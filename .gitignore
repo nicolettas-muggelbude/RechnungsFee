@@ -1,0 +1,166 @@
+# RechnungsPilot .gitignore
+
+# ===================================
+# IDE & Editor
+# ===================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===================================
+# Python (Backend: FastAPI)
+# ===================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ===================================
+# Node.js (Frontend: React)
+# ===================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+dist/
+dist-ssr/
+*.local
+.npm
+.eslintcache
+
+# ===================================
+# Rust (Tauri)
+# ===================================
+target/
+Cargo.lock
+**/*.rs.bk
+
+# ===================================
+# Databases & Data
+# ===================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+data/
+backups/
+*.sql
+
+# ===================================
+# Secrets & Config
+# ===================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+credentials.json
+config.local.*
+
+# ===================================
+# Logs
+# ===================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ===================================
+# OS
+# ===================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===================================
+# Testing
+# ===================================
+coverage/
+.nyc_output/
+*.lcov
+
+# ===================================
+# Build Artifacts
+# ===================================
+*.exe
+*.dmg
+*.app
+*.deb
+*.rpm
+*.AppImage
+*.msi
+installer/
+
+# ===================================
+# Temporary Files
+# ===================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+
+# ===================================
+# Documentation Build
+# ===================================
+site/
+docs/_build/
+docs/.vitepress/dist/
+
+# ===================================
+# Project Specific
+# ===================================
+# Benutzer-Uploads (Rechnungs-PDFs, Scans)
+uploads/
+documents/
+invoices/
+
+# OCR Temp-Dateien
+ocr_temp/
+
+# Export-Verzeichnisse
+exports/
+
+# Aber: Beispiel-Dateien behalten
+!examples/
