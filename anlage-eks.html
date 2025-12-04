@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Konvertierung</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        .page {
+            position: relative;
+            background: white;
+            margin: 20px auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+            overflow: hidden;
+        }
+        .text-element {
+            position: absolute;
+            white-space: pre;
+            line-height: 1.2;
+            z-index: 10;
+        }
+        .image-element {
+            position: absolute;
+        }
+        .background-image {
+            position: absolute;
+            z-index: 0;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .page { box-shadow: none; margin: 0; page-break-after: always; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page" style="width: 793px; height: 1122px;">
+        <img class="image-element" src="img_0_-7910396532801047218.png" style="left: 72px; top: 37px; width: 69px; height: 69px; z-index: 1;" />
+        <div class="text-element" style="left: 667px; top: 1040px;"><span style="font-size: 11px;">Seite 1 von 9</span></div>
+        <div class="text-element" style="left: 493px; top: 1039px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 75px; top: 198px;"><span style="font-size: 23px; font-weight: bold;">Anlage</span></div>
+        <div class="text-element" style="left: 619px; top: 156px;"><span style="font-size: 63px; font-weight: bold;">EKS</span></div>
+        <div class="text-element" style="left: 75px; top: 243px;"><span style="font-size: 11px;">Anlage zum Einkommen aus selbständiger/freiberuflicher Tätigkeit</span></div>
+        <div class="text-element" style="left: 99px; top: 291px;"><span style="font-size: 11px;">Sie teilen mit diesem Formular die Einkommensverhältnisse aus einer selbständigen/freiberuflichen Tätigkeit mit. </span></div>
+        <div class="text-element" style="left: 99px; top: 307px;"><span style="font-size: 11px;">Zu Beginn eines Bewilligungszeitraumes ist es erforderlich, dass Sie die zu erwartenden Einkünfte angeben </span></div>
+        <div class="text-element" style="left: 99px; top: 323px;"><span style="font-size: 11px;">(vorläufige Erklärung). Nach Ablauf des Bewilligungszeitraumes sind die tatsächlichen Einkünfte anzugeben und </span></div>
+        <div class="text-element" style="left: 99px; top: 339px;"><span style="font-size: 11px;">zu belegen (abschließende Erklärung).</span></div>
+        <div class="text-element" style="left: 99px; top: 355px;"><span style="font-size: 11px;">Füllen Sie dieses Formular bitte jeweils für sich und für alle weiteren selbständigen/freiberuflichen Personen über </span></div>
+        <div class="text-element" style="left: 99px; top: 371px;"><span style="font-size: 11px;">15 Jahren in der Bedarfsgemeinschaft gesondert aus. </span><span style="font-size: 11px; font-weight: bold;">Das Formular ist im Abschnitt E von der antragstellenden </span></div>
+        <div class="text-element" style="left: 99px; top: 387px;"><span style="font-size: 11px; font-weight: bold;">Person und im Abschnitt H von der selbständigen/freiberuflichen Person zu unterschreiben.</span><span style="font-size: 11px;"> Sofern Sie selbst </span></div>
+        <div class="text-element" style="left: 99px; top: 403px;"><span style="font-size: 11px;">die selbständige/freiberufliche Person sind, unterschreiben Sie bitte in beiden Abschnitten.</span></div>
+        <div class="text-element" style="left: 99px; top: 419px;"><span style="font-size: 11px;">Zu diesem Formular finden Sie zudem weiterführende Erklärungen in den Ausfüllhinweisen für Selbständige.</span></div>
+        <div class="text-element" style="left: 99px; top: 435px;"><span style="font-size: 11px;">Informationen zu wichtigen Themen und Fragen rund um das Bürgergeld finden Sie unter: </span><span style="font-size: 11px;">www.jobcenter.digital</span><span style="font-size: 11px;"> 
+</span></div>
+        <div class="text-element" style="left: 99px; top: 451px;"><span style="font-size: 11px;">Bitte reichen Sie grundsätzlich keine Originalbelege, sondern Nachweise nur in Kopie ein.</span></div>
+        <div class="text-element" style="left: 75px; top: 502px;"><span style="font-size: 19px; font-weight: bold;">A.	Persönliche Daten der antragstellenden Person</span></div>
+        <div class="text-element" style="left: 75px; top: 531px;"><span style="font-size: 11px;">1 Vorname</span></div>
+        <div class="text-element" style="left: 413px; top: 531px;"><span style="font-size: 11px;">2 Nachname</span></div>
+        <div class="text-element" style="left: 75px; top: 579px;"><span style="font-size: 11px;">3 Geburtsdatum (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 411px; top: 579px;"><span style="font-size: 11px;">4 Nummer der Bedarfsgemeinschaft (falls vorhanden)</span></div>
+        <div class="text-element" style="left: 75px; top: 634px;"><span style="font-size: 19px; font-weight: bold;">B.	Persönliche Daten der selbständigen/freiberuflich tätigen Person</span></div>
+        <div class="text-element" style="left: 75px; top: 663px;"><span style="font-size: 11px;">5 Vorname</span></div>
+        <div class="text-element" style="left: 413px; top: 663px;"><span style="font-size: 11px;">6 Nachname</span></div>
+        <div class="text-element" style="left: 75px; top: 711px;"><span style="font-size: 11px;">7 Geburtsdatum (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 75px; top: 766px;"><span style="font-size: 19px; font-weight: bold;">C.	Angaben zum Bewilligungszeitraum und zur Art der Erklärung</span></div>
+        <div class="text-element" style="left: 75px; top: 795px;"><span style="font-size: 11px;">8 Bitte geben Sie an, ob Sie in diesem Formular vorläufige oder abschließende Angaben machen.</span></div>
+        <div class="text-element" style="left: 75px; top: 815px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 815px;"><span style="font-size: 11px;">vorläufig (für die Zukunft)</span></div>
+        <div class="text-element" style="left: 75px; top: 839px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 839px;"><span style="font-size: 11px;">abschließend (für die Vergangenheit)</span></div>
+        <div class="text-element" style="left: 75px; top: 863px;"><span style="font-size: 11px;">9 Bitte geben Sie den Bewilligungszeitraum an, für den dieses Formular ausgefüllt wird. Ein Bewilligungszeitraum beträgt </span></div>
+        <div class="text-element" style="left: 75px; top: 879px;"><span style="font-size: 11px;">in der Regel 6 Monate. Tragen Sie daher bei einer vorläufigen Erklärung den Monat der Antragstellung ein und machen </span></div>
+        <div class="text-element" style="left: 75px; top: 895px;"><span style="font-size: 11px;">Sie Ihre Angaben für insgesamt 6 Monate. Bei abschließenden Angaben tragen Sie den Bewilligungszeitraum aus Ihrem </span></div>
+        <div class="text-element" style="left: 75px; top: 911px;"><span style="font-size: 11px;">Bewilligungsbescheid ein.</span></div>
+        <div class="text-element" style="left: 75px; top: 931px;"><span style="font-size: 11px;">von (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 243px; top: 931px;"><span style="font-size: 11px;">bis (TT.MM.JJJJ)</span></div>
+    </div>
+    <div class="page" style="width: 793px; height: 1122px;">
+        <div class="text-element" style="left: 667px; top: 1040px;"><span style="font-size: 11px;">Seite 2 von 9</span></div>
+        <div class="text-element" style="left: 493px; top: 1040px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 75px; top: 98px;"><span style="font-size: 19px; font-weight: bold;">D.	Allgemeine Daten zur selbständigen/freiberuflichen Tätigkeit</span></div>
+        <div class="text-element" style="left: 75px; top: 127px;"><span style="font-size: 11px;">10 Firmenname</span></div>
+        <div class="text-element" style="left: 75px; top: 175px;"><span style="font-size: 11px;">Bitte geben Sie die Anschrift der Betriebsstätte an.</span></div>
+        <div class="text-element" style="left: 75px; top: 195px;"><span style="font-size: 11px;">11 Straße</span></div>
+        <div class="text-element" style="left: 299px; top: 195px;"><span style="font-size: 11px;">12 Hausnummer</span></div>
+        <div class="text-element" style="left: 411px; top: 195px;"><span style="font-size: 11px;">13 Postleitzahl</span></div>
+        <div class="text-element" style="left: 523px; top: 195px;"><span style="font-size: 11px;">14 Ort</span></div>
+        <div class="text-element" style="left: 75px; top: 243px;"><span style="font-size: 11px;">15 Gewerbe oder Tätigkeit</span></div>
+        <div class="text-element" style="left: 75px; top: 291px;"><span style="font-size: 11px;">16 Beginn/Aufnahme der Tätigkeit (MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 411px; top: 291px;"><span style="font-size: 11px;">17 gegebenenfalls Ende der Tätigkeit (MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 75px; top: 339px;"><span style="font-size: 11px;">18 Rechtsform des Unternehmens (zum Beispiel GmbH, GbR, e.K.)</span></div>
+        <div class="text-element" style="left: 75px; top: 394px;"><span style="font-size: 19px; font-weight: bold;">E.	Hinweise und Unterschrift der antragstellenden Person</span></div>
+        <div class="text-element" style="left: 75px; top: 422px;"><span style="font-size: 15px; font-weight: bold;">Datenschutzhinweise</span></div>
+        <div class="text-element" style="left: 75px; top: 447px;"><span style="font-size: 11px;">Ihre Angaben werden aufgrund der §§ 60 - 65 Erstes Buch Sozialgesetzbuch (SGB I) und der §§ 67a, b, c Zehntes Buch </span></div>
+        <div class="text-element" style="left: 75px; top: 463px;"><span style="font-size: 11px;">Sozialgesetzbuch (SGB X) für die Leistungen nach dem SGB II erhoben und unterliegen dem Sozialgeheimnis.</span></div>
+        <div class="text-element" style="left: 75px; top: 483px;"><span style="font-size: 11px;">Näheres zum Datenschutz finden Sie im Internet unter </span><span style="font-size: 11px;">www.arbeitsagentur.de/datenerhebung</span><span style="font-size: 11px;">. Falls Sie hierzu Fragen </span></div>
+        <div class="text-element" style="left: 75px; top: 499px;"><span style="font-size: 11px;">haben, melden Sie sich bei dem für Sie zuständigen Jobcenter. </span></div>
+        <div class="text-element" style="left: 75px; top: 523px;"><span style="font-size: 11px; font-weight: bold;">Ich bestätige, dass die Angaben in den Abschnitten A bis D richtig sind.</span></div>
+        <div class="text-element" style="left: 75px; top: 563px;"><span style="font-size: 11px;">19 Datum</span></div>
+        <div class="text-element" style="left: 187px; top: 547px;"><span style="font-size: 11px;">20 Unterschrift antragstellende Person (bei Minderjährigen: </span></div>
+        <div class="text-element" style="left: 187px; top: 563px;"><span style="font-size: 11px;">Unterschrift erziehungs- oder sorgeberechtigte Person)</span></div>
+        <div class="text-element" style="left: 75px; top: 639px;"><span style="font-size: 11px;">21 Datum</span></div>
+        <div class="text-element" style="left: 187px; top: 639px;"><span style="font-size: 11px;">22 Unterschrift Betreuerin/Betreuer/Vormund</span></div>
+    </div>
+    <div class="page" style="width: 793px; height: 1122px;">
+        <div class="text-element" style="left: 667px; top: 1040px;"><span style="font-size: 11px;">Seite 3 von 9</span></div>
+        <div class="text-element" style="left: 493px; top: 1040px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 75px; top: 98px;"><span style="font-size: 19px; font-weight: bold;">F.	 Weitere Angaben zur selbständigen/freiberuflichen Tätigkeit</span></div>
+        <div class="text-element" style="left: 75px; top: 127px;"><span style="font-size: 11px;">23 Wird oder wurde die Miet-/Eigentumswohnung oder das Eigenheim – teilweise – für die selbständige/freiberufliche </span></div>
+        <div class="text-element" style="left: 75px; top: 143px;"><span style="font-size: 11px;">Tätigkeit gewerblich genutzt?</span></div>
+        <div class="text-element" style="left: 75px; top: 163px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 163px;"><span style="font-size: 11px;">Ja </span></div>
+        <div class="text-element" style="left: 75px; top: 187px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 187px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 211px;"><span style="font-size: 11px;">24 Anzahl der gewerblich genutzten Räume</span></div>
+        <div class="text-element" style="left: 355px; top: 211px;"><span style="font-size: 11px;">25 Gewerblich genutzte Fläche in Quadratmetern (m</span><span style="font-size: 6px;">2</span><span style="font-size: 11px;">)</span></div>
+        <div class="text-element" style="left: 75px; top: 259px;"><span style="font-size: 11px;">26 Werden oder wurden in Verbindung mit der selbständigen/freiberuflichen Tätigkeit Produkte kostenfrei und auf Dauer </span></div>
+        <div class="text-element" style="left: 75px; top: 275px;"><span style="font-size: 11px;">überlassen, zum Beispiel zur Produktplatzierung?</span></div>
+        <div class="text-element" style="left: 75px; top: 295px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 295px;"><span style="font-size: 11px;">Ja (bitte fügen Sie eine Auflistung und Nachweise über die Art und den Wert in Euro aller Produkte bei)</span></div>
+        <div class="text-element" style="left: 75px; top: 319px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 319px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 343px;"><span style="font-size: 11px;">27 Wird oder wurde Personal im Zusammenhang mit der selbständigen/freiberuflichen Tätigkeit beschäftigt?</span></div>
+        <div class="text-element" style="left: 75px; top: 363px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 363px;"><span style="font-size: 11px;">Ja </span></div>
+        <div class="text-element" style="left: 75px; top: 387px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 387px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 411px;"><span style="font-size: 11px;">28 Anzahl der Gesamtbeschäftigten (ohne selbständige/freiberufliche Person)</span></div>
+        <div class="text-element" style="left: 75px; top: 459px;"><span style="font-size: 11px;">29 Ist beabsichtigt, weiteres Personal zu beschäftigen?</span></div>
+        <div class="text-element" style="left: 75px; top: 479px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 479px;"><span style="font-size: 11px;">Ja </span></div>
+        <div class="text-element" style="left: 75px; top: 503px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 503px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 527px;"><span style="font-size: 11px;">30 Anzahl des weiteren Personals</span></div>
+        <div class="text-element" style="left: 355px; top: 527px;"><span style="font-size: 11px;">31 Eine Einstellung erfolgt voraussichtlich ab (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 75px; top: 579px;"><span style="font-size: 11px;">32 Unterliegt die selbständige/freiberufliche Tätigkeit der Umsatzsteuerpflicht?</span></div>
+        <div class="text-element" style="left: 75px; top: 599px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 599px;"><span style="font-size: 11px;">Ja </span></div>
+        <div class="text-element" style="left: 75px; top: 623px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 623px;"><span style="font-size: 11px;">Nein (im Abschnitt G entfallen die Angaben zur Umsatzsteuer und zur Vorsteuer)</span></div>
+        <div class="text-element" style="left: 75px; top: 647px;"><span style="font-size: 11px;">33 Erhält oder erhielt die selbständige/freiberufliche Person Zuschüsse/Beihilfen zu ihrer selbständigen/freiberuflichen </span></div>
+        <div class="text-element" style="left: 75px; top: 663px;"><span style="font-size: 11px;">Tätigkeit, zum Beispiel Lohnkostenzuschüsse, Gründungsdarlehen, Einstiegsgeld, Leistungen aus dem europäischen </span></div>
+        <div class="text-element" style="left: 75px; top: 679px;"><span style="font-size: 11px;">Sozialfond oder Subventionen/Förderungen für landwirtschaftliche Betriebe?</span></div>
+        <div class="text-element" style="left: 75px; top: 699px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 699px;"><span style="font-size: 11px;">Ja (bitte fügen Sie Nachweise zum Leistungsträger sowie zur Art, Dauer und Höhe des Zuschusses bei)</span></div>
+        <div class="text-element" style="left: 75px; top: 723px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 723px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 747px;"><span style="font-size: 11px;">34 Hat die selbständige/freiberufliche Person Zuschüsse/Beihilfen beantragt oder hat sie vor, diese zu beantragen?</span></div>
+        <div class="text-element" style="left: 75px; top: 767px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 767px;"><span style="font-size: 11px;">Ja (bitte fügen Sie soweit möglich Nachweise über die Antragstellung bei)</span></div>
+        <div class="text-element" style="left: 75px; top: 791px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 791px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 815px;"><span style="font-size: 11px;">35 Hat die selbständige/freiberufliche Person für den Betrieb/das Gewerbe ein Darlehen aufgenommen?</span></div>
+        <div class="text-element" style="left: 75px; top: 835px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 835px;"><span style="font-size: 11px;">Ja (bitte fügen Sie Nachweise bei, zum Beispiel Darlehensbescheid, Kontoauszug, Investitionsausgaben)</span></div>
+        <div class="text-element" style="left: 75px; top: 859px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 859px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 883px;"><span style="font-size: 11px;">36 Höhe des Darlehens in Euro</span></div>
+        <div class="text-element" style="left: 411px; top: 883px;"><span style="font-size: 11px;">37 Datum des Geldeingangs auf dem Konto (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 75px; top: 931px;"><span style="font-size: 11px;">38 Beginn der Rückzahlung des Darlehens (TT.MM.JJJJ)</span></div>
+        <div class="text-element" style="left: 411px; top: 931px;"><span style="font-size: 11px;">39 Monatliche Tilgungsrate in Euro</span></div>
+        <div class="text-element" style="left: 75px; top: 979px;"><span style="font-size: 11px;">40 Mit dem Darlehen finanzierte Betriebsausgaben (Art)</span></div>
+        <div class="text-element" style="left: 411px; top: 979px;"><span style="font-size: 11px;">41 Mit dem Darlehen finanzierte Betriebsausgaben (Höhe in Euro)</span></div>
+    </div>
+    <div class="page" style="width: 1122px; height: 793px;">
+        <div class="text-element" style="left: 826px; top: 730px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 1002px; top: 731px;"><span style="font-size: 11px;">Seite 4 von 9</span></div>
+        <div class="text-element" style="left: 71px; top: 98px;"><span style="font-size: 19px; font-weight: bold;">G.	Angaben zum Einkommen aus selbständiger/freiberuflicher Tätigkeit</span></div>
+        <div class="text-element" style="left: 71px; top: 127px;"><span style="font-size: 11px;">42 Bitte geben Sie an, ob die nachfolgenden Angaben in den Tabellen vorläufig oder abschließend sind.</span></div>
+        <div class="text-element" style="left: 71px; top: 147px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 95px; top: 147px;"><span style="font-size: 11px;">vorläufige Erklärung: Die Angaben sind geschätzt und beziehen sich auf den Bewilligungszeitraum im Abschnitt C</span></div>
+        <div class="text-element" style="left: 71px; top: 171px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 95px; top: 171px;"><span style="font-size: 11px;">abschließende Erklärung: Die Angaben sind abschließend und beziehen sich auf den Bewilligungszeitraum im Abschnitt C</span></div>
+        <div class="text-element" style="left: 71px; top: 203px;"><span style="font-size: 11px; font-weight: bold;">Hinweise zu den Angaben in den nachfolgenden Tabellen</span></div>
+        <div class="text-element" style="left: 71px; top: 219px;"><span style="font-size: 11px;">Bitte tragen Sie alle Wertangaben in Euro ein und fügen Sie aktuelle Nachweise bei, zum Beispiel eine betriebswirtschaftliche Aufstellung. Bitte bezeichnen Sie die Kalendermonate des </span></div>
+        <div class="text-element" style="left: 71px; top: 235px;"><span style="font-size: 11px;">Bewilligungszeitraumes (siehe Abschnitt C), zum Beispiel Januar, Februar. Für Monate ohne Einnahmen oder Ausgaben tragen Sie für den jeweiligen Monat bitte „0“ ein.</span></div>
+        <div class="text-element" style="left: 71px; top: 263px;"><span style="font-size: 11px;">43 </span><span style="font-size: 11px; font-weight: bold;">Tabelle A: Angaben zu den Betriebseinnahmen</span></div>
+        <div class="text-element" style="left: 75px; top: 292px;"><span style="font-size: 10px; font-weight: bold;">Kalendermonat (gegebenenfalls Teilmonat) </span></div>
+        <div class="text-element" style="left: 75px; top: 324px;"><span style="font-size: 10px;">A1 Betriebseinnahmen </span></div>
+        <div class="text-element" style="left: 75px; top: 348px;"><span style="font-size: 10px;">A2 Privatentnahmen von Waren </span></div>
+        <div class="text-element" style="left: 75px; top: 372px;"><span style="font-size: 10px;">A3 sonstige betriebliche Einnahmen 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 385px;"><span style="font-size: 10px;">(zum Beispiel auch kostenfrei auf Dauer </span></div>
+        <div class="text-element" style="left: 75px; top: 399px;"><span style="font-size: 10px;">überlassene Produkte) </span></div>
+        <div class="text-element" style="left: 75px; top: 424px;"><span style="font-size: 10px;">A4 Zuwendungen von Dritten </span></div>
+        <div class="text-element" style="left: 75px; top: 448px;"><span style="font-size: 10px;">A5.1 vereinnahmte Umsatzsteuer </span></div>
+        <div class="text-element" style="left: 75px; top: 472px;"><span style="font-size: 10px;">A5.2 Umsatzsteuer auf Privatentnahmen 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 485px;"><span style="font-size: 10px;">von Waren </span></div>
+        <div class="text-element" style="left: 75px; top: 512px;"><span style="font-size: 10px;">A5.3 vom Finanzamt erstattete Umsatzsteuer </span></div>
+        <div class="text-element" style="left: 75px; top: 536px;"><span style="font-size: 10px; font-weight: bold;">Summe der Betriebseinnahmen </span></div>
+        <div class="text-element" style="left: 71px; top: 571px;"><span style="font-size: 11px;">44 Anmerkungen tragen Sie bitte hier ein. Bitte geben Sie die jeweilige Position (zum Beispiel A1) an, auf die sich Ihre Anmerkung bezieht.</span></div>
+    </div>
+    <div class="page" style="width: 1122px; height: 793px;">
+        <div class="text-element" style="left: 826px; top: 730px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 1002px; top: 731px;"><span style="font-size: 11px;">Seite 5 von 9</span></div>
+        <div class="text-element" style="left: 71px; top: 99px;"><span style="font-size: 11px;">45 </span><span style="font-size: 11px; font-weight: bold;">Tabelle B – Teil 1: Angaben zu den Betriebsausgaben</span></div>
+        <div class="text-element" style="left: 75px; top: 128px;"><span style="font-size: 10px; font-weight: bold;">Kalendermonat (gegebenenfalls Teilmonat) </span></div>
+        <div class="text-element" style="left: 75px; top: 160px;"><span style="font-size: 10px;">B1 Wareneinkauf </span></div>
+        <div class="text-element" style="left: 75px; top: 184px;"><span style="font-size: 10px;">B2.1 Personalkosten 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 198px;"><span style="font-size: 10px;">(einschließlich Sozialversicherungsbeiträge) – </span></div>
+        <div class="text-element" style="left: 75px; top: 211px;"><span style="font-size: 10px;">Vollzeitbeschäftigte </span></div>
+        <div class="text-element" style="left: 75px; top: 236px;"><span style="font-size: 10px;">B2.2 Personalkosten 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 250px;"><span style="font-size: 10px;">(einschließlich Sozialversicherungsbeiträge) – </span></div>
+        <div class="text-element" style="left: 75px; top: 263px;"><span style="font-size: 10px;">Teilzeitbeschäftigte </span></div>
+        <div class="text-element" style="left: 75px; top: 288px;"><span style="font-size: 10px;">B2.3 Personalkosten 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 301px;"><span style="font-size: 10px;">(einschließlich Sozialversicherungsbeiträge) – </span></div>
+        <div class="text-element" style="left: 75px; top: 315px;"><span style="font-size: 10px;">geringfügig Beschäftigte </span></div>
+        <div class="text-element" style="left: 75px; top: 340px;"><span style="font-size: 10px;">B2.4 Personalkosten 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 353px;"><span style="font-size: 10px;">(einschließlich Sozialversicherungsbeiträge) – </span></div>
+        <div class="text-element" style="left: 75px; top: 367px;"><span style="font-size: 10px;">mithelfende Familienangehörige </span></div>
+        <div class="text-element" style="left: 75px; top: 392px;"><span style="font-size: 10px;">B3 Betriebliche Raumkosten 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 405px;"><span style="font-size: 10px;">(einschließlich Nebenkosten und Energiekosten) </span></div>
+        <div class="text-element" style="left: 75px; top: 432px;"><span style="font-size: 10px;">B4 Betriebliche Versicherungen/Beiträge </span></div>
+        <div class="text-element" style="left: 75px; top: 456px;"><span style="font-size: 10px;">B5 Kosten für Werbung </span></div>
+        <div class="text-element" style="left: 75px; top: 480px;"><span style="font-size: 10px; font-weight: bold;">Zwischensumme Tabelle B – Teil 1 </span></div>
+        <div class="text-element" style="left: 71px; top: 515px;"><span style="font-size: 11px;">46 Anmerkungen tragen Sie bitte hier ein. Bitte geben Sie die jeweilige Position (zum Beispiel B1) an, auf die sich Ihre Anmerkung bezieht.</span></div>
+    </div>
+    <div class="page" style="width: 1122px; height: 793px;">
+        <div class="text-element" style="left: 826px; top: 730px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 1002px; top: 731px;"><span style="font-size: 11px;">Seite 6 von 9</span></div>
+        <div class="text-element" style="left: 71px; top: 87px;"><span style="font-size: 11px; font-weight: bold;">Angaben zu einem Kraftfahrzeug in Tabelle B – Teil 2
+</span></div>
+        <div class="text-element" style="left: 71px; top: 103px;"><span style="font-size: 11px;">Bei einem betrieblichen Kraftfahrzeug füllen Sie bitte die Zeilen B6.1 bis B6.4 aus, bei einem privaten Kraftfahrzeug die Zeile B6.5. Ein Kraftfahrzeug ist ein betriebliches Kraftfahrzeug, wenn Sie </span></div>
+        <div class="text-element" style="left: 71px; top: 119px;"><span style="font-size: 11px;">es mindestens zu 50 Prozent betrieblich nutzen. Bitte fügen Sie als Nachweis ein Fahrtenbuch bei. Bei einem privaten Kraftfahrzeug geben Sie hier bitte nur die betrieblichen Fahrten an. Fahrten </span></div>
+        <div class="text-element" style="left: 71px; top: 135px;"><span style="font-size: 11px;">zur Betriebsstätte, die mit einem privaten Kraftfahrzeug durchgeführt werden, können bei den Angaben zu den personenbezogenen Ausgaben (Seite 9, Nummern 54 bis 56) angegeben werden.</span></div>
+        <div class="text-element" style="left: 71px; top: 159px;"><span style="font-size: 11px;">47 Wie viele Kilometer wird die selbständige/freiberufliche Person voraussichtlich betrieblich und/oder privat fahren?
+</span></div>
+        <div class="text-element" style="left: 71px; top: 175px;"><span style="font-size: 11px;">Bei abschließenden Angaben: Wie viele Kilometer ist die selbständige/freiberufliche Person betrieblich und/oder privat gefahren?</span></div>
+        <div class="text-element" style="left: 71px; top: 195px;"><span style="font-size: 11px;">betriebliche Kilometer</span></div>
+        <div class="text-element" style="left: 239px; top: 195px;"><span style="font-size: 11px;">private Kilometer</span></div>
+        <div class="text-element" style="left: 71px; top: 247px;"><span style="font-size: 11px;">48 </span><span style="font-size: 11px; font-weight: bold;">Tabelle B – Teil 2: Angaben zu den Betriebsausgaben</span></div>
+        <div class="text-element" style="left: 75px; top: 272px;"><span style="font-size: 10px; font-weight: bold;">Kalendermonat (gegebenenfalls Teilmonat) </span></div>
+        <div class="text-element" style="left: 75px; top: 304px;"><span style="font-size: 10px; font-weight: bold;">Übertrag Zwischensumme Tabelle B – Teil 1</span></div>
+        <div class="text-element" style="left: 75px; top: 328px;"><span style="font-size: 10px;">B6.1 betriebliches Kraftfahrzeug – Steuern </span></div>
+        <div class="text-element" style="left: 75px; top: 352px;"><span style="font-size: 10px;">B6.2 betriebliches Kraftfahrzeug – Versicherung </span></div>
+        <div class="text-element" style="left: 75px; top: 376px;"><span style="font-size: 10px;">B6.3 betriebliches Kraftfahrzeug – 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 389px;"><span style="font-size: 10px;">laufende Betriebskosten </span></div>
+        <div class="text-element" style="left: 75px; top: 416px;"><span style="font-size: 10px;">B6.4 betriebliches Kraftfahrzeug – </span></div>
+        <div class="text-element" style="left: 75px; top: 429px;"><span style="font-size: 10px;">Reparaturkosten </span></div>
+        <div class="text-element" style="left: 75px; top: 456px;"><span style="font-size: 10px; font-weight: bold;">Abzüglich</span><span style="font-size: 10px;"> privat gefahrener Kilometer 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 469px;"><span style="font-size: 10px;">(0,10 Euro je gefahrenem Kilometer)</span></div>
+        <div class="text-element" style="left: 321px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 446px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 571px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 697px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 822px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 947px; top: 465px;"><span style="font-size: 11px;">−</span></div>
+        <div class="text-element" style="left: 75px; top: 496px;"><span style="font-size: 10px;">B6.5 privates Kraftfahrzeug – betriebliche Fahrten </span></div>
+        <div class="text-element" style="left: 75px; top: 509px;"><span style="font-size: 10px;">(0,10 Euro je gefahrenem Kilometer)</span></div>
+        <div class="text-element" style="left: 75px; top: 536px;"><span style="font-size: 10px;">B7.1 Reisekosten – Übernachtungskosten</span></div>
+        <div class="text-element" style="left: 75px; top: 560px;"><span style="font-size: 10px;">B7.2 Reisekosten – Reisenebenkosten</span></div>
+        <div class="text-element" style="left: 75px; top: 584px;"><span style="font-size: 10px;">B7.3 Reisekosten – 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 597px;"><span style="font-size: 10px;">Kosten für öffentliche Verkehrsmittel</span></div>
+        <div class="text-element" style="left: 75px; top: 624px;"><span style="font-size: 10px;">B8 Investitionen</span></div>
+        <div class="text-element" style="left: 75px; top: 648px;"><span style="font-size: 10px;">B9 Investitionen aus Zuwendungen Dritter</span></div>
+        <div class="text-element" style="left: 75px; top: 672px;"><span style="font-size: 10px;">B10 Büromaterial einschließlich Porto</span></div>
+        <div class="text-element" style="left: 75px; top: 696px;"><span style="font-size: 10px; font-weight: bold;">Zwischensumme Tabelle B – Teil 2</span></div>
+    </div>
+    <div class="page" style="width: 1122px; height: 793px;">
+        <div class="text-element" style="left: 826px; top: 730px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 1002px; top: 731px;"><span style="font-size: 11px;">Seite 7 von 9</span></div>
+        <div class="text-element" style="left: 71px; top: 99px;"><span style="font-size: 11px;">49 </span><span style="font-size: 11px; font-weight: bold;">Tabelle B – Teil 3: Angaben zu den Betriebsausgaben und zum Gewinn</span></div>
+        <div class="text-element" style="left: 75px; top: 128px;"><span style="font-size: 10px; font-weight: bold;">Kalendermonat (gegebenenfalls Teilmonat)</span></div>
+        <div class="text-element" style="left: 75px; top: 160px;"><span style="font-size: 10px; font-weight: bold;">Übertrag Zwischensumme (Tabelle B – Teil 2)</span></div>
+        <div class="text-element" style="left: 75px; top: 184px;"><span style="font-size: 10px;">B11 Telefonkosten</span></div>
+        <div class="text-element" style="left: 75px; top: 208px;"><span style="font-size: 10px;">B12 Beratungskosten</span></div>
+        <div class="text-element" style="left: 75px; top: 232px;"><span style="font-size: 10px;">B13 Fortbildungskosten</span></div>
+        <div class="text-element" style="left: 75px; top: 256px;"><span style="font-size: 10px;">B14.1 Sonstige Betriebsausgaben – </span></div>
+        <div class="text-element" style="left: 75px; top: 270px;"><span style="font-size: 10px;">Reparaturkosten Anlagevermögen</span></div>
+        <div class="text-element" style="left: 75px; top: 296px;"><span style="font-size: 10px;">B14.2 Sonstige Betriebsausgaben – 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 309px;"><span style="font-size: 10px;">Miete Einrichtung</span></div>
+        <div class="text-element" style="left: 75px; top: 336px;"><span style="font-size: 10px;">B14.3 Sonstige Betriebsausgaben – 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 349px;"><span style="font-size: 10px;">Nebenkosten des Geldverkehrs</span></div>
+        <div class="text-element" style="left: 75px; top: 376px;"><span style="font-size: 10px;">B14.4 Sonstige Betriebsausgaben – 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 389px;"><span style="font-size: 10px;">Betriebliche Abfallbeseitigung</span></div>
+        <div class="text-element" style="left: 75px; top: 416px;"><span style="font-size: 10px;">B14.5 weitere bisher nicht erfasste </span></div>
+        <div class="text-element" style="left: 75px; top: 429px;"><span style="font-size: 10px;">Betriebsausgaben</span></div>
+        <div class="text-element" style="left: 75px; top: 456px;"><span style="font-size: 10px;">B15 Schuldzinsen aus Anlagevermögen</span></div>
+        <div class="text-element" style="left: 75px; top: 480px;"><span style="font-size: 10px;">B16 Tilgung bestehender betrieblicher Darlehen</span></div>
+        <div class="text-element" style="left: 75px; top: 504px;"><span style="font-size: 10px;">B17 gezahlte Vorsteuer</span></div>
+        <div class="text-element" style="left: 75px; top: 528px;"><span style="font-size: 10px;">B18 an das Finanzamt gezahlte Umsatzsteuer</span></div>
+        <div class="text-element" style="left: 75px; top: 552px;"><span style="font-size: 10px; font-weight: bold;">Summe Betriebsausgaben 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 565px;"><span style="font-size: 10px; font-weight: bold;">(Tabelle B Teil 1, 2 und 3)</span></div>
+        <div class="text-element" style="left: 75px; top: 592px;"><span style="font-size: 10px; font-weight: bold;">Gewinn (Betriebseinnahmen abzüglich </span></div>
+        <div class="text-element" style="left: 75px; top: 605px;"><span style="font-size: 10px; font-weight: bold;">Betriebsausgaben)</span></div>
+        <div class="text-element" style="left: 71px; top: 643px;"><span style="font-size: 11px;">50 Anmerkungen tragen Sie bitte hier ein. Bitte geben Sie die jeweilige Position (zum Beispiel B6.1) an, auf die sich Ihre Anmerkung bezieht.</span></div>
+    </div>
+    <div class="page" style="width: 1122px; height: 793px;">
+        <div class="text-element" style="left: 826px; top: 730px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 1002px; top: 731px;"><span style="font-size: 11px;">Seite 8 von 9</span></div>
+        <div class="text-element" style="left: 71px; top: 103px;"><span style="font-size: 11px; font-weight: bold;">Absetzungen vom Einkommen</span></div>
+        <div class="text-element" style="left: 71px; top: 131px;"><span style="font-size: 11px;">51 </span><span style="font-size: 11px; font-weight: bold;">Tabelle C: Absetzungen vom Einkommen</span></div>
+        <div class="text-element" style="left: 75px; top: 160px;"><span style="font-size: 10px; font-weight: bold;">Art der Absetzung </span></div>
+        <div class="text-element" style="left: 587px; top: 160px;"><span style="font-size: 10px; font-weight: bold;">Höhe in Euro</span></div>
+        <div class="text-element" style="left: 713px; top: 160px;"><span style="font-size: 10px; font-weight: bold;">Zahlungsrhythmus 
+</span></div>
+        <div class="text-element" style="left: 713px; top: 174px;"><span style="font-size: 10px; font-weight: bold;">(zum Beispiel monatlich, quartalsweise oder zu bestimmten Terminen)</span></div>
+        <div class="text-element" style="left: 75px; top: 200px;"><span style="font-size: 10px;">Einkommensteuervorauszahlungen/Einkommensteuernachzahlungen 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 214px;"><span style="font-size: 10px;">(siehe letzten Vorauszahlungsbescheid/Einkommensteuerbescheid)</span></div>
+        <div class="text-element" style="left: 75px; top: 240px;"><span style="font-size: 10px;">Pflichtbeiträge zur Kranken-/Pflege- und/oder Rentenversicherung </span></div>
+        <div class="text-element" style="left: 75px; top: 264px;"><span style="font-size: 10px;">Beiträge zur privaten Kranken- und Pflegeversicherung oder freiwillige Beiträge 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 278px;"><span style="font-size: 10px;">zur gesetzlichen Kranken- und Pflegeversicherung</span></div>
+        <div class="text-element" style="left: 75px; top: 304px;"><span style="font-size: 10px;">Beiträge zur Rentenversicherung</span></div>
+        <div class="text-element" style="left: 75px; top: 328px;"><span style="font-size: 10px;">Beiträge zu einer kapitalbildenden Lebensversicherung</span></div>
+        <div class="text-element" style="left: 75px; top: 352px;"><span style="font-size: 10px;">Beiträge zu einer Versorgungseinrichtung</span></div>
+        <div class="text-element" style="left: 75px; top: 376px;"><span style="font-size: 10px;">Beiträge für eine Kraftfahrzeug-Haftpflichtversicherung (ohne Teil-/Vollkasko/Kraftfahrzeug-Schutzbrief)</span></div>
+        <div class="text-element" style="left: 75px; top: 400px;"><span style="font-size: 10px;">Beiträge für weitere gesetzlich vorgeschriebene Versicherungen (zum Beispiel Haftpflichtversicherung 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 413px;"><span style="font-size: 10px;">für bestimmte Berufsgruppen wie Rechtsanwälte oder Hebammen)</span></div>
+        <div class="text-element" style="left: 75px; top: 440px;"><span style="font-size: 10px;">Beiträge für eine geförderte Altersvorsorge nach § 82 Einkommenssteuergesetz 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 453px;"><span style="font-size: 10px;">(Beiträge zur „Riester-Rente“)</span></div>
+        <div class="text-element" style="left: 75px; top: 484px;"><span style="font-size: 10px;">Sonstige Absetzungsmöglichkeiten (zum Beispiel Beiträge zur Arbeitsförderung bei freiwilliger </span></div>
+        <div class="text-element" style="left: 75px; top: 497px;"><span style="font-size: 10px;">Weiterversicherung (§ 28a Absatz 1 Nummer 2 Drittes Buch Sozialgesetzbuch) oder Einkommen, 
+</span></div>
+        <div class="text-element" style="left: 75px; top: 511px;"><span style="font-size: 10px;">das bereits bei der Feststellung von Ansprüchen der Ausbildungsförderung angerechnet wurde)</span></div>
+    </div>
+    <div class="page" style="width: 793px; height: 1122px;">
+        <div class="text-element" style="left: 667px; top: 1040px;"><span style="font-size: 11px;">Seite 9 von 9</span></div>
+        <div class="text-element" style="left: 493px; top: 1040px;"><span style="font-size: 11px; font-style: italic;">Jobcenter-EKS - 04/2025</span></div>
+        <div class="text-element" style="left: 75px; top: 99px;"><span style="font-size: 11px; font-weight: bold;">Angaben zu den personenbezogenen Ausgaben</span></div>
+        <div class="text-element" style="left: 75px; top: 119px;"><span style="font-size: 11px;">52 Hat die selbständige/freiberufliche Person mindestens ein Kind unter 18 Jahren, welches nicht bei ihr wohnt?</span></div>
+        <div class="text-element" style="left: 75px; top: 139px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 139px;"><span style="font-size: 11px;">Ja (bitte fügen Sie einen Nachweis bei, zum Beispiel Geburtsurkunde oder Unterhaltstitel)</span></div>
+        <div class="text-element" style="left: 75px; top: 163px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 163px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 187px;"><span style="font-size: 11px;">53 Zahlt die selbständige/freiberufliche Person Unterhalt?</span></div>
+        <div class="text-element" style="left: 75px; top: 207px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 207px;"><span style="font-size: 11px;">Ja (bitte fügen Sie einen Nachweis zur Höhe der Unterhaltsverpflichtung und einen Zahlungsnachweis bei)</span></div>
+        <div class="text-element" style="left: 75px; top: 231px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 231px;"><span style="font-size: 11px;">Nein</span></div>
+        <div class="text-element" style="left: 75px; top: 255px;"><span style="font-size: 11px;">54 Hat die selbständige/freiberufliche Person Ausgaben für die Fahrten zur Betriebsstätte mit dem privaten Kraftfahrzeug?</span></div>
+        <div class="text-element" style="left: 75px; top: 275px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 275px;"><span style="font-size: 11px;">Ja</span></div>
+        <div class="text-element" style="left: 75px; top: 299px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 299px;"><span style="font-size: 11px;">Nein (weiter mit 57)</span></div>
+        <div class="text-element" style="left: 75px; top: 323px;"><span style="font-size: 11px;">55 Bitte geben Sie die einfache Strecke zwischen Wohnung und Betriebsstätte in Kilometern an.</span></div>
+        <div class="text-element" style="left: 75px; top: 371px;"><span style="font-size: 11px;">56 An wie vielen Arbeitstagen je Woche fährt die selbständige/freiberufliche Person regelmäßig die Strecke?</span></div>
+        <div class="text-element" style="left: 75px; top: 419px;"><span style="font-size: 11px;">57 Entstehen der selbständigen/freiberuflichen Person Mehraufwendungen für Verpflegung wegen einer täglichen </span></div>
+        <div class="text-element" style="left: 75px; top: 435px;"><span style="font-size: 11px;">Abwesenheit von mindestens 12 Stunden von der Wohnung oder dem üblichen Beschäftigungsort, ohne dass eine </span></div>
+        <div class="text-element" style="left: 75px; top: 451px;"><span style="font-size: 11px;">doppelte Haushaltsführung vorliegt?</span></div>
+        <div class="text-element" style="left: 75px; top: 471px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 471px;"><span style="font-size: 11px;">Ja</span></div>
+        <div class="text-element" style="left: 75px; top: 495px;"><span style="font-size: 11px;">	</span></div>
+        <div class="text-element" style="left: 99px; top: 495px;"><span style="font-size: 11px;">Nein </span></div>
+        <div class="text-element" style="left: 75px; top: 519px;"><span style="font-size: 11px;">58 Bitte geben Sie die Anzahl der Arbeitstage im Monat an, bei denen Mehraufwendungen für Verpflegung entstehen.</span></div>
+        <div class="text-element" style="left: 75px; top: 574px;"><span style="font-size: 19px; font-weight: bold;">H.	Unterschrift der selbständigen/freiberuflichen Person</span></div>
+        <div class="text-element" style="left: 75px; top: 607px;"><span style="font-size: 11px; font-weight: bold;">Ich bestätige, dass die Angaben in den Abschnitten F bis G richtig sind.</span></div>
+        <div class="text-element" style="left: 75px; top: 631px;"><span style="font-size: 11px;">59 Datum</span></div>
+        <div class="text-element" style="left: 187px; top: 631px;"><span style="font-size: 11px;">60 Unterschrift selbständige/freiberufliche Person</span></div>
+    </div>
+</body>
+</html>

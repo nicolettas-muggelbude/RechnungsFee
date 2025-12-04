@@ -5,7 +5,7 @@
 **Zielgruppe:** Freiberufler, Selbstständige, Kleinunternehmer
 **Lizenz:** AGPL-3.0
 **Status:** Konzeptphase
-**Letzte Aktualisierung:** 2025-12-03
+**Letzte Aktualisierung:** 2025-12-04
 
 ---
 
@@ -394,6 +394,401 @@ User kann Standard-Verhalten wählen:
 
 ---
 
+### **Anlage EKS - Agentur für Arbeit (Kategorie 3) - ✅ GEKLÄRT**
+
+#### **Was ist die Anlage EKS?**
+
+Die **Anlage EKS (Einkommenserklärung für Selbstständige)** ist ein 9-seitiges Formular der Agentur für Arbeit / Jobcenter für:
+- Selbstständige mit **ALG II / Bürgergeld**
+- Dokumentation von Einnahmen und Ausgaben während des **Bewilligungszeitraums** (meist 6 Monate)
+- Zwei Varianten:
+  - **Vorläufige EKS:** Vor Beginn des Bewilligungszeitraums (Prognose)
+  - **Abschließende EKS:** Nach Ende des Bewilligungszeitraums (tatsächliche Zahlen)
+
+**Ziel von RechnungsPilot:** Automatische Generierung der EKS aus vorhandenen Buchhaltungsdaten.
+
+---
+
+#### **Struktur der Anlage EKS**
+
+##### **Tabelle A: Betriebseinnahmen (Einnahmen)**
+
+| Feld | Beschreibung | Quelle in RechnungsPilot |
+|------|--------------|---------------------------|
+| **A1** | Betriebseinnahmen aus selbstständiger Tätigkeit | Ausgangsrechnungen + Kassenbuch (Einnahmen) |
+| **A2** | Privatentnahmen | Kassenbuch (Kategorie "Privatentnahme") |
+| **A3** | Sonstige Einnahmen (privat & betrieblich) | Manuell erfassen (z.B. Steuererstattung) |
+| **A4** | Private Geld- oder Sacheinlagen | Kassenbuch (Kategorie "Privateinlage") |
+| **A5** | Umsatzsteuer: | |
+| **A5.1** | Umsatzsteuer-Ist-Einnahmen (Kennziffer 81) | Aus UStVA-Berechnung |
+| **A5.2** | Umsatzsteuer-Erstattung vom Finanzamt | Manuell erfassen (Bank-Eingang) |
+| **A5.3** | Summe Umsatzsteuer | A5.1 + A5.2 (automatisch) |
+
+**Summe A:** Automatisch aus A1-A5.3
+
+---
+
+##### **Tabelle B: Betriebsausgaben (Ausgaben)**
+
+**Teil 1 - Allgemeine Ausgaben:**
+
+| Feld | Beschreibung | Quelle in RechnungsPilot |
+|------|--------------|---------------------------|
+| **B1** | Wareneinkauf (Materialien, Waren) | Eingangsrechnungen (Kategorie "Wareneinkauf") |
+| **B2** | Personalkosten: | |
+| **B2.1** | Löhne und Gehälter | Eingangsrechnungen / Kassenbuch (Kategorie "Personal") |
+| **B2.2** | Sozialabgaben | Eingangsrechnungen (Kategorie "Sozialabgaben") |
+| **B2.3** | Vermögenswirksame Leistungen | Kassenbuch (Kategorie "VL") |
+| **B2.4** | Sonstige Personalkosten | Eingangsrechnungen / Kassenbuch |
+| **B3** | Raumkosten (Miete, Pacht, Nebenkosten) | Eingangsrechnungen (Kategorie "Raumkosten") |
+| **B4** | Versicherungen (Betrieb, Haftpflicht, etc.) | Eingangsrechnungen / Bank (Kategorie "Versicherungen") |
+| **B5** | Werbekosten (Anzeigen, Marketing) | Eingangsrechnungen (Kategorie "Werbung") |
+
+**Teil 2 - Fahrzeuge, Reisen, Investitionen:**
+
+| Feld | Beschreibung | Quelle in RechnungsPilot |
+|------|--------------|---------------------------|
+| **B6** | Fahrzeugkosten: | |
+| **B6.1** | Laufende Kfz-Kosten (Benzin, Wartung) | Eingangsrechnungen (Kategorie "Kfz") |
+| **B6.2** | Kfz-Steuer | Eingangsrechnungen / Bank |
+| **B6.3** | Kfz-Versicherung | Eingangsrechnungen / Bank |
+| **B6.4** | Leasingraten | Bank (Kategorie "Leasing") |
+| **B6.5** | Abschreibungen Fahrzeuge | Manuell / Anlagenverzeichnis (später) |
+| **B7** | Reisekosten: | |
+| **B7.1** | Fahrtkosten (ÖPNV, Taxi) | Kassenbuch / Eingangsrechnungen |
+| **B7.2** | Übernachtung, Verpflegung | Kassenbuch / Eingangsrechnungen (Reisekosten) |
+| **B7.3** | Sonstige Reisekosten | Kassenbuch / Eingangsrechnungen |
+| **B8** | Investitionen (Anschaffungen über 800€) | Eingangsrechnungen (Kategorie "Investitionen") |
+
+**Teil 3 - Büro, Kommunikation, Sonstiges:**
+
+| Feld | Beschreibung | Quelle in RechnungsPilot |
+|------|--------------|---------------------------|
+| **B9** | Büro- und Geschäftsbedarf | Eingangsrechnungen / Kassenbuch (Kategorie "Bürobedarf") |
+| **B10** | Porto, Telefon, Internet | Eingangsrechnungen (Kategorie "Kommunikation") |
+| **B11** | Rechts- und Beratungskosten | Eingangsrechnungen (Kategorie "Beratung") |
+| **B12** | Fortbildung | Eingangsrechnungen (Kategorie "Fortbildung") |
+| **B13** | Sonstige Betriebsausgaben: | |
+| **B13.1** | Instandhaltung / Reparaturen | Eingangsrechnungen (Kategorie "Reparaturen") |
+| **B13.2** | Beiträge / Abgaben (IHK, etc.) | Eingangsrechnungen / Bank |
+| **B13.3** | Buchhaltung / Steuerberatung | Eingangsrechnungen (Kategorie "Steuerberatung") |
+| **B13.4** | Geschenke / Bewirtung | Kassenbuch / Eingangsrechnungen |
+| **B13.5** | Übrige Kosten | Kassenbuch / Eingangsrechnungen (Kategorie "Sonstiges") |
+| **B14** | Zinsaufwendungen | Bank (Kategorie "Zinsen") |
+| **B15** | Kredittilgung | Bank (Kategorie "Tilgung") |
+| **B16** | Gezahlte Umsatzsteuer (Kennziffer 83) | Aus UStVA-Berechnung (Vorsteuer) |
+| **B17** | Vorsteuererstattung vom Finanzamt | Bank (eingehende Erstattung) |
+| **B18** | Sonstige Abzüge | Manuell erfassen (Sonderfälle) |
+
+**Summe B:** Automatisch aus B1-B18
+
+---
+
+##### **Tabelle C: Absetzungen vom Einkommen (Abzüge)**
+
+| Feld | Beschreibung | Quelle in RechnungsPilot |
+|------|--------------|---------------------------|
+| **C1** | Steuern (Einkommensteuer, Gewerbesteuer) | Bank (Abgänge "Finanzamt") + Manuell |
+| **C2** | Pflichtbeiträge Krankenversicherung | Bank (Kategorie "KV") |
+| **C3** | Pflichtbeiträge Pflegeversicherung | Bank (Kategorie "PV") |
+| **C4** | Rentenversicherung (freiwillig) | Bank (Kategorie "RV") |
+| **C5** | Riester-Beiträge | Bank (Kategorie "Riester") |
+| **C6** | Sonstige Absetzungen | Manuell erfassen |
+
+**Summe C:** Automatisch
+
+---
+
+#### **Zusätzliche Angaben im Formular:**
+
+**1. Firmendaten:**
+- Name, Anschrift, Steuernummer
+- **Quelle:** Stammdaten (Unternehmen)
+
+**2. Bewilligungszeitraum:**
+- Von-Bis (z.B. 01.01.2026 - 30.06.2026)
+- **Eingabe:** Manuell bei Export-Aufruf
+
+**3. Art der EKS:**
+- ☐ Vorläufige EKS (Prognose)
+- ☐ Abschließende EKS (tatsächliche Zahlen)
+- **Auswahl:** Vom User beim Export
+
+**4. Personaldaten:**
+- Anzahl Mitarbeiter (Vollzeit/Teilzeit/Geringfügig)
+- **Quelle:** Stammdaten (Personal) oder manuell
+
+**5. Fahrzeugnutzung:**
+- Anzahl Fahrzeuge
+- Betrieblich genutzt in %
+- **Quelle:** Stammdaten (Fahrzeuge) oder manuell
+
+**6. Darlehen & Zuschüsse:**
+- Erhaltene Fördermittel (z.B. Gründungszuschuss)
+- Darlehen (Höhe, Zinssatz)
+- **Quelle:** Manuell erfassen (einmalig)
+
+**7. Monatliche Aufschlüsselung:**
+- Jede Kategorie (A1-C6) wird **pro Monat** aufgeschlüsselt
+- 6 Spalten für 6-Monats-Zeitraum
+- **Automatisch:** RechnungsPilot summiert nach Monat
+
+---
+
+#### **Export-Workflow:**
+
+**Schritt 1: User wählt Zeitraum**
+```
+┌────────────────────────────────────────┐
+│ Anlage EKS exportieren                 │
+├────────────────────────────────────────┤
+│                                        │
+│ Bewilligungszeitraum:                  │
+│ Von: [01.01.2026] Bis: [30.06.2026]   │
+│                                        │
+│ Art der EKS:                           │
+│ ○ Vorläufig (Prognose)                 │
+│ ● Abschließend (tatsächliche Werte)   │
+│                                        │
+│ [Abbrechen]  [Daten prüfen →]          │
+└────────────────────────────────────────┘
+```
+
+**Schritt 2: Daten-Vorschau**
+```
+┌────────────────────────────────────────┐
+│ EKS-Vorschau: Jan-Jun 2026             │
+├────────────────────────────────────────┤
+│ Tabelle A - Betriebseinnahmen          │
+│ A1: Betriebseinnahmen      15.450,00 € │
+│   └─ Quelle: 42 Rechnungen             │
+│ A2: Privatentnahmen         3.200,00 € │
+│   └─ Quelle: 6 Kassenbucheinträge      │
+│ ...                                    │
+│                                        │
+│ ⚠️ Fehlende Daten:                     │
+│ • B6.5: Kfz-Abschreibung (manuell)     │
+│ • C5: Riester-Beiträge (prüfen)        │
+│                                        │
+│ [Zurück]  [Fehlende Daten ergänzen]    │
+│           [Als PDF exportieren]        │
+└────────────────────────────────────────┘
+```
+
+**Schritt 3: Export-Formate**
+- **PDF-Formular:** Vorausgefülltes Anlage-EKS-Formular
+- **CSV/Excel:** Tabellen A, B, C zum manuellen Übertragen
+- **JSON:** Maschinenlesbar für zukünftige digitale Übermittlung
+
+---
+
+#### **Mapping Kassenbuch → EKS**
+
+**Kategorien im Kassenbuch erweitern:**
+RechnungsPilot bietet vordefinierte Kategorien, die direkt zu EKS-Feldern mappen:
+
+**Einnahmen-Kategorien:**
+- "Betriebseinnahmen" → A1
+- "Privatentnahme" → A2 (negativ)
+- "Sonstige Einnahmen" → A3
+- "Privateinlage" → A4
+
+**Ausgaben-Kategorien:**
+- "Wareneinkauf" → B1
+- "Personal" → B2
+- "Raumkosten" → B3
+- "Versicherungen" → B4
+- "Werbung" → B5
+- "Kfz" → B6
+- "Reisekosten" → B7
+- "Investitionen" → B8
+- "Bürobedarf" → B9
+- "Kommunikation" → B10
+- "Beratung" → B11
+- "Fortbildung" → B12
+- "Sonstiges" → B13.5
+
+**Automatische Zuordnung:**
+- User wählt Kategorie → RechnungsPilot weiß automatisch, wo es in EKS hingehört
+- Bei Export: Automatische Summierung pro Monat
+
+---
+
+#### **Fehlende Daten (nicht in Kassenbuch/Rechnungen):**
+
+**Manuell zu erfassen:**
+- Abschreibungen (B6.5)
+- Steuerzahlungen (C1)
+- Versicherungsbeiträge (C2-C6)
+- Darlehen/Zuschüsse
+
+**Lösung:**
+- **Extra-Eingabemaske "EKS-Zusatzdaten":**
+  ```
+  ┌────────────────────────────────────────┐
+  │ EKS-Zusatzdaten für Jan-Jun 2026       │
+  ├────────────────────────────────────────┤
+  │                                        │
+  │ Abschreibungen:                        │
+  │ Kfz-Abschreibung (B6.5):   [____] €    │
+  │                                        │
+  │ Steuern & Versicherungen:              │
+  │ Einkommensteuer (C1):      [____] €    │
+  │ Krankenversicherung (C2):  [____] €    │
+  │ Pflegeversicherung (C3):   [____] €    │
+  │ ...                                    │
+  │                                        │
+  │ [Speichern]  [Abbrechen]               │
+  └────────────────────────────────────────┘
+  ```
+- Daten werden pro Bewilligungszeitraum gespeichert
+- Bei erneutem Export: Vorausgefüllt
+
+---
+
+#### **Plausibilitätsprüfung:**
+
+**Automatische Warnungen:**
+- ⚠️ "Betriebseinnahmen unter 100 € pro Monat - ist das korrekt?"
+- ⚠️ "Keine Ausgaben für Krankenversicherung - vergessen?"
+- ⚠️ "Privatentnahmen höher als Einnahmen - Liquiditätsproblem?"
+- ⚠️ "Umsatzsteuer-Summe passt nicht zu UStVA - bitte prüfen"
+
+**GoBD-Hinweise:**
+- Alle Belege (Eingangs-/Ausgangsrechnungen, Kassenbuch) müssen archiviert sein
+- Hinweis beim Export: "Stelle sicher, dass alle Belege für das Jobcenter vorliegen"
+
+---
+
+#### **Integration mit bestehenden Modulen:**
+
+**1. Kassenbuch:**
+- Kategorien müssen EKS-kompatibel sein
+- Monatliche Zusammenfassung ermöglichen
+
+**2. Eingangsrechnungen:**
+- Automatische Zuordnung zu EKS-Kategorien (B1-B18)
+
+**3. Ausgangsrechnungen:**
+- Automatische Summierung für A1
+
+**4. Bank-Integration:**
+- Steuerzahlungen erkennen (C1)
+- Versicherungsbeiträge erkennen (C2-C6)
+- Darlehenstilgung erkennen (B15)
+
+**5. UStVA:**
+- A5 (Umsatzsteuer) aus UStVA-Berechnung
+- B16 (Vorsteuer) aus UStVA-Berechnung
+
+---
+
+#### **Technische Umsetzung:**
+
+**Datenbank-Schema:**
+```sql
+CREATE TABLE eks_zusatzdaten (
+  id INTEGER PRIMARY KEY,
+  zeitraum_von DATE,
+  zeitraum_bis DATE,
+  kategorie TEXT, -- z.B. "B6.5", "C1"
+  monat INTEGER,  -- 1-6 im Bewilligungszeitraum
+  betrag DECIMAL,
+  beschreibung TEXT,
+  erstellt_am TIMESTAMP
+);
+
+CREATE TABLE eks_export (
+  id INTEGER PRIMARY KEY,
+  zeitraum_von DATE,
+  zeitraum_bis DATE,
+  art TEXT, -- "vorlaeufig" oder "abschliessend"
+  exportiert_am TIMESTAMP,
+  datei_pfad TEXT,
+  daten_json TEXT -- komplette EKS-Daten als JSON
+);
+```
+
+**Export-Library (Python):**
+- Template: Offizielles EKS-PDF-Formular
+- Ausfüllen mit `pypdf` oder `reportlab`
+- Alternativ: HTML → PDF (Weasyprint, Puppeteer)
+
+**Frontend (React):**
+- Komponente `EksExport.tsx`
+- Daten-Aggregation via API
+- Vorschau mit `react-pdf`
+
+---
+
+#### **Zeitlicher Workflow (User-Sicht):**
+
+**Szenario: Abschließende EKS für Jan-Jun 2026**
+
+1. **Juni 2026 endet** → Bewilligungszeitraum vorbei
+2. **User öffnet RechnungsPilot** → Menü: "Anlage EKS exportieren"
+3. **Zeitraum wählen:** 01.01.2026 - 30.06.2026
+4. **Art wählen:** Abschließend
+5. **Automatische Datensammlung:**
+   - Alle Ausgangsrechnungen (A1)
+   - Alle Eingangsrechnungen (B1-B18)
+   - Alle Kassenbucheinträge (A2, A4, B-Kategorien)
+   - UStVA-Daten (A5, B16)
+   - Bank-Transaktionen (C1-C6)
+6. **Fehlende Daten ergänzen:**
+   - Abschreibungen manuell eingeben
+   - Versicherungsbeiträge prüfen
+7. **Vorschau prüfen:**
+   - Summen kontrollieren
+   - Plausibilität checken
+8. **PDF generieren** → Speichern & an Jobcenter senden
+
+**Zeitaufwand:** ~10 Minuten (vs. 2-3 Stunden manuell!)
+
+---
+
+#### **Unique Selling Point (USP):**
+
+**Kein anderes Buchhaltungsprogramm bietet EKS-Export!**
+
+**Vorteile für Zielgruppe:**
+- ✅ Riesige Zeitersparnis (2-3 Stunden → 10 Minuten)
+- ✅ Weniger Fehler (automatische Berechnung)
+- ✅ Rechtssicher (alle Daten aus GoBD-konformen Belegen)
+- ✅ Übersichtlich (monatliche Aufschlüsselung)
+- ✅ Nachweisbar (alle Belege digital archiviert)
+
+**Marketing-Aspekt:**
+- "Die **einzige** Buchhaltungssoftware mit EKS-Export"
+- Große Zielgruppe: ~400.000 Selbstständige mit ALG II (Schätzung)
+- Community-Reichweite durch einzigartige Funktion
+
+---
+
+#### **MVP-Priorisierung:**
+
+**Phase 1 (MVP):**
+- ✅ Kategorie-Mapping definieren
+- ✅ Daten-Aggregation (A, B, C)
+- ✅ Einfacher CSV/Excel-Export
+- ✅ Manuelle Zusatzdaten-Eingabe
+
+**Phase 2 (Post-MVP):**
+- PDF-Formular vorausfüllen
+- Plausibilitätsprüfung
+- Monatliche Vorschau-Reports
+
+**Phase 3 (Later):**
+- Vorläufige EKS mit Prognose-Modus
+- Automatische Abschreibungsberechnung
+- Bank-API-Integration für C1-C6
+
+---
+
+**Status:** Vollständig analysiert - Struktur, Mapping, Export-Workflow, Datenquellen, Technische Umsetzung geklärt.
+
+---
+
 ### **📊 UStVA-Datenaufbereitung (Verbindung zu Kategorie 6)**
 
 **Wichtige Erkenntnis:** Das Kassenbuch mit USt-Aufschlüsselung bildet die **Datenbasis für die Umsatzsteuervoranmeldung (UStVA)**.
@@ -441,10 +836,9 @@ Zahllast/Erstattung:
 
 ### **Noch zu klären (siehe fragen.md):**
 
-- Kategorie 3: Anlage EKS (Agentur für Arbeit)
 - Kategorie 4: DATEV-Export
 - Kategorie 5: Bank-Integration
-- Kategorie 6: UStVA
+- Kategorie 6: UStVA (Details)
 - Kategorie 7: EÜR
 - Kategorie 8: Stammdaten-Erfassung
 - Kategorie 9: Import-Schnittstellen
@@ -625,13 +1019,32 @@ RechnungsPilot/
 
 ## **Changelog**
 
+### **2025-12-04 - Kategorie 3 (Anlage EKS) geklärt**
+- Anlage EKS (9-seitiges Jobcenter-Formular) vollständig analysiert
+- Tabelle A (Betriebseinnahmen): 7 Kategorien dokumentiert
+- Tabelle B (Betriebsausgaben): 28 Kategorien dokumentiert
+- Tabelle C (Absetzungen): 6 Kategorien dokumentiert
+- Mapping RechnungsPilot → EKS definiert
+- Export-Workflow (CSV/Excel/PDF) konzipiert
+- EKS-Zusatzdaten-Eingabemaske geplant
+- Plausibilitätsprüfung definiert
+- Integration mit Kassenbuch, Rechnungen, Bank, UStVA geklärt
+- Datenbank-Schema für EKS-Modul entworfen
+- MVP-Priorisierung in 3 Phasen aufgeteilt
+- USP herausgearbeitet: Einzige Software mit EKS-Export
+
 ### **2025-12-03 - Projektstart**
 - Initiales Projekt-Setup
 - projekt.md analysiert
 - fragen.md erstellt (Kategorien 2-13)
 - claude.md angelegt
 - Kategorie 1 (Kassenbuch) vollständig geklärt
+- Kategorie 2 (PDF/E-Rechnungs-Import) vollständig geklärt
+- Kassenbuch um USt-Aufschlüsselung erweitert
+- UStVA-Datenaufbereitung konzipiert
 - Technologie-Stack grob skizziert
+- GitHub-Repository erstellt und konfiguriert
+- Community-Ankündigungen vorbereitet
 
 ---
 

@@ -1,10 +1,13 @@
 # Offene Fragen zu RechnungsPilot
 
-## Status: Kategorie 1 (Kassenbuch) beantwortet ✅
+## Status:
+- ✅ Kategorie 1 (Kassenbuch) geklärt
+- ✅ Kategorie 2 (PDF/E-Rechnungs-Import) geklärt
+- ✅ Kategorie 3 (Anlage EKS) geklärt
 
 ---
 
-## **📋 Kategorie 2: PDF/E-Rechnungs-Import (ZUGFeRD, XRechnung)**
+## **📋 Kategorie 2: PDF/E-Rechnungs-Import (ZUGFeRD, XRechnung)** ✅ GEKLÄRT
 
 ### **Formate:**
 
@@ -31,7 +34,7 @@
 
 ---
 
-## **📋 Kategorie 3: Anlage EKS (Agentur für Arbeit)**
+## **📋 Kategorie 3: Anlage EKS (Agentur für Arbeit)** ✅ GEKLÄRT
 
 **Frage 3.1: EKS-Struktur:**
 - Welche Kategorien müssen genau erfasst werden? (Hast du die aktuelle Liste?)
