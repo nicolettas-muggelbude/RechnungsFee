@@ -95,6 +95,7 @@ Dieses Projekt wird offen entwickelt - die Community soll von Anfang an dabei se
 - 💬 **Feedback geben** - Teile deine Ideen und Anforderungen
 - 🐛 **Bugs melden** - Öffne Issues wenn etwas nicht funktioniert
 - 💻 **Code beitragen** - Pull Requests sind willkommen (siehe [CONTRIBUTING.md](CONTRIBUTING.md))
+- 🏦 **Bank-CSV Format beitragen** - Hilf deine Bank zu unterstützen ([Anleitung](CONTRIBUTING.md#-bank-csv-format-beitragen))
 - 📖 **Dokumentation** - Hilf die Docs zu verbessern
 - 🧪 **Testen** - Werde Beta-Tester
 - ⭐ **Stern geben** - Zeig deine Unterstützung
