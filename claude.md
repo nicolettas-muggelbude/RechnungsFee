@@ -2575,12 +2575,66 @@ class BankCSVParser:
 
 ---
 
+## **🔍 Marktbeobachtung & Competitor Research**
+
+### **AGENDA (Lexware)**
+
+**Import-Funktionen:**
+
+1. **DATEV-Import**
+   - Kann DATEV-Daten importieren
+   - Kompatibilität mit DATEV-Schnittstelle
+
+2. **Beleg-Import (PDF + XML)**
+   - **Voraussetzung:** PDF und XML müssen denselben Dateinamen haben
+   - **Format:** `rechnung-123.pdf` + `rechnung-123.xml`
+   - **Bulk-Import:** Unterstützt gezippte Belegbilder
+   - **Workflow:** ZIP hochladen → AGENDA entpackt → Matcht PDF+XML → Importiert
+
+**Relevanz für RechnungsPilot:**
+- ✅ **PDF+XML-Pairing:** Sollten wir auch unterstützen (Standard bei ZUGFeRD)
+- ✅ **ZIP-Import:** Praktisch für Massen-Upload von gescannten Belegen
+- ✅ **Dateinamen-Matching:** Konvention übernehmen (benutzerfreundlich)
+
+**Implementierungs-Idee:**
+```python
+def import_beleg_zip(zip_file):
+    """
+    Importiert ZIP mit gepaarten PDF+XML-Belegen
+
+    Struktur:
+    belege.zip
+    ├── rechnung-001.pdf
+    ├── rechnung-001.xml
+    ├── rechnung-002.pdf
+    └── rechnung-002.xml
+    """
+    files = extract_zip(zip_file)
+
+    # PDFs und XMLs matchen
+    pairs = match_pdf_xml_by_filename(files)
+
+    for pdf, xml in pairs:
+        # ZUGFeRD/XRechnung parsen
+        rechnung_data = parse_xrechnung(xml)
+
+        # PDF als Beleg anhängen
+        rechnung_data['beleg_pdf'] = pdf
+
+        # In Rechnungseingangs-/Ausgangsbuch eintragen
+        create_rechnung(rechnung_data)
+```
+
+**Status:** 📋 Für Kategorie 9 (Import-Schnittstellen) vorgemerkt
+
+---
+
 ### **Noch zu klären (siehe fragen.md):**
 
 - Kategorie 6: UStVA (Details)
 - Kategorie 7: EÜR
 - Kategorie 8: Stammdaten-Erfassung
-- Kategorie 9: Import-Schnittstellen
+- Kategorie 9: Import-Schnittstellen (inkl. AGENDA-kompatibel)
 - Kategorie 10: Backup & Update
 - Kategorie 11: Steuersätze
 - Kategorie 12: Hilfe-System
@@ -2592,7 +2646,7 @@ class BankCSVParser:
 
 ### **Vorschlag 1: LibreOffice-Rechnungsvorlagen mit ZUGFeRD-Platzhaltern**
 
-**Quelle:** Community-Diskussion auf forum.linuxguides.de
+**Quelle:** Community-Diskussion auf [forum.linuxguides.de](https://forum.linuxguides.de)
 **Datum:** 2025-12-03
 
 **Idee:**
