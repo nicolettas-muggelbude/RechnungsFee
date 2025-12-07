@@ -45,6 +45,7 @@ bank-csv/
 ├── sparkasse-lzo-camt-v2.csv  # ✅ Sparkasse/LZO - CAMT V2 Format
 ├── sparkasse-lzo-camt-v8.csv  # ✅ Sparkasse/LZO - CAMT V8 Format
 ├── paypal.csv                 # ✅ PayPal Aktivitätsbericht
+├── commerzbank.csv            # ✅ Commerzbank - Umsatzübersicht
 ├── volksbank.csv              # (noch nicht vorhanden)
 ├── dkb.csv                    # (noch nicht vorhanden)
 ├── ing.csv                    # (noch nicht vorhanden)
@@ -172,6 +173,7 @@ def test_sparkasse_import():
 | Sparkasse/LZO | CAMT V2 | ✅ | ❌ | ❌ |
 | Sparkasse/LZO | CAMT V8 | ✅ | ❌ | ❌ |
 | PayPal | Aktivitätsbericht | ✅ | ❌ | ❌ |
+| Commerzbank | Umsatzübersicht | ✅ | ❌ | ❌ |
 | Volksbank | - | ❌ | ❌ | ❌ |
 | DKB | - | ❌ | ❌ | ❌ |
 | ING | - | ❌ | ❌ | ❌ |
