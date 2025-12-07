@@ -4389,6 +4389,296 @@ Gewinn = Betriebseinnahmen - Betriebsausgaben
 
 ---
 
+### **7.2.1 Automatische Zuordnung & Warnungen (Frage 7.4)**
+
+#### **Automatische Buchung nach Zahlungsdatum**
+
+**Antwort: Ja, RechnungsPilot bucht automatisch nach Zahlungsdatum (nicht Rechnungsdatum).**
+
+**Technische Umsetzung:**
+
+```python
+def calculate_euer_jahr(rechnung):
+    """
+    Bestimmt EÜR-Jahr basierend auf Zahlungsdatum (Zufluss-/Abfluss-Prinzip)
+    """
+    if rechnung.zahlungsdatum:
+        # Zufluss-/Abfluss-Prinzip: Zahlungsdatum zählt
+        return rechnung.zahlungsdatum.year
+    else:
+        # Rechnung noch nicht bezahlt → Kein EÜR-Jahr
+        return None
+
+
+# Beispiel:
+rechnung = Rechnung(
+    rechnungsdatum='2025-12-15',
+    zahlungsdatum='2026-01-10',  # Zahlung im neuen Jahr
+    betrag=1000.00
+)
+
+euer_jahr = calculate_euer_jahr(rechnung)  # → 2026 (nicht 2025!)
+```
+
+**UI-Verhalten:**
+
+```
+┌──────────────────────────────────────────┐
+│ Ausgangsrechnung                         │
+├──────────────────────────────────────────┤
+│                                          │
+│ Rechnungsdatum: [15.12.2025]            │
+│ Zahlungsdatum:  [10.01.2026]            │
+│                                          │
+│ ℹ️ EÜR-Jahr: 2026                        │
+│    (Zufluss-Prinzip: Zahlungsdatum zählt)│
+│                                          │
+│ Betrag: 1.000,00 €                       │
+│                                          │
+│    [ Speichern ]                         │
+└──────────────────────────────────────────┘
+```
+
+**Filter in EÜR-Berechnung:**
+
+```python
+def get_ausgangsrechnungen_fuer_euer(jahr):
+    """
+    Holt Ausgangsrechnungen für EÜR (nach Zahlungsdatum!)
+    """
+    return db.query(Ausgangsrechnung).filter(
+        Ausgangsrechnung.zahlungsdatum >= f'{jahr}-01-01',
+        Ausgangsrechnung.zahlungsdatum <= f'{jahr}-12-31',
+        Ausgangsrechnung.status == 'bezahlt'  # Nur bezahlte!
+    ).all()
+
+# NICHT nach Rechnungsdatum filtern!
+# ❌ FALSCH: Ausgangsrechnung.rechnungsdatum
+# ✅ RICHTIG: Ausgangsrechnung.zahlungsdatum
+```
+
+---
+
+#### **Hinweise bei Jahresübergang (Rechnung & Zahlung in verschiedenen Jahren)**
+
+**Antwort: Ja, RechnungsPilot warnt proaktiv bei Jahresübergang.**
+
+**Wann wird gewarnt?**
+
+| Rechnungsdatum | Zahlungsdatum | Warnung? | Grund |
+|----------------|---------------|----------|-------|
+| 15.11.2025 | 28.11.2025 | ❌ Nein | Beide im selben Jahr |
+| 15.12.2025 | 10.01.2026 | ✅ Ja | Jahresübergang → EÜR-Jahr ändert sich |
+| 20.12.2025 | 28.12.2025 | ⚠️ Optional | Jahresende-Warnung (siehe unten) |
+
+**Warnung bei Jahresübergang:**
+
+```
+┌──────────────────────────────────────────┐
+│ ⚠️ Jahresübergang: EÜR-Jahr beachten!    │
+├──────────────────────────────────────────┤
+│                                          │
+│ Ausgangsrechnung: RE-2025-042            │
+│ Rechnungsdatum: 15.12.2025               │
+│ Zahlungsdatum:  10.01.2026               │
+│                                          │
+│ ⚠️ Rechnung wurde 2025 geschrieben,      │
+│    aber Zahlung erfolgt 2026.            │
+│                                          │
+│ Zufluss-Prinzip (EÜR):                   │
+│ → Einnahme zählt für EÜR 2026 (nicht 2025)│
+│                                          │
+│ Das ist steuerlich korrekt!              │
+│ Nur zur Info, falls unerwartet.          │
+│                                          │
+│              [ Verstanden ]              │
+└──────────────────────────────────────────┘
+```
+
+**Warnung direkt beim Zahlungseingabe:**
+
+```
+┌──────────────────────────────────────────┐
+│ Zahlung erfassen                         │
+├──────────────────────────────────────────┤
+│                                          │
+│ Rechnung: RE-2025-042                    │
+│ Rechnungsdatum: 15.12.2025               │
+│                                          │
+│ Zahlungsdatum: [10.01.2026____]          │
+│                                          │
+│ ⚠️ Achtung: Zahlung im neuen Jahr!       │
+│    → EÜR-Jahr: 2026 (nicht 2025)        │
+│                                          │
+│ Betrag: [1.000,00___] €                  │
+│                                          │
+│    [Abbrechen]  [ Speichern ]            │
+└──────────────────────────────────────────┘
+```
+
+---
+
+#### **Jahresende-Warnung (Dezember-Zahlungen)**
+
+**Problem:** User könnte vergessen, Dezember-Zahlungen rechtzeitig zu erfassen.
+
+**Lösung:** Automatische Erinnerung im Januar.
+
+```
+┌──────────────────────────────────────────┐
+│ ℹ️ Jahresabschluss 2025: Offene Rechnungen│
+├──────────────────────────────────────────┤
+│                                          │
+│ Es gibt 3 unbezahlte Rechnungen aus 2025:│
+│                                          │
+│ • RE-2025-038 (15.11.25) - 500 €        │
+│ • RE-2025-040 (01.12.25) - 750 €        │
+│ • RE-2025-042 (15.12.25) - 1.000 €      │
+│                                          │
+│ Fragen:                                  │
+│ 1. Wurden diese in 2025 bezahlt?         │
+│    → Zahlungsdatum nachtragen            │
+│                                          │
+│ 2. Wurden diese in 2026 bezahlt?         │
+│    → EÜR 2026 (Zufluss-Prinzip)         │
+│                                          │
+│ 💡 Tipp: Prüfe Kontoauszüge Dez 2025!    │
+│                                          │
+│    [Später]  [ Rechnungen prüfen ]       │
+└──────────────────────────────────────────┘
+```
+
+**Zeitpunkt der Warnung:**
+
+- ✅ Anfang Januar (z.B. ab 05.01.2026)
+- ✅ Vor EÜR-Export für Vorjahr
+- ✅ Bei EÜR-Berechnung für Vorjahr
+
+---
+
+#### **10-Tage-Regel für regelmäßige Zahlungen**
+
+**Rechtslage:** Regelmäßige Zahlungen (Miete, Versicherung, Abos) zwischen 22.12. und 10.01. können dem alten oder neuen Jahr zugeordnet werden.
+
+**UI-Dialog:**
+
+```
+┌──────────────────────────────────────────┐
+│ 10-Tage-Regel: Jahr wählen               │
+├──────────────────────────────────────────┤
+│                                          │
+│ Eingangsrechnung: Büromiete Januar 2026  │
+│ Zahlungsdatum: 28.12.2025                │
+│ Betrag: 500,00 €                         │
+│                                          │
+│ ℹ️ Regelmäßige Zahlung im Zeitraum       │
+│    22.12. - 10.01. → Wahlrecht           │
+│                                          │
+│ EÜR-Jahr:                                │
+│ ○ 2025 (Zahlung vor Jahreswechsel)      │
+│ ● 2026 (wirtschaftlich zu Januar gehörig)│
+│                                          │
+│ 💡 Empfehlung: 2026 (Miete für Januar)   │
+│                                          │
+│    [Abbrechen]  [ Speichern ]            │
+└──────────────────────────────────────────┘
+```
+
+**Automatische Erkennung:**
+
+```python
+def ist_10_tage_regel_anwendbar(rechnung):
+    """
+    Prüft ob 10-Tage-Regel anwendbar (22.12. - 10.01.)
+    """
+    # 1. Regelmäßige Zahlung? (Miete, Versicherung, Abo)
+    ist_regelmaessig = rechnung.kategorie in [
+        'Raumkosten (Miete)',
+        'Versicherungen (betr.)',
+        'Telefon, Internet',
+        'Software, Lizenzen'  # Wenn monatlich
+    ]
+
+    if not ist_regelmaessig:
+        return False
+
+    # 2. Zahlungsdatum zwischen 22.12. und 10.01.?
+    datum = rechnung.zahlungsdatum
+    jahr = datum.year
+
+    # 22.12. - 31.12. (altes Jahr)
+    if datum >= date(jahr, 12, 22) and datum <= date(jahr, 12, 31):
+        return True
+
+    # 01.01. - 10.01. (neues Jahr)
+    if datum >= date(jahr, 1, 1) and datum <= date(jahr, 1, 10):
+        return True
+
+    return False
+```
+
+---
+
+#### **Übersicht: EÜR-Jahr vs. Rechnungsjahr**
+
+**Dashboard-Widget:**
+
+```
+┌──────────────────────────────────────────┐
+│ EÜR-Jahresübergang (2025 → 2026)        │
+├──────────────────────────────────────────┤
+│                                          │
+│ Rechnungen 2025, bezahlt in 2026:       │
+│   3 Rechnungen, 2.500 € → EÜR 2026      │
+│                                          │
+│ Rechnungen 2026, bezahlt in 2025:       │
+│   0 Rechnungen, 0 € → Keine             │
+│                                          │
+│ ℹ️ EÜR 2025 niedriger als erwartet?      │
+│    Prüfe, ob Dezember-Rechnungen in 2026 │
+│    bezahlt wurden.                       │
+│                                          │
+│    [ Details anzeigen ]                  │
+└──────────────────────────────────────────┘
+```
+
+**Detail-Ansicht:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Jahresübergang: Rechnungen mit abweichendem EÜR-Jahr       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ Filter: [2025 ▼]  Typ: [Alle ▼]                             │
+│                                                             │
+│ ┌───────────────────────────────────────────────────────┐   │
+│ │ Rechnung        │ Rechnungsdatum │ Zahlungsdatum │ EÜR │
+│ ├─────────────────┼────────────────┼───────────────┼─────┤
+│ │ RE-2025-038     │ 15.11.2025     │ 05.01.2026    │ 2026│
+│ │ RE-2025-040     │ 01.12.2025     │ 08.01.2026    │ 2026│
+│ │ RE-2025-042     │ 15.12.2025     │ 10.01.2026    │ 2026│
+│ └─────────────────┴────────────────┴───────────────┴─────┘   │
+│                                                             │
+│ 💡 Diese Rechnungen wurden 2025 geschrieben, aber zählen   │
+│    für EÜR 2026 (Zufluss-Prinzip).                         │
+│                                                             │
+│    [CSV exportieren]  [PDF drucken]                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### **Zusammenfassung Frage 7.4**
+
+| Aspekt | Antwort |
+|--------|---------|
+| **Automatisch nach Zahlungsdatum buchen?** | ✅ Ja, EÜR-Jahr = Zahlungsjahr (nicht Rechnungsjahr) |
+| **Hinweise bei Jahresübergang?** | ✅ Ja, proaktive Warnungen bei Zahlungseingabe und Jahresabschluss |
+| **10-Tage-Regel?** | ✅ Ja, automatische Erkennung + Wahlrecht für regelmäßige Zahlungen |
+| **Dashboard-Widget?** | ✅ Ja, Übersicht Jahresübergang mit abweichenden EÜR-Jahren |
+
+---
+
 ### **7.3 Betriebseinnahmen**
 
 **Was gehört rein?**
