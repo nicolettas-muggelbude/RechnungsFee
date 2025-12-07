@@ -2842,24 +2842,134 @@ def export_ustva_pdf(ustva_data):
 | **Für wen?** | Alle (Standardfall) | Freiberufler, kleine Unternehmen |
 | **RechnungsPilot** | Alle Ausgangsrechnungen | Nur bezahlte Rechnungen |
 
-**Implementierung:**
+---
+
+#### **⚠️ WICHTIG: Ist-Versteuerung PFLICHT bei Transferleistungen**
+
+**Grund: SGBII-Konformität**
+
+Wenn der User **Transferleistungen** bezieht (ALG II / Bürgergeld), ist **Ist-Versteuerung zwingend erforderlich**!
+
+**Warum?**
+- **SGBII § 11:** "Einnahmen = Zufluss" (nur tatsächlich erhaltenes Geld)
+- **Soll-Versteuerung** würde Rechnungsdatum zählen → Einnahme "zu früh" gemeldet
+- **Ist-Versteuerung** zählt Zahlungseingang → Passt zu SGBII-Definition
+
+**Beispiel:**
+
+```
+Szenario:
+- Rechnung gestellt: 15.12.2025 (1.000 €)
+- Zahlung erhalten: 10.01.2026 (1.000 €)
+
+Soll-Versteuerung (FALSCH bei ALG II):
+→ Einnahme in Dezember 2025 (Rechnungsdatum)
+→ SGBII rechnet 1.000 € im Dezember an
+→ Aber: Kein Geld auf dem Konto!
+→ Kürzung der Leistung obwohl kein Geld da ist ❌
+
+Ist-Versteuerung (RICHTIG bei ALG II):
+→ Einnahme in Januar 2026 (Zahlungseingang)
+→ SGBII rechnet 1.000 € im Januar an
+→ Geld ist tatsächlich auf dem Konto
+→ Korrekte Anrechnung ✅
+```
+
+**RechnungsPilot-Verhalten:**
+
+1. **Beim Ersteinrichtung:**
+   ```
+   Beziehen Sie Transferleistungen?
+   (ALG II, Bürgergeld, Grundsicherung)
+
+   ○ Nein
+   ● Ja  ← User wählt "Ja"
+
+   → Automatisch: Ist-Versteuerung wird gesetzt
+   → Soll-Versteuerung wird deaktiviert/ausgegraut
+   ```
+
+2. **In Einstellungen:**
+   ```
+   Einstellungen > Steuern
+   ┌──────────────────────────────────┐
+   │ Versteuerungsart:                │
+   │ ○ Soll-Versteuerung (gesperrt)  │
+   │ ● Ist-Versteuerung               │
+   │                                  │
+   │ ⚠️ Ist-Versteuerung ist Pflicht  │
+   │    bei Bezug von                 │
+   │    Transferleistungen (SGBII)    │
+   └──────────────────────────────────┘
+   ```
+
+3. **EKS-Export:**
+   - EKS nutzt automatisch Ist-Versteuerung
+   - Alle Einnahmen/Ausgaben nach Zufluss-Datum
+   - Konsistent mit UStVA
+
+**Zusammenhang mit EKS (Kategorie 3):**
+- EKS = Einkommensnachweis fürs Jobcenter
+- Verwendet "Zufluss-Prinzip" (= Ist-Versteuerung)
+- UStVA muss dasselbe Prinzip verwenden!
+- Sonst: Widersprüchliche Zahlen zwischen EKS und Steuererklärung
+
+---
+
+#### **Implementierung:**
 
 ```python
-def get_ausgangsrechnungen_fuer_ustva(zeitraum, versteuerungsart):
+def get_versteuerungsart():
+    """
+    Ermittelt die Versteuerungsart unter Berücksichtigung von Transferleistungen
+    """
+    user_settings = get_user_settings()
+
+    # ZWANG: Transferleistungen → Ist-Versteuerung
+    if user_settings.bezieht_transferleistungen:
+        return 'ist'  # Keine Wahl!
+
+    # Sonst: User-Einstellung
+    return user_settings.versteuerungsart  # 'ist' oder 'soll'
+
+
+def get_ausgangsrechnungen_fuer_ustva(zeitraum):
+    """
+    Holt Ausgangsrechnungen je nach Versteuerungsart
+    """
+    versteuerungsart = get_versteuerungsart()
+
     if versteuerungsart == 'ist':
         # Ist-Versteuerung: Nur bezahlte Rechnungen
+        # WICHTIG bei Transferleistungen (SGBII § 11: Zufluss-Prinzip)
         return get_ausgangsrechnungen(
             zeitraum=zeitraum,
-            bezahlt=True
+            bezahlt=True,
+            zahlungsdatum_in_zeitraum=True  # Nach Zahlungseingang!
         )
     else:
         # Soll-Versteuerung: Alle Rechnungen
         return get_ausgangsrechnungen(
-            zeitraum=zeitraum
+            zeitraum=zeitraum,
+            rechnungsdatum_in_zeitraum=True  # Nach Rechnungsdatum
         )
+
+
+def validate_settings_change(field, new_value):
+    """
+    Verhindert ungültige Einstellungen
+    """
+    if field == 'versteuerungsart' and new_value == 'soll':
+        user = get_user_settings()
+
+        if user.bezieht_transferleistungen:
+            raise ValidationError(
+                "Soll-Versteuerung nicht möglich bei Bezug von Transferleistungen. "
+                "SGBII § 11 erfordert Ist-Versteuerung (Zufluss-Prinzip)."
+            )
 ```
 
-**User-Einstellung:**
+**User-Einstellung (normal):**
 ```
 Einstellungen > Steuern
 ┌────────────────────────────┐
@@ -2869,9 +2979,24 @@ Einstellungen > Steuern
 └────────────────────────────┘
 ```
 
+**User-Einstellung (bei Transferleistungen):**
+```
+Einstellungen > Steuern
+┌──────────────────────────────────────┐
+│ Versteuerungsart:                    │
+│ ○ Soll-Versteuerung (nicht möglich) │
+│ ● Ist-Versteuerung (Pflicht)        │
+│                                      │
+│ ⚠️ Bei Bezug von Transferleistungen  │
+│    ist Ist-Versteuerung              │
+│    gesetzlich vorgeschrieben         │
+│    (SGBII § 11 Zufluss-Prinzip)      │
+└──────────────────────────────────────┘
+```
+
 ---
 
-**Status:** ✅ Kategorie 6.1-6.5 definiert - Hybrid-Ansatz (MVP: Zahlen vorbereiten, v2.0: ELSTER-Integration), Berechnung, Kleinunternehmer, Ist/Soll-Versteuerung.
+**Status:** ✅ Kategorie 6.1-6.5 definiert - Hybrid-Ansatz (MVP: Zahlen vorbereiten, v2.0: ELSTER-Integration), Berechnung, Kleinunternehmer, Ist/Soll-Versteuerung, SGBII-Konformität (Ist-Versteuerung Pflicht bei Transferleistungen).
 
 ---
 
