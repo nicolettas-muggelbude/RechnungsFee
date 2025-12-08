@@ -7601,12 +7601,21 @@ CREATE TABLE kunden (
 
     -- Kontakt (Optional)
     email TEXT,
-    telefon TEXT,
+    telefon_mobil TEXT,  -- ⭐ NEU: Mobiltelefon (getrennt)
+    telefon_festnetz TEXT,  -- ⭐ NEU: Festnetz (getrennt)
     website TEXT,
 
+    -- Persönliche Daten (nur bei typ='privat')
+    geburtstag DATE,  -- ⭐ NEU: Für Privatpersonen
+
     -- Geschäftsbedingungen
-    zahlungsziel INTEGER DEFAULT 14,  -- ⭐ NEU: Tage (Standard 14)
-    zahlungsziel_individuell BOOLEAN DEFAULT 0,  -- ⭐ NEU: Abweichend vom User-Standard?
+    zahlungsziel INTEGER DEFAULT 14,  -- Tage (Standard 14)
+    zahlungsziel_individuell BOOLEAN DEFAULT 0,  -- Abweichend vom User-Standard?
+
+    -- Steuerliche Daten
+    steuernummer TEXT,  -- ⭐ NEU: Steuernummer (bei Firma validiert)
+    steuer_id TEXT,  -- ⭐ NEU: Steueridentifikationsnummer (11-stellig)
+    steuer_id_validiert BOOLEAN DEFAULT 0,  -- ⭐ NEU
 
     -- EU-Handel
     ust_idnr TEXT,  -- z.B. "BE0123456789"
@@ -7615,7 +7624,7 @@ CREATE TABLE kunden (
     ust_idnr_validierung_ergebnis TEXT,  -- BZSt-API Ergebnis (JSON)
 
     -- Metadaten
-    notizen TEXT,
+    notizen TEXT,  -- Anmerkungen / Bemerkungen
     erstellt_am TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     aktualisiert_am TIMESTAMP,
 
@@ -7679,12 +7688,36 @@ CREATE INDEX idx_kunden_land_kategorie ON kunden(land_kategorie);
 │ E-Mail:                                          │
 │ [info@neue-firma.be______________]               │
 │                                                  │
-│ USt-IdNr. (für EU-Kunden):                       │
-│ [BE0123456789____]  [Validieren ✓]              │
-│ ✅ Gültig (geprüft am 08.12.2025)                │
+│ Telefon (Mobil): ⭐ NEU                          │
+│ [📱 +49 170 1234567_____]  [📞 Anrufen]         │
+│                                                  │
+│ Telefon (Festnetz): ⭐ NEU                       │
+│ [📞 +49 441 12345___]  [📞 Anrufen]              │
+│                                                  │
+│ ┌────────────────────────────────────────────┐  │
+│ │ Steuerliche Daten                          │  │
+│ ├────────────────────────────────────────────┤  │
+│ │                                            │  │
+│ │ Steuernummer (bei Firma): ⭐ NEU          │  │
+│ │ [26/123/12345___________]                  │  │
+│ │ ⚠️ Empfohlen bei Firmen                   │  │
+│ │                                            │  │
+│ │ Steuer-ID: ⭐ NEU                          │  │
+│ │ [12345678901_____]  [Validieren ✓]        │  │
+│ │ ℹ️ 11-stellig (für DE-Kunden)             │  │
+│ │                                            │  │
+│ │ USt-IdNr. (für EU-Kunden):                 │  │
+│ │ [BE0123456789____]  [Validieren ✓]        │  │
+│ │ ✅ Gültig (geprüft am 08.12.2025)          │  │
+│ │                                            │  │
+│ └────────────────────────────────────────────┘  │
 │                                                  │
 │ Zahlungsziel:                                    │
 │ [14__] Tage  ☑ Abweichend vom Standard (14 T.)  │
+│                                                  │
+│ Anmerkungen: ⭐ NEU                              │
+│ [____________________________________________]   │
+│ [____________________________________________]   │
 │                                                  │
 ├──────────────────────────────────────────────────┤
 │                                                  │
@@ -7733,6 +7766,329 @@ CREATE INDEX idx_kunden_land_kategorie ON kunden(land_kategorie);
 
 ---
 
+#### **🖥️ UI: Privatperson (mit Geburtstag)** ⭐ NEU
+
+```
+┌──────────────────────────────────────────────────┐
+│ ➕ Neuer Kunde                                   │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│ Typ:  ○ Firma  ● Privatperson ⭐                │
+│                                                  │
+│ Anrede:                                          │
+│ [Frau ▼]                                         │
+│                                                  │
+│ Vorname:         Nachname: *                     │
+│ [Erika____]      [Musterfrau__________]          │
+│                                                  │
+│ Geburtstag: ⭐ NEU                               │
+│ [01.01.1980__]  📅                               │
+│ ℹ️ Optional (z.B. für Glückwünsche)             │
+│                                                  │
+│ Straße: *          Hausnr.:                      │
+│ [Musterstraße___]  [42__]                        │
+│                                                  │
+│ PLZ: *      Ort: *                               │
+│ [26123__]   [Oldenburg____________]              │
+│                                                  │
+│ Land: *                      (→ Kategorie: Inland)
+│ [Deutschland ▼]                                  │
+│                                                  │
+│ E-Mail:                                          │
+│ [erika@beispiel.de_______________]               │
+│                                                  │
+│ Telefon (Mobil): ⭐                              │
+│ [📱 +49 170 9876543_____]  [📞 Anrufen]         │
+│                                                  │
+│ Telefon (Festnetz): ⭐                           │
+│ [📞 0441 987654_____]  [📞 Anrufen]              │
+│                                                  │
+│ ┌────────────────────────────────────────────┐  │
+│ │ Steuerliche Daten (optional)               │  │
+│ ├────────────────────────────────────────────┤  │
+│ │                                            │  │
+│ │ Steuer-ID: ⭐                              │  │
+│ │ [12345678901_____]                         │  │
+│ │ ℹ️ 11-stellig (nur bei Bedarf)            │  │
+│ │                                            │  │
+│ └────────────────────────────────────────────┘  │
+│                                                  │
+│ Zahlungsziel:                                    │
+│ [14__] Tage                                      │
+│                                                  │
+│ Anmerkungen: ⭐                                  │
+│ [Stammkundin seit 2020, bevorzugt E-Mail____]   │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+#### **📞 Click-to-Call Funktion** ⭐ NEU
+
+**Linkfeld bei Telefonnummern:**
+
+```python
+# ui/kunde_detail.py
+def render_telefon_feld(telefon: str, typ: str) -> str:
+    """
+    Rendert Telefon-Feld mit Click-to-Call Link
+
+    Args:
+        telefon: Telefonnummer (z.B. "+49 170 1234567")
+        typ: 'mobil' oder 'festnetz'
+
+    Returns:
+        HTML mit klickbarem Link für Smartphones
+    """
+    if not telefon:
+        return ""
+
+    icon = "📱" if typ == "mobil" else "📞"
+
+    # Link für Smartphones/Click-to-Call
+    # Format: tel:+491701234567 (ohne Leerzeichen)
+    tel_link = telefon.replace(' ', '').replace('-', '')
+
+    html = f"""
+    <div class="telefon-feld">
+        <span class="icon">{icon}</span>
+        <a href="tel:{tel_link}" class="telefon-link">
+            {telefon}
+        </a>
+        <button class="btn-call" onclick="call('{tel_link}')">
+            📞 Anrufen
+        </button>
+    </div>
+    """
+
+    return html
+
+
+# JavaScript für Desktop (optional: Integration mit Softphone)
+def get_telefon_javascript():
+    return """
+    <script>
+    function call(nummer) {
+        // Option 1: Browser-Native (Smartphones)
+        window.location.href = 'tel:' + nummer;
+
+        // Option 2: Integration mit Softphone (z.B. 3CX, Asterisk)
+        // fetch('/api/softphone/call', {
+        //     method: 'POST',
+        //     body: JSON.stringify({nummer: nummer})
+        // });
+    }
+    </script>
+    """
+```
+
+**Verhalten:**
+- **Smartphone/Tablet**: Öffnet native Telefon-App
+- **Desktop**:
+  - Link öffnet Standard-Telefonie-App (Skype, Teams, etc.)
+  - Optional: Integration mit Softphone (3CX, Asterisk, sipgate)
+- **Button "Anrufen"**: Gleiche Funktion wie Link, aber prominenter
+
+---
+
+#### **📋 Templates für Kundenstamm** ⭐ NEU (für später)
+
+**Konzept:**
+Branchenspezifische Vorlagen für Kundenstamm-Felder
+
+**Branchen-Templates:**
+
+```python
+# templates/kunden_templates.py
+KUNDEN_TEMPLATES = {
+    'standard': {
+        'name': 'Standard (Universal)',
+        'felder': [
+            'kundennummer', 'typ', 'firmenname', 'vorname', 'nachname',
+            'strasse', 'plz', 'ort', 'land',
+            'email', 'telefon_mobil', 'telefon_festnetz',
+            'steuernummer', 'steuer_id', 'ust_idnr',
+            'zahlungsziel', 'notizen'
+        ],
+        'pflicht': ['nachname|firmenname', 'strasse', 'plz', 'ort', 'land']
+    },
+
+    'handwerk': {
+        'name': 'Handwerk (Privatkunden)',
+        'beschreibung': 'Für Handwerker mit vielen Privatkunden',
+        'felder': [
+            'kundennummer', 'typ',
+            'anrede', 'vorname', 'nachname',  # Privat im Fokus
+            'strasse', 'hausnummer', 'plz', 'ort',  # Hausnummer wichtig!
+            'email', 'telefon_mobil', 'telefon_festnetz',  # Beide Nummern
+            'geburtstag',  # Für Glückwünsche
+            'zahlungsziel',
+            'notizen'  # "Wünscht Anruf vorab", "Hat Hund"
+        ],
+        'pflicht': ['nachname', 'strasse', 'hausnummer', 'plz', 'ort', 'telefon_mobil'],
+        'besonderheiten': [
+            'Hausnummer Pflichtfeld (für Anfahrt)',
+            'Mindestens eine Telefonnummer Pflicht',
+            'Geburtstag optional (für Kundenbindung)'
+        ]
+    },
+
+    'b2b_eu': {
+        'name': 'B2B EU-Handel',
+        'beschreibung': 'Für Unternehmen mit vielen EU-Geschäftskunden',
+        'felder': [
+            'kundennummer', 'typ',
+            'firmenname', 'rechtsform', 'ansprechpartner',  # Firma im Fokus
+            'strasse', 'plz', 'ort', 'land',
+            'email', 'telefon_mobil', 'telefon_festnetz',
+            'steuernummer', 'ust_idnr',  # USt-IdNr. kritisch!
+            'zahlungsziel',
+            'notizen'
+        ],
+        'pflicht': ['firmenname', 'strasse', 'plz', 'ort', 'land', 'ust_idnr'],
+        'validierung_scharf': [
+            'ust_idnr',  # MUSS validiert werden
+            'land'  # MUSS EU-Land sein
+        ],
+        'besonderheiten': [
+            'USt-IdNr. Pflichtfeld (für ig. Lieferung)',
+            'Automatische BZSt-Validierung beim Speichern',
+            'Warnung bei fehlendem Ansprechpartner'
+        ]
+    },
+
+    'freiberufler_beratung': {
+        'name': 'Freiberufler/Beratung',
+        'beschreibung': 'Für Berater, Coaches, Dienstleister',
+        'felder': [
+            'kundennummer', 'typ',
+            'anrede', 'vorname', 'nachname',  # Oft persönliche Beziehung
+            'firmenname', 'ansprechpartner',  # Aber auch Firmen
+            'strasse', 'plz', 'ort', 'land',
+            'email', 'telefon_mobil', 'website',  # Website wichtig
+            'zahlungsziel',
+            'notizen'  # "Interessiert an Coaching", "Kontakt über LinkedIn"
+        ],
+        'pflicht': ['nachname|firmenname', 'email'],
+        'besonderheiten': [
+            'E-Mail Pflichtfeld (Haupt-Kommunikationskanal)',
+            'Website optional (für Recherche)',
+            'Telefon optional (E-Mail-Kommunikation dominiert)'
+        ]
+    },
+
+    'einzelhandel': {
+        'name': 'Einzelhandel (Laufkundschaft)',
+        'beschreibung': 'Für Shops mit vielen Einmalkunden',
+        'felder': [
+            'kundennummer', 'typ',
+            'vorname', 'nachname',
+            'email', 'telefon_mobil',
+            'geburtstag',  # Für Geburtstags-Rabatte
+            'notizen'
+        ],
+        'pflicht': ['nachname', 'email|telefon_mobil'],  # Minimal!
+        'besonderheiten': [
+            'Minimales Schema (viele Einmalkunden)',
+            'E-Mail ODER Telefon reicht',
+            'Adresse optional (Abholung im Shop)',
+            'Geburtstag für Marketing'
+        ]
+    },
+
+    'vermietung': {
+        'name': 'Vermietung/Verleih',
+        'beschreibung': 'Für Vermieter, Verleiher',
+        'felder': [
+            'kundennummer', 'typ',
+            'anrede', 'vorname', 'nachname',
+            'geburtstag',  # Für Altersverifikation
+            'strasse', 'hausnummer', 'plz', 'ort',
+            'email', 'telefon_mobil', 'telefon_festnetz',
+            'steuer_id',  # Für Schufa/Bonität
+            'notizen'  # "Kaution hinterlegt", "Vertrag bis 31.12."
+        ],
+        'pflicht': ['nachname', 'geburtstag', 'strasse', 'plz', 'ort', 'telefon_mobil'],
+        'besonderheiten': [
+            'Geburtstag Pflicht (Altersverifikation)',
+            'Vollständige Adresse Pflicht',
+            'Beide Telefonnummern empfohlen (Erreichbarkeit)'
+        ]
+    }
+}
+
+
+def get_template(branche: str) -> dict:
+    """
+    Gibt Template für Branche zurück
+
+    Args:
+        branche: 'standard', 'handwerk', 'b2b_eu', etc.
+
+    Returns:
+        Template-Dict mit Feldern, Pflichtfeldern, Besonderheiten
+    """
+    return KUNDEN_TEMPLATES.get(branche, KUNDEN_TEMPLATES['standard'])
+
+
+def apply_template(branche: str):
+    """
+    Wendet Template an: Passt UI-Formular und Validierung an
+    """
+    template = get_template(branche)
+
+    # UI nur relevante Felder anzeigen
+    # Validierung auf template['pflicht'] anpassen
+    # Besonderheiten als Tooltips/Hinweise anzeigen
+
+    pass  # Implementierung später
+```
+
+**UI - Template-Auswahl im Setup-Wizard:**
+
+```
+┌──────────────────────────────────────────────────┐
+│ Setup-Wizard - Schritt 1: Branche               │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│ Welche Branche passt am besten zu dir?          │
+│                                                  │
+│ ○ Standard (Universal)                           │
+│   Für alle Branchen geeignet                     │
+│                                                  │
+│ ○ Handwerk (Privatkunden)                        │
+│   Viele Privatkunden, Anfahrt wichtig            │
+│                                                  │
+│ ○ B2B EU-Handel                                  │
+│   Geschäftskunden, USt-IdNr. wichtig             │
+│                                                  │
+│ ○ Freiberufler/Beratung                          │
+│   Dienstleister, E-Mail-Kommunikation            │
+│                                                  │
+│ ○ Einzelhandel (Laufkundschaft)                  │
+│   Viele Einmalkunden, minimale Daten             │
+│                                                  │
+│ ○ Vermietung/Verleih                             │
+│   Verträge, Altersverifikation wichtig           │
+│                                                  │
+│ ℹ️ Du kannst die Felder später anpassen!        │
+│                                                  │
+│ [Zurück]                         [Weiter]        │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+**Vorteile:**
+- ✅ **Fokussiert**: Nur relevante Felder für Branche
+- ✅ **Geführt**: Pflichtfelder an Branche angepasst
+- ✅ **Lernkurve**: Weniger Verwirrung (weniger Felder)
+- ✅ **Flexibel**: Kann später auf "Standard" umstellen
+
+**Status:** 🔜 **Für v2.0 geplant** (v1.0 nutzt "Standard"-Template)
+
+---
+
 #### **💻 Code-Implementierung**
 
 ```python
@@ -7769,12 +8125,21 @@ class Kunde:
 
     # Kontakt
     email: Optional[str] = None
-    telefon: Optional[str] = None
+    telefon_mobil: Optional[str] = None  # ⭐ NEU
+    telefon_festnetz: Optional[str] = None  # ⭐ NEU
     website: Optional[str] = None
 
+    # Persönliche Daten
+    geburtstag: Optional[date] = None  # ⭐ NEU (nur bei typ='privat')
+
     # Geschäftsbedingungen
-    zahlungsziel: int = 14  # ⭐ NEU (Tage)
-    zahlungsziel_individuell: bool = False  # ⭐ NEU
+    zahlungsziel: int = 14  # Tage
+    zahlungsziel_individuell: bool = False
+
+    # Steuerliche Daten
+    steuernummer: Optional[str] = None  # ⭐ NEU (bei Firma)
+    steuer_id: Optional[str] = None  # ⭐ NEU (11-stellig)
+    steuer_id_validiert: bool = False  # ⭐ NEU
 
     # EU-Handel
     ust_idnr: Optional[str] = None
@@ -7840,11 +8205,49 @@ class Kunde:
         if not self.land:
             errors.append("Land ist Pflichtfeld")
 
+        # Steuerliche Validierungen ⭐ NEU
+        if self.typ == 'firma' and self.firmenname:
+            # Bei Firma: Steuernummer empfohlen
+            if not self.steuernummer:
+                errors.append("Warnung: Steuernummer bei Firma empfohlen")
+
+        # Steuer-ID Validierung (wenn gefüllt)
+        if self.steuer_id:
+            if self.land == 'DE':
+                # Deutsche Steuer-ID: 11-stellig
+                if not self._validate_steuer_id_de(self.steuer_id):
+                    errors.append("Steuer-ID ungültig (muss 11-stellig sein)")
+            else:
+                # Andere Länder: Steuer-ID sollte validiert werden
+                if not self.steuer_id_validiert:
+                    errors.append("Warnung: Steuer-ID sollte validiert werden")
+
         # USt-IdNr. bei EU-Kunden empfohlen
         if self.land_kategorie == 'eu' and not self.ust_idnr:
             errors.append("Warnung: USt-IdNr. bei EU-Kunden empfohlen (für ig. Lieferung)")
 
         return errors
+
+    def _validate_steuer_id_de(self, steuer_id: str) -> bool:
+        """
+        Validiert deutsche Steuer-ID (11-stellig)
+
+        Format: XXXXXXXXXXX (11 Ziffern)
+        - Ziffer 1-10: Beliebig (aber Prüfziffer-Logik)
+        - Ziffer 11: Prüfziffer
+        """
+        import re
+
+        # Leerzeichen entfernen
+        steuer_id_clean = steuer_id.replace(' ', '')
+
+        # Muss 11 Ziffern sein
+        if not re.match(r'^\d{11}$', steuer_id_clean):
+            return False
+
+        # Erweiterte Validierung (Prüfziffer) hier möglich
+        # Für MVP: Nur Längen-Check
+        return True
 
 
 # kunde_service.py
