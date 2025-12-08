@@ -7785,6 +7785,571 @@ class Lieferant:
 
 ---
 
+### **8.11 DSGVO-Compliance für Stammdaten** ⚠️ WICHTIG
+
+**Gilt für:** Kundenstamm UND Lieferantenstamm
+
+---
+
+#### **🔐 Rechtsgrundlagen für Speicherung**
+
+**Art. 6 Abs. 1 DSGVO - Rechtmäßigkeit der Verarbeitung:**
+
+```
+┌─────────────────────────────────────────────────┐
+│ Warum dürfen wir Kundendaten speichern?        │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│ ✅ Art. 6 Abs. 1 lit. b DSGVO                  │
+│    "Vertragserfüllung"                          │
+│    → Rechnungsstellung erfordert Kundendaten   │
+│                                                 │
+│ ✅ Art. 6 Abs. 1 lit. c DSGVO                  │
+│    "Rechtliche Verpflichtung"                   │
+│    → §147 AO: Aufbewahrungspflicht 10 Jahre    │
+│    → §257 HGB: Aufbewahrungspflicht 10 Jahre   │
+│                                                 │
+│ ✅ Art. 6 Abs. 1 lit. f DSGVO                  │
+│    "Berechtigtes Interesse"                     │
+│    → Kundenverwaltung für Geschäftszwecke      │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Wichtig:**
+- **Keine Einwilligung erforderlich** (Art. 6 Abs. 1 lit. a) für Geschäftskunden
+- **Aufbewahrungspflicht überwiegt Löschpflicht** während 10 Jahren
+- **Danach: Löschpflicht** (Art. 17 DSGVO)
+
+---
+
+#### **⏰ Aufbewahrungsfristen & Löschkonzept**
+
+**§147 AO & §257 HGB:**
+
+```python
+# Aufbewahrungsfristen
+AUFBEWAHRUNGSFRISTEN = {
+    'rechnungen': 10,  # Jahre (§147 Abs. 1 Nr. 1 AO)
+    'belege': 10,      # Jahre (§147 Abs. 1 Nr. 4 AO)
+    'buchhaltung': 10, # Jahre (§147 Abs. 1 Nr. 1 AO)
+}
+
+def berechne_aufbewahrung_bis(letzte_rechnung_datum: date) -> date:
+    """
+    Berechnet Ende der Aufbewahrungsfrist
+
+    Regel: 10 Jahre ab Ende des Kalenderjahres der letzten Rechnung
+
+    Beispiel:
+    - Letzte Rechnung: 15.03.2024
+    - Ende Kalenderjahr: 31.12.2024
+    - Aufbewahrung bis: 31.12.2034 (10 Jahre später)
+    """
+    jahr_letzte_rechnung = letzte_rechnung_datum.year
+    ende_kalenderjahr = date(jahr_letzte_rechnung, 12, 31)
+    aufbewahrung_bis = date(jahr_letzte_rechnung + 10, 12, 31)
+
+    return aufbewahrung_bis
+```
+
+**Konflikt: Aufbewahrungspflicht vs. Löschpflicht:**
+
+```
+Zeitstrahl:
+
+2024        2025        ...        2034        2035
+│           │                      │           │
+│           │                      │           │
+Rechnung    │                      │           Löschung
+erstellt    │                      │           erlaubt!
+            │                      │
+            │<──── 10 Jahre ──────>│
+            Aufbewahrungspflicht
+```
+
+**Lösung:**
+1. **Während Aufbewahrungsfrist (10 Jahre):**
+   - Daten NICHT löschen (§147 AO hat Vorrang)
+   - Aber: **Zugriff einschränken** ("Sperrung")
+   - Nur für Finanzamt/Prüfung zugänglich
+
+2. **Nach Ablauf (nach 10 Jahren):**
+   - **Automatische Löschung** (DSGVO Art. 17)
+   - Oder: Anonymisierung
+
+---
+
+#### **📊 Datenbank-Schema mit DSGVO-Feldern**
+
+```sql
+-- Erweitert: kunden & lieferanten Tabellen
+ALTER TABLE kunden ADD COLUMN gesperrt BOOLEAN DEFAULT 0;
+ALTER TABLE kunden ADD COLUMN gesperrt_grund TEXT;  -- "Aufbewahrungspflicht", "Nutzer-Wunsch"
+ALTER TABLE kunden ADD COLUMN gesperrt_am DATE;
+ALTER TABLE kunden ADD COLUMN loesch_datum DATE;  -- Geplantes Löschdatum
+ALTER TABLE kunden ADD COLUMN aufbewahrung_bis DATE;  -- Ende Aufbewahrungsfrist
+
+ALTER TABLE lieferanten ADD COLUMN gesperrt BOOLEAN DEFAULT 0;
+ALTER TABLE lieferanten ADD COLUMN gesperrt_grund TEXT;
+ALTER TABLE lieferanten ADD COLUMN gesperrt_am DATE;
+ALTER TABLE lieferanten ADD COLUMN loesch_datum DATE;
+ALTER TABLE lieferanten ADD COLUMN aufbewahrung_bis DATE;
+
+-- Audit-Log für DSGVO-Aktionen
+CREATE TABLE dsgvo_log (
+    id INTEGER PRIMARY KEY,
+
+    -- Betroffene Person
+    tabelle TEXT NOT NULL,  -- 'kunden' oder 'lieferanten'
+    datensatz_id INTEGER NOT NULL,
+    person_name TEXT,  -- Snapshot für Log
+
+    -- Aktion
+    aktion TEXT NOT NULL,  -- 'auskunft', 'berichtigung', 'loeschung', 'sperrung', 'export'
+    durchgefuehrt_am TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Details
+    details TEXT,  -- JSON mit Details
+
+    -- User (falls Multi-User in Zukunft)
+    user_id INTEGER
+);
+```
+
+---
+
+#### **👤 Betroffenenrechte implementieren**
+
+**Art. 15 DSGVO - Auskunftsrecht:**
+
+```python
+def dsgvo_auskunft(kunde_id: int) -> dict:
+    """
+    Gibt alle gespeicherten Daten über einen Kunden aus
+
+    Returns:
+        Dict mit allen Daten + Rechnungen
+    """
+    kunde = db.get_kunde(kunde_id)
+    rechnungen = db.get_rechnungen_by_kunde(kunde_id)
+
+    auskunft = {
+        'stammdaten': {
+            'kundennummer': kunde.kundennummer,
+            'name': f"{kunde.vorname} {kunde.nachname}",
+            'adresse': f"{kunde.strasse}, {kunde.plz} {kunde.ort}",
+            'email': kunde.email,
+            'telefon_mobil': kunde.telefon_mobil,
+            'telefon_festnetz': kunde.telefon_festnetz,
+            # ... alle Felder
+        },
+        'rechnungen': [
+            {
+                'rechnungsnummer': r.rechnungsnummer,
+                'datum': r.datum,
+                'betrag': r.betrag_brutto,
+                'status': r.status
+            }
+            for r in rechnungen
+        ],
+        'statistiken': {
+            'anzahl_rechnungen': kunde.anzahl_rechnungen,
+            'umsatz_gesamt': kunde.umsatz_gesamt,
+            'kunde_seit': kunde.erstellt_am,
+        },
+        'rechtsgrundlage': 'Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung)',
+        'speicherdauer': f'Bis {kunde.aufbewahrung_bis} (§147 AO)',
+    }
+
+    # Audit-Log
+    log_dsgvo_aktion('kunden', kunde_id, 'auskunft', auskunft)
+
+    return auskunft
+```
+
+**UI - Auskunft generieren:**
+
+```
+┌──────────────────────────────────────────────────┐
+│ 📄 DSGVO-Auskunft für Kunde                     │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│ Kunde: [Musterfrau, Erika ▼]                    │
+│                                                  │
+│ [Auskunft erstellen (PDF)]                      │
+│                                                  │
+│ ℹ️ Enthält alle gespeicherten Daten gemäß      │
+│    Art. 15 DSGVO                                │
+│                                                  │
+└──────────────────────────────────────────────────┘
+
+[Generiert PDF mit:]
+- Stammdaten
+- Rechnungen (Liste)
+- Speicherzweck
+- Rechtsgrundlage
+- Speicherdauer
+```
+
+---
+
+**Art. 16 DSGVO - Berichtigungsrecht:**
+
+```python
+def dsgvo_berichtigung(kunde_id: int, korrekturen: dict):
+    """
+    Korrigiert Kundendaten auf Wunsch
+
+    Args:
+        korrekturen: {'email': 'neu@beispiel.de', 'strasse': 'Neue Str. 1'}
+    """
+    kunde = db.get_kunde(kunde_id)
+
+    # Alte Daten für Log speichern
+    alte_daten = {k: getattr(kunde, k) for k in korrekturen.keys()}
+
+    # Aktualisieren
+    for feld, wert in korrekturen.items():
+        setattr(kunde, feld, wert)
+
+    kunde.aktualisiert_am = datetime.now()
+    db.save(kunde)
+
+    # Audit-Log
+    log_dsgvo_aktion('kunden', kunde_id, 'berichtigung', {
+        'alt': alte_daten,
+        'neu': korrekturen
+    })
+```
+
+---
+
+**Art. 17 DSGVO - Recht auf Löschung:**
+
+```python
+def dsgvo_loeschung(kunde_id: int, grund: str = 'nutzer_wunsch'):
+    """
+    Löscht Kundendaten (mit Aufbewahrungspflicht-Check)
+
+    Args:
+        grund: 'nutzer_wunsch', 'frist_abgelaufen'
+    """
+    kunde = db.get_kunde(kunde_id)
+
+    # Prüfung: Aufbewahrungspflicht?
+    heute = date.today()
+    if kunde.aufbewahrung_bis and kunde.aufbewahrung_bis > heute:
+        # Noch in Aufbewahrungsfrist → NICHT löschen!
+        raise ValueError(
+            f"Löschung nicht möglich: Aufbewahrungspflicht bis {kunde.aufbewahrung_bis} "
+            f"(§147 AO). Kunde wird stattdessen gesperrt."
+        )
+
+    # Löschung durchführen
+    if grund == 'nutzer_wunsch':
+        # Nutzer will Löschung → Sperrung statt Löschung
+        kunde.gesperrt = True
+        kunde.gesperrt_grund = 'Nutzer-Wunsch (DSGVO Art. 17)'
+        kunde.gesperrt_am = heute
+        kunde.loesch_datum = kunde.aufbewahrung_bis  # Löschung nach Frist
+        db.save(kunde)
+
+        log_dsgvo_aktion('kunden', kunde_id, 'sperrung', {
+            'grund': grund,
+            'loesch_datum': kunde.loesch_datum
+        })
+
+        return f"Kunde gesperrt. Automatische Löschung am {kunde.loesch_datum}."
+
+    elif grund == 'frist_abgelaufen':
+        # Frist abgelaufen → Endgültige Löschung
+
+        # Option 1: Vollständige Löschung
+        db.delete_kunde(kunde_id)
+
+        # Option 2: Anonymisierung (besser für Statistiken)
+        # kunde.vorname = 'GELÖSCHT'
+        # kunde.nachname = 'GELÖSCHT'
+        # kunde.email = None
+        # kunde.telefon_mobil = None
+        # ...
+        # db.save(kunde)
+
+        log_dsgvo_aktion('kunden', kunde_id, 'loeschung', {
+            'grund': grund
+        })
+
+        return "Kunde gelöscht."
+```
+
+**UI - Löschung beantragen:**
+
+```
+┌──────────────────────────────────────────────────┐
+│ 🗑️ Kundendaten löschen                          │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│ Kunde: Erika Musterfrau (K-042)                 │
+│                                                  │
+│ ⚠️ WARNUNG:                                     │
+│ Dieser Kunde hat noch Rechnungen!               │
+│                                                  │
+│ Letzte Rechnung: 15.03.2024 (RE-2024-123)       │
+│ Aufbewahrungspflicht bis: 31.12.2034            │
+│                                                  │
+│ ❌ Löschung NICHT möglich (§147 AO)             │
+│                                                  │
+│ ✅ Stattdessen: Kunde sperren                   │
+│    → Nicht mehr in Suche/Auswahl sichtbar       │
+│    → Automatische Löschung am 31.12.2034        │
+│                                                  │
+│ [Abbrechen]          [Kunde sperren]            │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+**Art. 20 DSGVO - Datenportabilität:**
+
+```python
+def dsgvo_export(kunde_id: int) -> str:
+    """
+    Exportiert Kundendaten in maschinenlesbarem Format
+
+    Returns:
+        JSON-String mit allen Daten
+    """
+    kunde = db.get_kunde(kunde_id)
+    rechnungen = db.get_rechnungen_by_kunde(kunde_id)
+
+    export_data = {
+        'stammdaten': {
+            'kundennummer': kunde.kundennummer,
+            'typ': kunde.typ,
+            'vorname': kunde.vorname,
+            'nachname': kunde.nachname,
+            # ... alle Felder
+        },
+        'rechnungen': [
+            {
+                'rechnungsnummer': r.rechnungsnummer,
+                'datum': r.datum.isoformat(),
+                'betrag_netto': str(r.betrag_netto),
+                'betrag_brutto': str(r.betrag_brutto),
+                # ... alle Felder
+            }
+            for r in rechnungen
+        ],
+        'export_datum': datetime.now().isoformat(),
+        'format_version': '1.0'
+    }
+
+    json_export = json.dumps(export_data, indent=2, ensure_ascii=False)
+
+    log_dsgvo_aktion('kunden', kunde_id, 'export', {'format': 'JSON'})
+
+    return json_export
+```
+
+---
+
+#### **🤖 Automatische Löschung (Cron-Job)**
+
+```python
+# tasks/dsgvo_cleanup.py
+def automatische_loeschung():
+    """
+    Wird täglich ausgeführt (Cron-Job)
+
+    Löscht Kunden/Lieferanten deren Aufbewahrungsfrist abgelaufen ist
+    """
+    heute = date.today()
+
+    # Kunden mit abgelaufener Frist finden
+    zu_loeschen = db.execute("""
+        SELECT id, name FROM kunden
+        WHERE loesch_datum IS NOT NULL
+        AND loesch_datum <= ?
+        AND gesperrt = 1
+    """, (heute,)).fetchall()
+
+    for kunde_id, name in zu_loeschen:
+        print(f"Lösche Kunde {name} (ID: {kunde_id})...")
+
+        try:
+            dsgvo_loeschung(kunde_id, grund='frist_abgelaufen')
+            print(f"✅ Gelöscht: {name}")
+        except Exception as e:
+            print(f"❌ Fehler bei {name}: {e}")
+
+    # Gleiches für Lieferanten
+    # ...
+
+    print(f"Automatische Löschung abgeschlossen: {len(zu_loeschen)} Datensätze gelöscht")
+
+
+# Cron-Eintrag (täglich 02:00 Uhr)
+# 0 2 * * * cd /pfad/zu/rechnungspilot && python tasks/dsgvo_cleanup.py
+```
+
+---
+
+#### **🔒 Technische & Organisatorische Maßnahmen (TOM)**
+
+**Verschlüsselung:**
+
+```python
+# config.py
+DATENBANK_VERSCHLUESSELUNG = True  # SQLCipher aktivieren
+
+# Bei SQLite-Verbindung:
+import sqlcipher3
+conn = sqlcipher3.connect('rechnungspilot.db')
+conn.execute(f"PRAGMA key = '{MASTER_PASSWORD}'")
+```
+
+**Zugriffskontrolle:**
+
+```python
+# Nur gesperrte Kunden für Finanzamt sichtbar
+def get_kunden_fuer_anzeige(include_gesperrt: bool = False):
+    """
+    Gibt Kunden zurück (ohne gesperrte, außer explizit gewünscht)
+    """
+    query = "SELECT * FROM kunden"
+    if not include_gesperrt:
+        query += " WHERE gesperrt = 0"
+
+    return db.execute(query).fetchall()
+
+
+# UI zeigt gesperrte Kunden NICHT in Autocomplete
+```
+
+**Audit-Logging:**
+
+```python
+def log_dsgvo_aktion(tabelle: str, datensatz_id: int, aktion: str, details: dict):
+    """
+    Loggt DSGVO-relevante Aktionen
+    """
+    db.execute("""
+        INSERT INTO dsgvo_log (tabelle, datensatz_id, aktion, details)
+        VALUES (?, ?, ?, ?)
+    """, (tabelle, datensatz_id, aktion, json.dumps(details)))
+
+    db.commit()
+```
+
+---
+
+#### **📋 DSGVO-Checkliste für Setup**
+
+```
+┌──────────────────────────────────────────────────┐
+│ ✅ DSGVO-Checkliste                             │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│ ☑ Datenschutzerklärung erstellt                 │
+│   (siehe datenschutz.md)                         │
+│                                                  │
+│ ☑ Verarbeitungsverzeichnis geführt              │
+│   (Art. 30 DSGVO)                                │
+│                                                  │
+│ ☑ Aufbewahrungsfristen implementiert            │
+│   (§147 AO: 10 Jahre)                            │
+│                                                  │
+│ ☑ Automatische Löschung konfiguriert            │
+│   (Cron-Job täglich 02:00 Uhr)                   │
+│                                                  │
+│ ☑ Datenbank verschlüsselt                       │
+│   (SQLCipher aktiviert)                          │
+│                                                  │
+│ ☑ Backup verschlüsselt                          │
+│   (Nextcloud mit Verschlüsselung)                │
+│                                                  │
+│ ☑ Audit-Logging aktiviert                       │
+│   (dsgvo_log Tabelle)                            │
+│                                                  │
+│ ☐ Datenschutz-Folgenabschätzung (DSFA)          │
+│   (Bei > 250 Mitarbeitern oder sensiblen Daten) │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+#### **📄 Datenschutzerklärung (Vorlage)**
+
+```markdown
+# Datenschutzerklärung - RechnungsPilot
+
+## 1. Verantwortlicher
+[Dein Name/Firma]
+[Adresse]
+[E-Mail]
+
+## 2. Welche Daten speichern wir?
+
+### Kundendaten:
+- Name, Adresse, Kontaktdaten
+- Rechnungsinformationen
+- Zahlungsinformationen
+
+### Lieferantendaten:
+- Name, Adresse, Kontaktdaten
+- Vertragsinformationen
+
+## 3. Rechtsgrundlage
+
+- **Art. 6 Abs. 1 lit. b DSGVO**: Vertragserfüllung (Rechnungsstellung)
+- **Art. 6 Abs. 1 lit. c DSGVO**: Rechtliche Verpflichtung (§147 AO, §257 HGB)
+
+## 4. Speicherdauer
+
+- **Während Geschäftsbeziehung**: Aktive Speicherung
+- **Nach letzter Rechnung**: 10 Jahre (§147 AO)
+- **Nach 10 Jahren**: Automatische Löschung
+
+## 5. Ihre Rechte (Art. 15-21 DSGVO)
+
+- **Auskunft**: Sie können jederzeit Auskunft über Ihre gespeicherten Daten erhalten
+- **Berichtigung**: Fehlerhafte Daten werden korrigiert
+- **Löschung**: Nach Ablauf der Aufbewahrungsfrist werden Daten gelöscht
+- **Einschränkung**: Sie können die Verarbeitung einschränken lassen
+- **Datenportabilität**: Sie erhalten Ihre Daten in maschinenlesbarem Format
+
+**Kontakt für Betroffenenrechte:**
+[E-Mail für DSGVO-Anfragen]
+
+## 6. Datensicherheit
+
+- Datenbank verschlüsselt (SQLCipher)
+- Backups verschlüsselt
+- Zugriffskontrolle
+- Audit-Logging
+
+## 7. Keine Weitergabe an Dritte
+
+Ihre Daten werden NICHT an Dritte weitergegeben (außer gesetzlich verpflichtet, z.B. Finanzamt bei Prüfung).
+```
+
+---
+
+**Status:** ✅ **DSGVO-Compliance dokumentiert**
+
+**Wichtigste Punkte:**
+1. ✅ Aufbewahrungspflicht (10 Jahre) hat Vorrang vor Löschpflicht
+2. ✅ Sperrung statt Löschung während Aufbewahrungsfrist
+3. ✅ Automatische Löschung nach Ablauf
+4. ✅ Betroffenenrechte (Auskunft, Löschung, Export) implementiert
+5. ✅ Verschlüsselung & Audit-Logging
+6. ✅ Datenschutzerklärung-Vorlage
+
+---
+
 ### **8.9 Produktstammdaten (für Rechnungsschreib-Modul)**
 
 **Zweck:**
