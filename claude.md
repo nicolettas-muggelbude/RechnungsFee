@@ -12147,6 +12147,274 @@ Kontakt für Widerruf:
 
 ---
 
+## **🏢 Zielgruppe: Bilanzpflichtige Unternehmen (GmbH, UG, AG)**
+
+### **Strategische Überlegung**
+
+**Frage:** Soll RechnungsPilot auch für **bilanzpflichtige Unternehmen** (Kapitalgesellschaften wie GmbH, UG, AG) nutzbar sein?
+
+**Kontext:**
+- RechnungsPilot ist primär für **EÜR-Rechner** konzipiert (Einzelunternehmer, Freiberufler, GbR)
+- Bilanzpflichtige Unternehmen sind nach **§238 HGB** zur doppelten Buchführung verpflichtet
+- RechnungsPilot bietet **keine doppelte Buchführung**
+- ABER: RechnungsPilot hat **DATEV-Export** und **UStVA-Modul**
+
+### **✅ Use Case: RechnungsPilot als Vorerfassungssystem**
+
+**Workflow für GmbH/UG:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ RechnungsPilot (Tagesgeschäft)                          │
+├─────────────────────────────────────────────────────────┤
+│ ✅ Eingangsrechnungen erfassen                          │
+│ ✅ Ausgangsrechnungen erstellen                         │
+│ ✅ Kassenbuch führen                                    │
+│ ✅ Bank-CSV importieren                                 │
+│ ✅ Kategorisierung (SKR03/SKR04)                        │
+│ ✅ UStVA monatlich/quartalsweise                        │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+                    (Monatlich/Quartalsweise)
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ UStVA per ELSTER                                        │
+│ (direkt aus RechnungsPilot)                             │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+                    (Am Jahresende)
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ DATEV-Export an Steuerberater                           │
+├─────────────────────────────────────────────────────────┤
+│ 📦 Buchungsstapel (alle Belege kategorisiert)           │
+│ 📦 Stammdaten (Kunden, Lieferanten, Kontenrahmen)       │
+└─────────────────────────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│ Steuerberater erstellt in DATEV:                        │
+├─────────────────────────────────────────────────────────┤
+│ ✅ Doppelte Buchführung (Soll/Haben auf Konten)         │
+│ ✅ Bilanz (Aktiva/Passiva nach §266 HGB)                │
+│ ✅ GuV (Gewinn- und Verlustrechnung nach §275 HGB)      │
+│ ✅ Jahresabschluss                                      │
+│ ✅ Körperschaftsteuer-Erklärung                         │
+│ ✅ Gewerbesteuer-Erklärung                              │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Rolle von RechnungsPilot:**
+- ✅ Belegverwaltungssystem mit Kategorisierung
+- ✅ Vorerfassungssystem für Steuerberater
+- ✅ UStVA-Modul (selbstständige Abgabe)
+- ❌ KEINE doppelte Buchführung
+- ❌ KEINE Bilanz-Erstellung
+- ❌ KEINE GuV nach §275 HGB
+
+### **📊 Steuerliche Einreichungen: Was ist gleich?**
+
+| Einreichung | EÜR (Einzelunternehmer) | GmbH/UG | In RechnungsPilot? |
+|-------------|-------------------------|---------|-------------------|
+| **UStVA** (monatlich/quartalsweise) | ✅ Pflicht | ✅ Pflicht | ✅ **JA** |
+| **ZM** (Zusammenfassende Meldung) | ✅ bei EU-Geschäft | ✅ bei EU-Geschäft | ✅ **JA** (geplant) |
+| **USt-Jahreserklärung** | ✅ Pflicht | ✅ Pflicht | ✅ **JA** |
+| **Gewinnermittlung** | EÜR (Anlage EÜR) | Bilanz + GuV | ⚠️ **NEIN** (macht Steuerberater) |
+| **Einkommensteuer** | ✅ Anlage G/S | ❌ Nicht für GmbH | ⏸️ Nicht relevant |
+| **Körperschaftsteuer** | ❌ Nicht für Einzelunternehmer | ✅ Pflicht | ⚠️ **NEIN** (macht Steuerberater) |
+| **Gewerbesteuer** | ✅ GewSt-Erklärung | ✅ GewSt-Erklärung | ⚠️ **NEIN** (macht Steuerberater) |
+| **Jahresabschluss** | ❌ Nicht für EÜR-Rechner | ✅ Pflicht (§264 HGB) | ❌ **NEIN** (macht Steuerberater) |
+| **E-Bilanz** | ❌ Nicht für EÜR-Rechner | ✅ Pflicht (§5b EStG) | ❌ **NEIN** (macht Steuerberater) |
+
+**✅ Fazit:** Alle **laufenden steuerlichen Pflichten** (UStVA, ZM, USt-Jahreserklärung) sind **identisch**!
+
+### **💡 Vorteile für RechnungsPilot**
+
+**1. Deutlich größerer Markt:**
+- 🏢 **1,2 Millionen GmbHs** in Deutschland (Statistisches Bundesamt 2024)
+- 🏢 **600.000 UGs** (Unternehmergesellschaften)
+- 👨‍💼 **3,2 Millionen Einzelunternehmer** (ohne GmbH/UG)
+
+→ **Markt verdoppelt sich fast!**
+
+**2. Typisches Szenario:**
+- Kleine GmbH/UG (1-5 Mitarbeiter)
+- Geschäftsführer erfasst Belege selbst
+- Steuerberater kommt 1× jährlich (Jahresabschluss)
+- Monatliche UStVA wird selbst gemacht
+
+→ **RechnungsPilot spart Steuerberater-Kosten für laufende Buchhaltung!**
+
+**3. Wenig zusätzlicher Entwicklungsaufwand:**
+- ✅ DATEV-Export bereits geplant
+- ✅ UStVA-Modul bereits geplant
+- ✅ Kategorisierung mit SKR03/SKR04 bereits vorhanden
+- ❌ KEINE zusätzliche Entwicklung für Bilanz nötig
+
+**4. Klare Abgrenzung:**
+- RechnungsPilot = Vorerfassungssystem für Steuerberater
+- DATEV = Finanzbuchhaltung & Jahresabschluss
+- Keine Konkurrenz, sondern **Ergänzung**
+
+### **⚠️ Herausforderungen & Unterschiede**
+
+| Aspekt | EÜR-Rechner | Bilanzpflichtige GmbH | Lösung |
+|--------|-------------|----------------------|--------|
+| **Kontenrahmen** | SKR03 (bevorzugt) | SKR03 oder SKR04 | ✅ Beide bereits unterstützt |
+| **Gewinnermittlung** | EÜR selbst erstellen | Bilanz vom Steuerberater | ✅ RechnungsPilot nur Vorerfassung |
+| **Anlagevermögen** | Vereinfacht (AfA-Liste) | Detailliert (Anlagenbuchhaltung) | ⚠️ Basis-AfA-Verwaltung reicht |
+| **Abschreibungen** | Linear/Sofortabschreibung | Planmäßig/außerplanmäßig | ⚠️ In DATEV detailliert |
+| **Kostenstellenrechnung** | Selten | Häufig | ⏸️ v2.0 Feature |
+| **Rückstellungen** | Nicht vorhanden | Pflicht (§249 HGB) | ❌ Macht Steuerberater in DATEV |
+| **Abgrenzungen** | Nicht vorhanden | Pflicht (§250 HGB) | ❌ Macht Steuerberater in DATEV |
+| **Inventur** | Nicht vorhanden | Pflicht (§240 HGB) | ⏸️ v2.0 Feature (optional) |
+
+**✅ Fazit:** Die meisten Unterschiede sind **NICHT relevant**, weil der Steuerberater die Bilanz in DATEV erstellt!
+
+### **🎯 Positionierung**
+
+**Marketing-Botschaft:**
+
+> **RechnungsPilot** – Die smarte Belegverwaltung für Einzelunternehmer und kleine GmbH/UG.
+>
+> ✅ Rechnungen schreiben & erfassen
+> ✅ Belege kategorisieren & archivieren
+> ✅ UStVA selbst abgeben
+> ✅ DATEV-Export für Steuerberater
+>
+> **Für EÜR-Rechner:** Erstelle deine Einnahmen-Überschuss-Rechnung selbst.
+> **Für GmbH/UG:** Exportiere deine Belege an deinen Steuerberater – spart Zeit und Geld!
+
+**Zielgruppen:**
+1. **Einzelunternehmer / Freiberufler** (primär)
+   - Machen EÜR selbst oder mit Steuerberater
+2. **Kleine GmbH/UG** (sekundär)
+   - Erfassen Belege selbst, Jahresabschluss macht Steuerberater
+3. **GbR** (Personengesellschaften)
+   - Ähnlich wie Einzelunternehmer (EÜR-Berechtigt)
+
+### **🛠️ Technische Umsetzung**
+
+**Keine Änderungen nötig!**
+
+Alle Features, die für **EÜR-Rechner** entwickelt werden, funktionieren auch für **GmbH/UG**:
+
+✅ **Rechnungsstellung** – identisch
+✅ **Belegerfassung** – identisch
+✅ **Kategorisierung** – identisch (SKR03/SKR04)
+✅ **UStVA** – identisch
+✅ **DATEV-Export** – identisch
+✅ **Bank-CSV-Import** – identisch
+
+**Einzige Anpassung:**
+
+Beim **Ersteinrichtungs-Assistenten** eine zusätzliche Frage:
+
+```
+┌────────────────────────────────────────────┐
+│ Unternehmensform wählen:                   │
+├────────────────────────────────────────────┤
+│ ○ Einzelunternehmer / Freiberufler (EÜR)  │
+│ ○ GbR (EÜR)                                │
+│ ● GmbH / UG (Bilanzpflicht) ⭐             │
+│ ○ AG / KG / OHG                            │
+└────────────────────────────────────────────┘
+
+⚠️ Hinweis bei GmbH/UG:
+RechnungsPilot erstellt KEINE Bilanz. Am Jahresende
+exportierst du deine Belege per DATEV-Export an
+deinen Steuerberater, der dann Bilanz und
+Jahresabschluss in DATEV erstellt.
+
+[ Weiter ]
+```
+
+**Datenbank-Änderung:**
+
+```sql
+ALTER TABLE firma ADD COLUMN unternehmensform TEXT DEFAULT 'einzelunternehmer';
+
+-- Mögliche Werte:
+-- 'einzelunternehmer', 'freiberufler', 'gbr', 'gmbh', 'ug', 'ag', 'kg', 'ohg'
+```
+
+**UI-Anpassung:**
+
+In der **Startseite / Dashboard** für GmbH/UG:
+
+```
+┌────────────────────────────────────────┐
+│ 📊 RechnungsPilot - Dashboard          │
+├────────────────────────────────────────┤
+│ Unternehmensform: GmbH (Bilanzpflicht) │
+│                                        │
+│ ℹ️ Hinweis:                            │
+│ Am Jahresende: DATEV-Export für       │
+│ Steuerberater (Bilanz & Jahresabschluss)│
+│                                        │
+│ ✅ UStVA 11/2025 - Abgegeben           │
+│ ⏸️ Nächste UStVA: 10.12.2025          │
+│                                        │
+│ [DATEV-Export erstellen]               │
+└────────────────────────────────────────┘
+```
+
+### **📋 Rechtliche Absicherung**
+
+**Disclaimer in Dokumentation & UI:**
+
+> **Hinweis für bilanzpflichtige Unternehmen (GmbH, UG, AG):**
+>
+> RechnungsPilot ist ein **Belegverwaltungssystem mit DATEV-Export-Funktion**.
+> Es ersetzt KEINE professionelle Finanzbuchhaltungs-Software (z.B. DATEV, Lexware Pro).
+>
+> **Was RechnungsPilot KANN:**
+> - ✅ Rechnungen erstellen & verwalten
+> - ✅ Belege erfassen & kategorisieren
+> - ✅ UStVA selbst abgeben
+> - ✅ DATEV-Export für Steuerberater
+>
+> **Was RechnungsPilot NICHT KANN:**
+> - ❌ Doppelte Buchführung (§238 HGB)
+> - ❌ Bilanz erstellen (§266 HGB)
+> - ❌ GuV nach §275 HGB
+> - ❌ E-Bilanz (§5b EStG)
+> - ❌ Jahresabschluss (§264 HGB)
+>
+> **Empfehlung:**
+> Nutzen Sie RechnungsPilot für das Tagesgeschäft und übergeben Sie am Jahresende
+> per DATEV-Export alle Belege an Ihren Steuerberater, der dann Bilanz und
+> Jahresabschluss in einer professionellen Fibu-Software (z.B. DATEV) erstellt.
+
+### **✅ Entscheidung: JA, absolut sinnvoll!**
+
+**Begründung:**
+
+1. ✅ **Markt verdoppelt sich** (1,8 Mio. GmbH/UG zusätzlich)
+2. ✅ **Alle steuerlichen Einreichungen sind gleich** (UStVA, ZM, USt-Jahr)
+3. ✅ **Wenig Entwicklungsaufwand** (keine neuen Features nötig)
+4. ✅ **Klarer Use Case** (Vorerfassungssystem für Steuerberater)
+5. ✅ **Keine Konkurrenz zu DATEV** (Ergänzung, kein Ersatz)
+6. ✅ **Rechtlich unbedenklich** (mit Disclaimer)
+
+**Implementierung:**
+
+- 🟢 **Phase 1 (MVP):** Bereits vollständig abgedeckt!
+- 🟢 **Phase 2 (v1.1):** Unternehmensform-Auswahl + Disclaimer
+- 🟢 **Phase 3 (v2.0):** Erweiterte Features (Kostenstellenrechnung, Inventur) optional
+
+**Marketing-Strategie:**
+
+- **Primäre Zielgruppe:** Einzelunternehmer / Freiberufler (EÜR)
+- **Sekundäre Zielgruppe:** Kleine GmbH/UG (1-5 Mitarbeiter) mit Steuerberater
+
+→ **Kein Mehraufwand, aber doppelter Markt!** 🚀
+
+---
+
+**Status:** ✅ **Strategische Entscheidung getroffen** - RechnungsPilot wird auch für bilanzpflichtige Unternehmen (GmbH, UG, AG) positioniert als **Vorerfassungssystem mit DATEV-Export**. Alle steuerlichen Einreichungen (UStVA, ZM) sind identisch. Bilanz und Jahresabschluss macht der Steuerberater in DATEV.
+
+---
+
 ## **💬 Community-Vorschläge & Feedback**
 
 ### **Vorschlag 1: LibreOffice-Rechnungsvorlagen mit ZUGFeRD-Platzhaltern**
