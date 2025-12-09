@@ -14060,6 +14060,266 @@ WHERE geaendert_am > (
 
 ---
 
+## **Kategorie 10.2: Software-Updates**
+
+### **Update-Strategie**
+
+**Grundprinzip:** Sicher, automatisch, mit Backup-Absicherung
+
+### **🔄 Update-Mechanismen**
+
+#### **1. Auto-Update (Standard)**
+
+**Desktop-App (Electron/Tauri):**
+- Eingebauter Auto-Updater (z.B. `electron-updater`, `tauri-plugin-updater`)
+- Prüft beim Start auf neue Versionen
+- Download im Hintergrund
+- Installation beim nächsten Neustart
+
+**Workflow:**
+```
+1. RechnungsPilot startet
+   ↓
+2. Prüft: Neue Version verfügbar?
+   ↓ JA
+3. 🔔 "Update verfügbar: v1.2.0 → v1.3.0"
+   ┌─────────────────────────────────────────┐
+   │ 🎉 Update verfügbar!                    │
+   ├─────────────────────────────────────────┤
+   │ Version 1.3.0 ist verfügbar.           │
+   │                                         │
+   │ Neue Features:                          │
+   │ • Verbesserte UStVA-Prüfung             │
+   │ • Schnellerer DATEV-Export              │
+   │ • Bugfixes für Kassenbuch               │
+   │                                         │
+   │ Größe: 45 MB                            │
+   │                                         │
+   │ ☑ Automatisch beim Beenden installieren│
+   │                                         │
+   │ [Später]  [Jetzt herunterladen]         │
+   └─────────────────────────────────────────┘
+   ↓
+4. Download im Hintergrund (Progress-Bar)
+   ↓
+5. User beendet RechnungsPilot
+   ↓
+6. **AUTOMATISCHES BACKUP VOR UPDATE** ⭐
+   ┌─────────────────────────────────────────┐
+   │ 💾 Backup vor Update (Pflicht)          │
+   ├─────────────────────────────────────────┤
+   │ Vor dem Update wird automatisch ein    │
+   │ Backup erstellt. Dies ist verpflichtend│
+   │ und kann nicht übersprungen werden.    │
+   │                                         │
+   │ ████████████████████░░░░ 80%            │
+   │                                         │
+   │ Erstelle Backup...                      │
+   └─────────────────────────────────────────┘
+   ↓
+7. Update installieren
+   ↓
+8. RechnungsPilot automatisch neu starten
+   ↓
+9. ✅ Update erfolgreich!
+   "Willkommen bei RechnungsPilot v1.3.0!"
+```
+
+#### **2. Manuelle Updates**
+
+**Für Power-User / Docker:**
+```bash
+# Docker
+docker pull rechnungspilot/rechnungspilot:latest
+docker-compose down
+docker-compose up -d
+
+# AppImage
+wget https://github.com/rechnungspilot/releases/latest/RechnungsPilot.AppImage
+chmod +x RechnungsPilot.AppImage
+./RechnungsPilot.AppImage
+```
+
+#### **3. Update-Kanäle**
+
+**Verfügbare Kanäle:**
+
+| Kanal | Beschreibung | Zielgruppe | Stabilität |
+|-------|--------------|------------|------------|
+| **Stable** | Produktiv-Release | Alle User | ⭐⭐⭐⭐⭐ |
+| **Beta** | Vorab-Test | Early Adopters | ⭐⭐⭐⭐ |
+| **Nightly** | Tägliche Builds | Entwickler | ⭐⭐ |
+
+**Einstellung:**
+```
+┌─────────────────────────────────────────┐
+│ ⚙️ Einstellungen → Updates              │
+├─────────────────────────────────────────┤
+│ Update-Kanal:                           │
+│ ● Stable (empfohlen)                    │
+│ ○ Beta (für Early Adopters)             │
+│ ○ Nightly (nur für Entwickler)          │
+│                                         │
+│ ☑ Automatisch nach Updates suchen      │
+│ ☑ Updates automatisch herunterladen    │
+│ ☑ Backup vor Update (Pflicht) ✅        │
+│                                         │
+│ Letzte Prüfung: Heute, 10:30 Uhr       │
+│ Installierte Version: 1.2.5             │
+│                                         │
+│ [Jetzt nach Updates suchen]             │
+└─────────────────────────────────────────┘
+```
+
+### **🛡️ Update-Sicherheit**
+
+#### **1. Backup vor Update (PFLICHT)**
+
+**Siehe Kategorie 10.1 - Backup:**
+- Automatisches Backup IMMER vor Update
+- Kann NICHT übersprungen werden
+- Bei Backup-Fehler → Update wird abgebrochen
+- Backup-Typ: Vollbackup (nicht inkrementell)
+
+```python
+def perform_update():
+    """
+    Update-Prozess mit obligatorischem Backup.
+    """
+    # 1. Backup erzwingen
+    backup_erfolg = create_mandatory_backup(typ='vor_update')
+
+    if not backup_erfolg:
+        show_error("Update abgebrochen: Backup fehlgeschlagen!")
+        return False
+
+    # 2. Datenbank-Migration (falls nötig)
+    if needs_migration():
+        migrate_database()
+
+    # 3. Update installieren
+    install_update()
+
+    # 4. Verifizierung
+    if verify_update():
+        return True
+    else:
+        # Rollback auf Backup
+        restore_backup(backup_id=last_backup_before_update)
+        return False
+```
+
+#### **2. Signierte Updates**
+
+**Code Signing:**
+- Alle Updates digital signiert
+- Verhindert Man-in-the-Middle-Attacks
+- Electron Auto-Updater prüft Signatur automatisch
+
+```javascript
+// electron-updater Konfiguration
+{
+  "publish": {
+    "provider": "github",
+    "owner": "rechnungspilot",
+    "repo": "rechnungspilot"
+  },
+  "verifyUpdateCodeSignature": true  // ✅ Signaturprüfung
+}
+```
+
+#### **3. Rollback-Funktion**
+
+**Falls Update fehlschlägt:**
+
+```
+┌─────────────────────────────────────────┐
+│ ⚠️ Update fehlgeschlagen                │
+├─────────────────────────────────────────┤
+│ Das Update konnte nicht installiert     │
+│ werden.                                  │
+│                                         │
+│ Möchtest du auf die vorherige Version  │
+│ zurückkehren? (Backup vom 09.12.2025)  │
+│                                         │
+│ [Abbrechen]  [Auf v1.2.5 zurückkehren] │
+└─────────────────────────────────────────┘
+```
+
+### **📋 MVP-Umfang für Kategorie 10.2 (Update)**
+
+#### **Phase 1 (v1.0):**
+- ✅ **Auto-Update** (Electron/Tauri built-in)
+- ✅ **Backup vor Update** (Pflicht, automatisch) - bereits in 10.1 geklärt
+- ✅ **Update-Benachrichtigung** (beim Start)
+- ✅ **Signierte Updates** (Code Signing)
+- ✅ **Stable-Kanal** (Produktiv-Releases)
+- ✅ **Changelog anzeigen** (Was ist neu?)
+- ✅ **Manuelle Update-Prüfung** (Button in Einstellungen)
+
+#### **Phase 2 (v1.1):**
+- Beta-Kanal (Early Access)
+- Rollback-UI (zurück zur vorherigen Version)
+- Update-Historie (welche Versionen wurden wann installiert)
+
+#### **Phase 3 (v2.0):**
+- Nightly-Kanal (tägliche Builds)
+- Delta-Updates (nur Änderungen herunterladen, spart Bandbreite)
+- Offline-Updates (Update-Paket manuell importieren)
+
+### **🗄️ Datenbank-Schema für Updates**
+
+```sql
+-- Update-Historie
+CREATE TABLE update_log (
+    id INTEGER PRIMARY KEY,
+    version_alt TEXT NOT NULL,        -- '1.2.5'
+    version_neu TEXT NOT NULL,        -- '1.3.0'
+    update_am TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Backup-Referenz
+    backup_id INTEGER NOT NULL,       -- Backup vor Update
+
+    -- Status
+    status TEXT DEFAULT 'erfolgreich', -- 'erfolgreich', 'fehler', 'rollback'
+    fehlermeldung TEXT,
+
+    -- Metadaten
+    update_kanal TEXT DEFAULT 'stable', -- 'stable', 'beta', 'nightly'
+    groesse_mb REAL,
+    dauer_sekunden INTEGER,
+
+    CHECK (status IN ('erfolgreich', 'fehler', 'rollback')),
+    CHECK (update_kanal IN ('stable', 'beta', 'nightly')),
+    FOREIGN KEY (backup_id) REFERENCES backups(id)
+);
+
+CREATE INDEX idx_update_log_datum ON update_log(update_am);
+```
+
+### **✅ Status: Kategorie 10.2 - Update vollständig geklärt**
+
+**Wichtigste Entscheidungen:**
+
+1. ✅ **Auto-Update als Standard** (Electron/Tauri built-in)
+2. ✅ **Backup vor Update PFLICHT** (siehe Kategorie 10.1) ⭐
+3. ✅ **Signierte Updates** (Code Signing für Sicherheit)
+4. ✅ **Stable-Kanal für v1.0** (Beta/Nightly später)
+5. ✅ **Rollback-Funktion** (bei fehlgeschlagenem Update)
+6. ✅ **Changelog-Anzeige** (Transparenz über Änderungen)
+
+**Technische Umsetzung:**
+- Desktop: `electron-updater` oder `tauri-plugin-updater`
+- Docker: Docker Hub / GitHub Container Registry
+- AppImage: GitHub Releases mit Auto-Updater
+
+**Sicherheit:**
+- Obligatorisches Backup vor jedem Update
+- Code Signing (verhindert manipulierte Updates)
+- Automatischer Rollback bei Fehler
+
+---
+
 ### **Noch zu klären (siehe fragen.md):**
 
 - ✅ ~~Kategorie 6: UStVA~~ - **Geklärt** (Hybrid-Ansatz, MVP nur Zahlen)
@@ -14067,7 +14327,7 @@ WHERE geaendert_am > (
 - ✅ ~~Kategorie 8: Stammdaten-Erfassung~~ - **Geklärt** (User/Firma, Kategorien, EU-Länder, Bankkonten, Kontenrahmen, Geschäftsjahr, Kundenstamm mit Hybrid-Lösung, Lieferantenstamm, Produktstamm v2.0)
 - ✅ ~~Kategorie 9: Import-Schnittstellen~~ - **Geklärt** (Typ 1: Stammdaten editierbar, Typ 2a: Rohdaten unveränderbar, Typ 2b: Geschäftsvorfälle unveränderbar; Fakturama/helloCash in v1.1, AGENDA in v1.1/v2.0)
 - ✅ ~~Kategorie 10.1: Backup~~ - **Geklärt** (Lokale Backups: Verzeichnis/USB/NAS, mehrere Ziele parallel, 3-2-1-Regel, Vollbackup/Inkrementell, AES-256-Verschlüsselung, automatischer Zeitplan, **Exit-Backup beim Beenden** ⭐, Change-Tracking, Cloud-Backup v2.0)
-- Kategorie 10.2: Update (noch zu klären)
+- ✅ ~~Kategorie 10.2: Update~~ - **Geklärt** (Auto-Update Standard, Backup vor Update PFLICHT, Code Signing, Stable/Beta/Nightly-Kanäle, Rollback-Funktion, Changelog-Anzeige)
 - Kategorie 11: Steuersätze
 - Kategorie 12: Hilfe-System
 - Kategorie 13: Scope & Priorisierung
