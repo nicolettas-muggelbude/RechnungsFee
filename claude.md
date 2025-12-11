@@ -1,5 +1,11 @@
 # RechnungsFee - Claude Projektdokumentation
 
+> ⚠️ **HINWEIS:** Diese Datei wurde aufgeteilt in einzelne Themendokumente für bessere Wartbarkeit.
+> 📚 **Neue Dokumentation:** Siehe [docs/README.md](docs/README.md) für den strukturierten Zugriff.
+> 📄 Diese Datei bleibt als Archiv erhalten, wird aber nicht mehr aktiv gepflegt.
+
+---
+
 **Projekt:** RechnungsFee
 **Typ:** Open-Source Buchhaltungssoftware
 **Zielgruppe:** Freiberufler, Selbstständige, Kleinunternehmer
