@@ -5,6 +5,7 @@
 - ✅ Kategorie 2 (PDF/E-Rechnungs-Import) geklärt
 - ✅ Kategorie 3 (Anlage EKS) geklärt
 - ✅ Kategorie 4 (DATEV-Export) geklärt
+- ✅ Kategorie 12 (Hilfe-System) geklärt
 
 ---
 
@@ -349,7 +350,7 @@
 
 ---
 
-## **📋 Kategorie 12: Hilfe-System**
+## **📋 Kategorie 12: Hilfe-System** ✅ GEKLÄRT
 
 **Frage 12.1: Umfang der Hilfe:**
 - Tooltips auf jeder Eingabemaske (Fragezeichen-Icon).
@@ -390,11 +391,13 @@ Welche Features MÜSSEN in Version 1.0 dabei sein? Bitte priorisieren:
 - [ ] Eingangsrechnungen erfassen (manuell)
 - [ ] Eingangsrechnungen verwalten (Liste, Filter, Suche)
 - [ ] Kassenbuch führen
-- [ ] EAR-Export (Steuerberater)
+- [ ] EAR-Export (Steuerberater / Elster)
+- [ ] Umsatzsteuer-Voranmeldung-Export (Steuerberater / Elster)
 - [ ] EKS-Export (Agentur für Arbeit)
 - [ ] Stammdaten-Verwaltung (Unternehmen, Kunden, Lieferanten)
 - [ ] Backup-Funktion
-- [ ] ?
+- [ ] DATEV Export (Steuerberater)
+
 
 **Should-Have (Prio 2 - gerne in 1.0 aber nicht zwingend):**
 - [ ] PDF-Import mit OCR

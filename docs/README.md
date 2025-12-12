@@ -43,6 +43,12 @@ Diese Dokumentation beschreibt alle Anforderungen, Konzepte und Entscheidungen f
 | **[07-dsgvo.md](07-dsgvo.md)** | Datenschutzerklärung, DSGVO-Konformität | - |
 | **[09-backup-updates.md](09-backup-updates.md)** | Backup-Strategie, Software-Updates, Exit-Backup | Kategorie 10 |
 
+### ❓ Hilfe & Support
+
+| Dokument | Beschreibung | Kategorie |
+|----------|--------------|-----------|
+| **[12-hilfe-system.md](12-hilfe-system.md)** | Hilfe-System, Tooltips, FAQ, Community-Support | Kategorie 12 |
+
 ### 📎 Anhang
 
 | Dokument | Beschreibung |
@@ -73,20 +79,22 @@ Diese Dokumentation beschreibt alle Anforderungen, Konzepte und Entscheidungen f
 - **Ersteinrichtung:** Siehe [06-stammdaten.md](06-stammdaten.md)
 - **Backup-Strategie:** Siehe [09-backup-updates.md](09-backup-updates.md)
 - **Import-Kompatibilität:** Siehe [08-import.md](08-import.md)
+- **Hilfe-System & Support:** Siehe [12-hilfe-system.md](12-hilfe-system.md)
 
 ---
 
 ## 📊 Dokumentations-Statistik
 
-| Bereich | Dokumente | Geschätzte Seiten |
+| Bereich | Dokumente | Geschätzte Zeilen |
 |---------|-----------|-------------------|
 | **Grundlagen** | 1 | ~125 |
 | **Kernfunktionen** | 2 | ~2.000 |
 | **Steuern** | 3 | ~4.500 |
 | **Stammdaten** | 2 | ~5.500 |
 | **Sicherheit** | 2 | ~2.000 |
+| **Hilfe & Support** | 1 | ~600 |
 | **Anhang** | 1 | ~600 |
-| **GESAMT** | **11** | **~15.000 Zeilen** |
+| **GESAMT** | **12** | **~15.600 Zeilen** |
 
 ---
 
