@@ -6,7 +6,7 @@
 - ✅ Kategorie 3 (Anlage EKS) geklärt
 - ✅ Kategorie 4 (DATEV-Export) geklärt
 - ✅ Kategorie 12 (Hilfe-System) geklärt
-- ✅ Kategorie 13 (Scope & Priorisierung) geklärt - Komfortables MVP
+- ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
 ---
 
@@ -497,35 +497,76 @@
 - **= 17 Features gesamt in v1.0**
 - Geschätzte Entwicklungszeit: 4-6 Monate
 
-**Frage 13.2: Reihenfolge der Entwicklung:**
-In welcher Reihenfolge sollen die Module entwickelt werden?
+---
 
-Mein Vorschlag:
-1. **Projekt-Setup** (Repo, Struktur, Basis-UI)
-2. **Stammdaten** (Unternehmen, Kunden, Lieferanten)
-3. **Eingangsrechnungen** (manuelle Erfassung, Verwaltung)
-4. **Kassenbuch** (inkl. Verknüpfung zu Rechnungen)
-5. **Bank-Import** (CSV)
-6. **Zahlungsabgleich** (Bank → Rechnungen)
-7. **EAR-Export** (für Steuerberater)
-8. **EKS-Export** (für Agentur für Arbeit)
-9. **UStVA** (Voranmeldung vorbereiten)
-10. **EÜR** (Gewinnermittlung)
-11. **DATEV-Export**
-12. **PDF/E-Rechnung-Import**
-13. **Ausgangsrechnungen** (nur Verwaltung)
-14. **Desktop-Installer** (Tauri)
-15. **Testing & Dokumentation**
-16. **Beta-Phase**
+**Frage 13.2: Reihenfolge der Entwicklung** ✅ GEKLÄRT
 
-Passt diese Reihenfolge oder würdest du anders priorisieren?
+**Entscheidung: Phasenweise Entwicklung, Stabilität vor Geschwindigkeit**
 
-**Frage 13.3: Zeitrahmen:**
-- Flexibel 
+### **Phase 1: Fundament (Wochen 1-4) 🏗️**
+- [x] Projekt-Setup (Tauri + DB + Basis-UI)
+- [x] Stammdaten-Verwaltung (Unternehmen, Kunden, Lieferanten)
+- [x] **✅ Meilenstein 1:** Stammdaten erfassbar → Test-Version 0.1
 
-**Frage 13.4: Meilensteine:**
-- Macht es Sinn alle 2-4 Wochen ein Review zu machen?
-- Willst du nach jedem Modul eine Test-Version haben? -ja
+### **Phase 2: Kern-Buchhaltung (Wochen 5-10) 📊**
+- [x] Eingangsrechnungen erfassen & verwalten
+- [x] Kassenbuch (mit GoBD-Konformität)
+- [x] **✅ Meilenstein 2:** Erste nutzbare Version → Test-Version 0.2
+
+### **Phase 3: Bank-Integration (Wochen 11-14) 🏦**
+- [x] Bank-CSV-Import (Format-Erkennung)
+- [x] Zahlungsabgleich (automatisch + manuell)
+- [x] **✅ Meilenstein 3:** Hauptarbeit automatisiert → Test-Version 0.3
+
+### **Phase 4: Dashboard & Backup (Wochen 15-16) 📈**
+- [x] Dashboard (KPIs, Übersicht)
+- [x] Backup-Funktion (manuell + Exit-Backup)
+- [x] **✅ Meilenstein 4:** Produktiv nutzbar → Test-Version 0.4
+
+### **Phase 5: Steuer-Exporte (Wochen 17-22) 💰**
+- [x] EÜR-Export (CSV für ELSTER)
+- [x] UStVA-Export (CSV/XML)
+- [x] UStVA-Vorschau-PDF
+- [x] Anlage EKS-Export
+- [x] **✅ Meilenstein 5:** Steuerlich vollständig → Test-Version 0.5
+
+### **Phase 6: Erweiterte Features (Wochen 23-26) ⭐**
+- [x] DATEV-Export (SKR03/04)
+- [x] ZUGFeRD/XRechnung-Import
+- [x] Ausgangsrechnungen erfassen (Read-Only)
+- [x] **✅ Meilenstein 6:** Alle 17 Features fertig → Test-Version 0.6
+
+### **Phase 7: UX & Hilfe (Wochen 27-28) 🎨**
+- [x] Hilfe-System (Tooltips, Kontexthilfe)
+- [x] Onboarding & Setup-Assistent
+- [x] **✅ Meilenstein 7:** Benutzerfreundlich → Test-Version 0.7
+
+### **Phase 8: Polishing & Testing (Wochen 29-32) 🔧**
+- [x] Unit- & Integration-Tests
+- [x] Bug-Fixing & Performance-Optimierung
+- [x] PDF-Handbuch schreiben
+- [x] **✅ Meilenstein 8:** Stabil & dokumentiert → Test-Version 0.8
+
+### **Phase 9: Beta & Release (Wochen 33-36) 🚀**
+- [x] Private Beta (5-10 Tester)
+- [x] Desktop-Installer (Windows, macOS, Linux)
+- [x] Release Preparation
+- [x] **✅ Meilenstein 9:** v1.0 Release! 🎉
+
+**📊 Gesamt:** 9 Phasen, 9 Meilensteine, 9 Test-Versionen, ~36 Wochen (realistisch)
+
+**⚠️ Wichtig:** Stabilität hat Priorität! Jede Phase wird gründlich getestet.
+
+---
+
+**Frage 13.3: Zeitrahmen** ✅ GEKLÄRT
+- [x] **Flexibel, aber realistisch:** 4-6 Monate (Best Case) bis 9 Monate (realistisch mit Stabilität)
+- [x] **Stabilität vor Geschwindigkeit:** Lieber länger entwickeln, dafür stabil
+
+**Frage 13.4: Meilensteine & Testing** ✅ GEKLÄRT
+- [x] **Test-Versionen:** Nach jedem Meilenstein (0.1 bis 0.8, dann v1.0)
+- [x] **Arbeitsweise:** Phasenweise (nicht agil/Sprints)
+- [x] **Fokus:** Gründliches Testen jeder Phase vor Weitergehen
 
 ---
 
