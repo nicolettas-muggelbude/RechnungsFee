@@ -11,7 +11,7 @@
 - ✅ Kategorie 8.1 (Unternehmerdaten) geklärt - 13 Pflichtfelder, 6 optional
 - ✅ Kategorie 8.6 (Kundenstammdaten) vollständig geklärt - 9 Punkte inkl. VIES-API, Inland/EU/Drittland
 - ✅ Kategorie 8.7 (Lieferantenstammdaten) geklärt - Ähnlich Kunden, einfacher, VIES-API
-- ✅ Kategorie 8.8 (Produktstammdaten) geklärt - Volle Version v1.0, VK brutto primär, manuelle Artikelnr.
+- ✅ Kategorie 8.8 (Artikel & Dienstleistungen) geklärt - Gemeinsamer Stamm, 3 Typen, EAN auch bei DL
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
@@ -652,74 +652,109 @@ Bei Auswahl von Einzelunternehmer, Freiberufler:
 - ✅ Zusatzfelder: Webshop, Lieferanten-Kundennummer
 - ✅ Einfacher und schlanker
 
-**Frage 8.8: Produktstammdaten** ✅ GEKLÄRT
+**Frage 8.8: Artikel- & Dienstleistungsstammdaten** ✅ GEKLÄRT
 
-**Entscheidung: Volle Version direkt in v1.0 (Option B)**
+**Entscheidung: Gemeinsamer Stamm mit Typ-Unterscheidung (Option A)**
 
-Obwohl Rechnungsschreiben erst in v1.1+ kommt, werden Produktstammdaten bereits in v1.0 vollständig implementiert für:
+Ein gemeinsamer Stamm für Produkte UND Dienstleistungen mit intelligenter Typ-Unterscheidung.
+
+Bereits in v1.0 vollständig implementiert für:
 - Ausgangsrechnungen erfassen (Should-Have v1.0)
 - Vorbereitung für Rechnungsschreib-Modul (v1.1+)
 - Nachbestellung und Rechnungssuche
+- Scanlisten (EAN-Erfassung auch bei Dienstleistungen!)
 
 ---
 
-### **Pflichtfelder:**
-- [x] **Bezeichnung** (z.B. "Beratungsstunde", "Bürostuhl Modell X", "Webhosting Paket M")
-- [x] **Artikelnummer** (manuell eingegeben!)
-  - Beispiel: "BER-001", "STUHL-MX-500", "WEB-M"
-  - Frei wählbar, kein automatisches Format
+### **Typ-Auswahl (bestimmt verfügbare Felder):**
+
+**1. Produkt** (physische Ware)
+- Alle Felder verfügbar
+- Mit Hersteller, Artikelcode, Lieferant, EAN
+
+**2. Dienstleistung - Eigenleistung** (selbst erbracht)
+- Nur VK (Verkaufspreis) relevant
+- Kein EK (Einkaufspreis)
+- Kein Lieferant/Hersteller
+- EAN möglich (für Scanlisten!)
+
+**3. Dienstleistung - Fremdleistung** (eingekauft, weitergegeben)
+- EK + VK relevant (Marge berechnen)
+- Lieferant = Dienstleister (Subunternehmer)
+- **Artikelnummer = Artikelnummer des Dienstleisters!**
+- Wichtig für Reverse-Charge bei ausländischen Dienstleistern
+
+---
+
+### **Pflichtfelder (für ALLE Typen):**
+- [x] **Typ** (Dropdown: Produkt / Dienstleistung)
+  - Bei "Dienstleistung": Zusatzauswahl "Eigenleistung / Fremdleistung"
+- [x] **Bezeichnung** (z.B. "Beratungsstunde", "Bürostuhl Modell X", "SEO-Optimierung")
+- [x] **Artikelnummer** (Freitext, frei wählbar!)
+  - Bei Produkt: Eigene Artikelnummer (z.B. "BER-001", "STUHL-MX-500")
+  - Bei Dienstleistung Eigenleistung: Eigene Nr. (z.B. "DL-WEB-001")
+  - Bei Dienstleistung Fremdleistung: **Artikelnummer des Dienstleisters!**
   - Eindeutig (Duplikat-Prüfung)
 - [x] **Steuersatz** (Dropdown: 19%, 7%, 0%)
 - [x] **VK brutto** (Verkaufspreis brutto - PRIMÄRE EINGABE)
   - VK netto wird automatisch berechnet: `netto = brutto / (1 + steuersatz)`
   - Beispiel: 119,00 € brutto bei 19% → 100,00 € netto
-- [x] **Einheit** (Dropdown mit Freitext-Option)
-  - Vordefiniert: Stück, Stunden, Pauschal, kg, m, m², Lizenz, Tag, Monat
-  - Freitext: Nutzer kann eigene Einheit eingeben
+- [x] **Einheit** (Freitext!)
+  - Produkte: Stück, kg, m, m², Liter, Paket, Palette, etc.
+  - Dienstleistungen: Stunden, Tag, Monat, Pauschal, Projekt, etc.
+  - Nutzer kann beliebige Einheit eingeben
 
 ---
 
-### **Optionale Felder:**
+### **Optionale Felder (verfügbar je nach Typ):**
 
-**Kategorisierung:**
+**Kategorisierung (ALLE Typen):**
 - [x] **Kategorie** (Freitext, für Gruppierung)
-  - Beispiel: "Dienstleistung", "Bürobedarf", "IT-Hardware", "Hosting"
+  - Beispiel: "Dienstleistung", "Bürobedarf", "IT-Hardware", "Marketing"
   - Später (v1.1+): Dropdown mit vordefinierten Kategorien
 
-**Einkaufspreise:**
+**Einkaufspreise (NUR bei: Produkt + Dienstleistung Fremdleistung):**
 - [x] **EK netto** (Einkaufspreis netto - PRIMÄRE EINGABE)
   - EK brutto wird automatisch berechnet: `brutto = netto * (1 + steuersatz)`
-  - Nur für Waren-Artikel relevant (bei Dienstleistungen leer lassen)
+  - Bei Produkt: Wareneinkaufspreis
+  - Bei Fremdleistung: Einkaufspreis vom Dienstleister/Subunternehmer
 - [x] **EK brutto** (automatisch berechnet, nicht editierbar)
 
-**Verkaufspreise:**
+**Verkaufspreise (ALLE Typen):**
 - [x] **VK netto** (automatisch berechnet aus VK brutto, nicht editierbar)
 
-**Lieferanten-Information:**
+**Lieferanten-Information (NUR bei: Produkt + Dienstleistung Fremdleistung):**
 - [x] **Lieferant** (Dropdown aus Lieferantenstamm)
+  - Bei Produkt: Warenlieferant
+  - Bei Fremdleistung: Dienstleister/Subunternehmer
 - [x] **Lieferanten-Artikelnummer** (wichtig!)
-  - Die Artikelnummer beim Lieferanten
-  - Beispiel: Bei Amazon Business = ASIN, bei Conrad = Bestellnummer
+  - Die Artikelnummer beim Lieferanten/Dienstleister
+  - Beispiel Produkt: Bei Amazon Business = ASIN, bei Conrad = Bestellnummer
+  - Beispiel Fremdleistung: Service-ID des Subunternehmers
   - **Verwendung:** Rechnungssuche, Nachbestellung
 
-**Hersteller-Information:**
+**Hersteller-Information (NUR bei: Produkt):**
 - [x] **Hersteller** (Freitext)
   - Beispiel: "Logitech", "HP", "Microsoft"
+  - Nicht bei Dienstleistungen
 - [x] **Artikelcode** (Hersteller-Artikelbezeichnung, wichtig!)
   - Die originale Artikelbezeichnung des Herstellers
   - Beispiel: "MX-500-BLK", "LaserJet Pro M404dn", "Win11-Pro-OEM"
   - **Verwendung:** Rechnungssuche, technische Dokumentation
+  - Nicht bei Dienstleistungen
 
-**Identifikation:**
+**Identifikation (ALLE Typen):**
 - [x] **EAN** (European Article Number - Barcode)
   - 13-stellig (EAN-13) oder 8-stellig (EAN-8)
   - Validierung: Prüfziffer
-  - Nur bei physischen Produkten relevant
+  - Bei Produkten: Standard-Barcode
+  - Bei Dienstleistungen: **Für Scanlisten!** (z.B. beim Erfassen von Standard-Dienstleistungspaketen)
 
-**Beschreibung:**
-- [x] **Artikelbeschreibung** (Textarea, unbegrenzt)
+**Beschreibung (ALLE Typen):**
+- [x] **Beschreibung** (Textarea, unbegrenzt)
   - Ausführliche Beschreibung für Rechnungstext
-  - Beispiel: "Ergonomischer Bürostuhl mit Lordosenstütze, höhenverstellbar, Belastbarkeit bis 120kg"
+  - Beispiel Produkt: "Ergonomischer Bürostuhl mit Lordosenstütze, höhenverstellbar, Belastbarkeit bis 120kg"
+  - Beispiel Dienstleistung: "Umfassende SEO-Optimierung inkl. Keyword-Recherche, On-Page-Optimierung und monatlichem Reporting"
   - Kann bei Ausgangsrechnung als Positionstext übernommen werden
 
 ---
@@ -768,35 +803,86 @@ Beispiele:
   - Wareneingangsprüfung
 
 **Use Cases:**
-1. **Dienstleistung erfassen:**
-   - Bezeichnung: "Beratungsstunde"
-   - Artikelnummer: "BER-001"
-   - VK brutto: 119,00 €
-   - Steuersatz: 19%
-   - Einheit: Stunden
-   - Kategorie: "Dienstleistung"
-   - EK/Lieferant/EAN: leer
 
-2. **Ware erfassen (für Wiederverkauf):**
+**1. Dienstleistung - Eigenleistung erfassen:**
+   - **Typ:** Dienstleistung - Eigenleistung
+   - Bezeichnung: "SEO-Optimierung Paket Basic"
+   - Artikelnummer: "DL-SEO-001" (eigene Nummer)
+   - VK brutto: 595,00 € → VK netto: 500,00 €
+   - Steuersatz: 19%
+   - Einheit: Pauschal
+   - Kategorie: "Marketing"
+   - EAN: "4012345678901" (für Scanliste!)
+   - Beschreibung: "Umfassende SEO-Optimierung inkl. Keyword-Recherche..."
+   - EK/Lieferant/Hersteller: leer (selbst erbracht)
+
+**2. Dienstleistung - Fremdleistung erfassen:**
+   - **Typ:** Dienstleistung - Fremdleistung
+   - Bezeichnung: "Webdesign durch Subunternehmer XY"
+   - Artikelnummer: **"WEB-SUB-2024-42"** (Artikelnummer des Dienstleisters!)
+   - Lieferant: "Webdesign GmbH" (Subunternehmer)
+   - Lieferanten-Artikelnummer: "WEB-SUB-2024-42"
+   - EK netto: 800,00 € → EK brutto: 952,00 €
+   - VK brutto: 1.190,00 € → VK netto: 1.000,00 €
+   - Steuersatz: 19%
+   - Einheit: Pauschal
+   - Kategorie: "IT-Dienstleistung"
+   - Beschreibung: "Responsive Webdesign, 5 Unterseiten, CMS-Integration"
+   - Hersteller/Artikelcode: leer
+
+**3. Produkt erfassen (für Wiederverkauf):**
+   - **Typ:** Produkt
    - Bezeichnung: "Logitech MX Master 3S Maus"
-   - Artikelnummer: "MAUS-001"
+   - Artikelnummer: "MAUS-001" (eigene Nummer)
    - Hersteller: "Logitech"
-   - Artikelcode: "MX-MASTER-3S-BLK"
+   - Artikelcode: "MX-MASTER-3S-BLK" (Hersteller-Bezeichnung)
    - Lieferant: "Conrad Electronic"
-   - Lieferanten-Artikelnummer: "2347891"
+   - Lieferanten-Artikelnummer: "2347891" (Conrad Bestellnummer)
    - EAN: "5099206098596"
    - EK netto: 70,00 € → EK brutto: 83,30 €
    - VK brutto: 119,00 € → VK netto: 100,00 €
    - Steuersatz: 19%
    - Einheit: Stück
+   - Kategorie: "IT-Hardware"
 
 ---
 
 **Vorbereitung für v1.1+ (Rechnungsschreib-Modul):**
-- Produktstammdaten können direkt in Ausgangsrechnungen eingefügt werden
-- Artikelbeschreibung → Positionstext
+- Artikel & Dienstleistungen können direkt in Ausgangsrechnungen eingefügt werden
+- Beschreibung → Positionstext
 - VK brutto/netto → automatische Berechnung
-- Einheit → Mengenangabe (z.B. "3 Stück", "12,5 Stunden")
+- Einheit → Mengenangabe (z.B. "3 Stück", "12,5 Stunden", "1 Pauschal")
+
+---
+
+### **Feldverfügbarkeit-Matrix:**
+
+| Feld | Produkt | DL Eigen | DL Fremd | Pflicht/Optional |
+|------|---------|----------|----------|------------------|
+| **Typ** | ✅ | ✅ | ✅ | Pflicht |
+| **Bezeichnung** | ✅ | ✅ | ✅ | Pflicht |
+| **Artikelnummer** | ✅ (eigene) | ✅ (eigene) | ✅ (vom Dienstleister!) | Pflicht |
+| **Steuersatz** | ✅ | ✅ | ✅ | Pflicht |
+| **VK brutto** | ✅ | ✅ | ✅ | Pflicht |
+| **VK netto** | ✅ (auto) | ✅ (auto) | ✅ (auto) | Automatisch |
+| **Einheit** | ✅ | ✅ | ✅ | Pflicht |
+| **Kategorie** | ✅ | ✅ | ✅ | Optional |
+| **EK netto** | ✅ | ❌ | ✅ | Optional |
+| **EK brutto** | ✅ (auto) | ❌ | ✅ (auto) | Automatisch |
+| **Lieferant** | ✅ | ❌ | ✅ | Optional |
+| **Lieferanten-ArtNr** | ✅ | ❌ | ✅ | Optional |
+| **Hersteller** | ✅ | ❌ | ❌ | Optional |
+| **Artikelcode** | ✅ | ❌ | ❌ | Optional |
+| **EAN** | ✅ | ✅ | ✅ | Optional |
+| **Beschreibung** | ✅ | ✅ | ✅ | Optional |
+| **Aktiv/Inaktiv** | ✅ | ✅ | ✅ | Automatisch |
+| **created_at/updated_at** | ✅ | ✅ | ✅ | Automatisch (GoBD) |
+
+**Legende:**
+- ✅ = Feld verfügbar
+- ❌ = Feld nicht verfügbar/ausgeblendet
+- (auto) = Automatisch berechnet
+- DL = Dienstleistung
 
 ---
 
