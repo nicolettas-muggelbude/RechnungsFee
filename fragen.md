@@ -11,6 +11,7 @@
 - ✅ Kategorie 8.1 (Unternehmerdaten) geklärt - 13 Pflichtfelder, 6 optional
 - ✅ Kategorie 8.6 (Kundenstammdaten) vollständig geklärt - 9 Punkte inkl. VIES-API, Inland/EU/Drittland
 - ✅ Kategorie 8.7 (Lieferantenstammdaten) geklärt - Ähnlich Kunden, einfacher, VIES-API
+- ✅ Kategorie 8.8 (Produktstammdaten) geklärt - Volle Version v1.0, VK brutto primär, manuelle Artikelnr.
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
@@ -651,11 +652,151 @@ Bei Auswahl von Einzelunternehmer, Freiberufler:
 - ✅ Zusatzfelder: Webshop, Lieferanten-Kundennummer
 - ✅ Einfacher und schlanker
 
-**Frage 8.8: Produktstammdaten (für späteres Rechnungsschreib-Modul):**
-- Schon in Ersteinrichtung erfassen oder erst später wenn Modul aktiv?
-- Falls jetzt: Artikel/Dienstleistungen mit Bezeichnung, Preis, Steuersatz?
-- Artikelnummern?
-- Einheiten (Stück, Stunden, Pauschal)?
+**Frage 8.8: Produktstammdaten** ✅ GEKLÄRT
+
+**Entscheidung: Volle Version direkt in v1.0 (Option B)**
+
+Obwohl Rechnungsschreiben erst in v1.1+ kommt, werden Produktstammdaten bereits in v1.0 vollständig implementiert für:
+- Ausgangsrechnungen erfassen (Should-Have v1.0)
+- Vorbereitung für Rechnungsschreib-Modul (v1.1+)
+- Nachbestellung und Rechnungssuche
+
+---
+
+### **Pflichtfelder:**
+- [x] **Bezeichnung** (z.B. "Beratungsstunde", "Bürostuhl Modell X", "Webhosting Paket M")
+- [x] **Artikelnummer** (manuell eingegeben!)
+  - Beispiel: "BER-001", "STUHL-MX-500", "WEB-M"
+  - Frei wählbar, kein automatisches Format
+  - Eindeutig (Duplikat-Prüfung)
+- [x] **Steuersatz** (Dropdown: 19%, 7%, 0%)
+- [x] **VK brutto** (Verkaufspreis brutto - PRIMÄRE EINGABE)
+  - VK netto wird automatisch berechnet: `netto = brutto / (1 + steuersatz)`
+  - Beispiel: 119,00 € brutto bei 19% → 100,00 € netto
+- [x] **Einheit** (Dropdown mit Freitext-Option)
+  - Vordefiniert: Stück, Stunden, Pauschal, kg, m, m², Lizenz, Tag, Monat
+  - Freitext: Nutzer kann eigene Einheit eingeben
+
+---
+
+### **Optionale Felder:**
+
+**Kategorisierung:**
+- [x] **Kategorie** (Freitext, für Gruppierung)
+  - Beispiel: "Dienstleistung", "Bürobedarf", "IT-Hardware", "Hosting"
+  - Später (v1.1+): Dropdown mit vordefinierten Kategorien
+
+**Einkaufspreise:**
+- [x] **EK netto** (Einkaufspreis netto - PRIMÄRE EINGABE)
+  - EK brutto wird automatisch berechnet: `brutto = netto * (1 + steuersatz)`
+  - Nur für Waren-Artikel relevant (bei Dienstleistungen leer lassen)
+- [x] **EK brutto** (automatisch berechnet, nicht editierbar)
+
+**Verkaufspreise:**
+- [x] **VK netto** (automatisch berechnet aus VK brutto, nicht editierbar)
+
+**Lieferanten-Information:**
+- [x] **Lieferant** (Dropdown aus Lieferantenstamm)
+- [x] **Lieferanten-Artikelnummer** (wichtig!)
+  - Die Artikelnummer beim Lieferanten
+  - Beispiel: Bei Amazon Business = ASIN, bei Conrad = Bestellnummer
+  - **Verwendung:** Rechnungssuche, Nachbestellung
+
+**Hersteller-Information:**
+- [x] **Hersteller** (Freitext)
+  - Beispiel: "Logitech", "HP", "Microsoft"
+- [x] **Artikelcode** (Hersteller-Artikelbezeichnung, wichtig!)
+  - Die originale Artikelbezeichnung des Herstellers
+  - Beispiel: "MX-500-BLK", "LaserJet Pro M404dn", "Win11-Pro-OEM"
+  - **Verwendung:** Rechnungssuche, technische Dokumentation
+
+**Identifikation:**
+- [x] **EAN** (European Article Number - Barcode)
+  - 13-stellig (EAN-13) oder 8-stellig (EAN-8)
+  - Validierung: Prüfziffer
+  - Nur bei physischen Produkten relevant
+
+**Beschreibung:**
+- [x] **Artikelbeschreibung** (Textarea, unbegrenzt)
+  - Ausführliche Beschreibung für Rechnungstext
+  - Beispiel: "Ergonomischer Bürostuhl mit Lordosenstütze, höhenverstellbar, Belastbarkeit bis 120kg"
+  - Kann bei Ausgangsrechnung als Positionstext übernommen werden
+
+---
+
+### **Automatische Felder:**
+- [x] **Aktiv/Inaktiv** - Checkbox (Standard: ✅ aktiviert)
+  - Inaktive Artikel ausblenden (z.B. ausgelaufene Produkte)
+  - Nicht löschen (GoBD - Historie behalten!)
+- [x] **created_at** - Zeitpunkt des Anlegens (automatisch)
+- [x] **updated_at** - Letzte Änderung (automatisch)
+- [x] **Unbedingt erforderlich** für GoBD-Konformität
+
+---
+
+### **Berechnungslogik:**
+
+**VK brutto → VK netto:**
+```
+VK netto = VK brutto / (1 + Steuersatz)
+
+Beispiele:
+119,00 € (brutto, 19%) → 100,00 € (netto)
+107,00 € (brutto, 7%) → 100,00 € (netto)
+100,00 € (brutto, 0%) → 100,00 € (netto)
+```
+
+**EK netto → EK brutto:**
+```
+EK brutto = EK netto × (1 + Steuersatz)
+
+Beispiele:
+50,00 € (netto, 19%) → 59,50 € (brutto)
+80,00 € (netto, 7%) → 85,60 € (brutto)
+```
+
+---
+
+### **Wichtige Hinweise:**
+
+**Unterschied Artikelcode vs. Lieferanten-Artikelnummer:**
+- **Artikelcode:** Hersteller-Bezeichnung (z.B. Logitech "MX-500-BLK")
+- **Lieferanten-Artikelnummer:** Bestellnummer beim Lieferanten (z.B. Conrad "2347891", Amazon "B08XYZ123")
+- **Beide wichtig für:**
+  - Rechnungssuche (Eingangsrechnungen finden)
+  - Nachbestellung (korrekte Artikel identifizieren)
+  - Wareneingangsprüfung
+
+**Use Cases:**
+1. **Dienstleistung erfassen:**
+   - Bezeichnung: "Beratungsstunde"
+   - Artikelnummer: "BER-001"
+   - VK brutto: 119,00 €
+   - Steuersatz: 19%
+   - Einheit: Stunden
+   - Kategorie: "Dienstleistung"
+   - EK/Lieferant/EAN: leer
+
+2. **Ware erfassen (für Wiederverkauf):**
+   - Bezeichnung: "Logitech MX Master 3S Maus"
+   - Artikelnummer: "MAUS-001"
+   - Hersteller: "Logitech"
+   - Artikelcode: "MX-MASTER-3S-BLK"
+   - Lieferant: "Conrad Electronic"
+   - Lieferanten-Artikelnummer: "2347891"
+   - EAN: "5099206098596"
+   - EK netto: 70,00 € → EK brutto: 83,30 €
+   - VK brutto: 119,00 € → VK netto: 100,00 €
+   - Steuersatz: 19%
+   - Einheit: Stück
+
+---
+
+**Vorbereitung für v1.1+ (Rechnungsschreib-Modul):**
+- Produktstammdaten können direkt in Ausgangsrechnungen eingefügt werden
+- Artikelbeschreibung → Positionstext
+- VK brutto/netto → automatische Berechnung
+- Einheit → Mengenangabe (z.B. "3 Stück", "12,5 Stunden")
 
 ---
 
