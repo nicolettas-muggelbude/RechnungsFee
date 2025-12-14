@@ -6,6 +6,8 @@
 - ✅ Kategorie 3 (Anlage EKS) geklärt
 - ✅ Kategorie 4 (DATEV-Export) geklärt
 - ✅ Kategorie 5 (Bank-Integration) vollständig geklärt - 9 Banken, Auto-Erkennung, Matching
+- ✅ Kategorie 6 (UStVA) vollständig geklärt - CSV/XML-Export, Kleinunternehmer, Zeiträume
+- ✅ Kategorie 7 (EÜR) vollständig geklärt - Master-Kategorien, AfA-Rechner, Anlagenverwaltung
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
@@ -207,55 +209,182 @@
 
 ---
 
-## **📋 Kategorie 6: Umsatzsteuervoranmeldung (UStVA)**
+## **📋 Kategorie 6: Umsatzsteuervoranmeldung (UStVA)** ✅ GEKLÄRT
 
-**Frage 6.1: Umfang:**
-- Vollautomatisch aus Buchungen generieren (Kennziffern befüllen)?
-- Oder nur Zahlen vorbereiten, Übertragung manuell via ELSTER?
-- ELSTER-Integration gewünscht (später)? Oder nur Export für manuelle Eingabe?
+**Frage 6.1: Umfang** ✅ GEKLÄRT
 
-**Frage 6.2: Sonderfälle:**
-- Innergemeinschaftlicher Erwerb (§13b UStG) - muss das abgebildet werden?
-- Reverse-Charge (§13b) - relevant?
-- Vorsteuerpauschale nach §23 UStG (Durchschnittssätze)?
-- Ist-Versteuerung oder Soll-Versteuerung (oder beide)?
+**Entscheidung: CSV/XML-Export + PDF-Vorschau (keine Direktanbindung in v1.0)**
 
-**Frage 6.3: Zeiträume:**
-- Monatlich, quartalsweise, jährlich - alle drei Modi?
-- Automatische Erkennung basierend auf Umsatz (z.B. >7.500€ → monatlich)?
-- Oder Nutzer legt das bei Einrichtung fest?
-- Dauerfristverlängerung berücksichtigen?
-
-**Frage 6.4: Voranmeldungsdaten:**
-- Welche Kennziffern sind wichtig?
-- Automatische Berechnung Zahllast/Erstattung?
-- Vorjahresvergleich anzeigen?
+- [x] **CSV/XML-Export für ELSTER:** Datei zum Upload in ELSTER-Portal
+- [x] **PDF-Vorschau generieren:** Formular-Ansicht zum Prüfen/Archivieren
+- [x] **Keine ELSTER-Direktanbindung** in v1.0 (zu komplex, später in v1.1+)
+- [x] **Automatisch Kennziffern befüllen** aus Buchungen
 
 ---
 
-## **📋 Kategorie 7: Einnahmenüberschussrechnung (EÜR)**
+**Frage 6.2: Sonderfälle** ✅ GEKLÄRT
 
-**Frage 7.1: EÜR-Umfang:**
-- Amtlicher Vordruck "Anlage EÜR" für ELSTER?
-- Oder vereinfachte Gewinnermittlung (formlos)?
-- Export für ELSTER oder nur PDF/Excel?
-- Müssen alle Zeilen der Anlage EÜR befüllt werden oder nur die wichtigsten?
+**Entscheidung: Kleinunternehmer-Support + Warnungen für komplexe Fälle**
 
-**Frage 7.2: Betriebsausgaben-Kategorien:**
-- Vordefinierte Liste (Büromaterial, KFZ, Reisekosten, etc.) nach Anlage EÜR?
-- Frei konfigurierbar/erweiterbar?
-- Anlehnung an DATEV-Konten oder eigenes System?
-- Wie viele Standard-Kategorien?
+**Kleinunternehmer (§19 UStG):**
+- [x] **Must-Have:** Checkbox bei Ersteinrichtung
+- [x] Warnung: "Du musst keine UStVA abgeben" (nur Jahreserklärung)
+- [x] Keine Umsatzsteuer auf Ausgangsrechnungen
 
-**Frage 7.3: Anlagenverwaltung:**
-- GWG (Geringwertige Wirtschaftsgüter) bis 800€/1000€ (Sofortabschreibung)?
-- AfA-Rechner für Abschreibungen (z.B. Laptop über 3 Jahre)?
-- Oder nur einfache Erfassung ohne Abschreibungslogik?
-- Anlagenverzeichnis führen?
+**Reverse-Charge (§13b UStG):**
+- [x] **v1.0:** Warnung anzeigen bei EU-IBAN
+- [x] Hinweis: "Evtl. Reverse-Charge prüfen! Siehe Hilfe"
+- [x] **v1.1:** Vollständige Unterstützung (Checkbox, automatische Kennziffern)
 
-**Frage 7.4: Zufluss-/Abflussprinzip:**
-- Wird automatisch nach Zahlungsdatum gebucht (nicht Rechnungsdatum)?
-- Hinweise wenn Rechnung und Zahlung in verschiedenen Jahren?
+**Innergemeinschaftlicher Erwerb:**
+- [x] **v1.0:** Warnung bei EU-Lieferanten
+- [x] **v1.1:** Vollständige Unterstützung
+
+**Ist-Versteuerung vs. Soll-Versteuerung:**
+- [x] **Ist-Versteuerung** als Standard (wichtiger für Selbstständige)
+- [x] Nur bezahlte Rechnungen zählen zur UStVA
+- [x] **Soll-Versteuerung:** Später (v1.1) falls Bedarf
+
+---
+
+**Frage 6.3: Zeiträume** ✅ GEKLÄRT
+
+**Entscheidung: Alle drei Modi + Dauerfristverlängerung**
+
+- [x] **Monatlich:** Für Umsatz > 7.500€
+- [x] **Quartalsweise:** Für Umsatz < 7.500€ (Q1, Q2, Q3, Q4)
+- [x] **Jährlich:** Für Kleinunternehmer (§19 UStG)
+- [x] **Dauerfristverlängerung:** Checkbox (1 Monat mehr Zeit)
+- [x] **Nutzer wählt** bei Ersteinrichtung (keine automatische Erkennung)
+
+---
+
+**Frage 6.4: Voranmeldungsdaten & Berechnung** ✅ GEKLÄRT
+
+**Entscheidung: Vollautomatische Berechnung aller Kennziffern**
+
+**Wichtigste Kennziffern:**
+- [x] **Kz. 81:** Umsätze 19% (aus Ausgangsrechnungen)
+- [x] **Kz. 86:** Umsätze 7% (aus Ausgangsrechnungen)
+- [x] **Kz. 35:** Umsätze 0% (z.B. EU-Lieferungen)
+- [x] **Kz. 66:** Vorsteuer (aus Eingangsrechnungen)
+- [x] **Kz. 83:** Umsatzsteuer 19% (automatisch: Kz. 81 × 0,19)
+- [x] **Kz. 89:** Zahllast/Erstattung (automatisch berechnet)
+
+**Zusätzliche Features:**
+- [x] **Plausibilitätsprüfung:** Warnungen bei ungewöhnlichen Werten
+- [x] **Vorjahresvergleich:** Optional anzeigen (v1.1)
+
+---
+
+## **📋 Kategorie 7: Einnahmenüberschussrechnung (EÜR)** ✅ GEKLÄRT
+
+**Frage 7.1: EÜR-Umfang** ✅ GEKLÄRT
+
+**Entscheidung: Vollständige Anlage EÜR mit ELSTER-Export**
+
+- [x] **Vollständige Anlage EÜR:** ~30-40 relevante Zeilen befüllen
+- [x] **CSV/XML-Export für ELSTER:** Datei zum Upload
+- [x] **PDF-Vorschau generieren:** Zum Prüfen/Archivieren
+- [x] **Nicht alle 100 Zeilen:** Nur relevante Zeilen für Selbstständige
+
+**Wichtigste EÜR-Zeilen:**
+- [x] Zeile 11-14: Betriebseinnahmen (19%, 7%, steuerfrei)
+- [x] Zeile 15-60: Betriebsausgaben (kategorisiert)
+- [x] Zeile 29: Abschreibungen (AfA)
+- [x] Zeile 90-95: Gewinn/Verlust-Berechnung
+
+---
+
+**Frage 7.2: Betriebsausgaben-Kategorien** ✅ GEKLÄRT
+
+**Entscheidung: Master-Kategorien-System (integriert mit EKS, DATEV, EÜR)**
+
+**Konzept: Ein Kategoriensystem für ALLES**
+- [x] **~25-30 Kategorien** (basierend auf claude.md Master-Tabelle)
+- [x] **Gruppiert** für bessere Übersicht (Menschen, nicht KIs 😉)
+- [x] **Automatisches Mapping:** 1x kategorisieren → automatisch korrekt für EÜR, EKS, DATEV, UStVA
+
+**Zwei Modi (wählbar in Einstellungen):**
+
+**Standard-Modus (empfohlen):**
+- [x] Einfache Kategorien-Liste mit 🏷️-Markierung
+- [x] Bei 🏷️ + Betrag > 1.000€ → Automatischer Dialog "Anlage?"
+- [x] Für Einsteiger & die meisten Nutzer
+
+**Experten-Modus:**
+- [x] Separate Anlagen-Kategorien sichtbar
+- [x] Keine Dialoge, direkte Auswahl
+- [x] Für Power-User
+
+**Kategorien-Gruppen:**
+```
+📦 Wareneinkauf & Material
+👥 Personal
+🏢 Raumkosten
+🚗 Fahrzeugkosten (mit 🏷️ Kfz-Anschaffung)
+💻 IT & Büro (mit 🏷️ Computer/IT, 🏷️ Büromöbel)
+🔧 Werkzeuge & Maschinen (mit 🏷️ Werkzeuge/Maschinen)
+✈️ Reisen & Werbung
+📚 Beratung & Fortbildung
+💰 Sonstiges
+🏗️ Anlagen (separate Gruppe für Experten-Modus)
+```
+
+**Prüfung während Entwicklung:**
+- [x] Kategorien-Vollständigkeit kontinuierlich prüfen (Phase 5: EÜR-Export)
+- [x] Testen mit realen Daten
+- [x] Beta-Feedback einholen
+
+---
+
+**Frage 7.3: Anlagenverwaltung** ✅ GEKLÄRT
+
+**Entscheidung: Vollständiger AfA-Rechner mit zweistufigem Ansatz**
+
+**GWG-Grenze:**
+- [x] **Aktuell: 1.000€** (netto)
+- [x] **Updatefähig:** Nicht hardcoded, in Datenbank
+- [x] **In Einstellungen konfigurierbar**
+- [x] **Automatische Updates** bei Gesetzesänderung
+- [x] **Historische Werte** bleiben erhalten (Zeitstempel)
+
+**AfA-Rechner:**
+- [x] **Anlagenverzeichnis führen** (Name, Wert, Kaufdatum, AfA-Dauer)
+- [x] **Automatische AfA-Berechnung** (jährlich)
+- [x] **Integration in EÜR** (Zeile 29: Abschreibungen)
+- [x] **AfA-Dauer vorschlagen** (Computer 3J, Möbel 13J, KFZ 6J)
+
+**Zweistufiger Ansatz (Ansatz 4):**
+- [x] **Schritt 1:** Kategorie mit 🏷️-Markierung (z.B. "💻 Computer/IT 🏷️")
+- [x] **Schritt 2:** Bei > 1.000€ → Dialog: "Sofort absetzen (GWG)" oder "Als Anlage (AfA)"
+- [x] **Nur bei relevanten Kategorien** (nicht nervig)
+- [x] **Nutzer wird geführt** zur richtigen Wahl
+
+**EKS-Besonderheit (Jobcenter-Genehmigung):**
+- [x] **Warnung beim EKS-Export** (einmalig): "Anschaffungen müssen vorher genehmigt sein"
+- [x] **Ausführlich im Handbuch** (Rechtshinweise, Genehmigungspflicht)
+- [x] **Optional: Tooltip bei Erfassung** (wenn EKS aktiviert)
+
+**EKS-Mapping:**
+- [x] **Anlagen:** EKS Tabelle B8 (Investitionen)
+- [x] **Abschreibungen:** EKS Tabelle C (C1-C6: Absetzungen)
+- [x] **GWG:** Normale Betriebsausgaben (z.B. B9 Büromaterial)
+
+---
+
+**Frage 7.4: Zufluss-/Abflussprinzip** ✅ GEKLÄRT
+
+**Entscheidung: Automatisch nach Zahlungsdatum mit Warnungen**
+
+- [x] **Automatisch nach Zahlungsdatum buchen** (nicht Rechnungsdatum)
+- [x] **Zufluss-/Abflussprinzip:** Nur Geldflüsse zählen für EÜR
+- [x] **Warnung bei Jahreswechsel:**
+  ```
+  ⚠️ Rechnung 2024, Zahlung 2025
+     "Diese Rechnung zählt zur EÜR 2025, nicht 2024!"
+  ```
+- [x] **Datum der Zahlung entscheidend** (aus Bank-Import)
 
 ---
 
