@@ -388,18 +388,75 @@
 
 ---
 
-## **📋 Kategorie 8: Stammdaten-Erfassung (Ersteinrichtung)**
+## **📋 Kategorie 8: Stammdaten-Erfassung (Ersteinrichtung)** ⏳ TEILWEISE GEKLÄRT
 
-**Frage 8.1: Unternehmerdaten - welche Felder?**
-- Name (Vor- und Nachname / Firmenname)
-- Rechtsform (Einzelunternehmer, GbR, UG, GmbH, etc.)
-- Anschrift (Straße, PLZ, Ort)
-- Kontaktdaten (E-Mail, Telefon, Website?)
-- Steuernummer
-- USt-IdNr. (falls vorhanden)
-- Finanzamt (zuständiges FA)
-- Steuer-Identifikationsnummer (persönliche)
-- Bankverbindung (für Ausgangsrechnungen)
+**Frage 8.1: Unternehmerdaten - welche Felder?** ✅ GEKLÄRT
+
+**Entscheidung: Optimierte Stammdaten-Erfassung**
+
+**Pflichtfelder (ohne geht's nicht):**
+
+**Grunddaten:**
+- [x] **Name des Unternehmens** * (Pflicht)
+- [x] **Rechtsform** * (Dropdown: Einzelunternehmer, GbR, UG, GmbH, AG, e.K., Freiberufler, Sonstige)
+- [x] **Straße** * (Pflicht)
+- [x] **Hausnummer** * (Pflicht)
+- [x] **PLZ** * (Pflicht)
+- [x] **Stadt** * (Pflicht)
+
+**Ansprechpartner:**
+- [x] **Vorname** * (Pflicht)
+- [x] **Nachname** * (Pflicht)
+- [x] **E-Mail** * (Pflicht - wichtig für Kommunikation, Updates)
+
+**Steuer:**
+- [x] **Umsatzsteuer-Status** * (Dropdown: Regelbesteuerung / Kleinunternehmer §19 UStG / Befreit)
+- [x] **Steuernummer** * (Pflicht - vom Finanzamt)
+- [x] **Zuständiges Finanzamt** * (Dropdown oder PLZ-basierte Auswahl)
+
+---
+
+**Optionale Felder (können später ergänzt werden):**
+
+**Kontakt:**
+- [x] Telefonnummer (optional)
+- [x] Webseite (optional)
+
+**Steuer (optional):**
+- [x] **USt-ID** (nur bei EU-Geschäften erforderlich)
+
+**Weitere:**
+- [x] **Handelsregisternummer** (nur bei GmbH, UG, AG - Pflicht bei diesen Rechtsformen)
+- [x] **Branche** (optional, evtl. für EKS-Export hilfreich)
+
+**Bank:**
+- [x] **IBAN** (optional, aber sinnvoll für Bank-CSV-Zuordnung)
+- [x] **BIC** (optional)
+
+---
+
+**Weglassen (nicht erforderlich):**
+- [x] ❌ **Faxnummer** (veraltet, 2024 kaum noch relevant)
+- [x] ❌ **Unternehmensbeschreibung** (unklar wofür, kein konkreter Nutzen)
+
+---
+
+**Rechtsform-abhängige Felder:**
+```
+Bei Auswahl von GmbH, UG, AG:
+→ Handelsregisternummer wird Pflichtfeld
+
+Bei Auswahl von Einzelunternehmer, Freiberufler:
+→ Handelsregisternummer ausgeblendet
+```
+
+---
+
+**Wichtige Klarstellung:**
+- [x] ⚠️ **KEIN Z-Bon beim Speichern der USt-ID!**
+  - Z-Bon = Tagesabschluss bei Kassensystemen (nicht relevant für RechnungsFee v1.0)
+  - USt-ID wird einfach als Text gespeichert
+  - Keine TSE/Kassensystem-Funktionen in v1.0
 
 **Frage 8.2: Steuerliche Einstellungen:**
 - §19 UStG (Kleinunternehmer) oder Regelbesteuerung - Radio-Button?
