@@ -9,6 +9,7 @@
 - ✅ Kategorie 6 (UStVA) vollständig geklärt - CSV/XML-Export, Kleinunternehmer, Zeiträume
 - ✅ Kategorie 7 (EÜR) vollständig geklärt - Master-Kategorien, AfA-Rechner, Anlagenverwaltung
 - ✅ Kategorie 8.1 (Unternehmerdaten) geklärt - 13 Pflichtfelder, 6 optional
+- ✅ Kategorie 8.2 (Steuerliche Einstellungen) geklärt - USt-Status, Ist-Default, Dauerfrist, änderbar
 - ✅ Kategorie 8.6 (Kundenstammdaten) vollständig geklärt - 9 Punkte inkl. VIES-API, Inland/EU/Drittland
 - ✅ Kategorie 8.7 (Lieferantenstammdaten) geklärt - Ähnlich Kunden, einfacher, VIES-API
 - ✅ Kategorie 8.8 (Artikel & Dienstleistungen) geklärt - Gemeinsamer Stamm, 3 Typen, EAN auch bei DL
@@ -465,11 +466,167 @@ Bei Auswahl von Einzelunternehmer, Freiberufler:
   - USt-ID wird einfach als Text gespeichert
   - Keine TSE/Kassensystem-Funktionen in v1.0
 
-**Frage 8.2: Steuerliche Einstellungen:**
-- §19 UStG (Kleinunternehmer) oder Regelbesteuerung - Radio-Button?
-- Bei Regelbesteuerung: Voranmeldungszeitraum (monatlich/quartalsweise)?
-- Ist-Versteuerung oder Soll-Versteuerung?
-- Dauerfristverlängerung ja/nein?
+**Frage 8.2: Steuerliche Einstellungen** ✅ GEKLÄRT
+
+Diese Einstellungen werden bei der **Ersteinrichtung** festgelegt und beeinflussen UStVA, EÜR und alle Buchungen.
+
+**⚠️ WICHTIG:** Alle Einstellungen können später in den Einstellungen geändert werden!
+
+---
+
+### **1. Umsatzsteuer-Status**
+
+**Radio-Button:**
+- [x] **Kleinunternehmer (§19 UStG)** - keine Umsatzsteuer
+  - Umsatz < 22.000€/Jahr → keine USt ausweisen, keine Vorsteuer abziehen
+  - **Warnung bei Auswahl:**
+    ```
+    ⚠️ Als Kleinunternehmer:
+    - Du kannst keine Vorsteuer geltend machen
+    - Du kannst keine Rechnung mit Mehrwertsteuer schreiben
+    - Du musst auf Rechnungen den §19 UStG-Hinweis angeben
+    ```
+- [x] **Regelbesteuerung** - mit Umsatzsteuer
+  - Standard für die meisten Unternehmen → USt ausweisen, Vorsteuer abziehen
+
+**Hilfetext:** Link zur IHK/Steuerberater-Info für Erklärung
+
+**Auswirkungen:**
+- Kleinunternehmer: Alle Rechnungen ohne USt, keine UStVA-Pflicht (aber möglich für EU-Geschäfte!)
+- Regelbesteuerung: UStVA Pflicht, Vorsteurabzug möglich
+
+**Änderbar:** Jährlich (wenn Umsatzgrenze überschritten/unterschritten)
+
+---
+
+### **2. Voranmeldungszeitraum** (nur bei Regelbesteuerung)
+
+**Dropdown:**
+- [x] Monatlich (Pflicht in ersten 2 Jahren + wenn Vorauszahlung >7.500€/Jahr)
+- [x] Vierteljährlich (Ab 3. Jahr + wenn Vorauszahlung ≤7.500€/Jahr)
+- [x] Jährlich (Nur für Kleinunternehmer oder bei Dauerfristverlängerung + geringer Last)
+
+**Smart Default:** "Monatlich" (sicher für Neugründer)
+
+**Hilfetext:** "Im ersten und zweiten Jahr meist monatlich, danach vierteljährlich möglich"
+
+**Nur sichtbar wenn:** "Regelbesteuerung" gewählt
+
+**Änderbar:** Jederzeit in Einstellungen
+
+---
+
+### **3. Versteuerungsart** (nur bei Regelbesteuerung)
+
+**Radio-Button:**
+- [x] **Ist-Versteuerung (DEFAULT)** - USt wird fällig bei **Zahlungseingang**
+  - Für Freiberufler und Kleinunternehmer <800.000€ Umsatz
+  - Vorteil: Liquidität (USt erst zahlen wenn Kunde bezahlt hat)
+- [x] **Soll-Versteuerung** - USt wird fällig bei **Rechnungsstellung**
+  - Standard für GmbH, UG (Pflicht!)
+  - Nachteil: USt zahlen auch wenn Kunde noch nicht bezahlt hat
+
+**Intelligente Vorauswahl basierend auf Rechtsform (8.1):**
+- Freiberufler → Default: **Ist-Versteuerung** ✅
+- Einzelunternehmer → Default: **Ist-Versteuerung** ✅
+- GmbH, UG, AG → Default: Soll-Versteuerung (dann gesperrt/Pflicht)
+
+**Hinweis bei Ist-Versteuerung:**
+```
+ℹ️ Bei Ist-Versteuerung:
+- UStVA rechnet nur bezahlte Rechnungen
+- Liquiditätsvorteil
+- Nur für Freiberufler/Kleinunternehmer <800.000€
+```
+
+**Wichtig für RechnungsFee:**
+- Bei Ist-Versteuerung: UStVA berücksichtigt nur bezahlte Rechnungen
+- Bei Soll-Versteuerung: UStVA berücksichtigt alle gestellten Rechnungen
+
+**Änderbar:** Mit Zustimmung Finanzamt (meist nur zu Jahresbeginn)
+
+---
+
+### **4. Dauerfristverlängerung** (nur bei Regelbesteuerung)
+
+**Checkbox:**
+- [x] ☐ Dauerfristverlängerung beantragt
+
+**Bedeutung:**
+- +1 Monat mehr Zeit für UStVA
+- Frist: vom 10. des Folgemonats → 10. des übernächsten Monats
+- Kostet: Sondervorauszahlung (1/11 der Vorjahres-USt-Last)
+- Muss beim Finanzamt beantragt werden
+
+**Hilfetext:** "Gibt dir 1 Monat mehr Zeit für die UStVA. Muss beim Finanzamt beantragt werden."
+
+**Hinweis bei Aktivierung:**
+```
+⚠️ Beachte bei Dauerfristverlängerung:
+- Frist verlängert sich von 10. auf 10. des Folgemonats
+- Sondervorauszahlung fällig (wird im Dezember verrechnet)
+- Gilt für das gesamte Kalenderjahr
+- Antrag muss beim Finanzamt gestellt werden
+```
+
+**Änderbar:** Zum Jahresbeginn (mit Antrag beim Finanzamt)
+
+---
+
+### **UI-Vorschlag für Ersteinrichtung:**
+
+```
+┌─ Steuerliche Einstellungen ───────────────────────┐
+│                                                    │
+│ Umsatzsteuer-Status:                               │
+│ ○ Kleinunternehmer (§19 UStG)                      │
+│   → Keine Umsatzsteuer, kein Vorsteuerabzug        │
+│                                                    │
+│ ● Regelbesteuerung                                 │
+│   → Mit Umsatzsteuer und Vorsteuerabzug            │
+│                                                    │
+│ ┌─────────────────────────────────────────────┐   │
+│ │ Voranmeldungszeitraum: [Monatlich      ▼]  │   │
+│ │ ℹ️ Im 1.+2. Jahr meist monatlich           │   │
+│ │                                             │   │
+│ │ Versteuerungsart:                           │   │
+│ │ ● Ist-Versteuerung (bei Zahlungseingang)   │   │
+│ │ ○ Soll-Versteuerung (bei Rechnungsstellung)│   │
+│ │ ℹ️ Ist-Versteuerung empfohlen (Liquidität) │   │
+│ │                                             │   │
+│ │ ☐ Dauerfristverlängerung beantragt         │   │
+│ │ ℹ️ +1 Monat Zeit, Sondervorauszahlung      │   │
+│ └─────────────────────────────────────────────┘   │
+│                                                    │
+│ ⚙️ Hinweis: Alle Einstellungen können später      │
+│   in den Einstellungen geändert werden.           │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+---
+
+### **Warnung bei Kleinunternehmer-Auswahl:**
+
+```
+┌─ ⚠️ Wichtiger Hinweis ────────────────────────────┐
+│                                                    │
+│ Als Kleinunternehmer (§19 UStG) beachte:          │
+│                                                    │
+│ ❌ Du kannst KEINE Vorsteuer geltend machen       │
+│ ❌ Du kannst KEINE Rechnung mit Mehrwertsteuer    │
+│    schreiben                                       │
+│ ℹ️ Du musst auf Rechnungen den §19 UStG-Hinweis  │
+│    angeben                                         │
+│                                                    │
+│ ✅ Vorteil: Vereinfachte Buchhaltung              │
+│ ✅ Vorteil: Keine UStVA (außer bei EU-Geschäften) │
+│                                                    │
+│ Mehr Infos: [Link zur IHK/Steuerberater-Info]     │
+│                                                    │
+│         [Zurück]    [Trotzdem wählen]             │
+└────────────────────────────────────────────────────┘
+```
 
 **Frage 8.3: Kontenrahmen:**
 - SKR03 oder SKR04 bei Einrichtung wählen?
