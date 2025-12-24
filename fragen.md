@@ -16,7 +16,8 @@
 - ✅ Kategorie 8.6 (Kundenstammdaten) vollständig geklärt - 9 Punkte inkl. VIES-API, Inland/EU/Drittland
 - ✅ Kategorie 8.7 (Lieferantenstammdaten) geklärt - Ähnlich Kunden, einfacher, VIES-API
 - ✅ Kategorie 8.8 (Artikel & Dienstleistungen) geklärt - Gemeinsamer Stamm, 3 Typen, EAN auch bei DL
-- ⏳ Kategorie 10 (Backup & Update) teilweise geklärt - 10.1 Speicherort geklärt
+- ✅ Kategorie 8.9 (Vereins-Buchhaltung) geklärt - 4 Sphären, SKR49, ermäßigter Steuersatz (v1.1+)
+- ⏳ Kategorie 10 (Backup & Update) teilweise geklärt - 10.1-10.6 geklärt, 10.7-10.8 offen
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
@@ -408,7 +409,7 @@
 
 **Grunddaten:**
 - [x] **Name des Unternehmens** * (Pflicht)
-- [x] **Rechtsform** * (Dropdown: Einzelunternehmer, GbR, UG, GmbH, AG, e.K., Freiberufler, Sonstige)
+- [x] **Rechtsform** * (Dropdown: Einzelunternehmer, GbR, UG, GmbH, AG, e.K., Freiberufler, Eingetragener Verein (e.V.), Sonstige)
 - [x] **Straße** * (Pflicht)
 - [x] **Hausnummer** * (Pflicht)
 - [x] **PLZ** * (Pflicht)
@@ -482,7 +483,7 @@ Diese Einstellungen werden bei der **Ersteinrichtung** festgelegt und beeinfluss
 
 **Radio-Button:**
 - [x] **Kleinunternehmer (§19 UStG)** - keine Umsatzsteuer
-  - Umsatz < 22.000€/Jahr → keine USt ausweisen, keine Vorsteuer abziehen
+  - Umsatz < 25.000€/Jahr (ab 2025, vorher 22.000€) → keine USt ausweisen, keine Vorsteuer abziehen
   - **Warnung bei Auswahl:**
     ```
     ⚠️ Als Kleinunternehmer:
@@ -490,42 +491,61 @@ Diese Einstellungen werden bei der **Ersteinrichtung** festgelegt und beeinfluss
     - Du kannst keine Rechnung mit Mehrwertsteuer schreiben
     - Du musst auf Rechnungen den §19 UStG-Hinweis angeben
     ```
-- [x] **Regelbesteuerung** - mit Umsatzsteuer
+- [x] **Regelbesteuerung (19%)** - mit Umsatzsteuer
   - Standard für die meisten Unternehmen → USt ausweisen, Vorsteuer abziehen
+- [x] **Gemeinnützig (ermäßigt 7%)** - für Vereine
+  - Für gemeinnützige, kirchliche oder mildtätige Vereine (e.V.)
+  - Ermäßigter Steuersatz 7% für Zweckbetrieb
+  - Ideeller Bereich und Vermögensverwaltung USt-frei
+  - **Hinweis bei Auswahl:**
+    ```
+    ℹ️ Als gemeinnütziger Verein:
+    - Mitgliedsbeiträge & Spenden: USt-frei (ideeller Bereich)
+    - Gemeinnützige Tätigkeiten (Zweckbetrieb): 7% USt
+    - Wirtschaftlicher Geschäftsbetrieb: 19% USt
+    - Kleinunternehmerregelung (§19) kann zusätzlich gewählt werden
+    ```
+  - **Nur sichtbar wenn:** Rechtsform "Eingetragener Verein (e.V.)" gewählt
 
 **Hilfetext:** Link zur IHK/Steuerberater-Info für Erklärung
 
 **Auswirkungen:**
 - Kleinunternehmer: Alle Rechnungen ohne USt, keine UStVA-Pflicht (aber möglich für EU-Geschäfte!)
 - Regelbesteuerung: UStVA Pflicht, Vorsteurabzug möglich
+- Gemeinnützig: UStVA Pflicht (je nach Sphären), Vorsteurabzug möglich, ermäßigter Steuersatz 7% für Zweckbetrieb
 
-**Änderbar:** Jährlich (wenn Umsatzgrenze überschritten/unterschritten)
+**Änderbar:** Jährlich (wenn Umsatzgrenze überschritten/unterschritten) bzw. bei Verlust/Erhalt Gemeinnützigkeit
 
 ---
 
-### **2. Voranmeldungszeitraum** (nur bei Regelbesteuerung)
+### **2. Voranmeldungszeitraum** (nur bei Regelbesteuerung + Gemeinnützig)
 
 **Dropdown:**
 - [x] Monatlich (Pflicht in ersten 2 Jahren + wenn Vorauszahlung >7.500€/Jahr)
 - [x] Vierteljährlich (Ab 3. Jahr + wenn Vorauszahlung ≤7.500€/Jahr)
-- [x] Jährlich (Nur für Kleinunternehmer oder bei Dauerfristverlängerung + geringer Last)
+- [x] Jährlich (Nur für Kleinunternehmer, kleine Vereine oder bei Dauerfristverlängerung + geringer Last)
 
-**Smart Default:** "Monatlich" (sicher für Neugründer)
+**Smart Default:**
+- Unternehmen: "Monatlich" (sicher für Neugründer)
+- Vereine: "Vierteljährlich" (typisch für kleine gemeinnützige Vereine)
 
-**Hilfetext:** "Im ersten und zweiten Jahr meist monatlich, danach vierteljährlich möglich"
+**Hilfetext:**
+- Unternehmen: "Im ersten und zweiten Jahr meist monatlich, danach vierteljährlich möglich"
+- Vereine: "Kleine Vereine können vierteljährlich oder jährlich melden (abhängig von Umsätzen)"
 
-**Nur sichtbar wenn:** "Regelbesteuerung" gewählt
+**Nur sichtbar wenn:** "Regelbesteuerung" oder "Gemeinnützig" gewählt
 
 **Änderbar:** Jederzeit in Einstellungen
 
 ---
 
-### **3. Versteuerungsart** (nur bei Regelbesteuerung)
+### **3. Versteuerungsart** (nur bei Regelbesteuerung + Gemeinnützig)
 
 **Radio-Button:**
 - [x] **Ist-Versteuerung (DEFAULT)** - USt wird fällig bei **Zahlungseingang**
-  - Für Freiberufler und Kleinunternehmer <800.000€ Umsatz
+  - Für Freiberufler, Kleinunternehmer und Vereine <800.000€ Umsatz
   - Vorteil: Liquidität (USt erst zahlen wenn Kunde bezahlt hat)
+  - Empfohlen für Vereine (typisch bei Mitgliedsbeiträgen, Kursgebühren)
 - [x] **Soll-Versteuerung** - USt wird fällig bei **Rechnungsstellung**
   - Standard für GmbH, UG (Pflicht!)
   - Nachteil: USt zahlen auch wenn Kunde noch nicht bezahlt hat
@@ -533,6 +553,7 @@ Diese Einstellungen werden bei der **Ersteinrichtung** festgelegt und beeinfluss
 **Intelligente Vorauswahl basierend auf Rechtsform (8.1):**
 - Freiberufler → Default: **Ist-Versteuerung** ✅
 - Einzelunternehmer → Default: **Ist-Versteuerung** ✅
+- Eingetragener Verein (e.V.) → Default: **Ist-Versteuerung** ✅
 - GmbH, UG, AG → Default: Soll-Versteuerung (dann gesperrt/Pflicht)
 
 **Hinweis bei Ist-Versteuerung:**
@@ -638,12 +659,18 @@ Diese Einstellungen werden bei der **Ersteinrichtung** festgelegt und beeinfluss
 
 - [x] **Automatische Auswahl basierend auf Rechtsform (aus 8.1):**
   - **Freiberufler** → SKR04 (Standard-Kontenrahmen für Freiberufler)
+  - **Eingetragener Verein (e.V.)** → SKR49 (Standard-Kontenrahmen für Vereine)
   - **Einzelunternehmer, GbR, UG, GmbH, AG, e.K., Sonstige** → SKR03 (Standard-Kontenrahmen für Gewerbetreibende)
 - [x] **Nachträglich änderbar** in Einstellungen
 - [x] **Keine Auswahl bei Einrichtung nötig** - Vereinfacht Setup für Laien
 - [x] **Keine Erklärung erforderlich** - System wählt automatisch den richtigen
 
 **Vorteil:** Nutzer braucht kein Wissen über Kontenrahmen - das System entscheidet basierend auf der bereits erfassten Rechtsform.
+
+**SKR49 für Vereine:**
+- Speziell für gemeinnützige Vereine entwickelt
+- Bildet die 4 Sphären der Vereinstätigkeit ab (ideeller Bereich, Vermögensverwaltung, Zweckbetrieb, wirtschaftlicher Geschäftsbetrieb)
+- Vereinfachte Trennung für Steuererklärung und Gemeinnützigkeitsnachweis
 
 **Frage 8.4: Geschäftsjahr** ✅ GEKLÄRT
 
@@ -1167,6 +1194,195 @@ Beispiele:
 
 ---
 
+**Frage 8.9: Vereins-Buchhaltung (4 Sphären)** ✅ GEKLÄRT (für v1.1+)
+
+**Entscheidung: Vereins-spezifische Buchhaltung mit 4 Sphären**
+
+Für gemeinnützige Vereine (e.V.) ist eine **Trennung nach Sphären** steuerlich erforderlich. Dies wird in **v1.1+** implementiert.
+
+### **Die 4 Sphären der Vereinstätigkeit:**
+
+#### **1. Ideeller Bereich** (steuerlich privilegiert)
+- [x] **Einnahmen:** Mitgliedsbeiträge, Spenden, Zuschüsse von öffentlicher Hand
+- [x] **Ausgaben:** Kosten für satzungsgemäße Vereinsarbeit (ohne wirtschaftlichen Bezug)
+- [x] **USt-Status:** Steuerfrei (keine USt, keine Vorsteuer)
+- [x] **Körperschaftsteuer:** Steuerfrei
+- [x] **Gewerbesteuer:** Steuerfrei
+
+**Beispiele:**
+- Mitgliedsbeiträge eines Sportvereins
+- Spenden für gemeinnützige Projekte
+- Zuschüsse vom Land/Kommune
+
+#### **2. Vermögensverwaltung** (steuerlich privilegiert)
+- [x] **Einnahmen:** Zinsen, Dividenden, Vermietung/Verpachtung
+- [x] **Ausgaben:** Verwaltungskosten für Vermögen
+- [x] **USt-Status:** Meist steuerfrei (abhängig von Art der Vermögensverwaltung)
+- [x] **Körperschaftsteuer:** Steuerfrei (bei gemeinnützigen Vereinen)
+- [x] **Gewerbesteuer:** Steuerfrei
+
+**Beispiele:**
+- Vermietung Vereinsheim an Mitglieder
+- Zinserträge aus Rücklagen
+- Dividenden aus Wertpapieren
+
+#### **3. Zweckbetrieb** (steuerlich begünstigt)
+- [x] **Einnahmen:** Tätigkeiten, die direkt dem satzungsgemäßen Zweck dienen
+- [x] **Ausgaben:** Kosten für Zweckbetrieb
+- [x] **USt-Status:** **Ermäßigt 7%** (statt 19%)
+- [x] **Körperschaftsteuer:** Steuerfrei (bei Erfüllung Gemeinnützigkeit)
+- [x] **Gewerbesteuer:** Steuerfrei (bei Erfüllung Gemeinnützigkeit)
+
+**Beispiele:**
+- Sportkurse eines Sportvereins (für Mitglieder + Externe)
+- Kulturveranstaltungen eines Kulturvereins
+- Bildungsangebote einer gemeinnützigen Organisation
+
+**Wichtig:** Zweckbetrieb muss **unentbehrlich** für satzungsgemäßen Zweck sein!
+
+#### **4. Wirtschaftlicher Geschäftsbetrieb** (steuerpflichtig)
+- [x] **Einnahmen:** Kommerzielle Tätigkeiten ohne direkten gemeinnützigen Bezug
+- [x] **Ausgaben:** Kosten für wirtschaftlichen Geschäftsbetrieb
+- [x] **USt-Status:** **Regelsteuersatz 19%**
+- [x] **Körperschaftsteuer:** Steuerpflichtig (wenn >45.000€/Jahr, ab 2026: >50.000€/Jahr)
+- [x] **Gewerbesteuer:** Steuerpflichtig (wenn >45.000€/Jahr, ab 2026: >50.000€/Jahr)
+
+**Beispiele:**
+- Vereinsgaststätte (offen für Öffentlichkeit)
+- Merchandise-Verkauf (T-Shirts, Tassen)
+- Werbung in Vereinszeitschrift
+- Bandenwerbung im Stadion
+
+**Freibetrag:** Bis 45.000€ (ab 2026: 50.000€) Einnahmen keine Körperschaftsteuer/Gewerbesteuer, aber trotzdem **USt-pflichtig!**
+
+---
+
+### **Warum ist diese Trennung wichtig?**
+
+1. **Steuerliche Korrektheit:**
+   - Finanzamt verlangt Trennung für Gemeinnützigkeitsprüfung
+   - Fehlende Trennung = Risiko Gemeinnützigkeitsverlust!
+
+2. **Unterschiedliche Steuersätze:**
+   - Ideell: 0% USt
+   - Zweckbetrieb: 7% USt
+   - Wirtschaftlich: 19% USt
+
+3. **Freibeträge nutzen:**
+   - Wirtschaftlicher GB: Freibetrag 45.000€ (ab 2026: 50.000€)
+   - Nur wenn korrekt getrennt, kann Freibetrag genutzt werden
+
+4. **UStVA korrekt erstellen:**
+   - Verschiedene Sphären haben verschiedene Behandlung
+   - Nur mit Trennung ist UStVA GoBD-konform
+
+---
+
+### **Implementation in RechnungsFee (v1.1+):**
+
+**Workflow:**
+1. Bei Buchung/Rechnung: Feld "Sphäre" (Dropdown)
+   - Ideeller Bereich (USt-frei)
+   - Vermögensverwaltung (USt-frei)
+   - Zweckbetrieb (7% USt)
+   - Wirtschaftlicher GB (19% USt)
+
+2. Automatische Zuordnung:
+   - System schlägt basierend auf Kontierung (SKR49) Sphäre vor
+   - User kann korrigieren
+
+3. Auswertungen nach Sphären:
+   - Separate Gewinn/Verlust-Rechnung pro Sphäre
+   - Freibetrags-Kontrolle (wirtschaftlicher GB)
+   - UStVA mit korrekter Trennung
+
+4. Steuererklärung:
+   - Export für Steuerberater mit Sphären-Trennung
+   - Gemeinnützigkeitsnachweis (Anlage zur Körperschaftsteuererklärung)
+
+---
+
+### **UI-Konzept (v1.1+):**
+
+```
+Buchung erfassen:
+
+┌─────────────────────────────────────────────┐
+│ Einnahme erfassen                           │
+├─────────────────────────────────────────────┤
+│ Betrag: [100,00 €]                          │
+│ Datum:  [22.01.2025]                        │
+│                                             │
+│ Sphäre: [Zweckbetrieb            ▼]        │
+│         ○ Ideeller Bereich (USt-frei)       │
+│         ● Zweckbetrieb (7% USt)             │
+│         ○ Vermögensverwaltung (USt-frei)    │
+│         ○ Wirtschaftlicher GB (19% USt)     │
+│                                             │
+│ USt:    [6,54 €] (7%)                       │
+│                                             │
+│ ℹ️ Zweckbetrieb: Ermäßigter Steuersatz     │
+│   für gemeinnützige Tätigkeiten             │
+│                                             │
+│         [Abbrechen]    [Speichern]         │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+### **Auswertung nach Sphären (v1.1+):**
+
+```
+Vereinsbuchhaltung 2025
+
+┌──────────────────────────────────────────────────────────┐
+│ Übersicht nach Sphären                                   │
+├──────────────────────────────────────────────────────────┤
+│ 1. Ideeller Bereich:                                     │
+│    Einnahmen:  25.000 € (Mitgliedsbeiträge, Spenden)    │
+│    Ausgaben:   12.000 € (Vereinsarbeit)                 │
+│    Ergebnis:  +13.000 € ✅ Steuerfrei                    │
+│                                                          │
+│ 2. Vermögensverwaltung:                                  │
+│    Einnahmen:   2.500 € (Zinsen, Vermietung)            │
+│    Ausgaben:      800 € (Verwaltung)                    │
+│    Ergebnis:   +1.700 € ✅ Steuerfrei                    │
+│                                                          │
+│ 3. Zweckbetrieb:                                         │
+│    Einnahmen:  18.000 € (Sportkurse)                    │
+│    USt (7%):    1.178 € → An Finanzamt                  │
+│    Ausgaben:   10.000 € (Trainer, Material)            │
+│    Vorsteuer:     950 € → Von Finanzamt zurück          │
+│    Ergebnis:   +7.772 € ✅ Steuerfrei (gemeinnützig)    │
+│                                                          │
+│ 4. Wirtschaftlicher Geschäftsbetrieb:                    │
+│    Einnahmen:  32.000 € (Gaststätte, Merchandise)       │
+│    USt (19%):   5.109 € → An Finanzamt                  │
+│    Ausgaben:   28.000 € (Waren, Personal)               │
+│    Vorsteuer:   4.200 € → Von Finanzamt zurück          │
+│    Ergebnis:   -1.109 € ⚠️ Unter Freibetrag (45k)       │
+│                        ✅ Keine KSt/GewSt                │
+│                                                          │
+│ Gesamt-USt-Zahllast: 1.178 + 5.109 - 950 - 4.200       │
+│                    = 1.137 € (quartalsweise abführen)   │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+### **Wichtig für v1.0 (Minimal-Version für Vereine):**
+
+Auch ohne 4-Sphären-Trennung können Vereine RechnungsFee nutzen:
+- [x] Rechtsform "e.V." auswählbar
+- [x] USt-Status "Gemeinnützig (7%)" verfügbar
+- [x] SKR49 (Vereins-Kontenrahmen) automatisch gewählt
+- [x] Ist-Versteuerung als Default
+- [x] Vierteljährliche UStVA
+
+**Für vollständige Vereins-Compliance (4 Sphären) → v1.1+**
+
+---
+
 ## **📋 Kategorie 9: Import-Schnittstellen (hellocash, Rechnungsassistent, Fakturama)**
 
 **Frage 9.1: Priorität:**
@@ -1209,7 +1425,7 @@ Beispiele:
 ### **Minimum (v1.0):**
 - [x] **Lokales Backup IMMER** (Pflicht)
   - Automatisch bei Programmende
-  - Standard-Pfad: `~/.rechnungspilot/backups/` (Linux/macOS) oder `%APPDATA%/RechnungsPilot/backups/` (Windows)
+  - Standard-Pfad: `~/.rechnungsfee/backups/` (Linux/macOS) oder `%APPDATA%/RechnungsFee/backups/` (Windows)
   - Mindestens 3 Versionen aufbewahren
   - **Kann nicht deaktiviert werden** (Datensicherheit!)
 
@@ -1265,7 +1481,7 @@ Einstellungen → Backup & Wiederherstellung
 │ Backup-Ziele                                │
 ├─────────────────────────────────────────────┤
 │ ☑ Lokal (Pflicht, nicht deaktivierbar)     │
-│   Pfad: ~/.rechnungspilot/backups/         │
+│   Pfad: ~/.rechnungfee/backups/         │
 │   Versionen: [3 ▼]                          │
 │                                             │
 │ ☐ USB-Stick                                 │
@@ -1333,8 +1549,8 @@ Einstellungen → Backup & Wiederherstellung
   - Andere (über CLI/API)
 - [x] **Workflow:**
   - Passwort in Passwortmanager speichern
-  - RechnungsPilot ruft Passwort via CLI/API ab
-  - Beispiel KeePassXC: `keepassxc-cli show database.kdbx "RechnungsPilot Backup"`
+  - RechnungsFee ruft Passwort via CLI/API ab
+  - Beispiel KeePassXC: `keepassxc-cli show database.kdbx "RechnungsFee Backup"`
 - [x] **Für Nutzer mit bestehendem Passwort-Management-Workflow**
 
 ---
