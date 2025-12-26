@@ -17,7 +17,7 @@
 - ✅ Kategorie 8.7 (Lieferantenstammdaten) geklärt - Ähnlich Kunden, einfacher, VIES-API
 - ✅ Kategorie 8.8 (Artikel & Dienstleistungen) geklärt - Gemeinsamer Stamm, 3 Typen, EAN auch bei DL
 - ✅ Kategorie 8.9 (Vereins-Buchhaltung) geklärt - 4 Sphären, SKR49, ermäßigter Steuersatz (v1.1+)
-- ⏳ Kategorie 10 (Backup & Update) teilweise geklärt - 10.1-10.6 geklärt, 10.7-10.8 offen
+- ✅ Kategorie 10 (Backup & Update) vollständig geklärt - Frist-System, kein manueller Rollback
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 
@@ -2637,16 +2637,862 @@ fn try_auto_restore() -> Result<(), Error> {
 
 ---
 
-**Frage 10.7: Auto-Update:**
-- Zwingend oder optional (Einstellung)?
-- Silent-Update (automatisch im Hintergrund) oder mit Nachfrage?
-- Update-Kanal: Stable, Beta, Nightly?
-- Update-Benachrichtigung auch wenn Auto-Update aus?
+**Frage 10.7: Auto-Update** ✅ GEKLÄRT
 
-**Frage 10.8: Rollback:**
-- Rollback bei Problemen nach Update?
-- Automatisches Backup vor Update?
-- Wie viele Versionen zurück möglich?
+**Entscheidung: Update-Pflicht mit Frist-System (nach Lexware-Modell)**
+
+### **Kernprinzip:**
+
+- [x] **Update-Pflicht** - nicht deaktivierbar
+  - Begründung: GoBD-Konformität, Steuerrecht, Sicherheit
+  - Kritische Updates MÜSSEN installiert werden
+- [x] **Frist-basiert** - User hat Zeit (7-30 Tage je nach Update-Typ)
+  - User kann Zeitpunkt innerhalb der Frist wählen
+  - Keine überraschenden Updates während der Arbeit
+- [x] **Transparenz** - Begründung wird angezeigt
+  - Warum ist das Update wichtig?
+  - Was ändert sich?
+  - Welche rechtlichen Gründe gibt es?
+
+---
+
+### **Update-Kategorien mit Fristen:**
+
+| Update-Typ | Frist | Beispiel | Zwang |
+|------------|-------|----------|-------|
+| **🔒 Kritisches Sicherheitsupdate** | 7 Tage | Verschlüsselungslücke, SQL-Injection, Datenleck | ✅ Pflicht |
+| **⚖️ Rechtliche Pflicht** | 14 Tage | E-Rechnung-Pflicht, neue UStVA-Formulare, Steuersatz-Änderungen | ✅ Pflicht |
+| **📋 Wichtiges Update (GoBD/Compliance)** | 30 Tage | GoBD-Änderungen, DATEV-Format-Update, neue Features mit Compliance | ✅ Pflicht |
+| **✨ Optionales Feature-Update** | Unbegrenzt | Neue UI, Komfort-Features, Performance-Verbesserungen | ❌ Optional |
+
+---
+
+### **Workflow: Update-Ankündigung (beim Programmstart)**
+
+#### **Phase 1: Erste Ankündigung (Tag 1-7)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔔 Neues Update verfügbar                               │
+├─────────────────────────────────────────────────────────┤
+│ Version 1.2.0 ist verfügbar                             │
+│ Aktuelle Version: 1.1.5                                 │
+│                                                         │
+│ 🔴 Wichtige Änderungen:                                 │
+│ ⚖️ Neue UStVA-Formulare 2025 (Pflicht)                 │
+│ ⚖️ E-Rechnungspflicht (§14 UStG, ab 01.01.2025)        │
+│ 🔒 Sicherheitsupdate: Verschlüsselung verbessert        │
+│ ✨ Vereins-Buchhaltung (4 Sphären)                      │
+│                                                         │
+│ ⚠️ Dieses Update muss bis 05.01.2025 installiert       │
+│    werden (noch 12 Tage).                               │
+│                                                         │
+│ Begründung:                                             │
+│ • Gesetzliche Pflicht: E-Rechnung ab 2025              │
+│ • GoBD-Konformität: Neue Anforderungen                  │
+│ • Sicherheit: Kritisches Verschlüsselungs-Update        │
+│                                                         │
+│ [ Jetzt installieren ]  [ Später (erinnere mich) ]     │
+│ [ Changelog anzeigen ]                                  │
+│                                                         │
+│ ℹ️ Update dauert ca. 2 Minuten                          │
+│ ℹ️ Automatisches Backup wird erstellt                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**User-Aktion:**
+- "Jetzt installieren" → Update startet sofort
+- "Später" → Dialog schließt sich, Erinnerung beim nächsten Start
+- "Changelog anzeigen" → Detaillierte Änderungsliste
+
+---
+
+#### **Phase 2: Dringliche Erinnerung (Tag 8-13)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ Wichtiges Update muss bald installiert werden        │
+├─────────────────────────────────────────────────────────┤
+│ Version 1.2.0 ist verfügbar                             │
+│                                                         │
+│ ⏰ Noch 5 Tage Zeit bis 05.01.2025                      │
+│                                                         │
+│ Danach kann RechnungsFee nicht mehr gestartet werden,  │
+│ bis das Update installiert ist.                         │
+│                                                         │
+│ Gründe für Pflicht-Update:                              │
+│ ⚖️ Rechtlich: E-Rechnungspflicht ab 2025               │
+│ 🔒 Sicherheit: Kritische Lücke geschlossen              │
+│ 📋 GoBD: Neue Anforderungen umgesetzt                   │
+│                                                         │
+│ [ Jetzt installieren ]  [ Morgen erinnern ]            │
+│                                                         │
+│ ⚠️ Bitte installiere das Update rechtzeitig!            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Zusätzlich:**
+- Auch beim **Programmende** wird Erinnerung angezeigt
+- Icon in der Statusleiste (permanent sichtbar)
+
+---
+
+#### **Phase 3: Letzte Warnung (Tag 14, letzter Tag)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🛑 LETZTER TAG: Update MUSS heute installiert werden!  │
+├─────────────────────────────────────────────────────────┤
+│ Version 1.2.0                                           │
+│                                                         │
+│ ⏰ Frist läuft HEUTE ab (05.01.2025, 23:59 Uhr)        │
+│                                                         │
+│ Ab morgen kann RechnungsFee NICHT MEHR gestartet       │
+│ werden, bis das Update installiert ist!                │
+│                                                         │
+│ ⚠️ Pflichtgründe:                                       │
+│ • E-Rechnungspflicht (gesetzlich ab 01.01.2025)        │
+│ • GoBD-Konformität gefährdet ohne Update                │
+│ • Sicherheitslücken in alter Version                    │
+│                                                         │
+│ Bitte installiere JETZT das Update!                    │
+│                                                         │
+│ [ Jetzt installieren ]  [ Programm beenden ]           │
+│                                                         │
+│ ℹ️ Backup wird automatisch erstellt                     │
+│ ℹ️ Bei Fehler: Automatischer Rollback                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**User-Aktion:**
+- "Jetzt installieren" → Update startet
+- "Programm beenden" → Programm schließt sich (ohne Update)
+
+**Kein "Später"-Button mehr!**
+
+---
+
+#### **Phase 4: Frist abgelaufen (nach Tag 14)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⛔ Update erforderlich - Programm gesperrt              │
+├─────────────────────────────────────────────────────────┤
+│ RechnungsFee kann nicht gestartet werden.               │
+│                                                         │
+│ Die Frist für Update 1.2.0 ist abgelaufen.             │
+│ (Fristende: 05.01.2025)                                │
+│                                                         │
+│ Gründe:                                                 │
+│ ⚖️ Gesetzliche Änderungen (E-Rechnung-Pflicht)          │
+│ 📋 GoBD-Konformität gefährdet                            │
+│ 🔒 Sicherheitslücken in alter Version                   │
+│                                                         │
+│ Das Update wird jetzt automatisch installiert.          │
+│ Danach kannst du RechnungsFee wieder verwenden.        │
+│                                                         │
+│         [ Update installieren und starten ]            │
+│                                                         │
+│ ℹ️ Deine Daten bleiben sicher (automatisches Backup)   │
+│ ℹ️ Update dauert ca. 2 Minuten                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Kein Ausweichen mehr möglich!**
+- Einzige Option: Update installieren
+- Programm startet erst nach erfolgreichem Update
+
+---
+
+### **Update-Installation (Workflow)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔄 Update wird installiert...                           │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│ Schritt 1/5: Backup erstellen                          │
+│ ████████████████████████████████████░░░░░░░ 85%        │
+│ backup-2025-01-05-14-30-00.db.enc                      │
+│                                                         │
+│ ℹ️ Deine Daten werden gesichert...                      │
+│                                                         │
+│ Geschätzte Zeit: 30 Sekunden                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Ablauf:**
+
+1. **Backup erstellen** (automatisch, verschlüsselt)
+   - Vollständiges DB-Backup
+   - Mit Zeitstempel
+   - Verifizierung (Hash-Check)
+
+2. **Update herunterladen**
+   - Von offiziellem Server (HTTPS)
+   - Signaturprüfung (GPG)
+   - Fortschrittsanzeige
+
+3. **Update installieren**
+   - Neue Version extrahieren
+   - Alte Version archivieren (für Rollback)
+   - Permissions prüfen
+
+4. **Datenbank-Migration** (falls nötig)
+   - Schema-Updates
+   - Daten konvertieren
+   - Integritätsprüfung
+
+5. **Programm neu starten**
+   - Automatischer Neustart
+   - Verifizierung (funktioniert alles?)
+   - Bei Fehler: **Automatischer Rollback**
+
+---
+
+### **Changelog transparent machen**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 📋 Was ist neu in Version 1.2.0?                        │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│ ⚖️ Rechtlich erforderlich (PFLICHT):                    │
+│ • E-Rechnungspflicht (§14 UStG, ab 01.01.2025)         │
+│   → B2B-Rechnungen müssen elektronisch sein            │
+│ • Neue UStVA-Formulare 2025                             │
+│   → Finanzamt akzeptiert alte Formulare nicht mehr     │
+│                                                         │
+│ 🔒 Sicherheit (KRITISCH):                               │
+│ • CVE-2025-1234: AES-Verschlüsselung verbessert        │
+│ • Backup-Passwort-Hashing (PBKDF2, 200.000 Iterationen)│
+│ • SQL-Injection-Schutz verbessert                       │
+│                                                         │
+│ 📋 GoBD/Compliance:                                     │
+│ • Neue Anforderungen BMF-Schreiben 2025                │
+│ • Revisionssichere Archivierung erweitert               │
+│                                                         │
+│ ✨ Neue Features (OPTIONAL):                            │
+│ • Vereins-Buchhaltung (4 Sphären, SKR49)                │
+│ • GLS Bank CSV-Import                                   │
+│ • Verbesserte Fehlerbehandlung                          │
+│ • Performance-Optimierungen (30% schneller)             │
+│                                                         │
+│ 🐛 Bugfixes:                                            │
+│ • #123: UStVA Zeile 67 Rundungsfehler behoben          │
+│ • #145: DATEV-Export Sonderzeichen-Problem             │
+│ • 10 weitere Bugfixes                                   │
+│                                                         │
+│ [ Vollständigen Changelog auf GitHub anzeigen ]        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Kategorisierung:**
+- ⚖️ **Rechtlich erforderlich** - User versteht: "Muss sein, Gesetz!"
+- 🔒 **Sicherheit** - User versteht: "Wichtig für Datenschutz!"
+- 📋 **GoBD/Compliance** - User versteht: "Finanzamt-relevant!"
+- ✨ **Neue Features** - User versteht: "Bonus, aber nicht zwingend"
+- 🐛 **Bugfixes** - User versteht: "Verbesserungen"
+
+---
+
+### **Automatischer Rollback bei Fehler**
+
+Falls Update fehlschlägt:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ Update fehlgeschlagen                                │
+├─────────────────────────────────────────────────────────┤
+│ Das Update konnte nicht installiert werden.             │
+│                                                         │
+│ Fehler: Datenbank-Migration fehlgeschlagen (Schritt 4) │
+│                                                         │
+│ RechnungsFee wird jetzt auf die vorherige Version      │
+│ zurückgesetzt (Rollback).                               │
+│                                                         │
+│ 🔄 Rollback läuft...                                    │
+│ ████████████████████████████████████░░░░░░░ 85%        │
+│                                                         │
+│ Deine Daten sind sicher und bleiben unverändert.       │
+│                                                         │
+│ [ Bitte warten... ]                                     │
+└─────────────────────────────────────────────────────────┘
+
+Nach Rollback:
+
+┌─────────────────────────────────────────────────────────┐
+│ ✅ Rollback erfolgreich                                 │
+├─────────────────────────────────────────────────────────┤
+│ RechnungsFee läuft wieder auf Version 1.1.5             │
+│                                                         │
+│ Das Update wird in Kürze erneut versucht.              │
+│                                                         │
+│ Fehlerprotokoll wurde an Entwickler gesendet.          │
+│                                                         │
+│ [ Programm neu starten ]                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Automatischer Rollback:**
+- Backup wird wiederhergestellt
+- Alte Version wird aktiviert
+- Fehlerprotokoll wird erstellt (optional an Entwickler senden)
+- User kann weiterarbeiten
+
+---
+
+### **Antworten auf die 4 Fragen:**
+
+#### **1. Zwingend oder optional?**
+**✅ Entscheidung: Zwingend (mit Frist)**
+
+- **Pflicht-Updates:** Sicherheit, Rechtliches, GoBD
+  - Nicht deaktivierbar
+  - Frist: 7-30 Tage je nach Typ
+- **Optionale Updates:** Neue Features ohne Compliance-Relevanz
+  - Benachrichtigung, aber kein Zwang
+  - User kann ignorieren
+
+**Begründung:**
+- GoBD-Konformität: Veraltete Versionen gefährden Compliance
+- Steuerrecht: Neue Formulare, Steuersätze müssen aktuell sein
+- Sicherheit: Verschlüsselung, Datenschutz
+- Support: Einheitliche Versionen erleichtern Support
+
+---
+
+#### **2. Silent-Update oder mit Nachfrage?**
+**✅ Entscheidung: Mit Nachfrage (während Frist)**
+
+- **Während Frist:** User wird gefragt, kann Zeitpunkt wählen
+  - Vorteil: User kann planen (nicht mitten in Steuererklärung)
+  - User behält Kontrolle
+- **Nach Frist:** Automatisch (blockierend)
+  - Programm startet nicht mehr ohne Update
+  - Keine Ausweichmöglichkeit
+
+**KEIN Silent-Update im Hintergrund:**
+- Zu riskant (DB-Migration könnte schiefgehen)
+- User soll bewusst Update durchführen
+- Backup-Erstellung sichtbar machen
+
+---
+
+#### **3. Update-Kanal?**
+**✅ Entscheidung: Nur Stable (für v1.0)**
+
+- **Stable-Kanal:** Alle Nutzer (Standard)
+  - Nur stabile, getestete Releases
+  - Keine Beta/Alpha-Features
+- **Beta/Nightly:** Erst ab v1.1+ (für Entwickler/Tester)
+  - Optional aktivierbar in Einstellungen
+  - Mit Warnung: "Nur für Entwickler!"
+
+**Begründung:**
+- v1.0: Einfachheit, keine Verwirrung
+- Buchhaltungssoftware = stabil sein muss
+- Beta/Nightly nur für Power-User
+
+---
+
+#### **4. Update-Benachrichtigung bei deaktiviertem Auto-Update?**
+**✅ Entscheidung: Nicht relevant (Auto-Update nicht deaktivierbar)**
+
+- Pflicht-Updates können nicht deaktiviert werden
+- Optionale Feature-Updates:
+  - Benachrichtigung: Ja
+  - Zwang: Nein
+  - User kann ignorieren
+
+---
+
+### **Technische Details:**
+
+**Update-Server:**
+```
+https://updates.rechnungsfee.de/stable/latest.json
+
+{
+  "version": "1.2.0",
+  "release_date": "2025-01-01",
+  "mandatory": true,
+  "deadline": "2025-01-15",
+  "deadline_days": 14,
+  "category": "legal",
+  "download_url": "https://updates.rechnungsfee.de/stable/1.2.0/rechnungsfee-1.2.0.tar.gz",
+  "signature": "https://updates.rechnungsfee.de/stable/1.2.0/rechnungsfee-1.2.0.tar.gz.sig",
+  "changelog_url": "https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v1.2.0",
+  "min_version": "1.0.0",
+  "reasons": [
+    "E-Rechnungspflicht (§14 UStG)",
+    "Kritisches Sicherheitsupdate (CVE-2025-1234)",
+    "GoBD-Konformität"
+  ]
+}
+```
+
+**Update-Prüfung:**
+- Beim Programmstart (täglich)
+- Optional: Stündlich im Hintergrund (wenn Programm läuft)
+- Signaturprüfung (GPG) vor Installation
+
+**Rollback-Mechanismus:**
+```rust
+fn update_with_rollback() -> Result<(), Error> {
+    // 1. Backup erstellen
+    let backup_path = create_backup()?;
+
+    // 2. Alte Version archivieren
+    let old_version = archive_current_version()?;
+
+    // 3. Update installieren
+    match install_update() {
+        Ok(_) => {
+            // 4. Verifizierung
+            if verify_installation()? {
+                Ok(())
+            } else {
+                // Rollback
+                restore_from_backup(&backup_path)?;
+                restore_old_version(&old_version)?;
+                Err(Error::VerificationFailed)
+            }
+        }
+        Err(e) => {
+            // Rollback
+            restore_from_backup(&backup_path)?;
+            restore_old_version(&old_version)?;
+            Err(e)
+        }
+    }
+}
+```
+
+---
+
+### **Vorteile dieser Lösung:**
+
+- ✅ **User-freundlich:** Frist statt sofortigem Zwang
+- ✅ **Sicher:** Alle Nutzer auf aktuellem Stand
+- ✅ **Rechtlich sauber:** GoBD, Steuerrecht, E-Rechnung
+- ✅ **Transparent:** Begründung, Changelog, Kategorisierung
+- ✅ **Flexibel:** User wählt Zeitpunkt (innerhalb Frist)
+- ✅ **Robust:** Automatischer Rollback bei Fehler
+- ✅ **Support-freundlich:** Einheitliche Versionen
+
+---
+
+**Frage 10.8: Rollback** ✅ GEKLÄRT
+
+**Entscheidung: Kein manueller Rollback - nur automatischer bei Update-Fehler**
+
+### **Kernprinzip:**
+
+- [x] **KEIN manueller Rollback** nach erfolgreichem Update
+  - User kann nicht auf alte Version zurück
+  - Alle User bleiben auf aktueller Version
+  - Sicherheit, Compliance, Support
+- [x] **Automatischer Rollback bei Update-Fehler**
+  - Bereits in 10.7 dokumentiert
+  - Funktioniert während Update-Installation
+  - User kann weiterarbeiten mit alter Version
+- [x] **Automatisches Backup vor Update** (immer!)
+  - Bereits in 10.7 dokumentiert
+  - Verschlüsselt, verifiziert, mit Zeitstempel
+- [x] **Nur letzte Version archiviert** (1 Version zurück)
+  - Reicht für automatischen Rollback
+  - Wenig Speicherplatz (~100-200 MB)
+
+---
+
+### **1. KEIN manueller Rollback**
+
+**Begründung:**
+
+#### **Sicherheit:**
+- Alle User müssen auf aktueller Version sein
+- Veraltete Versionen = Sicherheitslücken
+- Update-Pflicht mit Frist-System (10.7) greift
+
+#### **Compliance (GoBD, Steuerrecht):**
+- Veraltete Versionen gefährden GoBD-Konformität
+- Finanzamt erkennt alte Exporte evtl. nicht an
+- E-Rechnung-Pflicht ab 2025 erfordert aktuelle Version
+
+#### **Datenbank-Migration:**
+- **Vorwärts-Migration:** Einfach (von v1.1 → v1.2)
+- **Rückwärts-Migration:** Komplex und fehleranfällig!
+  - Neue Spalten müssen gelöscht werden
+  - Neue Features hinterlassen evtl. Daten
+  - Risiko von Datenverlust
+
+#### **Support:**
+- Nur eine Version im Umlauf
+- Bug-Reports eindeutig zuordenbar
+- Einfachere Fehlersuche
+
+---
+
+### **2. Was wenn User NACH erfolgreichem Update Probleme hat?**
+
+**Szenarien und Lösungen:**
+
+#### **Szenario A: Funktionaler Bug nach Update**
+
+```
+Beispiel: "Seit Update v1.2.0 kann ich keine Rechnungen mehr als PDF exportieren"
+```
+
+**Workflow:**
+
+1. **User meldet Bug** (GitHub Issue oder Support)
+   ```
+   Titel: [Bug] PDF-Export funktioniert nicht nach Update v1.2.0
+   Beschreibung: Beim Klick auf "Als PDF exportieren" passiert nichts.
+   Version: 1.2.0
+   Fehlermeldung: [Screenshot]
+   ```
+
+2. **Entwickler verifiziert Bug**
+   - Bug wird bestätigt
+   - Priorität: Kritisch (Kernfunktion betroffen)
+
+3. **Hotfix wird entwickelt** (v1.2.1)
+   - Bug-Fix innerhalb 24-48h (kritisch)
+   - Release als Pflicht-Update (7 Tage Frist)
+
+4. **User installiert Hotfix**
+   - Automatische Benachrichtigung
+   - "Wichtiger Bugfix verfügbar"
+
+**KEIN Rollback auf v1.1.5** → stattdessen Fix in v1.2.1
+
+---
+
+#### **Szenario B: Performance-Problem nach Update**
+
+```
+Beispiel: "Seit Update v1.2.0 ist das Programm deutlich langsamer"
+```
+
+**Workflow:**
+
+1. **User meldet Performance-Problem**
+   ```
+   Titel: [Performance] Programm langsamer seit v1.2.0
+   Beschreibung: Laden dauert jetzt 10 Sekunden statt 2 Sekunden
+   Version: 1.2.0
+   Datenbank-Größe: 150 MB
+   ```
+
+2. **Entwickler analysiert Problem**
+   - Profiling, Performance-Tests
+   - Ursache identifiziert (z.B. fehlender DB-Index)
+
+3. **Performance-Hotfix** (v1.2.1)
+   - Optimierung wird entwickelt
+   - Getestet mit großen Datenbanken
+   - Release als wichtiges Update (14 Tage Frist)
+
+**KEIN Rollback** → Performance-Fix in nächstem Update
+
+---
+
+#### **Szenario C: UI-Änderung gefällt User nicht**
+
+```
+Beispiel: "Die neue Oberfläche in v1.2.0 gefällt mir nicht, ich will die alte zurück"
+```
+
+**Antwort:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ UI-Feedback                                             │
+├─────────────────────────────────────────────────────────┤
+│ Danke für dein Feedback zur neuen Oberfläche!           │
+│                                                         │
+│ Ein Rollback auf die alte Version ist leider nicht     │
+│ möglich, da:                                            │
+│ • Sicherheitsupdates in v1.2.0 enthalten sind          │
+│ • GoBD-konforme Anforderungen erfüllt werden müssen     │
+│                                                         │
+│ Wir nehmen dein Feedback ernst:                         │
+│ • Bitte erstelle ein GitHub Issue mit konkreten        │
+│   Verbesserungsvorschlägen                              │
+│ • Wir prüfen UI-Anpassungen für v1.3.0                  │
+│ • Optional: Altes Theme als Option (in v1.3.0)         │
+│                                                         │
+│ [ Issue erstellen ]  [ Schließen ]                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Lösungsansatz:**
+- UI-Feedback sammeln
+- Optional: "Klassisches Theme" in späterem Update (v1.3.0)
+- KEIN Rollback auf alte Version
+
+---
+
+### **3. Automatisches Backup vor Update** ✅
+
+**Bereits in 10.7 vollständig dokumentiert:**
+
+- ✅ Automatisch bei JEDEM Update
+- ✅ Verschlüsselt (AES-256-GCM)
+- ✅ Mit Zeitstempel
+- ✅ Verifizierung (Hash-Check)
+- ✅ Wird für automatischen Rollback verwendet (bei Update-Fehler)
+
+**Beispiel:**
+```
+~/.rechnungsfee/backups/
+  ├─ backup-2025-01-05-14-30-00.db.enc  (vor Update v1.2.0)
+  ├─ backup-2025-01-12-10-15-30.db.enc  (regulär, 7 Versionen)
+  └─ ...
+```
+
+**Wichtig:**
+- Update-Backup ist **zusätzlich** zu regulären Backups (10.1-10.5)
+- Wird verwendet für automatischen Rollback bei Update-Fehler
+- NICHT für manuellen Rollback (User kann nicht darauf zugreifen)
+
+---
+
+### **4. Wie viele Versionen archivieren?** ✅
+
+**Entscheidung: Nur letzte Version (1 Version zurück)**
+
+**Archiv-Struktur:**
+```
+~/.rechnungsfee/archive/
+  └─ rechnungsfee-1.1.5/        (alte Version)
+      ├─ bin/                   (Binaries)
+      ├─ lib/                   (Libraries)
+      └─ version.txt            (Version-Info)
+```
+
+**Ablauf bei Update von v1.1.5 → v1.2.0:**
+
+1. **Vor Update:**
+   - Aktuelle Version: v1.1.5 (aktiv)
+   - Archiv: v1.1.4 (alte Version)
+
+2. **Update-Prozess:**
+   - v1.1.5 wird ins Archiv verschoben
+   - v1.1.4 wird gelöscht (nicht mehr benötigt)
+   - v1.2.0 wird installiert (neue aktive Version)
+
+3. **Nach Update:**
+   - Aktuelle Version: v1.2.0 (aktiv)
+   - Archiv: v1.1.5 (für automatischen Rollback)
+
+**Speicherplatz:**
+- Pro Version: ~100-200 MB
+- Nur 1 alte Version: Minimal (~200 MB)
+- Bei 3 Versionen: ~600 MB (unnötig, da kein manueller Rollback)
+
+---
+
+### **5. Automatischer Rollback bei Update-Fehler** ✅
+
+**Bereits in 10.7 vollständig dokumentiert:**
+
+Wenn Update **während Installation** fehlschlägt:
+
+```rust
+fn update_with_rollback() -> Result<(), Error> {
+    let backup_path = create_backup()?;
+    let old_version = archive_current_version()?;
+
+    match install_update() {
+        Ok(_) => {
+            if verify_installation()? {
+                Ok(())
+            } else {
+                // Rollback
+                restore_from_backup(&backup_path)?;
+                restore_old_version(&old_version)?;
+                Err(Error::VerificationFailed)
+            }
+        }
+        Err(e) => {
+            // Rollback
+            restore_from_backup(&backup_path)?;
+            restore_old_version(&old_version)?;
+            Err(e)
+        }
+    }
+}
+```
+
+**Fehler-Szenarien mit automatischem Rollback:**
+- ❌ Download fehlgeschlagen → Rollback
+- ❌ Signatur ungültig → Rollback
+- ❌ Installation fehlgeschlagen → Rollback
+- ❌ Datenbank-Migration fehlgeschlagen → Rollback
+- ❌ Verifizierung fehlgeschlagen → Rollback
+
+**User sieht:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ Update fehlgeschlagen                                │
+├─────────────────────────────────────────────────────────┤
+│ Das Update konnte nicht installiert werden.             │
+│ Fehler: Datenbank-Migration fehlgeschlagen (Schritt 4) │
+│                                                         │
+│ RechnungsFee wird auf vorherige Version zurückgesetzt.  │
+│                                                         │
+│ 🔄 Rollback läuft...                                    │
+│ ████████████████████████████████████████░░░ 90%        │
+│                                                         │
+│ Deine Daten sind sicher und bleiben unverändert.       │
+└─────────────────────────────────────────────────────────┘
+
+Nach Rollback:
+
+┌─────────────────────────────────────────────────────────┐
+│ ✅ Rollback erfolgreich                                 │
+├─────────────────────────────────────────────────────────┤
+│ RechnungsFee läuft wieder auf Version 1.1.5             │
+│                                                         │
+│ Das Update wird in Kürze erneut versucht.              │
+│ Fehlerprotokoll wurde an Entwickler gesendet.          │
+│                                                         │
+│ Du kannst jetzt normal weiterarbeiten.                 │
+│                                                         │
+│ [ Programm neu starten ]                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### **6. Notfall-Szenario: Datenbank-Korruption nach Update**
+
+**Extrem seltener Fall:** Update erfolgreich, aber später stellt sich heraus: DB korrupt
+
+**Lösung:** Kategorie 10.6 (Wiederherstellung) greift!
+
+1. **Beim nächsten Programmstart:**
+   - DB-Integritätsprüfung (PRAGMA integrity_check)
+   - Korruption erkannt
+
+2. **Automatische Wiederherstellung:**
+   - Versuch: Letztes Backup wiederherstellen
+   - Backup von VOR dem Update existiert
+
+3. **Bei Scheitern:**
+   - Backup-Liste anzeigen (10.6)
+   - User wählt älteres Backup (vor Update)
+
+**Wichtig:**
+- Wiederherstellung betrifft nur **Datenbank**
+- Programm-Version bleibt **v1.2.0** (neue Version)
+- User kann weiterarbeiten mit Daten von vor dem Update
+
+---
+
+### **UI-Konzept: Kein Rollback-Button**
+
+**Alte Versionen (wenn manueller Rollback erlaubt wäre):**
+```
+Einstellungen → Updates
+[ Auf Version 1.1.5 zurücksetzen ]  ← NICHT vorhanden!
+```
+
+**Neue Version (kein manueller Rollback):**
+```
+Einstellungen → Updates
+
+┌─────────────────────────────────────────────┐
+│ Updates                                     │
+├─────────────────────────────────────────────┤
+│ Aktuelle Version: 1.2.0                     │
+│ Veröffentlicht: 01.01.2025                  │
+│                                             │
+│ ✅ Alle Updates installiert                 │
+│                                             │
+│ Nächste Update-Prüfung: In 6 Stunden       │
+│                                             │
+│ [ Jetzt nach Updates suchen ]              │
+│ [ Update-Verlauf anzeigen ]                 │
+│                                             │
+│ ℹ️ Updates werden automatisch überprüft.   │
+│   Bei wichtigen Updates wirst du           │
+│   benachrichtigt.                           │
+└─────────────────────────────────────────────┘
+
+Update-Verlauf:
+┌─────────────────────────────────────────────┐
+│ v1.2.0  01.01.2025  Installiert ✅          │
+│ v1.1.5  15.12.2024  Installiert ✅          │
+│ v1.1.0  01.12.2024  Installiert ✅          │
+└─────────────────────────────────────────────┘
+```
+
+**Kein "Auf alte Version zurücksetzen"-Button!**
+
+---
+
+### **Zusammenfassung der 3 Fragen:**
+
+#### **1. Rollback bei Problemen nach Update?**
+**✅ Entscheidung: NEIN (kein manueller Rollback)**
+
+- Nur automatischer Rollback bei Update-Fehler (während Installation)
+- Nach erfolgreichem Update: Kein Zurück
+- Bei Problemen: Bug-Report → Hotfix in neuem Update
+
+**Begründung:**
+- Sicherheit (alle User aktuell)
+- Compliance (GoBD, Steuerrecht)
+- Einfachheit (keine Rückwärts-Migration)
+- Support (einheitliche Versionen)
+
+---
+
+#### **2. Automatisches Backup vor Update?**
+**✅ Entscheidung: JA (automatisch, immer)**
+
+- Bereits in 10.7 dokumentiert
+- Verschlüsselt, verifiziert
+- Wird für automatischen Rollback verwendet
+
+---
+
+#### **3. Wie viele Versionen zurück möglich?**
+**✅ Entscheidung: Nur letzte Version (1 Version zurück)**
+
+- Reicht für automatischen Rollback
+- Wenig Speicherplatz
+- Alte Version wird bei jedem Update überschrieben
+
+---
+
+### **Vorteile dieser Lösung:**
+
+- ✅ **Sicher:** Alle User auf aktueller Version, keine veralteten Versionen
+- ✅ **Compliance:** GoBD, Steuerrecht, E-Rechnung garantiert
+- ✅ **Einfach:** Keine komplexe Rückwärts-Migration
+- ✅ **Support-freundlich:** Nur eine Version im Umlauf
+- ✅ **Robust:** Automatischer Rollback bei Update-Fehler
+- ✅ **Transparent:** Update-Verlauf einsehbar
+- ✅ **Speicher-effizient:** Nur 1 alte Version archiviert (~200 MB)
+
+---
+
+### **Wichtige Klarstellung:**
+
+**Unterschied zwischen:**
+
+| Was | Wann | Automatisch? | Funktion |
+|-----|------|--------------|----------|
+| **Automatischer Rollback** | Bei Update-FEHLER (während Installation) | ✅ Ja | Zurück zu alter Version, User kann weiterarbeiten |
+| **Manueller Rollback** | Nach erfolgreichem Update | ❌ NEIN (nicht vorhanden) | - |
+| **Wiederherstellung (10.6)** | Bei DB-Korruption | ✅ Ja (mit Fallback) | Datenbank wiederherstellen, Version bleibt aktuell |
+
+---
 
 ---
 
