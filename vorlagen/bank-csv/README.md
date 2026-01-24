@@ -12,7 +12,7 @@ Dieser Ordner enthält Beispiel-CSVs verschiedener Banken für die Import-Funkti
 - [x] **Volksbank / Raiffeisenbank** - Genossenschaftsbanken ✅ (VR-Teilhaberbank)
 - [ ] **Deutsche Bank** - Großbank
 - [x] **Commerzbank** - Großbank ✅
-- [ ] **Postbank** - Retail-Bank
+- [x] **Postbank** - Retail-Bank ✅
 - [x] **DKB (Deutsche Kreditbank)** - Online-Bank ✅
 - [x] **ING (ehem. ING-DiBa)** - Online-Bank ✅
 - [ ] **N26** - Mobile Bank
@@ -58,6 +58,7 @@ bank-csv/
 ├── vr-teilhaberbank.mta                   # ✅ VR-Teilhaberbank - MT940 Format
 ├── sparda-bank-west.csv                   # ✅ Sparda-Bank West eG - CSV-Export
 ├── gls-bank.csv                           # ✅ GLS Gemeinschaftsbank eG - CSV-Export
+├── postbank.csv                           # ✅ Postbank - Umsatzübersicht
 ├── volksbank.csv                          # (noch nicht vorhanden)
 ├── n26.csv                                # (noch nicht vorhanden)
 └── ...
@@ -328,6 +329,29 @@ def test_sparkasse_import():
   - Enthält Saldo nach jeder Buchung
   - Gläubiger-ID und Mandatsreferenz bei Lastschriften
 
+### Postbank
+**Datei:** `postbank.csv`
+
+- **Trennzeichen:** `;` (Semikolon)
+- **Encoding:** UTF-8 mit BOM
+- **Dezimaltrennzeichen:** `,` (Komma)
+- **Datumsformat:** D.M.YYYY (z.B. 2.1.2026 oder 31.12.2025)
+- **Header ab Zeile:** 8 (Zeilen 1-7: Metadaten)
+- **Spalten:** Buchungstag, Wert, Umsatzart, Begünstigter / Auftraggeber, Verwendungszweck, IBAN / Kontonummer, BIC, Kundenreferenz, Mandatsreferenz, Gläubiger ID, Fremde Gebühren, Betrag, Abweichender Empfänger, Anzahl der Aufträge, Anzahl der Schecks, Soll, Haben, Währung
+- **Besonderheiten:**
+  - Umfangreiche Metadaten in Zeilen 1-7:
+    - Zeile 1: "Umsätze"
+    - Zeile 2-3: Kontoinformationen (Konto, IBAN, Währung)
+    - Zeile 5: Zeitraum (z.B. "1.12.2025 - 2.1.2026")
+    - Zeile 6: Letzter Kontostand
+    - Zeile 7: Hinweistext zu vorgemerkten Umsätzen
+  - 18 Spalten mit vollständigen SEPA-Informationen
+  - Separate Soll/Haben-Spalten (statt Vorzeichen im Betrag)
+  - Detaillierte Umsatzarten (SEPA Lastschrift, Kartenzahlung, Kontoabrechnung, etc.)
+  - Enthält Fremde Gebühren-Spalte
+  - Beträge ohne Anführungszeichen
+  - Kartenzahlungen mit ausführlichen Details (Folgenummer, Verfalldatum)
+
 ---
 
 ## 📊 Status-Übersicht
@@ -350,6 +374,7 @@ def test_sparkasse_import():
 | VR-Teilhaberbank | MT940 (.mta) | ✅ | ❌ | ❌ |
 | Sparda-Bank West eG | CSV-Export | ✅ | ❌ | ❌ |
 | GLS Gemeinschaftsbank eG | CSV-Export | ✅ | ❌ | ❌ |
+| Postbank | Umsatzübersicht CSV | ✅ | ❌ | ❌ |
 | Volksbank | - | ❌ | ❌ | ❌ |
 | N26 | - | ❌ | ❌ | ❌ |
 

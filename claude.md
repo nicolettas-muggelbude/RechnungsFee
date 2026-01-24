@@ -15287,6 +15287,24 @@ RechnungsFee/
 
 ## **Changelog**
 
+### **2026-01-24 - Issue #13: Export-Funktionen für Nicht-DATEV-Software geprüft**
+- Feature-Request analysiert: Export für Programme ohne DATEV-Import-Unterstützung
+- Klarstellung: CAMT/OFX sind Bank-IMPORT-Formate, keine Buchhaltungs-EXPORT-Formate
+- Feststellung: CSV-Exporte bereits umfangreich geplant (Kassenbuch, Rechnungen, Transaktionen, Stammdaten)
+- Neues Feature konzipiert: Generisches Export-Template-System für v2.0
+- Template-Editor für beliebige Buchhaltungssoftware (Lexware, WISO, sevdesk, etc.)
+- Community-Templates via GitHub für schnelle Unterstützung neuer Software
+- Spalten-Mapping-Tool für individuelle Anpassungen
+- Dokumentiert in: discussion-issue-13-export.md, issue-13-comment.md
+- Rückfragen an User gestellt: Welche konkrete Zielsoftware?
+
+### **2026-01-24 - Postbank CSV-Format hinzugefügt**
+- Postbank CSV-Vorlage anonymisiert und integriert
+- Format-Spezifikation dokumentiert (18 Spalten, Soll/Haben-Trennung, umfangreiche Metadaten)
+- README.md in vorlagen/bank-csv/ aktualisiert: Postbank als unterstützte Bank markiert
+- Besonderheiten dokumentiert: Separate Soll/Haben-Spalten, Fremde Gebühren, detaillierte Kartenzahlungen mit Folgenummer und Verfalldatum
+- Anonymisierung umfasste: IBANs, Personennamen, Kundennummern, Telefonnummern
+
 ### **2025-12-04 - XRechnung/ZUGFeRD Pflichtfelder präzisiert**
 - Vollständige Pflichtfelder-Tabelle mit EN-Codes (BT-Nummern)
 - Kritische Pflichtfelder: Rechnungsinfo, Lieferant, Kunde, Leistung, Steuer, Gesamtbeträge
