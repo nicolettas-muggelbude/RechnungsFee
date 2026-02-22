@@ -1,111 +1,108 @@
-## **📅 Projektplan: RechnungsFee (Version 1.0)**
-**Ziel:** Eine plattformunabhängige, Open-Source-Lösung für Rechnungserfassung, -verwaltung und Steuerdokumentengenerierung (EAR, EKS) mit Fokus auf §19 UStG und EKS-Kategorisierung.
+# RechnungsFee – Projektplan & Roadmap
+
+**Ziel:** Open-Source Buchhaltungssoftware für Freiberufler, Selbstständige und Kleinunternehmer
+**Lizenz:** AGPL-3.0 · **Stack:** Tauri 2 · React 19 · FastAPI · SQLite (WAL)
 
 ---
 
-### **📌 Phase 1: Vorbereitung (Woche 1–2)**
-**Ziel:** Klare Anforderungen, Technologie-Stack und Entwicklungsumgebung festlegen.
+## Status
 
-| Aufgabe                                      | Verantwortlich | Technologie/Tools                     | Ergebnis                                  |
-|----------------------------------------------|----------------|---------------------------------------|--------------------------------------------|
-| **Anforderungsdokument finalisieren**        | Nicoletta      | Markdown/Confluence                   | Dokument mit User Stories und Akzeptanzkriterien |
-| **Technologie-Stack auswählen**              | Nicoletta      | Recherche                            | Entscheidung: React (Frontend), FastAPI (Backend), SQLite (DB) |
-| **Entwicklungsumgebung einrichten**         | Nicoletta      | Docker, VS Code, GitHub               | Lokale Dev-Umgebung mit Hot-Reload         |
-| **Steuerformular-Templates recherchieren**  | Nicoletta      | ELSTER, GoBD, Anlage EKS (BA)         | Vorlagen für EAR-XML und EKS-CSV           |
-| **OCR-Bibliothek evaluieren**               | Nicoletta      | Tesseract.js vs. EasyOCR              | Entscheidung: Tesseract.js (lokal, Open Source) |
-
----
-
-### **📌 Phase 2: Prototyp (Woche 3–6)**
-**Ziel:** Ein funktionierender Prototyp mit Kernfunktionen: Rechnungserfassung, EKS-Kategorisierung, EAR/EKS-Export.
-
-#### **🔧 Frontend (React PWA)**
-| Aufgabe                                      | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|---------------------------------|--------------------------------------------|
-| **UI-Konzept & Design**                      | Figma, React                    | Mockups für Rechnungserfassung & Übersicht |
-| **Rechnungserfassungsformular**              | React Hooks, Formik             | Formular mit Pflichtfeldern & EKS-Kategorien |
-| **Drag & Drop für PDFs**                      | react-dropzone                  | Upload & Vorschau von Rechnungen           |
-| **OCR-Integration (Tesseract.js)**           | Tesseract.js                    | Extraktion von Rechnungsdaten (Nummer, Betrag, USt-IdNr.) |
-| **EKS-Kategorisierung**                      | React Select                    | Dropdown für EKS-Kategorien (Anlage EKS)   |
-| **Rechnungsübersicht (Tabelle)**            | React Table                     | Filterbare Liste mit Status, Datum, Kunde  |
-
-#### **🔧 Backend (FastAPI)**
-| Aufgabe                                      | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|---------------------------------|--------------------------------------------|
-| **API für Rechnungsspeicherung**             | FastAPI, SQLite                 | CRUD-Endpoints für Rechnungen              |
-| **EAR-XML-Generierung**                      | xml.etree (Python)              | GoBD-konforme XML-Datei                   |
-| **EKS-CSV-Export**                           | Python CSV                      | Vorlage für Anlage EKS (BA)                |
-| **§19 UStG-Plausi-Check**                    | Python (RegEx/Validierung)      | Warnung bei Überschreitung der Umsatzgrenze |
-
-#### **🗄️ Datenbank (SQLite)**
-| Aufgabe                                      | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|---------------------------------|--------------------------------------------|
-| **Datenbankschema entwerfen**                | SQLite                          | Tabellen: Rechnungen, Kunden, EKS-Kategorien |
-| **Verschlüsselung implementieren**           | SQLCipher                       | AES-256-Verschlüsselung der DB             |
-
-#### **📱 Mobile Version (PWA)**
-| Aufgabe                                      | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|---------------------------------|--------------------------------------------|
-| **Kamera-Integration für Scannen**           | React Camera, Tesseract.js      | Scannen von Rechnungen per Handy          |
-| **Offline-Fähigkeit testen**                 | Service Worker                  | Rechnungen erfassen ohne Internet          |
+| Version | Inhalt | Status |
+|---------|--------|--------|
+| **v0.1** | Kassenbuch (GoBD-konform) | ✅ Released 2026-02-22 |
+| **v0.2** | Bank-CSV Import | 🔲 Geplant |
+| **v0.3** | Rechnungsmodul | 🔲 Geplant |
+| **v0.4** | EÜR / UStVA Export | 🔲 Geplant |
+| **v1.0** | Erstes stabiles Release | 🔲 Geplant |
 
 ---
 
-### **📌 Phase 3: Test & Feedback (Woche 7–8)**
-**Ziel:** Prototyp mit 5–10 Freiberuflern testen und Feedback einarbeiten.
+## v0.1 – Kassenbuch ✅
 
-| Aufgabe                                      | Verantwortlich | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|----------------|---------------------------------|--------------------------------------------|
-| **Testumgebung bereitstellen**               | Nicoletta      | Docker, GitHub Pages            | Demo-Instanz für Tester                    |
-| **Usability-Tests durchführen**             | Tester          | Hotjar, Feedback-Formular       | Liste mit Bugs & Verbesserungsvorschlägen |
-| **OCR-Genauigkeit evaluieren**               | Nicoletta      | Manuelle Prüfung               | Fehlerquote < 5%                          |
-| **EAR/EKS-Exporte prüfen**                   | Steuerberater  | ELSTER, Excel                   | Korrekte Übertragung der Daten            |
-
----
-
-### **📌 Phase 4: Finalisierung (Woche 9–10)**
-**Ziel:** Bugfixes, Dokumentation und Veröffentlichung der Version 1.0.
-
-| Aufgabe                                      | Verantwortlich | Technologie                     | Ergebnis                                  |
-|----------------------------------------------|----------------|---------------------------------|--------------------------------------------|
-| **Bugfixes umsetzen**                        | Nicoletta      | GitHub Issues                   | Stabiler Prototyp                         |
-| **Dokumentation erstellen**                  | Nicoletta      | MkDocs                          | Anleitung für Installation & Nutzung      |
-| **Open-Source veröffentlichen**              | Nicoletta      | GitHub                          | Repository mit AGPL-3.0-Lizenz            |
-| **Backup-Funktion implementieren**          | Nicoletta      | Python (shutil), Nextcloud API  | Automatische Sicherung nach Nextcloud      |
+- GoBD-konformes Kassenbuch (keine Änderung/Löschung, Storno als Gegenbuchung)
+- Belegnummer-Generierung: `KB-YYYYMMDD-NNN`
+- USt-Berechnung aus Bruttobetrag (ROUND_HALF_UP)
+- Kleinunternehmer-Automatik (§19 UStG)
+- Tagesabschluss mit Soll/Ist-Vergleich und Differenzprotokoll
+- Kunden- & Lieferantenverwaltung
+- Dashboard: Monatsstatistik (Einnahmen / Ausgaben / Saldo)
+- Sidebar-Navigation im App-Layout
 
 ---
 
-### **📌 Phase 5: Erweiterungen (ab Woche 11)**
-**Ziel:** Optionale Features für spätere Versionen.
+## v0.2 – Bank-CSV Import
 
-| Feature                              | Priorität | Technologie                     |
-|--------------------------------------|-----------|---------------------------------|
-| **ELSTER-Schnittstelle**             | Mittel    | ELSTER API                      |
-| **Electron-App für lokale Nutzung**  | Niedrig   | Electron                        |
-| **Mandantenfähigkeit**               | Niedrig   | PostgreSQL, Auth0               |
-| **Mehrsprachigkeit**                 | Niedrig   | i18n (React)                    |
+**Ziel:** Kontoauszüge importieren und Buchungen halbautomatisch zuordnen.
 
----
-
-## **📊 Meilensteine & Zeitplan**
-| Meilenstein                          | Zieldatum       | Verantwortlich |
-|--------------------------------------|-----------------|-----------------|
-| **Anforderungsdokument finalisiert** | Ende Woche 2    | Nicoletta       |
-| **Prototyp (Frontend + Backend)**    | Ende Woche 6    | Nicoletta       |
-| **Testphase abgeschlossen**          | Ende Woche 8    | Tester           |
-| **Version 1.0 veröffentlicht**      | Ende Woche 10   | Nicoletta       |
+- CSV-Import für gängige Bankformate (Postbank, Sparkasse, DKB, ING)
+- Vorlagen-System (`bank_templates` – bereits in DB vorhanden)
+- Automatische Kategorie-Vorschläge per Regelwerk (`auto_filter_regeln`)
+- Mischkonto-Klassifizierung: geschäftlich / privat / Privatentnahme
+- Import-Protokoll mit Duplikat-Erkennung
+- Frontend: Import-Wizard + manuelle Nachbearbeitung
 
 ---
 
-## **🔧 Technologie-Stack im Detail**
-| Bereich               | Technologie                     | Begründung                                  |
-|-----------------------|---------------------------------|---------------------------------------------|
-| **Frontend**          | React (PWA)                     | Plattformunabhängig, gute Community         |
-| **Backend**           | FastAPI (Python)                | Schnell, einfach, gute Dokumentation       |
-| **Datenbank**         | SQLite (SQLCipher)              | Lokal, verschlüsselt, keine Serverkosten   |
-| **OCR**               | Tesseract.js                    | Open Source, lokal, keine Cloud-Abhängigkeit |
-| **Steuerformulare**   | ELSTER/XRechnung                | Konform mit deutschen Vorschriften          |
-| **Backup**            | Nextcloud API                   | Nutzerfreundlich, sicher                    |
-| **Verschlüsselung**  | AES-256 (SQLCipher)             | Hohe Sicherheit, bewährt                   |
+## v0.3 – Rechnungsmodul
+
+**Ziel:** Eingangs- und Ausgangsrechnungen erfassen und verwalten.
+
+- Ausgangsrechnungen schreiben (PDF-Generierung)
+- Eingangsrechnungen erfassen (manuell oder per PDF-Upload)
+- Zuordnung zu Kunden / Lieferanten
+- Zahlungsstatus & Fälligkeitsverfolgung
+- Vorsteuerabzug für Eingangsrechnungen
+- Rechnungspositionen mit verschiedenen USt-Sätzen
+- Verknüpfung mit Kassenbuch / Bankkonto
 
 ---
+
+## v0.4 – EÜR / UStVA Export
+
+**Ziel:** Steuerrelevante Auswertungen und Exporte.
+
+- Einnahmen-Überschuss-Rechnung (EÜR) – Jahresauswertung
+- Umsatzsteuer-Voranmeldung (UStVA) – monatlich / quartalsweise
+- Anlage EKS (für Transferleistungsbezieher)
+- DATEV-Export (CSV)
+- §19-Umsatzgrenze-Warnung (aktuelle Grenze: 25.000 € ab 2025)
+
+---
+
+## v1.0 – Erstes stabiles Release
+
+**Ziel:** Produktionsreif, dokumentiert, updatefähig.
+
+- Tauri-Installer (Windows / macOS / Linux)
+- Auto-Update via GitHub Releases
+- Backup-Funktion (lokale ZIP-Sicherung)
+- Benutzerhandbuch (MkDocs)
+- Vollständige Testabdeckung Backend (pytest)
+
+---
+
+## Spätere Versionen (Backlog)
+
+| Feature | Prio |
+|---------|------|
+| AfA-Berechnung (Anlagevermögen) | Mittel |
+| OCR-Erkennung für PDF-Rechnungen | Mittel |
+| XRechnung / ZUGFeRD Import | Niedrig |
+| Docker-Version | Niedrig |
+| Mobile PWA | Niedrig |
+| ELSTER-Direktübertragung | Niedrig |
+| Mehrsprachigkeit (i18n) | Niedrig |
+
+---
+
+## Tech Stack
+
+| Bereich | Technologie |
+|---------|-------------|
+| Desktop-Shell | Tauri 2.10 (Rust) |
+| Frontend | React 19, Vite, TypeScript, Tailwind CSS v4 |
+| State / API | React Query, React Hook Form + Zod |
+| Backend | FastAPI, Python 3.12 |
+| Datenbank | SQLite (WAL-Modus), SQLAlchemy 2.0 |
+| DB-Pfad | `~/.local/share/RechnungsFee/rechnungsfee.db` |
+| Kontenrahmen | SKR03 / SKR04 / SKR49 |
