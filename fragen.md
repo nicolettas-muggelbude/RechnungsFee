@@ -20,6 +20,7 @@
 - ✅ Kategorie 10 (Backup & Update) vollständig geklärt - Frist-System, kein manueller Rollback
 - ✅ Kategorie 12 (Hilfe-System) geklärt
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
+- ✅ GitHub Issue #14 (Rechnung AN Verein, §4 Nr. 21 UStG) analysiert - Steuer-Assistent v1.2, Bescheinigung im Kundenstamm v1.1
 
 ---
 
@@ -3742,6 +3743,84 @@ Update-Verlauf:
 - [x] **Test-Versionen:** Nach jedem Meilenstein (0.1 bis 0.8, dann v1.0)
 - [x] **Arbeitsweise:** Phasenweise (nicht agil/Sprints)
 - [x] **Fokus:** Gründliches Testen jeder Phase vor Weitergehen
+
+---
+
+## **📋 GitHub Community Issues** ✅ ANALYSIERT
+
+---
+
+### **Issue #14: Rechnung AN gemeinnützigen Verein (§4 Nr. 21 UStG)** ✅ ANALYSIERT
+
+**Datum:** 2026-02-22
+**Issue:** https://github.com/nicolettas-muggelbude/RechnungsFee/issues/14
+**User:** @Feedesiree
+**Priorität (User):** Sehr wichtig
+**Bereich:** Rechnungen, Steuer, Kundenstamm
+
+---
+
+#### **Szenario**
+
+Ein Selbstständiger (Dozent/Lehrer/Kursanbieter) mit USt-Pflicht stellt Rechnungen **an** einen gemeinnützigen Verein für **Bildungsleistungen** (Unterricht, Kurse, Seminare). Unter bestimmten Voraussetzungen kann die Rechnung ohne Umsatzsteuer ausgestellt werden.
+
+**Wichtig:** Dies ist das **umgekehrte Szenario** zu Kategorie 8.9 (Verein als RechnungsFee-Nutzer). Hier ist der Verein der **Kunde**, nicht der Nutzer.
+
+---
+
+#### **Rechtliche Entscheidungslogik (§4 Nr. 21 UStG)**
+
+```
+Bist du Kleinunternehmer (§19 UStG)?
+  → Ja: Keine USt auf der Rechnung (unabhängig vom Verein) ✅
+
+  → Nein (du weist USt aus):
+     Hat der Verein eine Bescheinigung nach §4 Nr. 21 Buchst. b) bb) UStG?
+       → Ja: Handelt es sich um eine Bildungsleistung (Unterricht, Kurs, Seminar)?
+              → Ja: Rechnung OHNE USt möglich ✅ (Steuerbefreiung greift)
+              → Nein: Rechnung MIT USt (z.B. reine Verwaltungsleistung)
+       → Nein: Rechnung MIT USt (du bist USt-pflichtig)
+```
+
+**Die Bescheinigung nach §4 Nr. 21 Buchst. b) bb) UStG:**
+- Amtliche Bescheinigung der zuständigen Landesbehörde
+- Bestätigt: Verein ist eine allgemein- oder berufsbildende Einrichtung
+- Der Verein muss sie dem Rechnungssteller vorlegen
+- Aufbewahrungspflicht: 10 Jahre (Nachweis für Finanzamt)
+
+---
+
+#### **Geplante Umsetzung in RechnungsFee**
+
+**v1.0 (MVP) – bereits eingeplant:**
+- [x] Steuerbefreiungsgrund manuell eintragbar (z.B. "§4 Nr. 21 UStG")
+- [x] 0% USt auswählbar mit Pflichtangabe des Grundes
+- [x] Rechnung enthält automatisch den korrekten Hinweistext
+
+**v1.1 – Kundenstamm-Erweiterung:**
+- [ ] Verein-Flag im Kundenstamm: Checkbox "Gemeinnütziger Verein"
+- [ ] Bescheinigungsfelder: Nummer, ausstellende Behörde, Gültigkeitsdatum
+- [ ] Automatische Warnung bei fehlender oder abgelaufener Bescheinigung
+
+**v1.2 – Geführter Steuer-Assistent:**
+- [ ] Assistent bei Rechnungserstellung für Vereinskunden:
+  1. "Ist dies ein gemeinnütziger Verein?"
+  2. "Liegt eine Bescheinigung nach §4 Nr. 21 Buchst. b) bb) UStG vor?"
+  3. "Handelt es sich um eine Bildungsleistung?"
+  → Automatische USt-Auswahl (0% oder 19%)
+  → Automatischer Textbaustein auf der Rechnung
+
+---
+
+#### **Antwort gepostet**
+
+GitHub-Kommentar gepostet am 2026-02-22:
+https://github.com/nicolettas-muggelbude/RechnungsFee/issues/14#issuecomment-3940487903
+
+Rückfragen an User offen:
+- Liegt die Bescheinigung immer schriftlich vor?
+- Nur Bildungsleistungen oder auch andere Leistungen?
+- Wie viele Vereins-Kunden ca.?
 
 ---
 
