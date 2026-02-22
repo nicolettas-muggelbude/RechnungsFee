@@ -402,7 +402,7 @@
 
 ---
 
-## **📋 Kategorie 8: Stammdaten-Erfassung (Ersteinrichtung)** ⏳ TEILWEISE GEKLÄRT
+## **📋 Kategorie 8: Stammdaten-Erfassung (Ersteinrichtung)** ✅ GEKLÄRT
 
 **Frage 8.1: Unternehmerdaten - welche Felder?** ✅ GEKLÄRT
 
@@ -1445,7 +1445,7 @@ Erst relevant wenn das eigene Rechnungsmodul (v1.1) existiert und eine vollstän
 
 ---
 
-## **📋 Kategorie 10: Backup & Update**
+## **📋 Kategorie 10: Backup & Update** ✅ GEKLÄRT
 
 **Frage 10.1: Backup-Speicherort** ✅ GEKLÄRT
 
