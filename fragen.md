@@ -19,6 +19,7 @@
 - ✅ Kategorie 8.9 (Vereins-Buchhaltung) geklärt - 4 Sphären, SKR49, ermäßigter Steuersatz (v1.1+)
 - ✅ Kategorie 10 (Backup & Update) vollständig geklärt - Frist-System, kein manueller Rollback
 - ✅ Kategorie 12 (Hilfe-System) geklärt
+- ✅ Kategorie 9 (Import-Schnittstellen) geklärt - v1.0 durch Kat. 2+5 abgedeckt, direkte APIs ab v1.1; Rechnungsmodul v1.0=LibreOffice-ODT-Vorlage, v1.1=eigenes Modul
 - ✅ Kategorie 11 (Steuersätze) vollständig geklärt - 19%/7%/0%, historische Sätze, B2C brutto/B2B netto, Mischrechnung, Vorsteuer mit Teilabzug
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 - ✅ GitHub Issue #14 (Rechnung AN Verein, §4 Nr. 21 UStG) analysiert - Steuer-Assistent v1.2, Bescheinigung im Kundenstamm v1.1
@@ -1385,36 +1386,62 @@ Auch ohne 4-Sphären-Trennung können Vereine RechnungsFee nutzen:
 
 ---
 
-## **📋 Kategorie 9: Import-Schnittstellen (hellocash, Rechnungsassistent, Fakturama)**
+## **📋 Kategorie 9: Import-Schnittstellen & Rechnungsmodul** ✅ GEKLÄRT
 
-**Frage 9.1: Priorität:**
-- Welches Tool zuerst? Hellocash, Rechnungsassistent oder Fakturama?
-- Oder alle drei parallel?
+---
 
-**Frage 9.2: hellocash - Daten-Formate:**
-- Welche Formate exportiert hellocash?
-- CSV, JSON, XML, direkte DB-Anbindung?
-- Hast du Beispiel-Exporte?
+### **Grundsatzentscheidung: Zwei Arten von Import** ✅ GEKLÄRT
 
-**Frage 9.3: Rechnungsassistent - Daten-Formate:**
-- Welche Formate?
-- Struktur bekannt?
+- [x] **Import zur Verarbeitung** = Eingangsrechnungen (ZUGFeRD/PDF) empfangen und buchen → bereits durch **Kategorie 2** abgedeckt
+- [x] **Import als Übernahme** = Datenmigration aus anderen Programmen (hellocash, Fakturama etc.) → **erst ab v1.1**
+- [x] **Keine direkte API-Anbindung in v1.0** – kein REST-API-Zugriff, kein direkter DB-Zugriff
+- [x] Kategorie 9 ist für **v1.0 vollständig durch Kategorien 2 + 5 gelöst**
 
-**Frage 9.4: Fakturama - Daten-Formate:**
-- Fakturama nutzt H2-Datenbank - direkter DB-Import?
-- Oder CSV-Export aus Fakturama?
+---
 
-**Frage 9.5: Import-Umfang:**
-- Nur Rechnungen (Eingang/Ausgang)?
-- Auch Kundenstammdaten?
-- Auch Produktstammdaten?
-- Historische Daten komplett migrieren oder nur ab Stichtag?
+### **Frage 9.1: Priorität der direkten Schnittstellen** ✅ GEKLÄRT
 
-**Frage 9.6: Duplikat-Erkennung:**
-- Was wenn Daten mehrfach importiert werden?
-- Automatische Deduplizierung anhand Rechnungsnummer?
-- Warnung bei Duplikaten?
-- Überschreiben oder überspringen?
+- [x] **v1.0:** Keine direkten Schnittstellen zu Dritt-Programmen
+- [x] **v1.1 (Priorität 1):** hellocash → REST-API (JSON)
+- [x] **v1.1 (Priorität 2):** Rechnungsassistent + Fakturama → ZUGFeRD/PDF-Export (universeller Weg, kein direkter DB-Zugriff)
+- [x] Alle drei Programme + weitere können ZUGFeRD und PDF exportieren → universeller Importweg
+
+---
+
+### **Fragen 9.2–9.4: Daten-Formate je Programm** ✅ GEKLÄRT
+
+| Programm | v1.0 | v1.1+ |
+|----------|------|-------|
+| **hellocash** | ZUGFeRD/PDF (universell) | REST-API (JSON) |
+| **Rechnungsassistent** | ZUGFeRD/PDF (universell) | ZUGFeRD/PDF reicht |
+| **Fakturama** | ZUGFeRD/PDF (universell) | ZUGFeRD/PDF reicht |
+| **Alle anderen** | ZUGFeRD/PDF (universell) | ZUGFeRD/PDF reicht |
+
+---
+
+### **Fragen 9.5–9.6: Import-Umfang & Duplikat-Erkennung** ⏸️ ZURÜCKGESTELLT (v1.1)
+
+Erst relevant wenn das eigene Rechnungsmodul (v1.1) existiert und eine vollständige Datenmigration sinnvoll ist.
+
+---
+
+### **Scope-Entscheidung: Rechnungsmodul** ✅ GEKLÄRT
+
+**v1.0 – Kein eigenes Rechnungsmodul:**
+- [x] RechnungsFee generiert eine **vorausgefüllte LibreOffice-ODT-Vorlage**
+  - Kundendaten, Positionen, Steuersätze, Gesamtbeträge automatisch eingetragen
+  - User öffnet Datei in LibreOffice Writer
+  - User passt nach Bedarf an (Logo, Layout, Freitext)
+  - User exportiert als PDF und versendet
+- [x] **Vorteil:** Schlankes v1.0, keine komplexe PDF-Engine nötig
+- [x] **Vorteil:** User hat volle Kontrolle über Layout und Inhalt
+- [x] Ausgangsrechnungen werden als Einnahmen manuell im Kassenbuch erfasst
+
+**v1.1 – Eigenes Rechnungsmodul:**
+- [ ] Rechnungen direkt in RechnungsFee erstellen
+- [ ] PDF-Export direkt aus der Anwendung
+- [ ] ZUGFeRD-Einbettung in ausgehende Rechnungen
+- [ ] Anbindung an Buchhaltung (automatische Buchung bei Zahlungseingang)
 
 ---
 
