@@ -19,6 +19,7 @@
 - ✅ Kategorie 8.9 (Vereins-Buchhaltung) geklärt - 4 Sphären, SKR49, ermäßigter Steuersatz (v1.1+)
 - ✅ Kategorie 10 (Backup & Update) vollständig geklärt - Frist-System, kein manueller Rollback
 - ✅ Kategorie 12 (Hilfe-System) geklärt
+- ✅ Kategorie 11 (Steuersätze) vollständig geklärt - 19%/7%/0%, historische Sätze, B2C brutto/B2B netto, Mischrechnung, Vorsteuer mit Teilabzug
 - ✅ Kategorie 13 (Scope & Priorisierung) vollständig geklärt - Komfortables MVP, 9 Phasen
 - ✅ GitHub Issue #14 (Rechnung AN Verein, §4 Nr. 21 UStG) analysiert - Steuer-Assistent v1.2, Bescheinigung im Kundenstamm v1.1
 
@@ -3497,33 +3498,60 @@ Update-Verlauf:
 
 ---
 
-## **📋 Kategorie 11: Verschiedene Steuersätze**
+## **📋 Kategorie 11: Verschiedene Steuersätze** ✅ GEKLÄRT
 
-**Frage 11.1: Welche Steuersätze konkret?**
-- 19% (Regelsteuersatz)
-- 7% (ermäßigt - Bücher, Lebensmittel, etc.)
-- 0% (steuerbefreit):
-  - Kleinunternehmer (§19 UStG)
-  - Reverse-Charge (§13b UStG)
-  - Innergemeinschaftliche Lieferung
-  - Ausfuhrlieferung (Export)
-- Historische Sätze (z.B. 16%/5% aus Corona-Zeit für alte Rechnungen)?
-- Sondersätze (z.B. Künstler/Schriftsteller)?
+**Detaildokumentation:** `docs/10-steuersaetze.md`
 
-**Frage 11.2: Buchungslogik:**
-- Eingabe Brutto oder Netto?
-- Umschaltbar (mal so, mal so)?
-- Automatische Umsatzsteuer-Berechnung beim Erfassen?
+---
 
-**Frage 11.3: Mischrechnung:**
-- Verschiedene Steuersätze pro Position auf einer Rechnung?
-- Z.B. Position 1: Buch 7%, Position 2: Beratung 19%
-- Automatische Summierung nach Steuersatz?
+**Frage 11.1: Welche Steuersätze konkret?** ✅ GEKLÄRT
 
-**Frage 11.4: Vorsteuerabzug:**
-- Bei Eingangsrechnungen: Vorsteuer automatisch berechnen?
-- Nicht abzugsfähige Vorsteuer (z.B. Bewirtung 30%, PKW)?
-- Vorsteueraufteilung bei gemischter Nutzung?
+- [x] **19%** – Regelsteuersatz (Standard für Waren & Dienstleistungen, seit 01.01.2007)
+- [x] **7%** – Ermäßigt: Bücher, Zeitungen, Lebensmittel, ÖPNV, Kulturveranstaltungen, Beherbergung (nur Übernachtung), künstlerische/schriftstellerische Leistungen (§12 Abs. 2 Nr. 7 UStG)
+- [x] **0% Kleinunternehmer** (§19 UStG) – kein Vorsteuerabzug, Pflichthinweis auf Rechnung
+- [x] **0% Reverse-Charge** (§13b UStG) – Bauleistungen, Gebäudereinigung, Altmetall, TK, Gas/Strom, CO2-Zertifikate
+- [x] **0% Innergemeinschaftliche Lieferung** (§4 Nr. 1b UStG) – Warenlieferung EU, gültige USt-IdNr. erforderlich
+- [x] **0% Ausfuhrlieferung/Export** (§4 Nr. 1a UStG) – Drittland, Ausfuhrnachweis erforderlich
+- [x] **0% Sonstige** – Vermietung (§4 Nr. 12), Bildungsleistungen, Gesundheitsleistungen
+- [x] **Historische Sätze** (Corona 01.07.–31.12.2020): 16% / 5% – automatische Erkennung anhand Rechnungsdatum
+- [x] **Sondersätze Land-/Forstwirtschaft** (§24 UStG: 10,7% / 5,5%) → ⏸️ nicht in v1.0, erst v2.0
+
+---
+
+**Frage 11.2: Buchungslogik** ✅ GEKLÄRT
+
+- [x] **Standard-Eingabemodus konfigurierbar:** B2C → Brutto, B2B → Netto (in Einstellungen wählbar)
+- [x] **In jeder Maske umschaltbar** – flexibles Arbeiten je nach Beleg
+- [x] **Automatische USt-Berechnung** in beide Richtungen:
+  - Brutto eingeben → Netto & USt werden berechnet
+  - Netto eingeben → USt & Brutto werden berechnet
+- [x] **Kaufmännische Rundung** auf 2 Nachkommastellen (ROUND_HALF_UP)
+
+---
+
+**Frage 11.3: Mischrechnung** ✅ GEKLÄRT
+
+- [x] Mehrere Positionen mit **verschiedenen Steuersätzen** pro Beleg möglich
+- [x] **Automatische Summierung nach Steuersatz** (Netto 7%, Netto 19% etc. getrennt ausgewiesen)
+- [x] Gesamtsummen (Netto, USt, Brutto) werden automatisch berechnet
+- [x] DB-Schema: Tabelle `rechnungspositionen` mit `ust_satz` pro Position + Trigger für Summierung
+
+---
+
+**Frage 11.4: Vorsteuerabzug** ✅ GEKLÄRT
+
+- [x] **Automatische Berechnung** bei Eingangsrechnungen (Checkbox "Vorsteuerabzug berechtigt")
+- [x] **Bewirtungskosten** (§4 Abs. 5 Nr. 2 UStG): automatisch nur 70% abzugsfähig
+- [x] **PKW gemischte Nutzung**: prozentuale Eingabe des geschäftlichen Anteils, Vorsteuer anteilig
+- [x] **Kategorie-basierte Regeln**: Vorsteuer-% je Kategorie hinterlegt (100%, 70%, 0%)
+- [x] **Kleinunternehmer**: kein Vorsteuerabzug (automatisch gesperrt)
+
+---
+
+**Versionsplanung:**
+- **v1.0:** Alle Standard-Steuersätze, Brutto/Netto-Umschaltung, Mischrechnung, Vorsteuer mit Teilabzug ✅
+- **v1.1:** Branchenvorlagen für Steuersätze, erweiterter Vorsteuer-Import historischer Rechnungen
+- **v2.0:** §24 UStG Land-/Forstwirtschaft, Differenzbesteuerung (§25a), Margenbesteuerung
 
 ---
 
