@@ -5,22 +5,23 @@
 
 ---
 
-## v0.1 – Kassenbuch *(Ziel: April 2026)*
+## ✅ v0.1 – Kassenbuch *(Released: Februar 2026)*
 
 Kern-Funktion: Einnahmen und Ausgaben manuell erfassen.
 
 **Backend**
-- [ ] Kassenbuch-API (CRUD: Einnahmen/Ausgaben, Kategorisierung)
-- [ ] Kunden- und Lieferanten-API
-- [ ] Tagesabschluss (GoBD: unveränderlich nach Abschluss)
-- [ ] USt-Berechnung bei Buchungserstellung
+- [x] Kassenbuch-API (Einnahmen/Ausgaben, Kategorisierung, Storno als Gegenbuchung)
+- [x] Kunden- und Lieferanten-API
+- [x] Tagesabschluss (GoBD: unveränderlich nach Abschluss, Soll/Ist-Differenz)
+- [x] USt-Berechnung aus Bruttobetrag (ROUND_HALF_UP), Kleinunternehmer §19 automatisch
 
 **Frontend**
-- [ ] Kassenbuch-Ansicht (Liste, Filter nach Monat/Kategorie)
-- [ ] Buchung erfassen (Formular mit Kategorie, Belegnummer, Betrag, USt)
-- [ ] Kunden-/Lieferantenverwaltung (einfach)
-- [ ] Tagesabschluss-Dialog
-- [ ] Dashboard mit Monatsübersicht (Einnahmen / Ausgaben / Saldo)
+- [x] Kassenbuch-Ansicht (Liste, Filter nach Monat/Kategorie/Art)
+- [x] Buchung erfassen (Formular mit Live-USt-Vorschau, Belegnummer KB-YYYYMMDD-NNN)
+- [x] Kunden-/Lieferantenverwaltung
+- [x] Tagesabschluss-Dialog (Vorschau, Ist-Bestand, Differenz-Begründung)
+- [x] Dashboard mit Monatsübersicht (Einnahmen / Ausgaben / Saldo)
+- [x] AppLayout mit Sidebar-Navigation
 
 ---
 
@@ -80,3 +81,4 @@ Rechnungen erstellen und externe Programme anbinden.
 - [x] Frontend: Setup-Assistent (3-stufiger Wizard)
 - [x] 31 Standard-Kategorien (SKR03/04/49, EÜR-Zuordnung)
 - [x] 27 EU-Länder mit USt-Sätzen (Seed-Daten)
+- [x] **v0.1 Kassenbuch** – Released Februar 2026 ([Release-Notes](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v0.1))
