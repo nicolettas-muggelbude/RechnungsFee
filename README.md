@@ -47,7 +47,7 @@ RechnungsFee ist eine plattformunabhängige, offline-first Buchhaltungslösung m
 | **v1.0** | Tauri-Installer, Backup, Dokumentation | 🔲 Ziel: Oktober 2026 |
 | **v1.1** | Rechnungsmodul, ZUGFeRD | 🔲 Ziel: Dezember 2026 |
 
-Vollständige Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+Vollständige Roadmap: [docs/ROADMAP.md](https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md)
 
 ---
 
@@ -119,7 +119,7 @@ Dieses Projekt wird offen entwickelt – die Community soll von Anfang an dabei 
 
 | Datei | Inhalt |
 |-------|--------|
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Versionierte Roadmap mit Meilensteinen |
+| [docs/ROADMAP.md](https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md) | Versionierte Roadmap mit Meilensteinen |
 | [docs/02-kassenbuch.md](docs/02-kassenbuch.md) | Kassenbuch-Konzept & GoBD |
 | [docs/03-bank-integration.md](docs/03-bank-integration.md) | Bank-CSV Import |
 | [docs/04-ustva.md](docs/04-ustva.md) | UStVA & EÜR |
