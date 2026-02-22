@@ -5,7 +5,7 @@ Getrennt von den SQLAlchemy-Models (database/models.py).
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, field_validator, model_validator
 
 
@@ -160,3 +160,187 @@ class SetupStatus(BaseModel):
     hat_unternehmen: bool
     hat_konto: bool
     hat_kategorien: bool
+
+
+# ---------------------------------------------------------------------------
+# Kassenbuch
+# ---------------------------------------------------------------------------
+
+class KassenbuchEintragCreate(BaseModel):
+    datum: date
+    beschreibung: str
+    kategorie_id: Optional[int] = None
+    zahlungsart: str = "Bar"  # Bar|Karte|Bank|PayPal
+    art: str  # Einnahme|Ausgabe
+    brutto_betrag: Decimal
+    ust_satz: Decimal = Decimal("0")
+    vorsteuerabzug: bool = False
+
+    @field_validator("zahlungsart")
+    @classmethod
+    def check_zahlungsart(cls, v: str) -> str:
+        if v not in ("Bar", "Karte", "Bank", "PayPal"):
+            raise ValueError("zahlungsart muss Bar, Karte, Bank oder PayPal sein")
+        return v
+
+    @field_validator("art")
+    @classmethod
+    def check_art(cls, v: str) -> str:
+        if v not in ("Einnahme", "Ausgabe"):
+            raise ValueError("art muss Einnahme oder Ausgabe sein")
+        return v
+
+    @field_validator("brutto_betrag")
+    @classmethod
+    def check_betrag(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("brutto_betrag muss positiv sein")
+        return v
+
+
+class KassenbuchEintragResponse(BaseModel):
+    id: int
+    datum: date
+    belegnr: str
+    beschreibung: str
+    kategorie_id: Optional[int]
+    zahlungsart: str
+    art: str
+    netto_betrag: Decimal
+    ust_satz: Decimal
+    ust_betrag: Decimal
+    brutto_betrag: Decimal
+    vorsteuerabzug: bool
+    steuerbefreiung_grund: Optional[str]
+    immutable: bool
+    erstellt_am: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StornoRequest(BaseModel):
+    grund: str
+
+
+class MonatsUebersicht(BaseModel):
+    monat: str  # YYYY-MM
+    einnahmen: Decimal
+    ausgaben: Decimal
+    saldo: Decimal
+    anzahl_buchungen: int
+
+
+# ---------------------------------------------------------------------------
+# Tagesabschluss
+# ---------------------------------------------------------------------------
+
+class TagesabschlussCreate(BaseModel):
+    datum: date
+    ist_endbestand: Decimal
+    differenz_begruendung: Optional[str] = None
+    differenz_buchungsart: Optional[str] = None  # Privatentnahme|Aufwand|Protokoll
+
+
+class TagesabschlussResponse(BaseModel):
+    id: int
+    datum: date
+    uhrzeit: str
+    anfangsbestand: Decimal
+    einnahmen_bar: Decimal
+    ausgaben_bar: Decimal
+    soll_endbestand: Decimal
+    ist_endbestand: Decimal
+    differenz: Decimal
+    differenz_begruendung: Optional[str]
+    differenz_buchungsart: Optional[str]
+    kassenbewegungen_anzahl: int
+    immutable: bool
+    erstellt_am: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TagesabschlussVorschau(BaseModel):
+    datum: date
+    anfangsbestand: Decimal
+    einnahmen_bar: Decimal
+    ausgaben_bar: Decimal
+    soll_endbestand: Decimal
+    kassenbewegungen_anzahl: int
+
+
+# ---------------------------------------------------------------------------
+# Kunden
+# ---------------------------------------------------------------------------
+
+class KundeBase(BaseModel):
+    firmenname: Optional[str] = None
+    vorname: Optional[str] = None
+    nachname: Optional[str] = None
+    strasse: Optional[str] = None
+    hausnummer: Optional[str] = None
+    plz: Optional[str] = None
+    ort: Optional[str] = None
+    land: str = "DE"
+    ust_idnr: Optional[str] = None
+    email: Optional[str] = None
+    telefon: Optional[str] = None
+    ist_verein: bool = False
+    ist_gemeinnuetzig: bool = False
+    kundennummer: Optional[str] = None
+    notizen: Optional[str] = None
+
+
+class KundeCreate(KundeBase):
+    pass
+
+
+class KundeUpdate(KundeBase):
+    aktiv: Optional[bool] = None
+
+
+class KundeResponse(KundeBase):
+    id: int
+    ust_idnr_validiert: bool
+    aktiv: bool
+    erstellt_am: datetime
+    aktualisiert_am: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Lieferanten
+# ---------------------------------------------------------------------------
+
+class LieferantBase(BaseModel):
+    firmenname: str
+    vorname: Optional[str] = None
+    nachname: Optional[str] = None
+    strasse: Optional[str] = None
+    hausnummer: Optional[str] = None
+    plz: Optional[str] = None
+    ort: Optional[str] = None
+    land: str = "DE"
+    ust_idnr: Optional[str] = None
+    email: Optional[str] = None
+    telefon: Optional[str] = None
+    lieferantennummer: Optional[str] = None
+    notizen: Optional[str] = None
+
+
+class LieferantCreate(LieferantBase):
+    pass
+
+
+class LieferantUpdate(LieferantBase):
+    firmenname: Optional[str] = None
+    aktiv: Optional[bool] = None
+
+
+class LieferantResponse(LieferantBase):
+    id: int
+    aktiv: bool
+    erstellt_am: datetime
+
+    model_config = {"from_attributes": True}

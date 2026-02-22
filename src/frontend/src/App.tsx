@@ -2,7 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { getSetupStatus } from './api/client'
 import { SetupWizard } from './pages/setup/SetupWizard'
+import { AppLayout } from './components/AppLayout'
 import { Dashboard } from './pages/dashboard/Dashboard'
+import { KassenbuchPage } from './pages/kassenbuch/KassenbuchPage'
+import { KundenPage } from './pages/kunden/KundenPage'
+import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
 
 function AppRoutes() {
   const { data: status, isLoading } = useQuery({
@@ -43,14 +47,16 @@ function AppRoutes() {
             : <SetupWizard />
         }
       />
-      <Route
-        path="/"
-        element={
-          status.ist_eingerichtet
-            ? <Dashboard />
-            : <Navigate to="/setup" replace />
-        }
-      />
+      {status.ist_eingerichtet ? (
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/kassenbuch" element={<KassenbuchPage />} />
+          <Route path="/kunden" element={<KundenPage />} />
+          <Route path="/lieferanten" element={<LieferantenPage />} />
+        </Route>
+      ) : (
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      )}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
