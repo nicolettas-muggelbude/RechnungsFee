@@ -76,6 +76,7 @@ export type Kategorie = {
   name: string
   kontenart: string
   vorsteuer_prozent: string
+  ust_satz_standard: number
   ist_system: boolean
 }
 export const getKategorien = () => request<Kategorie[]>('/kategorien')

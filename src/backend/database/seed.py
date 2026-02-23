@@ -10,47 +10,47 @@ from .models import Kategorie, EuLand, Nummernkreis
 
 STANDARD_KATEGORIEN = [
     # --- Einnahmen ---
-    {"name": "Betriebseinnahmen",          "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",  "euer_zeile": 11, "vorsteuer_prozent": 0},
-    {"name": "Betriebseinnahmen (7%)",     "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",  "euer_zeile": 12, "vorsteuer_prozent": 0},
-    {"name": "Betriebseinnahmen (0%)",     "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14, "vorsteuer_prozent": 0},
-    {"name": "Kleinunternehmer-Einnahmen", "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14, "vorsteuer_prozent": 0},
-    {"name": "Privateinlage",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": None,  "euer_zeile": None, "vorsteuer_prozent": 0},
+    {"name": "Betriebseinnahmen",          "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",  "euer_zeile": 11, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+    {"name": "Betriebseinnahmen (7%)",     "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",  "euer_zeile": 12, "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
+    {"name": "Betriebseinnahmen (0%)",     "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Kleinunternehmer-Einnahmen", "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Privateinlage",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": None,  "euer_zeile": None, "vorsteuer_prozent": 0,  "ust_satz_standard": 0},
     # --- Ausgaben: Büro & Verwaltung ---
-    {"name": "Büromaterial",              "kontenart": "Aufwand", "konto_skr03": "4910", "konto_skr04": "6815", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Büroausstattung",           "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Porto & Versand",           "kontenart": "Aufwand", "konto_skr03": "4930", "konto_skr04": "6825", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Telefon & Internet",        "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B10", "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Software & Abonnements",    "kontenart": "Aufwand", "konto_skr03": "4940", "konto_skr04": "6831", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Steuerberatung",            "kontenart": "Aufwand", "konto_skr03": "4960", "konto_skr04": "6835", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Rechts- & Beratungskosten","kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6840", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Buchführungskosten",        "kontenart": "Aufwand", "konto_skr03": "4975", "konto_skr04": "6845", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
+    {"name": "Büromaterial",              "kontenart": "Aufwand", "konto_skr03": "4910", "konto_skr04": "6815", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Büroausstattung",           "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Porto & Versand",           "kontenart": "Aufwand", "konto_skr03": "4930", "konto_skr04": "6825", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Telefon & Internet",        "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B10", "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Software & Abonnements",    "kontenart": "Aufwand", "konto_skr03": "4940", "konto_skr04": "6831", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Steuerberatung",            "kontenart": "Aufwand", "konto_skr03": "4960", "konto_skr04": "6835", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Rechts- & Beratungskosten","kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6840", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Buchführungskosten",        "kontenart": "Aufwand", "konto_skr03": "4975", "konto_skr04": "6845", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
     # --- Ausgaben: Raumkosten ---
-    {"name": "Miete Büro",               "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 100},
-    {"name": "Nebenkosten Büro",         "kontenart": "Aufwand", "konto_skr03": "4230", "konto_skr04": "6320", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 100},
-    {"name": "Arbeitszimmer (anteilig)", "kontenart": "Aufwand", "konto_skr03": "4215", "konto_skr04": "6315", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 0},
+    {"name": "Miete Büro",               "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Nebenkosten Büro",         "kontenart": "Aufwand", "konto_skr03": "4230", "konto_skr04": "6320", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Arbeitszimmer (anteilig)", "kontenart": "Aufwand", "konto_skr03": "4215", "konto_skr04": "6315", "eks_kategorie": "B5",  "euer_zeile": 46, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
     # --- Ausgaben: KFZ ---
-    {"name": "KFZ-Kosten",              "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6520", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 100},
-    {"name": "KFZ-Versicherung",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 0},
-    {"name": "Reisekosten",             "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B8",  "euer_zeile": 49, "vorsteuer_prozent": 100},
+    {"name": "KFZ-Kosten",              "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6520", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "KFZ-Versicherung",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
+    {"name": "Reisekosten",             "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B8",  "euer_zeile": 49, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
     # --- Ausgaben: Personal ---
-    {"name": "Löhne & Gehälter",        "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B3",  "euer_zeile": 44, "vorsteuer_prozent": 0},
-    {"name": "Fremdleistungen",         "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B4",  "euer_zeile": 45, "vorsteuer_prozent": 100},
+    {"name": "Löhne & Gehälter",        "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B3",  "euer_zeile": 44, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
+    {"name": "Fremdleistungen",         "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B4",  "euer_zeile": 45, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
     # --- Ausgaben: Marketing ---
-    {"name": "Werbung & Marketing",     "kontenart": "Aufwand", "konto_skr03": "4600", "konto_skr04": "6600", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Bewirtungskosten",        "kontenart": "Aufwand", "konto_skr03": "4650", "konto_skr04": "6620", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 70},
+    {"name": "Werbung & Marketing",     "kontenart": "Aufwand", "konto_skr03": "4600", "konto_skr04": "6600", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Bewirtungskosten",        "kontenart": "Aufwand", "konto_skr03": "4650", "konto_skr04": "6620", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 70,   "ust_satz_standard": 19},
     # --- Ausgaben: Fortbildung ---
-    {"name": "Fortbildung & Fachliteratur", "kontenart": "Aufwand", "konto_skr03": "4945", "konto_skr04": "6820", "eks_kategorie": "B9", "euer_zeile": 40, "vorsteuer_prozent": 100},
+    {"name": "Fortbildung & Fachliteratur", "kontenart": "Aufwand", "konto_skr03": "4945", "konto_skr04": "6820", "eks_kategorie": "B9", "euer_zeile": 40, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     # --- Ausgaben: Versicherungen ---
-    {"name": "Betriebsversicherungen",  "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B6",  "euer_zeile": 47, "vorsteuer_prozent": 0},
-    {"name": "Berufsgenossenschaft",    "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6450", "eks_kategorie": "B6",  "euer_zeile": 47, "vorsteuer_prozent": 0},
+    {"name": "Betriebsversicherungen",  "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B6",  "euer_zeile": 47, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
+    {"name": "Berufsgenossenschaft",    "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6450", "eks_kategorie": "B6",  "euer_zeile": 47, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
     # --- Ausgaben: Bankkosten ---
-    {"name": "Bankgebühren",            "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6855", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 0},
+    {"name": "Bankgebühren",            "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6855", "eks_kategorie": "B9",  "euer_zeile": 50, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
     # --- Ausgaben: Sonstiges ---
-    {"name": "Sonstige Betriebsausgaben","kontenart": "Aufwand","konto_skr03": "4980", "konto_skr04": "6880", "eks_kategorie": "B18", "euer_zeile": 50, "vorsteuer_prozent": 100},
-    {"name": "Privatentnahme",           "kontenart": "Privat", "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": None,  "euer_zeile": None, "vorsteuer_prozent": 0},
+    {"name": "Sonstige Betriebsausgaben","kontenart": "Aufwand","konto_skr03": "4980", "konto_skr04": "6880", "eks_kategorie": "B18", "euer_zeile": 50, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Privatentnahme",           "kontenart": "Privat", "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": None,  "euer_zeile": None, "vorsteuer_prozent": 0,  "ust_satz_standard": 0},
     # --- Anlagevermögen ---
-    {"name": "Anlagevermögen (Kauf)",    "kontenart": "Anlage", "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "C1",  "euer_zeile": None, "vorsteuer_prozent": 100},
-    {"name": "Geringwertige Wirtschaftsgüter (GWG)", "kontenart": "Aufwand", "konto_skr03": "0480", "konto_skr04": "0680", "eks_kategorie": "B9", "euer_zeile": 50, "vorsteuer_prozent": 100},
+    {"name": "Anlagevermögen (Kauf)",    "kontenart": "Anlage", "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "C1",  "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Geringwertige Wirtschaftsgüter (GWG)", "kontenart": "Aufwand", "konto_skr03": "0480", "konto_skr04": "0680", "eks_kategorie": "B9", "euer_zeile": 50, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
 ]
 
 EU_LAENDER = [

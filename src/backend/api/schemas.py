@@ -146,6 +146,7 @@ class KategorieResponse(BaseModel):
     eks_kategorie: Optional[str]
     euer_zeile: Optional[int]
     vorsteuer_prozent: Decimal
+    ust_satz_standard: int
     ist_system: bool
 
     model_config = {"from_attributes": True}
@@ -170,6 +171,7 @@ class KassenbuchEintragCreate(BaseModel):
     datum: date
     beschreibung: str
     kategorie_id: Optional[int] = None
+    kunde_id: Optional[int] = None
     zahlungsart: str = "Bar"  # Bar|Karte|Bank|PayPal
     art: str  # Einnahme|Ausgabe
     brutto_betrag: Decimal
@@ -204,6 +206,9 @@ class KassenbuchEintragResponse(BaseModel):
     belegnr: str
     beschreibung: str
     kategorie_id: Optional[int]
+    kunde_id: Optional[int]
+    kunde_name: Optional[str] = None   # aus Relationship befüllt
+    kunde_email: Optional[str] = None
     zahlungsart: str
     art: str
     netto_betrag: Decimal
@@ -216,6 +221,15 @@ class KassenbuchEintragResponse(BaseModel):
     erstellt_am: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_with_kunde(cls, obj) -> "KassenbuchEintragResponse":
+        data = cls.model_validate(obj)
+        if obj.kunde:
+            parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
+            data.kunde_name = " ".join(p for p in parts if p) or None
+            data.kunde_email = obj.kunde.email
+        return data
 
 
 class StornoRequest(BaseModel):

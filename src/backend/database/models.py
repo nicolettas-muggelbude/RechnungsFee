@@ -93,6 +93,7 @@ class Kategorie(Base):
     eks_kategorie: Mapped[str | None] = mapped_column(String(10))  # B9, A1 etc.
     euer_zeile: Mapped[int | None] = mapped_column(Integer)
     vorsteuer_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100, nullable=False)
+    ust_satz_standard: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0|7|19
     ist_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -141,6 +142,7 @@ class Kassenbucheintrag(Base):
     belegnr: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     beschreibung: Mapped[str] = mapped_column(String(500), nullable=False)
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
+    kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id"))
     zahlungsart: Mapped[str] = mapped_column(String(20), nullable=False)  # Bar|Karte|Bank|PayPal
     art: Mapped[str] = mapped_column(String(10), nullable=False)  # Einnahme|Ausgabe
     netto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -156,6 +158,7 @@ class Kassenbucheintrag(Base):
     erstellt_von: Mapped[str | None] = mapped_column(String(100))
 
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="kassenbucheintraege")
+    kunde: Mapped["Kunde | None"] = relationship()
 
 
 class Tagesabschluss(Base):

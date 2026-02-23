@@ -53,11 +53,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   useEffect(() => {
     if (!kategorie_id || !kategorien) return
     const kat = kategorien.find((k) => String(k.id) === kategorie_id)
-    if (kat) {
-      // vorsteuer_prozent ist 100 = kein USt, 19 = 19% USt
-      const satz = parseFloat(kat.vorsteuer_prozent) === 100 ? '19' : '0'
-      setValue('ust_satz', satz)
-    }
+    if (kat) setValue('ust_satz', String(kat.ust_satz_standard))
   }, [kategorie_id, kategorien, setValue])
 
   // Live USt-Berechnung
@@ -89,9 +85,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
     })
   }
 
-  const kategorienGefiltert = (kategorien ?? []).filter((k) =>
-    art === 'Einnahme' ? k.kontenart === 'Erlös' : k.kontenart === 'Aufwand'
-  )
+  const alle = kategorien ?? []
+  // Einnahmen
+  const erloeseKat   = alle.filter((k) => k.kontenart === 'Erlös')
+  const einlageKat   = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privateinlage')
+  // Ausgaben
+  const aufwandKat   = alle.filter((k) => k.kontenart === 'Aufwand')
+  const anlageKat    = alle.filter((k) => k.kontenart === 'Anlage')
+  const entnahmeKat  = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privatentnahme')
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -140,9 +141,34 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             <label className="block text-xs font-medium text-slate-600 mb-1">Kategorie</label>
             <select {...register('kategorie_id')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">— keine —</option>
-              {kategorienGefiltert.map((k) => (
-                <option key={k.id} value={k.id}>{k.name}</option>
-              ))}
+              {art === 'Einnahme' ? (
+                <>
+                  <optgroup label="Erlöse">
+                    {erloeseKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </optgroup>
+                  {einlageKat.length > 0 && (
+                    <optgroup label="Sonstiges">
+                      {einlageKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                    </optgroup>
+                  )}
+                </>
+              ) : (
+                <>
+                  <optgroup label="Betriebsausgaben">
+                    {aufwandKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </optgroup>
+                  {anlageKat.length > 0 && (
+                    <optgroup label="Investitionen">
+                      {anlageKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                    </optgroup>
+                  )}
+                  {entnahmeKat.length > 0 && (
+                    <optgroup label="Sonstiges">
+                      {entnahmeKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                    </optgroup>
+                  )}
+                </>
+              )}
             </select>
           </div>
 
