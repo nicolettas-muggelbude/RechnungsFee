@@ -344,3 +344,45 @@ class LieferantResponse(LieferantBase):
     erstellt_am: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Nummernkreise
+# ---------------------------------------------------------------------------
+
+class NummernkreisUpdate(BaseModel):
+    bezeichnung: Optional[str] = None
+    format: Optional[str] = None
+    naechste_nr: Optional[int] = None
+    reset_jaehrlich: Optional[bool] = None
+    aktiv: Optional[bool] = None
+
+    @field_validator("format")
+    @classmethod
+    def check_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if "#" not in v:
+            raise ValueError("Format muss mindestens ein '#' als Nummernplatzhalter enthalten")
+        return v
+
+    @field_validator("naechste_nr")
+    @classmethod
+    def check_naechste_nr(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 1:
+            raise ValueError("naechste_nr muss >= 1 sein")
+        return v
+
+
+class NummernkreisResponse(BaseModel):
+    id: int
+    bezeichnung: str
+    typ: str
+    format: str
+    naechste_nr: int
+    reset_jaehrlich: bool
+    letztes_jahr: Optional[int]
+    aktiv: bool
+    vorschau: Optional[str] = None  # wird im Router befüllt
+
+    model_config = {"from_attributes": True}

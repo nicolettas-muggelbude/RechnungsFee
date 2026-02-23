@@ -5,7 +5,7 @@ Startwerte für die Datenbank:
 """
 
 from sqlalchemy.orm import Session
-from .models import Kategorie, EuLand
+from .models import Kategorie, EuLand, Nummernkreis
 
 
 STANDARD_KATEGORIEN = [
@@ -100,6 +100,20 @@ def seed_eu_laender(db: Session) -> None:
     db.commit()
 
 
+def seed_nummernkreise(db: Session) -> None:
+    if db.query(Nummernkreis).count() > 0:
+        return
+    db.add(Nummernkreis(
+        bezeichnung="Kassenbuch",
+        typ="kassenbuch",
+        format="YY####",
+        naechste_nr=1,
+        reset_jaehrlich=True,
+    ))
+    db.commit()
+
+
 def run_all_seeds(db: Session) -> None:
     seed_kategorien(db)
     seed_eu_laender(db)
+    seed_nummernkreise(db)

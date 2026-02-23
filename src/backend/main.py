@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.connection import Base, engine, SessionLocal
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -22,6 +22,7 @@ app.include_router(kassenbuch.router)
 app.include_router(kunden.router)
 app.include_router(lieferanten.router)
 app.include_router(tagesabschluss.router)
+app.include_router(nummernkreise.router)
 
 
 @app.on_event("startup")

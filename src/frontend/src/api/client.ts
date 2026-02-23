@@ -233,3 +233,21 @@ export const updateLieferant = (id: number, data: Partial<Lieferant>) =>
   request<Lieferant>(`/lieferanten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteLieferant = (id: number) =>
   request<void>(`/lieferanten/${id}`, { method: 'DELETE' })
+
+// --- Nummernkreise ---
+export type Nummernkreis = {
+  id: number
+  bezeichnung: string
+  typ: string
+  format: string
+  naechste_nr: number
+  reset_jaehrlich: boolean
+  letztes_jahr: number | null
+  aktiv: boolean
+  vorschau: string | null
+}
+export const getNummernkreise = () => request<Nummernkreis[]>('/nummernkreise')
+export const updateNummernkreis = (id: number, data: Partial<Nummernkreis>) =>
+  request<Nummernkreis>(`/nummernkreise/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const getNummernkreisVorschau = (id: number, format: string) =>
+  request<{ vorschau: string }>(`/nummernkreise/vorschau/${id}?format=${encodeURIComponent(format)}`)

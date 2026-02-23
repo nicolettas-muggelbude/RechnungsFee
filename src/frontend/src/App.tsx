@@ -7,6 +7,7 @@ import { Dashboard } from './pages/dashboard/Dashboard'
 import { KassenbuchPage } from './pages/kassenbuch/KassenbuchPage'
 import { KundenPage } from './pages/kunden/KundenPage'
 import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
+import { NummernkreisePage } from './pages/einstellungen/NummernkreisePage'
 
 function AppRoutes() {
   const { data: status, isLoading } = useQuery({
@@ -53,6 +54,7 @@ function AppRoutes() {
           <Route path="/kassenbuch" element={<KassenbuchPage />} />
           <Route path="/kunden" element={<KundenPage />} />
           <Route path="/lieferanten" element={<LieferantenPage />} />
+          <Route path="/einstellungen" element={<NummernkreisePage />} />
         </Route>
       ) : (
         <Route path="*" element={<Navigate to="/setup" replace />} />

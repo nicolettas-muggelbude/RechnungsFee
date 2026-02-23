@@ -12,7 +12,7 @@ from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Kassenbucheintrag, Kategorie, Unternehmen
+from database.models import Kassenbucheintrag, Kategorie, Unternehmen, Nummernkreis
 from .schemas import (
     KassenbuchEintragCreate,
     KassenbuchEintragResponse,
@@ -23,15 +23,39 @@ from .schemas import (
 router = APIRouter(prefix="/api/kassenbuch", tags=["Kassenbuch"])
 
 
+import re as _re
+
+
+def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
+    """Wendet das Format-Template an. Y=Jahrsstelle, #=Nummernstelle."""
+    year_4 = str(datum.year)
+    year_2 = year_4[-2:]
+    result = format_str.replace("YYYY", year_4).replace("YY", year_2)
+
+    def _pad(m: _re.Match) -> str:
+        return str(nr).zfill(len(m.group()))
+
+    return _re.sub(r"#+", _pad, result)
+
+
 def _naechste_belegnr(db: Session, datum: date) -> str:
-    """Generiert die nächste Belegnummer im Format KB-YYYYMMDD-NNN."""
-    prefix = f"KB-{datum.strftime('%Y%m%d')}-"
-    count = (
-        db.query(Kassenbucheintrag)
-        .filter(Kassenbucheintrag.belegnr.like(f"{prefix}%"))
-        .count()
-    )
-    return f"{prefix}{count + 1:03d}"
+    """Liest den Kassenbuch-Nummernkreis, generiert die nächste Belegnummer
+    und speichert den inkrementierten Zähler (atomar im selben Commit)."""
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "kassenbuch").first()
+    if not nk:
+        # Fallback falls Seed fehlt
+        count = db.query(Kassenbucheintrag).count()
+        return f"{str(datum.year)[-2:]}{count + 1:04d}"
+
+    # Jahreswechsel-Reset
+    if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+        nk.naechste_nr = 1
+    nk.letztes_jahr = datum.year
+
+    nr = nk.naechste_nr
+    nk.naechste_nr += 1
+    # Wird im selben db.commit() des Eintrags gespeichert
+    return _belegnr_aus_format(nk.format, datum, nr)
 
 
 def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]:

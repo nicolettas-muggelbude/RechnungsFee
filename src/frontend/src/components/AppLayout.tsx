@@ -5,6 +5,7 @@ const navItems = [
   { to: '/kassenbuch', label: 'Kassenbuch', icon: '📒' },
   { to: '/kunden', label: 'Kunden', icon: '👤' },
   { to: '/lieferanten', label: 'Lieferanten', icon: '🏭' },
+  { to: '/einstellungen', label: 'Einstellungen', icon: '⚙️' },
 ]
 
 export function AppLayout() {

@@ -102,6 +102,30 @@ class Kategorie(Base):
 
 
 # ---------------------------------------------------------------------------
+# Nummernkreise
+# ---------------------------------------------------------------------------
+
+class Nummernkreis(Base):
+    """
+    Konfigurierbare Nummernkreise für Belegnummern.
+    Format-Vorlage: 'YY####' → '260001', 'YYYY-####' → '2026-0001', 'KB-YY####' → 'KB-260001'
+    Y = Jahreszahl-Stelle, # = fortlaufende Nummer (Anzahl # = Stellen mit führenden Nullen).
+    """
+    __tablename__ = "nummernkreise"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bezeichnung: Mapped[str] = mapped_column(String(100), nullable=False)
+    typ: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)  # kassenbuch, rechnung_ausgang, ...
+    format: Mapped[str] = mapped_column(String(50), default="YY####", nullable=False)
+    naechste_nr: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    reset_jaehrlich: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    letztes_jahr: Mapped[int | None] = mapped_column(Integer)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
 # Kassenbuch (GoBD-konform, unveränderbar)
 # ---------------------------------------------------------------------------
 
