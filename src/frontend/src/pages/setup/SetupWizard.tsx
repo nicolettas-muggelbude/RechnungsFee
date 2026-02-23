@@ -1,26 +1,29 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { createUnternehmen, createKonto, type Unternehmen, type Konto } from '../../api/client'
+import { createUnternehmen, createKonto, setKassenbestand, type Unternehmen, type Konto } from '../../api/client'
 import { StepUnternehmen } from './StepUnternehmen'
 import { StepSteuern } from './StepSteuern'
 import { StepKonto } from './StepKonto'
+import { StepKassenbestand } from './StepKassenbestand'
 
 const STEPS = [
   { label: 'Meine Daten', desc: 'Name & Adresse' },
   { label: 'Steuerliches', desc: 'USt & Kontenrahmen' },
   { label: 'Bankkonto', desc: 'Erstes Konto' },
+  { label: 'Kassenbestand', desc: 'Bargeld-Anfangsbestand' },
 ]
 
 export function SetupWizard() {
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<Partial<Unternehmen>>({})
+  const [kontoData, setKontoData] = useState<Omit<Konto, 'id' | 'aktiv' | 'ist_standard'> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   const saveMutation = useMutation({
-    mutationFn: async (kontoData: Omit<Konto, 'id' | 'aktiv' | 'ist_standard'>) => {
+    mutationFn: async (betrag: string) => {
       await createUnternehmen({
         ...formData,
         land: 'DE',
@@ -31,7 +34,9 @@ export function SetupWizard() {
         taetigkeitsart: formData.taetigkeitsart ?? 'freiberuflich',
         rechtsform: formData.rechtsform ?? 'Einzelunternehmer',
       } as Unternehmen)
-      await createKonto({ ...kontoData, ist_standard: true })
+      await createKonto({ ...kontoData!, ist_standard: true })
+      const b = parseFloat(betrag)
+      if (b > 0) await setKassenbestand(betrag)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setup-status'] })
@@ -51,8 +56,13 @@ export function SetupWizard() {
   }
 
   const handleStep2 = (data: Omit<Konto, 'id' | 'aktiv' | 'ist_standard'>) => {
+    setKontoData(data)
+    setStep(3)
+  }
+
+  const handleStep3 = (betrag: string) => {
     setError(null)
-    saveMutation.mutate(data)
+    saveMutation.mutate(betrag)
   }
 
   return (
@@ -61,7 +71,7 @@ export function SetupWizard() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">🧾 RechnungsFee</h1>
-          <p className="text-slate-500 mt-1">Einrichtung in 3 Schritten</p>
+          <p className="text-slate-500 mt-1">Einrichtung in 4 Schritten</p>
         </div>
 
         {/* Fortschrittsanzeige */}
@@ -101,7 +111,8 @@ export function SetupWizard() {
 
           {step === 0 && <StepUnternehmen onNext={handleStep0} defaultValues={formData} />}
           {step === 1 && <StepSteuern onNext={handleStep1} onBack={() => setStep(0)} defaultValues={formData} />}
-          {step === 2 && <StepKonto onNext={handleStep2} onBack={() => setStep(1)} isLoading={saveMutation.isPending} />}
+          {step === 2 && <StepKonto onNext={handleStep2} onBack={() => setStep(1)} />}
+          {step === 3 && <StepKassenbestand onNext={handleStep3} onBack={() => setStep(2)} isLoading={saveMutation.isPending} />}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">

@@ -17,6 +17,7 @@ from .schemas import (
     KassenbuchEintragCreate,
     KassenbuchEintragResponse,
     StornoRequest,
+    SplitBuchungCreate,
     MonatsUebersicht,
 )
 
@@ -191,6 +192,44 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(eintrag)
     return KassenbuchEintragResponse.from_orm_with_kunde(eintrag)
+
+
+@router.post("/split", response_model=list[KassenbuchEintragResponse], status_code=201)
+def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
+    """Erstellt mehrere Kassenbucheinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
+    unternehmen = db.query(Unternehmen).first()
+    ergebnisse = []
+    for pos in data.positionen:
+        ust_satz = pos.ust_satz
+        steuerbefreiung_grund = None
+        if unternehmen and unternehmen.ist_kleinunternehmer:
+            ust_satz = Decimal("0")
+            steuerbefreiung_grund = "§19 UStG"
+        netto, ust_betrag = _berechne_ust(pos.brutto_betrag, ust_satz)
+        belegnr = _naechste_belegnr(db, data.datum)
+        eintrag = Kassenbucheintrag(
+            datum=data.datum,
+            belegnr=belegnr,
+            beschreibung=pos.beschreibung,
+            externe_belegnr=data.externe_belegnr,
+            kategorie_id=pos.kategorie_id,
+            kunde_id=data.kunde_id,
+            zahlungsart=data.zahlungsart,
+            art=data.art,
+            netto_betrag=netto,
+            ust_satz=ust_satz,
+            ust_betrag=ust_betrag,
+            brutto_betrag=pos.brutto_betrag,
+            vorsteuerabzug=pos.vorsteuerabzug,
+            steuerbefreiung_grund=steuerbefreiung_grund,
+            immutable=True,
+        )
+        db.add(eintrag)
+        ergebnisse.append(eintrag)
+    db.commit()
+    for e in ergebnisse:
+        db.refresh(e)
+    return [KassenbuchEintragResponse.from_orm_with_kunde(e) for e in ergebnisse]
 
 
 @router.get("/{eintrag_id}", response_model=KassenbuchEintragResponse)

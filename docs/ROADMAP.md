@@ -62,13 +62,25 @@ Produktionsreife Desktop-App für Windows, Linux und macOS.
 
 ---
 
-## v1.1 – Rechnungen *(Ziel: Dezember 2026)*
+## v1.1 – Rechnungsbücher & Import *(Ziel: Dezember 2026)*
 
-Rechnungen erstellen und externe Programme anbinden.
+Eingangs- und Ausgangsrechnungen verwalten, elektronische Rechnungsformate importieren.
 
-- [ ] LibreOffice-ODT-Rechnungsvorlage (generiert aus Kassenbuch-Daten)
-- [ ] Vollständige Kundenverwaltung (inkl. Vereins-Felder, Issue #14)
+**Rechnungseingangsbuch**
+- [ ] Eingangsrechnungen erfassen und verwalten (Lieferant, Betrag, Fälligkeit, Zahlungsstatus)
+- [ ] ZUGFeRD / XRechnung / PDF importieren (inkl. OCR-Texterkennung bei normalen PDFs)
+- [ ] Automatische Kassenbuchung vorschlagen (bei Barzahlung)
+- [ ] Verknüpfung Eingangsrechnung ↔ Kassenbucheintrag sichtbar
+
+**Rechnungsausgangsbuch**
+- [ ] Ausgangsrechnungen erfassen und verwalten (Kunde, Betrag, Fälligkeit, Zahlungsstatus)
 - [ ] ZUGFeRD-Export (elektronische Rechnung)
+- [ ] LibreOffice-ODT-Rechnungsvorlage (generiert aus Stammdaten + Buchung)
+- [ ] Automatische Kassenbuchung vorschlagen (bei Bareinnahme)
+- [ ] Verknüpfung Ausgangsrechnung ↔ Kassenbucheintrag sichtbar
+
+**Sonstiges**
+- [ ] Vollständige Kundenverwaltung (inkl. Vereins-Felder, Issue #14)
 - [ ] hellocash REST-API Anbindung (Issue #13)
 
 ---

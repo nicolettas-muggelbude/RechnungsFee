@@ -22,6 +22,11 @@ export type SetupStatus = {
   hat_kategorien: boolean
 }
 export const getSetupStatus = () => request<SetupStatus>('/setup/status')
+export const setKassenbestand = (betrag: string) =>
+  request<{ belegnr: string; betrag: string }>('/setup/kassenbestand', {
+    method: 'POST',
+    body: JSON.stringify({ betrag }),
+  })
 
 // --- Unternehmen ---
 export type Unternehmen = {
@@ -148,6 +153,29 @@ export const stornoKassenbuchEintrag = (id: number, grund: string) =>
   request<KassenbuchEintrag>(`/kassenbuch/${id}/storno`, {
     method: 'POST',
     body: JSON.stringify({ grund }),
+  })
+
+export type SplitPosition = {
+  beschreibung: string
+  kategorie_id?: number
+  brutto_betrag: string
+  ust_satz: string
+  vorsteuerabzug: boolean
+}
+
+export type SplitBuchungCreate = {
+  datum: string
+  art: 'Einnahme' | 'Ausgabe'
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal'
+  externe_belegnr?: string
+  kunde_id?: number
+  positionen: SplitPosition[]
+}
+
+export const createSplitBuchung = (data: SplitBuchungCreate) =>
+  request<KassenbuchEintrag[]>('/kassenbuch/split', {
+    method: 'POST',
+    body: JSON.stringify(data),
   })
 export const getMonatsUebersicht = (monat: string) =>
   request<MonatsUebersicht>(`/kassenbuch/statistik/monat?monat=${encodeURIComponent(monat)}`)

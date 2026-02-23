@@ -238,6 +238,51 @@ class StornoRequest(BaseModel):
     grund: str
 
 
+class SplitPosition(BaseModel):
+    beschreibung: str
+    kategorie_id: Optional[int] = None
+    brutto_betrag: Decimal
+    ust_satz: Decimal = Decimal("0")
+    vorsteuerabzug: bool = False
+
+    @field_validator("brutto_betrag")
+    @classmethod
+    def check_betrag(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("brutto_betrag muss positiv sein")
+        return v
+
+
+class SplitBuchungCreate(BaseModel):
+    datum: date
+    art: str
+    zahlungsart: str = "Bar"
+    externe_belegnr: Optional[str] = None
+    kunde_id: Optional[int] = None
+    positionen: List[SplitPosition]
+
+    @field_validator("art")
+    @classmethod
+    def check_art(cls, v: str) -> str:
+        if v not in ("Einnahme", "Ausgabe"):
+            raise ValueError("art muss Einnahme oder Ausgabe sein")
+        return v
+
+    @field_validator("zahlungsart")
+    @classmethod
+    def check_zahlungsart(cls, v: str) -> str:
+        if v not in ("Bar", "Karte", "Bank", "PayPal"):
+            raise ValueError("zahlungsart muss Bar, Karte, Bank oder PayPal sein")
+        return v
+
+    @field_validator("positionen")
+    @classmethod
+    def check_positionen(cls, v: List[SplitPosition]) -> List[SplitPosition]:
+        if len(v) < 2:
+            raise ValueError("Mindestens 2 Positionen erforderlich")
+        return v
+
+
 class MonatsUebersicht(BaseModel):
     monat: str  # YYYY-MM
     einnahmen: Decimal
