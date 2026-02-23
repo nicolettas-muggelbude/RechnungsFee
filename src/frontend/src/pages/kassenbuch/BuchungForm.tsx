@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createKassenbuchEintrag, getKategorien, getKunden } from '../../api/client'
+import { createKassenbuchEintrag, getKategorien, getKunden, getUnternehmen } from '../../api/client'
 
 const schema = z.object({
   datum: z.string().min(1, 'Datum erforderlich'),
@@ -32,6 +32,9 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const qc = useQueryClient()
   const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+
+  const istKleinunternehmer = unternehmen?.ist_kleinunternehmer ?? false
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -49,12 +52,20 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const ustSatzStr = watch('ust_satz')
   const kategorie_id = watch('kategorie_id')
 
-  // USt-Satz aus Kategorie vorbelegen
+  // USt-Standard sobald Unternehmensdaten geladen (nur wenn noch keine Kategorie gewählt)
+  useEffect(() => {
+    if (unternehmen === undefined) return
+    if (!kategorie_id) {
+      setValue('ust_satz', istKleinunternehmer ? '0' : '19')
+    }
+  }, [unternehmen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // USt-Satz aus Kategorie vorbelegen (Kleinunternehmer bleibt immer 0%)
   useEffect(() => {
     if (!kategorie_id || !kategorien) return
     const kat = kategorien.find((k) => String(k.id) === kategorie_id)
-    if (kat) setValue('ust_satz', String(kat.ust_satz_standard))
-  }, [kategorie_id, kategorien, setValue])
+    if (kat) setValue('ust_satz', istKleinunternehmer ? '0' : String(kat.ust_satz_standard))
+  }, [kategorie_id, kategorien, setValue, istKleinunternehmer])
 
   // Live USt-Berechnung
   const brutto = parseFloat(bruttoStr) || 0
@@ -86,18 +97,29 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   }
 
   const alle = kategorien ?? []
-  // Einnahmen
-  const erloeseKat   = alle.filter((k) => k.kontenart === 'Erlös')
-  const einlageKat   = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privateinlage')
+  // Einnahmen: Kleinunternehmer sieht nur "Kleinunternehmer-Einnahmen", sonst alles außer dieser
+  const erloeseKat = alle.filter((k) =>
+    k.kontenart === 'Erlös' &&
+    (istKleinunternehmer ? k.name === 'Kleinunternehmer-Einnahmen' : k.name !== 'Kleinunternehmer-Einnahmen')
+  )
+  const einlageKat  = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privateinlage')
   // Ausgaben
-  const aufwandKat   = alle.filter((k) => k.kontenart === 'Aufwand')
-  const anlageKat    = alle.filter((k) => k.kontenart === 'Anlage')
-  const entnahmeKat  = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privatentnahme')
+  const aufwandKat  = alle.filter((k) => k.kontenart === 'Aufwand')
+  const anlageKat   = alle.filter((k) => k.kontenart === 'Anlage')
+  const entnahmeKat = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privatentnahme')
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
         <h2 className="text-lg font-bold text-slate-800 mb-4">Neue Buchung</h2>
+
+        {/* Kleinunternehmer-Hinweis */}
+        {istKleinunternehmer && (
+          <div className="mb-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            <span className="mt-0.5">ℹ️</span>
+            <span><strong>Kleinunternehmer §19 UStG</strong> – Keine Umsatzsteuer ausgewiesen. USt-Satz ist gesperrt.</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Art */}
@@ -172,7 +194,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             </select>
           </div>
 
-          {/* Kunde (optional) */}
+          {/* Kunde (optional, nur bei Einnahmen) */}
           {art === 'Einnahme' && (
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Kunde <span className="text-slate-400 font-normal">(optional)</span></label>
@@ -194,11 +216,20 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               {errors.brutto_betrag && <p className="text-red-500 text-xs mt-0.5">{errors.brutto_betrag.message}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">USt-Satz (%)</label>
-              <select {...register('ust_satz')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="0">0 %</option>
-                <option value="7">7 %</option>
-                <option value="19">19 %</option>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                USt-Satz (%)
+                {!istKleinunternehmer && unternehmen?.taetigkeitsart === 'freiberuflich' && (
+                  <span className="ml-1 text-slate-400 font-normal">(7 % für Autoren/Heilberufe etc.)</span>
+                )}
+              </label>
+              <select
+                {...register('ust_satz')}
+                disabled={istKleinunternehmer}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                <option value="0">{istKleinunternehmer ? '0 % (§19 UStG)' : '0 %'}</option>
+                {!istKleinunternehmer && <option value="7">7 %</option>}
+                {!istKleinunternehmer && <option value="19">19 %</option>}
               </select>
             </div>
           </div>
@@ -212,8 +243,8 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             </div>
           )}
 
-          {/* Vorsteuerabzug */}
-          {art === 'Ausgabe' && (
+          {/* Vorsteuerabzug – nur für Ausgaben von Nicht-Kleinunternehmern */}
+          {art === 'Ausgabe' && !istKleinunternehmer && (
             <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
               <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
               Vorsteuerabzug geltend machen
