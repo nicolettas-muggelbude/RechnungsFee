@@ -87,6 +87,9 @@ export type KassenbuchEintrag = {
   belegnr: string
   beschreibung: string
   kategorie_id: number | null
+  kunde_id: number | null
+  kunde_name: string | null
+  kunde_email: string | null
   zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal'
   art: 'Einnahme' | 'Ausgabe'
   netto_betrag: string
@@ -103,6 +106,7 @@ export type KassenbuchEintragCreate = {
   datum: string
   beschreibung: string
   kategorie_id?: number
+  kunde_id?: number
   zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal'
   art: 'Einnahme' | 'Ausgabe'
   brutto_betrag: string
@@ -126,8 +130,13 @@ function toQuery(params: Record<string, string | number | undefined | null>): st
   return q ? `?${q}` : ''
 }
 
-export const getKassenbuch = (filter?: { monat?: string; kategorie_id?: number; art?: string }) =>
-  request<KassenbuchEintrag[]>(`/kassenbuch${toQuery(filter ?? {})}`)
+export const getKassenbuch = (filter?: {
+  monat?: string
+  datum_von?: string
+  datum_bis?: string
+  kategorie_id?: number
+  art?: string
+}) => request<KassenbuchEintrag[]>(`/kassenbuch${toQuery(filter ?? {})}`)
 export const createKassenbuchEintrag = (data: KassenbuchEintragCreate) =>
   request<KassenbuchEintrag>('/kassenbuch', { method: 'POST', body: JSON.stringify(data) })
 export const getKassenbuchEintrag = (id: number) =>

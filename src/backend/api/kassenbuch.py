@@ -124,6 +124,8 @@ def monat_statistik(monat: str = Query(..., description="Format: YYYY-MM"), db: 
 @router.get("", response_model=list[KassenbuchEintragResponse])
 def list_eintraege(
     monat: Optional[str] = Query(None, description="Format: YYYY-MM"),
+    datum_von: Optional[date] = Query(None, description="Von-Datum (YYYY-MM-DD)"),
+    datum_bis: Optional[date] = Query(None, description="Bis-Datum (YYYY-MM-DD)"),
     kategorie_id: Optional[int] = None,
     art: Optional[str] = Query(None, description="Einnahme oder Ausgabe"),
     db: Session = Depends(get_db),
@@ -139,13 +141,19 @@ def list_eintraege(
             )
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="monat muss im Format YYYY-MM sein")
+    else:
+        if datum_von:
+            q = q.filter(Kassenbucheintrag.datum >= datum_von)
+        if datum_bis:
+            q = q.filter(Kassenbucheintrag.datum <= datum_bis)
     if kategorie_id is not None:
         q = q.filter(Kassenbucheintrag.kategorie_id == kategorie_id)
     if art:
         if art not in ("Einnahme", "Ausgabe"):
             raise HTTPException(status_code=422, detail="art muss Einnahme oder Ausgabe sein")
         q = q.filter(Kassenbucheintrag.art == art)
-    return q.order_by(Kassenbucheintrag.datum.desc(), Kassenbucheintrag.id.desc()).all()
+    eintraege = q.order_by(Kassenbucheintrag.datum.desc(), Kassenbucheintrag.id.desc()).all()
+    return [KassenbuchEintragResponse.from_orm_with_kunde(e) for e in eintraege]
 
 
 @router.post("", response_model=KassenbuchEintragResponse, status_code=201)
@@ -167,6 +175,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
         belegnr=belegnr,
         beschreibung=data.beschreibung,
         kategorie_id=data.kategorie_id,
+        kunde_id=data.kunde_id,
         zahlungsart=data.zahlungsart,
         art=data.art,
         netto_betrag=netto,
@@ -180,7 +189,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
     db.add(eintrag)
     db.commit()
     db.refresh(eintrag)
-    return eintrag
+    return KassenbuchEintragResponse.from_orm_with_kunde(eintrag)
 
 
 @router.get("/{eintrag_id}", response_model=KassenbuchEintragResponse)
@@ -188,7 +197,7 @@ def get_eintrag(eintrag_id: int, db: Session = Depends(get_db)):
     eintrag = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
     if not eintrag:
         raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
-    return eintrag
+    return KassenbuchEintragResponse.from_orm_with_kunde(eintrag)
 
 
 @router.post("/{eintrag_id}/storno", response_model=KassenbuchEintragResponse, status_code=201)
@@ -232,4 +241,4 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     db.add(storno)
     db.commit()
     db.refresh(storno)
-    return storno
+    return KassenbuchEintragResponse.from_orm_with_kunde(storno)
