@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createKassenbuchEintrag, getKategorien } from '../../api/client'
+import { createKassenbuchEintrag, getKategorien, getKunden } from '../../api/client'
 
 const schema = z.object({
   datum: z.string().min(1, 'Datum erforderlich'),
@@ -13,6 +13,7 @@ const schema = z.object({
   ust_satz: z.string(),
   zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal']),
   kategorie_id: z.string().optional(),
+  kunde_id: z.string().optional(),
   vorsteuerabzug: z.boolean().optional(),
 })
 
@@ -30,6 +31,7 @@ function heute(): string {
 export function BuchungForm({ onClose, onSuccess }: Props) {
   const qc = useQueryClient()
   const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
+  const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -82,6 +84,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
       ust_satz: values.ust_satz,
       zahlungsart: values.zahlungsart,
       kategorie_id: values.kategorie_id ? Number(values.kategorie_id) : undefined,
+      kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
       vorsteuerabzug: values.vorsteuerabzug,
     })
   }
@@ -142,6 +145,20 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               ))}
             </select>
           </div>
+
+          {/* Kunde (optional) */}
+          {art === 'Einnahme' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Kunde <span className="text-slate-400 font-normal">(optional)</span></label>
+              <select {...register('kunde_id')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— kein Kunde —</option>
+                {(kunden ?? []).filter((k) => k.aktiv !== false).map((k) => {
+                  const name = [k.firmenname, k.vorname, k.nachname].filter(Boolean).join(' ')
+                  return <option key={k.id} value={k.id}>{name}{k.kundennummer ? ` (${k.kundennummer})` : ''}</option>
+                })}
+              </select>
+            </div>
+          )}
 
           {/* Betrag + USt */}
           <div className="grid grid-cols-2 gap-3">

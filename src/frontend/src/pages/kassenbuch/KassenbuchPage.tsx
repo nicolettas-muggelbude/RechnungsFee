@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getKassenbuch, getKategorien, stornoKassenbuchEintrag } from '../../api/client'
+import { useQuery } from '@tanstack/react-query'
+import { getKassenbuch, getKategorien } from '../../api/client'
 import { BuchungForm } from './BuchungForm'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
+import { BuchungDetail } from './BuchungDetail'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -20,12 +21,12 @@ function aktuellerMonat(): string {
 }
 
 export function KassenbuchPage() {
-  const qc = useQueryClient()
   const [monat, setMonat] = useState(aktuellerMonat)
   const [art, setArt] = useState<'' | 'Einnahme' | 'Ausgabe'>('')
   const [kategorieId, setKategorieId] = useState<string>('')
   const [showBuchung, setShowBuchung] = useState(false)
   const [showAbschluss, setShowAbschluss] = useState(false)
+  const [aktiverEintragId, setAktiverEintragId] = useState<number | null>(null)
 
   const { data: eintraege, isLoading } = useQuery({
     queryKey: ['kassenbuch', monat, art, kategorieId],
@@ -48,19 +49,8 @@ export function KassenbuchPage() {
       .map((e) => e.beschreibung.split(':')[0].replace('STORNO ', '').trim())
   )
 
-  const stornoMutation = useMutation({
-    mutationFn: ({ id, grund }: { id: number; grund: string }) =>
-      stornoKassenbuchEintrag(id, grund),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
-      qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
-    },
-  })
-
-  function handleStorno(id: number, belegnr: string) {
-    const grund = window.prompt(`Storno-Grund für ${belegnr}:`)
-    if (!grund) return
-    stornoMutation.mutate({ id, grund })
+  function toggleEintrag(id: number) {
+    setAktiverEintragId((prev) => (prev === id ? null : id))
   }
 
   return (
@@ -128,43 +118,55 @@ export function KassenbuchPage() {
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 w-24">Zahlung</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-right w-28">Einnahme</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-right w-28">Ausgabe</th>
-                <th className="px-4 py-3 w-16"></th>
               </tr>
             </thead>
             <tbody>
-              {eintraege.map((e) => (
-                <tr key={e.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-500">{formatDatum(e.datum)}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">{e.belegnr}</td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {e.beschreibung}
-                    {e.steuerbefreiung_grund && (
-                      <span className="ml-2 text-xs text-slate-400">({e.steuerbefreiung_grund})</span>
+              {eintraege.map((e) => {
+                const istAktiv = aktiverEintragId === e.id
+                const bereitsStorniert = bereitsStornieterteBelegnrn.has(e.belegnr)
+                const istStorno = e.beschreibung.startsWith('STORNO ')
+                return (
+                  <>
+                    <tr
+                      key={e.id}
+                      onClick={() => toggleEintrag(e.id)}
+                      className={`border-b border-slate-100 cursor-pointer select-none transition-colors ${
+                        istAktiv ? 'bg-blue-50' : istStorno ? 'hover:bg-slate-50 opacity-60' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <td className="px-4 py-3 text-slate-500">{formatDatum(e.datum)}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-400 flex items-center gap-1">
+                        <span className={`inline-block w-3 text-slate-300 transition-transform ${istAktiv ? 'rotate-90' : ''}`}>▶</span>
+                        {e.belegnr}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {e.beschreibung}
+                        {e.steuerbefreiung_grund && (
+                          <span className="ml-2 text-xs text-slate-400">({e.steuerbefreiung_grund})</span>
+                        )}
+                        {bereitsStorniert && (
+                          <span className="ml-2 text-xs bg-slate-100 text-slate-400 rounded px-1">storniert</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{e.zahlungsart}</td>
+                      <td className="px-4 py-3 text-right font-medium text-green-600">
+                        {e.art === 'Einnahme' ? formatEuro(e.brutto_betrag) : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-red-600">
+                        {e.art === 'Ausgabe' ? formatEuro(e.brutto_betrag) : ''}
+                      </td>
+                    </tr>
+                    {istAktiv && (
+                      <BuchungDetail
+                        key={`detail-${e.id}`}
+                        eintrag={e}
+                        bereitsStorniert={bereitsStorniert}
+                        onClose={() => setAktiverEintragId(null)}
+                      />
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">{e.zahlungsart}</td>
-                  <td className="px-4 py-3 text-right font-medium text-green-600">
-                    {e.art === 'Einnahme' ? formatEuro(e.brutto_betrag) : ''}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-red-600">
-                    {e.art === 'Ausgabe' ? formatEuro(e.brutto_betrag) : ''}
-                  </td>
-                  <td className="px-4 py-3">
-                    {!e.beschreibung.startsWith('STORNO ') && !bereitsStornieterteBelegnrn.has(e.belegnr) && (
-                      <button
-                        onClick={() => handleStorno(e.id, e.belegnr)}
-                        className="text-xs text-slate-400 hover:text-red-600"
-                        title="Stornieren"
-                      >
-                        ✕
-                      </button>
-                    )}
-                    {bereitsStornieterteBelegnrn.has(e.belegnr) && (
-                      <span className="text-xs text-slate-300" title="Bereits storniert">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                  </>
+                )
+              })}
             </tbody>
           </table>
         )}
