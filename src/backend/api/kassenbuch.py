@@ -173,6 +173,18 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     original = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
+    # Storno eines Stornos verhindern
+    if original.beschreibung.startswith("STORNO "):
+        raise HTTPException(status_code=409, detail="Ein Storno-Eintrag kann nicht erneut storniert werden.")
+    # Bereits stornierte Buchung erkennen
+    bereits_storniert = db.query(Kassenbucheintrag).filter(
+        Kassenbucheintrag.beschreibung.like(f"STORNO {original.belegnr}:%")
+    ).first()
+    if bereits_storniert:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Diese Buchung wurde bereits storniert (Gegenbuchung: {bereits_storniert.belegnr}).",
+        )
     # Gegenbuchung: umgekehrte Art
     storno_art = "Ausgabe" if original.art == "Einnahme" else "Einnahme"
     storno_datum = date.today()

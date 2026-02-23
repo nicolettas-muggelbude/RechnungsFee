@@ -36,6 +36,13 @@ export function KassenbuchPage() {
     queryFn: getKategorien,
   })
 
+  // Belegnummern die bereits storniert wurden (aus der geladenen Liste ableiten)
+  const bereitsStornieterteBelegnrn = new Set(
+    (eintraege ?? [])
+      .filter((e) => e.beschreibung.startsWith('STORNO '))
+      .map((e) => e.beschreibung.split(':')[0].replace('STORNO ', '').trim())
+  )
+
   const stornoMutation = useMutation({
     mutationFn: ({ id, grund }: { id: number; grund: string }) =>
       stornoKassenbuchEintrag(id, grund),
@@ -138,7 +145,7 @@ export function KassenbuchPage() {
                     {e.art === 'Ausgabe' ? formatEuro(e.brutto_betrag) : ''}
                   </td>
                   <td className="px-4 py-3">
-                    {!e.beschreibung.startsWith('STORNO') && (
+                    {!e.beschreibung.startsWith('STORNO ') && !bereitsStornieterteBelegnrn.has(e.belegnr) && (
                       <button
                         onClick={() => handleStorno(e.id, e.belegnr)}
                         className="text-xs text-slate-400 hover:text-red-600"
@@ -146,6 +153,9 @@ export function KassenbuchPage() {
                       >
                         ✕
                       </button>
+                    )}
+                    {bereitsStornieterteBelegnrn.has(e.belegnr) && (
+                      <span className="text-xs text-slate-300" title="Bereits storniert">—</span>
                     )}
                   </td>
                 </tr>
