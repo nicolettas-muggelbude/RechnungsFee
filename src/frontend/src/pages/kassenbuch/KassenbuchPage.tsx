@@ -9,6 +9,11 @@ function formatEuro(val: string | number): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+function formatDatum(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 function aktuellerMonat(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -129,7 +134,7 @@ export function KassenbuchPage() {
             <tbody>
               {eintraege.map((e) => (
                 <tr key={e.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-500">{e.datum}</td>
+                  <td className="px-4 py-3 text-slate-500">{formatDatum(e.datum)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-400">{e.belegnr}</td>
                   <td className="px-4 py-3 text-slate-700">
                     {e.beschreibung}

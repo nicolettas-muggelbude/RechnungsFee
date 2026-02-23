@@ -7,6 +7,11 @@ function formatEuro(val: string | number): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+function formatDatum(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 function aktuellerMonat(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -73,7 +78,7 @@ export function Dashboard() {
             <tbody>
               {letzte5.map((e) => (
                 <tr key={e.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-5 py-3 text-slate-500 w-28">{e.datum}</td>
+                  <td className="px-5 py-3 text-slate-500 w-28">{formatDatum(e.datum)}</td>
                   <td className="px-5 py-3 text-slate-400 w-32 font-mono text-xs">{e.belegnr}</td>
                   <td className="px-5 py-3 text-slate-700 flex-1">{e.beschreibung}</td>
                   <td className={`px-5 py-3 text-right font-medium ${e.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'}`}>

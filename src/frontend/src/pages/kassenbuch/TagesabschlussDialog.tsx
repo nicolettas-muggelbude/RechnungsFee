@@ -68,7 +68,7 @@ export function TagesabschlussDialog({ onClose, onSuccess }: Props) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-bold text-slate-800 mb-1">Tagesabschluss</h2>
-        <p className="text-sm text-slate-500 mb-4">{datum}</p>
+        <p className="text-sm text-slate-500 mb-4">{datum.split('-').reverse().join('.')}</p>
 
         {isLoading ? (
           <p className="text-slate-400 text-sm">Lade Vorschau…</p>
