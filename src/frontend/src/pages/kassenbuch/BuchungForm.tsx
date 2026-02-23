@@ -52,13 +52,17 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const ustSatzStr = watch('ust_satz')
   const kategorie_id = watch('kategorie_id')
 
-  // USt-Standard sobald Unternehmensdaten geladen (nur wenn noch keine Kategorie gewählt)
+  // Standardkategorie vorwählen sobald Kategorien geladen oder Art / Unternehmensstatus wechselt
   useEffect(() => {
-    if (unternehmen === undefined) return
-    if (!kategorie_id) {
-      setValue('ust_satz', istKleinunternehmer ? '0' : '19')
+    if (!kategorien) return
+    if (art === 'Einnahme') {
+      const defaultName = istKleinunternehmer ? 'Kleinunternehmer-Einnahmen' : 'Betriebseinnahmen'
+      const kat = kategorien.find((k) => k.name === defaultName)
+      if (kat) setValue('kategorie_id', String(kat.id))
+    } else {
+      setValue('kategorie_id', '')
     }
-  }, [unternehmen]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kategorien, art, istKleinunternehmer, setValue])
 
   // USt-Satz aus Kategorie vorbelegen (Kleinunternehmer bleibt immer 0%)
   useEffect(() => {
