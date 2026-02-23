@@ -64,11 +64,15 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
     }
   }, [kategorien, art, istKleinunternehmer, setValue])
 
-  // USt-Satz aus Kategorie vorbelegen (Kleinunternehmer bleibt immer 0%)
+  // USt-Satz und Vorsteuerabzug aus Kategorie vorbelegen
   useEffect(() => {
     if (!kategorie_id || !kategorien) return
     const kat = kategorien.find((k) => String(k.id) === kategorie_id)
-    if (kat) setValue('ust_satz', istKleinunternehmer ? '0' : String(kat.ust_satz_standard))
+    if (!kat) return
+    setValue('ust_satz', istKleinunternehmer ? '0' : String(kat.ust_satz_standard))
+    if (!istKleinunternehmer) {
+      setValue('vorsteuerabzug', parseFloat(kat.vorsteuer_prozent) > 0)
+    }
   }, [kategorie_id, kategorien, setValue, istKleinunternehmer])
 
   // Live USt-Berechnung
