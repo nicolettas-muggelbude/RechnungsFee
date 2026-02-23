@@ -141,6 +141,7 @@ class Kassenbucheintrag(Base):
     datum: Mapped[date] = mapped_column(Date, nullable=False)
     belegnr: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     beschreibung: Mapped[str] = mapped_column(String(500), nullable=False)
+    externe_belegnr: Mapped[str | None] = mapped_column(String(100))
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
     kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id"))
     zahlungsart: Mapped[str] = mapped_column(String(20), nullable=False)  # Bar|Karte|Bank|PayPal

@@ -204,6 +204,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
               <span>{formatEuro(e.brutto_betrag)}</span>
             </div>
             <div className="text-xs text-slate-400 pt-1">
+              {e.externe_belegnr && <span>Ext. Belegnr.: {e.externe_belegnr} &nbsp;·&nbsp;</span>}
               {e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
             </div>
           </div>

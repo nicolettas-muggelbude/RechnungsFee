@@ -177,6 +177,7 @@ class KassenbuchEintragCreate(BaseModel):
     brutto_betrag: Decimal
     ust_satz: Decimal = Decimal("0")
     vorsteuerabzug: bool = False
+    externe_belegnr: Optional[str] = None
 
     @field_validator("zahlungsart")
     @classmethod
@@ -217,6 +218,7 @@ class KassenbuchEintragResponse(BaseModel):
     brutto_betrag: Decimal
     vorsteuerabzug: bool
     steuerbefreiung_grund: Optional[str]
+    externe_belegnr: Optional[str] = None
     immutable: bool
     erstellt_am: datetime
 

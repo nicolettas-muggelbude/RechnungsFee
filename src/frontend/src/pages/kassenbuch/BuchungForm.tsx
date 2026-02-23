@@ -15,6 +15,7 @@ const schema = z.object({
   kategorie_id: z.string().optional(),
   kunde_id: z.string().optional(),
   vorsteuerabzug: z.boolean().optional(),
+  externe_belegnr: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -101,6 +102,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
       kategorie_id: values.kategorie_id ? Number(values.kategorie_id) : undefined,
       kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
       vorsteuerabzug: values.vorsteuerabzug,
+      externe_belegnr: values.externe_belegnr || undefined,
     })
   }
 
@@ -164,6 +166,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             <label className="block text-xs font-medium text-slate-600 mb-1">Beschreibung</label>
             <input type="text" {...register('beschreibung')} placeholder="z.B. Büromaterial" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             {errors.beschreibung && <p className="text-red-500 text-xs mt-0.5">{errors.beschreibung.message}</p>}
+          </div>
+
+          {/* Externe Belegnr. */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Externe Belegnr. <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <input type="text" {...register('externe_belegnr')} placeholder="z.B. RE-2024-00123" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {/* Kategorie */}

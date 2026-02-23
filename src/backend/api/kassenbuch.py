@@ -184,6 +184,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
         brutto_betrag=data.brutto_betrag,
         vorsteuerabzug=data.vorsteuerabzug,
         steuerbefreiung_grund=steuerbefreiung_grund,
+        externe_belegnr=data.externe_belegnr,
         immutable=True,
     )
     db.add(eintrag)

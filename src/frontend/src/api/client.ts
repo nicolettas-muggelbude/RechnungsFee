@@ -99,6 +99,7 @@ export type KassenbuchEintrag = {
   brutto_betrag: string
   vorsteuerabzug: boolean
   steuerbefreiung_grund: string | null
+  externe_belegnr?: string
   immutable: boolean
   erstellt_am: string
 }
@@ -113,6 +114,7 @@ export type KassenbuchEintragCreate = {
   brutto_betrag: string
   ust_satz: string
   vorsteuerabzug?: boolean
+  externe_belegnr?: string
 }
 
 export type MonatsUebersicht = {

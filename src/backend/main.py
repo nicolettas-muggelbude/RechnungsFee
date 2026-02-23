@@ -38,6 +38,15 @@ def _run_migrations() -> None:
             ))
             conn.commit()
 
+        # kassenbuch.externe_belegnr
+        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
+        columns = {row[1] for row in result}
+        if "externe_belegnr" not in columns:
+            conn.execute(text(
+                "ALTER TABLE kassenbuch ADD COLUMN externe_belegnr VARCHAR(100)"
+            ))
+            conn.commit()
+
         # kategorien.ust_satz_standard
         result = conn.execute(text("PRAGMA table_info(kategorien)"))
         columns = {row[1] for row in result}
