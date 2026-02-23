@@ -43,7 +43,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
       art: 'Einnahme',
       zahlungsart: 'Bar',
       ust_satz: '0',
-      vorsteuerabzug: false,
+      vorsteuerabzug: true,
     },
   })
 
