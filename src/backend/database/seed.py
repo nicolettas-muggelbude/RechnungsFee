@@ -32,6 +32,9 @@ STANDARD_KATEGORIEN = [
     {"name": "KFZ-Kosten",              "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6520", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
     {"name": "KFZ-Versicherung",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B7",  "euer_zeile": 48, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
     {"name": "Reisekosten",             "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B8",  "euer_zeile": 49, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    # --- Ausgaben: Wareneinkauf ---
+    {"name": "Wareneinkauf",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",  "euer_zeile": 26, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},
+    {"name": "Wareneinkauf (7%)",         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",  "euer_zeile": 26, "vorsteuer_prozent": 100,  "ust_satz_standard": 7},
     # --- Ausgaben: Personal ---
     {"name": "Löhne & Gehälter",        "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B3",  "euer_zeile": 44, "vorsteuer_prozent": 0,    "ust_satz_standard": 0},
     {"name": "Fremdleistungen",         "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B4",  "euer_zeile": 45, "vorsteuer_prozent": 100,  "ust_satz_standard": 19},

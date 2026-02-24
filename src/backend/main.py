@@ -101,6 +101,38 @@ def _run_migrations() -> None:
             conn.commit()
 
 
+def _migrate_kategorien() -> None:
+    """Fehlende Kategorien in bestehende Datenbanken eintragen."""
+    from database.models import Kategorie
+
+    neue = [
+        {
+            "name": "Wareneinkauf",
+            "kontenart": "Aufwand",
+            "konto_skr03": "3000", "konto_skr04": "5000",
+            "eks_kategorie": "B1", "euer_zeile": 26,
+            "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+            "ist_system": True,
+        },
+        {
+            "name": "Wareneinkauf (7%)",
+            "kontenart": "Aufwand",
+            "konto_skr03": "3000", "konto_skr04": "5000",
+            "eks_kategorie": "B1", "euer_zeile": 26,
+            "vorsteuer_prozent": 100, "ust_satz_standard": 7,
+            "ist_system": True,
+        },
+    ]
+    db = SessionLocal()
+    try:
+        for data in neue:
+            if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
+                db.add(Kategorie(**data))
+        db.commit()
+    finally:
+        db.close()
+
+
 def _migrate_signaturen() -> None:
     """
     GoBD-Sicherheit: Rückwirkend SHA-256-Signaturen für bestehende immutable
@@ -205,6 +237,7 @@ def _setup_gobd_triggers() -> None:
 def startup():
     Base.metadata.create_all(bind=engine)
     _run_migrations()
+    _migrate_kategorien()   # Fehlende Kategorien nachträglich eintragen
     _migrate_signaturen()   # Erst Signaturen nachholen (Trigger noch nicht aktiv)
     _setup_gobd_triggers()  # Dann Trigger scharf schalten
     db = SessionLocal()
