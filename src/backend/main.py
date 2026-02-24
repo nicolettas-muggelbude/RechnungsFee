@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -24,6 +24,7 @@ app.include_router(kunden.router)
 app.include_router(lieferanten.router)
 app.include_router(tagesabschluss.router)
 app.include_router(nummernkreise.router)
+app.include_router(export.router)
 
 
 def _run_migrations() -> None:
@@ -44,6 +45,33 @@ def _run_migrations() -> None:
         if "externe_belegnr" not in columns:
             conn.execute(text(
                 "ALTER TABLE kassenbuch ADD COLUMN externe_belegnr VARCHAR(100)"
+            ))
+            conn.commit()
+
+        # kassenbuch.signatur
+        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
+        columns = {row[1] for row in result}
+        if "signatur" not in columns:
+            conn.execute(text(
+                "ALTER TABLE kassenbuch ADD COLUMN signatur VARCHAR(64)"
+            ))
+            conn.commit()
+
+        # tagesabschluesse.zaehlung_json
+        result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
+        columns = {row[1] for row in result}
+        if "zaehlung_json" not in columns:
+            conn.execute(text(
+                "ALTER TABLE tagesabschluesse ADD COLUMN zaehlung_json TEXT"
+            ))
+            conn.commit()
+
+        # tagesabschluesse.signatur
+        result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
+        columns = {row[1] for row in result}
+        if "signatur" not in columns:
+            conn.execute(text(
+                "ALTER TABLE tagesabschluesse ADD COLUMN signatur VARCHAR(64)"
             ))
             conn.commit()
 
@@ -73,10 +101,112 @@ def _run_migrations() -> None:
             conn.commit()
 
 
+def _migrate_signaturen() -> None:
+    """
+    GoBD-Sicherheit: Rückwirkend SHA-256-Signaturen für bestehende immutable
+    Einträge ohne Signatur berechnen.
+
+    Ablauf:
+    1. Bestehende Schutz-Trigger temporär entfernen (damit UPDATE möglich ist).
+    2. Signaturen über ORM-Session berechnen und setzen.
+    3. Trigger werden danach durch _setup_gobd_triggers() neu erstellt.
+    """
+    from utils.signatur import signatur_kassenbucheintrag, signatur_tagesabschluss
+    from database.models import Kassenbucheintrag, Tagesabschluss
+
+    # Trigger temporär entfernen
+    with engine.connect() as conn:
+        for trigger in [
+            "protect_kassenbuch_update",
+            "protect_kassenbuch_delete",
+            "protect_tagesabschluesse_update",
+            "protect_tagesabschluesse_delete",
+        ]:
+            conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
+        conn.commit()
+
+    # Signaturen via ORM setzen (konsistent mit signatur_*-Funktionen)
+    db = SessionLocal()
+    try:
+        eintraege = (
+            db.query(Kassenbucheintrag)
+            .filter(Kassenbucheintrag.immutable == True, Kassenbucheintrag.signatur.is_(None))
+            .all()
+        )
+        for e in eintraege:
+            e.signatur = signatur_kassenbucheintrag(e)
+
+        abschluesse = (
+            db.query(Tagesabschluss)
+            .filter(Tagesabschluss.immutable == True, Tagesabschluss.signatur.is_(None))
+            .all()
+        )
+        for a in abschluesse:
+            a.signatur = signatur_tagesabschluss(a)
+
+        db.commit()
+    finally:
+        db.close()
+
+
+def _setup_gobd_triggers() -> None:
+    """
+    SQLite-Trigger erstellen, die UPDATE und DELETE auf immutable Einträge
+    auf Datenbankebene blockieren (GoBD-Konformität).
+
+    WHEN OLD.immutable = 1 → greift nur auf bereits festgeschriebene Einträge.
+    Neue Einträge (INSERT) sind nicht betroffen.
+    """
+    triggers = [
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_kassenbuch_update
+        BEFORE UPDATE ON kassenbuch
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Kassenbucheinträge sind unveränderbar (immutable=1).');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_kassenbuch_delete
+        BEFORE DELETE ON kassenbuch
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Kassenbucheinträge können nicht gelöscht werden (immutable=1).');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_tagesabschluesse_update
+        BEFORE UPDATE ON tagesabschluesse
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Tagesabschlüsse sind unveränderbar (immutable=1).');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_tagesabschluesse_delete
+        BEFORE DELETE ON tagesabschluesse
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Tagesabschlüsse können nicht gelöscht werden (immutable=1).');
+        END
+        """,
+    ]
+    with engine.connect() as conn:
+        for trigger_sql in triggers:
+            conn.execute(text(trigger_sql))
+        conn.commit()
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
     _run_migrations()
+    _migrate_signaturen()   # Erst Signaturen nachholen (Trigger noch nicht aktiv)
+    _setup_gobd_triggers()  # Dann Trigger scharf schalten
     db = SessionLocal()
     try:
         run_all_seeds(db)

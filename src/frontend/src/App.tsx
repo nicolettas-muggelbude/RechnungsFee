@@ -5,12 +5,14 @@ import { SetupWizard } from './pages/setup/SetupWizard'
 import { AppLayout } from './components/AppLayout'
 import { Dashboard } from './pages/dashboard/Dashboard'
 import { KassenbuchPage } from './pages/kassenbuch/KassenbuchPage'
+import { TagesabschlussPage } from './pages/kassenbuch/TagesabschlussPage'
 import { KundenPage } from './pages/kunden/KundenPage'
 import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
 import { NummernkreisePage } from './pages/einstellungen/NummernkreisePage'
 import { KontenPage } from './pages/stammdaten/KontenPage'
 import { KategorienPage } from './pages/stammdaten/KategorienPage'
 import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
+import { ExportPage } from './pages/ExportPage'
 
 function AppRoutes() {
   const { data: status, isLoading } = useQuery({
@@ -55,6 +57,7 @@ function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/kassenbuch" element={<KassenbuchPage />} />
+          <Route path="/tagesabschluesse" element={<TagesabschlussPage />} />
           {/* Stammdaten */}
           <Route path="/kunden" element={<KundenPage />} />
           <Route path="/lieferanten" element={<LieferantenPage />} />
@@ -62,6 +65,7 @@ function AppRoutes() {
           <Route path="/kategorien" element={<KategorienPage />} />
           <Route path="/nummernkreise" element={<NummernkreisePage />} />
           <Route path="/unternehmen" element={<UnternehmenPage />} />
+          <Route path="/exporte" element={<ExportPage />} />
         </Route>
       ) : (
         <Route path="*" element={<Navigate to="/setup" replace />} />

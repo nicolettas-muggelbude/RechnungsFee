@@ -298,6 +298,7 @@ class MonatsUebersicht(BaseModel):
 class TagesabschlussCreate(BaseModel):
     datum: date
     ist_endbestand: Decimal
+    zaehlung_json: Optional[str] = None  # JSON: Scheine/Münzen-Zählung
     differenz_begruendung: Optional[str] = None
     differenz_buchungsart: Optional[str] = None  # Privatentnahme|Aufwand|Protokoll
 
@@ -314,6 +315,7 @@ class TagesabschlussResponse(BaseModel):
     differenz: Decimal
     differenz_begruendung: Optional[str]
     differenz_buchungsart: Optional[str]
+    zaehlung_json: Optional[str]
     kassenbewegungen_anzahl: int
     immutable: bool
     erstellt_am: datetime

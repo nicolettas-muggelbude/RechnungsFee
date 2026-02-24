@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Kassenbucheintrag, Kategorie, Unternehmen, Nummernkreis
+from utils.signatur import signatur_kassenbucheintrag
 from .schemas import (
     KassenbuchEintragCreate,
     KassenbuchEintragResponse,
@@ -188,6 +189,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
         externe_belegnr=data.externe_belegnr,
         immutable=True,
     )
+    eintrag.signatur = signatur_kassenbucheintrag(eintrag)
     db.add(eintrag)
     db.commit()
     db.refresh(eintrag)
@@ -224,6 +226,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             steuerbefreiung_grund=steuerbefreiung_grund,
             immutable=True,
         )
+        eintrag.signatur = signatur_kassenbucheintrag(eintrag)
         db.add(eintrag)
         ergebnisse.append(eintrag)
     db.commit()
@@ -278,6 +281,7 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         steuerbefreiung_grund=None,
         immutable=True,
     )
+    storno.signatur = signatur_kassenbucheintrag(storno)
     db.add(storno)
     db.commit()
     db.refresh(storno)

@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getTagesabschlussFehltGestern } from '../api/client'
+import { TagesabschlussDialog } from '../pages/kassenbuch/TagesabschlussDialog'
 
 const hauptNav = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
   { to: '/kassenbuch', label: 'Kassenbuch', icon: '📒' },
+  { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
+  { to: '/exporte', label: 'Exporte', icon: '📦' },
 ]
 
 const stammdatenNav = [
@@ -17,10 +22,27 @@ const stammdatenNav = [
 
 const stammdatenPfade = stammdatenNav.map((n) => n.to)
 
+function formatDatum(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 export function AppLayout() {
   const location = useLocation()
+  const qc = useQueryClient()
   const stammdatenAktiv = stammdatenPfade.some((p) => location.pathname.startsWith(p))
   const [stammdatenOffen, setStammdatenOffen] = useState(stammdatenAktiv)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
+
+  const { data: fehltGestern } = useQuery({
+    queryKey: ['tagesabschluss-fehlt-gestern'],
+    queryFn: getTagesabschlussFehltGestern,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  })
+
+  const zeigeBanner = fehltGestern?.fehlt === true && !bannerDismissed
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
@@ -90,9 +112,48 @@ export function AppLayout() {
       </aside>
 
       {/* Hauptinhalt */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex-1 overflow-auto flex flex-col">
+        {/* Erinnerungs-Banner */}
+        {zeigeBanner && fehltGestern && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3 shrink-0">
+            <span className="text-amber-600 text-base leading-none">⚠</span>
+            <p className="text-sm text-amber-800 flex-1">
+              Kein Tagesabschluss für{' '}
+              <span className="font-semibold">{formatDatum(fehltGestern.datum)}</span> vorhanden.
+            </p>
+            <button
+              onClick={() => setAbschlussDialog(fehltGestern.datum)}
+              className="text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-md px-3 py-1 transition-colors shrink-0"
+            >
+              Jetzt durchführen
+            </button>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="text-amber-500 hover:text-amber-700 text-lg leading-none px-1 shrink-0"
+              title="Schließen"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="flex-1">
+          <Outlet />
+        </div>
       </main>
+
+      {/* Tagesabschluss-Dialog (aus Banner heraus) */}
+      {abschlussDialog && (
+        <TagesabschlussDialog
+          datum={abschlussDialog}
+          onClose={() => setAbschlussDialog(null)}
+          onSuccess={() => {
+            setAbschlussDialog(null)
+            setBannerDismissed(true)
+            qc.invalidateQueries({ queryKey: ['tagesabschluss-fehlt-gestern'] })
+          }}
+        />
+      )}
     </div>
   )
 }

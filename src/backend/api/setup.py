@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Unternehmen, Konto, Kategorie, Kassenbucheintrag, Nummernkreis
+from utils.signatur import signatur_kassenbucheintrag
 from .schemas import SetupStatus
 from .kassenbuch import _naechste_belegnr
 
@@ -76,6 +77,7 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
         vorsteuerabzug=False,
         immutable=True,
     )
+    eintrag.signatur = signatur_kassenbucheintrag(eintrag)
     db.add(eintrag)
     db.commit()
     return {"belegnr": belegnr, "betrag": str(data.betrag)}

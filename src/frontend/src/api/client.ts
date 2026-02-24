@@ -195,6 +195,7 @@ export type Tagesabschluss = {
   differenz: string
   differenz_begruendung: string | null
   differenz_buchungsart: string | null
+  zaehlung_json: string | null
   kassenbewegungen_anzahl: number
   immutable: boolean
   erstellt_am: string
@@ -211,13 +212,30 @@ export type TagesabschlussVorschau = {
 
 export const getTagesabschlussVorschau = (datum: string) =>
   request<TagesabschlussVorschau>(`/tagesabschluss/vorschau/${datum}`)
+export const getTagesabschlussFehltGestern = () =>
+  request<{ datum: string; fehlt: boolean }>('/tagesabschluss/fehlt-gestern')
 export const getTagesabschluesse = () => request<Tagesabschluss[]>('/tagesabschluss')
+export const pruefeTagesabschlussSignatur = (id: number) =>
+  request<{ id: number; gueltig: boolean; gespeichert: string | null; berechnet: string }>(
+    `/tagesabschluss/${id}/pruefen`,
+  )
 export const createTagesabschluss = (data: {
   datum: string
   ist_endbestand: string
+  zaehlung_json?: string
   differenz_begruendung?: string
   differenz_buchungsart?: string
 }) => request<Tagesabschluss>('/tagesabschluss', { method: 'POST', body: JSON.stringify(data) })
+
+export function downloadTagesabschlussPdf(params: {
+  zeitraum?: 'monat' | 'jahr' | 'alle'
+  wert?: string
+}) {
+  const { zeitraum = 'alle', wert } = params
+  const searchParams = new URLSearchParams({ zeitraum })
+  if (wert) searchParams.set('wert', wert)
+  window.open(`/api/tagesabschluss/export/pdf?${searchParams}`, '_blank')
+}
 
 // --- Kunden ---
 export type Kunde = {
@@ -273,6 +291,11 @@ export const updateLieferant = (id: number, data: Partial<Lieferant>) =>
   request<Lieferant>(`/lieferanten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteLieferant = (id: number) =>
   request<void>(`/lieferanten/${id}`, { method: 'DELETE' })
+
+// --- Export ---
+export function downloadGobdExport(jahr: number) {
+  window.open(`/api/export/gobd?jahr=${jahr}`, '_blank')
+}
 
 // --- Nummernkreise ---
 export type Nummernkreis = {
