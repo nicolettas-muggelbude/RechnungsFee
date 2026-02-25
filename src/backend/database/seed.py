@@ -104,16 +104,36 @@ def seed_eu_laender(db: Session) -> None:
 
 
 def seed_nummernkreise(db: Session) -> None:
-    if db.query(Nummernkreis).count() > 0:
-        return
-    db.add(Nummernkreis(
-        bezeichnung="Kassenbuch",
-        typ="kassenbuch",
-        format="YY####",
-        naechste_nr=1,
-        reset_jaehrlich=True,
-    ))
-    db.commit()
+    typen = {nk.typ for nk in db.query(Nummernkreis).all()}
+    neue = []
+    if "kassenbuch" not in typen:
+        neue.append(Nummernkreis(
+            bezeichnung="Kassenbuch",
+            typ="kassenbuch",
+            format="YY####",
+            naechste_nr=1,
+            reset_jaehrlich=True,
+        ))
+    if "rechnung_ausgang" not in typen:
+        neue.append(Nummernkreis(
+            bezeichnung="Ausgangsrechnungen",
+            typ="rechnung_ausgang",
+            format="YY####",
+            naechste_nr=1,
+            reset_jaehrlich=True,
+        ))
+    if "rechnung_eingang" not in typen:
+        neue.append(Nummernkreis(
+            bezeichnung="Eingangsrechnungen",
+            typ="rechnung_eingang",
+            format="YY####",
+            naechste_nr=1,
+            reset_jaehrlich=True,
+        ))
+    if neue:
+        for nk in neue:
+            db.add(nk)
+        db.commit()
 
 
 def run_all_seeds(db: Session) -> None:

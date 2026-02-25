@@ -106,6 +106,7 @@ export type KassenbuchEintrag = {
   vorsteuerabzug: boolean
   steuerbefreiung_grund: string | null
   externe_belegnr?: string
+  rechnung_id?: number | null
   immutable: boolean
   erstellt_am: string
 }
@@ -315,3 +316,118 @@ export const updateNummernkreis = (id: number, data: Partial<Nummernkreis>) =>
   request<Nummernkreis>(`/nummernkreise/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const getNummernkreisVorschau = (id: number, format: string) =>
   request<{ vorschau: string }>(`/nummernkreise/vorschau/${id}?format=${encodeURIComponent(format)}`)
+
+// --- Rechnungen ---
+export type Rechnungsposition = {
+  id: number
+  position_nr: number
+  beschreibung: string
+  menge: string
+  einheit: string
+  netto: string
+  ust_satz: string
+  ust_betrag: string
+  brutto: string
+}
+
+export type RechnungspositionCreate = {
+  beschreibung: string
+  menge?: string
+  einheit?: string
+  netto: string
+  ust_satz: string
+}
+
+export type ZahlungKompakt = {
+  id: number
+  belegnr: string
+  datum: string
+  brutto_betrag: string
+  art: 'Einnahme' | 'Ausgabe'
+  zahlungsart: string
+}
+
+export type Rechnung = {
+  id: number
+  typ: 'eingang' | 'ausgang'
+  rechnungsnummer: string | null
+  datum: string
+  faellig_am: string | null
+  kunde_id: number | null
+  kunde_name: string | null
+  lieferant_id: number | null
+  lieferant_name: string | null
+  partner_freitext: string | null
+  kategorie_id: number | null
+  netto_gesamt: string
+  ust_gesamt: string
+  brutto_gesamt: string
+  bezahlt: boolean
+  bezahlt_betrag: string
+  zahlungsstatus: 'offen' | 'teilweise' | 'bezahlt'
+  zahlungsdatum: string | null
+  notizen: string | null
+  positionen: Rechnungsposition[]
+  zahlungen: ZahlungKompakt[]
+  immutable: boolean
+  erstellt_am: string
+  aktualisiert_am: string
+}
+
+export type RechnungCreate = {
+  typ: 'eingang' | 'ausgang'
+  rechnungsnummer?: string
+  datum: string
+  faellig_am?: string
+  kunde_id?: number
+  lieferant_id?: number
+  partner_freitext?: string
+  kategorie_id?: number
+  notizen?: string
+  positionen: RechnungspositionCreate[]
+}
+
+export type RechnungUpdate = Partial<RechnungCreate>
+
+export type BarZahlungCreate = {
+  betrag?: string
+  datum: string
+  zahlungsart: 'Bar' | 'Karte' | 'PayPal'
+  beschreibung?: string
+}
+
+export type BarZahlungResult = {
+  kassenbucheintrag_id: number
+  kassenbucheintrag_belegnr: string
+  rechnung: Rechnung
+}
+
+export const getRechnungen = (filter?: {
+  typ?: 'eingang' | 'ausgang'
+  zahlungsstatus?: string
+  monat?: string
+  kunde_id?: number
+  lieferant_id?: number
+}) => request<Rechnung[]>(`/rechnungen${toQuery(filter ?? {})}`)
+
+export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
+
+export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
+
+export const createRechnung = (data: RechnungCreate) =>
+  request<Rechnung>('/rechnungen', { method: 'POST', body: JSON.stringify(data) })
+
+export const updateRechnung = (id: number, data: RechnungUpdate) =>
+  request<Rechnung>(`/rechnungen/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const deleteRechnung = (id: number) =>
+  request<void>(`/rechnungen/${id}`, { method: 'DELETE' })
+
+export const barZahlungErstellen = (id: number, data: BarZahlungCreate) =>
+  request<BarZahlungResult>(`/rechnungen/${id}/zahlung-bar`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const getRechnungZahlungen = (id: number) =>
+  request<ZahlungKompakt[]>(`/rechnungen/${id}/zahlungen`)

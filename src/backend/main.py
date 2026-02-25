@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -25,6 +25,7 @@ app.include_router(lieferanten.router)
 app.include_router(tagesabschluss.router)
 app.include_router(nummernkreise.router)
 app.include_router(export.router)
+app.include_router(rechnungen.router)
 
 
 def _run_migrations() -> None:
@@ -36,6 +37,33 @@ def _run_migrations() -> None:
         if "kunde_id" not in columns:
             conn.execute(text(
                 "ALTER TABLE kassenbuch ADD COLUMN kunde_id INTEGER REFERENCES kunden(id)"
+            ))
+            conn.commit()
+
+        # kassenbuch.rechnung_id
+        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
+        columns = {row[1] for row in result}
+        if "rechnung_id" not in columns:
+            conn.execute(text(
+                "ALTER TABLE kassenbuch ADD COLUMN rechnung_id INTEGER REFERENCES rechnungen(id)"
+            ))
+            conn.commit()
+
+        # rechnungen.bezahlt_betrag
+        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
+        columns = {row[1] for row in result}
+        if "bezahlt_betrag" not in columns:
+            conn.execute(text(
+                "ALTER TABLE rechnungen ADD COLUMN bezahlt_betrag NUMERIC(12,2) NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+
+        # rechnungen.zahlungsstatus
+        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
+        columns = {row[1] for row in result}
+        if "zahlungsstatus" not in columns:
+            conn.execute(text(
+                "ALTER TABLE rechnungen ADD COLUMN zahlungsstatus VARCHAR(20) NOT NULL DEFAULT 'offen'"
             ))
             conn.commit()
 

@@ -7,6 +7,7 @@ import { TagesabschlussDialog } from '../pages/kassenbuch/TagesabschlussDialog'
 const hauptNav = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
   { to: '/kassenbuch', label: 'Kassenbuch', icon: '📒' },
+  { to: '/rechnungen', label: 'Rechnungen', icon: '🧾' },
   { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
   { to: '/exporte', label: 'Exporte', icon: '📦' },
 ]

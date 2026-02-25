@@ -152,6 +152,7 @@ class Kassenbucheintrag(Base):
     brutto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     vorsteuerabzug: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     steuerbefreiung_grund: Mapped[str | None] = mapped_column(String(100))  # z.B. "§19 UStG"
+    rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"))
     # GoBD
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     signatur: Mapped[str | None] = mapped_column(String(64))
@@ -160,6 +161,7 @@ class Kassenbucheintrag(Base):
 
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="kassenbucheintraege")
     kunde: Mapped["Kunde | None"] = relationship()
+    rechnung: Mapped["Rechnung | None"] = relationship(back_populates="kassenbucheintraege")
 
 
 class Tagesabschluss(Base):
@@ -272,6 +274,8 @@ class Rechnung(Base):
     brutto_gesamt: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     # Zahlung (Zufluss-/Abfluss-Prinzip)
     bezahlt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    bezahlt_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    zahlungsstatus: Mapped[str] = mapped_column(String(20), default="offen", nullable=False)  # offen|teilweise|bezahlt
     zahlungsdatum: Mapped[date | None] = mapped_column(Date)
     konto_id: Mapped[int | None] = mapped_column(ForeignKey("konten.id"))
     # Vorsteuer (nur Eingangsrechnungen)
@@ -301,6 +305,7 @@ class Rechnung(Base):
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan")
     anlagegueter: Mapped[list["Anlagegut"]] = relationship(back_populates="rechnung")
+    kassenbucheintraege: Mapped[list["Kassenbucheintrag"]] = relationship(back_populates="rechnung")
 
 
 class Rechnungsposition(Base):
