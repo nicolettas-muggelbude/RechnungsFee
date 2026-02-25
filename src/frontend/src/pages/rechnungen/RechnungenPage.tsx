@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  getKunden, getLieferanten, getKategorien,
+  getKunden, getLieferanten, getKategorien, getUnternehmen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
 } from '../../api/client'
 
@@ -441,12 +441,12 @@ type Positionszeile = {
   ust_satz: string
 }
 
-const leerPosition = (): Positionszeile => ({
+const leerPosition = (defaultUst = '19'): Positionszeile => ({
   beschreibung: '',
   menge: '1',
   einheit: 'Stück',
   netto: '',
-  ust_satz: '19',
+  ust_satz: defaultUst,
 })
 
 function RechnungForm({
@@ -463,6 +463,9 @@ function RechnungForm({
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
   const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+
+  const istKleinunternehmer = unternehmen?.ist_kleinunternehmer ?? false
 
   const [rechnungsnummer, setRechnungsnummer] = useState(initial?.rechnungsnummer ?? '')
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
@@ -487,6 +490,57 @@ function RechnungForm({
 
   const partnerListe = typ === 'ausgang' ? (kunden ?? []) : (lieferanten ?? [])
 
+  // Default-Kategorie vorwählen (nur neue Rechnung, nicht beim Bearbeiten)
+  useEffect(() => {
+    if (!kategorien || initial) return
+    if (typ === 'ausgang') {
+      const defaultName = istKleinunternehmer ? 'Kleinunternehmer-Einnahmen' : 'Betriebseinnahmen'
+      const kat = kategorien.find((k) => k.name === defaultName)
+      if (kat) setKategorieId(String(kat.id))
+    }
+    // Eingang: keine Default-Kategorie (zu vielfältig)
+  }, [kategorien, istKleinunternehmer, typ, initial])
+
+  // USt-Satz aller Positionen aus gewählter Kategorie ableiten
+  useEffect(() => {
+    if (!kategorieId || !kategorien) return
+    const kat = kategorien.find((k) => String(k.id) === kategorieId)
+    if (!kat) return
+    const neuerUst = istKleinunternehmer ? '0' : String(kat.ust_satz_standard)
+    setPositionen((prev) => prev.map((p) => ({ ...p, ust_satz: neuerUst })))
+  }, [kategorieId, kategorien, istKleinunternehmer])
+
+  // Kategorie-Gruppen analog BuchungForm
+  const alle = kategorien ?? []
+  const erloeseKat = alle.filter(
+    (k) =>
+      k.kontenart === 'Erlös' &&
+      (istKleinunternehmer
+        ? k.name === 'Kleinunternehmer-Einnahmen'
+        : k.name !== 'Kleinunternehmer-Einnahmen')
+  )
+  const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
+  const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
+
+  const kategorieOptionen = typ === 'ausgang' ? (
+    <>
+      <optgroup label="Erlöse">
+        {erloeseKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+      </optgroup>
+    </>
+  ) : (
+    <>
+      <optgroup label="Betriebsausgaben">
+        {aufwandKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+      </optgroup>
+      {anlageKat.length > 0 && (
+        <optgroup label="Investitionen">
+          {anlageKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+        </optgroup>
+      )}
+    </>
+  )
+
   // Summenberechnung
   const summen = positionen.reduce(
     (acc, p) => {
@@ -509,7 +563,9 @@ function RechnungForm({
   }
 
   function addPosition() {
-    setPositionen((prev) => [...prev, leerPosition()])
+    const kat = (kategorien ?? []).find((k) => String(k.id) === kategorieId)
+    const defaultUst = istKleinunternehmer ? '0' : (kat ? String(kat.ust_satz_standard) : '19')
+    setPositionen((prev) => [...prev, leerPosition(defaultUst)])
   }
 
   function removePosition(i: number) {
@@ -533,15 +589,11 @@ function RechnungForm({
         menge: p.menge || '1',
         einheit: p.einheit || 'Stück',
         netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(2),
-        ust_satz: p.ust_satz || '0',
+        ust_satz: istKleinunternehmer ? '0' : (p.ust_satz || '0'),
       } as RechnungspositionCreate)),
     }
     onSave(data)
   }
-
-  const erloeseKats = (kategorien ?? []).filter((k) =>
-    typ === 'ausgang' ? k.kontenart === 'Erlös' : k.kontenart === 'Aufwand'
-  )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -589,9 +641,7 @@ function RechnungForm({
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">— keine —</option>
-            {erloeseKats.map((k) => (
-              <option key={k.id} value={k.id}>{k.name}</option>
-            ))}
+            {kategorieOptionen}
           </select>
         </div>
       </div>
@@ -624,6 +674,17 @@ function RechnungForm({
           />
         )}
       </div>
+
+      {/* §19-Hinweis */}
+      {istKleinunternehmer && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+          <span className="mt-0.5">ℹ️</span>
+          <span>
+            <strong>Kleinunternehmer §19 UStG</strong> – Keine Umsatzsteuer ausgewiesen.
+            USt-Satz ist gesperrt.
+          </span>
+        </div>
+      )}
 
       {/* Positionen */}
       <div>
@@ -692,11 +753,12 @@ function RechnungForm({
                     <select
                       value={pos.ust_satz}
                       onChange={(e) => updatePosition(i, 'ust_satz', e.target.value)}
-                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700"
+                      disabled={istKleinunternehmer}
+                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
                     >
-                      <option value="0">0</option>
-                      <option value="7">7</option>
-                      <option value="19">19</option>
+                      <option value="0">{istKleinunternehmer ? '0 (§19)' : '0'}</option>
+                      {!istKleinunternehmer && <option value="7">7</option>}
+                      {!istKleinunternehmer && <option value="19">19</option>}
                     </select>
                   </td>
                   <td className="px-2 py-1.5 text-center">
