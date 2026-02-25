@@ -164,10 +164,20 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
     # Kleinunternehmer-Check
     unternehmen = db.query(Unternehmen).first()
     ust_satz = data.ust_satz
+    vorsteuerabzug = data.vorsteuerabzug
     steuerbefreiung_grund = None
     if unternehmen and unternehmen.ist_kleinunternehmer:
         ust_satz = Decimal("0")
         steuerbefreiung_grund = "§19 UStG"
+
+    # Privat-Kategorie: keine USt, kein Vorsteuerabzug
+    if data.kategorie_id:
+        kat = db.query(Kategorie).filter(Kategorie.id == data.kategorie_id).first()
+        if kat and kat.kontenart == "Privat":
+            ust_satz = Decimal("0")
+            vorsteuerabzug = False
+            if not steuerbefreiung_grund:
+                steuerbefreiung_grund = "Privatbuchung"
 
     netto, ust_betrag = _berechne_ust(data.brutto_betrag, ust_satz)
     belegnr = _naechste_belegnr(db, data.datum)
@@ -184,7 +194,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
         ust_satz=ust_satz,
         ust_betrag=ust_betrag,
         brutto_betrag=data.brutto_betrag,
-        vorsteuerabzug=data.vorsteuerabzug,
+        vorsteuerabzug=vorsteuerabzug,
         steuerbefreiung_grund=steuerbefreiung_grund,
         externe_belegnr=data.externe_belegnr,
         immutable=True,
@@ -203,10 +213,18 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
     ergebnisse = []
     for pos in data.positionen:
         ust_satz = pos.ust_satz
+        vorsteuerabzug = pos.vorsteuerabzug
         steuerbefreiung_grund = None
         if unternehmen and unternehmen.ist_kleinunternehmer:
             ust_satz = Decimal("0")
             steuerbefreiung_grund = "§19 UStG"
+        if pos.kategorie_id:
+            kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first()
+            if kat and kat.kontenart == "Privat":
+                ust_satz = Decimal("0")
+                vorsteuerabzug = False
+                if not steuerbefreiung_grund:
+                    steuerbefreiung_grund = "Privatbuchung"
         netto, ust_betrag = _berechne_ust(pos.brutto_betrag, ust_satz)
         belegnr = _naechste_belegnr(db, data.datum)
         eintrag = Kassenbucheintrag(
@@ -222,7 +240,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             ust_satz=ust_satz,
             ust_betrag=ust_betrag,
             brutto_betrag=pos.brutto_betrag,
-            vorsteuerabzug=pos.vorsteuerabzug,
+            vorsteuerabzug=vorsteuerabzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             immutable=True,
         )

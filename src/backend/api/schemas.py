@@ -207,6 +207,7 @@ class KassenbuchEintragResponse(BaseModel):
     belegnr: str
     beschreibung: str
     kategorie_id: Optional[int]
+    kategorie_kontenart: Optional[str] = None  # Erlös|Aufwand|Privat|Anlage
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None   # aus Relationship befüllt
     kunde_email: Optional[str] = None
@@ -231,6 +232,8 @@ class KassenbuchEintragResponse(BaseModel):
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
             data.kunde_email = obj.kunde.email
+        if obj.kategorie:
+            data.kategorie_kontenart = obj.kategorie.kontenart
         return data
 
 

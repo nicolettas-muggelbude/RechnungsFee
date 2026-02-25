@@ -162,11 +162,20 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
     if (!kategorie_id || !kategorien || isSplit) return
     const kat = kategorien.find((k) => String(k.id) === kategorie_id)
     if (!kat) return
+    // Privat-Buchung: immer USt=0, kein Vorsteuerabzug
+    if (kat.kontenart === 'Privat') {
+      setValue('ust_satz', '0')
+      setValue('vorsteuerabzug', false)
+      return
+    }
     setValue('ust_satz', istKleinunternehmer ? '0' : String(kat.ust_satz_standard))
     if (!istKleinunternehmer) {
       setValue('vorsteuerabzug', parseFloat(kat.vorsteuer_prozent) > 0)
     }
   }, [kategorie_id, kategorien, isSplit, setValue, istKleinunternehmer])
+
+  const gewaehlteKat = (kategorien ?? []).find((k) => String(k.id) === kategorie_id)
+  const istPrivatKategorie = gewaehlteKat?.kontenart === 'Privat'
 
   // USt-Vorschau (einfache Buchung) – je nach Eingabemodus
   const eingabeWert = parseFloat(bruttoStr) || 0
@@ -455,6 +464,18 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </select>
             </div>
 
+            {/* Privat-Hinweis */}
+            {istPrivatKategorie && (
+              <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800">
+                <span className="mt-0.5 shrink-0">🏠</span>
+                <span>
+                  <strong>Privatbuchung</strong> – kein Betriebsvorgang. Wird nicht in der
+                  Betriebseinnahmen/-ausgaben-Auswertung berücksichtigt. USt ist
+                  automatisch 0 %.
+                </span>
+              </div>
+            )}
+
             {/* Kunde (nur Einnahmen) */}
             {art === 'Einnahme' && (
               <div>
@@ -521,12 +542,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                 </label>
                 <select
                   {...register('ust_satz')}
-                  disabled={istKleinunternehmer}
+                  disabled={istKleinunternehmer || istPrivatKategorie}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
-                  <option value="0">{istKleinunternehmer ? '0 % (§19 UStG)' : '0 %'}</option>
-                  {!istKleinunternehmer && <option value="7">7 %</option>}
-                  {!istKleinunternehmer && <option value="19">19 %</option>}
+                  <option value="0">
+                    {istKleinunternehmer ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : '0 %'}
+                  </option>
+                  {!istKleinunternehmer && !istPrivatKategorie && <option value="7">7 %</option>}
+                  {!istKleinunternehmer && !istPrivatKategorie && <option value="19">19 %</option>}
                 </select>
               </div>
             </div>
@@ -552,7 +575,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             )}
 
             {/* Vorsteuerabzug */}
-            {art === 'Ausgabe' && !istKleinunternehmer && (
+            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && (
               <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                 <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
                 Vorsteuerabzug geltend machen
