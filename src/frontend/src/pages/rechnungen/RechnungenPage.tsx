@@ -487,7 +487,7 @@ function RechnungForm({
       ust_satz: p.ust_satz,
     })) ?? [leerPosition()]
   )
-  const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('netto')
+  const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('brutto')
 
   const partnerListe = typ === 'ausgang' ? (kunden ?? []) : (lieferanten ?? [])
 
