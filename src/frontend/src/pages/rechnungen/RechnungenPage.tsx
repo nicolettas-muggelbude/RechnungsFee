@@ -487,6 +487,7 @@ function RechnungForm({
       ust_satz: p.ust_satz,
     })) ?? [leerPosition()]
   )
+  const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('netto')
 
   const partnerListe = typ === 'ausgang' ? (kunden ?? []) : (lieferanten ?? [])
 
@@ -541,22 +542,49 @@ function RechnungForm({
     </>
   )
 
-  // Summenberechnung
+  // Summenberechnung — reagiert auf eingabeModus
   const summen = positionen.reduce(
     (acc, p) => {
-      const netto = parseFloat(p.netto.replace(',', '.')) || 0
+      const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
       const menge = parseFloat(p.menge.replace(',', '.')) || 1
       const ust = parseFloat(p.ust_satz) || 0
-      const nettoBrutto = netto * menge
-      const ustBetrag = (nettoBrutto * ust) / 100
-      return {
-        netto: acc.netto + nettoBrutto,
-        ust: acc.ust + ustBetrag,
-        brutto: acc.brutto + nettoBrutto + ustBetrag,
+      let netto: number, ustBetrag: number, brutto: number
+      if (eingabeModus === 'brutto') {
+        brutto = eingabe * menge
+        netto = ust > 0 ? (brutto * 100) / (100 + ust) : brutto
+        ustBetrag = brutto - netto
+      } else {
+        netto = eingabe * menge
+        ustBetrag = (netto * ust) / 100
+        brutto = netto + ustBetrag
       }
+      return { netto: acc.netto + netto, ust: acc.ust + ustBetrag, brutto: acc.brutto + brutto }
     },
     { netto: 0, ust: 0, brutto: 0 }
   )
+
+  function toggleEingabeModus() {
+    setEingabeModus((prev) => {
+      const naechster = prev === 'netto' ? 'brutto' : 'netto'
+      setPositionen((ps) =>
+        ps.map((p) => {
+          const val = parseFloat(p.netto.replace(',', '.'))
+          if (isNaN(val) || val === 0) return { ...p }
+          const ust = parseFloat(p.ust_satz) || 0
+          if (prev === 'netto') {
+            // netto → brutto
+            const neuerWert = ust > 0 ? val * (1 + ust / 100) : val
+            return { ...p, netto: neuerWert.toFixed(2) }
+          } else {
+            // brutto → netto
+            const neuerWert = ust > 0 ? (val * 100) / (100 + ust) : val
+            return { ...p, netto: neuerWert.toFixed(2) }
+          }
+        })
+      )
+      return naechster
+    })
+  }
 
   function updatePosition(i: number, field: keyof Positionszeile, value: string) {
     setPositionen((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)))
@@ -584,13 +612,24 @@ function RechnungForm({
       partner_freitext: partnerFreitext || undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
       notizen: notizen || undefined,
-      positionen: positionen.map((p) => ({
-        beschreibung: p.beschreibung,
-        menge: p.menge || '1',
-        einheit: p.einheit || 'Stück',
-        netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(2),
-        ust_satz: istKleinunternehmer ? '0' : (p.ust_satz || '0'),
-      } as RechnungspositionCreate)),
+      positionen: positionen.map((p) => {
+        const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
+        const ust = parseFloat(p.ust_satz) || 0
+        const ust_satz = istKleinunternehmer ? '0' : (p.ust_satz || '0')
+        let netto: number
+        if (eingabeModus === 'brutto') {
+          netto = ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
+        } else {
+          netto = eingabe
+        }
+        return {
+          beschreibung: p.beschreibung,
+          menge: p.menge || '1',
+          einheit: p.einheit || 'Stück',
+          netto: netto.toFixed(2),
+          ust_satz,
+        } as RechnungspositionCreate
+      }),
     }
     onSave(data)
   }
@@ -690,13 +729,24 @@ function RechnungForm({
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-slate-700">Positionen *</label>
-          <button
-            type="button"
-            onClick={addPosition}
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-          >
-            + Position hinzufügen
-          </button>
+          <div className="flex items-center gap-3">
+            {!istKleinunternehmer && (
+              <button
+                type="button"
+                onClick={toggleEingabeModus}
+                className="text-xs text-blue-600 hover:text-blue-700 underline"
+              >
+                {eingabeModus === 'netto' ? 'Brutto eingeben' : 'Netto eingeben'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={addPosition}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+            >
+              + Position hinzufügen
+            </button>
+          </div>
         </div>
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <table className="w-full text-xs">
@@ -705,7 +755,9 @@ function RechnungForm({
                 <th className="px-3 py-2 text-left text-slate-500 font-medium">Beschreibung</th>
                 <th className="px-3 py-2 text-right text-slate-500 font-medium w-16">Menge</th>
                 <th className="px-3 py-2 text-left text-slate-500 font-medium w-20">Einheit</th>
-                <th className="px-3 py-2 text-right text-slate-500 font-medium w-24">Netto (€)</th>
+                <th className="px-3 py-2 text-right text-slate-500 font-medium w-24">
+                  {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
+                </th>
                 <th className="px-3 py-2 text-right text-slate-500 font-medium w-16">USt %</th>
                 <th className="px-3 py-2 w-8"></th>
               </tr>
@@ -777,7 +829,9 @@ function RechnungForm({
             </tbody>
             <tfoot className="bg-slate-50 border-t border-slate-200">
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 text-xs">Netto</td>
+                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 text-xs">
+                  Netto{eingabeModus === 'brutto' && <span className="text-slate-400"> (berechnet)</span>}
+                </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700">{formatEuro(summen.netto)}</td>
               </tr>
               <tr>
@@ -785,7 +839,9 @@ function RechnungForm({
                 <td colSpan={2} className="px-3 py-2 text-right text-slate-600">{formatEuro(summen.ust)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700">Brutto</td>
+                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700">
+                  Brutto{eingabeModus === 'netto' && <span className="text-slate-400 font-normal"> (berechnet)</span>}
+                </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800">{formatEuro(summen.brutto)}</td>
               </tr>
             </tfoot>
