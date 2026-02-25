@@ -25,6 +25,30 @@ Kern-Funktion: Einnahmen und Ausgaben manuell erfassen.
 
 ---
 
+## ✅ Post-v0.1 – Erweiterungen *(Februar 2026)*
+
+Features, die nach dem v0.1-Release umgesetzt wurden.
+
+**Backend**
+- [x] Split-Buchung (atomare Mehrfach-Buchung, min. 2 Positionen, `/kassenbuch/split`)
+- [x] Nummernkreise: konfigurierbare Belegnr-Präfixe (KB-YYYYMMDD-NNN, RE-YY####, ER-YY####)
+- [x] GoBD-Export: `GET /api/export/gobd?jahr=YYYY` → ZIP mit 8 Dateien (CSV + PDF-Prüfbericht)
+- [x] Rechnungen-API: Eingangs- und Ausgangsrechnungen CRUD mit Positionen, automatische Summenberechnung
+- [x] Verknüpfung Rechnung ↔ Kassenbucheintrag (`POST /{id}/zahlung-bar`, Bar/Karte/PayPal)
+- [x] Teilzahlungs-Tracking: `bezahlt_betrag`, `zahlungsstatus` (offen / teilweise / bezahlt)
+
+**Frontend**
+- [x] Split-Buchung im BuchungForm (eigener Modus im selben Modal)
+- [x] Brutto/Netto-Umschalter im Kassenbuch-Buchungsformular (nicht für §19)
+- [x] Dashboard-Zeitfilter (Monat / Tag / Zeitraum)
+- [x] Externe Belegnr. im Buchungsformular
+- [x] Vorsteuerabzug automatisch nach Kategorie
+- [x] TagesabschlussPage: Liste aller Abschlüsse, PDF-Export, Differenz-Statistik
+- [x] ExportPage (`/exporte`): GoBD-Export mit Jahresauswahl
+- [x] RechnungenPage (`/rechnungen`): Tabs Eingang/Ausgang, Positionsformular mit Brutto/Netto-Umschalter, Detail-Panel, Zahlungs-Dialog, Fortschrittsbalken, Link zu Kassenbuch-Einträgen
+
+---
+
 ## v0.2 – Bank-Import *(Ziel: Juni 2026)*
 
 CSV-Import von Kontoauszügen, automatisches Matching.
@@ -62,24 +86,19 @@ Produktionsreife Desktop-App für Windows, Linux und macOS.
 
 ---
 
-## v1.1 – Rechnungsbücher & Import *(Ziel: Dezember 2026)*
+## v1.1 – Rechnungen – Ausgabe & Import *(Ziel: Dezember 2026)*
 
-Eingangs- und Ausgangsrechnungen verwalten, elektronische Rechnungsformate importieren.
+Rechnungs-PDF ausgeben und elektronische Rechnungsformate importieren.
 
-**Rechnungseingangsbuch**
-- [ ] Eingangsrechnungen erfassen und verwalten (Lieferant, Betrag, Fälligkeit, Zahlungsstatus)
-- [ ] ZUGFeRD / XRechnung / PDF importieren (inkl. OCR-Texterkennung bei normalen PDFs)
-- [ ] Automatische Kassenbuchung vorschlagen (bei Barzahlung)
-- [ ] Verknüpfung Eingangsrechnung ↔ Kassenbucheintrag sichtbar
+**Bereits umgesetzt (vorgezogen)**
+- [x] Eingangs- und Ausgangsrechnungen erfassen (Positionen, Fälligkeit, Zahlungsstatus)
+- [x] Kassenbuchung bei Bar-/Kartenzahlung direkt aus der Rechnung erstellen
+- [x] Verknüpfung Rechnung ↔ Kassenbucheintrag in beiden Richtungen sichtbar
 
-**Rechnungsausgangsbuch**
-- [ ] Ausgangsrechnungen erfassen und verwalten (Kunde, Betrag, Fälligkeit, Zahlungsstatus)
-- [ ] ZUGFeRD-Export (elektronische Rechnung)
-- [ ] LibreOffice-ODT-Rechnungsvorlage (generiert aus Stammdaten + Buchung)
-- [ ] Automatische Kassenbuchung vorschlagen (bei Bareinnahme)
-- [ ] Verknüpfung Ausgangsrechnung ↔ Kassenbucheintrag sichtbar
-
-**Sonstiges**
+**Noch offen**
+- [ ] Rechnungs-PDF ausgeben (Ausgangsrechnung als druckfertiges PDF)
+- [ ] ZUGFeRD-Export (elektronische Rechnung nach EN 16931)
+- [ ] ZUGFeRD / XRechnung / PDF importieren (inkl. OCR-Texterkennung)
 - [ ] Vollständige Kundenverwaltung (inkl. Vereins-Felder, Issue #14)
 - [ ] hellocash REST-API Anbindung (Issue #13)
 
@@ -90,7 +109,8 @@ Eingangs- und Ausgangsrechnungen verwalten, elektronische Rechnungsformate impor
 - [x] Projektvision und Dokumentation (`docs/`)
 - [x] Datenbankschema (SQLAlchemy 2.0, GoBD-konform, 16 Tabellen)
 - [x] Backend-API: Setup, Unternehmen, Konten, Kategorien
-- [x] Frontend: Setup-Assistent (3-stufiger Wizard)
+- [x] Frontend: Setup-Assistent (4-stufiger Wizard inkl. Kassenbestand)
 - [x] 31 Standard-Kategorien (SKR03/04/49, EÜR-Zuordnung)
 - [x] 27 EU-Länder mit USt-Sätzen (Seed-Daten)
 - [x] **v0.1 Kassenbuch** – Released Februar 2026 ([Release-Notes](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v0.1))
+- [x] **Post-v0.1**: Split-Buchung, GoBD-Export, Rechnungen (Eingang/Ausgang) mit Kassenbuch-Verknüpfung
