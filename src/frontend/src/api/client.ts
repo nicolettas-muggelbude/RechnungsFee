@@ -268,6 +268,18 @@ export const updateKunde = (id: number, data: Partial<Kunde>) =>
 export const deleteKunde = (id: number) =>
   request<void>(`/kunden/${id}`, { method: 'DELETE' })
 
+export type AnonymisierungResult = {
+  anonymisierte_buchungen: number
+  anonymisierte_rechnungen: number
+  unveraenderlich_verblieben: number
+  hinweis: string
+}
+export const anonymisiereKunde = (id: number) =>
+  request<AnonymisierungResult>(`/kunden/${id}/anonymisieren`, { method: 'POST' })
+export function dsgvoExportKunde(id: number) {
+  window.open(`/api/kunden/${id}/dsgvo-export`, '_blank')
+}
+
 // --- Lieferanten ---
 export type Lieferant = {
   id?: number

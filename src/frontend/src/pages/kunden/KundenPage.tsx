@@ -3,7 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { getKunden, createKunde, updateKunde, deleteKunde, type Kunde } from '../../api/client'
+import {
+  getKunden, createKunde, updateKunde, deleteKunde,
+  anonymisiereKunde, dsgvoExportKunde,
+  type Kunde, type AnonymisierungResult,
+} from '../../api/client'
 
 const schema = z.object({
   firmenname: z.string().optional(),
@@ -35,6 +39,8 @@ export function KundenPage() {
   const qc = useQueryClient()
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
+  const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
 
   const { data: kunden, isLoading } = useQuery({
     queryKey: ['kunden'],
@@ -52,6 +58,15 @@ export function KundenPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteKunde,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kunden'] }),
+  })
+
+  const anonymisierungMutation = useMutation({
+    mutationFn: (id: number) => anonymisiereKunde(id),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['kunden'] })
+      setAnonymisierungResult(result)
+      setShowDsgvoBestaetigung(false)
+    },
   })
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
@@ -77,7 +92,12 @@ export function KundenPage() {
     setShowForm(true)
   }
 
-  function closeForm() { setShowForm(false); setEditKunde(null) }
+  function closeForm() {
+    setShowForm(false)
+    setEditKunde(null)
+    setShowDsgvoBestaetigung(false)
+    setAnonymisierungResult(null)
+  }
 
   function onSubmit(values: FormValues) {
     // Leere Strings → undefined
@@ -227,6 +247,84 @@ export function KundenPage() {
                   {isPending ? 'Speichert…' : 'Speichern'}
                 </button>
               </div>
+
+              {/* DSGVO-Aktionen (nur im Bearbeitungs-Modus) */}
+              {editKunde?.id && !anonymisierungResult && (
+                <div className="border-t border-slate-200 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Datenschutz (DSGVO)</p>
+                  {!showDsgvoBestaetigung ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => dsgvoExportKunde(editKunde.id!)}
+                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50"
+                      >
+                        📥 Datenauskunft exportieren
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDsgvoBestaetigung(true)}
+                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50"
+                      >
+                        🗑 Anonymisieren (Art. 17)
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-red-800">Kunden wirklich anonymisieren?</p>
+                      <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                        <li>Kundenstammdaten werden dauerhaft gelöscht</li>
+                        <li>Verknüpfungen in offenen Buchungen und Rechnungen werden entfernt</li>
+                        <li>Immutable Kassenbucheinträge bleiben aus rechtlichen Gründen erhalten (§147 AO)</li>
+                      </ul>
+                      {anonymisierungMutation.isError && (
+                        <p className="text-xs text-red-600">{(anonymisierungMutation.error as Error).message}</p>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => anonymisierungMutation.mutate(editKunde.id!)}
+                          disabled={anonymisierungMutation.isPending}
+                          className="flex-1 bg-red-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {anonymisierungMutation.isPending ? '…' : 'Jetzt anonymisieren'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDsgvoBestaetigung(false)}
+                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50"
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ergebnis der Anonymisierung */}
+              {anonymisierungResult && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-medium text-green-800">Anonymisierung abgeschlossen</p>
+                    <p className="text-xs text-green-700">
+                      {anonymisierungResult.anonymisierte_buchungen} Buchung(en) und {anonymisierungResult.anonymisierte_rechnungen} Rechnung(en) anonymisiert.
+                    </p>
+                    {anonymisierungResult.unveraenderlich_verblieben > 0 && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+                        ⚠ {anonymisierungResult.hinweis}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                  >
+                    Schließen
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
