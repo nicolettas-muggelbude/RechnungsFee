@@ -208,7 +208,7 @@ function ZahlungsDialog({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-semibold text-slate-800">
-            {rechnung.typ === 'ausgang' ? 'Bar kassieren' : 'Bar bezahlen'}
+            {rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
         </div>
@@ -649,7 +649,7 @@ function RechnungDetail({
             onClick={() => setZahlungsDialog(true)}
             className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
           >
-            {rechnung.typ === 'ausgang' ? 'Bar kassieren' : 'Bar bezahlen'}
+            {rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
             {rechnung.zahlungsstatus === 'teilweise' && ` (Restbetrag ${formatEuro(restbetrag)})`}
           </button>
         )}
