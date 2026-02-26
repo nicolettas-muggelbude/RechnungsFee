@@ -92,13 +92,21 @@ def _run_migrations() -> None:
             conn.execute(text("ALTER TABLE rechnungen ADD COLUMN leistungsdatum DATE"))
             conn.commit()
 
-        # rechnungen.ist_entwurf (DEFAULT 1 = alle bestehenden Rechnungen werden Entwürfe)
+        # rechnungen.ist_entwurf
         result = conn.execute(text("PRAGMA table_info(rechnungen)"))
         columns = {row[1] for row in result}
         if "ist_entwurf" not in columns:
             conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN ist_entwurf BOOLEAN NOT NULL DEFAULT 1"
+                "ALTER TABLE rechnungen ADD COLUMN ist_entwurf BOOLEAN NOT NULL DEFAULT 0"
             ))
+            conn.commit()
+
+        # Einmalige Korrektur: ist_entwurf wurde initial mit DEFAULT 1 angelegt.
+        # PRAGMA user_version 0 → noch nicht korrigiert, 1 → erledigt.
+        db_version = conn.execute(text("PRAGMA user_version")).scalar()
+        if db_version < 1:
+            conn.execute(text("UPDATE rechnungen SET ist_entwurf = 0"))
+            conn.execute(text("PRAGMA user_version = 1"))
             conn.commit()
 
         # rechnungen.storniert
