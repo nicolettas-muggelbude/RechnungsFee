@@ -39,6 +39,7 @@ export function KundenPage() {
   const qc = useQueryClient()
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
 
@@ -59,7 +60,7 @@ export function KundenPage() {
     mutationFn: (k: Kunde) => deleteKunde(k.id!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kunden'] }),
     onError: (_err: Error, k: Kunde) => {
-      // Verknüpfte Daten → Edit-Modal mit DSGVO-Abschnitt öffnen
+      setDeleteFehlgeschlagen(true)
       openEdit(k)
     },
   })
@@ -99,6 +100,7 @@ export function KundenPage() {
   function closeForm() {
     setShowForm(false)
     setEditKunde(null)
+    setDeleteFehlgeschlagen(false)
     setShowDsgvoBestaetigung(false)
     setAnonymisierungResult(null)
   }
@@ -182,6 +184,12 @@ export function KundenPage() {
             <h2 className="text-lg font-bold text-slate-800 mb-4">
               {editKunde ? 'Kunde bearbeiten' : 'Neuer Kunde'}
             </h2>
+            {deleteFehlgeschlagen && (
+              <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+                <p className="font-medium">Löschen nicht möglich</p>
+                <p className="mt-0.5">Dieser Kunde hat verknüpfte Buchungen oder Rechnungen und kann nicht direkt gelöscht werden. Verwende unten <strong>„Anonymisieren (Art. 17)"</strong>, um die Daten datenschutzkonform zu entfernen.</p>
+              </div>
+            )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">

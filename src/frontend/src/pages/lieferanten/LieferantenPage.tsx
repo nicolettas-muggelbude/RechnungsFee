@@ -3,7 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { getLieferanten, createLieferant, updateLieferant, deleteLieferant, type Lieferant } from '../../api/client'
+import {
+  getLieferanten, createLieferant, updateLieferant, deleteLieferant,
+  anonymisiereLieferant, dsgvoExportLieferant,
+  type Lieferant, type AnonymisierungResult,
+} from '../../api/client'
 
 const schema = z.object({
   firmenname: z.string().min(1, 'Firmenname erforderlich'),
@@ -33,6 +37,9 @@ export function LieferantenPage() {
   const qc = useQueryClient()
   const [editLieferant, setEditLieferant] = useState<Lieferant | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
+  const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
+  const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
 
   const { data: lieferanten, isLoading } = useQuery({
     queryKey: ['lieferanten'],
@@ -48,8 +55,20 @@ export function LieferantenPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['lieferanten'] }); closeForm() },
   })
   const deleteMutation = useMutation({
-    mutationFn: deleteLieferant,
+    mutationFn: (l: Lieferant) => deleteLieferant(l.id!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lieferanten'] }),
+    onError: (_err: Error, l: Lieferant) => {
+      setDeleteFehlgeschlagen(true)
+      openEdit(l)
+    },
+  })
+  const anonymisierungMutation = useMutation({
+    mutationFn: (id: number) => anonymisiereLieferant(id),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['lieferanten'] })
+      setAnonymisierungResult(result)
+      setShowDsgvoBestaetigung(false)
+    },
   })
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
@@ -59,6 +78,9 @@ export function LieferantenPage() {
 
   function openCreate() {
     setEditLieferant(null)
+    setDeleteFehlgeschlagen(false)
+    setShowDsgvoBestaetigung(false)
+    setAnonymisierungResult(null)
     reset(EMPTY)
     setShowForm(true)
   }
@@ -75,7 +97,13 @@ export function LieferantenPage() {
     setShowForm(true)
   }
 
-  function closeForm() { setShowForm(false); setEditLieferant(null) }
+  function closeForm() {
+    setShowForm(false)
+    setEditLieferant(null)
+    setDeleteFehlgeschlagen(false)
+    setShowDsgvoBestaetigung(false)
+    setAnonymisierungResult(null)
+  }
 
   function onSubmit(values: FormValues) {
     const clean = Object.fromEntries(
@@ -91,7 +119,7 @@ export function LieferantenPage() {
   function handleDelete(l: Lieferant) {
     if (!l.id) return
     if (!window.confirm(`Lieferant "${l.firmenname}" löschen?`)) return
-    deleteMutation.mutate(l.id)
+    deleteMutation.mutate(l)
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
@@ -116,6 +144,7 @@ export function LieferantenPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left">
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">Firmenname</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Adresse</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">E-Mail</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">Lieferantennr.</th>
                 <th className="px-4 py-3 w-20"></th>
@@ -125,6 +154,9 @@ export function LieferantenPage() {
               {lieferanten.map((l) => (
                 <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 text-slate-700">{l.firmenname}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {[l.strasse && l.hausnummer ? `${l.strasse} ${l.hausnummer}` : l.strasse, l.plz && l.ort ? `${l.plz} ${l.ort}` : l.ort].filter(Boolean).join(', ') || '—'}
+                  </td>
                   <td className="px-4 py-3 text-slate-500">{l.email || '—'}</td>
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">{l.lieferantennummer || '—'}</td>
                   <td className="px-4 py-3 flex gap-2 justify-end">
@@ -144,6 +176,14 @@ export function LieferantenPage() {
             <h2 className="text-lg font-bold text-slate-800 mb-4">
               {editLieferant ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}
             </h2>
+
+            {deleteFehlgeschlagen && (
+              <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+                <p className="font-medium">Löschen nicht möglich</p>
+                <p className="mt-0.5">Dieser Lieferant hat verknüpfte Rechnungen und kann nicht direkt gelöscht werden. Verwende unten <strong>„Anonymisieren (Art. 17)"</strong>, um die Daten datenschutzkonform zu entfernen.</p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
@@ -158,6 +198,16 @@ export function LieferantenPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nachname</label>
                   <input type="text" {...register('nachname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Adresse</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">E-Mail</label>
@@ -194,6 +244,79 @@ export function LieferantenPage() {
                   {isPending ? 'Speichert…' : 'Speichern'}
                 </button>
               </div>
+
+              {/* DSGVO-Aktionen (nur im Bearbeitungs-Modus) */}
+              {editLieferant?.id && !anonymisierungResult && (
+                <div className="border-t border-slate-200 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Datenschutz (DSGVO)</p>
+                  {!showDsgvoBestaetigung ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => dsgvoExportLieferant(editLieferant.id!)}
+                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50"
+                      >
+                        📥 Datenauskunft exportieren
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDsgvoBestaetigung(true)}
+                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50"
+                      >
+                        🗑 Anonymisieren (Art. 17)
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-red-800">Lieferant wirklich anonymisieren?</p>
+                      <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                        <li>Lieferantenstammdaten werden dauerhaft gelöscht</li>
+                        <li>Verknüpfungen in Rechnungen werden entfernt</li>
+                        <li>Der Lieferantenname bleibt in den Rechnungen als Freitext erhalten</li>
+                      </ul>
+                      {anonymisierungMutation.isError && (
+                        <p className="text-xs text-red-600">{(anonymisierungMutation.error as Error).message}</p>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => anonymisierungMutation.mutate(editLieferant.id!)}
+                          disabled={anonymisierungMutation.isPending}
+                          className="flex-1 bg-red-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {anonymisierungMutation.isPending ? '…' : 'Jetzt anonymisieren'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDsgvoBestaetigung(false)}
+                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50"
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ergebnis der Anonymisierung */}
+              {anonymisierungResult && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-medium text-green-800">Anonymisierung abgeschlossen</p>
+                    <p className="text-xs text-green-700">
+                      {anonymisierungResult.anonymisierte_rechnungen} Rechnung(en) anonymisiert.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                  >
+                    Schließen
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>

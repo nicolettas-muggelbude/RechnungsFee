@@ -305,6 +305,11 @@ export const updateLieferant = (id: number, data: Partial<Lieferant>) =>
   request<Lieferant>(`/lieferanten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteLieferant = (id: number) =>
   request<void>(`/lieferanten/${id}`, { method: 'DELETE' })
+export const anonymisiereLieferant = (id: number) =>
+  request<AnonymisierungResult>(`/lieferanten/${id}/anonymisieren`, { method: 'POST' })
+export function dsgvoExportLieferant(id: number) {
+  window.open(`/api/lieferanten/${id}/dsgvo-export`, '_blank')
+}
 
 // --- Export ---
 export function downloadGobdExport(jahr: number) {

@@ -2,11 +2,15 @@
 API-Endpunkte für Lieferantenverwaltung.
 """
 
+import json as _json
+from datetime import date as _date
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response as _Response
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Lieferant
+from database.models import Lieferant, Rechnung
 from .schemas import LieferantCreate, LieferantUpdate, LieferantResponse
 
 router = APIRouter(prefix="/api/lieferanten", tags=["Stammdaten"])
@@ -27,6 +31,106 @@ def create_lieferant(data: LieferantCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(lieferant)
     return lieferant
+
+
+@router.get("/{lieferant_id}/dsgvo-export")
+def dsgvo_export(lieferant_id: int, db: Session = Depends(get_db)):
+    """DSGVO Art. 15 (Auskunft) + Art. 20 (Datenportabilität):
+    Alle gespeicherten Daten zu einem Lieferanten als JSON-Datei."""
+    lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
+    if not lieferant:
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
+
+    rechnungen = (
+        db.query(Rechnung)
+        .filter(Rechnung.lieferant_id == lieferant_id)
+        .order_by(Rechnung.datum)
+        .all()
+    )
+
+    name = lieferant.firmenname or " ".join(
+        t for t in [lieferant.vorname, lieferant.nachname] if t
+    ) or f"Lieferant-{lieferant_id}"
+
+    result = {
+        "export_datum": str(_date.today()),
+        "grundlage": "DSGVO Art. 15 (Auskunft) + Art. 20 (Datenportabilität)",
+        "lieferantendaten": {
+            "id": lieferant.id,
+            "lieferantennummer": lieferant.lieferantennummer,
+            "firmenname": lieferant.firmenname,
+            "vorname": lieferant.vorname,
+            "nachname": lieferant.nachname,
+            "strasse": lieferant.strasse,
+            "hausnummer": lieferant.hausnummer,
+            "plz": lieferant.plz,
+            "ort": lieferant.ort,
+            "land": lieferant.land,
+            "email": lieferant.email,
+            "telefon": lieferant.telefon,
+            "ust_idnr": lieferant.ust_idnr,
+            "notizen": lieferant.notizen,
+        },
+        "rechnungen": [
+            {
+                "id": r.id,
+                "rechnungsnummer": r.rechnungsnummer,
+                "datum": str(r.datum),
+                "leistungsdatum": str(r.leistungsdatum) if r.leistungsdatum else None,
+                "brutto_gesamt": str(r.brutto_gesamt),
+                "zahlungsstatus": r.zahlungsstatus,
+                "storniert": r.storniert,
+                "positionen": [
+                    {
+                        "beschreibung": p.beschreibung,
+                        "menge": str(p.menge),
+                        "einheit": p.einheit,
+                        "netto": str(p.netto),
+                        "ust_satz": str(p.ust_satz),
+                        "brutto": str(p.brutto),
+                    }
+                    for p in r.positionen
+                ],
+            }
+            for r in rechnungen
+        ],
+    }
+
+    content = _json.dumps(result, ensure_ascii=False, indent=2)
+    filename = f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.json"
+    return _Response(
+        content=content.encode("utf-8"),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{lieferant_id}/anonymisieren")
+def anonymisiere_lieferant(lieferant_id: int, db: Session = Depends(get_db)):
+    """DSGVO Art. 17 (Recht auf Vergessenwerden):
+    Löscht den Lieferantenstammsatz und entfernt die Verknüpfung in allen Rechnungen."""
+    lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
+    if not lieferant:
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
+
+    name = lieferant.firmenname or " ".join(
+        t for t in [lieferant.vorname, lieferant.nachname] if t
+    ) or f"Lieferant #{lieferant_id}"
+
+    rechnungen = db.query(Rechnung).filter(Rechnung.lieferant_id == lieferant_id).all()
+    for r in rechnungen:
+        if not r.partner_freitext:
+            r.partner_freitext = name
+        r.lieferant_id = None
+
+    db.delete(lieferant)
+    db.commit()
+
+    return {
+        "anonymisierte_rechnungen": len(rechnungen),
+        "unveraenderlich_verblieben": 0,
+        "hinweis": "",
+    }
 
 
 @router.get("/{lieferant_id}", response_model=LieferantResponse)
@@ -51,15 +155,16 @@ def update_lieferant(lieferant_id: int, data: LieferantUpdate, db: Session = Dep
 
 @router.delete("/{lieferant_id}", status_code=204)
 def delete_lieferant(lieferant_id: int, db: Session = Depends(get_db)):
-    """Löscht einen Lieferanten – nur wenn keine Rechnungen verknüpft sind."""
+    """Löscht einen Lieferanten – nur wenn keine Rechnungen verknüpft sind.
+    Für Lieferanten mit verknüpften Daten stattdessen /anonymisieren verwenden."""
     lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
     if not lieferant:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
     if lieferant.rechnungen:
         raise HTTPException(
             status_code=409,
-            detail="Lieferant kann nicht gelöscht werden – es sind Rechnungen verknüpft. "
-                   "Bitte den Lieferanten deaktivieren.",
+            detail="Lieferant hat verknüpfte Rechnungen. "
+                   "Bitte 'Anonymisieren (DSGVO)' verwenden.",
         )
     db.delete(lieferant)
     db.commit()
