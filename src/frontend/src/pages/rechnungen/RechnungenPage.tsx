@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen, stornoRechnung,
+  getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
+  stornoRechnung, finalisiereRechnung,
   getKunden, getLieferanten, getKategorien, getUnternehmen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
+  type Unternehmen,
 } from '../../api/client'
 
 // ---------------------------------------------------------------------------
@@ -33,11 +35,31 @@ function aktuellerMonat(): string {
 // Druck-/PDF-Logik
 // ---------------------------------------------------------------------------
 
-function rechnungHtml(r: Rechnung): string {
-  const datum = r.datum.split('-').reverse().join('.')
+function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined): string {
+  const isoZuDe = (iso: string) => iso.split('-').reverse().join('.')
   const partner = r.typ === 'ausgang'
     ? (r.kunde_name ?? r.partner_freitext ?? '—')
     : (r.lieferant_name ?? r.partner_freitext ?? '—')
+
+  const absenderName = u
+    ? [u.firmenname, u.vorname, u.nachname].filter(Boolean).join(' ')
+    : 'RechnungsFee'
+  const absenderAdresse = u
+    ? `${u.strasse} ${u.hausnummer}, ${u.plz} ${u.ort}`
+    : ''
+  const steuernrZeile = u?.steuernummer ? `StNr: ${u.steuernummer}` : ''
+  const ustIdZeile = u?.ust_idnr ? `USt-IdNr: ${u.ust_idnr}` : ''
+
+  const leistungsDatum = r.leistungsdatum && r.leistungsdatum !== r.datum
+    ? `<tr><td class="lbl">Leistungsdatum</td><td>${isoZuDe(r.leistungsdatum)}</td></tr>`
+    : ''
+  const faelligZeile = r.faellig_am
+    ? `<tr><td class="lbl">Fällig am</td><td>${isoZuDe(r.faellig_am)}</td></tr>`
+    : ''
+  const steuerHinweis = u?.ist_kleinunternehmer
+    ? '<p style="margin-top:12px;font-size:12px;color:#64748b">Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</p>'
+    : ''
+
   const posZeilen = r.positionen.map((p) => {
     const mengeStr = parseFloat(p.menge) !== 1 ? ` × ${p.menge} ${p.einheit}` : ''
     return `<tr>
@@ -47,29 +69,46 @@ function rechnungHtml(r: Rechnung): string {
       <td class="r bold">${formatEuro(p.brutto)}</td>
     </tr>`
   }).join('')
+
   return `<!DOCTYPE html><html><head>
   <meta charset="utf-8">
   <title>${r.rechnungsnummer ?? 'Rechnung'}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }
-    h1 { font-size: 18px; margin-bottom: 4px; }
-    .meta { color: #64748b; font-size: 13px; margin-bottom: 24px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; font-size: 14px; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 32px; }
+    .absender { font-size: 13px; line-height: 1.6; }
+    .absender strong { font-size: 15px; }
+    .metatable { font-size: 13px; border-collapse: collapse; }
+    .metatable td { padding: 2px 8px 2px 0; }
+    .metatable td.lbl { color: #64748b; }
+    h1 { font-size: 20px; margin: 24px 0 4px; }
+    .empfaenger { font-size: 13px; margin-bottom: 24px; color: #475569; }
+    table.pos { width: 100%; border-collapse: collapse; margin-top: 8px; }
     th { background: #f8fafc; text-align: left; padding: 8px; font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
     th.r, td.r { text-align: right; }
-    td { padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    td { padding: 8px; border-bottom: 1px solid #f1f5f9; }
     .bold { font-weight: bold; }
-    .total td { border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 15px; }
-    .footer { margin-top: 40px; font-size: 12px; color: #94a3b8; }
+    .total td { border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 15px; padding-top: 10px; }
+    .footer { margin-top: 48px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   </style>
   </head><body>
-  <h1>RechnungsFee – ${r.typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}</h1>
-  <div class="meta">
-    ${r.rechnungsnummer ?? '(keine Nummer)'} &nbsp;·&nbsp; ${datum}
-    ${r.faellig_am ? ' &nbsp;·&nbsp; Fällig: ' + r.faellig_am.split('-').reverse().join('.') : ''}
+  <div class="header">
+    <div class="absender">
+      <strong>${absenderName}</strong><br>
+      ${absenderAdresse ? absenderAdresse + '<br>' : ''}
+      ${steuernrZeile ? steuernrZeile + '<br>' : ''}
+      ${ustIdZeile || ''}
+    </div>
+    <table class="metatable">
+      <tr><td class="lbl">${r.typ === 'ausgang' ? 'Rechnungsnummer' : 'Eingangsrechnung'}</td><td>${r.rechnungsnummer ?? '—'}</td></tr>
+      <tr><td class="lbl">Rechnungsdatum</td><td>${isoZuDe(r.datum)}</td></tr>
+      ${leistungsDatum}
+      ${faelligZeile}
+    </table>
   </div>
-  <p><strong>${r.typ === 'ausgang' ? 'Kunde' : 'Lieferant'}:</strong> ${partner}</p>
-  <table>
+  <div class="empfaenger"><strong>${r.typ === 'ausgang' ? 'Rechnungsempfänger' : 'Lieferant'}:</strong> ${partner}</div>
+  <h1>${r.typ === 'ausgang' ? 'Rechnung' : 'Eingangsrechnung'}</h1>
+  <table class="pos">
     <thead><tr>
       <th>Beschreibung</th>
       <th class="r">Netto</th>
@@ -79,20 +118,21 @@ function rechnungHtml(r: Rechnung): string {
     <tbody>${posZeilen}</tbody>
     <tfoot>
       <tr class="total">
-        <td colspan="3">Gesamt</td>
+        <td colspan="3">Gesamtbetrag</td>
         <td class="r">${formatEuro(r.brutto_gesamt)}</td>
       </tr>
     </tfoot>
   </table>
+  ${steuerHinweis}
   ${r.notizen ? `<p style="margin-top:16px;font-size:13px;color:#64748b">Notizen: ${r.notizen}</p>` : ''}
   <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; ${new Date().toLocaleDateString('de-DE')}</div>
   </body></html>`
 }
 
-function oeffneRechnungFenster(r: Rechnung, drucken: boolean) {
+function oeffneRechnungFenster(r: Rechnung, drucken: boolean, u?: Unternehmen | null) {
   const win = window.open('', '_blank', 'width=720,height=900')
   if (!win) return
-  win.document.write(rechnungHtml(r))
+  win.document.write(rechnungHtml(r, u))
   win.document.close()
   win.focus()
   if (drucken) win.print()
@@ -312,6 +352,7 @@ function RechnungDetail({
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const qc = useQueryClient()
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
   const fortschritt = parseFloat(rechnung.brutto_gesamt) > 0
@@ -330,6 +371,11 @@ function RechnungDetail({
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setZeigStornoEingabe(false)
     },
+  })
+
+  const finalisiereMutation = useMutation({
+    mutationFn: () => finalisiereRechnung(rechnung.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
   })
 
   function handleMail() {
@@ -360,13 +406,13 @@ function RechnungDetail({
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => oeffneRechnungFenster(rechnung, true)}
+            onClick={() => oeffneRechnungFenster(rechnung, true, unternehmen)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
           >
             🖨️ Drucken
           </button>
           <button
-            onClick={() => oeffneRechnungFenster(rechnung, false)}
+            onClick={() => oeffneRechnungFenster(rechnung, false, unternehmen)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
           >
             📄 PDF öffnen
@@ -379,7 +425,7 @@ function RechnungDetail({
               ✉️ Mail senden{!partnerEmail ? ' …' : ''}
             </button>
           )}
-          {!rechnung.storniert && rechnung.zahlungen.length === 0 && !zeigStornoEingabe && (
+          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.zahlungen.length === 0 && !zeigStornoEingabe && (
             <button
               onClick={() => setZeigStornoEingabe(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
@@ -390,7 +436,7 @@ function RechnungDetail({
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
           )}
-          {rechnung.zahlungen.length > 0 && !rechnung.storniert && (
+          {!rechnung.ist_entwurf && rechnung.zahlungen.length > 0 && !rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storno nicht möglich (Zahlung verknüpft)</span>
           )}
         </div>
@@ -446,6 +492,20 @@ function RechnungDetail({
           <p className="text-red-600 text-xs">{(stornoMutation.error as Error).message}</p>
         )}
 
+        {/* Entwurf-Banner */}
+        {rechnung.ist_entwurf && (
+          <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <span className="text-sm text-amber-800">📝 <strong>Entwurf</strong> – noch nicht finalisiert</span>
+            <button
+              onClick={() => finalisiereMutation.mutate()}
+              disabled={finalisiereMutation.isPending}
+              className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 shrink-0"
+            >
+              {finalisiereMutation.isPending ? '…' : 'Finalisieren'}
+            </button>
+          </div>
+        )}
+
         {/* Stammdaten */}
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
@@ -457,8 +517,12 @@ function RechnungDetail({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Datum</span>
+            <span className="text-slate-500">Rechnungsdatum</span>
             <span>{formatDatum(rechnung.datum)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Leistungsdatum</span>
+            <span>{rechnung.leistungsdatum ? formatDatum(rechnung.leistungsdatum) : formatDatum(rechnung.datum)}</span>
           </div>
           {rechnung.faellig_am && (
             <div className="flex justify-between">
@@ -585,7 +649,7 @@ function RechnungDetail({
             {rechnung.zahlungsstatus === 'teilweise' && ` (Restbetrag ${formatEuro(restbetrag)})`}
           </button>
         )}
-        {!rechnung.immutable && (
+        {rechnung.ist_entwurf && (
           <>
             <button
               onClick={onEdit}
@@ -593,14 +657,12 @@ function RechnungDetail({
             >
               Bearbeiten
             </button>
-            {rechnung.zahlungen.length === 0 && (
-              <button
-                onClick={onDelete}
-                className="w-full py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
-              >
-                Löschen
-              </button>
-            )}
+            <button
+              onClick={onDelete}
+              className="w-full py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+            >
+              Entwurf löschen
+            </button>
           </>
         )}
       </div>
@@ -656,6 +718,10 @@ function RechnungForm({
 
   const [rechnungsnummer, setRechnungsnummer] = useState(initial?.rechnungsnummer ?? '')
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
+  const [leistungsdatum, setLeistungsdatum] = useState(initial?.leistungsdatum ?? initial?.datum ?? heuteIso())
+  const [leistungsdatumManuell, setLeistungsdatumManuell] = useState(
+    !!(initial?.leistungsdatum && initial.leistungsdatum !== initial.datum)
+  )
   const [faelligAm, setFaelligAm] = useState(initial?.faellig_am ?? '')
   const [partnerId, setPartnerId] = useState<string>(
     typ === 'ausgang'
@@ -688,6 +754,11 @@ function RechnungForm({
     }
     // Eingang: keine Default-Kategorie (zu vielfältig)
   }, [kategorien, istKleinunternehmer, typ, initial])
+
+  // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
+  useEffect(() => {
+    if (!leistungsdatumManuell) setLeistungsdatum(datum)
+  }, [datum, leistungsdatumManuell])
 
   // USt-Satz aller Positionen aus gewählter Kategorie ableiten
   useEffect(() => {
@@ -788,27 +859,23 @@ function RechnungForm({
     setPositionen((prev) => prev.filter((_, idx) => idx !== i))
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const data: RechnungCreate = {
+  function buildData(istEntwurf: boolean): RechnungCreate {
+    return {
       typ,
       rechnungsnummer: rechnungsnummer || undefined,
       datum,
+      leistungsdatum: leistungsdatum !== datum ? leistungsdatum : undefined,
       faellig_am: faelligAm || undefined,
       ...(typ === 'ausgang' ? { kunde_id: partnerId ? parseInt(partnerId) : undefined } : { lieferant_id: partnerId ? parseInt(partnerId) : undefined }),
       partner_freitext: partnerFreitext || undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
       notizen: notizen || undefined,
+      ist_entwurf: istEntwurf,
       positionen: positionen.map((p) => {
         const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
         const ust = parseFloat(p.ust_satz) || 0
         const ust_satz = istKleinunternehmer ? '0' : (p.ust_satz || '0')
-        let netto: number
-        if (eingabeModus === 'brutto') {
-          netto = ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
-        } else {
-          netto = eingabe
-        }
+        const netto = eingabeModus === 'brutto' && ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
         return {
           beschreibung: p.beschreibung,
           menge: p.menge || '1',
@@ -818,11 +885,15 @@ function RechnungForm({
         } as RechnungspositionCreate
       }),
     }
-    onSave(data)
+  }
+
+  function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
+    e.preventDefault()
+    onSave(buildData(istEntwurf))
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -837,7 +908,7 @@ function RechnungForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Datum *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Rechnungsdatum *</label>
           <input
             type="date"
             required
@@ -850,6 +921,21 @@ function RechnungForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Leistungsdatum
+            {!leistungsdatumManuell && <span className="text-slate-400 font-normal ml-1">(= Rechnungsdatum)</span>}
+          </label>
+          <input
+            type="date"
+            value={leistungsdatum}
+            onChange={(e) => {
+              setLeistungsdatum(e.target.value)
+              setLeistungsdatumManuell(e.target.value !== datum)
+            }}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Fällig am</label>
           <input
             type="date"
@@ -859,17 +945,18 @@ function RechnungForm({
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Kategorie</label>
-          <select
-            value={kategorieId}
-            onChange={(e) => setKategorieId(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">— keine —</option>
-            {kategorieOptionen}
-          </select>
-        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Kategorie</label>
+        <select
+          value={kategorieId}
+          onChange={(e) => setKategorieId(e.target.value)}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">— keine —</option>
+          {kategorieOptionen}
+        </select>
       </div>
 
       <div>
@@ -1047,19 +1134,27 @@ function RechnungForm({
         />
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50"
+          className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50"
         >
           Abbrechen
         </button>
         <button
-          type="submit"
+          type="button"
+          onClick={(e) => handleSubmit(e, true)}
+          className="flex-1 px-4 py-2 text-sm border border-slate-300 bg-white text-slate-700 rounded-lg hover:bg-slate-50"
+        >
+          📝 Entwurf speichern
+        </button>
+        <button
+          type="button"
+          onClick={(e) => handleSubmit(e, false)}
           className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          {initial ? 'Speichern' : 'Rechnung anlegen'}
+          ✓ {initial ? 'Speichern & Finalisieren' : 'Finalisieren'}
         </button>
       </div>
     </form>
@@ -1296,6 +1391,7 @@ export function RechnungenPage() {
                       <td className="px-5 py-3 text-slate-500">{formatDatum(r.datum)}</td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-400">
                         {r.rechnungsnummer ?? '—'}
+                        {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">Entwurf</span>}
                         {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 bg-slate-100 border border-slate-200 rounded px-1">Storniert</span>}
                       </td>
                       <td className="px-5 py-3 text-slate-700">

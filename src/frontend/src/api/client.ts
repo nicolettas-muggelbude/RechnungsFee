@@ -352,6 +352,7 @@ export type Rechnung = {
   typ: 'eingang' | 'ausgang'
   rechnungsnummer: string | null
   datum: string
+  leistungsdatum: string | null
   faellig_am: string | null
   kunde_id: number | null
   kunde_name: string | null
@@ -369,6 +370,7 @@ export type Rechnung = {
   notizen: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
+  ist_entwurf: boolean
   immutable: boolean
   storniert: boolean
   erstellt_am: string
@@ -379,12 +381,14 @@ export type RechnungCreate = {
   typ: 'eingang' | 'ausgang'
   rechnungsnummer?: string
   datum: string
+  leistungsdatum?: string
   faellig_am?: string
   kunde_id?: number
   lieferant_id?: number
   partner_freitext?: string
   kategorie_id?: number
   notizen?: string
+  ist_entwurf?: boolean
   positionen: RechnungspositionCreate[]
 }
 
@@ -437,3 +441,6 @@ export const getRechnungZahlungen = (id: number) =>
 
 export const stornoRechnung = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/storno`, { method: 'POST' })
+
+export const finalisiereRechnung = (id: number) =>
+  request<Rechnung>(`/rechnungen/${id}/finalisieren`, { method: 'POST' })

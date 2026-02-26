@@ -188,12 +188,14 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         typ=data.typ,
         rechnungsnummer=rechnungsnummer,
         datum=data.datum,
+        leistungsdatum=data.leistungsdatum,
         faellig_am=data.faellig_am,
         kunde_id=data.kunde_id,
         lieferant_id=data.lieferant_id,
         partner_freitext=data.partner_freitext,
         kategorie_id=data.kategorie_id,
         notizen=data.notizen,
+        ist_entwurf=data.ist_entwurf,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -243,14 +245,14 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.immutable:
-        raise HTTPException(status_code=409, detail="Diese Rechnung ist unveränderbar.")
+    if not rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Nur Entwürfe können bearbeitet werden.")
 
     unternehmen = db.query(Unternehmen).first()
     ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
 
-    for field in ("rechnungsnummer", "datum", "faellig_am", "kunde_id", "lieferant_id",
-                  "partner_freitext", "kategorie_id", "notizen"):
+    for field in ("rechnungsnummer", "datum", "leistungsdatum", "faellig_am", "kunde_id",
+                  "lieferant_id", "partner_freitext", "kategorie_id", "notizen"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
@@ -288,6 +290,23 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
         rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Decimal("0.01"), ROUND_HALF_UP)
 
+    if data.ist_entwurf is not None:
+        rechnung.ist_entwurf = data.ist_entwurf
+
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
+def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
+    """Entwurf finalisieren – danach nicht mehr bearbeitbar."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if not rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+    rechnung.ist_entwurf = False
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -298,13 +317,8 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.immutable:
-        raise HTTPException(status_code=409, detail="Diese Rechnung ist unveränderbar.")
-    if rechnung.kassenbucheintraege:
-        raise HTTPException(
-            status_code=409,
-            detail="Rechnung ist mit Kassenbucheinträgen verknüpft und kann nicht gelöscht werden.",
-        )
+    if not rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Nur Entwürfe können gelöscht werden.")
     db.delete(rechnung)
     db.commit()
 
@@ -380,6 +394,9 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     db.add(eintrag)
     db.flush()
 
+    # Zahlung finalisiert Entwurf automatisch
+    rechnung.ist_entwurf = False
+
     # Zahlungsstatus der Rechnung aktualisieren
     _aktualisiere_zahlungsstatus(rechnung)
 
@@ -400,6 +417,8 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwürfe können nicht storniert werden. Bitte den Entwurf löschen.")
     if rechnung.storniert:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits storniert.")
     if rechnung.kassenbucheintraege:

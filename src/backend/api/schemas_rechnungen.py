@@ -64,12 +64,14 @@ class RechnungCreate(BaseModel):
     typ: str  # eingang|ausgang
     rechnungsnummer: Optional[str] = None
     datum: date
+    leistungsdatum: Optional[date] = None
     faellig_am: Optional[date] = None
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
     partner_freitext: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
+    ist_entwurf: bool = True
     positionen: List[RechnungspositionCreate]
 
     @field_validator("typ")
@@ -98,12 +100,14 @@ class RechnungCreate(BaseModel):
 class RechnungUpdate(BaseModel):
     rechnungsnummer: Optional[str] = None
     datum: Optional[date] = None
+    leistungsdatum: Optional[date] = None
     faellig_am: Optional[date] = None
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
     partner_freitext: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
+    ist_entwurf: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
@@ -139,6 +143,8 @@ class RechnungResponse(BaseModel):
     zahlungsstatus: str
     zahlungsdatum: Optional[date]
     notizen: Optional[str]
+    leistungsdatum: Optional[date]
+    ist_entwurf: bool
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
     immutable: bool
