@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
+  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben, getRechnungPdf,
   getKunden, getLieferanten, getKategorien, getUnternehmen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type Unternehmen,
@@ -356,6 +356,8 @@ function RechnungDetail({
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
+  const [pdfLaeuft, setPdfLaeuft] = useState(false)
+  const [pdfHinweis, setPdfHinweis] = useState(false)
   const qc = useQueryClient()
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
@@ -407,18 +409,40 @@ function RechnungDetail({
     _markiereWennNoetig()
   }
 
-  function handleMail() {
+  async function handleMail() {
     const email = partnerEmail || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
-    const datum = rechnung.datum.split('-').reverse().join('.')
+
+    // PDF vom Backend laden und herunterladen
+    setPdfLaeuft(true)
+    setPdfHinweis(false)
+    try {
+      const blob = await getRechnungPdf(rechnung.id)
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setPdfHinweis(true)
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    } catch {
+      // PDF-Fehler: trotzdem mailto öffnen
+    } finally {
+      setPdfLaeuft(false)
+    }
+
+    // mailto öffnen (PDF-Anhang muss manuell hinzugefügt werden)
+    const datumDe = rechnung.datum.split('-').reverse().join('.')
     const subject = encodeURIComponent(`Rechnung ${rechnung.rechnungsnummer ?? ''}`)
-    const body = encodeURIComponent(
-      `Anbei die Rechnung vom ${datum}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}`
+    const body    = encodeURIComponent(
+      `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
     )
     window.open(`mailto:${email}?subject=${subject}&body=${body}`)
     setZeigMailEingabe(false)
     setMailAdresse('')
-    _markiereWennNoetig()
   }
 
   return (
@@ -450,9 +474,10 @@ function RechnungDetail({
           {!rechnung.storniert && (
             <button
               onClick={handleMail}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+              disabled={pdfLaeuft}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 disabled:opacity-50"
             >
-              ✉️ Mail senden{!partnerEmail ? ' …' : ''}
+              {pdfLaeuft ? '⏳ PDF…' : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
             </button>
           )}
           {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && (
@@ -493,6 +518,17 @@ function RechnungDetail({
             >
               Abbrechen
             </button>
+          </div>
+        )}
+
+        {/* PDF-Hinweis nach Mail-Versand */}
+        {pdfHinweis && (
+          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-sm text-blue-800">
+            <span className="mt-0.5 shrink-0">📎</span>
+            <span className="flex-1">
+              PDF wurde gespeichert. Bitte die Datei als Anhang in dein E-Mail-Programm einfügen.
+            </span>
+            <button onClick={() => setPdfHinweis(false)} className="text-blue-400 hover:text-blue-600 shrink-0">×</button>
           </div>
         )}
 

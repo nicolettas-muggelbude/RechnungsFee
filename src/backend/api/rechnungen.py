@@ -7,6 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from database.models import (
     Kategorie, Unternehmen, Nummernkreis,
 )
 from utils.signatur import signatur_kassenbucheintrag
+from utils.pdf_rechnung import generate_rechnung_pdf
 from .schemas_rechnungen import (
     RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt,
@@ -310,6 +312,63 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.post("/{rechnung_id}/ausgegeben", response_model=RechnungResponse)
+def markiere_ausgegeben(rechnung_id: int, db: Session = Depends(get_db)):
+    """Markiert eine finalisierte Rechnung als ausgegeben (gedruckt/versendet).
+    Folgedrucke/-versände werden damit als KOPIE gekennzeichnet."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwürfe werden nicht als ausgegeben markiert.")
+    rechnung.ausgegeben = True
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.get("/{rechnung_id}/pdf")
+def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
+    """PDF der Rechnung generieren und zurückgeben.
+    Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
+    Folge-Abrufe erhalten ein KOPIE-Banner."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwürfe können nicht als PDF exportiert werden.")
+
+    unternehmen = db.query(Unternehmen).first()
+    unt_dict = {}
+    if unternehmen:
+        unt_dict = {
+            "firmenname":         unternehmen.firmenname or "",
+            "vorname":            unternehmen.vorname or "",
+            "nachname":           unternehmen.nachname or "",
+            "strasse":            unternehmen.strasse or "",
+            "hausnummer":         unternehmen.hausnummer or "",
+            "plz":                unternehmen.plz or "",
+            "ort":                unternehmen.ort or "",
+            "steuernummer":       unternehmen.steuernummer or "",
+            "ust_idnr":           unternehmen.ust_idnr or "",
+            "ist_kleinunternehmer": unternehmen.ist_kleinunternehmer or False,
+        }
+
+    ist_kopie = rechnung.ausgegeben
+    pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie)
+
+    if not rechnung.ausgegeben:
+        rechnung.ausgegeben = True
+        db.commit()
+
+    dateiname = f"Rechnung_{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+    )
 
 
 @router.delete("/{rechnung_id}", status_code=204)

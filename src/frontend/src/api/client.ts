@@ -388,6 +388,7 @@ export type Rechnung = {
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   ist_entwurf: boolean
+  ausgegeben: boolean
   immutable: boolean
   storniert: boolean
   erstellt_am: string
@@ -461,3 +462,15 @@ export const stornoRechnung = (id: number) =>
 
 export const finalisiereRechnung = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/finalisieren`, { method: 'POST' })
+
+export const markiereRechnungAusgegeben = (id: number) =>
+  request<Rechnung>(`/rechnungen/${id}/ausgegeben`, { method: 'POST' })
+
+export async function getRechnungPdf(id: number): Promise<Blob> {
+  const res = await fetch(`${BASE}/rechnungen/${id}/pdf`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'PDF-Export fehlgeschlagen')
+  }
+  return res.blob()
+}
