@@ -145,6 +145,7 @@ class RechnungResponse(BaseModel):
     notizen: Optional[str]
     leistungsdatum: Optional[date]
     ist_entwurf: bool
+    ausgegeben: bool
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
     immutable: bool

@@ -118,6 +118,15 @@ def _run_migrations() -> None:
             ))
             conn.commit()
 
+        # rechnungen.ausgegeben
+        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
+        columns = {row[1] for row in result}
+        if "ausgegeben" not in columns:
+            conn.execute(text(
+                "ALTER TABLE rechnungen ADD COLUMN ausgegeben BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+
         # tagesabschluesse.zaehlung_json
         result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
         columns = {row[1] for row in result}
