@@ -10,8 +10,22 @@ from fastapi.responses import Response as _Response
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Kunde, Kassenbucheintrag, Rechnung
+from database.models import Kunde, Kassenbucheintrag, Rechnung, Nummernkreis
+from .kassenbuch import _belegnr_aus_format
 from .schemas import KundeCreate, KundeUpdate, KundeResponse
+
+
+def _naechste_nummer(typ: str, db: Session) -> str | None:
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == typ).first()
+    if not nk:
+        return None
+    heute = _date.today()
+    if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+        nk.naechste_nr = 1
+    nk.letztes_jahr = heute.year
+    nr = nk.naechste_nr
+    nk.naechste_nr += 1
+    return _belegnr_aus_format(nk.format, heute, nr)
 
 router = APIRouter(prefix="/api/kunden", tags=["Stammdaten"])
 
@@ -26,7 +40,10 @@ def list_kunden(nur_aktive: bool = True, db: Session = Depends(get_db)):
 
 @router.post("", response_model=KundeResponse, status_code=201)
 def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
-    kunde = Kunde(**data.model_dump())
+    kunde_data = data.model_dump()
+    if not kunde_data.get("kundennummer"):
+        kunde_data["kundennummer"] = _naechste_nummer("kunde", db)
+    kunde = Kunde(**kunde_data)
     db.add(kunde)
     db.commit()
     db.refresh(kunde)

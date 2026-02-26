@@ -10,8 +10,22 @@ from fastapi.responses import Response as _Response
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Lieferant, Rechnung
+from database.models import Lieferant, Rechnung, Nummernkreis
+from .kassenbuch import _belegnr_aus_format
 from .schemas import LieferantCreate, LieferantUpdate, LieferantResponse
+
+
+def _naechste_nummer(typ: str, db: Session) -> str | None:
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == typ).first()
+    if not nk:
+        return None
+    heute = _date.today()
+    if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+        nk.naechste_nr = 1
+    nk.letztes_jahr = heute.year
+    nr = nk.naechste_nr
+    nk.naechste_nr += 1
+    return _belegnr_aus_format(nk.format, heute, nr)
 
 router = APIRouter(prefix="/api/lieferanten", tags=["Stammdaten"])
 
@@ -26,7 +40,10 @@ def list_lieferanten(nur_aktive: bool = True, db: Session = Depends(get_db)):
 
 @router.post("", response_model=LieferantResponse, status_code=201)
 def create_lieferant(data: LieferantCreate, db: Session = Depends(get_db)):
-    lieferant = Lieferant(**data.model_dump())
+    lieferant_data = data.model_dump()
+    if not lieferant_data.get("lieferantennummer"):
+        lieferant_data["lieferantennummer"] = _naechste_nummer("lieferant", db)
+    lieferant = Lieferant(**lieferant_data)
     db.add(lieferant)
     db.commit()
     db.refresh(lieferant)
