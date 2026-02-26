@@ -56,8 +56,12 @@ export function KundenPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['kunden'] }); closeForm() },
   })
   const deleteMutation = useMutation({
-    mutationFn: deleteKunde,
+    mutationFn: (k: Kunde) => deleteKunde(k.id!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kunden'] }),
+    onError: (_err: Error, k: Kunde) => {
+      // Verknüpfte Daten → Edit-Modal mit DSGVO-Abschnitt öffnen
+      openEdit(k)
+    },
   })
 
   const anonymisierungMutation = useMutation({
@@ -119,7 +123,7 @@ export function KundenPage() {
   function handleDelete(k: Kunde) {
     if (!k.id) return
     if (!window.confirm(`Kunden "${k.firmenname ?? k.nachname}" löschen?`)) return
-    deleteMutation.mutate(k.id)
+    deleteMutation.mutate(k)
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
