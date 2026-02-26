@@ -297,6 +297,7 @@ class Rechnung(Base):
     notizen: Mapped[str | None] = mapped_column(Text)
     # GoBD
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    storniert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

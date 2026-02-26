@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
+  getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen, stornoRechnung,
   getKunden, getLieferanten, getKategorien, getUnternehmen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
 } from '../../api/client'
@@ -27,6 +27,75 @@ function heuteIso(): string {
 function aktuellerMonat(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+// ---------------------------------------------------------------------------
+// Druck-/PDF-Logik
+// ---------------------------------------------------------------------------
+
+function rechnungHtml(r: Rechnung): string {
+  const datum = r.datum.split('-').reverse().join('.')
+  const partner = r.typ === 'ausgang'
+    ? (r.kunde_name ?? r.partner_freitext ?? '—')
+    : (r.lieferant_name ?? r.partner_freitext ?? '—')
+  const posZeilen = r.positionen.map((p) => {
+    const mengeStr = parseFloat(p.menge) !== 1 ? ` × ${p.menge} ${p.einheit}` : ''
+    return `<tr>
+      <td>${p.beschreibung}${mengeStr}</td>
+      <td class="r">${formatEuro(p.netto)}</td>
+      <td class="r">${p.ust_satz} %</td>
+      <td class="r bold">${formatEuro(p.brutto)}</td>
+    </tr>`
+  }).join('')
+  return `<!DOCTYPE html><html><head>
+  <meta charset="utf-8">
+  <title>${r.rechnungsnummer ?? 'Rechnung'}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .meta { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th { background: #f8fafc; text-align: left; padding: 8px; font-size: 13px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    th.r, td.r { text-align: right; }
+    td { padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    .bold { font-weight: bold; }
+    .total td { border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 15px; }
+    .footer { margin-top: 40px; font-size: 12px; color: #94a3b8; }
+  </style>
+  </head><body>
+  <h1>RechnungsFee – ${r.typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}</h1>
+  <div class="meta">
+    ${r.rechnungsnummer ?? '(keine Nummer)'} &nbsp;·&nbsp; ${datum}
+    ${r.faellig_am ? ' &nbsp;·&nbsp; Fällig: ' + r.faellig_am.split('-').reverse().join('.') : ''}
+  </div>
+  <p><strong>${r.typ === 'ausgang' ? 'Kunde' : 'Lieferant'}:</strong> ${partner}</p>
+  <table>
+    <thead><tr>
+      <th>Beschreibung</th>
+      <th class="r">Netto</th>
+      <th class="r">USt</th>
+      <th class="r">Brutto</th>
+    </tr></thead>
+    <tbody>${posZeilen}</tbody>
+    <tfoot>
+      <tr class="total">
+        <td colspan="3">Gesamt</td>
+        <td class="r">${formatEuro(r.brutto_gesamt)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  ${r.notizen ? `<p style="margin-top:16px;font-size:13px;color:#64748b">Notizen: ${r.notizen}</p>` : ''}
+  <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; ${new Date().toLocaleDateString('de-DE')}</div>
+  </body></html>`
+}
+
+function oeffneRechnungFenster(r: Rechnung, drucken: boolean) {
+  const win = window.open('', '_blank', 'width=720,height=900')
+  if (!win) return
+  win.document.write(rechnungHtml(r))
+  win.document.close()
+  win.focus()
+  if (drucken) win.print()
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +308,9 @@ function RechnungDetail({
   onDelete: () => void
 }) {
   const [zahlungsDialog, setZahlungsDialog] = useState(false)
+  const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
+  const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
+  const [mailAdresse, setMailAdresse] = useState('')
   const qc = useQueryClient()
 
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
@@ -246,7 +318,32 @@ function RechnungDetail({
     ? Math.min((parseFloat(rechnung.bezahlt_betrag) / parseFloat(rechnung.brutto_gesamt)) * 100, 100)
     : 0
 
-  const hatZahlungsoption = restbetrag > 0.004
+  const hatZahlungsoption = restbetrag > 0.004 && !rechnung.storniert
+
+  const partnerEmail = rechnung.typ === 'ausgang'
+    ? (rechnung as any).kunde_email ?? null
+    : null
+
+  const stornoMutation = useMutation({
+    mutationFn: () => stornoRechnung(rechnung.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      setZeigStornoEingabe(false)
+    },
+  })
+
+  function handleMail() {
+    const email = partnerEmail || mailAdresse.trim()
+    if (!email) { setZeigMailEingabe(true); return }
+    const datum = rechnung.datum.split('-').reverse().join('.')
+    const subject = encodeURIComponent(`Rechnung ${rechnung.rechnungsnummer ?? ''}`)
+    const body = encodeURIComponent(
+      `Anbei die Rechnung vom ${datum}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}`
+    )
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`)
+    setZeigMailEingabe(false)
+    setMailAdresse('')
+  }
 
   return (
     <div className="border-l border-slate-200 bg-white h-full overflow-auto flex flex-col">
@@ -259,6 +356,96 @@ function RechnungDetail({
       </div>
 
       <div className="p-5 space-y-5 flex-1">
+
+        {/* Aktionsleiste */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => oeffneRechnungFenster(rechnung, true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+          >
+            🖨️ Drucken
+          </button>
+          <button
+            onClick={() => oeffneRechnungFenster(rechnung, false)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+          >
+            📄 PDF öffnen
+          </button>
+          {!rechnung.storniert && (
+            <button
+              onClick={handleMail}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+            >
+              ✉️ Mail senden{!partnerEmail ? ' …' : ''}
+            </button>
+          )}
+          {!rechnung.storniert && rechnung.zahlungen.length === 0 && !zeigStornoEingabe && (
+            <button
+              onClick={() => setZeigStornoEingabe(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+            >
+              ✕ Stornieren
+            </button>
+          )}
+          {rechnung.storniert && (
+            <span className="self-center text-xs text-slate-400 italic">Storniert</span>
+          )}
+          {rechnung.zahlungen.length > 0 && !rechnung.storniert && (
+            <span className="self-center text-xs text-slate-400 italic">Storno nicht möglich (Zahlung verknüpft)</span>
+          )}
+        </div>
+
+        {/* Mail-Eingabe */}
+        {zeigMailEingabe && (
+          <div className="flex gap-2 items-center">
+            <input
+              type="email"
+              value={mailAdresse}
+              onChange={(e) => setMailAdresse(e.target.value)}
+              placeholder="E-Mail-Adresse eingeben…"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleMail()}
+            />
+            <button
+              onClick={handleMail}
+              disabled={!mailAdresse.trim()}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              Öffnen
+            </button>
+            <button
+              onClick={() => { setZeigMailEingabe(false); setMailAdresse('') }}
+              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+            >
+              Abbrechen
+            </button>
+          </div>
+        )}
+
+        {/* Storno-Bestätigung */}
+        {zeigStornoEingabe && (
+          <div className="flex gap-2 items-center bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            <span className="text-sm text-red-700 flex-1">Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.</span>
+            <button
+              onClick={() => stornoMutation.mutate()}
+              disabled={stornoMutation.isPending}
+              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+            >
+              {stornoMutation.isPending ? '…' : 'Bestätigen'}
+            </button>
+            <button
+              onClick={() => setZeigStornoEingabe(false)}
+              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+            >
+              Abbrechen
+            </button>
+          </div>
+        )}
+        {stornoMutation.isError && (
+          <p className="text-red-600 text-xs">{(stornoMutation.error as Error).message}</p>
+        )}
+
         {/* Stammdaten */}
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
@@ -1104,17 +1291,18 @@ export function RechnungenPage() {
                       onClick={() => { setSelectedId(r.id); setFormModus(null) }}
                       className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors ${
                         selectedId === r.id ? 'bg-blue-50/50' : ''
-                      }`}
+                      } ${r.storniert ? 'opacity-50' : ''}`}
                     >
                       <td className="px-5 py-3 text-slate-500">{formatDatum(r.datum)}</td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-400">
                         {r.rechnungsnummer ?? '—'}
+                        {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 bg-slate-100 border border-slate-200 rounded px-1">Storniert</span>}
                       </td>
                       <td className="px-5 py-3 text-slate-700">
                         {r.typ === 'ausgang'
                           ? (r.kunde_name ?? r.partner_freitext ?? '—')
                           : (r.lieferant_name ?? r.partner_freitext ?? '—')}
-                        {r.faellig_am && r.zahlungsstatus !== 'bezahlt' && r.faellig_am < heuteIso() && (
+                        {r.faellig_am && r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
                           <span className="ml-1.5 text-[10px] text-red-600 bg-red-50 border border-red-200 rounded px-1">
                             Überfällig
                           </span>
@@ -1124,7 +1312,9 @@ export function RechnungenPage() {
                         {formatEuro(r.brutto_gesamt)}
                       </td>
                       <td className="px-5 py-3 text-center">
-                        <StatusBadge status={r.zahlungsstatus} />
+                        {r.storniert
+                          ? <span className="text-xs text-slate-400 italic">—</span>
+                          : <StatusBadge status={r.zahlungsstatus} />}
                       </td>
                     </tr>
                   ))}

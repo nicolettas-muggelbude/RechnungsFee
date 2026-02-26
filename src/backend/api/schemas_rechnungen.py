@@ -142,6 +142,7 @@ class RechnungResponse(BaseModel):
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
     immutable: bool
+    storniert: bool
     erstellt_am: datetime
     aktualisiert_am: datetime
 

@@ -370,6 +370,7 @@ export type Rechnung = {
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   immutable: boolean
+  storniert: boolean
   erstellt_am: string
   aktualisiert_am: string
 }
@@ -433,3 +434,6 @@ export const barZahlungErstellen = (id: number, data: BarZahlungCreate) =>
 
 export const getRechnungZahlungen = (id: number) =>
   request<ZahlungKompakt[]>(`/rechnungen/${id}/zahlungen`)
+
+export const stornoRechnung = (id: number) =>
+  request<Rechnung>(`/rechnungen/${id}/storno`, { method: 'POST' })

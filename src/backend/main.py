@@ -85,6 +85,15 @@ def _run_migrations() -> None:
             ))
             conn.commit()
 
+        # rechnungen.storniert
+        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
+        columns = {row[1] for row in result}
+        if "storniert" not in columns:
+            conn.execute(text(
+                "ALTER TABLE rechnungen ADD COLUMN storniert BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+
         # tagesabschluesse.zaehlung_json
         result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
         columns = {row[1] for row in result}

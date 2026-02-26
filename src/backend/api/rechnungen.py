@@ -394,6 +394,26 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     )
 
 
+@router.post("/{rechnung_id}/storno", response_model=RechnungResponse)
+def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
+    """Rechnung als storniert markieren (irreversibel)."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.storniert:
+        raise HTTPException(status_code=409, detail="Rechnung ist bereits storniert.")
+    if rechnung.kassenbucheintraege:
+        raise HTTPException(
+            status_code=409,
+            detail="Rechnung hat verknüpfte Kassenbucheinträge und kann nicht storniert werden.",
+        )
+    rechnung.storniert = True
+    rechnung.immutable = True
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
 @router.get("/{rechnung_id}/zahlungen", response_model=list[ZahlungKompakt])
 def get_rechnung_zahlungen(rechnung_id: int, db: Session = Depends(get_db)):
     """Alle verknüpften Kassenbucheinträge für eine Rechnung."""
