@@ -118,6 +118,8 @@ def list_rechnungen(
     typ: Optional[str] = Query(None, description="eingang|ausgang"),
     zahlungsstatus: Optional[str] = Query(None, description="offen|teilweise|bezahlt"),
     monat: Optional[str] = Query(None, description="YYYY-MM"),
+    datum_von: Optional[date] = Query(None, description="YYYY-MM-DD"),
+    datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
     kunde_id: Optional[int] = None,
     lieferant_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -138,6 +140,10 @@ def list_rechnungen(
             )
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="monat muss im Format YYYY-MM sein")
+    if datum_von:
+        q = q.filter(Rechnung.datum >= datum_von)
+    if datum_bis:
+        q = q.filter(Rechnung.datum <= datum_bis)
     if kunde_id is not None:
         q = q.filter(Rechnung.kunde_id == kunde_id)
     if lieferant_id is not None:

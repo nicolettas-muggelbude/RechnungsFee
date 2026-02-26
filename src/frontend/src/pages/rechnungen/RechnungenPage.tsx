@@ -883,18 +883,31 @@ function RechnungForm({
 // Haupt-Seite
 // ---------------------------------------------------------------------------
 
+type FilterModus = 'monat' | 'datum' | 'zeitraum'
+
 export function RechnungenPage() {
   const qc = useQueryClient()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
   const [zahlungsstatus, setZahlungsstatus] = useState('')
+  const [filterModus, setFilterModus] = useState<FilterModus>('monat')
   const [monat, setMonat] = useState(aktuellerMonat())
+  const [datum, setDatum] = useState(heuteIso())
+  const [datumVon, setDatumVon] = useState(heuteIso())
+  const [datumBis, setDatumBis] = useState(heuteIso())
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
 
+  const filterParams =
+    filterModus === 'monat'
+      ? { monat }
+      : filterModus === 'datum'
+        ? { datum_von: datum, datum_bis: datum }
+        : { datum_von: datumVon, datum_bis: datumBis }
+
   const { data: rechnungen, isLoading } = useQuery({
-    queryKey: ['rechnungen', typ, zahlungsstatus, monat],
-    queryFn: () => getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, monat }),
+    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis],
+    queryFn: () => getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
   })
 
   const selectedRechnung = rechnungen?.find((r) => r.id === selectedId) ?? null
@@ -973,6 +986,59 @@ export function RechnungenPage() {
               ))}
             </div>
 
+            {/* Zeitraum-Modus */}
+            <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+              {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setFilterModus(m)}
+                  className={`px-3 py-1.5 transition-colors ${
+                    filterModus === m
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
+                </button>
+              ))}
+            </div>
+
+            {/* Datums-Eingabe je nach Modus */}
+            {filterModus === 'monat' && (
+              <input
+                type="month"
+                value={monat}
+                onChange={(e) => setMonat(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
+            {filterModus === 'datum' && (
+              <input
+                type="date"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
+            {filterModus === 'zeitraum' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={datumVon}
+                  onChange={(e) => setDatumVon(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-slate-400 text-sm">bis</span>
+                <input
+                  type="date"
+                  value={datumBis}
+                  min={datumVon}
+                  onChange={(e) => setDatumBis(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+
             {/* Zahlungsstatus */}
             <select
               value={zahlungsstatus}
@@ -984,14 +1050,6 @@ export function RechnungenPage() {
               <option value="teilweise">Teilweise bezahlt</option>
               <option value="bezahlt">Bezahlt</option>
             </select>
-
-            {/* Monat */}
-            <input
-              type="month"
-              value={monat}
-              onChange={(e) => setMonat(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
           </div>
 
           {/* Fehlermeldung */}

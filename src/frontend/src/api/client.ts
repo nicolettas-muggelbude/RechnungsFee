@@ -406,6 +406,8 @@ export const getRechnungen = (filter?: {
   typ?: 'eingang' | 'ausgang'
   zahlungsstatus?: string
   monat?: string
+  datum_von?: string
+  datum_bis?: string
   kunde_id?: number
   lieferant_id?: number
 }) => request<Rechnung[]>(`/rechnungen${toQuery(filter ?? {})}`)
