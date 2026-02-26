@@ -184,14 +184,14 @@ class RechnungResponse(BaseModel):
 class BarZahlungCreate(BaseModel):
     betrag: Optional[Decimal] = None  # None = Restbetrag
     datum: date
-    zahlungsart: str = "Bar"  # Bar|Karte|PayPal
+    zahlungsart: str = "Bar"  # Bar|Karte|PayPal|Bank
     beschreibung: Optional[str] = None
 
     @field_validator("zahlungsart")
     @classmethod
     def check_zahlungsart(cls, v: str) -> str:
-        if v not in ("Bar", "Karte", "PayPal"):
-            raise ValueError("zahlungsart muss Bar, Karte oder PayPal sein")
+        if v not in ("Bar", "Karte", "PayPal", "Bank"):
+            raise ValueError("zahlungsart muss Bar, Karte, PayPal oder Bank sein")
         return v
 
     @field_validator("betrag")

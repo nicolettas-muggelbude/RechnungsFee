@@ -172,7 +172,7 @@ function ZahlungsDialog({
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
   const [betrag, setBetrag] = useState(restbetrag.toFixed(2).replace('.', ','))
   const [datum, setDatum] = useState(heuteIso())
-  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal'>('Bar')
+  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bar')
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
@@ -263,18 +263,18 @@ function ZahlungsDialog({
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Zahlungsart</label>
             <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
-              {(['Bar', 'Karte', 'PayPal'] as const).map((z) => (
+              {([['Bar', 'Bar'], ['Karte', 'Karte'], ['PayPal', 'PayPal'], ['Bank', 'Überw.']] as const).map(([val, label]) => (
                 <button
-                  key={z}
+                  key={val}
                   type="button"
-                  onClick={() => setZahlungsart(z)}
+                  onClick={() => setZahlungsart(val)}
                   className={`flex-1 py-2 transition-colors ${
-                    zahlungsart === z
+                    zahlungsart === val
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  {z}
+                  {label}
                 </button>
               ))}
             </div>
@@ -299,7 +299,7 @@ function ZahlungsDialog({
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm">
               <p className="text-blue-700 font-medium">Kassenbuchung wird erstellt:</p>
               <p className="text-blue-600 mt-0.5">
-                {artLabel} {formatEuro(betragDecimal)} via {zahlungsart}
+                {artLabel} {formatEuro(betragDecimal)} via {zahlungsart === 'Bank' ? 'Überweisung' : zahlungsart}
               </p>
             </div>
           )}

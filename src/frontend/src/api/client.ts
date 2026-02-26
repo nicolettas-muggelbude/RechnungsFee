@@ -397,7 +397,7 @@ export type RechnungUpdate = Partial<RechnungCreate>
 export type BarZahlungCreate = {
   betrag?: string
   datum: string
-  zahlungsart: 'Bar' | 'Karte' | 'PayPal'
+  zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank'
   beschreibung?: string
 }
 
