@@ -425,7 +425,7 @@ function RechnungDetail({
               ✉️ Mail senden{!partnerEmail ? ' …' : ''}
             </button>
           )}
-          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.zahlungen.length === 0 && !zeigStornoEingabe && (
+          {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && (
             <button
               onClick={() => setZeigStornoEingabe(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
@@ -435,9 +435,6 @@ function RechnungDetail({
           )}
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
-          )}
-          {!rechnung.ist_entwurf && rechnung.zahlungen.length > 0 && !rechnung.storniert && (
-            <span className="self-center text-xs text-slate-400 italic">Storno nicht möglich (Zahlung verknüpft)</span>
           )}
         </div>
 
@@ -472,7 +469,14 @@ function RechnungDetail({
         {/* Storno-Bestätigung */}
         {zeigStornoEingabe && (
           <div className="flex gap-2 items-center bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-            <span className="text-sm text-red-700 flex-1">Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.</span>
+            <span className="text-sm text-red-700 flex-1">
+              Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.
+              {rechnung.zahlungen.length > 0 && (
+                <span className="block mt-0.5 text-xs text-red-600">
+                  Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Kassenbuch erstellt.
+                </span>
+              )}
+            </span>
             <button
               onClick={() => stornoMutation.mutate()}
               disabled={stornoMutation.isPending}

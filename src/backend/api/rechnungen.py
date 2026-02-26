@@ -413,7 +413,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
 @router.post("/{rechnung_id}/storno", response_model=RechnungResponse)
 def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
-    """Rechnung als storniert markieren (irreversibel)."""
+    """Rechnung stornieren (irreversibel). Hat die Rechnung verknüpfte Kassenbuch-
+    Zahlungen, werden automatisch GoBD-konforme Gegenbuchungen erstellt."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -421,11 +422,38 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Entwürfe können nicht storniert werden. Bitte den Entwurf löschen.")
     if rechnung.storniert:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits storniert.")
-    if rechnung.kassenbucheintraege:
-        raise HTTPException(
-            status_code=409,
-            detail="Rechnung hat verknüpfte Kassenbucheinträge und kann nicht storniert werden.",
+
+    re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
+    heute = date.today()
+
+    # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Kassenbuch-Storno)
+    for eintrag in list(rechnung.kassenbucheintraege):
+        # Nicht doppelt stornieren
+        bereits = db.query(Kassenbucheintrag).filter(
+            Kassenbucheintrag.beschreibung.like(f"STORNO {eintrag.belegnr}:%")
+        ).first()
+        if bereits:
+            continue
+        storno_art = "Ausgabe" if eintrag.art == "Einnahme" else "Einnahme"
+        belegnr = _naechste_belegnr_kassenbuch(db, heute)
+        gegenbuchung = Kassenbucheintrag(
+            datum=heute,
+            belegnr=belegnr,
+            beschreibung=f"STORNO {eintrag.belegnr}: Rechnung {re_nr} storniert",
+            kategorie_id=eintrag.kategorie_id,
+            zahlungsart=eintrag.zahlungsart,
+            art=storno_art,
+            netto_betrag=eintrag.netto_betrag,
+            ust_satz=eintrag.ust_satz,
+            ust_betrag=eintrag.ust_betrag,
+            brutto_betrag=eintrag.brutto_betrag,
+            vorsteuerabzug=False,
+            steuerbefreiung_grund=None,
+            immutable=True,
         )
+        gegenbuchung.signatur = signatur_kassenbucheintrag(gegenbuchung)
+        db.add(gegenbuchung)
+
     rechnung.storniert = True
     rechnung.immutable = True
     db.commit()
