@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung,
+  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
   getKunden, getLieferanten, getKategorien, getUnternehmen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type Unternehmen,
@@ -35,7 +35,7 @@ function aktuellerMonat(): string {
 // Druck-/PDF-Logik
 // ---------------------------------------------------------------------------
 
-function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined): string {
+function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined, istKopie = false): string {
   const isoZuDe = (iso: string) => iso.split('-').reverse().join('.')
   const partner = r.typ === 'ausgang'
     ? (r.kunde_name ?? r.partner_freitext ?? '—')
@@ -70,9 +70,13 @@ function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined): string {
     </tr>`
   }).join('')
 
+  const kopiBanner = istKopie
+    ? `<div style="background:#dc2626;color:#fff;text-align:center;padding:10px;font-size:20px;font-weight:bold;letter-spacing:8px;margin-bottom:24px;border-radius:4px;">KOPIE</div>`
+    : ''
+
   return `<!DOCTYPE html><html><head>
   <meta charset="utf-8">
-  <title>${r.rechnungsnummer ?? 'Rechnung'}</title>
+  <title>${istKopie ? 'KOPIE – ' : ''}${r.rechnungsnummer ?? 'Rechnung'}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; font-size: 14px; }
     .header { display: flex; justify-content: space-between; margin-bottom: 32px; }
@@ -92,6 +96,7 @@ function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined): string {
     .footer { margin-top: 48px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   </style>
   </head><body>
+  ${kopiBanner}
   <div class="header">
     <div class="absender">
       <strong>${absenderName}</strong><br>
@@ -129,10 +134,10 @@ function rechnungHtml(r: Rechnung, u: Unternehmen | null | undefined): string {
   </body></html>`
 }
 
-function oeffneRechnungFenster(r: Rechnung, drucken: boolean, u?: Unternehmen | null) {
+function oeffneRechnungFenster(r: Rechnung, drucken: boolean, u?: Unternehmen | null, istKopie = false) {
   const win = window.open('', '_blank', 'width=720,height=900')
   if (!win) return
-  win.document.write(rechnungHtml(r, u))
+  win.document.write(rechnungHtml(r, u, istKopie))
   win.document.close()
   win.focus()
   if (drucken) win.print()
@@ -378,6 +383,30 @@ function RechnungDetail({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
   })
 
+  const markiereAusgegebenMutation = useMutation({
+    mutationFn: () => markiereRechnungAusgegeben(rechnung.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
+  })
+
+  // Beim ersten Druck/Öffnen/Mail: Rechnung als "ausgegeben" markieren
+  function _markiereWennNoetig() {
+    if (!rechnung.ist_entwurf && !rechnung.ausgegeben) {
+      markiereAusgegebenMutation.mutate()
+    }
+  }
+
+  function handleDrucken() {
+    const istKopie = !rechnung.ist_entwurf && rechnung.ausgegeben
+    oeffneRechnungFenster(rechnung, true, unternehmen, istKopie)
+    _markiereWennNoetig()
+  }
+
+  function handlePdfOeffnen() {
+    const istKopie = !rechnung.ist_entwurf && rechnung.ausgegeben
+    oeffneRechnungFenster(rechnung, false, unternehmen, istKopie)
+    _markiereWennNoetig()
+  }
+
   function handleMail() {
     const email = partnerEmail || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
@@ -389,6 +418,7 @@ function RechnungDetail({
     window.open(`mailto:${email}?subject=${subject}&body=${body}`)
     setZeigMailEingabe(false)
     setMailAdresse('')
+    _markiereWennNoetig()
   }
 
   return (
@@ -406,16 +436,16 @@ function RechnungDetail({
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => oeffneRechnungFenster(rechnung, true, unternehmen)}
+            onClick={handleDrucken}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
           >
-            🖨️ Drucken
+            🖨️ {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie drucken' : 'Drucken'}
           </button>
           <button
-            onClick={() => oeffneRechnungFenster(rechnung, false, unternehmen)}
+            onClick={handlePdfOeffnen}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
           >
-            📄 PDF öffnen
+            📄 {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
           </button>
           {!rechnung.storniert && (
             <button
