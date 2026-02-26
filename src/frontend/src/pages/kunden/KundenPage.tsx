@@ -124,6 +124,7 @@ export function KundenPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left">
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">Name / Firma</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Adresse</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">E-Mail</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500">Kundennr.</th>
                 <th className="px-4 py-3 w-20"></th>
@@ -134,6 +135,9 @@ export function KundenPage() {
                 <tr key={k.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 text-slate-700">
                     {k.firmenname || [k.vorname, k.nachname].filter(Boolean).join(' ') || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
                   </td>
                   <td className="px-4 py-3 text-slate-500">{k.email || '—'}</td>
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">{k.kundennummer || '—'}</td>
@@ -167,6 +171,16 @@ export function KundenPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nachname</label>
                   <input type="text" {...register('nachname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Adresse</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">E-Mail</label>
