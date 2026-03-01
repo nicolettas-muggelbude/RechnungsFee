@@ -597,7 +597,7 @@ function RechnungDetail({
         {rechnung.ist_entwurf && (
           <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
             <span className="text-sm text-amber-800 flex items-center gap-1">
-              📝 <strong>Entwurf</strong> – noch nicht finalisiert
+              📝 <strong>Entwurf</strong>
               <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
             </span>
             <button
