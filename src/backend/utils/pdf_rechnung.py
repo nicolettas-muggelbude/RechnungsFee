@@ -66,9 +66,9 @@ ADRESS_Y    = 45.0
 # Briefkopf-Separator: fest bei 43mm (2mm Abstand vor Adressfeld)
 HEADER_LINE_Y = 43.0
 
-# Unternehmensblock rechts im Header
-BLOCK_X     = 110.0
-BLOCK_W     = PAGE_W - R_MARGIN - BLOCK_X    # ≈ 85 mm
+# Unternehmensblock rechts im Header – bündig mit Rechnungsnummer-Spalte (meta_x = L_MARGIN+95)
+BLOCK_X     = L_MARGIN + 95                  # 115 mm
+BLOCK_W     = PAGE_W - R_MARGIN - BLOCK_X    # 80 mm
 
 # Footer-Höhe: 2-Spalten-Layout (je 3 Zeilen à 4mm + Separator + Abstand)
 FOOTER_H    = 22.0
@@ -169,26 +169,38 @@ class RechnungPDF(FPDF):
             except Exception:
                 pass
 
-        # --- Firmenname + Adresse rechts (kompakt, passt vor 43mm) ---
+        # --- Firmenname + Adresse + Kontakt rechts (bündig mit Rechnungsnummer) ---
         absender = " ".join(filter(None, [
             unt.get("firmenname"), unt.get("vorname"), unt.get("nachname")
         ])) or "RechnungsFee"
-        strasse = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
-        plz_ort = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
+        strasse  = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
+        plz_ort  = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
+        telefon  = unt.get("telefon") or ""
+        email    = unt.get("email") or ""
+        webseite = unt.get("webseite") or ""
 
         y = top
         self.set_xy(BLOCK_X, y)
         self.set_font("DejaVu", "B", 10)
         self.set_text_color(*TEXT_DUNKEL)
-        self.cell(BLOCK_W, 5.5, absender)
+        self.cell(BLOCK_W, 5.5, absender, align="L")
         y += 5.5
 
         self.set_font("DejaVu", "", 8)
         self.set_text_color(*TEXT_GRAU)
         for zeile in filter(None, [strasse, plz_ort]):
             self.set_xy(BLOCK_X, y)
-            self.cell(BLOCK_W, 4.5, zeile)
-            y += 4.5
+            self.cell(BLOCK_W, 4.0, zeile, align="L")
+            y += 4.0
+
+        for zeile in filter(None, [
+            f"Tel: {telefon}" if telefon else "",
+            f"E-Mail: {email}" if email else "",
+            f"Web: {webseite}" if webseite else "",
+        ]):
+            self.set_xy(BLOCK_X, y)
+            self.cell(BLOCK_W, 4.0, zeile, align="L")
+            y += 4.0
 
         # --- Separator-Linie (fest bei 43mm) ---
         self.set_draw_color(*GRAU_RAND)
