@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CHANGELOG, type ChangelogVersion, type EintragTyp } from '../../data/changelog'
+import { useUpdateCheck } from '../../hooks/useUpdateCheck'
 
 const TYP_CFG: Record<EintragTyp, { label: string; cls: string }> = {
   neu:          { label: 'Neu',          cls: 'bg-green-100 text-green-700' },
@@ -49,6 +50,8 @@ function VersionsBlock({ v, defaultOffen }: { v: ChangelogVersion; defaultOffen:
 }
 
 export function InfoPage() {
+  const { updateAvailable, version, downloading, progress, installUpdate } = useUpdateCheck()
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
 
@@ -63,6 +66,42 @@ export function InfoPage() {
           </div>
         </div>
       </div>
+
+      {/* Update-Banner (nur Tauri-Prod, wenn Update verfügbar) */}
+      {updateAvailable && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-green-600 text-lg shrink-0">↑</span>
+            <div>
+              <p className="text-sm font-semibold text-green-800">
+                Update verfügbar: Version {version}
+              </p>
+              {downloading && (
+                <div className="mt-1.5 w-48">
+                  <div className="h-1.5 bg-green-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full transition-all duration-300"
+                      style={{ width: progress !== null ? `${progress}%` : '100%' }}
+                    />
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">
+                    {progress !== null ? `${progress} %` : 'Wird heruntergeladen…'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          {!downloading && (
+            <button
+              type="button"
+              onClick={installUpdate}
+              className="shrink-0 text-sm font-medium bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg transition-colors"
+            >
+              Jetzt installieren
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Beta-Disclaimer */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex gap-3">

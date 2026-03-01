@@ -25,6 +25,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest/download/latest.json"
+      ],
+      "pubkey": "PLATZHALTER – npx tauri signer generate -w ~/.tauri/rechnungsfee.key ausführen und Public Key hier eintragen"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["appimage", "msi"],
