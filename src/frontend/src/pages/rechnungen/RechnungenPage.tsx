@@ -854,17 +854,17 @@ function StammdatenCombobox({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const gefiltert = query.trim() === ''
-    ? items.slice(0, 50)
-    : items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())).slice(0, 50)
+  const q = query.trim()
+  const gefiltert = q === ''
+    ? []
+    : items.filter((i) => i.label.toLowerCase().includes(q.toLowerCase())).slice(0, 50)
 
-  const mehrVorhanden = query.trim() === ''
-    ? items.length > 50
-    : items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())).length > 50
+  const mehrVorhanden = q !== '' &&
+    items.filter((i) => i.label.toLowerCase().includes(q.toLowerCase())).length > 50
 
   function handleInputChange(v: string) {
     setQuery(v)
-    setOffen(true)
+    setOffen(v.trim() !== '')
     setHighlightIdx(0)
     // Freitext-Modus: kein Stammdatensatz ausgewählt
     onChange(null, v)
@@ -878,7 +878,7 @@ function StammdatenCombobox({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!offen) {
-      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      if ((e.key === 'ArrowDown' || e.key === 'Enter') && query.trim()) {
         setOffen(true)
         e.preventDefault()
       }
@@ -913,7 +913,7 @@ function StammdatenCombobox({
           type="text"
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => setOffen(true)}
+          onFocus={() => { if (query.trim()) setOffen(true) }}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -924,14 +924,16 @@ function StammdatenCombobox({
             ✓ Stammdaten
           </span>
         )}
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() => { setOffen((o) => !o); inputRef.current?.focus() }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-        >
-          {offen ? '▲' : '▼'}
-        </button>
+        {query.trim() && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => { setOffen((o) => !o); inputRef.current?.focus() }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+          >
+            {offen ? '▲' : '▼'}
+          </button>
+        )}
       </div>
 
       {offen && (
