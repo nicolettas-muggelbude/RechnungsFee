@@ -344,16 +344,27 @@ def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
     unt_dict = {}
     if unternehmen:
         unt_dict = {
-            "firmenname":         unternehmen.firmenname or "",
-            "vorname":            unternehmen.vorname or "",
-            "nachname":           unternehmen.nachname or "",
-            "strasse":            unternehmen.strasse or "",
-            "hausnummer":         unternehmen.hausnummer or "",
-            "plz":                unternehmen.plz or "",
-            "ort":                unternehmen.ort or "",
-            "steuernummer":       unternehmen.steuernummer or "",
-            "ust_idnr":           unternehmen.ust_idnr or "",
-            "ist_kleinunternehmer": unternehmen.ist_kleinunternehmer or False,
+            "firmenname":              unternehmen.firmenname or "",
+            "vorname":                 unternehmen.vorname or "",
+            "nachname":                unternehmen.nachname or "",
+            "strasse":                 unternehmen.strasse or "",
+            "hausnummer":              unternehmen.hausnummer or "",
+            "plz":                     unternehmen.plz or "",
+            "ort":                     unternehmen.ort or "",
+            "land":                    unternehmen.land or "DE",
+            "steuernummer":            unternehmen.steuernummer or "",
+            "ust_idnr":                unternehmen.ust_idnr or "",
+            "finanzamt":               unternehmen.finanzamt or "",
+            "handelsregister_nr":      unternehmen.handelsregister_nr or "",
+            "handelsregister_gericht": unternehmen.handelsregister_gericht or "",
+            "telefon":                 unternehmen.telefon or "",
+            "email":                   unternehmen.email or "",
+            "webseite":                unternehmen.webseite or "",
+            "iban":                    unternehmen.iban or "",
+            "bic":                     unternehmen.bic or "",
+            "bank_name":               unternehmen.bank_name or "",
+            "logo_pfad":               unternehmen.logo_pfad or "",
+            "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
         }
 
     ist_kopie = rechnung.ausgegeben
