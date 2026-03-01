@@ -23,7 +23,7 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.1 Beta',
+    version: 'v0.1.1',
     datum: 'März 2026',
     eintraege: [
       { typ: 'neu', text: 'Kassenbuch mit GoBD-konformen unveränderlichen Einträgen und SHA-256-Signaturen (§146 AO)' },
