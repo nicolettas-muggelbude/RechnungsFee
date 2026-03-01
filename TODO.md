@@ -59,19 +59,34 @@ Vor Datenverlust schützen – besonders kritisch bei Updates und bei Beta-Nutze
 
 ---
 
-## 5. Tauri-Build
+## 5. Tauri-Build + Paketformate
 
 Nutzer brauchen ein installierbares Programm, nicht manuelles `uvicorn` + `npm run dev`.
 
-- [ ] Tauri-Sidecar: FastAPI-Backend als eingebettetes Binary (PyInstaller oder ähnlich)
-- [ ] Build-Pipeline:
-  - [ ] Windows: `.msi` / `.exe`-Installer
-  - [ ] Linux: `.deb` / `.AppImage`
-  - [ ] macOS: `.dmg` (optional für Beta)
+### Beschlossene Paketierungs-Strategie
+
+| Phase | Format | Plattform | Updater |
+|---|---|---|---|
+| **Beta** | `.AppImage` | Linux (alle Distros) | Tauri in-app ✅ |
+| **Beta** | `.msi` | Windows | Tauri in-app ✅ |
+| **Post-Beta** | Flatpak (Flathub) | Linux | flatpak update ⚙️ |
+| **Post-Beta** | `.dmg` | macOS | Tauri in-app ✅ |
+| **On Demand** | Snap | Ubuntu | snapd automatisch ⚙️ |
+
+> `.deb` / `.rpm` werden nicht als primäre Formate gepflegt –
+> AppImage (Beta) und Flatpak (Post-Beta) decken Linux vollständig ab.
+
+### Aufgaben
+
+- [ ] Tauri-Sidecar: FastAPI-Backend als eingebettetes Binary (PyInstaller oder Nuitka)
 - [ ] GitHub Actions Workflow für automatische Builds bei Tag-Push (`v*`)
-- [ ] App-Icon (alle Plattform-Größen)
-- [ ] Erster Start: Auto-Setup wenn keine DB vorhanden (ist bereits implementiert)
+  - [ ] Matrix: `[windows-latest, ubuntu-latest]` für Beta
+  - [ ] Outputs: `.msi` + `.AppImage`
+- [ ] App-Icon aus Logo ableiten (alle Plattform-Größen: 16–512px, `.ico`, `.icns`, `.png`)
+- [ ] Erster Start: Auto-Setup wenn keine DB vorhanden (bereits implementiert)
 - [ ] Backend-Port Konflikt abfangen (8001 belegt → nächsten freien Port wählen)
+- [ ] Code Signing Windows: selbstsigniertes Zertifikat für Beta (Hinweis im Installer)
+- [ ] Flatpak-Manifest (`org.rechnungsfee.App.yaml`) + Flathub-Einreichung nach Beta
 
 ---
 
@@ -79,12 +94,17 @@ Nutzer brauchen ein installierbares Programm, nicht manuelles `uvicorn` + `npm r
 
 Ohne Updater müssen Nutzer manuell neu installieren – nicht akzeptabel nach Beta-Launch.
 
+> Gilt für AppImage und MSI. Flatpak/Snap nutzen ihr eigenes Update-System und rufen
+> den Tauri-Updater nicht auf – das ist gewollt.
+
 - [ ] Tauri-Updater aktivieren (`tauri-plugin-updater`)
-- [ ] Update-Server: GitHub Releases als Quelle (JSON-Endpoint mit Versionsinfos)
-- [ ] Code-Signing einrichten (Pflicht für Tauri-Updater)
-  - Windows: Selbstsigniertes Zertifikat für Beta, später ggf. EV-Zertifikat
-  - macOS: Apple Developer ID (falls macOS-Support geplant)
-  - Linux: kein Signing erforderlich
+- [ ] Update-Server: GitHub Releases als Quelle
+  - JSON-Endpoint `latest.json` mit Versionsinfos + Download-URLs je Plattform
+  - GitHub Actions schreibt diesen automatisch bei jedem Release
+- [ ] Code-Signing:
+  - Linux AppImage: kein Signing erforderlich
+  - Windows: selbstsigniertes Zertifikat für Beta, Hinweis an Nutzer
+  - macOS: Apple Developer ID (wenn macOS dazukommt)
 - [ ] Update-Check beim App-Start (nicht-blockierend, Hinweis-Banner wenn Update verfügbar)
 - [ ] Vor Update: automatisches Backup auslösen (→ siehe Punkt 4)
 - [ ] Changelog im Update-Dialog anzeigen
