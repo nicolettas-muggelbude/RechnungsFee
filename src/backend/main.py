@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup
 
 SCHEMA_VERSION = 2
 
@@ -31,6 +31,7 @@ app.include_router(tagesabschluss.router)
 app.include_router(nummernkreise.router)
 app.include_router(export.router)
 app.include_router(rechnungen.router)
+app.include_router(backup.router)
 
 
 def _backup_datenbank() -> None:

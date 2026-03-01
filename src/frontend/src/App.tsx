@@ -14,6 +14,7 @@ import { KategorienPage } from './pages/stammdaten/KategorienPage'
 import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
 import { ExportPage } from './pages/ExportPage'
 import { RechnungenPage } from './pages/rechnungen/RechnungenPage'
+import { BackupPage } from './pages/backup/BackupPage'
 
 function AppRoutes() {
   const { data: status, isLoading } = useQuery({
@@ -68,6 +69,7 @@ function AppRoutes() {
           <Route path="/unternehmen" element={<UnternehmenPage />} />
           <Route path="/rechnungen" element={<RechnungenPage />} />
           <Route path="/exporte" element={<ExportPage />} />
+          <Route path="/backup" element={<BackupPage />} />
         </Route>
       ) : (
         <Route path="*" element={<Navigate to="/setup" replace />} />

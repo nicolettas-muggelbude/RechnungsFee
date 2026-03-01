@@ -10,6 +10,7 @@ const hauptNav = [
   { to: '/rechnungen', label: 'Rechnungen', icon: '🧾' },
   { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
   { to: '/exporte', label: 'Exporte', icon: '📦' },
+  { to: '/backup', label: 'Backup', icon: '💾' },
 ]
 
 const stammdatenNav = [

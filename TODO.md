@@ -46,17 +46,14 @@ Beta-Nutzer akkumulieren echte Daten. Jede neue Version muss sauber migrieren.
 
 ---
 
-## 4. Backup
+## 4. Backup ✅
 
 Vor Datenverlust schützen – besonders kritisch bei Updates und bei Beta-Nutzern ohne IT-Kenntnisse.
 
-- [ ] "Backup erstellen"-Button in Einstellungen / Info-Seite
-  - Kopiert `rechnungsfee.db` nach `~/Downloads/RechnungsFee-Backup-YYYY-MM-DD.db`
-  - Bestätigungs-Dialog mit Speicherpfad
-- [ ] Automatisches Backup vor DB-Migration beim App-Start
-  - Speicherort: `~/.local/share/RechnungsFee/backups/` (max. 5 aufbewahren, älteste rotieren)
-- [ ] Backup wiederherstellen (manuell: DB-Datei ersetzen, Hinweis in Info-Seite)
-- [ ] Backup-Datei als `.db` (SQLite direkt öffenbar) oder `.zip` (mit Metadaten-Datei)?
+- [x] "Backup erstellen"-Button (`GET /api/backup/download`, `BackupPage.tsx`, Sidebar-Eintrag 💾)
+- [x] Automatisches Backup vor DB-Migration beim App-Start (TODO 3, `_backup_datenbank()`, max. 5, Rotation)
+- [x] Backup wiederherstellen – Schritt-für-Schritt-Anleitung in BackupPage.tsx
+- [x] Format: `.db` (SQLite direkt öffenbar, konsistent mit Auto-Backups)
 
 ---
 

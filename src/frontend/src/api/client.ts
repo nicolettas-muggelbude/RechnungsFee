@@ -352,6 +352,11 @@ export function downloadGobdExport(jahr: number) {
   window.open(`/api/export/gobd?jahr=${jahr}`, '_blank')
 }
 
+// --- Backup ---
+export function downloadBackup() {
+  window.open('/api/backup/download', '_blank')
+}
+
 // --- Nummernkreise ---
 export type Nummernkreis = {
   id: number
