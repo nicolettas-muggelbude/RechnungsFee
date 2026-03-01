@@ -105,17 +105,6 @@ export function AppLayout() {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-slate-200 text-xs text-slate-400 flex flex-col gap-1">
-          <a
-            href="https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-slate-600 transition-colors"
-          >
-            🗺️ Roadmap
-          </a>
-          <span>v0.1.0</span>
-        </div>
       </aside>
 
       {/* Hauptinhalt */}
