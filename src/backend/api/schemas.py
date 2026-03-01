@@ -321,6 +321,7 @@ class TagesabschlussResponse(BaseModel):
     zaehlung_json: Optional[str]
     kassenbewegungen_anzahl: int
     immutable: bool
+    signatur: Optional[str] = None
     erstellt_am: datetime
 
     model_config = {"from_attributes": True}

@@ -200,6 +200,7 @@ export type Tagesabschluss = {
   zaehlung_json: string | null
   kassenbewegungen_anzahl: number
   immutable: boolean
+  signatur: string | null
   erstellt_am: string
 }
 
