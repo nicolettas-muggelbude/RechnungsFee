@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#EEF2FF"/>
+      <stop offset="100%" stop-color="#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="doc" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#F5F7FF"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#4338CA" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Hintergrund -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Dokument (etwas links-zentriert damit Stab Platz hat) -->
+  <rect x="112" y="128" width="220" height="280" rx="16" fill="url(#doc)" filter="url(#shadow)"/>
+
+  <!-- Eselsohr oben rechts -->
+  <path d="M 276 128 Q 332 128 332 184 L 276 184 Z" fill="#C7D2FE"/>
+
+  <!-- Dokumentlinien -->
+  <rect x="140" y="208" width="136" height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="140" y="232" width="120" height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="140" y="256" width="144" height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="140" y="280" width="104" height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="140" y="304" width="128" height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="140" y="328" width="88"  height="11" rx="5" fill="#E0E7FF"/>
+
+  <!-- € auf Dokument -->
+  <text x="158" y="188" font-size="46" font-weight="700"
+        fill="#4F46E5" font-family="Georgia, serif">€</text>
+
+  <!-- Zauberstab – ragt aus der oberen rechten Ecke des Dokuments -->
+  <!-- Stab: startet an der Ecke des Eselsohrs (ca. 310,148), geht schräg hoch rechts -->
+  <line x1="310" y1="158" x2="400" y2="58"
+        stroke="#4F46E5" stroke-width="18" stroke-linecap="round"/>
+
+  <!-- Stern an der Stabspitze (Zentrum 408, 48) -->
+  <path d="M 408,18 L 417,40 L 440,48 L 417,56 L 408,78 L 399,56 L 376,48 L 399,40 Z"
+        fill="#F59E0B"/>
+  <!-- Glanzpunkt -->
+  <circle cx="402" cy="42" r="5" fill="white" opacity="0.7"/>
+
+  <!-- Funken um den Stern -->
+  <path d="M 452,86  L 457,98  L 470,86  L 457,98  L 452,110 L 447,98  L 434,86  L 447,98  Z"
+        fill="#FBBF24"/>
+  <circle cx="468" cy="56"  r="6" fill="#F59E0B"  opacity="0.75"/>
+  <circle cx="448" cy="118" r="4" fill="#FCD34D"  opacity="0.65"/>
+  <circle cx="376" cy="38"  r="4" fill="#FBBF24"  opacity="0.6"/>
+</svg>
