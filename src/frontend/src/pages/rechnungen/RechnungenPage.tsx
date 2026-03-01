@@ -5,7 +5,6 @@ import {
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben, getRechnungPdf,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
-  type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
