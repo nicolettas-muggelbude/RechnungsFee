@@ -33,15 +33,16 @@ Sichtbarer Einstiegspunkt für Hilfe, Beta-Hinweis und Feedback-Link.
 
 ---
 
-## 3. DB-Migrationen robust für Updates
+## 3. DB-Migrationen robust für Updates ✅
 
 Beta-Nutzer akkumulieren echte Daten. Jede neue Version muss sauber migrieren.
 
-- [ ] Migrations-Mechanismus in `main.py` (`_run_migrations()`) auf Vollständigkeit prüfen
-- [ ] Alle bisherigen Migrationen dokumentieren und testen (frische DB vs. alte DB)
-- [ ] Versionstabelle in DB einführen (`schema_version`) für kontrollierten Migrations-Ablauf
-- [ ] Rollback-Strategie festlegen: Backup vor jeder Migration automatisch anlegen
-- [ ] Integrations-Test: leere DB → aktuelle Version, alte DB → aktuelle Version
+- [x] Migrations-Mechanismus in `main.py` (`_run_migrations()`) auf Vollständigkeit prüfen
+- [x] Alle bisherigen Migrationen dokumentieren (CLAUDE.md – Versionsverlauf)
+- [x] `PRAGMA user_version` als Versionstabelle – `SCHEMA_VERSION = 2`, kontrollierte Versionssprünge
+- [x] Backup vor jeder Migration automatisch anlegen (`_backup_datenbank()`, max. 5, WAL-sicher)
+- [x] Early-Return wenn DB aktuell (kein PRAGMA-Overhead beim normalen Start)
+- [x] Integrations-Test: leere DB → aktuelle Version, alte DB → aktuelle Version (`src/backend/tests/test_migrations.py`, 6 Tests)
 
 ---
 
