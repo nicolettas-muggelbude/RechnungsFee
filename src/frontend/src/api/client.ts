@@ -10,7 +10,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     // FastAPI gibt bei 422 ein Array zurück: [{ loc, msg, type }]
     const detail = err.detail
     const message = Array.isArray(detail)
-      ? detail.map((e: any) => e.msg ?? JSON.stringify(e)).join(' · ')
+      ? detail.map((e: any) => (e.msg ?? JSON.stringify(e)).replace(/^Value error,\s*/i, '')).join(' · ')
       : String(detail ?? 'Unbekannter Fehler')
     throw new Error(message)
   }

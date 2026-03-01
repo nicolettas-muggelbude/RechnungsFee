@@ -1211,6 +1211,14 @@ function RechnungForm({
 
   function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
     e.preventDefault()
+    if (typ === 'ausgang' && !partnerId && !partnerFreitext.trim()) {
+      alert('Bitte einen Kunden auswählen oder einen Namen im Freitext-Feld eingeben.')
+      return
+    }
+    if (positionen.every((p) => !p.beschreibung.trim())) {
+      alert('Bitte mindestens eine Position mit Beschreibung eingeben.')
+      return
+    }
     onSave(buildData(istEntwurf))
   }
 
