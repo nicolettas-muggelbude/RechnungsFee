@@ -134,6 +134,10 @@ coverage/
 *.msi
 installer/
 
+# Tauri Sidecar-Binaries (werden per build-sidecar.sh generiert)
+src-tauri/binaries/backend-*
+!src-tauri/binaries/.gitkeep
+
 # ===================================
 # Temporary Files
 # ===================================

@@ -1,10 +1,14 @@
 import os
+import platform
 from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-# Datenbankpfad: ~/.local/share/RechnungsFee/rechnungsfee.db
-APP_DATA_DIR = Path.home() / ".local" / "share" / "RechnungsFee"
+# Plattformübergreifender Datenpfad
+if platform.system() == "Windows":
+    APP_DATA_DIR = Path(os.environ.get("APPDATA", Path.home())) / "RechnungsFee"
+else:
+    APP_DATA_DIR = Path.home() / ".local" / "share" / "RechnungsFee"
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = APP_DATA_DIR / "rechnungsfee.db"

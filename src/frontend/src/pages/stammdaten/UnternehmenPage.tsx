@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl,
@@ -39,6 +39,10 @@ function LogoSektion({
   const fileRef = useRef<HTMLInputElement>(null)
   const [fehler, setFehler] = useState<string | null>(null)
   const [cacheBust, setCacheBust] = useState(Date.now())
+  const [logoSrc, setLogoSrc] = useState<string>('')
+  useEffect(() => {
+    getLogoUrl().then((url) => setLogoSrc(`${url}?v=${cacheBust}`))
+  }, [cacheBust])
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => uploadLogo(file),
@@ -73,7 +77,7 @@ function LogoSektion({
       <div className="w-28 h-20 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 flex-shrink-0">
         {logoVorhanden ? (
           <img
-            src={`${getLogoUrl()}?v=${cacheBust}`}
+            src={logoSrc}
             alt="Firmenlogo"
             className="max-w-full max-h-full object-contain"
             onError={() => setCacheBust(Date.now())}

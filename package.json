@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "cd src/frontend && npm run dev",
+    "build": "cd src/frontend && npm run build",
+    "build:sidecar": "bash scripts/build-sidecar.sh",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run build:sidecar && tauri build"
+  }
+}

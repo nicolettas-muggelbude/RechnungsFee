@@ -1,0 +1,104 @@
+name: Release-Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            sidecar_ext: ''
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            sidecar_ext: '.exe'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Linux-Systemabhängigkeiten ──────────────────────────────────────────
+      - name: Linux-Deps installieren
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev
+
+      # ── Python / PyInstaller ────────────────────────────────────────────────
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python-Abhängigkeiten installieren
+        working-directory: src/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Backend-Sidecar bauen (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: bash scripts/build-sidecar.sh
+
+      - name: Backend-Sidecar bauen (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: pwsh scripts/build-sidecar.ps1
+
+      # ── Node.js / Frontend ──────────────────────────────────────────────────
+      - name: Node.js 22 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Frontend-Abhängigkeiten installieren
+        working-directory: src/frontend
+        run: npm ci
+
+      # ── Rust ────────────────────────────────────────────────────────────────
+      - name: Rust-Toolchain einrichten
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust-Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # ── Tauri-Build & Release ───────────────────────────────────────────────
+      - name: Tauri-App bauen und Release erstellen
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'RechnungsFee ${{ github.ref_name }}'
+          releaseBody: |
+            Automatisch generiertes Release für ${{ github.ref_name }}.
+
+            **Enthaltene Pakete:**
+            - Linux: `.AppImage`
+            - Windows: `.msi`
+
+            Bitte lies die [Installationsanleitung](https://github.com/${{ github.repository }}/blob/main/README.md) vor der Installation.
+          releaseDraft: true
+          prerelease: false
+          projectPath: .
+          tauriScript: npx tauri
+          args: --target ${{ matrix.target }}

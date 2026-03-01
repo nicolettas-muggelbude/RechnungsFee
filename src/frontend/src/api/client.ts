@@ -1,7 +1,53 @@
-const BASE = '/api'
+import { invoke } from '@tauri-apps/api/core'
+
+// --- API-Basis-URL ---
+// Im Tauri-Produktionsmodus: Backend-Port per IPC-Command holen.
+// Im Vite-Dev-Modus: Vite-Proxy leitet /api → http://localhost:8001 weiter.
+
+let _baseUrl: string | null = null
+
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+async function getBaseUrl(): Promise<string> {
+  if (_baseUrl !== null) return _baseUrl
+
+  if (!isTauri() || import.meta.env.DEV) {
+    _baseUrl = '/api'
+    return _baseUrl
+  }
+
+  // Tauri-Produktionsmodus: Port vom Rust-Backend holen
+  const port = await invoke<number>('get_backend_port')
+  _baseUrl = `http://127.0.0.1:${port}/api`
+  return _baseUrl
+}
+
+/** Wartet bis das Backend antwortet (max. 30 × 200 ms = 6 s). */
+async function waitForBackend(baseUrl: string): Promise<void> {
+  for (let i = 0; i < 30; i++) {
+    try {
+      const res = await fetch(`${baseUrl}/setup/status`)
+      if (res.ok) return
+    } catch {
+      // Backend noch nicht bereit
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  console.warn('[RechnungsFee] Backend nach 6 s nicht erreichbar')
+}
+
+// Im Tauri-Modus einmalig warten, damit das UI erst lädt wenn das Backend ready ist
+if (isTauri() && !import.meta.env.DEV) {
+  getBaseUrl().then((url) => waitForBackend(url))
+}
+
+// --- HTTP-Hilfsfunktion ---
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
@@ -17,6 +63,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   // 204 No Content
   if (res.status === 204) return undefined as T
   return res.json()
+}
+
+/** Liefert die aktuelle Basis-URL für direkte fetch/window.open-Aufrufe. */
+export async function getApiBase(): Promise<string> {
+  return getBaseUrl()
 }
 
 // --- Setup ---
@@ -73,9 +124,10 @@ export const updateUnternehmen = (data: Partial<Unternehmen>) =>
   request<Unternehmen>('/unternehmen', { method: 'PUT', body: JSON.stringify(data) })
 
 export async function uploadLogo(file: File): Promise<Unternehmen> {
+  const base = await getBaseUrl()
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/unternehmen/logo`, { method: 'POST', body: form })
+  const res = await fetch(`${base}/unternehmen/logo`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Logo-Upload fehlgeschlagen')
@@ -84,15 +136,17 @@ export async function uploadLogo(file: File): Promise<Unternehmen> {
 }
 
 export async function deleteLogo(): Promise<void> {
-  const res = await fetch(`${BASE}/unternehmen/logo`, { method: 'DELETE' })
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/unternehmen/logo`, { method: 'DELETE' })
   if (!res.ok && res.status !== 204) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Logo löschen fehlgeschlagen')
   }
 }
 
-export function getLogoUrl(): string {
-  return `${BASE}/unternehmen/logo`
+export async function getLogoUrl(): Promise<string> {
+  const base = await getBaseUrl()
+  return `${base}/unternehmen/logo`
 }
 
 // --- Konten ---
@@ -265,14 +319,15 @@ export const createTagesabschluss = (data: {
   differenz_buchungsart?: string
 }) => request<Tagesabschluss>('/tagesabschluss', { method: 'POST', body: JSON.stringify(data) })
 
-export function downloadTagesabschlussPdf(params: {
+export async function downloadTagesabschlussPdf(params: {
   zeitraum?: 'monat' | 'jahr' | 'alle'
   wert?: string
 }) {
   const { zeitraum = 'alle', wert } = params
   const searchParams = new URLSearchParams({ zeitraum })
   if (wert) searchParams.set('wert', wert)
-  window.open(`/api/tagesabschluss/export/pdf?${searchParams}`, '_blank')
+  const base = await getBaseUrl()
+  window.open(`${base}/tagesabschluss/export/pdf?${searchParams}`, '_blank')
 }
 
 // --- Kunden ---
@@ -312,8 +367,9 @@ export type AnonymisierungResult = {
 }
 export const anonymisiereKunde = (id: number) =>
   request<AnonymisierungResult>(`/kunden/${id}/anonymisieren`, { method: 'POST' })
-export function dsgvoExportKunde(id: number) {
-  window.open(`/api/kunden/${id}/dsgvo-export`, '_blank')
+export async function dsgvoExportKunde(id: number) {
+  const base = await getBaseUrl()
+  window.open(`${base}/kunden/${id}/dsgvo-export`, '_blank')
 }
 
 // --- Lieferanten ---
@@ -343,18 +399,21 @@ export const deleteLieferant = (id: number) =>
   request<void>(`/lieferanten/${id}`, { method: 'DELETE' })
 export const anonymisiereLieferant = (id: number) =>
   request<AnonymisierungResult>(`/lieferanten/${id}/anonymisieren`, { method: 'POST' })
-export function dsgvoExportLieferant(id: number) {
-  window.open(`/api/lieferanten/${id}/dsgvo-export`, '_blank')
+export async function dsgvoExportLieferant(id: number) {
+  const base = await getBaseUrl()
+  window.open(`${base}/lieferanten/${id}/dsgvo-export`, '_blank')
 }
 
 // --- Export ---
-export function downloadGobdExport(jahr: number) {
-  window.open(`/api/export/gobd?jahr=${jahr}`, '_blank')
+export async function downloadGobdExport(jahr: number) {
+  const base = await getBaseUrl()
+  window.open(`${base}/export/gobd?jahr=${jahr}`, '_blank')
 }
 
 // --- Backup ---
-export function downloadBackup() {
-  window.open('/api/backup/download', '_blank')
+export async function downloadBackup() {
+  const base = await getBaseUrl()
+  window.open(`${base}/backup/download`, '_blank')
 }
 
 // --- Nummernkreise ---
@@ -510,7 +569,8 @@ export const markiereRechnungAusgegeben = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ausgegeben`, { method: 'POST' })
 
 export async function getRechnungPdf(id: number): Promise<Blob> {
-  const res = await fetch(`${BASE}/rechnungen/${id}/pdf`)
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/rechnungen/${id}/pdf`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'PDF-Export fehlgeschlagen')

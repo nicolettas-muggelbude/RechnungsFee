@@ -15,7 +15,7 @@ app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "tauri://localhost"],
+    allow_origins=["http://localhost:5173", "tauri://localhost", "http://tauri.localhost"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -316,3 +316,13 @@ def startup():
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0"}
+
+
+if __name__ == "__main__":
+    import argparse
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="RechnungsFee Backend")
+    parser.add_argument("--port", type=int, default=8001)
+    args = parser.parse_args()
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
