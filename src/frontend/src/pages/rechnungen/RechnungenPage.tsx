@@ -749,6 +749,64 @@ function RechnungDetail({
 }
 
 // ---------------------------------------------------------------------------
+// Einheit-Combo (Select + Freitext-Fallback)
+// ---------------------------------------------------------------------------
+
+const EINHEITEN = ['Stück', 'Pack', 'Set', 'Lizenz', 'Stunde', 'Tag', 'Monat', 'Pauschal', 'km', 'm²']
+
+function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const istBekannt = EINHEITEN.includes(value)
+  const [freitext, setFreitext] = useState(!istBekannt)
+
+  // Wenn der Wert von außen auf einen bekannten zurückgesetzt wird (z.B. Formular-Reset)
+  useEffect(() => {
+    if (EINHEITEN.includes(value)) setFreitext(false)
+  }, [value])
+
+  if (freitext) {
+    return (
+      <div className="flex items-center gap-0.5">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full border-0 outline-none bg-transparent text-slate-700 min-w-0"
+          placeholder="Einheit"
+          autoFocus
+        />
+        <button
+          type="button"
+          title="Zur Liste zurück"
+          onClick={() => { setFreitext(false); onChange('Stück') }}
+          className="text-slate-300 hover:text-slate-500 shrink-0 leading-none"
+        >
+          ↩
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === '__freitext__') {
+          setFreitext(true)
+          onChange('')
+        } else {
+          onChange(e.target.value)
+        }
+      }}
+      className="w-full border-0 outline-none bg-transparent text-slate-700 cursor-pointer"
+    >
+      {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
+      <option value="__freitext__">Freitext…</option>
+    </select>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
 // Rechnungs-Formular
 // ---------------------------------------------------------------------------
 
@@ -1128,11 +1186,9 @@ function RechnungForm({
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <input
-                      type="text"
+                    <EinheitZelle
                       value={pos.einheit}
-                      onChange={(e) => updatePosition(i, 'einheit', e.target.value)}
-                      className="w-full border-0 outline-none bg-transparent text-slate-700"
+                      onChange={(v) => updatePosition(i, 'einheit', v)}
                     />
                   </td>
                   <td className="px-2 py-1.5">
