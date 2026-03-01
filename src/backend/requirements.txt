@@ -4,3 +4,4 @@ sqlalchemy==2.0.46
 aiofiles==25.1.0
 python-multipart==0.0.22
 fpdf2
+Pillow==12.1.1
