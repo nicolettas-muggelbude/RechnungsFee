@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#4338CA"/>
+      <stop offset="100%" stop-color="#6D28D9"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="white" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Hintergrund -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Glanz-Overlay oben -->
+  <rect width="512" height="256" rx="112" fill="url(#shine)"/>
+
+  <!-- RF – Monogramm -->
+  <text x="256" y="300"
+        font-size="220" font-weight="900" fill="white"
+        font-family="'Arial Black', Arial, sans-serif"
+        text-anchor="middle" letter-spacing="-8">RF</text>
+
+  <!-- Unterer Schriftzug -->
+  <text x="256" y="355"
+        font-size="38" fill="white" opacity="0.55"
+        font-family="Arial, sans-serif"
+        text-anchor="middle" letter-spacing="14">FEE</text>
+
+  <!-- Trennlinie unter RF -->
+  <rect x="176" y="313" width="160" height="3" rx="2" fill="white" opacity="0.25"/>
+
+  <!-- 4-Zacken-Sterne (Funken) -->
+
+  <!-- Groß oben rechts -->
+  <path d="M 380,88 L 388,108 L 410,88 L 388,108 L 380,128 L 372,108 L 350,88 L 372,108 Z"
+        fill="#FBBF24"/>
+  <!-- Glanzpunkt im Stern -->
+  <circle cx="377" cy="85" r="4" fill="white" opacity="0.6"/>
+
+  <!-- Mittel oben links -->
+  <path d="M 132,118 L 138,132 L 154,118 L 138,132 L 132,146 L 126,132 L 110,118 L 126,132 Z"
+        fill="#F59E0B" opacity="0.9"/>
+
+  <!-- Klein rechts Mitte -->
+  <path d="M 408,248 L 412,258 L 422,248 L 412,258 L 408,268 L 404,258 L 394,248 L 404,258 Z"
+        fill="#FCD34D" opacity="0.8"/>
+
+  <!-- Winzig links unten -->
+  <circle cx="118" cy="370" r="6"  fill="#F59E0B" opacity="0.6"/>
+  <circle cx="134" cy="355" r="4"  fill="#FCD34D" opacity="0.5"/>
+
+  <!-- Winzig rechts oben extra -->
+  <circle cx="400" cy="152" r="5"  fill="#FBBF24" opacity="0.55"/>
+  <circle cx="420" cy="200" r="3"  fill="#FCD34D" opacity="0.45"/>
+</svg>
