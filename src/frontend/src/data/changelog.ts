@@ -23,6 +23,16 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.2',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Drucken, PDF öffnen und Mail senden funktionieren jetzt unter Windows (Tauri/WebView2-Kompatibilität)' },
+      { typ: 'fix', text: 'Zuflussmonitor zählt den Kassenanfangsbestand nicht mehr als Einnahme' },
+      { typ: 'fix', text: 'Kein Tagesabschluss-Hinweis mehr für Tage vor der Ersteinrichtung' },
+      { typ: 'fix', text: 'Entwurf-Label in Rechnungen vereinfacht' },
+    ],
+  },
+  {
     version: 'v0.1.1',
     datum: 'März 2026',
     eintraege: [
