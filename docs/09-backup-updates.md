@@ -1017,13 +1017,14 @@ WHERE geaendert_am > (
 
 ### **🔄 Update-Mechanismen**
 
-#### **1. Auto-Update (Standard)**
+#### **1. Auto-Update (Standard)** ✅ Implementiert (v0.1.1)
 
-**Desktop-App (Electron/Tauri):**
-- Eingebauter Auto-Updater (z.B. `electron-updater`, `tauri-plugin-updater`)
-- Prüft beim Start auf neue Versionen
-- Download im Hintergrund
-- Installation beim nächsten Neustart
+**Desktop-App (Tauri):**
+- `tauri-plugin-updater` – prüft beim Start auf neue Versionen
+- Endpoint: GitHub Releases `latest.json`
+- Signing-Key: `~/.tauri/rechnungsfee.key` (Public Key in `tauri.conf.json`)
+- Frontend: `useUpdateCheck`-Hook + grünes Banner in `InfoPage`
+- `downloadAndInstall()` → App startet automatisch neu
 
 **Workflow:**
 ```

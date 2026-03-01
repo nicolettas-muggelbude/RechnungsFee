@@ -59,9 +59,34 @@ def _run_migrations():
 - Ziel: `~/.local/share/RechnungsFee/backups/rechnungsfee_YYYYMMDD_HHMMSS.db`
 - Rotation: max. 5 Backups, älteste werden automatisch gelöscht
 
-## App-Versionierung (Frontend)
-Kommt aus Git-Tag – **nie manuell** in `package.json` ändern.
-Neues Release: `git tag v0.x.y && git push --tags`
+## App-Versionierung & Release-Prozess
+
+Version kommt aus Git-Tag – **nie manuell** in `package.json` ändern.
+
+### Neues Release erstellen
+```bash
+git tag v0.x.y
+git push origin main   # erst Commits pushen!
+git push --tags        # dann Tag → löst GitHub Actions aus
+```
+
+**Wichtig:** Tag erst pushen nachdem alle Commits auf `origin/main` sind –
+sonst findet GitHub Actions die Workflow-Datei nicht.
+
+### GitHub Actions (`.github/workflows/build.yml`)
+- Trigger: `push tags v*`
+- Matrix: Ubuntu (AppImage) + Windows (MSI)
+- Sidecar: PyInstaller (Linux: `build-sidecar.sh`, Windows: `build-sidecar.ps1`)
+- Signierung: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` als GitHub Secrets
+- Ergebnis: Draft-Release mit `.AppImage`, `.msi`, `latest.json`
+- Release manuell auf GitHub veröffentlichen → erst dann ist Updater aktiv
+
+### Tauri Updater (`tauri-plugin-updater`)
+- Signing-Key lokal: `~/.tauri/rechnungsfee.key` (privat, nie committen!)
+- Public Key in `src-tauri/tauri.conf.json` unter `plugins.updater.pubkey`
+- Endpoint: GitHub Releases `latest.json`
+- Frontend: `useUpdateCheck`-Hook + grünes Banner in `InfoPage`
+- Key neu generieren: `npx tauri signer generate -w ~/.tauri/rechnungsfee.key`
 
 ## GoBD-Schutz
 - `_migrate_kategorien()` und `_migrate_signaturen()` laufen bei **jedem** Start (idempotent)
