@@ -56,7 +56,7 @@ Vor Datenverlust schützen – besonders kritisch bei Updates und bei Beta-Nutze
 
 ---
 
-## 5. Tauri-Build + Paketformate
+## 5. Tauri-Build + Paketformate ✅
 
 Nutzer brauchen ein installierbares Programm, nicht manuelles `uvicorn` + `npm run dev`.
 
@@ -75,34 +75,30 @@ Nutzer brauchen ein installierbares Programm, nicht manuelles `uvicorn` + `npm r
 
 ### Aufgaben
 
-- [ ] Tauri-Sidecar: FastAPI-Backend als eingebettetes Binary (PyInstaller oder Nuitka)
-- [ ] GitHub Actions Workflow für automatische Builds bei Tag-Push (`v*`)
-  - [ ] Matrix: `[windows-latest, ubuntu-latest]` für Beta
-  - [ ] Outputs: `.msi` + `.AppImage`
-- [ ] App-Icon aus Logo ableiten (alle Plattform-Größen: 16–512px, `.ico`, `.icns`, `.png`)
-- [ ] Erster Start: Auto-Setup wenn keine DB vorhanden (bereits implementiert)
-- [ ] Backend-Port Konflikt abfangen (8001 belegt → nächsten freien Port wählen)
+- [x] Tauri-Sidecar: FastAPI-Backend als eingebettetes Binary (PyInstaller)
+- [x] GitHub Actions Workflow für automatische Builds bei Tag-Push (`v*`)
+  - [x] Matrix: `[windows-latest, ubuntu-latest]` für Beta
+  - [x] Outputs: `.msi` + `.AppImage`
+- [x] App-Icon aus Logo ableiten (alle Plattform-Größen: 16–512px, `.ico`, `.icns`, `.png`)
+- [x] Erster Start: Auto-Setup wenn keine DB vorhanden (bereits implementiert)
+- [x] Backend-Port Konflikt abfangen (8001 belegt → nächsten freien Port wählen)
 - [ ] Code Signing Windows: selbstsigniertes Zertifikat für Beta (Hinweis im Installer)
 - [ ] Flatpak-Manifest (`org.rechnungsfee.App.yaml`) + Flathub-Einreichung nach Beta
 
 ---
 
-## 6. Updater
+## 6. Updater ✅
 
 Ohne Updater müssen Nutzer manuell neu installieren – nicht akzeptabel nach Beta-Launch.
 
 > Gilt für AppImage und MSI. Flatpak/Snap nutzen ihr eigenes Update-System und rufen
 > den Tauri-Updater nicht auf – das ist gewollt.
 
-- [ ] Tauri-Updater aktivieren (`tauri-plugin-updater`)
-- [ ] Update-Server: GitHub Releases als Quelle
-  - JSON-Endpoint `latest.json` mit Versionsinfos + Download-URLs je Plattform
-  - GitHub Actions schreibt diesen automatisch bei jedem Release
-- [ ] Code-Signing:
-  - Linux AppImage: kein Signing erforderlich
-  - Windows: selbstsigniertes Zertifikat für Beta, Hinweis an Nutzer
-  - macOS: Apple Developer ID (wenn macOS dazukommt)
-- [ ] Update-Check beim App-Start (nicht-blockierend, Hinweis-Banner wenn Update verfügbar)
+- [x] Tauri-Updater aktivieren (`tauri-plugin-updater`)
+- [x] Update-Server: GitHub Releases als Quelle
+  - JSON-Endpoint `latest.json` wird von GitHub Actions automatisch bei jedem Release erzeugt
+- [x] Code-Signing: Signing-Key generiert, Public Key in `tauri.conf.json`, Private Key als GitHub Secret
+- [x] Update-Check beim App-Start (nicht-blockierend, grünes Hinweis-Banner in InfoPage)
 - [ ] Vor Update: automatisches Backup auslösen (→ siehe Punkt 4)
 - [ ] Changelog im Update-Dialog anzeigen
 
@@ -113,6 +109,8 @@ Ohne Updater müssen Nutzer manuell neu installieren – nicht akzeptabel nach B
 ```
 DB-Migration robust  →  Backup  →  Tooltip-System + Info-Seite  →  Tauri-Build  →  Updater
 ```
+
+Alle Beta-Blocker erledigt. Erstes Release: **v0.1.1** (02.03.2026)
 
 Begründung: Datensicherheit zuerst, dann UX, dann Deployment.
 
