@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
@@ -806,6 +806,172 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
 
 
 // ---------------------------------------------------------------------------
+// Stammdaten-Combobox (Autocomplete mit Freitext-Fallback)
+// ---------------------------------------------------------------------------
+
+function StammdatenCombobox({
+  items,
+  selectedId,
+  freitext,
+  onChange,
+  placeholder = 'Suchen oder frei eingeben…',
+}: {
+  items: { id: number; label: string }[]
+  selectedId: number | null
+  freitext: string
+  onChange: (id: number | null, freitext: string) => void
+  placeholder?: string
+}) {
+  const [query, setQuery] = useState(() => {
+    if (selectedId != null) {
+      return items.find((i) => i.id === selectedId)?.label ?? ''
+    }
+    return freitext
+  })
+  const [offen, setOffen] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Wenn selectedId / freitext von außen geändert wird (z.B. Formular-Reset)
+  useEffect(() => {
+    if (selectedId != null) {
+      const label = items.find((i) => i.id === selectedId)?.label ?? ''
+      setQuery(label)
+    } else {
+      setQuery(freitext)
+    }
+  }, [selectedId, freitext, items])
+
+  // Außen-Klick schließt Dropdown
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOffen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const gefiltert = query.trim() === ''
+    ? items.slice(0, 50)
+    : items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())).slice(0, 50)
+
+  const mehrVorhanden = query.trim() === ''
+    ? items.length > 50
+    : items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())).length > 50
+
+  function handleInputChange(v: string) {
+    setQuery(v)
+    setOffen(true)
+    setHighlightIdx(0)
+    // Freitext-Modus: kein Stammdatensatz ausgewählt
+    onChange(null, v)
+  }
+
+  function handleSelect(item: { id: number; label: string }) {
+    setQuery(item.label)
+    setOffen(false)
+    onChange(item.id, '')
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!offen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setOffen(true)
+        e.preventDefault()
+      }
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      setHighlightIdx((i) => Math.min(i + 1, gefiltert.length - 1))
+      e.preventDefault()
+    } else if (e.key === 'ArrowUp') {
+      setHighlightIdx((i) => Math.max(i - 1, 0))
+      e.preventDefault()
+    } else if (e.key === 'Enter') {
+      if (gefiltert[highlightIdx]) {
+        handleSelect(gefiltert[highlightIdx])
+      }
+      e.preventDefault()
+    } else if (e.key === 'Escape') {
+      setOffen(false)
+    }
+  }
+
+  function handleBlur() {
+    // Kleines Delay damit onClick im Dropdown noch feuert
+    setTimeout(() => setOffen(false), 150)
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={() => setOffen(true)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {selectedId != null && (
+          <span className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-green-600 font-medium whitespace-nowrap">
+            ✓ Stammdaten
+          </span>
+        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => { setOffen((o) => !o); inputRef.current?.focus() }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+        >
+          {offen ? '▲' : '▼'}
+        </button>
+      </div>
+
+      {offen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+          {gefiltert.length === 0 ? (
+            <div className="px-3 py-2.5 text-sm text-slate-400 italic">
+              Kein Treffer – wird als Freitext übernommen
+            </div>
+          ) : (
+            <>
+              {gefiltert.map((item, idx) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseDown={() => handleSelect(item)}
+                  onMouseEnter={() => setHighlightIdx(idx)}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                    idx === highlightIdx
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+              {mehrVorhanden && (
+                <div className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
+                  Weitere Treffer – Suche verfeinern
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
 // Rechnungs-Formular
 // ---------------------------------------------------------------------------
 
@@ -1090,29 +1256,23 @@ function RechnungForm({
         <label className="block text-sm font-medium text-slate-700 mb-1">
           {typ === 'ausgang' ? 'Kunde' : 'Lieferant'}
         </label>
-        <div className="flex gap-2">
-          <select
-            value={partnerId}
-            onChange={(e) => { setPartnerId(e.target.value); if (e.target.value) setPartnerFreitext('') }}
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">— Stammdatensatz wählen oder Freitext —</option>
-            {partnerListe.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.firmenname ?? [p.vorname, p.nachname].filter(Boolean).join(' ')}
-              </option>
-            ))}
-          </select>
-        </div>
-        {!partnerId && (
-          <input
-            type="text"
-            value={partnerFreitext}
-            onChange={(e) => setPartnerFreitext(e.target.value)}
-            placeholder="oder Name frei eingeben"
-            className="mt-2 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        )}
+        <StammdatenCombobox
+          items={partnerListe.map((p: any) => ({
+            id: p.id as number,
+            label: p.firmenname ?? [p.vorname, p.nachname].filter(Boolean).join(' '),
+          }))}
+          selectedId={partnerId ? parseInt(partnerId) : null}
+          freitext={partnerFreitext}
+          onChange={(id, text) => {
+            setPartnerId(id != null ? String(id) : '')
+            setPartnerFreitext(text)
+          }}
+          placeholder={
+            typ === 'ausgang'
+              ? 'Kunde suchen oder frei eingeben…'
+              : 'Lieferant suchen oder frei eingeben…'
+          }
+        />
       </div>
 
       {/* §19-Hinweis */}
