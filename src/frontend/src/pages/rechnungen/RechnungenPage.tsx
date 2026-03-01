@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben, getRechnungPdf,
-  getKunden, getLieferanten, getKategorien, getUnternehmen,
+  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type Unternehmen,
 } from '../../api/client'
@@ -398,16 +398,19 @@ function RechnungDetail({
     }
   }
 
-  function handleDrucken() {
-    const istKopie = !rechnung.ist_entwurf && rechnung.ausgegeben
-    oeffneRechnungFenster(rechnung, true, unternehmen, istKopie)
+  async function handleDrucken() {
     _markiereWennNoetig()
+    const base = await getApiBase()
+    const win = window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+    if (win) win.addEventListener('load', () => win.print())
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
   }
 
-  function handlePdfOeffnen() {
-    const istKopie = !rechnung.ist_entwurf && rechnung.ausgegeben
-    oeffneRechnungFenster(rechnung, false, unternehmen, istKopie)
+  async function handlePdfOeffnen() {
     _markiereWennNoetig()
+    const base = await getApiBase()
+    window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
   }
 
   async function handleMail() {
@@ -468,7 +471,7 @@ function RechnungDetail({
     // mailto öffnen (PDF-Anhang muss manuell hinzugefügt werden)
     const subject = encodeURIComponent(subjectText)
     const body    = encodeURIComponent(bodyText)
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`)
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
     setZeigMailEingabe(false)
     setMailAdresse('')
   }

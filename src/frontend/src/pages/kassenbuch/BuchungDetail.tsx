@@ -46,12 +46,14 @@ function belegHtml(e: KassenbuchEintrag): string {
 }
 
 function oeffneBelegFenster(e: KassenbuchEintrag, drucken: boolean) {
-  const win = window.open('', '_blank', 'width=640,height=750')
-  if (!win) return
-  win.document.write(belegHtml(e))
-  win.document.close()
-  win.focus()
-  if (drucken) win.print()
+  const blob = new Blob([belegHtml(e)], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const win = window.open(url, '_blank', 'width=640,height=750')
+  if (!win) { URL.revokeObjectURL(url); return }
+  win.addEventListener('load', () => {
+    if (drucken) win.print()
+    URL.revokeObjectURL(url)
+  })
 }
 
 export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) {
@@ -87,7 +89,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
       bodyText += `\n\n${unternehmen.mail_signatur}`
     }
     const body = encodeURIComponent(bodyText)
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`)
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
     setZeigMailEingabe(false)
     setMailAdresse('')
   }
