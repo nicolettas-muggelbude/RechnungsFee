@@ -772,7 +772,6 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
           onChange={(e) => onChange(e.target.value)}
           className="w-full border-0 outline-none bg-transparent text-slate-700 min-w-0"
           placeholder="Einheit"
-          autoFocus
         />
         <button
           type="button"
@@ -821,7 +820,7 @@ type Positionszeile = {
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
   beschreibung: '',
   menge: '1',
-  einheit: 'Stück',
+  einheit: '',
   netto: '',
   ust_satz: defaultUst,
 })
