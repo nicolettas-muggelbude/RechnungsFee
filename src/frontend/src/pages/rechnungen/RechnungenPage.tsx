@@ -1212,7 +1212,7 @@ function RechnungForm({
   function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
     e.preventDefault()
     if (typ === 'ausgang' && !partnerId && !partnerFreitext.trim()) {
-      alert('Bitte einen Kunden auswählen oder einen Namen im Freitext-Feld eingeben.')
+      alert('Bitte einen Kunden auswählen oder einen Namen im Kundenfeld eingeben.')
       return
     }
     if (positionen.every((p) => !p.beschreibung.trim())) {
