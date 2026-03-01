@@ -106,6 +106,15 @@ Defaults in `useForm({ defaultValues: ... })`, Fallback im Submit-Handler mit `?
 ### Kassenbuch-Router
 `/split` muss VOR `/{id}` registriert sein (FastAPI matcht sonst `split` als ID).
 
+### FastAPI 422 – Array-Detail
+FastAPI gibt bei Validierungsfehlern `detail` als Array zurück: `[{loc, msg, type}]`.
+In `client.ts` wird das Array zu einem lesbaren String zusammengeführt, Pydantic-v2-Präfix `"Value error, "` wird entfernt.
+
+### Versionierung
+Version kommt aus Git-Tag, **nie manuell** in `package.json` ändern.
+`vite.config.ts` liest: `GITHUB_REF_NAME` (CI) → `git describe --tags` (lokal) → `dev-<hash>` (kein Tag).
+Neues Release: `git tag v0.x.y && git push --tags`
+
 ---
 
 ## Changelog
@@ -122,3 +131,9 @@ Defaults in `useForm({ defaultValues: ... })`, Fallback im Submit-Handler mit `?
   - Adressfeld Y=45mm, 3-Spalten-Footer
   - Rechtsformabhängige Personenbezeichnung (`_person_bezeichnung()`)
   - Dezentes `– Kopie –` statt rotem KOPIE-Banner
+  - Zahlungsbestätigung: „Rechnungsbetrag bereits dankend erhalten am TT.MM.JJJJ per Zahlungsart: €"
+  - Offene Rechnung: IBAN-Überweisungsaufforderung (unverändert)
+- Logo Option B in Sidebar (war Emoji), `src/frontend/public/logo.svg`
+- `client.ts`: FastAPI-422-Array-Detail lesbar, Pydantic-v2-Präfix entfernt
+- RechnungenPage: Frontend-Validierung vor Submit (Kunde + Positionsbeschreibung)
+- Versionsnummer in Sidebar aus Git-Tag (`vite.config.ts` → `__APP_VERSION__`)
