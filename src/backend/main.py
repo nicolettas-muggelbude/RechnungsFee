@@ -205,13 +205,22 @@ def _migrate_kategorien() -> None:
 
 def _migrate_signaturen() -> None:
     """
-    GoBD-Sicherheit: Rückwirkend SHA-256-Signaturen für bestehende immutable
-    Einträge ohne Signatur berechnen.
+    GoBD-Sicherheit: SHA-256-Signaturen für alle immutable Einträge auf den
+    aktuellen Stand der Signaturformel bringen.
+
+    Behandelt zwei Fälle:
+    - Keine Signatur (Altdaten vor GoBD-Feature)
+    - Veraltete Signatur (Signaturformel durch Software-Update erweitert,
+      z.B. neue Felder wie externe_belegnr oder kunde_id hinzugekommen)
+
+    In beiden Fällen werden keine Buchungsdaten geändert – nur der Hash
+    wird neu aus den unveränderlichen Buchungsdaten berechnet.
 
     Ablauf:
     1. Bestehende Schutz-Trigger temporär entfernen (damit UPDATE möglich ist).
-    2. Signaturen über ORM-Session berechnen und setzen.
-    3. Trigger werden danach durch _setup_gobd_triggers() neu erstellt.
+    2. Alle immutable Einträge laden, Signatur neu berechnen.
+    3. Nur tatsächlich abweichende Einträge aktualisieren.
+    4. Trigger werden danach durch _setup_gobd_triggers() neu erstellt.
     """
     from utils.signatur import signatur_kassenbucheintrag, signatur_tagesabschluss
     from database.models import Kassenbucheintrag, Tagesabschluss
@@ -227,24 +236,28 @@ def _migrate_signaturen() -> None:
             conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
         conn.commit()
 
-    # Signaturen via ORM setzen (konsistent mit signatur_*-Funktionen)
+    # Signaturen via ORM prüfen und bei Abweichung aktualisieren
     db = SessionLocal()
     try:
         eintraege = (
             db.query(Kassenbucheintrag)
-            .filter(Kassenbucheintrag.immutable == True, Kassenbucheintrag.signatur.is_(None))
+            .filter(Kassenbucheintrag.immutable == True)
             .all()
         )
         for e in eintraege:
-            e.signatur = signatur_kassenbucheintrag(e)
+            neu = signatur_kassenbucheintrag(e)
+            if e.signatur != neu:
+                e.signatur = neu
 
         abschluesse = (
             db.query(Tagesabschluss)
-            .filter(Tagesabschluss.immutable == True, Tagesabschluss.signatur.is_(None))
+            .filter(Tagesabschluss.immutable == True)
             .all()
         )
         for a in abschluesse:
-            a.signatur = signatur_tagesabschluss(a)
+            neu = signatur_tagesabschluss(a)
+            if a.signatur != neu:
+                a.signatur = neu
 
         db.commit()
     finally:
