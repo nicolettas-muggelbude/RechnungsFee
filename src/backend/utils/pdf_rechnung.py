@@ -449,22 +449,48 @@ class RechnungPDF(FPDF):
                       new_x="LMARGIN", new_y="NEXT")
             self.ln(2)
 
-        # --- Zahlungshinweis ---
-        iban = unt.get("iban") or ""
-        if iban and r.typ == "ausgang":
-            bic     = unt.get("bic") or ""
-            faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
-            hinweis = (
-                f"Bitte überweisen Sie {_fmt_euro(r.brutto_gesamt)} bis {faellig} "
-                f"unter Angabe der Rechnungsnummer {r.rechnungsnummer or ''} "
-                f"auf IBAN {iban}"
-            )
-            if bic: hinweis += f"  ·  BIC {bic}"
-            hinweis += "."
-            self.set_font("DejaVu", "", 8)
-            self.set_text_color(*TEXT_GRAU)
-            self.multi_cell(0, 5, hinweis)
-            self.ln(2)
+        # --- Zahlungshinweis / Zahlungsbestätigung ---
+        zahlungsstatus = str(getattr(r, "zahlungsstatus", "offen") or "offen")
+        zahlungen = [
+            z for z in (getattr(r, "kassenbucheintraege", None) or [])
+            if not getattr(z, "storniert", False)
+        ]
+
+        self.set_font("DejaVu", "", 8)
+        self.set_text_color(*TEXT_GRAU)
+
+        if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen:
+            # Bezahlte / teilweise bezahlte Rechnung – Zahlungsbestätigung
+            for z in zahlungen:
+                art_label = {
+                    "Bar": "Barzahlung", "Karte": "Kartenzahlung",
+                    "PayPal": "PayPal", "Bank": "Überweisung",
+                }.get(str(getattr(z, "zahlungsart", "")), str(getattr(z, "zahlungsart", "")))
+                zeile = (
+                    f"Erhalten am {_iso_zu_de(str(z.datum))} "
+                    f"per {art_label}: {_fmt_euro(z.brutto_betrag)}"
+                )
+                self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
+            if zahlungsstatus == "bezahlt":
+                self.ln(1)
+                self.set_font("DejaVu", "B", 8)
+                self.cell(0, 5, f"Gesamtbetrag beglichen: {_fmt_euro(r.brutto_gesamt)}",
+                          new_x="LMARGIN", new_y="NEXT")
+        else:
+            # Offene Rechnung – Überweisungsaufforderung
+            iban = unt.get("iban") or ""
+            if iban and r.typ == "ausgang":
+                bic     = unt.get("bic") or ""
+                faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
+                hinweis = (
+                    f"Bitte überweisen Sie {_fmt_euro(r.brutto_gesamt)} bis {faellig} "
+                    f"unter Angabe der Rechnungsnummer {r.rechnungsnummer or ''} "
+                    f"auf IBAN {iban}"
+                )
+                if bic: hinweis += f"  ·  BIC {bic}"
+                hinweis += "."
+                self.multi_cell(0, 5, hinweis)
+        self.ln(2)
 
         # --- Notizen ---
         if r.notizen:

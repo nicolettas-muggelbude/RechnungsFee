@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="wand" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#3730A3"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="3" dy="5" stdDeviation="12" flood-color="#4F46E5" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Hintergrund -->
+  <rect width="512" height="512" rx="112" fill="#EEF2FF"/>
+
+  <!-- Dokument -->
+  <rect x="144" y="108" width="224" height="296" rx="18" fill="white" filter="url(#shadow)"/>
+
+  <!-- Eselsohr -->
+  <path d="M 312 108 Q 368 108 368 164 L 312 164 Z" fill="#C7D2FE"/>
+
+  <!-- Dokumentlinien -->
+  <rect x="172" y="194" width="136" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="220" width="152" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="246" width="120" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="272" width="144" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="298" width="100" height="12" rx="6" fill="#E0E7FF"/>
+
+  <!-- € auf Dokument -->
+  <text x="196" y="175" font-size="48" font-weight="700"
+        fill="#4F46E5" font-family="Georgia, serif">€</text>
+
+  <!-- Zauberstab -->
+  <line x1="80" y1="448" x2="368" y2="80"
+        stroke="url(#wand)" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- Stern an der Stabspitze (Zentrum 376, 68) -->
+  <path d="M 376,34 L 386,58 L 412,68 L 386,78 L 376,102 L 366,78 L 340,68 L 366,58 Z"
+        fill="#F59E0B"/>
+  <circle cx="370" cy="62" r="6" fill="white" opacity="0.65"/>
+
+  <!-- Funken -->
+  <path d="M 424,116 L 430,130 L 446,116 L 430,130 L 424,144 L 418,130 L 402,116 L 418,130 Z"
+        fill="#FBBF24"/>
+  <circle cx="444" cy="158" r="6"  fill="#F59E0B" opacity="0.75"/>
+  <circle cx="418" cy="96"  r="4"  fill="#FCD34D" opacity="0.65"/>
+</svg>

@@ -7,7 +7,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Unbekannter Fehler')
+    // FastAPI gibt bei 422 ein Array zurück: [{ loc, msg, type }]
+    const detail = err.detail
+    const message = Array.isArray(detail)
+      ? detail.map((e: any) => e.msg ?? JSON.stringify(e)).join(' · ')
+      : String(detail ?? 'Unbekannter Fehler')
+    throw new Error(message)
   }
   // 204 No Content
   if (res.status === 204) return undefined as T

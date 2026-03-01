@@ -56,8 +56,9 @@ export function AppLayout() {
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar */}
       <aside className="w-56 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-4 border-b border-slate-200">
-          <h1 className="font-bold text-slate-800 text-lg">🧾 RechnungsFee</h1>
+        <div className="p-4 border-b border-slate-200 flex items-center gap-2">
+          <img src="/logo.svg" alt="RechnungsFee" className="w-8 h-8 flex-shrink-0" />
+          <h1 className="font-bold text-slate-800 text-lg">RechnungsFee</h1>
         </div>
 
         <nav className="flex-1 py-3">
