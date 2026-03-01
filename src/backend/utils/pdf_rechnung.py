@@ -461,21 +461,25 @@ class RechnungPDF(FPDF):
 
         if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen:
             # Bezahlte / teilweise bezahlte Rechnung – Zahlungsbestätigung
+            art_labels = {
+                "Bar": "Barzahlung", "Karte": "Kartenzahlung",
+                "PayPal": "PayPal", "Bank": "Überweisung",
+            }
             for z in zahlungen:
-                art_label = {
-                    "Bar": "Barzahlung", "Karte": "Kartenzahlung",
-                    "PayPal": "PayPal", "Bank": "Überweisung",
-                }.get(str(getattr(z, "zahlungsart", "")), str(getattr(z, "zahlungsart", "")))
+                art_label = art_labels.get(
+                    str(getattr(z, "zahlungsart", "")),
+                    str(getattr(z, "zahlungsart", ""))
+                )
+                prefix = (
+                    "Rechnungsbetrag bereits dankend erhalten"
+                    if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                    else "Teilbetrag dankend erhalten"
+                )
                 zeile = (
-                    f"Erhalten am {_iso_zu_de(str(z.datum))} "
+                    f"{prefix} am {_iso_zu_de(str(z.datum))} "
                     f"per {art_label}: {_fmt_euro(z.brutto_betrag)}"
                 )
                 self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
-            if zahlungsstatus == "bezahlt":
-                self.ln(1)
-                self.set_font("DejaVu", "B", 8)
-                self.cell(0, 5, f"Gesamtbetrag beglichen: {_fmt_euro(r.brutto_gesamt)}",
-                          new_x="LMARGIN", new_y="NEXT")
         else:
             # Offene Rechnung – Überweisungsaufforderung
             iban = unt.get("iban") or ""
