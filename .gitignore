@@ -78,6 +78,7 @@ Cargo.lock
 *.db-shm
 *.db-wal
 data/
+!src/frontend/src/data/
 backups/
 *.sql
 

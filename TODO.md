@@ -19,17 +19,16 @@ Kontext-Hilfe direkt im UI ist wertvoller als externe Dokumentation.
 
 ---
 
-## 2. Menüpunkt "Info"
+## 2. Menüpunkt "Info" ✅
 
 Sichtbarer Einstiegspunkt für Hilfe, Beta-Hinweis und Feedback-Link.
 
-- [ ] Info-Seite in der Sidebar ergänzen
-- [ ] Inhalt:
-  - Versionsnummer (aus `package.json` / Tauri-Config)
-  - Beta-Disclaimer ("Programm befindet sich in der Beta-Phase – nicht als alleinige Steuerunterlage verwenden")
-  - Link zu GitHub Issues (Feedback / Fehler melden)
-  - Lizenz (AGPL-3.0)
-  - Kurze Beschreibung Zielgruppe und Scope
+- [x] Info-Seite in der Sidebar ergänzen (ℹ️ Info & Updates)
+- [x] Versionsnummer aus Git-Tag (`__APP_VERSION__`)
+- [x] Beta-Disclaimer (amber Box mit Backup-Link)
+- [x] "Was ist neu" – statisches Changelog (`src/frontend/src/data/changelog.ts`), aufklappbar pro Version, Typ-Badges (Neu/Verbessert/Fix)
+- [x] Links: GitHub Issues, Roadmap, Lizenz AGPL-3.0, Quellcode
+- [x] Kurzbeschreibung Zielgruppe und Scope
 
 ---
 

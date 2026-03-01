@@ -11,6 +11,7 @@ const hauptNav = [
   { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
   { to: '/exporte', label: 'Exporte', icon: '📦' },
   { to: '/backup', label: 'Backup', icon: '💾' },
+  { to: '/info', label: 'Info & Updates', icon: 'ℹ️' },
 ]
 
 const stammdatenNav = [
