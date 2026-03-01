@@ -3,7 +3,11 @@ API-Endpunkte für Unternehmensstammdaten.
 Es gibt immer genau einen Datensatz (id=1).
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
@@ -11,6 +15,15 @@ from database.models import Unternehmen
 from .schemas import UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse
 
 router = APIRouter(prefix="/api/unternehmen", tags=["Stammdaten"])
+
+UPLOAD_DIR = Path.home() / ".local" / "share" / "RechnungsFee" / "uploads"
+ERLAUBTE_TYPEN = {"image/png", "image/jpeg", "image/webp"}
+MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
+
+
+def _upload_dir() -> Path:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    return UPLOAD_DIR
 
 
 @router.get("", response_model=UnternehmenResponse | None)
@@ -45,3 +58,69 @@ def update_unternehmen(data: UnternehmenUpdate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(unternehmen)
     return unternehmen
+
+
+# ---------------------------------------------------------------------------
+# Logo-Endpunkte
+# ---------------------------------------------------------------------------
+
+@router.post("/logo", response_model=UnternehmenResponse)
+async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Lädt ein Firmenlogo hoch (PNG/JPEG/WEBP, max 2 MB)."""
+    unternehmen = db.query(Unternehmen).first()
+    if not unternehmen:
+        raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
+
+    if file.content_type not in ERLAUBTE_TYPEN:
+        raise HTTPException(status_code=400, detail="Nur PNG, JPEG und WEBP sind erlaubt.")
+
+    inhalt = await file.read()
+    if len(inhalt) > MAX_LOGO_BYTES:
+        raise HTTPException(status_code=400, detail="Logo darf maximal 2 MB groß sein.")
+
+    # Dateierweiterung bestimmen
+    ext_map = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+    ext = ext_map[file.content_type]
+    ziel = _upload_dir() / f"logo.{ext}"
+
+    # Altes Logo löschen (andere Erweiterung)
+    if unternehmen.logo_pfad and unternehmen.logo_pfad != str(ziel):
+        try:
+            os.unlink(unternehmen.logo_pfad)
+        except FileNotFoundError:
+            pass
+
+    with open(ziel, "wb") as f:
+        f.write(inhalt)
+
+    unternehmen.logo_pfad = str(ziel)
+    db.commit()
+    db.refresh(unternehmen)
+    return unternehmen
+
+
+@router.get("/logo")
+def get_logo(db: Session = Depends(get_db)):
+    """Liefert das gespeicherte Firmenlogo als Datei aus."""
+    unternehmen = db.query(Unternehmen).first()
+    if not unternehmen or not unternehmen.logo_pfad:
+        raise HTTPException(status_code=404, detail="Kein Logo hinterlegt.")
+    pfad = Path(unternehmen.logo_pfad)
+    if not pfad.exists():
+        raise HTTPException(status_code=404, detail="Logo-Datei nicht gefunden.")
+    return FileResponse(str(pfad))
+
+
+@router.delete("/logo", status_code=204)
+def delete_logo(db: Session = Depends(get_db)):
+    """Löscht das Firmenlogo."""
+    unternehmen = db.query(Unternehmen).first()
+    if not unternehmen:
+        raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
+    if unternehmen.logo_pfad:
+        try:
+            os.unlink(unternehmen.logo_pfad)
+        except FileNotFoundError:
+            pass
+        unternehmen.logo_pfad = None
+        db.commit()

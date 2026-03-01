@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { stornoKassenbuchEintrag, type KassenbuchEintrag } from '../../api/client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { stornoKassenbuchEintrag, getUnternehmen, type KassenbuchEintrag } from '../../api/client'
 
 interface Props {
   eintrag: KassenbuchEintrag
@@ -59,6 +59,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const stornoMutation = useMutation({
     mutationFn: () => stornoKassenbuchEintrag(e.id, stornoGrund),
@@ -80,9 +81,11 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
       return
     }
     const subject = encodeURIComponent(`Beleg ${e.belegnr}`)
-    const body = encodeURIComponent(
-      `Anbei dein Beleg vom ${datum}.\n\nBeleg-Nr.: ${e.belegnr}\nBetrag: ${formatEuro(e.brutto_betrag)}`
-    )
+    let bodyText = `Anbei dein Beleg vom ${datum}.\n\nBeleg-Nr.: ${e.belegnr}\nBetrag: ${formatEuro(e.brutto_betrag)}`
+    if (unternehmen?.mail_signatur) {
+      bodyText += `\n\n${unternehmen.mail_signatur}`
+    }
+    const body = encodeURIComponent(bodyText)
     window.open(`mailto:${email}?subject=${subject}&body=${body}`)
     setZeigMailEingabe(false)
     setMailAdresse('')

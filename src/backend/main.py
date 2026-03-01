@@ -145,6 +145,22 @@ def _run_migrations() -> None:
             ))
             conn.commit()
 
+        # unternehmen: logo_pfad, mail_betreff_vorlage, mail_text_vorlage, mail_signatur
+        result = conn.execute(text("PRAGMA table_info(unternehmen)"))
+        columns = {row[1] for row in result}
+        if "logo_pfad" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN logo_pfad VARCHAR(500)"))
+            conn.commit()
+        if "mail_betreff_vorlage" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_betreff_vorlage VARCHAR(500)"))
+            conn.commit()
+        if "mail_text_vorlage" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_text_vorlage TEXT"))
+            conn.commit()
+        if "mail_signatur" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_signatur TEXT"))
+            conn.commit()
+
         # kategorien.ust_satz_standard
         result = conn.execute(text("PRAGMA table_info(kategorien)"))
         columns = {row[1] for row in result}

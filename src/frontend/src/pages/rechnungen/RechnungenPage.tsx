@@ -366,11 +366,11 @@ function RechnungDetail({
     ? Math.min((parseFloat(rechnung.bezahlt_betrag) / parseFloat(rechnung.brutto_gesamt)) * 100, 100)
     : 0
 
-  const hatZahlungsoption = restbetrag > 0.004 && !rechnung.storniert
+  const hatZahlungsoption = restbetrag > 0.004 && !rechnung.storniert && !rechnung.ist_entwurf
 
   const partnerEmail = rechnung.typ === 'ausgang'
-    ? (rechnung as any).kunde_email ?? null
-    : null
+    ? rechnung.kunde_email
+    : rechnung.lieferant_email
 
   const stornoMutation = useMutation({
     mutationFn: () => stornoRechnung(rechnung.id),
@@ -434,12 +434,39 @@ function RechnungDetail({
       setPdfLaeuft(false)
     }
 
-    // mailto öffnen (PDF-Anhang muss manuell hinzugefügt werden)
+    // Platzhalter-Werte bestimmen
     const datumDe = rechnung.datum.split('-').reverse().join('.')
-    const subject = encodeURIComponent(`Rechnung ${rechnung.rechnungsnummer ?? ''}`)
-    const body    = encodeURIComponent(
-      `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
-    )
+    const faelligDe = rechnung.faellig_am ? rechnung.faellig_am.split('-').reverse().join('.') : '—'
+    const kundeName = rechnung.kunde_name ?? rechnung.lieferant_name ?? rechnung.partner_freitext ?? ''
+    const firmenname = unternehmen?.firmenname ?? 'RechnungsFee'
+
+    function ersetze(vorlage: string): string {
+      return vorlage
+        .replace(/\{rechnungsnummer\}/g, rechnung.rechnungsnummer ?? '—')
+        .replace(/\{datum\}/g, datumDe)
+        .replace(/\{betrag\}/g, formatEuro(rechnung.brutto_gesamt))
+        .replace(/\{faellig_am\}/g, faelligDe)
+        .replace(/\{kunde\}/g, kundeName)
+        .replace(/\{firmenname\}/g, firmenname)
+    }
+
+    // Betreff aus Vorlage oder Fallback
+    const betreffVorlage = unternehmen?.mail_betreff_vorlage ?? 'Rechnung {rechnungsnummer}'
+    const subjectText = ersetze(betreffVorlage)
+
+    // Text aus Vorlage oder Fallback
+    const standardText = `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
+    const textVorlage = unternehmen?.mail_text_vorlage ?? standardText
+    let bodyText = ersetze(textVorlage)
+
+    // Signatur anhängen
+    if (unternehmen?.mail_signatur) {
+      bodyText += `\n\n${unternehmen.mail_signatur}`
+    }
+
+    // mailto öffnen (PDF-Anhang muss manuell hinzugefügt werden)
+    const subject = encodeURIComponent(subjectText)
+    const body    = encodeURIComponent(bodyText)
     window.open(`mailto:${email}?subject=${subject}&body=${body}`)
     setZeigMailEingabe(false)
     setMailAdresse('')

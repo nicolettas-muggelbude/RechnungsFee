@@ -50,15 +50,43 @@ export type Unternehmen = {
   rechtsform: string
   email?: string
   telefon?: string
+  webseite?: string
   iban?: string
   bic?: string
   bank_name?: string
+  logo_pfad?: string | null
+  mail_betreff_vorlage?: string | null
+  mail_text_vorlage?: string | null
+  mail_signatur?: string | null
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
   request<Unternehmen>('/unternehmen', { method: 'POST', body: JSON.stringify(data) })
 export const updateUnternehmen = (data: Partial<Unternehmen>) =>
   request<Unternehmen>('/unternehmen', { method: 'PUT', body: JSON.stringify(data) })
+
+export async function uploadLogo(file: File): Promise<Unternehmen> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/unternehmen/logo`, { method: 'POST', body: form })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'Logo-Upload fehlgeschlagen')
+  }
+  return res.json()
+}
+
+export async function deleteLogo(): Promise<void> {
+  const res = await fetch(`${BASE}/unternehmen/logo`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'Logo löschen fehlgeschlagen')
+  }
+}
+
+export function getLogoUrl(): string {
+  return `${BASE}/unternehmen/logo`
+}
 
 // --- Konten ---
 export type Konto = {
@@ -374,8 +402,10 @@ export type Rechnung = {
   faellig_am: string | null
   kunde_id: number | null
   kunde_name: string | null
+  kunde_email: string | null
   lieferant_id: number | null
   lieferant_name: string | null
+  lieferant_email: string | null
   partner_freitext: string | null
   kategorie_id: number | null
   netto_gesamt: string

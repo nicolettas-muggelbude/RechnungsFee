@@ -131,8 +131,10 @@ class RechnungResponse(BaseModel):
     faellig_am: Optional[date]
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None
+    kunde_email: Optional[str] = None
     lieferant_id: Optional[int]
     lieferant_name: Optional[str] = None
+    lieferant_email: Optional[str] = None
     partner_freitext: Optional[str]
     kategorie_id: Optional[int]
     netto_gesamt: Decimal
@@ -161,9 +163,11 @@ class RechnungResponse(BaseModel):
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
+            data.kunde_email = obj.kunde.email
         if obj.lieferant:
             parts = [obj.lieferant.firmenname or "", obj.lieferant.vorname or "", obj.lieferant.nachname or ""]
             data.lieferant_name = " ".join(p for p in parts if p) or None
+            data.lieferant_email = obj.lieferant.email
         data.zahlungen = [
             ZahlungKompakt(
                 id=e.id,

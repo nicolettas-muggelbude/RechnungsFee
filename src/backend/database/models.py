@@ -54,6 +54,11 @@ class Unternehmen(Base):
     iban: Mapped[str | None] = mapped_column(String(34))
     bic: Mapped[str | None] = mapped_column(String(11))
     bank_name: Mapped[str | None] = mapped_column(String(100))
+    # Logo & Mail-Vorlagen
+    logo_pfad: Mapped[str | None] = mapped_column(String(500))
+    mail_betreff_vorlage: Mapped[str | None] = mapped_column(String(500))
+    mail_text_vorlage: Mapped[str | None] = mapped_column(Text)
+    mail_signatur: Mapped[str | None] = mapped_column(Text)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

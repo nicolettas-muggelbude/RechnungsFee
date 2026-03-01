@@ -395,6 +395,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwürfe können nicht kassiert werden. Bitte zuerst finalisieren.")
 
     restbetrag = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
     if restbetrag <= 0:
@@ -452,9 +454,6 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     eintrag.signatur = signatur_kassenbucheintrag(eintrag)
     db.add(eintrag)
     db.flush()
-
-    # Zahlung finalisiert Entwurf automatisch
-    rechnung.ist_entwurf = False
 
     # Zahlungsstatus der Rechnung aktualisieren
     _aktualisiere_zahlungsstatus(rechnung)

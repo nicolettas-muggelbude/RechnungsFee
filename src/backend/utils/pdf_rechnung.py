@@ -104,6 +104,17 @@ class RechnungPDF(FPDF):
 
         start_y = self.get_y()
 
+        # Logo (links oben, falls vorhanden)
+        logo_pfad = unt.get("logo_pfad")
+        if logo_pfad:
+            from pathlib import Path
+            if Path(logo_pfad).exists():
+                try:
+                    self.image(logo_pfad, x=10, y=start_y, h=12)
+                    start_y = self.get_y() + 14
+                except Exception:
+                    pass  # Logo-Fehler ignorieren, Text-Header weiter nutzen
+
         # Linke Spalte: Absender
         self.set_x(10)
         self.set_font("DejaVu", "B", 13)

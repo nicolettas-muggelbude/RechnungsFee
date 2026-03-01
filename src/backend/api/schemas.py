@@ -39,6 +39,10 @@ class UnternehmenBase(BaseModel):
     iban: Optional[str] = None
     bic: Optional[str] = None
     bank_name: Optional[str] = None
+    logo_pfad: Optional[str] = None
+    mail_betreff_vorlage: Optional[str] = None
+    mail_text_vorlage: Optional[str] = None
+    mail_signatur: Optional[str] = None
 
     @field_validator("versteuerungsart")
     @classmethod

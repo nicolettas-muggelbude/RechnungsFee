@@ -15287,6 +15287,22 @@ RechnungsFee/
 
 ## **Changelog**
 
+### **2026-03-01 - UnternehmenPage: Firmendaten, Logo, Mail-Vorlagen**
+- UnternehmenPage war Platzhalter ("Kommt in v1.0") – jetzt vollständig implementiert
+- **Logo-Upload**: POST/GET/DELETE `/api/unternehmen/logo`, max 2 MB, PNG/JPEG/WEBP, gespeichert unter `~/.local/share/RechnungsFee/uploads/`
+- **PDF-Logo**: `pdf_rechnung.py` zeigt Logo oben links im Rechnungs-Header
+- **DB-Felder**: `logo_pfad`, `mail_betreff_vorlage`, `mail_text_vorlage`, `mail_signatur` in Tabelle `unternehmen` (Migration in `main.py`)
+- **UnternehmenPage**: 3 Cards – Firmendaten+Logo, Mail-Vorlage (mit Platzhalter-Legende), Mail-Signatur (mit Live-Vorschau)
+- **Mail-Platzhalter**: `{rechnungsnummer}`, `{datum}`, `{betrag}`, `{faellig_am}`, `{kunde}`, `{firmenname}`
+- **handleMail() (RechnungenPage)**: Platzhalter-Ersetzung, Template aus Unternehmen, Signatur anhängen
+- **handleMail() (BuchungDetail)**: Signatur aus Unternehmen an Beleg-Mails anhängen
+
+### **2026-03-01 - Bugfixes: Entwurf-Zahlung + Kunden-E-Mail**
+- **Logikfehler behoben**: Entwurfs-Rechnungen konnten kassiert werden → Button jetzt nur bei finalisierten Rechnungen aktiv (`hatZahlungsoption` prüft `!ist_entwurf`)
+- **Backend-Guard**: `zahlung_bar_erstellen` lehnt Entwürfe mit 409 ab
+- **Auto-Finalisierung entfernt**: Zahlung hat Entwurf nicht mehr stillschweigend finalisiert
+- **Kunden-E-Mail**: `RechnungResponse` liefert jetzt `kunde_email` + `lieferant_email` direkt mit (war zuvor fehlendes Feld → `as any`-Hack im Frontend); `RechnungsDetailPanel` nutzt korrekte E-Mail aus Stammdaten
+
 ### **2026-01-24 - Issue #13: Export-Funktionen für Nicht-DATEV-Software geprüft**
 - Feature-Request analysiert: Export für Programme ohne DATEV-Import-Unterstützung
 - Klarstellung: CAMT/OFX sind Bank-IMPORT-Formate, keine Buchhaltungs-EXPORT-Formate
