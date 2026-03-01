@@ -1,78 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="4" dy="6" stdDeviation="10" flood-color="#4F46E5" flood-opacity="0.18"/>
-    </filter>
-    <!-- Wand gradient -->
     <linearGradient id="wand" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#3730A3"/>
-      <stop offset="100%" stop-color="#6366F1"/>
+      <stop offset="0%"   stop-color="#3730A3"/>
+      <stop offset="100%" stop-color="#818CF8"/>
     </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="3" dy="5" stdDeviation="12" flood-color="#4F46E5" flood-opacity="0.15"/>
+    </filter>
   </defs>
 
   <!-- Hintergrund -->
   <rect width="512" height="512" rx="112" fill="#EEF2FF"/>
 
-  <!-- Dokument Schatten -->
-  <rect x="148" y="112" width="216" height="288" rx="18" fill="#4F46E5" opacity="0.12" transform="translate(6,8)"/>
-
   <!-- Dokument -->
-  <rect x="148" y="112" width="216" height="288" rx="18" fill="white" filter="url(#shadow)"/>
+  <rect x="144" y="108" width="224" height="296" rx="18" fill="white" filter="url(#shadow)"/>
 
-  <!-- Eselsohr oben rechts -->
-  <path d="M 306 112 L 364 170 L 306 170 Z" fill="#E0E7FF"/>
-  <path d="M 306 112 L 364 170 L 306 170 L 306 112 Z" fill="#C7D2FE"/>
-  <!-- Weiße Ecke abschneiden für cleanen Look -->
-  <path d="M 306 112 Q 364 112 364 170 L 306 170 Z" fill="#C7D2FE"/>
+  <!-- Eselsohr -->
+  <path d="M 312 108 Q 368 108 368 164 L 312 164 Z" fill="#C7D2FE"/>
 
   <!-- Dokumentlinien -->
-  <rect x="176" y="200" width="130" height="11" rx="5" fill="#E0E7FF"/>
-  <rect x="176" y="224" width="148" height="11" rx="5" fill="#E0E7FF"/>
-  <rect x="176" y="248" width="118" height="11" rx="5" fill="#E0E7FF"/>
-  <rect x="176" y="272" width="138" height="11" rx="5" fill="#E0E7FF"/>
-  <rect x="176" y="296" width="96"  height="11" rx="5" fill="#E0E7FF"/>
+  <rect x="172" y="194" width="136" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="220" width="152" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="246" width="120" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="272" width="144" height="12" rx="6" fill="#E0E7FF"/>
+  <rect x="172" y="298" width="100" height="12" rx="6" fill="#E0E7FF"/>
 
-  <!-- Euro-Zeichen auf Dokument -->
-  <text x="200" y="180" font-size="44" font-weight="700" fill="#4F46E5"
-        font-family="Georgia, serif">€</text>
+  <!-- € auf Dokument -->
+  <text x="196" y="175" font-size="48" font-weight="700"
+        fill="#4F46E5" font-family="Georgia, serif">€</text>
 
   <!-- Zauberstab -->
-  <line x1="88" y1="436" x2="360" y2="86"
-        stroke="url(#wand)" stroke-width="24" stroke-linecap="round"/>
+  <line x1="80" y1="448" x2="368" y2="80"
+        stroke="url(#wand)" stroke-width="26" stroke-linecap="round"/>
 
-  <!-- Wand-Spitze: 4-Zacken-Stern -->
-  <!-- Zentrum: 368, 76 · Außenradius 34 · Innenradius 13 -->
-  <path d="M 368,42 L 377,63 L 402,76 L 377,89 L 368,110 L 359,89 L 334,76 L 359,63 Z"
+  <!-- Stern an der Stabspitze (Zentrum 376, 68) -->
+  <path d="M 376,34 L 386,58 L 412,68 L 386,78 L 376,102 L 366,78 L 340,68 L 366,58 Z"
         fill="#F59E0B"/>
-  <!-- Glanzpunkt -->
-  <circle cx="362" cy="70" r="5" fill="white" opacity="0.7"/>
+  <circle cx="370" cy="62" r="6" fill="white" opacity="0.65"/>
 
   <!-- Funken -->
-  <!-- Großer Funke oben rechts -->
-  <path d="M 418,118 L 423,130 L 436,118 L 423,130 L 418,142 L 413,130 L 400,118 L 413,130 Z"
+  <path d="M 424,116 L 430,130 L 446,116 L 430,130 L 424,144 L 418,130 L 402,116 L 418,130 Z"
         fill="#FBBF24"/>
-  <!-- Mittlerer Funke -->
-  <path d="M 396,158 L 399,166 L 408,158 L 399,166 L 396,174 L 393,166 L 384,158 L 393,166 Z"
-        fill="#F59E0B" opacity="0.85"/>
-  <!-- Kleiner Funke -->
-  <circle cx="432" cy="158" r="5" fill="#FCD34D"/>
-  <circle cx="416" cy="98"  r="4" fill="#FCD34D" opacity="0.7"/>
-
-  <!-- Fee-Silhouette: Kopf -->
-  <circle cx="100" cy="148" r="22" fill="#6366F1"/>
-  <!-- Haare als goldene Kurve -->
-  <path d="M 82 138 Q 100 118 118 138" stroke="#F59E0B" stroke-width="5"
-        fill="none" stroke-linecap="round"/>
-  <!-- Körper / Kleid -->
-  <path d="M 100 170 Q 118 195 114 230 Q 100 238 86 230 Q 82 195 100 170 Z"
-        fill="#4F46E5"/>
-  <!-- Flügel links -->
-  <path d="M 90 182 Q 52 155 58 200 Q 64 225 88 210 Z"
-        fill="#A5B4FC" opacity="0.75"/>
-  <!-- Flügel rechts -->
-  <path d="M 110 182 Q 148 155 142 200 Q 136 225 112 210 Z"
-        fill="#A5B4FC" opacity="0.75"/>
-  <!-- Arm / Stab haltend -->
-  <line x1="114" y1="195" x2="130" y2="185"
-        stroke="#4F46E5" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="444" cy="158" r="6"  fill="#F59E0B" opacity="0.75"/>
+  <circle cx="418" cy="96"  r="4"  fill="#FCD34D" opacity="0.65"/>
 </svg>

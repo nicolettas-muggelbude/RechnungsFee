@@ -12,45 +12,30 @@
 
   <!-- Hintergrund -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- Glanz-Overlay oben -->
   <rect width="512" height="256" rx="112" fill="url(#shine)"/>
 
-  <!-- RF – Monogramm -->
-  <text x="256" y="300"
-        font-size="220" font-weight="900" fill="white"
+  <!-- RF Monogramm – vertikal zentriert -->
+  <text x="256" y="310"
+        font-size="240" font-weight="900" fill="white"
         font-family="'Arial Black', Arial, sans-serif"
-        text-anchor="middle" letter-spacing="-8">RF</text>
+        text-anchor="middle" letter-spacing="-10">RF</text>
 
-  <!-- Unterer Schriftzug -->
-  <text x="256" y="355"
-        font-size="38" fill="white" opacity="0.55"
-        font-family="Arial, sans-serif"
-        text-anchor="middle" letter-spacing="14">FEE</text>
-
-  <!-- Trennlinie unter RF -->
-  <rect x="176" y="313" width="160" height="3" rx="2" fill="white" opacity="0.25"/>
-
-  <!-- 4-Zacken-Sterne (Funken) -->
-
+  <!-- Funken -->
   <!-- Groß oben rechts -->
-  <path d="M 380,88 L 388,108 L 410,88 L 388,108 L 380,128 L 372,108 L 350,88 L 372,108 Z"
+  <path d="M 382,78 L 391,100 L 414,78 L 391,100 L 382,122 L 373,100 L 350,78 L 373,100 Z"
         fill="#FBBF24"/>
-  <!-- Glanzpunkt im Stern -->
-  <circle cx="377" cy="85" r="4" fill="white" opacity="0.6"/>
+  <circle cx="378" cy="74" r="5" fill="white" opacity="0.55"/>
 
   <!-- Mittel oben links -->
-  <path d="M 132,118 L 138,132 L 154,118 L 138,132 L 132,146 L 126,132 L 110,118 L 126,132 Z"
+  <path d="M 130,108 L 137,124 L 154,108 L 137,124 L 130,140 L 123,124 L 106,108 L 123,124 Z"
         fill="#F59E0B" opacity="0.9"/>
 
   <!-- Klein rechts Mitte -->
-  <path d="M 408,248 L 412,258 L 422,248 L 412,258 L 408,268 L 404,258 L 394,248 L 404,258 Z"
+  <path d="M 410,240 L 414,252 L 426,240 L 414,252 L 410,264 L 406,252 L 394,240 L 406,252 Z"
         fill="#FCD34D" opacity="0.8"/>
 
-  <!-- Winzig links unten -->
-  <circle cx="118" cy="370" r="6"  fill="#F59E0B" opacity="0.6"/>
-  <circle cx="134" cy="355" r="4"  fill="#FCD34D" opacity="0.5"/>
-
-  <!-- Winzig rechts oben extra -->
-  <circle cx="400" cy="152" r="5"  fill="#FBBF24" opacity="0.55"/>
-  <circle cx="420" cy="200" r="3"  fill="#FCD34D" opacity="0.45"/>
+  <!-- Punkte -->
+  <circle cx="400" cy="148" r="6"  fill="#FBBF24" opacity="0.6"/>
+  <circle cx="118" cy="360" r="7"  fill="#F59E0B" opacity="0.5"/>
+  <circle cx="136" cy="342" r="4"  fill="#FCD34D" opacity="0.45"/>
 </svg>
