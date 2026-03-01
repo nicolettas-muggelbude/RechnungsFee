@@ -1,11 +1,23 @@
 """
 PDF-Export für Rechnungen (Eingang + Ausgang).
-Layout nach DIN 5008 / §14 UStG:
-  - Logo links oben
-  - Unternehmensblock rechts (Name, Adresse, Steuer, Kontakt, Bank)
-  - Empfänger-Adressblock links (§14 IV Nr. 1 Pflichtangabe)
-  - Rechnungsmetadaten rechts daneben
-  - Positionstabelle + Summen + Zahlungshinweis
+
+Layout nach DIN 5008 Form B / §14 UStG:
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ Logo (links)       │  Firmenname + Adresse (rechts)     │ 10–43mm
+  ├─────────────────────────────────────────────────────────┤  43mm
+  │ Absender-Kurzzeile │  Rechnungsnr / Datum / Fällig      │ 45mm
+  │ Empfänger-Adresse  │                                     │ 51–90mm
+  ├─────────────────────────────────────────────────────────┤
+  │ Rechnung RE-XXXX                                         │
+  │ Positionstabelle                                         │
+  │ Summen + Zahlungshinweis                                 │
+  ├─────────────────────────────────────────────────────────┤
+  │ Vollst. Firmendaten (Tel, E-Mail, Web, IBAN, HRB …)     │ Footer
+  └─────────────────────────────────────────────────────────┘
+
+Adressfeld startet IMMER bei Y=45mm (DIN 5008, Fensterumschlag-kompatibel).
+Vollständige Firmendaten stehen im Footer (jede Seite).
 
 Fonts: DejaVu (kommt mit fpdf2) für volle Unicode-Unterstützung.
 """
@@ -43,17 +55,23 @@ GRAU_RAND   = (210, 213, 220)
 TEXT_GRAU   = (110, 115, 125)
 TEXT_DUNKEL = (20, 24, 35)
 
-L_MARGIN = 15
-R_MARGIN = 15
-PAGE_W   = 210
-NUTZ_W   = PAGE_W - L_MARGIN - R_MARGIN  # 180 mm
+L_MARGIN    = 20      # linker Rand mm (DIN 5008)
+R_MARGIN    = 15
+PAGE_W      = 210
+NUTZ_W      = PAGE_W - L_MARGIN - R_MARGIN   # 175 mm
 
-# Unternehmensblock: rechte Spalte
-BLOCK_X = 110.0   # Startpunkt links des Unternehmensblocks
-BLOCK_W = PAGE_W - R_MARGIN - BLOCK_X  # ≈ 85 mm
+# DIN 5008 Form B: Anschriftfeld beginnt bei 45mm vom oberen Blattrand
+ADRESS_Y    = 45.0
 
-LOGO_MAX_H = 20.0  # maximale Logo-Höhe mm
-LOGO_MAX_W = 60.0  # maximale Logo-Breite mm
+# Briefkopf-Separator: fest bei 43mm (2mm Abstand vor Adressfeld)
+HEADER_LINE_Y = 43.0
+
+# Unternehmensblock rechts im Header
+BLOCK_X     = 110.0
+BLOCK_W     = PAGE_W - R_MARGIN - BLOCK_X    # ≈ 85 mm
+
+# Footer-Höhe: 2-Spalten-Layout (je 3 Zeilen à 4mm + Separator + Abstand)
+FOOTER_H    = 22.0
 
 
 def _fmt_euro(val: Any) -> str:
@@ -73,28 +91,27 @@ def _iso_zu_de(iso: str) -> str:
         return str(iso)
 
 
-def _logo_abmessungen(pfad: str) -> tuple[float, float]:
-    """Gibt (breite_mm, hoehe_mm) zurück, skaliert auf LOGO_MAX_H/LOGO_MAX_W."""
+def _logo_abmessungen(pfad: str, max_h: float = 18.0, max_w: float = 55.0) -> tuple[float, float]:
+    """Skaliert Logo auf max_h×max_w unter Beibehaltung der Aspect Ratio."""
     try:
         from PIL import Image as PilImage
         with PilImage.open(pfad) as img:
             px_w, px_h = img.size
-        # skalieren: primär auf Höhe, dann auf Breite kappen
-        h = LOGO_MAX_H
+        h = max_h
         w = h * px_w / px_h
-        if w > LOGO_MAX_W:
-            w = LOGO_MAX_W
+        if w > max_w:
+            w = max_w
             h = w * px_h / px_w
-        return w, h
+        return round(w, 2), round(h, 2)
     except Exception:
         return 0.0, 0.0
 
 
 def _adresszeilen(obj) -> list[str]:
-    """Vollständige Adresszeilen aus Kunden- oder Lieferanten-Objekt."""
+    """Vollständige Adresszeilen aus Kunden- oder Lieferanten-Objekt (§14 UStG)."""
     if obj is None:
         return []
-    zeilen = []
+    zeilen: list[str] = []
     name = " ".join(filter(None, [
         getattr(obj, "firmenname", None) or "",
         getattr(obj, "vorname", None) or "",
@@ -125,63 +142,25 @@ class RechnungPDF(FPDF):
     def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.set_margins(L_MARGIN, 10, R_MARGIN)
-        self.set_auto_page_break(auto=True, margin=22)
+        self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
         dv_dir = _find_dejavu_dir()
-        self.add_font("DejaVu",  style="",  fname=str(dv_dir / "DejaVuSans.ttf"))
-        self.add_font("DejaVu",  style="B", fname=str(dv_dir / "DejaVuSans-Bold.ttf"))
+        self.add_font("DejaVu", style="",  fname=str(dv_dir / "DejaVuSans.ttf"))
+        self.add_font("DejaVu", style="B", fname=str(dv_dir / "DejaVuSans-Bold.ttf"))
         self._unt        = unternehmen
         self._r          = rechnung
         self._ist_kopie  = ist_kopie
         self._druckdatum = datetime.now().strftime("%d.%m.%Y")
-        # Header-Höhe vorberechnen damit body_y auf jeder Seite stimmt
-        self._header_h   = self._calc_header_h()
 
     # -------------------------------------------------------------------------
-    # Hilfsmethode: Höhe des Unternehmensblocks schätzen
-    # -------------------------------------------------------------------------
-
-    def _calc_header_h(self) -> float:
-        """Schätzt die Gesamthöhe des Briefkopfs in mm."""
-        unt = self._unt
-        zeilen = 0
-        # Firmenname
-        zeilen += 1
-        # Adresse
-        for f in ["strasse", "plz", "land"]:
-            if unt.get(f):
-                zeilen += 1
-        # Leerzeile Trenngruppe
-        steuer_da = any(unt.get(k) for k in ["steuernummer", "ust_idnr", "handelsregister_nr"])
-        kontakt_da = any(unt.get(k) for k in ["telefon", "email", "webseite"])
-        bank_da = unt.get("iban")
-        if steuer_da:
-            zeilen += sum(1 for k in ["steuernummer", "ust_idnr", "handelsregister_nr"] if unt.get(k))
-            zeilen += 1  # Leerzeile
-        if kontakt_da:
-            zeilen += sum(1 for k in ["telefon", "email", "webseite"] if unt.get(k))
-            zeilen += 1
-        if bank_da:
-            zeilen += 1 + (1 if unt.get("bic") else 0)
-
-        block_h = 10 + zeilen * 4.5  # Start 10mm + Zeilen
-        # Logo-Höhe berücksichtigen
-        logo_pfad = unt.get("logo_pfad")
-        if logo_pfad and Path(logo_pfad).exists():
-            _, lh = _logo_abmessungen(logo_pfad)
-            block_h = max(block_h, lh + 6)
-
-        return max(block_h, 35.0) + 6  # +6mm für Linie + Abstand
-
-    # -------------------------------------------------------------------------
-    # Briefkopf (jede Seite)
+    # Briefkopf (jede Seite) – kompakt, endet bei HEADER_LINE_Y=43mm
     # -------------------------------------------------------------------------
 
     def header(self):
         unt = self._unt
         top = 10.0
 
-        # === Logo links ===
-        logo_pfad = unt.get("logo_pfad")
+        # --- Logo links oben ---
+        logo_pfad = unt.get("logo_pfad") or ""
         if logo_pfad and Path(logo_pfad).exists():
             try:
                 lw, lh = _logo_abmessungen(logo_pfad)
@@ -190,96 +169,127 @@ class RechnungPDF(FPDF):
             except Exception:
                 pass
 
-        # === Unternehmensblock rechts ===
-        y = top
-
-        def _zeile(text: str, bold: bool = False, size: float = 8.5, color=TEXT_DUNKEL):
-            nonlocal y
-            self.set_xy(BLOCK_X, y)
-            self.set_font("DejaVu", "B" if bold else "", size)
-            self.set_text_color(*color)
-            self.cell(BLOCK_W, 4.5, text, new_x="LMARGIN", new_y="NEXT")
-            y += 4.5
-
-        def _leer():
-            nonlocal y
-            y += 2.5
-
-        # Firmenname
+        # --- Firmenname + Adresse rechts (kompakt, passt vor 43mm) ---
         absender = " ".join(filter(None, [
             unt.get("firmenname"), unt.get("vorname"), unt.get("nachname")
         ])) or "RechnungsFee"
-        _zeile(absender, bold=True, size=9.0)
-
-        # Adresse
         strasse = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
         plz_ort = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
-        land    = (unt.get("land") or "DE").upper()
-        if strasse: _zeile(strasse, color=TEXT_GRAU)
-        if plz_ort: _zeile(plz_ort, color=TEXT_GRAU)
-        if land and land != "DE": _zeile(land, color=TEXT_GRAU)
 
-        # Steuer / Rechtsangaben
-        steuernr   = unt.get("steuernummer") or ""
-        ust_id     = unt.get("ust_idnr") or ""
-        hr_nr      = unt.get("handelsregister_nr") or ""
-        hr_gericht = unt.get("handelsregister_gericht") or ""
-        steuer_zeilen = []
-        if ust_id:   steuer_zeilen.append(f"USt-ID: {ust_id}")
-        if steuernr: steuer_zeilen.append(f"Steuernr.: {steuernr}")
-        if hr_nr:
-            hr_text = f"Handelsregister: {hr_nr}"
-            if hr_gericht: hr_text += f" ({hr_gericht})"
-            steuer_zeilen.append(hr_text)
-        if steuer_zeilen:
-            _leer()
-            for z in steuer_zeilen:
-                _zeile(z, color=TEXT_GRAU)
+        y = top
+        self.set_xy(BLOCK_X, y)
+        self.set_font("DejaVu", "B", 10)
+        self.set_text_color(*TEXT_DUNKEL)
+        self.cell(BLOCK_W, 5.5, absender)
+        y += 5.5
 
-        # Kontakt
-        telefon = unt.get("telefon") or ""
-        email   = unt.get("email") or ""
-        webseite = unt.get("webseite") or ""
-        kontakt_zeilen = []
-        if telefon:  kontakt_zeilen.append(f"Telefon: {telefon}")
-        if email:    kontakt_zeilen.append(f"E-Mail: {email}")
-        if webseite: kontakt_zeilen.append(f"Webseite: {webseite}")
-        if kontakt_zeilen:
-            _leer()
-            for z in kontakt_zeilen:
-                _zeile(z, color=TEXT_GRAU)
+        self.set_font("DejaVu", "", 8)
+        self.set_text_color(*TEXT_GRAU)
+        for zeile in filter(None, [strasse, plz_ort]):
+            self.set_xy(BLOCK_X, y)
+            self.cell(BLOCK_W, 4.5, zeile)
+            y += 4.5
 
-        # Bankverbindung
-        iban = unt.get("iban") or ""
-        bic  = unt.get("bic") or ""
-        if iban:
-            _leer()
-            _zeile(f"IBAN: {iban}", color=TEXT_GRAU)
-            if bic: _zeile(f"BIC: {bic}", color=TEXT_GRAU)
-
-        # Trennlinie
-        line_y = max(y, self._header_h - 4)
+        # --- Separator-Linie (fest bei 43mm) ---
         self.set_draw_color(*GRAU_RAND)
-        self.line(L_MARGIN, line_y, PAGE_W - R_MARGIN, line_y)
-        self.set_y(line_y + 4)
+        self.line(L_MARGIN, HEADER_LINE_Y, PAGE_W - R_MARGIN, HEADER_LINE_Y)
+
+        # Cursor auf Adressfeld-Start setzen
+        self.set_y(ADRESS_Y)
         self.set_text_color(0, 0, 0)
 
     # -------------------------------------------------------------------------
-    # Fußzeile (jede Seite)
+    # Fußzeile (jede Seite) – vollständige Firmendaten
     # -------------------------------------------------------------------------
 
     def footer(self):
-        self.set_y(-14)
+        unt = self._unt
+
+        footer_top = -(FOOTER_H)
+        self.set_y(footer_top)
+
+        # Separator
         self.set_draw_color(*GRAU_RAND)
         self.line(L_MARGIN, self.get_y(), PAGE_W - R_MARGIN, self.get_y())
         self.ln(1.5)
+
         self.set_font("DejaVu", "", 7)
         self.set_text_color(*TEXT_GRAU)
-        self.cell(
-            0, 4,
-            f"Seite {self.page_no()}  ·  {self._druckdatum}  ·  RechnungsFee",
-            align="C",
-        )
+
+        col_w  = NUTZ_W / 2       # ≈ 87.5 mm je Spalte
+        lh     = 4.0              # Zeilenhöhe Footer
+        start_y = self.get_y()
+
+        # ── Linke Spalte: Firmendaten + Steuer + HRB ─────────────────────────
+        absender = " ".join(filter(None, [
+            unt.get("firmenname"), unt.get("vorname"), unt.get("nachname")
+        ])) or ""
+        strasse  = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
+        plz_ort  = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
+        adresse  = f"{strasse}, {plz_ort}".strip(", ") if strasse or plz_ort else ""
+
+        ust_id   = unt.get("ust_idnr") or ""
+        steuernr = unt.get("steuernummer") or ""
+        hr_nr    = unt.get("handelsregister_nr") or ""
+        hr_ger   = unt.get("handelsregister_gericht") or ""
+        hr_str   = (f"HRB {hr_nr}" + (f" {hr_ger}" if hr_ger else "")) if hr_nr else ""
+
+        steuer_teile = list(filter(None, [
+            f"USt-ID: {ust_id}" if ust_id else "",
+            f"StNr: {steuernr}" if steuernr else "",
+            hr_str,
+        ]))
+
+        y = start_y
+        if absender:
+            self.set_xy(L_MARGIN, y)
+            self.cell(col_w, lh, absender)
+            y += lh
+        if adresse:
+            self.set_xy(L_MARGIN, y)
+            self.cell(col_w, lh, adresse)
+            y += lh
+        if steuer_teile:
+            self.set_xy(L_MARGIN, y)
+            self.cell(col_w, lh, "  ·  ".join(steuer_teile))
+            y += lh
+
+        # ── Rechte Spalte: Kontakt + Bank + Seite ────────────────────────────
+        rx     = L_MARGIN + col_w
+        telefon  = unt.get("telefon") or ""
+        email    = unt.get("email") or ""
+        webseite = unt.get("webseite") or ""
+        iban     = unt.get("iban") or ""
+        bic      = unt.get("bic") or ""
+        bank     = unt.get("bank_name") or ""
+
+        kontakt_teile = list(filter(None, [
+            f"Tel: {telefon}" if telefon else "",
+            f"E-Mail: {email}" if email else "",
+            f"Web: {webseite}" if webseite else "",
+        ]))
+        bank_teile = list(filter(None, [
+            f"IBAN: {iban}" if iban else "",
+            f"BIC: {bic}" if bic else "",
+            bank,
+        ]))
+
+        ry = start_y
+        if kontakt_teile:
+            self.set_xy(rx, ry)
+            self.cell(col_w, lh, "  ·  ".join(kontakt_teile), align="R")
+            ry += lh
+        if bank_teile:
+            self.set_xy(rx, ry)
+            self.cell(col_w, lh, "  ·  ".join(bank_teile), align="R")
+            ry += lh
+
+        # Seitenzahl immer in der letzten Zeile rechts
+        self.set_xy(rx, ry)
+        self.cell(col_w, lh,
+                  f"Seite {self.page_no()}  ·  {self._druckdatum}  ·  RechnungsFee",
+                  align="R")
+
         self.set_text_color(0, 0, 0)
 
     # -------------------------------------------------------------------------
@@ -291,23 +301,23 @@ class RechnungPDF(FPDF):
         unt = self._unt
 
         self.add_page()
-        y0 = self.get_y()
+        # header() hat den Cursor bereits auf ADRESS_Y=45mm gesetzt
 
-        # --- Absender-Kurzzeile (für Fensterumschlag) ---
-        absender_kurz = ", ".join(filter(None, [
+        # --- Absender-Kurzzeile (DIN 5008: erste 5mm des Anschriftfeldes) ---
+        absender_kurz = "  ·  ".join(filter(None, [
             unt.get("firmenname"),
             f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip(),
             f"{unt.get('plz', '')} {unt.get('ort', '')}".strip(),
         ]))
-        self.set_xy(L_MARGIN, y0)
+        self.set_xy(L_MARGIN, ADRESS_Y)
         self.set_font("DejaVu", "", 6.5)
         self.set_text_color(*TEXT_GRAU)
-        self.cell(90, 4, absender_kurz)
+        self.cell(90, 4.5, absender_kurz)
         # Trennlinie unter Kurzzeile
         self.set_draw_color(*GRAU_RAND)
-        self.line(L_MARGIN, y0 + 4.5, L_MARGIN + 90, y0 + 4.5)
+        self.line(L_MARGIN, ADRESS_Y + 5, L_MARGIN + 90, ADRESS_Y + 5)
 
-        # --- Empfänger-Adressblock (links) ---
+        # --- Empfänger-Adressblock (DIN 5008: ab ~50mm, max 6 Zeilen à 5.5mm = 33mm) ---
         if r.typ == "ausgang":
             partner_obj = r.kunde
             freitext    = r.partner_freitext
@@ -319,20 +329,20 @@ class RechnungPDF(FPDF):
         if not adresszeilen and freitext:
             adresszeilen = [freitext]
 
-        emp_y = y0 + 6
+        emp_y = ADRESS_Y + 6.5
         for i, zeile in enumerate(adresszeilen):
             self.set_xy(L_MARGIN, emp_y + i * 5.5)
             self.set_font("DejaVu", "B" if i == 0 else "", 9.5)
             self.set_text_color(*TEXT_DUNKEL)
             self.cell(90, 5.5, zeile)
 
-        emp_bottom = emp_y + max(len(adresszeilen), 1) * 5.5
+        emp_bottom = emp_y + len(adresszeilen) * 5.5
 
-        # --- Rechnungsmetadaten (rechts, neben Empfänger) ---
-        meta_x  = L_MARGIN + 95
-        meta_lbl = 40.0
+        # --- Rechnungsmetadaten (rechts neben Empfänger, ab ADRESS_Y) ---
+        meta_x   = L_MARGIN + 95
+        meta_lbl = 42.0
         meta_val = PAGE_W - R_MARGIN - meta_x - meta_lbl
-        meta_y  = y0
+        meta_y   = ADRESS_Y
 
         def _meta(lbl: str, val: str):
             nonlocal meta_y
@@ -359,11 +369,11 @@ class RechnungPDF(FPDF):
         body_y = max(emp_bottom, meta_y) + 10
         self.set_xy(L_MARGIN, body_y)
 
-        if r.typ == "ausgang":
-            titel = f"Rechnung {r.rechnungsnummer or ''}".strip()
-        else:
-            titel = f"Eingangsrechnung {r.rechnungsnummer or ''}".strip()
-
+        titel = (
+            f"Rechnung {r.rechnungsnummer or ''}".strip()
+            if r.typ == "ausgang"
+            else f"Eingangsrechnung {r.rechnungsnummer or ''}".strip()
+        )
         self.set_font("DejaVu", "B", 16)
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
@@ -376,7 +386,7 @@ class RechnungPDF(FPDF):
         self.ln(4)
 
         # --- Positionstabelle ---
-        col_w  = [82, 16, 17, 27, 14, 24]
+        col_w   = [82, 16, 17, 27, 14, 24]
         headers = ["Beschreibung", "Menge", "Einheit", "Netto", "USt %", "Brutto"]
         aligns  = ["L",            "R",     "L",       "R",     "R",     "R"]
 
@@ -436,16 +446,14 @@ class RechnungPDF(FPDF):
         # --- Zahlungshinweis ---
         iban = unt.get("iban") or ""
         if iban and r.typ == "ausgang":
-            bic       = unt.get("bic") or ""
-            bank      = unt.get("bank_name") or ""
-            faellig   = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
-            hinweis   = (
+            bic     = unt.get("bic") or ""
+            faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
+            hinweis = (
                 f"Bitte überweisen Sie {_fmt_euro(r.brutto_gesamt)} bis {faellig} "
                 f"unter Angabe der Rechnungsnummer {r.rechnungsnummer or ''} "
                 f"auf IBAN {iban}"
             )
-            if bic:  hinweis += f"  ·  BIC {bic}"
-            if bank: hinweis += f"  ({bank})"
+            if bic: hinweis += f"  ·  BIC {bic}"
             hinweis += "."
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
@@ -471,7 +479,7 @@ def generate_rechnung_pdf(rechnung, unternehmen: dict, ist_kopie: bool = False) 
     Erzeugt ein PDF für die übergebene Rechnung.
 
     :param rechnung:    SQLAlchemy-Rechnung-Objekt (mit .positionen, .kunde, .lieferant)
-    :param unternehmen: dict mit Firmendaten
+    :param unternehmen: dict mit allen Firmendaten
     :param ist_kopie:   True → dezenter „– Kopie –"-Hinweis unter dem Titel
     """
     pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie)
