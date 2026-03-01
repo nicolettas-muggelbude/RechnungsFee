@@ -91,6 +91,16 @@ def _iso_zu_de(iso: str) -> str:
         return str(iso)
 
 
+def _person_bezeichnung(rechtsform: str) -> str:
+    """Korrekte Personenbezeichnung je nach Rechtsform."""
+    rf = (rechtsform or "").lower()
+    if any(k in rf for k in ("gmbh", "ug", "ag", "se", "kgaa", "eg")):
+        return "GF:"       # Geschäftsführer
+    if any(k in rf for k in ("gbr", "ohg", "kg", "partg")):
+        return "GS:"       # Gesellschafter
+    return "Inh.:"         # Einzelunternehmer, Freiberufler
+
+
 def _logo_abmessungen(pfad: str, max_h: float = 18.0, max_w: float = 55.0) -> tuple[float, float]:
     """Skaliert Logo auf max_h×max_w unter Beibehaltung der Aspect Ratio."""
     try:
@@ -267,12 +277,13 @@ class RechnungPDF(FPDF):
         ])))
 
         # ── Spalte 2: Inhaber · USt-ID (bevorzugt) oder StNr · HRB ──────────
-        # Inhaber nur wenn ein Firmenname existiert und Vor-/Nachname gesetzt
-        inhaber   = " ".join(filter(None, [vorname, nachname])) if firmenname else ""
+        # Personen-Label je nach Rechtsform; nur wenn Firmenname + Vor-/Nachname vorhanden
+        inhaber      = " ".join(filter(None, [vorname, nachname])) if firmenname else ""
+        person_label = _person_bezeichnung(unt.get("rechtsform") or "")
         steuer    = f"USt-ID: {ust_id}" if ust_id else (f"StNr: {steuernr}" if steuernr else "")
         hr_zeile  = (f"HRB {hr_nr}" + (f", {hr_ger}" if hr_ger else "")) if hr_nr else ""
         _col(L_MARGIN + col_w, list(filter(None, [
-            f"Inh.: {inhaber}" if inhaber else "",
+            f"{person_label} {inhaber}" if inhaber else "",
             steuer,
             hr_zeile,
         ])))
