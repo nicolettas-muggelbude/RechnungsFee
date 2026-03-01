@@ -7,6 +7,7 @@ import {
   type Tagesabschluss,
 } from '../../api/client'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
+import { InfoTooltip } from '../../components/InfoTooltip'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -134,7 +135,10 @@ function SignaturBlock({ abschluss }: { abschluss: Tagesabschluss }) {
   return (
     <div className="border border-slate-200 rounded-lg p-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-slate-600">Integritätsprüfung (SHA-256)</span>
+        <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+          Integritätsprüfung (SHA-256)
+          <InfoTooltip text="Jeder Eintrag wird mit einem SHA-256-Hash digital signiert. Damit kann bei einer Betriebsprüfung bewiesen werden, dass keine nachträglichen Änderungen vorgenommen wurden (GoBD-Konformität nach §146 AO)." />
+        </span>
         <button
           onClick={pruefen}
           disabled={laden}
@@ -408,7 +412,10 @@ export function TagesabschlussPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Tagesabschlüsse</h1>
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            Tagesabschlüsse
+            <InfoTooltip text="Der Tagesabschluss dokumentiert den Kassenstand am Tagesende. Er ist nach §146a AO für jeden Tag vorgeschrieben, an dem Bargeschäfte stattfanden, und nach dem Erstellen unveränderlich. Bei einer Betriebsprüfung dient er als lückenloser Nachweis." side="bottom" />
+          </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {abschluesse.length > 0
               ? `${abschluesse.length} Abschlüsse gespeichert`

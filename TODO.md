@@ -5,17 +5,17 @@ Zielgruppe Beta: §19-Kleinunternehmer / Freiberufler.
 
 ---
 
-## 1. Tooltip-System
+## 1. Tooltip-System ✅
 
 Viele GoBD-Konzepte sind für Nutzer ungewohnt (Storno statt Löschen, Tagesabschluss, immutable Einträge).
 Kontext-Hilfe direkt im UI ist wertvoller als externe Dokumentation.
 
-- [ ] Wiederverwendbare `<Tooltip>`-Komponente (Info-Icon + Hover/Tap-Popup)
-- [ ] Kassenbuch: Tooltips für "Warum kann ich nicht löschen?", Storno, Split-Buchung, Vorsteuerabzug
-- [ ] Tagesabschluss: Was ist das, warum ist er unveränderlich
-- [ ] Rechnungen: Entwurf vs. finalisiert, KOPIE-Markierung, Zahlungsstatus
-- [ ] Kleinunternehmer §19: Hinweis warum keine USt ausgewiesen wird
-- [ ] Formulare: Pflichtfelder nach §14 UStG erklären (USt-IdNr, Steuernummer etc.)
+- [x] Wiederverwendbare `<InfoTooltip>`-Komponente (`components/InfoTooltip.tsx`, ℹ-Icon + Hover/Tap-Popup, side=top|bottom)
+- [x] Kassenbuch: Storno (GoBD §146, Gegeneintrag), Split-Buchung, Vorsteuerabzug (einfach + Split)
+- [x] Tagesabschluss: Seitentitel (§146a AO, unveränderlich), SHA-256-Integritätsprüfung
+- [x] Rechnungen: Entwurf-Banner, KOPIE-Markierung, Zahlungsstatus-Label
+- [x] Kleinunternehmer §19 (UnternehmenPage: Checkbox)
+- [x] Formulare: Steuernummer, USt-IdNr., Versteuerungsart, Kontenrahmen
 
 ---
 

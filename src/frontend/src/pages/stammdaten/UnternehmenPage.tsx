@@ -4,12 +4,13 @@ import {
   getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl,
   type Unternehmen,
 } from '../../api/client'
+import { InfoTooltip } from '../../components/InfoTooltip'
 
 // ---------------------------------------------------------------------------
 // Hilfskomponenten
 // ---------------------------------------------------------------------------
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
@@ -208,10 +209,10 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Steuer</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Steuernummer">{inp('steuernummer', '12/345/67890')}</Field>
+          <Field label={<>Steuernummer <InfoTooltip text="Deine Steuernummer vom Finanzamt (z.B. 12/345/67890). Muss auf Rechnungen nach §14 UStG angegeben werden, wenn keine USt-IdNr. vorhanden ist." /></>}>{inp('steuernummer', '12/345/67890')}</Field>
           <Field label="Finanzamt">{inp('finanzamt', 'Finanzamt Berlin-Mitte')}</Field>
         </div>
-        <Field label="USt-IdNr.">{inp('ust_idnr', 'DE123456789')}</Field>
+        <Field label={<>USt-IdNr. <InfoTooltip text="Umsatzsteuer-Identifikationsnummer (z.B. DE123456789) – benötigt für EU-Geschäfte (innergemeinschaftliche Lieferungen und Leistungen). Bei rein inländischen Geschäften genügt die Steuernummer." /></>}>{inp('ust_idnr', 'DE123456789')}</Field>
 
         <label className="flex items-start gap-3 cursor-pointer">
           <input
@@ -221,13 +222,16 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Kleinunternehmer (§19 UStG)</span>
+            <span className="text-sm font-medium text-slate-700 flex items-center gap-1">
+              Kleinunternehmer (§19 UStG)
+              <InfoTooltip text="Als Kleinunternehmer nach §19 UStG weist du keine Umsatzsteuer auf Rechnungen aus und kannst keine Vorsteuer abziehen. Voraussetzung: Jahresumsatz im Vorjahr unter 25.000 €. Diese Einstellung wirkt auf alle Rechnungen und Buchungen." side="bottom" />
+            </span>
             <p className="text-xs text-slate-500 mt-0.5">Keine USt auf Rechnungen, kein Vorsteuerabzug.</p>
           </div>
         </label>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Versteuerungsart">
+          <Field label={<>Versteuerungsart <InfoTooltip text="Ist-Versteuerung: USt wird fällig wenn der Kunde zahlt. Soll-Versteuerung: USt ist bereits bei Rechnungsstellung fällig. Für die meisten Freiberufler und Kleinunternehmer gilt die Ist-Versteuerung." /></>}>
             <select
               value={form.versteuerungsart ?? 'ist'}
               onChange={ev => set('versteuerungsart', ev.target.value)}
@@ -237,7 +241,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
               <option value="soll">Soll-Versteuerung</option>
             </select>
           </Field>
-          <Field label="Kontenrahmen">
+          <Field label={<>Kontenrahmen <InfoTooltip text="SKR03: Standard für Dienstleister und Freiberufler. SKR04: Standard für Handel und produzierende Betriebe. SKR49: Für Vereine und Non-Profits. Beeinflusst Kontenzuordnung im GoBD-Export." /></>}>
             <select
               value={form.kontenrahmen ?? 'SKR03'}
               onChange={ev => set('kontenrahmen', ev.target.value)}

@@ -7,6 +7,7 @@ import {
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type Unternehmen,
 } from '../../api/client'
+import { InfoTooltip } from '../../components/InfoTooltip'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -498,6 +499,9 @@ function RechnungDetail({
           >
             📄 {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
           </button>
+          {!rechnung.ist_entwurf && rechnung.ausgegeben && (
+            <InfoTooltip text="Diese Rechnung wurde bereits ausgegeben (gedruckt, als PDF geöffnet oder per Mail versandt). Alle weiteren Ausgaben werden automatisch als Kopie markiert, damit Doppelsendungen erkennbar sind." side="bottom" />
+          )}
           {!rechnung.storniert && (
             <button
               onClick={handleMail}
@@ -592,7 +596,10 @@ function RechnungDetail({
         {/* Entwurf-Banner */}
         {rechnung.ist_entwurf && (
           <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            <span className="text-sm text-amber-800">📝 <strong>Entwurf</strong> – noch nicht finalisiert</span>
+            <span className="text-sm text-amber-800 flex items-center gap-1">
+              📝 <strong>Entwurf</strong> – noch nicht finalisiert
+              <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
+            </span>
             <button
               onClick={() => finalisiereMutation.mutate()}
               disabled={finalisiereMutation.isPending}
@@ -679,7 +686,10 @@ function RechnungDetail({
 
         {/* Zahlungsstatus */}
         <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Zahlung</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+            Zahlung
+            <InfoTooltip text="Offen: noch keine Zahlung eingegangen. Teilweise: mindestens eine Teilzahlung verbucht. Bezahlt: Rechnungsbetrag vollständig beglichen. Zahlungen werden automatisch als Kassenbucheinträge gespeichert." />
+          </p>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Bezahlt</span>

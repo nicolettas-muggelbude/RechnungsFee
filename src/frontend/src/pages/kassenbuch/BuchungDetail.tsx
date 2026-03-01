@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { stornoKassenbuchEintrag, getUnternehmen, type KassenbuchEintrag } from '../../api/client'
+import { InfoTooltip } from '../../components/InfoTooltip'
 
 interface Props {
   eintrag: KassenbuchEintrag
@@ -118,12 +119,15 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             </button>
           )}
           {kannStorniert && !zeigStornoEingabe && (
-            <button
-              onClick={() => setZeigStornoEingabe(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
-            >
-              ✕ Stornieren
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setZeigStornoEingabe(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+              >
+                ✕ Stornieren
+              </button>
+              <InfoTooltip text="Kassenbucheinträge sind nach GoBD §146 unveränderbar – löschen ist nicht erlaubt. Eine Stornierung erzeugt einen Gegeneintrag mit negativem Betrag. Beide Buchungen bleiben sichtbar und bilden gemeinsam die korrekte Buchungshistorie." side="bottom" />
+            </div>
           )}
           {bereitsStorniert && (
             <span className="self-center text-xs text-slate-400 italic">Bereits storniert</span>

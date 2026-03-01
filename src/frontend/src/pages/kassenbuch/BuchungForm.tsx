@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -397,7 +398,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                 className="w-full flex items-center justify-between border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <span>Mehrere Positionen auf unterschiedliche Kategorien?</span>
-                <span className="font-medium">Split-Buchung →</span>
+                <span className="flex items-center gap-1 font-medium">
+                  Split-Buchung →
+                  <InfoTooltip text="Eine Split-Buchung verteilt einen Gesamtbetrag auf mehrere Kategorien. Beispiel: Restaurantrechnung 80 € aufteilen in 60 € Bewirtungskosten + 20 € Reisekosten. Alle Positionen werden als eine atomare Buchung gespeichert." side="bottom" />
+                </span>
               </button>
             )}
 
@@ -578,7 +582,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && (
               <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                 <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
-                Vorsteuerabzug geltend machen
+                <span className="flex items-center gap-1">
+                  Vorsteuerabzug geltend machen
+                  <InfoTooltip text="Du kannst die gezahlte Umsatzsteuer vom Finanzamt zurückholen (Vorsteuer). Gilt nur bei umsatzsteuerpflichtigen Betrieben – nicht bei Kleinunternehmern §19. Typisch: Büromaterial, Software, Telefon, Berufsausstattung. Nicht möglich: Versicherungen, private Ausgaben, steuerfreie Leistungen." />
+                </span>
               </label>
             )}
 
@@ -845,7 +852,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                               {...registerS(`positionen.${i}.vorsteuerabzug`)}
                               className="rounded"
                             />
-                            Vorsteuerabzug
+                            <span className="flex items-center gap-1">
+                              Vorsteuerabzug
+                              <InfoTooltip text="Du kannst die gezahlte Umsatzsteuer vom Finanzamt zurückholen (Vorsteuer). Gilt nur bei umsatzsteuerpflichtigen Betrieben – nicht bei Kleinunternehmern §19. Typisch: Büromaterial, Software, Telefon, Berufsausstattung. Nicht möglich: Versicherungen, private Ausgaben, steuerfreie Leistungen." />
+                            </span>
                           </label>
                         ) : (
                           <div />
