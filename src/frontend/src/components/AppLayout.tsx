@@ -58,7 +58,10 @@ export function AppLayout() {
       <aside className="w-56 bg-white border-r border-slate-200 flex flex-col">
         <div className="p-4 border-b border-slate-200 flex items-center gap-2">
           <img src="/logo.svg" alt="RechnungsFee" className="w-8 h-8 flex-shrink-0" />
-          <h1 className="font-bold text-slate-800 text-lg">RechnungsFee</h1>
+          <div>
+            <h1 className="font-bold text-slate-800 text-lg leading-tight">RechnungsFee</h1>
+            <p className="text-xs text-slate-400 leading-tight">v{__APP_VERSION__}</p>
+          </div>
         </div>
 
         <nav className="flex-1 py-3">
