@@ -51,6 +51,8 @@ export type Unternehmen = {
   email?: string
   telefon?: string
   webseite?: string
+  handelsregister_nr?: string
+  handelsregister_gericht?: string
   iban?: string
   bic?: string
   bank_name?: string

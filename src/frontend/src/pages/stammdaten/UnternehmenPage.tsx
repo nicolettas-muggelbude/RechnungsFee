@@ -284,6 +284,18 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       <hr className="border-slate-100" />
 
+      {/* Handelsregister */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Handelsregister</h3>
+        <p className="text-xs text-slate-400">Nur für GmbH, UG, AG etc. – Einzelunternehmer und Freiberufler leer lassen.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Register-Nr.">{inp('handelsregister_nr', 'HRB 215517')}</Field>
+          <Field label="Registergericht">{inp('handelsregister_gericht', 'Oldenburg')}</Field>
+        </div>
+      </div>
+
+      <hr className="border-slate-100" />
+
       {/* Bank */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Bankverbindung</h3>

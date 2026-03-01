@@ -36,6 +36,8 @@ class UnternehmenBase(BaseModel):
     email: Optional[str] = None
     telefon: Optional[str] = None
     webseite: Optional[str] = None
+    handelsregister_nr: Optional[str] = None
+    handelsregister_gericht: Optional[str] = None
     iban: Optional[str] = None
     bic: Optional[str] = None
     bank_name: Optional[str] = None

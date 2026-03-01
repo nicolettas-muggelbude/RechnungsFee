@@ -145,7 +145,15 @@ def _run_migrations() -> None:
             ))
             conn.commit()
 
-        # unternehmen: logo_pfad, mail_betreff_vorlage, mail_text_vorlage, mail_signatur
+        # unternehmen: alle neuen Felder
+        result = conn.execute(text("PRAGMA table_info(unternehmen)"))
+        columns = {row[1] for row in result}
+        if "handelsregister_nr" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN handelsregister_nr VARCHAR(100)"))
+            conn.commit()
+        if "handelsregister_gericht" not in columns:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN handelsregister_gericht VARCHAR(100)"))
+            conn.commit()
         result = conn.execute(text("PRAGMA table_info(unternehmen)"))
         columns = {row[1] for row in result}
         if "logo_pfad" not in columns:
