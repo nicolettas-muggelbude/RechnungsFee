@@ -66,11 +66,14 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
       const update = await check()
       if (!update?.available) return
 
+      let total: number | null = null
+      let downloaded = 0
       await update.downloadAndInstall(event => {
-        if (event.event === 'Progress') {
-          const pct = event.data.chunkLength && event.data.contentLength
-            ? Math.round((event.data.chunkLength / event.data.contentLength) * 100)
-            : null
+        if (event.event === 'Started') {
+          total = event.data.contentLength ?? null
+        } else if (event.event === 'Progress') {
+          downloaded += event.data.chunkLength
+          const pct = total ? Math.round((downloaded / total) * 100) : null
           setState(s => ({ ...s, progress: pct }))
         }
       })
