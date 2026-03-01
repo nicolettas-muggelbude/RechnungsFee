@@ -41,8 +41,8 @@ try {
         --onefile `
         --name backend `
         "--distpath=$BinariesDir" `
-        "--workpath=$env:TEMP\pyinstaller_build" `
-        "--specpath=$env:TEMP\pyinstaller_spec" `
+        "--workpath=$RepoRoot\build\pyinstaller_work" `
+        "--specpath=$RepoRoot\build\pyinstaller_spec" `
         --hidden-import uvicorn.logging `
         --hidden-import uvicorn.loops `
         --hidden-import uvicorn.loops.auto `
