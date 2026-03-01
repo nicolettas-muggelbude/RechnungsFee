@@ -188,9 +188,13 @@ export function Dashboard() {
   const saldo = einnahmen - ausgaben
   const letzte5 = alle.slice(0, 5)
 
-  // Zufluss für Monitor (Einnahmen excl. Privateinlagen, aktueller Monat)
+  // Zufluss für Monitor (Einnahmen excl. Privateinlagen + Kassenanfangsbestand, aktueller Monat)
   const zuflussMonat = (aktuelleEintraege ?? [])
-    .filter((e) => e.art === 'Einnahme' && e.kategorie_kontenart !== 'Privat')
+    .filter((e) =>
+      e.art === 'Einnahme' &&
+      e.kategorie_kontenart !== 'Privat' &&
+      e.beschreibung !== 'Kassenanfangsbestand'
+    )
     .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
 
   const loaded = eintraege !== undefined

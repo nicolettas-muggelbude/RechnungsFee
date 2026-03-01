@@ -75,8 +75,17 @@ def _berechne_vorschau(datum: date, db: Session) -> dict:
 
 @router.get("/fehlt-gestern")
 def fehlt_gestern(db: Session = Depends(get_db)):
-    """Prüft ob für gestern ein Tagesabschluss fehlt."""
+    """Prüft ob für gestern ein Tagesabschluss fehlt.
+    Gibt nur fehlt=True zurück wenn gestern tatsächlich Buchungen existieren –
+    verhindert Fehlalarm bei Ersteinrichtung."""
     gestern = date.today() - timedelta(days=1)
+    hat_buchungen = (
+        db.query(func.count(Kassenbucheintrag.id))
+        .filter(Kassenbucheintrag.datum == gestern)
+        .scalar() or 0
+    ) > 0
+    if not hat_buchungen:
+        return {"datum": str(gestern), "fehlt": False}
     existiert = (
         db.query(Tagesabschluss)
         .filter(Tagesabschluss.datum == gestern)
