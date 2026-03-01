@@ -1,10 +1,15 @@
+import sqlite3
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from database.connection import Base, engine, SessionLocal
+from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen
+
+SCHEMA_VERSION = 2
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -28,171 +33,124 @@ app.include_router(export.router)
 app.include_router(rechnungen.router)
 
 
+def _backup_datenbank() -> None:
+    """Erstellt ein WAL-sicheres Backup der DB vor Migrationen (max. 5 Backups)."""
+    backup_dir = DB_PATH.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"rechnungsfee_{ts}.db"
+
+    src = sqlite3.connect(str(DB_PATH))
+    dst = sqlite3.connect(str(backup_path))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    print(f"[Migration] DB-Backup: {backup_path.name}")
+
+    # Rotation: max. 5 Backups behalten, älteste löschen
+    backups = sorted(backup_dir.glob("rechnungsfee_*.db"))
+    for old in backups[:-5]:
+        old.unlink()
+        print(f"[Migration] Altes Backup gelöscht: {old.name}")
+
+
 def _run_migrations() -> None:
-    """Einfache Spalten-Migrationen für SQLite (ohne Alembic)."""
+    """Versionierte DB-Migrationen für SQLite (ohne Alembic)."""
     with engine.connect() as conn:
-        # kassenbuch.kunde_id
-        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
-        columns = {row[1] for row in result}
-        if "kunde_id" not in columns:
-            conn.execute(text(
-                "ALTER TABLE kassenbuch ADD COLUMN kunde_id INTEGER REFERENCES kunden(id)"
-            ))
-            conn.commit()
+        version = conn.execute(text("PRAGMA user_version")).scalar()
 
-        # kassenbuch.rechnung_id
-        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
-        columns = {row[1] for row in result}
-        if "rechnung_id" not in columns:
-            conn.execute(text(
-                "ALTER TABLE kassenbuch ADD COLUMN rechnung_id INTEGER REFERENCES rechnungen(id)"
-            ))
-            conn.commit()
+    if version >= SCHEMA_VERSION:
+        return  # Fast-Path: DB ist aktuell
 
-        # rechnungen.bezahlt_betrag
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "bezahlt_betrag" not in columns:
-            conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN bezahlt_betrag NUMERIC(12,2) NOT NULL DEFAULT 0"
-            ))
-            conn.commit()
+    _backup_datenbank()
 
-        # rechnungen.zahlungsstatus
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "zahlungsstatus" not in columns:
-            conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN zahlungsstatus VARCHAR(20) NOT NULL DEFAULT 'offen'"
-            ))
-            conn.commit()
+    with engine.connect() as conn:
+        if version < 1:
+            # kassenbuch – 1× PRAGMA für alle Spalten
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(kassenbuch)"))}
+            for col_name, ddl in [
+                ("kunde_id",        "INTEGER REFERENCES kunden(id)"),
+                ("rechnung_id",     "INTEGER REFERENCES rechnungen(id)"),
+                ("externe_belegnr", "VARCHAR(100)"),
+                ("signatur",        "VARCHAR(64)"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE kassenbuch ADD COLUMN {col_name} {ddl}"))
 
-        # kassenbuch.externe_belegnr
-        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
-        columns = {row[1] for row in result}
-        if "externe_belegnr" not in columns:
-            conn.execute(text(
-                "ALTER TABLE kassenbuch ADD COLUMN externe_belegnr VARCHAR(100)"
-            ))
-            conn.commit()
+            # rechnungen – 1× PRAGMA für alle Spalten
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(rechnungen)"))}
+            for col_name, ddl in [
+                ("bezahlt_betrag",  "NUMERIC(12,2) NOT NULL DEFAULT 0"),
+                ("zahlungsstatus",  "VARCHAR(20) NOT NULL DEFAULT 'offen'"),
+                ("leistungsdatum",  "DATE"),
+                ("ist_entwurf",     "BOOLEAN NOT NULL DEFAULT 0"),
+                ("storniert",       "BOOLEAN NOT NULL DEFAULT 0"),
+                ("ausgegeben",      "BOOLEAN NOT NULL DEFAULT 0"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE rechnungen ADD COLUMN {col_name} {ddl}"))
 
-        # kassenbuch.signatur
-        result = conn.execute(text("PRAGMA table_info(kassenbuch)"))
-        columns = {row[1] for row in result}
-        if "signatur" not in columns:
-            conn.execute(text(
-                "ALTER TABLE kassenbuch ADD COLUMN signatur VARCHAR(64)"
-            ))
-            conn.commit()
+            # tagesabschluesse – 1× PRAGMA für alle Spalten
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(tagesabschluesse)"))}
+            for col_name, ddl in [
+                ("zaehlung_json", "TEXT"),
+                ("signatur",      "VARCHAR(64)"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE tagesabschluesse ADD COLUMN {col_name} {ddl}"))
 
-        # rechnungen.leistungsdatum
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "leistungsdatum" not in columns:
-            conn.execute(text("ALTER TABLE rechnungen ADD COLUMN leistungsdatum DATE"))
-            conn.commit()
+            # unternehmen – 1× PRAGMA für alle Spalten
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(unternehmen)"))}
+            for col_name, ddl in [
+                ("handelsregister_nr",      "VARCHAR(100)"),
+                ("handelsregister_gericht", "VARCHAR(100)"),
+                ("logo_pfad",               "VARCHAR(500)"),
+                ("mail_betreff_vorlage",    "VARCHAR(500)"),
+                ("mail_text_vorlage",       "TEXT"),
+                ("mail_signatur",           "TEXT"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {col_name} {ddl}"))
 
-        # rechnungen.ist_entwurf
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "ist_entwurf" not in columns:
-            conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN ist_entwurf BOOLEAN NOT NULL DEFAULT 0"
-            ))
-            conn.commit()
+            # kategorien.ust_satz_standard
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(kategorien)"))}
+            if "ust_satz_standard" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE kategorien ADD COLUMN ust_satz_standard INTEGER NOT NULL DEFAULT 0"
+                ))
+                for name, satz in [
+                    ("Betriebseinnahmen", 19), ("Betriebseinnahmen (7%)", 7),
+                    ("Büromaterial", 19), ("Büroausstattung", 19), ("Porto & Versand", 19),
+                    ("Telefon & Internet", 19), ("Software & Abonnements", 19),
+                    ("Steuerberatung", 19), ("Rechts- & Beratungskosten", 19),
+                    ("Buchführungskosten", 19), ("Miete Büro", 19), ("Nebenkosten Büro", 19),
+                    ("KFZ-Kosten", 19), ("Reisekosten", 19), ("Fremdleistungen", 19),
+                    ("Werbung & Marketing", 19), ("Bewirtungskosten", 19),
+                    ("Fortbildung & Fachliteratur", 19), ("Sonstige Betriebsausgaben", 19),
+                    ("Anlagevermögen (Kauf)", 19),
+                    ("Geringwertige Wirtschaftsgüter (GWG)", 19),
+                ]:
+                    conn.execute(
+                        text("UPDATE kategorien SET ust_satz_standard = :s WHERE name = :n"),
+                        {"s": satz, "n": name},
+                    )
 
-        # Einmalige Korrektur: ist_entwurf wurde initial mit DEFAULT 1 angelegt.
-        # PRAGMA user_version 0 → noch nicht korrigiert, 1 → erledigt.
-        db_version = conn.execute(text("PRAGMA user_version")).scalar()
-        if db_version < 1:
-            conn.execute(text("UPDATE rechnungen SET ist_entwurf = 0"))
+            # ist_entwurf-Korrektur (wurde früher versehentlich mit DEFAULT 1 angelegt)
+            conn.execute(text("UPDATE rechnungen SET ist_entwurf = 0 WHERE ist_entwurf = 1"))
+
             conn.execute(text("PRAGMA user_version = 1"))
             conn.commit()
+            print("[Migration] Schema auf Version 1 gebracht")
 
-        # rechnungen.storniert
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "storniert" not in columns:
-            conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN storniert BOOLEAN NOT NULL DEFAULT 0"
-            ))
+        if version < 2:
+            conn.execute(text("PRAGMA user_version = 2"))
             conn.commit()
+            print("[Migration] Schema auf Version 2 gebracht")
 
-        # rechnungen.ausgegeben
-        result = conn.execute(text("PRAGMA table_info(rechnungen)"))
-        columns = {row[1] for row in result}
-        if "ausgegeben" not in columns:
-            conn.execute(text(
-                "ALTER TABLE rechnungen ADD COLUMN ausgegeben BOOLEAN NOT NULL DEFAULT 0"
-            ))
-            conn.commit()
-
-        # tagesabschluesse.zaehlung_json
-        result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
-        columns = {row[1] for row in result}
-        if "zaehlung_json" not in columns:
-            conn.execute(text(
-                "ALTER TABLE tagesabschluesse ADD COLUMN zaehlung_json TEXT"
-            ))
-            conn.commit()
-
-        # tagesabschluesse.signatur
-        result = conn.execute(text("PRAGMA table_info(tagesabschluesse)"))
-        columns = {row[1] for row in result}
-        if "signatur" not in columns:
-            conn.execute(text(
-                "ALTER TABLE tagesabschluesse ADD COLUMN signatur VARCHAR(64)"
-            ))
-            conn.commit()
-
-        # unternehmen: alle neuen Felder
-        result = conn.execute(text("PRAGMA table_info(unternehmen)"))
-        columns = {row[1] for row in result}
-        if "handelsregister_nr" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN handelsregister_nr VARCHAR(100)"))
-            conn.commit()
-        if "handelsregister_gericht" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN handelsregister_gericht VARCHAR(100)"))
-            conn.commit()
-        result = conn.execute(text("PRAGMA table_info(unternehmen)"))
-        columns = {row[1] for row in result}
-        if "logo_pfad" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN logo_pfad VARCHAR(500)"))
-            conn.commit()
-        if "mail_betreff_vorlage" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_betreff_vorlage VARCHAR(500)"))
-            conn.commit()
-        if "mail_text_vorlage" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_text_vorlage TEXT"))
-            conn.commit()
-        if "mail_signatur" not in columns:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN mail_signatur TEXT"))
-            conn.commit()
-
-        # kategorien.ust_satz_standard
-        result = conn.execute(text("PRAGMA table_info(kategorien)"))
-        columns = {row[1] for row in result}
-        if "ust_satz_standard" not in columns:
-            conn.execute(text(
-                "ALTER TABLE kategorien ADD COLUMN ust_satz_standard INTEGER NOT NULL DEFAULT 0"
-            ))
-            for name, satz in [
-                ("Betriebseinnahmen", 19), ("Betriebseinnahmen (7%)", 7),
-                ("Büromaterial", 19), ("Büroausstattung", 19), ("Porto & Versand", 19),
-                ("Telefon & Internet", 19), ("Software & Abonnements", 19),
-                ("Steuerberatung", 19), ("Rechts- & Beratungskosten", 19),
-                ("Buchführungskosten", 19), ("Miete Büro", 19), ("Nebenkosten Büro", 19),
-                ("KFZ-Kosten", 19), ("Reisekosten", 19), ("Fremdleistungen", 19),
-                ("Werbung & Marketing", 19), ("Bewirtungskosten", 19),
-                ("Fortbildung & Fachliteratur", 19), ("Sonstige Betriebsausgaben", 19),
-                ("Anlagevermögen (Kauf)", 19),
-                ("Geringwertige Wirtschaftsgüter (GWG)", 19),
-            ]:
-                conn.execute(
-                    text("UPDATE kategorien SET ust_satz_standard = :s WHERE name = :n"),
-                    {"s": satz, "n": name},
-                )
-            conn.commit()
+        # Zukünftig: if version < 3: ...
 
 
 def _migrate_kategorien() -> None:
