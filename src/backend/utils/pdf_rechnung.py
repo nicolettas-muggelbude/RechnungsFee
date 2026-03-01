@@ -70,8 +70,8 @@ HEADER_LINE_Y = 43.0
 BLOCK_X     = L_MARGIN + 95                  # 115 mm
 BLOCK_W     = PAGE_W - R_MARGIN - BLOCK_X    # 80 mm
 
-# Footer-Höhe: 2-Spalten-Layout (je 3 Zeilen à 4mm + Separator + Abstand)
-FOOTER_H    = 22.0
+# Footer-Höhe: 3-Spalten-Layout (Col1 max 6 Zeilen à 3.8mm + Separator + Puffer)
+FOOTER_H    = 28.0
 
 
 def _fmt_euro(val: Any) -> str:
@@ -217,8 +217,7 @@ class RechnungPDF(FPDF):
     def footer(self):
         unt = self._unt
 
-        footer_top = -(FOOTER_H)
-        self.set_y(footer_top)
+        self.set_y(-FOOTER_H)
 
         # Separator
         self.set_draw_color(*GRAU_RAND)
@@ -228,79 +227,63 @@ class RechnungPDF(FPDF):
         self.set_font("DejaVu", "", 7)
         self.set_text_color(*TEXT_GRAU)
 
-        col_w  = NUTZ_W / 2       # ≈ 87.5 mm je Spalte
-        lh     = 4.0              # Zeilenhöhe Footer
+        col_w   = NUTZ_W / 3      # ≈ 58 mm je Spalte
+        lh      = 3.8
         start_y = self.get_y()
 
-        # ── Linke Spalte: Firmendaten + Steuer + HRB ─────────────────────────
-        absender = " ".join(filter(None, [
-            unt.get("firmenname"), unt.get("vorname"), unt.get("nachname")
-        ])) or ""
-        strasse  = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
-        plz_ort  = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
-        adresse  = f"{strasse}, {plz_ort}".strip(", ") if strasse or plz_ort else ""
+        firmenname = unt.get("firmenname") or ""
+        vorname    = unt.get("vorname") or ""
+        nachname   = unt.get("nachname") or ""
+        strasse    = f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip()
+        plz_ort    = f"{unt.get('plz', '')} {unt.get('ort', '')}".strip()
+        telefon    = unt.get("telefon") or ""
+        email      = unt.get("email") or ""
+        webseite   = unt.get("webseite") or ""
+        ust_id     = unt.get("ust_idnr") or ""
+        steuernr   = unt.get("steuernummer") or ""
+        hr_nr      = unt.get("handelsregister_nr") or ""
+        hr_ger     = unt.get("handelsregister_gericht") or ""
+        iban       = unt.get("iban") or ""
+        bic        = unt.get("bic") or ""
+        bank       = unt.get("bank_name") or ""
 
-        ust_id   = unt.get("ust_idnr") or ""
-        steuernr = unt.get("steuernummer") or ""
-        hr_nr    = unt.get("handelsregister_nr") or ""
-        hr_ger   = unt.get("handelsregister_gericht") or ""
-        hr_str   = (f"HRB {hr_nr}" + (f" {hr_ger}" if hr_ger else "")) if hr_nr else ""
+        def _col(x: float, zeilen: list[str]):
+            y = start_y
+            for z in zeilen:
+                if z:
+                    self.set_xy(x, y)
+                    self.cell(col_w, lh, z)
+                    y += lh
 
-        steuer_teile = list(filter(None, [
-            f"USt-ID: {ust_id}" if ust_id else "",
-            f"StNr: {steuernr}" if steuernr else "",
-            hr_str,
-        ]))
-
-        y = start_y
-        if absender:
-            self.set_xy(L_MARGIN, y)
-            self.cell(col_w, lh, absender)
-            y += lh
-        if adresse:
-            self.set_xy(L_MARGIN, y)
-            self.cell(col_w, lh, adresse)
-            y += lh
-        if steuer_teile:
-            self.set_xy(L_MARGIN, y)
-            self.cell(col_w, lh, "  ·  ".join(steuer_teile))
-            y += lh
-
-        # ── Rechte Spalte: Kontakt + Bank + Seite ────────────────────────────
-        rx     = L_MARGIN + col_w
-        telefon  = unt.get("telefon") or ""
-        email    = unt.get("email") or ""
-        webseite = unt.get("webseite") or ""
-        iban     = unt.get("iban") or ""
-        bic      = unt.get("bic") or ""
-        bank     = unt.get("bank_name") or ""
-
-        kontakt_teile = list(filter(None, [
+        # ── Spalte 1: Name · Adresse · Kontakt ───────────────────────────────
+        name = " ".join(filter(None, [firmenname, vorname, nachname]))
+        _col(L_MARGIN, list(filter(None, [
+            name,
+            strasse,
+            plz_ort,
             f"Tel: {telefon}" if telefon else "",
             f"E-Mail: {email}" if email else "",
             f"Web: {webseite}" if webseite else "",
-        ]))
-        bank_teile = list(filter(None, [
+        ])))
+
+        # ── Spalte 2: Inhaber · USt-ID (bevorzugt) oder StNr · HRB ──────────
+        # Inhaber nur wenn ein Firmenname existiert und Vor-/Nachname gesetzt
+        inhaber   = " ".join(filter(None, [vorname, nachname])) if firmenname else ""
+        steuer    = f"USt-ID: {ust_id}" if ust_id else (f"StNr: {steuernr}" if steuernr else "")
+        hr_zeile  = (f"HRB {hr_nr}" + (f", {hr_ger}" if hr_ger else "")) if hr_nr else ""
+        _col(L_MARGIN + col_w, list(filter(None, [
+            f"Inh.: {inhaber}" if inhaber else "",
+            steuer,
+            hr_zeile,
+        ])))
+
+        # ── Spalte 3: Bankdaten · Seite ──────────────────────────────────────
+        _col(L_MARGIN + 2 * col_w, list(filter(None, [
+            bank,
             f"IBAN: {iban}" if iban else "",
             f"BIC: {bic}" if bic else "",
-            bank,
-        ]))
-
-        ry = start_y
-        if kontakt_teile:
-            self.set_xy(rx, ry)
-            self.cell(col_w, lh, "  ·  ".join(kontakt_teile), align="R")
-            ry += lh
-        if bank_teile:
-            self.set_xy(rx, ry)
-            self.cell(col_w, lh, "  ·  ".join(bank_teile), align="R")
-            ry += lh
-
-        # Seitenzahl immer in der letzten Zeile rechts
-        self.set_xy(rx, ry)
-        self.cell(col_w, lh,
-                  f"Seite {self.page_no()}  ·  {self._druckdatum}  ·  RechnungsFee",
-                  align="R")
+            f"Seite {self.page_no()}  ·  {self._druckdatum}",
+        ])))
 
         self.set_text_color(0, 0, 0)
 
