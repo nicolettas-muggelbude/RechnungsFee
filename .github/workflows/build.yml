@@ -141,11 +141,11 @@ jobs:
           # tauri-action löscht das .tar.gz nach seinem Lauf – neu erstellen
           tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
 
-          # Signieren (erzeugt $TAR.sig)
-          npx tauri signer sign \
-            --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
-            --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
-            "$TAR"
+          # Signieren – Key in Temp-Datei (mehrzeilig, kein direktes Argument möglich)
+          KEYFILE=$(mktemp)
+          echo "$TAURI_SIGNING_PRIVATE_KEY" > "$KEYFILE"
+          npx tauri signer sign --private-key "$KEYFILE" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$TAR"
+          rm -f "$KEYFILE"
 
           gh release upload "${{ github.ref_name }}" "$TAR" "${TAR}.sig" --clobber
 
