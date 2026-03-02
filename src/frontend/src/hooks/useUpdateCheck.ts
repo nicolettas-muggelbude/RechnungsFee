@@ -77,7 +77,11 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
           setState(s => ({ ...s, progress: pct }))
         }
       })
-      // Nach Installation startet die App automatisch neu
+
+      // Explizit neu starten – auf Windows (NSIS) startet der Prozess
+      // nach dem Installer nicht automatisch neu.
+      const { relaunch } = await import('@tauri-apps/plugin-process')
+      await relaunch()
     } catch (err) {
       setState(s => ({
         ...s,
