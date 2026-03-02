@@ -141,7 +141,8 @@ jobs:
           # tauri-action löscht das .tar.gz nach seinem Lauf – neu erstellen
           tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
 
-          # Signieren via Env-Vars – identisch zu tauri build (kein --private-key-Argument nötig)
+          # tauri-action normalisiert den Key intern (Newlines entfernen) – tauri signer sign tut das nicht
+          export TAURI_SIGNING_PRIVATE_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '\n\r')
           npx tauri signer sign "$TAR"
 
           gh release upload "${{ github.ref_name }}" "$TAR" "${TAR}.sig" --clobber
