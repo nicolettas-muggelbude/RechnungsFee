@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.8',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Update-Banner zeigt jetzt Fehlermeldung wenn das Update nicht installiert werden konnte' },
+    ],
+  },
+  {
     version: 'v0.1.7',
     datum: 'März 2026',
     eintraege: [
