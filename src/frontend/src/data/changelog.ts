@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.6',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'App startet nach dem Update unter Windows jetzt automatisch neu – vorher blieb die alte Version geöffnet' },
+    ],
+  },
+  {
     version: 'v0.1.5',
     datum: 'März 2026',
     eintraege: [
