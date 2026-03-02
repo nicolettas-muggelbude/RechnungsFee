@@ -80,16 +80,20 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
         }
       })
 
-      // Download abgeschlossen – Nutzer informieren, bevor die App sich schließt.
-      // Der NSIS-Installer startet die neue Version NICHT automatisch.
-      setState(s => ({ ...s, downloading: false, readyToRestart: true }))
+      const isWindows = navigator.userAgent.toLowerCase().includes('win')
 
-      // 3 Sekunden warten, damit der Nutzer die Meldung lesen kann.
-      await new Promise(resolve => setTimeout(resolve, 3000))
-
-      // App beenden, damit der NSIS-Installer die gesperrte Exe ersetzen kann.
-      const { exit } = await import('@tauri-apps/plugin-process')
-      await exit(0)
+      if (isWindows) {
+        // NSIS-Installer braucht freie Datei-Sperre.
+        // Nutzer informieren, dann App beenden – Installer übernimmt den Rest.
+        setState(s => ({ ...s, downloading: false, readyToRestart: true }))
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        const { exit } = await import('@tauri-apps/plugin-process')
+        await exit(0)
+      } else {
+        // Linux/macOS: AppImage/Bundle wurde bereits ersetzt – direkt neu starten.
+        const { relaunch } = await import('@tauri-apps/plugin-process')
+        await relaunch()
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message

@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.12',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Auto-Update unter Linux funktioniert jetzt – nach dem Download startet die neue Version direkt neu (relaunch statt exit)' },
+    ],
+  },
+  {
     version: 'v0.1.11',
     datum: 'März 2026',
     eintraege: [
