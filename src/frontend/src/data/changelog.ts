@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.15',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Auto-Update: Signatur-Format in latest.json korrigiert (Base64-kodiert statt rohem Text) und Pubkey-Format wiederhergestellt' },
+    ],
+  },
+  {
     version: 'v0.1.14',
     datum: 'März 2026',
     eintraege: [

@@ -231,12 +231,16 @@ jobs:
           gh release download "$TAG" --pattern "*.sig" --dir sigs --repo "$REPO"
 
           python3 << 'PYEOF'
-          import json, os, re, datetime
+          import json, os, re, datetime, base64
 
           v    = os.environ['TAG'].lstrip('v')
           tag  = os.environ['TAG']
           repo = os.environ['REPO']
           base = f'https://github.com/{repo}/releases/download/{tag}'
+
+          def sig_b64(path):
+              # tauri-plugin-updater erwartet den .sig-Datei-Inhalt base64-kodiert
+              return base64.b64encode(open(path, 'rb').read()).decode('ascii')
 
           # ── latest.json ────────────────────────────────────────────────────
           data = {
@@ -245,11 +249,11 @@ jobs:
             'pub_date': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
             'platforms': {
               'windows-x86_64': {
-                'signature': open(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig').read().strip(),
+                'signature': sig_b64(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig'),
                 'url': f'{base}/RechnungsFee_{v}_x64-setup.nsis.zip',
               },
               'linux-x86_64': {
-                'signature': open(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig').read().strip(),
+                'signature': sig_b64(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig'),
                 'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
               },
             },
