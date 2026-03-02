@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.5',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Mehrere backend.exe-Instanzen im Task-Manager behoben – Hintergrunddienst wird beim Schließen der App jetzt sauber beendet' },
+    ],
+  },
+  {
     version: 'v0.1.4',
     datum: 'März 2026',
     eintraege: [
