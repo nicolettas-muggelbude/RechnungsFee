@@ -211,13 +211,16 @@ jobs:
 
           gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
 
-  # ── latest.json generieren (nach beiden Builds) ────────────────────────────
+  # ── latest.json generieren + Release-Notes aktualisieren ──────────────────
   updater-json:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: latest.json generieren und hochladen
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -228,13 +231,14 @@ jobs:
           gh release download "$TAG" --pattern "*.sig" --dir sigs --repo "$REPO"
 
           python3 << 'PYEOF'
-          import json, os, datetime
+          import json, os, re, datetime
 
-          v   = os.environ['TAG'].lstrip('v')
-          tag = os.environ['TAG']
+          v    = os.environ['TAG'].lstrip('v')
+          tag  = os.environ['TAG']
           repo = os.environ['REPO']
           base = f'https://github.com/{repo}/releases/download/{tag}'
 
+          # ── latest.json ────────────────────────────────────────────────────
           data = {
             'version': v,
             'notes': '',
@@ -250,9 +254,51 @@ jobs:
               },
             },
           }
-
           json.dump(data, open('latest.json', 'w'), indent=2)
-          print('latest.json generiert:', json.dumps(data, indent=2))
+          print('latest.json generiert')
+
+          # ── Release-Notes aus changelog.ts extrahieren ─────────────────────
+          ts = open('src/frontend/src/data/changelog.ts').read()
+          block = re.search(
+            rf"version:\s*['\"]({re.escape(tag)})['\"].*?eintraege:\s*\[(.*?)\]",
+            ts, re.DOTALL
+          )
+          typ_emoji = {'neu': '✨', 'verbesserung': '⚡', 'fix': '🐛'}
+          changelog_lines = []
+          if block:
+            for typ, text in re.findall(r"typ:\s*['\"](\w+)['\"],\s*text:\s*'([^']+)'", block.group(2)):
+              changelog_lines.append(f'- {typ_emoji.get(typ, "•")} {text}')
+          changelog_md = '\n'.join(changelog_lines) if changelog_lines else '_Keine Einträge gefunden._'
+
+          # ── Release-Body zusammenbauen ──────────────────────────────────────
+          body = f"""## Was ist neu in {tag}
+
+          {changelog_md}
+
+          ---
+
+          ## Download & Installation
+
+          | Betriebssystem | Datei | Hinweis |
+          |---|---|---|
+          | **Windows** | `RechnungsFee_{v}_x64-setup.exe` | NSIS-Installer, einfach ausführen |
+          | **Linux** | `RechnungsFee_{v}_amd64.AppImage` | Ausführbar machen + starten: `chmod +x … && ./…` |
+
+          **Auto-Update:** Wer v0.1.3 oder neuer installiert hat, bekommt das Update automatisch beim nächsten App-Start angeboten.
+
+          > ℹ️ Die Dateien `.tar.gz`, `.nsis.zip` und `.sig` sind für den eingebauten Auto-Updater – **nicht manuell herunterladen**.
+
+          ---
+
+          ## Mitwirken
+
+          Fehler gefunden oder Feature-Wunsch? → [Issue erstellen](https://github.com/{repo}/issues/new)
+          """
+          body = '\n'.join(line.lstrip() for line in body.splitlines())
+
+          open('release_body.md', 'w').write(body)
+          print('Release-Body generiert')
           PYEOF
 
           gh release upload "$TAG" latest.json --clobber --repo "$REPO"
+          gh release edit "$TAG" --notes-file release_body.md --repo "$REPO"
