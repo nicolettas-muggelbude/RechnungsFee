@@ -137,15 +137,39 @@ jobs:
           V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
           TAR="$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz"
+          SIG="${TAR}.sig"
 
-          # tauri-action löscht das .tar.gz nach seinem Lauf – neu erstellen
+          echo "=== bundle/appimage Inhalt ==="
+          ls -la "$BASE/"
+
+          # Falls tauri build bereits .tar.gz + .sig erzeugt hat, direkt hochladen
+          if [ -f "$SIG" ]; then
+            echo "Signatur bereits vorhanden (von tauri build), direkt hochladen"
+            gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
+            exit 0
+          fi
+
+          # .tar.gz neu erstellen (tauri build löscht es möglicherweise)
           tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
 
-          # tauri-action normalisiert den Key intern (Newlines entfernen) – tauri signer sign tut das nicht
-          export TAURI_SIGNING_PRIVATE_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '\n\r')
-          npx tauri signer sign "$TAR"
+          # minisign installieren (robuster als tauri signer sign für CI-Secrets)
+          sudo apt-get install -y minisign
 
-          gh release upload "${{ github.ref_name }}" "$TAR" "${TAR}.sig" --clobber
+          # Key in Temp-Datei schreiben; unterstützt base64-kodierten und raw-Format
+          KEYFILE=$(mktemp)
+          STRIPPED=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '[:space:]')
+          if echo "$STRIPPED" | base64 -d 2>/dev/null | grep -q "^untrusted comment:"; then
+            echo "$STRIPPED" | base64 -d > "$KEYFILE"
+          else
+            # raw-Format (evtl. mit \n-Escape aus CI-Secret)
+            printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\\n/\n/g' > "$KEYFILE"
+          fi
+
+          # Signieren (Passwort via stdin)
+          printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" | minisign -Sm "$TAR" -s "$KEYFILE"
+          rm -f "$KEYFILE"
+
+          gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
 
   # ── latest.json generieren (nach beiden Builds) ────────────────────────────
   updater-json:
