@@ -21,7 +21,8 @@ function AppRoutes() {
   const { data: status, isLoading } = useQuery({
     queryKey: ['setup-status'],
     queryFn: getSetupStatus,
-    retry: false,
+    retry: 20,
+    retryDelay: 500,
   })
 
   if (isLoading) {

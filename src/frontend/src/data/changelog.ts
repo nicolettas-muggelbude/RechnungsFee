@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.4',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Fehlermeldung "Backend nicht erreichbar" unter Windows behoben – App wartet jetzt bis zu 10 Sekunden auf den Start des Hintergrunddienstes' },
+    ],
+  },
+  {
     version: 'v0.1.3',
     datum: 'März 2026',
     eintraege: [

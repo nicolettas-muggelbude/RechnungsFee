@@ -24,9 +24,9 @@ async function getBaseUrl(): Promise<string> {
   return _baseUrl
 }
 
-/** Wartet bis das Backend antwortet (max. 30 × 200 ms = 6 s). */
+/** Wartet bis das Backend antwortet (max. 50 × 200 ms = 10 s). */
 async function waitForBackend(baseUrl: string): Promise<void> {
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 50; i++) {
     try {
       const res = await fetch(`${baseUrl}/setup/status`)
       if (res.ok) return
@@ -35,7 +35,7 @@ async function waitForBackend(baseUrl: string): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 200))
   }
-  console.warn('[RechnungsFee] Backend nach 6 s nicht erreichbar')
+  console.warn('[RechnungsFee] Backend nach 10 s nicht erreichbar')
 }
 
 // Im Tauri-Modus einmalig warten, damit das UI erst lädt wenn das Backend ready ist
