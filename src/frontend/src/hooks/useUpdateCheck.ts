@@ -78,10 +78,10 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
         }
       })
 
-      // Explizit neu starten – auf Windows (NSIS) startet der Prozess
-      // nach dem Installer nicht automatisch neu.
-      const { relaunch } = await import('@tauri-apps/plugin-process')
-      await relaunch()
+      // App beenden, damit der NSIS-Installer die gesperrte Exe ersetzen kann.
+      // Der Installer startet danach automatisch die neue Version.
+      const { exit } = await import('@tauri-apps/plugin-process')
+      await exit(0)
     } catch (err) {
       setState(s => ({
         ...s,

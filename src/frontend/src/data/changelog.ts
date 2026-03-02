@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.7',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows-Update: App beendet sich nach dem Download korrekt, damit der Installer die Dateien ersetzen kann' },
+    ],
+  },
+  {
     version: 'v0.1.6',
     datum: 'März 2026',
     eintraege: [
