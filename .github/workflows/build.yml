@@ -159,14 +159,16 @@ jobs:
           KEYFILE=$(mktemp)
           STRIPPED=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '[:space:]')
           if echo "$STRIPPED" | base64 -d 2>/dev/null | grep -q "^untrusted comment:"; then
+            echo "Key-Format: base64-kodiert"
             echo "$STRIPPED" | base64 -d > "$KEYFILE"
           else
-            # raw-Format (evtl. mit \n-Escape aus CI-Secret)
+            echo "Key-Format: raw (oder escaped \\n)"
             printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\\n/\n/g' > "$KEYFILE"
           fi
 
-          # Signieren (Passwort via stdin)
-          printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" | minisign -Sm "$TAR" -s "$KEYFILE"
+          # Signieren: -H = Prehash-Modus (kompatibel mit tauri-plugin-updater, optimal für große Dateien)
+          # -x "$SIG" = Ausgabedatei explizit angeben (Standard wäre .minisig)
+          printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" | minisign -SHm "$TAR" -s "$KEYFILE" -x "$SIG"
           rm -f "$KEYFILE"
 
           gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
