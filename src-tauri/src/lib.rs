@@ -1,9 +1,13 @@
 use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandChild;
 
 /// Globaler State: der vom Sidecar belegte Port
 struct BackendPort(Mutex<u16>);
+
+/// Globaler State: Handle des laufenden Sidecar-Prozesses
+struct BackendChild(Mutex<Option<CommandChild>>);
 
 /// IPC-Command: Frontend fragt den Backend-Port ab
 #[tauri::command]
@@ -37,14 +41,31 @@ pub fn run() {
                 .expect("Backend-Sidecar nicht gefunden")
                 .args(["--port", &port.to_string()]);
 
-            let (_rx, _child) = sidecar_cmd
+            let (_rx, child) = sidecar_cmd
                 .spawn()
                 .expect("Backend-Sidecar konnte nicht gestartet werden");
+
+            // Child-Handle speichern, damit er beim App-Exit sauber beendet wird
+            app.manage(BackendChild(Mutex::new(Some(child))));
 
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![get_backend_port])
-        .run(tauri::generate_context!())
-        .expect("Fehler beim Starten der Tauri-Anwendung");
+        .build(tauri::generate_context!())
+        .expect("Fehler beim Erstellen der Tauri-Anwendung")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(child) = app_handle
+                    .state::<BackendChild>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .take()
+                {
+                    let _ = child.kill();
+                    log::info!("Backend-Sidecar beendet");
+                }
+            }
+        });
 }
