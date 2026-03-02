@@ -113,3 +113,76 @@ jobs:
           projectPath: .
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
+
+      # ── Updater-Artefakte hochladen ─────────────────────────────────────────
+      - name: Updater-ZIP und Signatur hochladen (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          $base = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi"
+          gh release upload "${{ github.ref_name }}" `
+            "$base\RechnungsFee_${v}_x64_en-US.msi.zip" `
+            "$base\RechnungsFee_${v}_x64_en-US.msi.zip.sig" `
+            --clobber
+
+      - name: Updater-TAR und Signatur hochladen (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          BASE="src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
+          gh release upload "${{ github.ref_name }}" \
+            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz" \
+            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz.sig" \
+            --clobber
+
+  # ── latest.json generieren (nach beiden Builds) ────────────────────────────
+  updater-json:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: latest.json generieren und hochladen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir sigs
+          gh release download "$TAG" --pattern "*.sig" --dir sigs --repo "$REPO"
+
+          python3 << 'PYEOF'
+          import json, os, datetime
+
+          v   = os.environ['TAG'].lstrip('v')
+          tag = os.environ['TAG']
+          repo = os.environ['REPO']
+          base = f'https://github.com/{repo}/releases/download/{tag}'
+
+          data = {
+            'version': v,
+            'notes': '',
+            'pub_date': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'platforms': {
+              'windows-x86_64': {
+                'signature': open(f'sigs/RechnungsFee_{v}_x64_en-US.msi.zip.sig').read().strip(),
+                'url': f'{base}/RechnungsFee_{v}_x64_en-US.msi.zip',
+              },
+              'linux-x86_64': {
+                'signature': open(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig').read().strip(),
+                'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
+              },
+            },
+          }
+
+          json.dump(data, open('latest.json', 'w'), indent=2)
+          print('latest.json generiert:', json.dumps(data, indent=2))
+          PYEOF
+
+          gh release upload "$TAG" latest.json --clobber
