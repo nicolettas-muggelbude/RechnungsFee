@@ -130,16 +130,24 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           V="${{ github.ref_name }}"
           V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          echo "Verzeichnis-Inhalt:"
-          ls -la "$BASE" | grep -i "tar\|sig" || true
-          gh release upload "${{ github.ref_name }}" \
-            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz" \
-            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz.sig" \
-            --clobber
+          TAR="$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz"
+
+          # tauri-action löscht das .tar.gz nach seinem Lauf – neu erstellen
+          tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
+
+          # Signieren (erzeugt $TAR.sig)
+          npx tauri signer sign \
+            --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
+            --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
+            "$TAR"
+
+          gh release upload "${{ github.ref_name }}" "$TAR" "${TAR}.sig" --clobber
 
   # ── latest.json generieren (nach beiden Builds) ────────────────────────────
   updater-json:
