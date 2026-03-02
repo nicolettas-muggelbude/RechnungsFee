@@ -139,7 +139,7 @@ jobs:
             # minisign 0.12 für Windows herunterladen
             Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile "$env:TEMP\minisign.zip"
             Expand-Archive -Path "$env:TEMP\minisign.zip" -DestinationPath "$env:TEMP\minisign-bin" -Force
-            $minisign = Get-ChildItem -Path "$env:TEMP\minisign-bin" -Filter "minisign.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+            $minisign = "$env:TEMP\minisign-bin\minisign-win64\x86_64\minisign.exe"
 
             # Key-Format erkennen (base64-kodiert oder raw)
             $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
