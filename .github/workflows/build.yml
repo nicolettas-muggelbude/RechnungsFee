@@ -105,7 +105,7 @@ jobs:
 
             **Enthaltene Pakete:**
             - Linux: `.AppImage`
-            - Windows: `.msi`
+            - Windows: `.exe` (NSIS-Installer)
 
             Bitte lies die [Installationsanleitung](https://github.com/${{ github.repository }}/blob/main/README.md) vor der Installation.
           releaseDraft: true
@@ -121,8 +121,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $base = "${{ github.workspace }}\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi"
-          Get-ChildItem -Path $base | Where-Object { $_.Name -match "\.msi\.zip(\.sig)?$" } | ForEach-Object {
+          $base = "${{ github.workspace }}\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
+          Get-ChildItem -Path $base | Where-Object { $_.Name -match "\.nsis\.zip(\.sig)?$" } | ForEach-Object {
             gh release upload "${{ github.ref_name }}" $_.FullName --clobber
           }
 
@@ -166,8 +166,8 @@ jobs:
             'pub_date': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
             'platforms': {
               'windows-x86_64': {
-                'signature': open(f'sigs/RechnungsFee_{v}_x64_en-US.msi.zip.sig').read().strip(),
-                'url': f'{base}/RechnungsFee_{v}_x64_en-US.msi.zip',
+                'signature': open(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig').read().strip(),
+                'url': f'{base}/RechnungsFee_{v}_x64-setup.nsis.zip',
               },
               'linux-x86_64': {
                 'signature': open(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig').read().strip(),
