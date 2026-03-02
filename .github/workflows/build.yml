@@ -131,10 +131,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          for f in "$BASE"/RechnungsFee_*.AppImage.tar.gz "$BASE"/RechnungsFee_*.AppImage.tar.gz.sig; do
-            [ -f "$f" ] && gh release upload "${{ github.ref_name }}" "$f" --clobber
-          done
+          echo "Verzeichnis-Inhalt:"
+          ls -la "$BASE" | grep -i "tar\|sig" || true
+          gh release upload "${{ github.ref_name }}" \
+            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz" \
+            "$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz.sig" \
+            --clobber
 
   # ── latest.json generieren (nach beiden Builds) ────────────────────────────
   updater-json:
