@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.13',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Auto-Update funktioniert jetzt auf Windows und Linux – Signatur-Verifikation war durch falsches Pubkey-Format fehlgeschlagen' },
+    ],
+  },
+  {
     version: 'v0.1.12',
     datum: 'März 2026',
     eintraege: [
