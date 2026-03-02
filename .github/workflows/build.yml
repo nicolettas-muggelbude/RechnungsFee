@@ -83,6 +83,10 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # ── App-Version aus Git-Tag ─────────────────────────────────────────────
+      - name: App-Version aus Git-Tag setzen
+        run: python -c "import json; f='src-tauri/tauri.conf.json'; d=json.load(open(f)); d['version']='${{ github.ref_name }}'.lstrip('v'); open(f,'w').write(json.dumps(d, indent=2))"
+
       # ── Tauri-Build & Release ───────────────────────────────────────────────
       - name: Tauri CLI installieren
         run: npm install -g @tauri-apps/cli@^2

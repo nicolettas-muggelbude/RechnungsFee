@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern } from '../api/client'
 import { TagesabschlussDialog } from '../pages/kassenbuch/TagesabschlussDialog'
+import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
 const hauptNav = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
@@ -37,6 +38,9 @@ export function AppLayout() {
   const [stammdatenOffen, setStammdatenOffen] = useState(stammdatenAktiv)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
+  const [updateDismissed, setUpdateDismissed] = useState(false)
+
+  const { updateAvailable, version: updateVersion, downloading, progress, installUpdate } = useUpdateCheck()
 
   const { data: fehltGestern } = useQuery({
     queryKey: ['tagesabschluss-fehlt-gestern'],
@@ -109,6 +113,39 @@ export function AppLayout() {
 
       {/* Hauptinhalt */}
       <main className="flex-1 overflow-auto flex flex-col">
+        {/* Update-Banner */}
+        {updateAvailable && !updateDismissed && (
+          <div className="bg-green-50 border-b border-green-200 px-4 py-2.5 flex items-center gap-3 shrink-0">
+            <span className="text-green-600 text-base leading-none">↑</span>
+            <p className="text-sm text-green-800 flex-1">
+              Update verfügbar:{' '}
+              <span className="font-semibold">Version {updateVersion}</span>
+            </p>
+            {downloading ? (
+              <div className="w-32 h-1.5 bg-green-200 rounded-full overflow-hidden shrink-0">
+                <div
+                  className="h-full bg-green-500 rounded-full transition-all duration-300"
+                  style={{ width: progress !== null ? `${progress}%` : '60%' }}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={installUpdate}
+                className="text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 border border-green-300 rounded-md px-3 py-1 transition-colors shrink-0"
+              >
+                Jetzt installieren
+              </button>
+            )}
+            <button
+              onClick={() => setUpdateDismissed(true)}
+              className="text-green-500 hover:text-green-700 text-lg leading-none px-1 shrink-0"
+              title="Schließen"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Erinnerungs-Banner */}
         {zeigeBanner && fehltGestern && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3 shrink-0">
