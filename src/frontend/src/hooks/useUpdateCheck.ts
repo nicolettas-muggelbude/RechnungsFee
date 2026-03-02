@@ -83,11 +83,11 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
       const { exit } = await import('@tauri-apps/plugin-process')
       await exit(0)
     } catch (err) {
-      setState(s => ({
-        ...s,
-        downloading: false,
-        error: err instanceof Error ? err.message : 'Update fehlgeschlagen',
-      }))
+      const msg =
+        err instanceof Error ? err.message
+        : typeof err === 'string' ? err
+        : JSON.stringify(err)
+      setState(s => ({ ...s, downloading: false, error: msg }))
     }
   }, [state.updateAvailable])
 
