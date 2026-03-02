@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.14',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Test-Release: Auto-Update sollte jetzt von v0.1.13 auf v0.1.14 funktionieren' },
+    ],
+  },
+  {
     version: 'v0.1.13',
     datum: 'März 2026',
     eintraege: [
