@@ -1,39 +1,77 @@
-# 🧾 RechnungsFee
+<div align="center">
+  <img src="src/frontend/public/logo.svg" alt="RechnungsFee Logo" width="120"/>
 
-**Open-Source Buchhaltungssoftware für Freiberufler, Selbstständige und Kleinunternehmer**
+  # RechnungsFee
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Release](https://img.shields.io/github/v/release/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/releases)
-[![GitHub stars](https://img.shields.io/github/stars/nicolettas-muggelbude/RechnungsFee?style=social)](https://github.com/nicolettas-muggelbude/RechnungsFee/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/issues)
-[![GitHub discussions](https://img.shields.io/github/discussions/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/discussions)
+  **Open-Source Buchhaltungssoftware für Freiberufler, Selbstständige und Kleinunternehmer**
 
----
+  [![Release](https://img.shields.io/github/v/release/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest)
+  [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+  [![GitHub stars](https://img.shields.io/github/stars/nicolettas-muggelbude/RechnungsFee?style=social)](https://github.com/nicolettas-muggelbude/RechnungsFee/stargazers)
+  [![GitHub issues](https://img.shields.io/github/issues/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/issues)
+  [![GitHub discussions](https://img.shields.io/github/discussions/nicolettas-muggelbude/RechnungsFee)](https://github.com/nicolettas-muggelbude/RechnungsFee/discussions)
 
-## 🎯 Vision
-
-RechnungsFee ist eine plattformunabhängige, offline-first Buchhaltungslösung mit Fokus auf:
-
-- **Einfachheit** – Speziell für Buchhaltungs-Laien entwickelt
-- **Datenschutz** – Alle Daten bleiben lokal auf deinem Rechner
-- **GoBD-Konformität** – Rechtssicher nach deutschen Steuervorschriften
-- **Open Source** – Transparent, erweiterbar, community-driven
-
-**Besonderheit:** Unterstützung für Selbstständige mit Transferleistungen (ALG II / Bürgergeld) durch EKS-Export.
+</div>
 
 ---
 
-## ✅ Aktueller Stand – v0.1 Kassenbuch
+## ⬇️ Download
 
-[**→ Release-Notes v0.1**](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v0.1)
+| Betriebssystem | Download | Hinweis |
+|---|---|---|
+| **Windows 10/11** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `…x64-setup.exe` | NSIS-Installer, einfach ausführen |
+| **Linux (x86_64)** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `…amd64.AppImage` | Ausführbar machen + starten |
 
-- 📒 **GoBD-konformes Kassenbuch** – Einnahmen/Ausgaben erfassen, Storno als Gegenbuchung, keine Manipulation möglich
-- 🔢 **Automatische Belegnummern** – Format `KB-YYYYMMDD-NNN`
-- 💶 **USt-Berechnung** – Aus Bruttobetrag (ROUND_HALF_UP), §19 UStG automatisch für Kleinunternehmer
-- 📅 **Tagesabschluss** – Soll/Ist-Vergleich mit Differenzprotokoll
-- 👤 **Kunden & Lieferanten** – Stammdatenverwaltung
-- 📊 **Dashboard** – Monatsstatistik (Einnahmen / Ausgaben / Saldo)
-- 🗂️ **Kategorien** – 31 vordefinierte Kategorien (SKR03/04/49, EÜR-Zuordnung)
+```bash
+# Linux: AppImage ausführbar machen
+chmod +x RechnungsFee_*.AppImage
+./RechnungsFee_*.AppImage
+```
+
+Installierte Apps aktualisieren sich automatisch – beim nächsten Start erscheint ein Update-Banner.
+
+---
+
+## ✨ Was kann RechnungsFee?
+
+### 📒 Kassenbuch (GoBD-konform)
+- Einnahmen & Ausgaben erfassen – Bar, Karte, Bank, PayPal
+- **Unveränderliche Einträge** nach §146 AO – Storno erzeugt Gegenbuchung, kein Löschen
+- **SHA-256-Signaturen** für jeden Eintrag und Tagesabschluss
+- Split-Buchungen für gemischte Zahlungen
+- Automatische **Belegnummern** (Nummernkreise frei konfigurierbar)
+
+### 🧾 Rechnungen
+- Ausgangsrechnungen & Eingangsrechnungen
+- **PDF nach DIN 5008** – mit Logo, Unternehmensblock, Fensterumschlag-Adressfeld
+- Zahlungsverfolgung mit Teilzahlungen und Fortschrittsbalken
+- Bar-, Karte-, PayPal- und Banküberweisungserfassung
+- Entwurfsmodus & Finalisierung, Storno mit automatischer Kassenbuchgegenbuchung
+
+### 📋 Tagesabschlüsse
+- Soll/Ist-Vergleich mit Differenzprotokoll
+- Unveränderlicher Abschluss mit **SHA-256-Integritätsprüfung**
+- PDF-Export für die Buchhaltungsablage
+
+### 👥 Kunden & Lieferanten
+- Vollständige Stammdatenverwaltung
+- **DSGVO-konform**: Auskunft Art. 15 (JSON-Export) · Löschung Art. 17 (Anonymisierung)
+
+### 📦 GoBD-Export
+- Export für Betriebsprüfungen nach **Z3-Datenträgerüberlassung**
+- 8 CSV-Dateien + PDF-Prüfbericht als ZIP
+
+### 🏢 Unternehmensstammdaten
+- Logo-Upload, Steuernummer, USt-IdNr., IBAN, Rechtsform
+- Mail-Vorlagen mit Platzhaltern für Rechnungsversand
+- **Kleinunternehmer §19 UStG** vollständig unterstützt (USt automatisch 0 %)
+
+### 🔧 Weitere Funktionen
+- **Setup-Assistent** für den ersten Start
+- **Manuelles Backup** als Download + automatisches Backup vor DB-Updates
+- **Kontext-Hilfe** mit ℹ-Tooltips für GoBD-Konzepte, Steuerfelder und Rechnungslogik
+- **Auto-Updater** – neue Versionen werden direkt in der App angeboten
+- **Offline-first** – alle Daten bleiben lokal auf deinem Rechner
 
 ---
 
@@ -41,13 +79,11 @@ RechnungsFee ist eine plattformunabhängige, offline-first Buchhaltungslösung m
 
 | Version | Inhalt | Status |
 |---------|--------|--------|
-| **v0.1** | Kassenbuch (GoBD-konform) | ✅ Released Februar 2026 |
-| **v0.2** | Bank-CSV Import (Postbank, Sparkasse, Volksbank…) | 🔲 Ziel: Juni 2026 |
-| **v0.3** | EÜR, UStVA, DATEV-Export | 🔲 Ziel: August 2026 |
-| **v1.0** | Tauri-Installer, Backup, Dokumentation | 🔲 Ziel: Oktober 2026 |
-| **v1.1** | Rechnungsmodul, ZUGFeRD | 🔲 Ziel: Dezember 2026 |
-
-Vollständige Roadmap: [docs/ROADMAP.md](https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md)
+| **v0.1.x** | Kassenbuch, Rechnungen, GoBD, Tauri-App, Auto-Updater | ✅ Aktuell |
+| **v0.2** | Bank-CSV-Import (Postbank, Sparkasse, Volksbank …), Auto-Filter-Regeln | 🔲 Ziel: Juni 2026 |
+| **v0.3** | EÜR, UStVA-Voranmeldung, DATEV-Export, Jahresübersicht | 🔲 Ziel: August 2026 |
+| **v1.0** | Einstellungen, Flatpak/Flathub | 🔲 Ziel: Oktober 2026 |
+| **v1.1** | ZUGFeRD/XRechnung, PDF+OCR-Import, Rechnungs-PDF-Vorschau | 🔲 Ziel: Dezember 2026 |
 
 ---
 
@@ -57,10 +93,11 @@ Vollständige Roadmap: [docs/ROADMAP.md](https://github.com/nicolettas-muggelbud
 |---------|-------------|
 | Desktop-Shell | [Tauri 2](https://tauri.app) (Rust) |
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS v4 |
-| State / Forms | React Query, React Hook Form + Zod |
+| State / Forms | TanStack Query, React Hook Form + Zod |
 | Backend | FastAPI, Python 3.12 |
 | Datenbank | SQLite (WAL-Modus), SQLAlchemy 2.0 |
-| Kontenrahmen | SKR03 / SKR04 / SKR49 |
+| PDF | fpdf2 (DIN 5008) |
+| Pakete | AppImage (Linux), NSIS-Installer (Windows) |
 
 ---
 
@@ -69,7 +106,7 @@ Vollständige Roadmap: [docs/ROADMAP.md](https://github.com/nicolettas-muggelbud
 ### Voraussetzungen
 
 - Python 3.12+
-- Node.js 20+
+- Node.js 22+
 - Rust + Cargo (für Tauri)
 
 ### Backend starten
@@ -94,9 +131,13 @@ npm run dev
 
 App läuft unter `http://localhost:5173`
 
-### Tauri Desktop-App
+### Tauri Desktop-App (Entwicklungsmodus)
 
 ```bash
+# Sidecar-Binary zuerst bauen
+bash scripts/build-sidecar.sh      # Linux
+# pwsh scripts/build-sidecar.ps1  # Windows
+
 cd src/frontend
 npm run tauri dev
 ```
@@ -109,21 +150,8 @@ Dieses Projekt wird offen entwickelt – die Community soll von Anfang an dabei 
 
 - 💬 **Feedback & Ideen** → [GitHub Discussions](https://github.com/nicolettas-muggelbude/RechnungsFee/discussions)
 - 🐛 **Bugs melden** → [GitHub Issues](https://github.com/nicolettas-muggelbude/RechnungsFee/issues)
-- 💻 **Code beitragen** → Pull Requests willkommen, siehe [CONTRIBUTING.md](CONTRIBUTING.md)
-- 🏦 **Bank-CSV Format einreichen** → [Anleitung](CONTRIBUTING.md#-bank-csv-format-beitragen)
+- 💻 **Code beitragen** → Pull Requests sind willkommen
 - ⭐ **Stern geben** → Hilft anderen, das Projekt zu finden
-
----
-
-## 📚 Dokumentation
-
-| Datei | Inhalt |
-|-------|--------|
-| [docs/ROADMAP.md](https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md) | Versionierte Roadmap mit Meilensteinen |
-| [docs/02-kassenbuch.md](docs/02-kassenbuch.md) | Kassenbuch-Konzept & GoBD |
-| [docs/03-bank-integration.md](docs/03-bank-integration.md) | Bank-CSV Import |
-| [docs/04-ustva.md](docs/04-ustva.md) | UStVA & EÜR |
-| [projekt.md](projekt.md) | Projektplan & Feature-Übersicht |
 
 ---
 
@@ -145,4 +173,6 @@ RechnungsFee ist ein Software-Tool und ersetzt keine professionelle Steuerberatu
 
 ---
 
-**Entwickelt mit ❤️ für die Freiberufler- und Selbstständigen-Community**
+<div align="center">
+  <strong>Entwickelt mit ❤️ für die Freiberufler- und Selbstständigen-Community</strong>
+</div>
