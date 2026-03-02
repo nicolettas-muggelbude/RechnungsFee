@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.17',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows-Update: ZIP-Datei wird jetzt mit Standard-Deflate erstellt (statt Deflate64) – behebt "Compression method not supported"' },
+    ],
+  },
+  {
     version: 'v0.1.16',
     datum: 'März 2026',
     eintraege: [
