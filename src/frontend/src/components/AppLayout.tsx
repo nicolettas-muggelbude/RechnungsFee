@@ -40,7 +40,7 @@ export function AppLayout() {
   const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
 
-  const { updateAvailable, version: updateVersion, downloading, progress, error: updateError, installUpdate } = useUpdateCheck()
+  const { updateAvailable, version: updateVersion, downloading, progress, error: updateError, readyToRestart, installUpdate } = useUpdateCheck()
 
   const { data: fehltGestern } = useQuery({
     queryKey: ['tagesabschluss-fehlt-gestern'],
@@ -115,43 +115,61 @@ export function AppLayout() {
       <main className="flex-1 overflow-auto flex flex-col">
         {/* Update-Banner */}
         {updateAvailable && !updateDismissed && (
-          <div className={`border-b px-4 py-2.5 flex items-center gap-3 shrink-0 ${updateError ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-            <span className={`text-base leading-none ${updateError ? 'text-red-500' : 'text-green-600'}`}>
-              {updateError ? '!' : '↑'}
+          <div className={`border-b px-4 py-2.5 flex items-center gap-3 shrink-0 ${
+            readyToRestart ? 'bg-blue-50 border-blue-200'
+            : updateError ? 'bg-red-50 border-red-200'
+            : 'bg-green-50 border-green-200'
+          }`}>
+            <span className={`text-base leading-none ${
+              readyToRestart ? 'text-blue-500'
+              : updateError ? 'text-red-500'
+              : 'text-green-600'
+            }`}>
+              {readyToRestart ? '↻' : updateError ? '!' : '↑'}
             </span>
-            <p className={`text-sm flex-1 ${updateError ? 'text-red-800' : 'text-green-800'}`}>
-              {updateError ? (
+            <p className={`text-sm flex-1 ${
+              readyToRestart ? 'text-blue-800'
+              : updateError ? 'text-red-800'
+              : 'text-green-800'
+            }`}>
+              {readyToRestart ? (
+                <><span className="font-semibold">Update installiert!</span> Die App schließt sich gleich – bitte danach manuell neu starten.</>
+              ) : updateError ? (
                 <><span className="font-semibold">Update fehlgeschlagen:</span> {updateError}</>
               ) : (
                 <>Update verfügbar: <span className="font-semibold">Version {updateVersion}</span></>
               )}
             </p>
-            {downloading ? (
-              <div className="w-32 h-1.5 bg-green-200 rounded-full overflow-hidden shrink-0">
-                <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-300"
-                  style={{ width: progress !== null ? `${progress}%` : '60%' }}
-                />
-              </div>
-            ) : (
+            {!readyToRestart && (
+              downloading ? (
+                <div className="w-32 h-1.5 bg-green-200 rounded-full overflow-hidden shrink-0">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all duration-300"
+                    style={{ width: progress !== null ? `${progress}%` : '60%' }}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={installUpdate}
+                  className={`text-sm font-medium rounded-md px-3 py-1 transition-colors shrink-0 border ${
+                    updateError
+                      ? 'text-red-700 bg-red-100 hover:bg-red-200 border-red-300'
+                      : 'text-green-700 bg-green-100 hover:bg-green-200 border-green-300'
+                  }`}
+                >
+                  {updateError ? 'Erneut versuchen' : 'Jetzt installieren'}
+                </button>
+              )
+            )}
+            {!readyToRestart && (
               <button
-                onClick={installUpdate}
-                className={`text-sm font-medium rounded-md px-3 py-1 transition-colors shrink-0 border ${
-                  updateError
-                    ? 'text-red-700 bg-red-100 hover:bg-red-200 border-red-300'
-                    : 'text-green-700 bg-green-100 hover:bg-green-200 border-green-300'
-                }`}
+                onClick={() => setUpdateDismissed(true)}
+                className={`text-lg leading-none px-1 shrink-0 ${updateError ? 'text-red-400 hover:text-red-600' : 'text-green-500 hover:text-green-700'}`}
+                title="Schließen"
               >
-                {updateError ? 'Erneut versuchen' : 'Jetzt installieren'}
+                ×
               </button>
             )}
-            <button
-              onClick={() => setUpdateDismissed(true)}
-              className={`text-lg leading-none px-1 shrink-0 ${updateError ? 'text-red-400 hover:text-red-600' : 'text-green-500 hover:text-green-700'}`}
-              title="Schließen"
-            >
-              ×
-            </button>
           </div>
         )}
 

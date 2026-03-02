@@ -10,6 +10,7 @@ export interface UpdateState {
   downloading: boolean
   progress: number | null
   error: string | null
+  readyToRestart: boolean
 }
 
 export interface UpdateActions {
@@ -24,6 +25,7 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
     downloading: false,
     progress: null,
     error: null,
+    readyToRestart: false,
   })
 
   useEffect(() => {
@@ -78,8 +80,14 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
         }
       })
 
+      // Download abgeschlossen – Nutzer informieren, bevor die App sich schließt.
+      // Der NSIS-Installer startet die neue Version NICHT automatisch.
+      setState(s => ({ ...s, downloading: false, readyToRestart: true }))
+
+      // 3 Sekunden warten, damit der Nutzer die Meldung lesen kann.
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
       // App beenden, damit der NSIS-Installer die gesperrte Exe ersetzen kann.
-      // Der Installer startet danach automatisch die neue Version.
       const { exit } = await import('@tauri-apps/plugin-process')
       await exit(0)
     } catch (err) {

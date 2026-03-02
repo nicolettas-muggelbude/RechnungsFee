@@ -23,6 +23,27 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.11',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Nach dem Update-Download erscheint eine Meldung \"Update installiert – bitte App manuell neu starten\", bevor die App sich schließt' },
+    ],
+  },
+  {
+    version: 'v0.1.10',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Fehlermeldung bei Update-Problemen wird jetzt vollständig angezeigt (vorher: \"Update fehlgeschlagen: Update fehlgeschlagen\")' },
+    ],
+  },
+  {
+    version: 'v0.1.9',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Protokoll-Datei wird jetzt geschrieben – unter Windows: %LOCALAPPDATA%\\de.rechnungsfee.app\\logs\\rechnungsfee.log' },
+    ],
+  },
+  {
     version: 'v0.1.8',
     datum: 'März 2026',
     eintraege: [
