@@ -120,11 +120,49 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          $V = "${{ github.ref_name }}".TrimStart('v')
           $base = "${{ github.workspace }}\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
-          Get-ChildItem -Path $base | Where-Object { $_.Name -match "\.nsis\.zip(\.sig)?$" } | ForEach-Object {
-            gh release upload "${{ github.ref_name }}" $_.FullName --clobber
+          $exe = "$base\RechnungsFee_${V}_x64-setup.exe"
+          $zip = "$base\RechnungsFee_${V}_x64-setup.nsis.zip"
+          $sig = "${zip}.sig"
+
+          # .nsis.zip aus .exe erstellen (tauri build erstellt es nicht ohne Signing-Konfig)
+          if (-not (Test-Path $zip)) {
+            Compress-Archive -Path $exe -DestinationPath $zip
           }
+
+          # Falls .sig bereits vorhanden (von tauri build), direkt hochladen
+          if (-not (Test-Path $sig)) {
+            # minisign 0.12 für Windows herunterladen
+            Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile "$env:TEMP\minisign.zip"
+            Expand-Archive -Path "$env:TEMP\minisign.zip" -DestinationPath "$env:TEMP\minisign-bin" -Force
+            $minisign = Get-ChildItem -Path "$env:TEMP\minisign-bin" -Filter "minisign.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+
+            # Key-Format erkennen (base64-kodiert oder raw)
+            $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
+            $keyFile = [System.IO.Path]::GetTempFileName() + ".key"
+            $stripped = $keyContent -replace '[\s]', ''
+            try {
+              $decoded = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($stripped))
+              if ($decoded.StartsWith("untrusted comment:")) {
+                Write-Host "Key-Format: base64-kodiert"
+                [System.IO.File]::WriteAllText($keyFile, $decoded)
+              } else { throw "Not a minisign key" }
+            } catch {
+              Write-Host "Key-Format: raw (oder escaped \n)"
+              [System.IO.File]::WriteAllText($keyFile, ($keyContent -replace '\\n', "`n"))
+            }
+
+            # Signieren: -H = Prehash, -x = explizite Ausgabedatei
+            $password = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            $password | & $minisign -SHm "$zip" -s "$keyFile" -x "$sig"
+            Remove-Item $keyFile -Force
+          }
+
+          gh release upload "${{ github.ref_name }}" "$zip" "$sig" --clobber
 
       - name: Updater-TAR und Signatur hochladen (Linux)
         if: matrix.platform == 'ubuntu-latest'
