@@ -75,25 +75,33 @@ export function SetupWizard() {
         </div>
 
         {/* Fortschrittsanzeige */}
-        <div className="flex items-center mb-8">
+        <div className="flex mb-8">
           {STEPS.map((s, i) => (
-            <div key={i} className="flex-1 flex items-center">
-              <div className="flex flex-col items-center">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
-                  i < step ? 'bg-green-500 text-white' :
-                  i === step ? 'bg-blue-600 text-white' :
-                  'bg-slate-200 text-slate-500'
-                }`}>
-                  {i < step ? '✓' : i + 1}
-                </div>
-                <div className="text-center mt-1">
-                  <p className={`text-xs font-medium ${i === step ? 'text-blue-700' : 'text-slate-500'}`}>{s.label}</p>
-                  <p className="text-xs text-slate-400 hidden sm:block">{s.desc}</p>
-                </div>
-              </div>
-              {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-2 mb-5 ${i < step ? 'bg-green-400' : 'bg-slate-200'}`} />
+            <div key={i} className="flex-1 flex flex-col items-center relative">
+              {/* Verbindungslinie zur linken Seite (zum vorigen Schritt) */}
+              {i > 0 && (
+                <div className={`absolute left-0 right-1/2 top-[17px] h-0.5 ${
+                  i <= step ? 'bg-green-400' : 'bg-slate-200'
+                }`} />
               )}
+              {/* Verbindungslinie zur rechten Seite (zum nächsten Schritt) */}
+              {i < STEPS.length - 1 && (
+                <div className={`absolute left-1/2 right-0 top-[17px] h-0.5 ${
+                  i < step ? 'bg-green-400' : 'bg-slate-200'
+                }`} />
+              )}
+              {/* Schritt-Kreis (z-10 überdeckt die Linien) */}
+              <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                i < step ? 'bg-green-500 text-white' :
+                i === step ? 'bg-blue-600 text-white' :
+                'bg-slate-200 text-slate-500'
+              }`}>
+                {i < step ? '✓' : i + 1}
+              </div>
+              <div className="text-center mt-1">
+                <p className={`text-xs font-medium ${i === step ? 'text-blue-700' : 'text-slate-500'}`}>{s.label}</p>
+                <p className="text-xs text-slate-400 hidden sm:block">{s.desc}</p>
+              </div>
             </div>
           ))}
         </div>
