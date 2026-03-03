@@ -1,6 +1,7 @@
 #!/bin/bash
 # RechnungsFee – Desktop-Integration für Linux
 # Erstellt einen Starter in GNOME, KDE, XFCE und anderen Desktop-Umgebungen.
+# Benötigt KEIN sudo – alles wird im Benutzerverzeichnis installiert.
 #
 # Verwendung:
 #   chmod +x install-linux.sh
@@ -9,6 +10,8 @@
 # Ohne Argument wird ~/Downloads/RechnungsFee*.AppImage gesucht.
 
 set -e
+
+ICON_URL="https://raw.githubusercontent.com/nicolettas-muggelbude/RechnungsFee/main/src-tauri/icons/256x256.png"
 
 # ── AppImage finden ────────────────────────────────────────────────────────────
 APPIMAGE="${1:-}"
@@ -26,27 +29,18 @@ echo "AppImage: $APPIMAGE"
 # ── Ausführbar machen ──────────────────────────────────────────────────────────
 chmod +x "$APPIMAGE"
 
-# ── Icons aus AppImage extrahieren ─────────────────────────────────────────────
-ICON_BASE="$HOME/.local/share/icons/hicolor"
-TMP_DIR="$(mktemp -d)"
-echo "Extrahiere Icons..."
+# ── Icon herunterladen ─────────────────────────────────────────────────────────
+ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+ICON_FILE="$ICON_DIR/de.rechnungsfee.app.png"
+mkdir -p "$ICON_DIR"
 
-cd "$TMP_DIR"
-"$APPIMAGE" --appimage-extract "usr/share/icons" > /dev/null 2>&1 || true
-
-if [ -d "$TMP_DIR/squashfs-root/usr/share/icons/hicolor" ]; then
-  for size in 16 32 48 64 128 256 512; do
-    SRC="$TMP_DIR/squashfs-root/usr/share/icons/hicolor/${size}x${size}/apps"
-    if [ -d "$SRC" ]; then
-      mkdir -p "$ICON_BASE/${size}x${size}/apps"
-      cp "$SRC"/*.png "$ICON_BASE/${size}x${size}/apps/" 2>/dev/null || true
-    fi
-  done
-  rm -rf "$TMP_DIR"
-  echo "  Icons installiert nach ~/.local/share/icons/hicolor/"
+echo "Lade Icon herunter..."
+if command -v wget &>/dev/null; then
+  wget -qO "$ICON_FILE" "$ICON_URL" && echo "  Icon installiert." || echo "  Hinweis: Icon konnte nicht geladen werden – App-Icon fehlt ggf. im Starter."
+elif command -v curl &>/dev/null; then
+  curl -sSL "$ICON_URL" -o "$ICON_FILE" && echo "  Icon installiert." || echo "  Hinweis: Icon konnte nicht geladen werden – App-Icon fehlt ggf. im Starter."
 else
-  rm -rf "$TMP_DIR"
-  echo "  Hinweis: Icons konnten nicht extrahiert werden – App-Icon fehlt ggf. im Starter."
+  echo "  Hinweis: wget und curl nicht gefunden – Icon übersprungen."
 fi
 
 # ── .desktop-Datei anlegen ─────────────────────────────────────────────────────
@@ -70,7 +64,6 @@ DESKTOP
 echo "Desktop-Eintrag erstellt: $DESKTOP_FILE"
 
 # ── Desktop-Datenbanken aktualisieren ──────────────────────────────────────────
-gtk-update-icon-cache -f -t "$ICON_BASE" 2>/dev/null || true
 update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 
 echo ""
