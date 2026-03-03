@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.27',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: App schließt sich jetzt sofort – taskkill wird nicht mehr abgewartet (spawn statt output)' },
+    ],
+  },
+  {
     version: 'v0.1.26',
     datum: 'März 2026',
     eintraege: [

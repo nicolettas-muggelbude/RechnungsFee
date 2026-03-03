@@ -27,7 +27,7 @@ fn kill_backend_inner(child: CommandChild) {
         drop(child);
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/T", "/PID", &pid.to_string()])
-            .output();
+            .spawn();  // spawn statt output – nicht auf Abschluss warten
         log::info!("Backend-Prozessbaum (PID {}) per taskkill /T beendet", pid);
     }
     #[cfg(not(target_os = "windows"))]
