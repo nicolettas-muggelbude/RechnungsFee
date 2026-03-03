@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.22',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'App lässt sich wieder schließen – onCloseRequested-Handler entfernt, der durch await invoke() blockierte und das Fenster einfrieren ließ' },
+    ],
+  },
+  {
     version: 'v0.1.21',
     datum: 'März 2026',
     eintraege: [
