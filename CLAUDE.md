@@ -19,7 +19,7 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 2` – zentrale Konstante.
+`SCHEMA_VERSION = 3` – zentrale Konstante.
 
 ### Ablauf beim App-Start
 ```
@@ -40,7 +40,9 @@ def _run_migrations():
         # Am Ende: PRAGMA user_version = 1 + commit
     if version < 2:
         # PRAGMA user_version = 2 + commit
-    # if version < 3: ...
+    if version < 3:
+        # PRAGMA user_version = 3 + commit
+    # if version < 4: ...
 ```
 
 ### Neue Migration hinzufügen
@@ -53,6 +55,7 @@ def _run_migrations():
 |---------|--------|
 | 0→1 | kassenbuch (kunde_id, rechnung_id, externe_belegnr, signatur), rechnungen (bezahlt_betrag, zahlungsstatus, leistungsdatum, ist_entwurf, storniert, ausgegeben), tagesabschluesse (zaehlung_json, signatur), unternehmen (handelsregister_nr/gericht, logo_pfad, mail_*), kategorien.ust_satz_standard, ist_entwurf-Korrektur |
 | 1→2 | Formalisierung – bestehende DBs auf Versioning-System heben |
+| 2→3 | unternehmen (berufsbezeichnung VARCHAR(100), kammer_mitgliedschaft VARCHAR(200)) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

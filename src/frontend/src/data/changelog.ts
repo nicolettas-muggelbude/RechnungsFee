@@ -23,6 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.23',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Berufsbezeichnung & Kammermitgliedschaft: 12 Berufskarten im Setup-Assistenten, Kammerberufe (Rechtsanwalt, Steuerberater, Architekt, Arzt) werden automatisch vorausgefüllt – erscheinen auf PDF-Rechnungen' },
+      { typ: 'fix', text: 'Mail-Versand funktioniert jetzt auf Linux (kein "URL can\'t be shown" mehr) und Windows (PDF wird korrekt erstellt)' },
+      { typ: 'fix', text: 'AppImage behält nach einem Update jetzt seinen Dateinamen – kein manuelles Umbenennen mehr nötig' },
+      { typ: 'fix', text: 'Linux: RechnungsFee erscheint jetzt mit eigenem Icon im Anwendungsmenü (nach einmaligem Ausführen von install-linux.sh)' },
+      { typ: 'fix', text: 'Setup-Assistent: Schrittanzeige ist jetzt auf Windows und Linux korrekt ausgerichtet' },
+    ],
+  },
+  {
     version: 'v0.1.22',
     datum: 'März 2026',
     eintraege: [

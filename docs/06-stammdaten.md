@@ -78,6 +78,10 @@ class UserStammdaten:
     versteuerungsart: str  # 'ist' oder 'soll'
     bezieht_transferleistungen: bool  # ALG II/Bürgergeld → Ist-Versteuerung Pflicht!
 
+    # Beruf & Kammer (optional, für Kammerberufe)
+    berufsbezeichnung: str      # "Rechtsanwältin", "IT-Berater" – erscheint im PDF-Header
+    kammer_mitgliedschaft: str  # "Rechtsanwaltskammer Berlin, Mitgl.-Nr. …" – erscheint im PDF-Footer
+
     # E-Rechnung
     leitweg_id: str  # Für Rechnungen an öffentliche Auftraggeber (optional)
 ```
@@ -148,38 +152,50 @@ def validate_user_stammdaten():
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ RechnungsFee - Ersteinrichtung (Schritt 1/4) │
+│ RechnungsFee – Ersteinrichtung (Schritt 1/4)    │
 ├─────────────────────────────────────────────────┤
 │                                                 │
-│ FIRMA / FREIBERUFLER                            │
+│ TÄTIGKEIT                                       │
+│                                                 │
+│ Welche Tätigkeit übst du aus?                   │
+│                                                 │
+│ [💻 IT /    ] [🎨 Design/  ] [✍️ Text /      ] │
+│ [Entwicklung] [Grafik     ] [Journalismus    ] │
+│ [📊 Beratung] [📣 Marketing] [🔤 Übersetzung ] │
+│ [/Coaching  ] [/PR        ] [               ] │
+│ [⚖️ Rechts- ] [🧮 Steuer- ] [🏛️ Architekt/  ] │
+│ [anwalt/-in ] [berater/in ] [in             ] │
+│ [🩺 Arzt /  ] [🔧 Handwerk] [… Sonstiges   ] │
+│ [Ärztin     ] [/Gewerbe   ] [               ] │
+│                                                 │
+│ ┌─────────────────────────────────────────┐    │
+│ │ Berufsbezeichnung (erscheint auf        │    │
+│ │ Rechnungen):                            │    │
+│ │ [Rechtsanwältin___________________]    │    │
+│ │                                         │    │
+│ │ Kammermitgliedschaft (optional):        │    │
+│ │ [Rechtsanwaltskammer [Stadt], Nr. …] │    │
+│ └─────────────────────────────────────────┘    │
+│                                                 │
+│ FIRMENDATEN                                     │
 │                                                 │
 │  Firmenname:  [___________________________]    │
-│  Rechtsform:  [Freiberufler ▼]                 │
-│               □ Einzelunternehmer               │
-│               □ GbR                             │
-│               ● Freiberufler                    │
-│                                                 │
-│  ℹ️ RechnungsFee unterstützt nur            │
-│     EÜR-berechtigte Rechtsformen.              │
-│     Bilanzpflichtige Gesellschaften (GmbH,     │
-│     UG, OHG, KG) werden nicht unterstützt.     │
-│                                                 │
-│  Inhaber:     [Max Mustermann____________]     │
+│  Vorname:     [Maria____]  Nachname: [Muster]  │
 │                                                 │
 │ ADRESSE                                         │
 │                                                 │
 │  Straße:      [Musterstraße______________]     │
-│  Hausnummer:  [42__]                            │
-│  PLZ:         [26121]  Ort: [Oldenburg____]    │
-│  Land:        [Deutschland ▼]                   │
+│  Hausnummer:  [1a__]                            │
+│  PLZ:         [10115]  Ort: [Berlin_______]    │
 │                                                 │
-│ KONTAKT                                         │
+│ KONTAKT & STEUER                                │
 │                                                 │
-│  E-Mail:      [max@example.com___________]     │
-│  Telefon:     [0441 12345678_____________]     │
-│  Website:     [www.example.com___________]     │
+│  E-Mail:      [maria@beispiel.de_________]     │
+│  Telefon:     [+49 30 12345678___________]     │
+│  Steuernummer:[12/345/67890______________]     │
+│  Finanzamt:   [Finanzamt Berlin-Mitte____]     │
 │                                                 │
-│              [Zurück]        [Weiter →]         │
+│                            [Weiter →]           │
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
@@ -403,205 +419,94 @@ def validate_steuernummer(stnr: str) -> bool:
 
 ---
 
-### **8.2.3 Berufsrechtliche Pflichtangaben**
+### **8.2.3 Berufsrechtliche Angaben**
 
-**Bestimmte Berufe haben Pflichtangaben auf Rechnungen:**
+**Bestimmte Berufe müssen auf Rechnungen ihre Berufsbezeichnung und ggf. Kammermitgliedschaft angeben.**
 
-#### **Kammerberufe:**
+#### **Unterstützte Kammerberufe:**
 
-| Beruf | Pflichtangabe | Beispiel |
-|-------|--------------|----------|
-| **Handwerker** | Handwerkskammer + Handwerksrollennummer | "Eingetragen bei Handwerkskammer Oldenburg, Nr. HWK-123456" |
-| **Arzt** | Ärztekammer + Approbationsnummer (optional) | "Mitglied der Ärztekammer Niedersachsen" |
-| **Rechtsanwalt** | Rechtsanwaltskammer + Zulassung | "Zugelassen bei Rechtsanwaltskammer Oldenburg" |
-| **Steuerberater** | Steuerberaterkammer + Berufsbezeichnung | "Mitglied der Steuerberaterkammer Niedersachsen" |
-| **Architekt** | Architektenkammer + Berufsbezeichnung | "Mitglied der Architektenkammer Niedersachsen" |
-| **Ingenieur** | Ingenieurkammer (je nach Bundesland) | "Mitglied der Ingenieurkammer Niedersachsen" |
+| Beruf | vorausgefüllte Kammer |
+|-------|-----------------------|
+| Rechtsanwalt/-anwältin | Rechtsanwaltskammer |
+| Steuerberater/in | Steuerberaterkammer |
+| Architekt/in | Architektenkammer |
+| Arzt / Ärztin | Ärztekammer |
 
-#### **IHK-Mitglieder:**
+Alle anderen Berufe können diese Felder frei befüllen oder leer lassen.
 
-**Gewerbetreibende (IHK-pflichtig):**
-- IHK + Registernummer (optional, aber empfohlen)
-- Beispiel: "IHK Oldenburg, Registernummer IHK-789012"
-
-#### **Datenmodell:**
+#### **Datenmodell (implementiert):**
 
 ```python
-class User:
-    # ... (bestehende Felder)
-
-    # Berufsrechtliche Angaben (optional, je nach Beruf)
-    kammer_typ: str  # 'handwerk', 'aerzte', 'rechtsanwaelte', 'steuerberater', 'architekten', 'ingenieure', 'ihk', 'keine'
-    kammer_name: str  # "Handwerkskammer Oldenburg"
-    kammer_nummer: str  # "HWK-123456" oder "IHK-789012"
-
-    # Zusätzliche Angaben (je nach Beruf)
-    berufsbezeichnung: str  # "Rechtsanwalt", "Steuerberater", "Architekt"
-    approbation: str  # Nur für Ärzte/Apotheker
+# Tabelle: unternehmen
+berufsbezeichnung:     VARCHAR(100)   # z.B. "Rechtsanwältin", "IT-Berater"  – erscheint im PDF-Header
+kammer_mitgliedschaft: VARCHAR(200)   # z.B. "Rechtsanwaltskammer Berlin, Mitgl.-Nr. …" – erscheint im PDF-Footer
 ```
 
-#### **UI-Eingabe im Setup-Wizard:**
+Beide Felder sind Freitext und optional. Es gibt keine strukturierte Trennung von Kammer-Typ, Kammer-Name und Nummer – der Nutzer gibt den vollständigen Text so ein, wie er auf der Rechnung erscheinen soll.
+
+#### **UI-Eingabe im Setup-Wizard (Schritt 1):**
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ RechnungsFee - Ersteinrichtung (Schritt 1/4) │
+│ RechnungsFee – Ersteinrichtung (Schritt 1/4)    │
 ├─────────────────────────────────────────────────┤
 │                                                 │
-│ BERUFSRECHTLICHE ANGABEN                        │
+│ Welche Tätigkeit übst du aus?                   │
 │                                                 │
-│ Bist du Mitglied einer Kammer/eines            │
-│ Berufsverbandes?                                │
+│ [💻 IT /      ] [🎨 Design /  ] [✍️ Text /     ]│
+│ [Entwicklung  ] [Grafik      ] [Journalismus   ]│
 │                                                 │
-│ ○ Nein                                          │
-│ ● Ja                                            │
+│ [📊 Beratung /] [📣 Marketing/] [🔤 Über-      ]│
+│ [Coaching     ] [PR          ] [setzung        ]│
 │                                                 │
-│   Kammer/Verband: [Handwerkskammer ▼]          │
-│                   □ Keine                       │
-│                   ● Handwerkskammer             │
-│                   □ Ärztekammer                 │
-│                   □ Rechtsanwaltskammer         │
-│                   □ Steuerberaterkammer         │
-│                   □ Architektenkammer           │
-│                   □ Ingenieurkammer             │
-│                   □ IHK                         │
+│ [⚖️ Rechts-   ] [🧮 Steuer-  ] [🏛️ Architekt/ ]│
+│ [anwalt/-in   ] [berater/in  ] [in             ]│
 │                                                 │
-│   Name:   [Handwerkskammer Oldenburg____]      │
-│   Nummer: [HWK-123456___________________]      │
+│ [🩺 Arzt /    ] [🔧 Handwerk/] [… Sonstiges   ]│
+│ [Ärztin       ] [Gewerbe     ] [               ]│
 │                                                 │
-│   ℹ️ Diese Angaben erscheinen auf Rechnungen   │
-│      (gesetzliche Pflicht bei Kammerberufen)   │
+│ ┌──────────────────────────────────────────┐   │
+│ │ Berufsbezeichnung (erscheint auf         │   │
+│ │ Rechnungen):                             │   │
+│ │ [Rechtsanwältin____________________]    │   │
+│ │                                          │   │
+│ │ Kammermitgliedschaft (optional, erscheint│   │
+│ │ im Rechnungs-Footer):                    │   │
+│ │ [Rechtsanwaltskammer [Stadt], Nr. …]    │   │
+│ └──────────────────────────────────────────┘   │
 │                                                 │
 │              [← Zurück]      [Weiter →]         │
 └─────────────────────────────────────────────────┘
 ```
 
-#### **Rechtliche Grundlagen:**
+Das Eingabefeld für Berufsbezeichnung + Kammer erscheint erst nach Auswahl einer Tätigkeit. Für Kammerberufe wird die Kammer automatisch vorausgefüllt (z.B. „Rechtsanwaltskammer ").
 
-**§ 14 Abs. 4 UStG - Pflichtangaben auf Rechnungen:**
+#### **Ausgabe auf der Rechnung:**
 
-Für Kammerberufe zusätzlich erforderlich:
-- Berufsbezeichnung
-- Zuständige Kammer
-- Kammernummer (je nach Kammer)
+**Berufsbezeichnung** erscheint im **Header** (rechter Unternehmensblock, DIN 5008 Form B), direkt unter dem Firmennamen:
 
-**Beispiele auf Rechnung:**
-
-**1. Handwerker:**
 ```
-Max Mustermann
-Elektroinstallateur
-Musterstraße 42, 26121 Oldenburg
-
-Eingetragen bei der Handwerkskammer Oldenburg
-Handwerksrollennummer: HWK-123456
+Maria Muster Rechtsberatung
+Rechtsanwältin                  ← berufsbezeichnung
+Musterstraße 1, 10115 Berlin
+Tel: +49 30 12345678
 ```
 
-**2. Rechtsanwalt:**
-```
-Dr. Erika Musterfrau
-Rechtsanwältin
-Musterstraße 42, 26121 Oldenburg
+**Kammermitgliedschaft** erscheint im **Footer** (Spalte 2), unterhalb von Steuer- und Handelsregisternummer:
 
-Zugelassen bei der Rechtsanwaltskammer Oldenburg
 ```
-
-**3. Arzt:**
-```
-Dr. med. Max Mustermann
-Facharzt für Allgemeinmedizin
-Musterstraße 42, 26121 Oldenburg
-
-Mitglied der Ärztekammer Niedersachsen
+Inh.: Maria Muster
+Steuer-Nr: 12/345/67890
+Rechtsanwaltskammer Berlin,    ← kammer_mitgliedschaft
+Mitgl.-Nr. 12345
 ```
 
-**4. IHK-Mitglied:**
-```
-Musterfirma GmbH
-Geschäftsführer: Max Mustermann
-Musterstraße 42, 26121 Oldenburg
-
-IHK Oldenburg, Registernummer: IHK-789012
-```
-
-#### **Automatische Angabe auf Rechnungen:**
-
-```python
-def generate_rechnung_kopf(user, kunde):
-    """
-    Generiert Rechnungskopf mit Pflichtangaben
-    """
-    kopf = f"{user.firmenname or f'{user.vorname} {user.nachname}'}\n"
-
-    # Berufsbezeichnung (wenn vorhanden)
-    if user.berufsbezeichnung:
-        kopf += f"{user.berufsbezeichnung}\n"
-
-    kopf += f"{user.strasse}, {user.plz} {user.ort}\n\n"
-
-    # Kammer-Angaben (Pflicht bei Kammerberufen)
-    if user.kammer_typ != 'keine':
-        if user.kammer_typ == 'handwerk':
-            kopf += f"Eingetragen bei der {user.kammer_name}\n"
-            kopf += f"Handwerksrollennummer: {user.kammer_nummer}\n\n"
-
-        elif user.kammer_typ == 'rechtsanwaelte':
-            kopf += f"Zugelassen bei der {user.kammer_name}\n\n"
-
-        elif user.kammer_typ == 'aerzte':
-            kopf += f"Mitglied der {user.kammer_name}\n"
-            if user.approbation:
-                kopf += f"Approbation: {user.approbation}\n"
-            kopf += "\n"
-
-        elif user.kammer_typ == 'ihk':
-            kopf += f"{user.kammer_name}"
-            if user.kammer_nummer:
-                kopf += f", Registernummer: {user.kammer_nummer}"
-            kopf += "\n\n"
-
-        else:
-            # Generisch: Steuerberater, Architekten, Ingenieure
-            kopf += f"Mitglied der {user.kammer_name}\n\n"
-
-    return kopf
-```
-
-#### **Validierung:**
-
-```python
-def validate_kammerangaben(user):
-    """
-    Prüft ob Kammer-Angaben vollständig sind
-    """
-    errors = []
-
-    if user.kammer_typ != 'keine':
-        if not user.kammer_name:
-            errors.append({
-                'field': 'kammer_name',
-                'message': 'Kammer-Name ist Pflicht bei Kammerberufen'
-            })
-
-        # Handwerker: Nummer ist Pflicht
-        if user.kammer_typ == 'handwerk' and not user.kammer_nummer:
-            errors.append({
-                'field': 'kammer_nummer',
-                'message': 'Handwerksrollennummer ist Pflicht für Handwerker'
-            })
-
-    return errors
-```
-
-#### **Hinweis für User:**
+#### **Rechtlicher Hinweis:**
 
 ⚠️ **Wichtig:**
-- Bei Kammerberufen sind diese Angaben **gesetzlich verpflichtend** auf Rechnungen
-- Fehlende Angaben können zu Abmahnungen führen
-- RechnungsFee fügt diese automatisch in Rechnungsvorlagen ein
-
-💡 **Tipp:**
-- Falls unsicher: Auf der Website Ihrer Kammer nachsehen
-- Bei IHK: Pflicht zur Mitgliedschaft, Angabe auf Rechnung empfohlen
+- Bei Kammerberufen sind Berufsbezeichnung und Kammermitgliedschaft auf Rechnungen **gesetzlich verpflichtend** (§ 14 Abs. 4 UStG)
+- RechnungsFee fügt diese Angaben automatisch in PDF-Rechnungen ein
+- Der genaue Wortlaut (z.B. „Zugelassen bei …" vs. „Mitglied der …") liegt in der Verantwortung des Nutzers – RechnungsFee gibt keine Vorschriften vor
 
 ---
 
