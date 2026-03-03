@@ -49,9 +49,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "linux": {
-      "desktopTemplate": "assets/de.rechnungsfee.app.desktop"
-    },
     "externalBin": [
       "binaries/backend"
     ]
