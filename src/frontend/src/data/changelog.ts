@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.24',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'PDF öffnen und Drucken funktioniert jetzt auf Linux und Windows – Tauri öffnet PDFs jetzt im Systembrowser statt in einem WebView-Fenster (das keine PDFs rendern kann)' },
+      { typ: 'fix', text: 'Linux: Desktop-Integration (install-linux.sh) benötigt kein sudo mehr – Icon wird direkt von GitHub geladen statt aus dem AppImage extrahiert' },
+      { typ: 'fix', text: 'Linux: App lässt sich jetzt ans Dock anheften – StartupWMClass war kleingeschrieben und passte nicht zum Fenstertitel' },
+    ],
+  },
+  {
     version: 'v0.1.23',
     datum: 'März 2026',
     eintraege: [

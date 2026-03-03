@@ -287,18 +287,33 @@ function RechnungDetail({
     }
   }
 
+  // PDF öffnen: In Tauri über Shell-Plugin (öffnet Systembrowser mit PDF-Viewer),
+  // im Browser direkt per window.open.
+  async function _openPdf() {
+    const base = await getApiBase()
+    const url = `${base}/rechnungen/${rechnung.id}/pdf`
+    if (isTauri()) {
+      try { await invoke('open_url', { url }) } catch { /* ignorieren */ }
+    } else {
+      window.open(url, '_blank')
+    }
+  }
+
   async function handleDrucken() {
     _markiereWennNoetig()
-    const base = await getApiBase()
-    const win = window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
-    if (win) win.addEventListener('load', () => win.print())
+    if (isTauri()) {
+      await _openPdf()
+    } else {
+      const base = await getApiBase()
+      const win = window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+      if (win) win.addEventListener('load', () => win.print())
+    }
     qc.invalidateQueries({ queryKey: ['rechnungen'] })
   }
 
   async function handlePdfOeffnen() {
     _markiereWennNoetig()
-    const base = await getApiBase()
-    window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+    await _openPdf()
     qc.invalidateQueries({ queryKey: ['rechnungen'] })
   }
 
@@ -306,12 +321,11 @@ function RechnungDetail({
     const email = partnerEmail || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
 
-    // PDF herunterladen (window.open wie Backup/GoBD-Download – funktioniert in Tauri auf allen Plattformen)
+    // PDF im Systembrowser öffnen (kein neues WebView-Fenster – WebView kann keine PDFs rendern)
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
-      const base = await getApiBase()
-      window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+      await _openPdf()
       setPdfHinweis(true)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
     } finally {

@@ -56,7 +56,7 @@ Exec=$APPIMAGE %u
 Icon=de.rechnungsfee.app
 Type=Application
 Categories=Office;Finance;Accounting;
-StartupWMClass=rechnungsfee
+StartupWMClass=RechnungsFee
 Keywords=Rechnung;Buchhaltung;Kassenbuch;Freiberufler;GoBD;Steuer;
 Terminal=false
 DESKTOP
