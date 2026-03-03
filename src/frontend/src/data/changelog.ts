@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.25',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Linux: Icon und Andocken funktionieren jetzt – StartupWMClass auf de.rechnungsfee.app korrigiert (Tauri 2 nutzt den App-Identifier als GTK App-ID, nicht den Produktnamen)' },
+      { typ: 'fix', text: 'Linux: Icon-Cache wird nach der Installation automatisch aktualisiert – kein Ab- und Anmelden mehr nötig' },
+    ],
+  },
+  {
     version: 'v0.1.24',
     datum: 'März 2026',
     eintraege: [

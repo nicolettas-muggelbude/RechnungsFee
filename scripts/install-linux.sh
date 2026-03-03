@@ -56,7 +56,7 @@ Exec=$APPIMAGE %u
 Icon=de.rechnungsfee.app
 Type=Application
 Categories=Office;Finance;Accounting;
-StartupWMClass=RechnungsFee
+StartupWMClass=de.rechnungsfee.app
 Keywords=Rechnung;Buchhaltung;Kassenbuch;Freiberufler;GoBD;Steuer;
 Terminal=false
 DESKTOP
@@ -64,6 +64,7 @@ DESKTOP
 echo "Desktop-Eintrag erstellt: $DESKTOP_FILE"
 
 # ── Desktop-Datenbanken aktualisieren ──────────────────────────────────────────
+gtk-update-icon-cache -f -t "$ICON_BASE" 2>/dev/null || true
 update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 
 echo ""

@@ -5,6 +5,6 @@ Exec={{exec}} %u
 Icon={{icon}}
 Type=Application
 Categories=Office;Finance;Accounting;
-StartupWMClass=RechnungsFee
+StartupWMClass=de.rechnungsfee.app
 Keywords=Rechnung;Buchhaltung;Kassenbuch;Freiberufler;GoBD;Steuer;Kleinunternehmer;
 Terminal=false
