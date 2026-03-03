@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.26',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: PDF-Generierung funktioniert jetzt – DejaVu-Schriften werden direkt aus dem fpdf2-Paket geladen statt aus Linux-Systempfaden gesucht' },
+      { typ: 'fix', text: 'Windows: backend.exe wird beim Schließen der App wieder zuverlässig beendet – Prozess wird jetzt direkt beim Window-Close-Event statt beim App-Exit-Event getötet' },
+    ],
+  },
+  {
     version: 'v0.1.25',
     datum: 'März 2026',
     eintraege: [

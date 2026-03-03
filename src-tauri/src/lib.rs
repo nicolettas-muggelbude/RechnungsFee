@@ -85,12 +85,28 @@ pub fn run() {
 
             app.manage(BackendChild(Mutex::new(Some(child))));
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
+
+            // Backend beim Schließen des Hauptfensters synchron beenden.
+            // CloseRequested feuert zuverlässiger als RunEvent::Exit und
+            // vermeidet Race-Conditions mit shell.open() (PDF-Links).
+            let ah = app.handle().clone();
+            app.get_webview_window("main")
+                .expect("Hauptfenster nicht gefunden")
+                .on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
+                            kill_backend_inner(child);
+                        }
+                    }
+                });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
+            // Fallback: Falls CloseRequested nicht gefeuert hat (z.B. kein Hauptfenster)
             if let tauri::RunEvent::Exit = event {
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
                     kill_backend_inner(child);

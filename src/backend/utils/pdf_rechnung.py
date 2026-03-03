@@ -30,6 +30,15 @@ from fpdf import FPDF
 
 
 def _find_dejavu_dir() -> Path:
+    # Erst: fpdf2-interne Fonts (immer vorhanden, plattformunabhängig – auch Windows/PyInstaller)
+    try:
+        import fpdf as _fpdf_mod
+        fpdf_fonts = Path(_fpdf_mod.__file__).parent / "fonts"
+        if (fpdf_fonts / "DejaVuSans.ttf").exists():
+            return fpdf_fonts
+    except Exception:
+        pass
+    # Fallback: System-Fonts (Linux)
     candidates = [
         Path("/usr/share/fonts/truetype/dejavu"),
         Path("/usr/share/fonts/dejavu"),
