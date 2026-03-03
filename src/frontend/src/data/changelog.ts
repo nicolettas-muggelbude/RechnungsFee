@@ -26,7 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.19',
     datum: 'März 2026',
     eintraege: [
-      { typ: 'fix', text: 'Backend-Sidecar wird beim App-Schließen (X-Button) und beim Update zuverlässig beendet – onCloseRequested fängt den Exit ab und ruft kill_backend direkt auf' },
+      { typ: 'fix', text: 'Backend-Sidecar wird beim App-Schließen zuverlässig beendet – PyInstaller --onefile startet auf Windows zwei Prozesse; taskkill /T beendet jetzt den gesamten Prozessbaum' },
     ],
   },
   {
