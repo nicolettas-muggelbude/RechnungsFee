@@ -112,6 +112,8 @@ export type Unternehmen = {
   iban?: string
   bic?: string
   bank_name?: string
+  berufsbezeichnung?: string | null
+  kammer_mitgliedschaft?: string | null
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null

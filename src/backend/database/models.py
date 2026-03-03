@@ -57,6 +57,9 @@ class Unternehmen(Base):
     iban: Mapped[str | None] = mapped_column(String(34))
     bic: Mapped[str | None] = mapped_column(String(11))
     bank_name: Mapped[str | None] = mapped_column(String(100))
+    # Beruf & Kammer
+    berufsbezeichnung: Mapped[str | None] = mapped_column(String(100))       # z.B. "Rechtsanwältin"
+    kammer_mitgliedschaft: Mapped[str | None] = mapped_column(String(200))   # z.B. "Rechtsanwaltskammer Berlin"
     # Logo & Mail-Vorlagen
     logo_pfad: Mapped[str | None] = mapped_column(String(500))
     mail_betreff_vorlage: Mapped[str | None] = mapped_column(String(500))

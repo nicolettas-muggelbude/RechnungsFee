@@ -189,6 +189,8 @@ class RechnungPDF(FPDF):
         email    = unt.get("email") or ""
         webseite = unt.get("webseite") or ""
 
+        berufsbezeichnung = unt.get("berufsbezeichnung") or ""
+
         y = top
         self.set_xy(BLOCK_X, y)
         self.set_font("DejaVu", "B", 10)
@@ -198,6 +200,10 @@ class RechnungPDF(FPDF):
 
         self.set_font("DejaVu", "", 8)
         self.set_text_color(*TEXT_GRAU)
+        if berufsbezeichnung:
+            self.set_xy(BLOCK_X, y)
+            self.cell(BLOCK_W, 4.0, berufsbezeichnung, align="L")
+            y += 4.0
         for zeile in filter(None, [strasse, plz_ort]):
             self.set_xy(BLOCK_X, y)
             self.cell(BLOCK_W, 4.0, zeile, align="L")
@@ -282,10 +288,12 @@ class RechnungPDF(FPDF):
         person_label = _person_bezeichnung(unt.get("rechtsform") or "")
         steuer    = f"USt-ID: {ust_id}" if ust_id else (f"StNr: {steuernr}" if steuernr else "")
         hr_zeile  = (f"HRB {hr_nr}" + (f", {hr_ger}" if hr_ger else "")) if hr_nr else ""
+        kammer    = unt.get("kammer_mitgliedschaft") or ""
         _col(L_MARGIN + col_w, list(filter(None, [
             f"{person_label} {inhaber}" if inhaber else "",
             steuer,
             hr_zeile,
+            kammer,
         ])))
 
         # ── Spalte 3: Bankdaten · Seite ──────────────────────────────────────

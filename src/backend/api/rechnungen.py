@@ -364,6 +364,8 @@ def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
             "bic":                     unternehmen.bic or "",
             "bank_name":               unternehmen.bank_name or "",
             "logo_pfad":               unternehmen.logo_pfad or "",
+            "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
+            "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
             "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
         }
 

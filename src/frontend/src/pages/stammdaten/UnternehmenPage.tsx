@@ -292,6 +292,20 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       <hr className="border-slate-100" />
 
+      {/* Beruf & Kammer */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Beruf & Kammermitgliedschaft</h3>
+        <p className="text-xs text-slate-400">
+          Optional – erscheint auf Rechnungen. Relevant für Anwälte, Steuerberater, Architekten und andere Kammerberufe.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Berufsbezeichnung">{inp('berufsbezeichnung', 'z.B. Rechtsanwältin')}</Field>
+          <Field label="Kammermitgliedschaft">{inp('kammer_mitgliedschaft', 'z.B. Rechtsanwaltskammer Berlin')}</Field>
+        </div>
+      </div>
+
+      <hr className="border-slate-100" />
+
       {/* Handelsregister */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Handelsregister</h3>
