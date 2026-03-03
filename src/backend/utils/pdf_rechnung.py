@@ -30,14 +30,19 @@ from fpdf import FPDF
 
 
 def _find_dejavu_dir() -> Path:
-    # Erst: fpdf2-interne Fonts (immer vorhanden, plattformunabhängig – auch Windows/PyInstaller)
-    try:
-        import fpdf as _fpdf_mod
-        fpdf_fonts = Path(_fpdf_mod.__file__).parent / "fonts"
-        if (fpdf_fonts / "DejaVuSans.ttf").exists():
-            return fpdf_fonts
-    except Exception:
-        pass
+    import sys
+
+    # PyInstaller-Bundle: Fonts werden nach sys._MEIPASS/fonts/ extrahiert
+    if getattr(sys, "frozen", False):
+        p = Path(sys._MEIPASS) / "fonts"  # type: ignore[attr-defined]
+        if (p / "DejaVuSans.ttf").exists():
+            return p
+
+    # Entwicklung / direkter Start: Fonts liegen im Projekt unter src/backend/fonts/
+    local = Path(__file__).parent.parent / "fonts"
+    if (local / "DejaVuSans.ttf").exists():
+        return local
+
     # Fallback: System-Fonts (Linux)
     candidates = [
         Path("/usr/share/fonts/truetype/dejavu"),
@@ -49,6 +54,7 @@ def _find_dejavu_dir() -> Path:
     for p in candidates:
         if (p / "DejaVuSans.ttf").exists():
             return p
+
     raise FileNotFoundError(
         "DejaVu-Fonts nicht gefunden. Bitte 'fonts-dejavu-core' installieren "
         "(sudo apt install fonts-dejavu-core)."

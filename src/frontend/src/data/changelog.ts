@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.28',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: PDF-Generierung funktioniert jetzt – DejaVu-Schriften werden aus dem Projektverzeichnis (fonts/) geladen und per PyInstaller ins Backend-Bundle gepackt' },
+    ],
+  },
+  {
     version: 'v0.1.27',
     datum: 'März 2026',
     eintraege: [

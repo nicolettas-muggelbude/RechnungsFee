@@ -67,6 +67,7 @@ pyinstaller \
     --hidden-import utils.pdf_tagesabschluss \
     --hidden-import utils.pdf_rechnung \
     --hidden-import utils.signatur \
+    --add-data "fonts:fonts" \
     main.py
 
 # Binary umbenennen: backend → backend-{triple}
