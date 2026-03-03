@@ -73,7 +73,7 @@ try {
         --hidden-import utils.pdf_tagesabschluss `
         --hidden-import utils.pdf_rechnung `
         --hidden-import utils.signatur `
-        "--add-data=fonts;fonts" `
+        "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {
     Pop-Location
