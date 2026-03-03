@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.19',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows-Update: Backend-Sidecar wird vor App-Exit explizit beendet – RunEvent::Exit wird durch exit(0) manchmal umgangen' },
+    ],
+  },
+  {
     version: 'v0.1.18',
     datum: 'März 2026',
     eintraege: [

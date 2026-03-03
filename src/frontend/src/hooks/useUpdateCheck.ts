@@ -84,9 +84,12 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
 
       if (isWindows) {
         // NSIS-Installer braucht freie Datei-Sperre.
-        // Nutzer informieren, dann App beenden – Installer übernimmt den Rest.
+        // Nutzer informieren, dann Backend explizit beenden, dann App beenden.
         setState(s => ({ ...s, downloading: false, readyToRestart: true }))
         await new Promise(resolve => setTimeout(resolve, 3000))
+        // Backend-Sidecar explizit killen – exit(0) umgeht ggf. RunEvent::Exit
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('kill_backend').catch(() => {})
         const { exit } = await import('@tauri-apps/plugin-process')
         await exit(0)
       } else {

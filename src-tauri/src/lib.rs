@@ -15,6 +15,15 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
     *state.0.lock().unwrap()
 }
 
+/// IPC-Command: Frontend beendet den Backend-Sidecar explizit vor dem Update-Exit
+#[tauri::command]
+fn kill_backend(state: tauri::State<BackendChild>) {
+    if let Some(child) = state.0.lock().unwrap().take() {
+        let _ = child.kill();
+        log::info!("Backend-Sidecar vor Update-Exit explizit beendet");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -58,7 +67,7 @@ pub fn run() {
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port])
+        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
