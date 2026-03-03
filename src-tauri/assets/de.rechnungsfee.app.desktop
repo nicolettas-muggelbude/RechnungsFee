@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name={{product_name}}
+Comment=Buchhaltung für Freiberufler & Kleinunternehmer (§19 UStG)
+Exec={{exec}} %u
+Icon={{icon}}
+Type=Application
+Categories=Office;Finance;Accounting;
+StartupWMClass=rechnungsfee
+Keywords=Rechnung;Buchhaltung;Kassenbuch;Freiberufler;GoBD;Steuer;Kleinunternehmer;
+Terminal=false

@@ -114,6 +114,21 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
 
+      # ── Version-loses AppImage + Desktop-Integrations-Skript hochladen ──────────
+      - name: Version-loses AppImage + install-linux.sh hochladen (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
+          cp "$BASE/RechnungsFee_${V}_amd64.AppImage" "$BASE/RechnungsFee_amd64.AppImage"
+          gh release upload "${{ github.ref_name }}" \
+            "$BASE/RechnungsFee_amd64.AppImage" \
+            "${GITHUB_WORKSPACE}/scripts/install-linux.sh" \
+            --clobber
+
       # ── Updater-Artefakte hochladen ─────────────────────────────────────────
       - name: Updater-ZIP und Signatur hochladen (Windows)
         if: matrix.platform == 'windows-latest'
@@ -278,10 +293,12 @@ jobs:
           changelog_md = '\n'.join(changelog_lines) if changelog_lines else '_Keine Einträge gefunden._'
 
           # ── Release-Body zusammenbauen ──────────────────────────────────────
-          win_exe = f'RechnungsFee_{v}_x64-setup.exe'
-          lin_img = f'RechnungsFee_{v}_amd64.AppImage'
-          win_url = f'{base}/{win_exe}'
-          lin_url = f'{base}/{lin_img}'
+          win_exe      = f'RechnungsFee_{v}_x64-setup.exe'
+          lin_img      = 'RechnungsFee_amd64.AppImage'
+          lin_img_ver  = f'RechnungsFee_{v}_amd64.AppImage'
+          win_url      = f'{base}/{win_exe}'
+          lin_url      = f'{base}/{lin_img}'
+          lin_url_ver  = f'{base}/{lin_img_ver}'
 
           body = f"""## Was ist neu in {tag}
 
@@ -294,9 +311,24 @@ jobs:
           | Betriebssystem | Download | Hinweis |
           |---|---|---|
           | **Windows** | [⬇ {win_exe}]({win_url}) | NSIS-Installer, einfach ausführen |
-          | **Linux** | [⬇ {lin_img}]({lin_url}) | Ausführbar machen + starten: `chmod +x … && ./…` |
+          | **Linux** | [⬇ {lin_img}]({lin_url}) | **Empfohlen** – Dateiname bleibt nach Auto-Updates korrekt |
+          | **Linux (versioniert)** | [⬇ {lin_img_ver}]({lin_url_ver}) | Alternative mit Versionsnummer im Dateinamen |
 
           **Auto-Update:** Wer v0.1.3 oder neuer installiert hat, bekommt das Update automatisch beim nächsten App-Start angeboten.
+
+          ### Linux: Starter ins Anwendungsmenü integrieren
+
+          Damit RechnungsFee in GNOME Activities, KDE Launcher, XFCE-Menü usw. erscheint:
+
+          ```bash
+          # 1. AppImage herunterladen und ausführbar machen
+          chmod +x RechnungsFee_amd64.AppImage
+
+          # 2. Integrations-Skript ausführen (einmalig)
+          wget -qO install-linux.sh {base}/install-linux.sh
+          chmod +x install-linux.sh
+          ./install-linux.sh ./RechnungsFee_amd64.AppImage
+          ```
 
           > ℹ️ Die Dateien `.tar.gz`, `.nsis.zip` und `.sig` sind für den eingebauten Auto-Updater – **nicht manuell herunterladen**.
 

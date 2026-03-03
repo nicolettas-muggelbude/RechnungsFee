@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben, getRechnungPdf,
-  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase,
+  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
+  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -305,23 +306,14 @@ function RechnungDetail({
     const email = partnerEmail || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
 
-    // PDF vom Backend laden und herunterladen
+    // PDF herunterladen (window.open wie Backup/GoBD-Download – funktioniert in Tauri auf allen Plattformen)
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
-      const blob = await getRechnungPdf(rechnung.id)
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const base = await getApiBase()
+      window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
       setPdfHinweis(true)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
-    } catch {
-      // PDF-Fehler: trotzdem mailto öffnen
     } finally {
       setPdfLaeuft(false)
     }
@@ -356,10 +348,16 @@ function RechnungDetail({
       bodyText += `\n\n${unternehmen.mail_signatur}`
     }
 
-    // mailto öffnen (PDF-Anhang muss manuell hinzugefügt werden)
+    // mailto öffnen – in Tauri über Shell-Plugin (funktioniert auf Linux + Windows),
+    // im Browser per window.location.href
     const subject = encodeURIComponent(subjectText)
     const body    = encodeURIComponent(bodyText)
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
+    if (isTauri()) {
+      try { await invoke('open_url', { url: mailtoUrl }) } catch { /* ignorieren */ }
+    } else {
+      window.location.href = mailtoUrl
+    }
     setZeigMailEingabe(false)
     setMailAdresse('')
   }

@@ -37,6 +37,12 @@ fn kill_backend_inner(child: CommandChild) {
     }
 }
 
+/// IPC-Command: URL mit System-Standard-App öffnen (z.B. mailto:, https:)
+#[tauri::command]
+fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+    app.shell().open(&url, None).map_err(|e| e.to_string())
+}
+
 /// IPC-Command: wird vom Frontend beim Schließen und vor dem Update-Exit aufgerufen
 #[tauri::command]
 fn kill_backend(state: tauri::State<BackendChild>) {
@@ -81,7 +87,7 @@ pub fn run() {
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend])
+        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
