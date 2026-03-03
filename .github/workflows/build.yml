@@ -299,6 +299,8 @@ jobs:
           win_url      = f'{base}/{win_exe}'
           lin_url      = f'{base}/{lin_img}'
           lin_url_ver  = f'{base}/{lin_img_ver}'
+          install_sh   = 'install-linux.sh'
+          install_url  = f'{base}/{install_sh}'
 
           body = f"""## Was ist neu in {tag}
 
@@ -313,6 +315,7 @@ jobs:
           | **Windows** | [⬇ {win_exe}]({win_url}) | NSIS-Installer, einfach ausführen |
           | **Linux** | [⬇ {lin_img}]({lin_url}) | **Empfohlen** – Dateiname bleibt nach Auto-Updates korrekt |
           | **Linux (versioniert)** | [⬇ {lin_img_ver}]({lin_url_ver}) | Alternative mit Versionsnummer im Dateinamen |
+          | **Linux: Menü-Integration** | [⬇ {install_sh}]({install_url}) | Einmalig ausführen → Icon + Starter im Anwendungsmenü |
 
           **Auto-Update:** Wer v0.1.3 oder neuer installiert hat, bekommt das Update automatisch beim nächsten App-Start angeboten.
 
