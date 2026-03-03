@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.18',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows-Update: NSIS-ZIP wird jetzt ohne Komprimierung (Stored) erstellt – tauri-plugin-updater unterstützt nur diese Methode' },
+    ],
+  },
+  {
     version: 'v0.1.17',
     datum: 'März 2026',
     eintraege: [

@@ -134,7 +134,7 @@ jobs:
           # → Python zipfile mit ZIP_DEFLATED (standard Deflate, method 8) verwenden
           if (-not (Test-Path $zip)) {
             $exeName = Split-Path -Leaf $exe
-            python -c "import zipfile; zf = zipfile.ZipFile(r'$zip', 'w', zipfile.ZIP_DEFLATED); zf.write(r'$exe', '$exeName'); zf.close()"
+            python -c "import zipfile; zf = zipfile.ZipFile(r'$zip', 'w', zipfile.ZIP_STORED); zf.write(r'$exe', '$exeName'); zf.close()"
           }
 
           # Falls .sig bereits vorhanden (von tauri build), direkt hochladen
