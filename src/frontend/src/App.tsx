@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { getSetupStatus } from './api/client'
@@ -82,7 +83,31 @@ function AppRoutes() {
   )
 }
 
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
 export default function App() {
+  // Fenster-Schließen abfangen → Backend explizit beenden bevor App endet
+  useEffect(() => {
+    if (!isTauri) return
+
+    let unlisten: (() => void) | undefined
+
+    async function register() {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      const { invoke } = await import('@tauri-apps/api/core')
+      const { exit } = await import('@tauri-apps/plugin-process')
+
+      unlisten = await getCurrentWindow().onCloseRequested(async event => {
+        event.preventDefault()
+        await invoke('kill_backend').catch(() => {})
+        await exit(0)
+      })
+    }
+
+    register()
+    return () => { unlisten?.() }
+  }, [])
+
   return (
     <BrowserRouter>
       <AppRoutes />
