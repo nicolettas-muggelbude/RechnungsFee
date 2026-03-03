@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.21',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'App schließt wieder sofort – kein preventDefault mehr im Close-Handler' },
+      { typ: 'fix', text: 'Backend-Prozess wird jetzt zuverlässig beendet – taskkill /T läuft jetzt VOR dem child.kill(), damit der Python-Child-Prozess (PyInstaller) nicht als Waise weiterläuft' },
+    ],
+  },
+  {
     version: 'v0.1.19',
     datum: 'März 2026',
     eintraege: [

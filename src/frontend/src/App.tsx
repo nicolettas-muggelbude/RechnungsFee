@@ -95,12 +95,11 @@ export default function App() {
     async function register() {
       const { getCurrentWindow } = await import('@tauri-apps/api/window')
       const { invoke } = await import('@tauri-apps/api/core')
-      const { exit } = await import('@tauri-apps/plugin-process')
 
-      unlisten = await getCurrentWindow().onCloseRequested(async event => {
-        event.preventDefault()
+      // Kein preventDefault – Fenster schließt normal weiter.
+      // kill_backend wird proaktiv aufgerufen; RunEvent::Exit tut es nochmals (idempotent).
+      unlisten = await getCurrentWindow().onCloseRequested(async () => {
         await invoke('kill_backend').catch(() => {})
-        await exit(0)
       })
     }
 

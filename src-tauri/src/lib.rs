@@ -15,26 +15,33 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
     *state.0.lock().unwrap()
 }
 
-/// IPC-Command: Frontend beendet den Backend-Sidecar explizit (beim Schließen und vor Update-Exit).
+/// Backend-Prozessbaum beenden.
 /// PyInstaller --onefile startet auf Windows zwei Prozesse (Bootloader + Python-Child).
-/// child.kill() beendet nur den Bootloader – /T killt den gesamten Prozessbaum.
+/// child.kill() tötet nur den Parent → Child läuft weiter.
+/// Lösung: zuerst taskkill /F /T /PID (killt ganzen Baum), dann Handle droppen.
+fn kill_backend_inner(child: CommandChild) {
+    #[cfg(target_os = "windows")]
+    {
+        let pid = child.pid();
+        // Handle freigeben OHNE kill() – taskkill übernimmt den ganzen Baum atomisch
+        drop(child);
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .output();
+        log::info!("Backend-Prozessbaum (PID {}) per taskkill /T beendet", pid);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = child.kill();
+        log::info!("Backend-Sidecar beendet");
+    }
+}
+
+/// IPC-Command: wird vom Frontend beim Schließen und vor dem Update-Exit aufgerufen
 #[tauri::command]
 fn kill_backend(state: tauri::State<BackendChild>) {
     if let Some(child) = state.0.lock().unwrap().take() {
-        #[cfg(target_os = "windows")]
-        let pid = child.pid();
-
-        let _ = child.kill();
-
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("taskkill")
-                .args(["/F", "/T", "/PID", &pid.to_string()])
-                .output();
-            log::info!("Backend-Sidecar Prozessbaum (PID {}) per taskkill /T beendet", pid);
-        }
-        #[cfg(not(target_os = "windows"))]
-        log::info!("Backend-Sidecar beendet");
+        kill_backend_inner(child);
     }
 }
 
@@ -56,15 +63,10 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // Freien Port wählen
             let port = portpicker::pick_unused_port().expect("Kein freier Port gefunden");
-
             log::info!("Backend-Port: {}", port);
-
-            // State registrieren, damit get_backend_port es lesen kann
             app.manage(BackendPort(Mutex::new(port)));
 
-            // Sidecar starten
             let sidecar_cmd = app
                 .shell()
                 .sidecar("backend")
@@ -75,9 +77,7 @@ pub fn run() {
                 .spawn()
                 .expect("Backend-Sidecar konnte nicht gestartet werden");
 
-            // Child-Handle speichern, damit er beim App-Exit sauber beendet wird
             app.manage(BackendChild(Mutex::new(Some(child))));
-
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
             Ok(())
         })
@@ -87,20 +87,7 @@ pub fn run() {
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
-                    #[cfg(target_os = "windows")]
-                    let pid = child.pid();
-
-                    let _ = child.kill();
-
-                    #[cfg(target_os = "windows")]
-                    {
-                        let _ = std::process::Command::new("taskkill")
-                            .args(["/F", "/T", "/PID", &pid.to_string()])
-                            .output();
-                        log::info!("Backend-Sidecar Prozessbaum (PID {}) per taskkill /T beendet", pid);
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    log::info!("Backend-Sidecar beendet");
+                    kill_backend_inner(child);
                 }
             }
         });
