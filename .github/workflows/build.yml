@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-24.04
+          - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_ext: ''
           - platform: windows-latest
@@ -28,7 +28,7 @@ jobs:
 
       # ── Linux-Systemabhängigkeiten ──────────────────────────────────────────
       - name: Linux-Deps installieren
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -52,7 +52,7 @@ jobs:
           pip install pyinstaller
 
       - name: Backend-Sidecar bauen (Linux)
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-22.04'
         run: bash scripts/build-sidecar.sh
 
       - name: Backend-Sidecar bauen (Windows)
@@ -116,7 +116,7 @@ jobs:
 
       # ── Version-loses AppImage + Desktop-Integrations-Skript hochladen ──────────
       - name: Version-loses AppImage + install-linux.sh hochladen (Linux)
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-22.04'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -183,7 +183,7 @@ jobs:
           gh release upload "${{ github.ref_name }}" "$zip" "$sig" --clobber
 
       - name: Updater-TAR und Signatur hochladen (Linux)
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-22.04'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

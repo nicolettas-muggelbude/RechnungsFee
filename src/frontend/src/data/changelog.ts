@@ -26,7 +26,8 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.29',
     datum: 'März 2026',
     eintraege: [
-      { typ: 'fix', text: 'Linux: Weißes Fenster bei KDE Plasma / Wayland behoben – WEBKIT_DISABLE_COMPOSITING_MODE und WEBKIT_DISABLE_DMABUF_RENDERER werden beim App-Start gesetzt' },
+      { typ: 'fix', text: 'Linux: AppImage läuft jetzt auf MX-Linux, Debian und anderen Distros mit älterer glibc – Build auf Ubuntu 22.04 reduziert die glibc-Mindestanforderung von 2.39 auf 2.35' },
+      { typ: 'fix', text: 'Linux: Weißes Fenster / EGL-Crash bei KDE Plasma / Wayland behoben (GDK_BACKEND=x11, WEBKIT_DISABLE_DMABUF_RENDERER)' },
       { typ: 'verbesserung', text: 'install-linux.sh prüft jetzt ob libwebkit2gtk-4.1-0 installiert ist (Hinweis für Debian/MX-Linux-Nutzer)' },
       { typ: 'verbesserung', text: 'openUrl-Hilfsfunktion jetzt zentral exportiert – doppelter Code in RechnungenPage entfernt, invoke-Import eliminiert' },
     ],
