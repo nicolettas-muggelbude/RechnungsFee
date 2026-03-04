@@ -53,14 +53,6 @@ fn kill_backend(state: tauri::State<BackendChild>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // WebKit-Rendering-Fixes für Linux:
-    // Verhindert weiße/schwarze Fenster bei KDE Plasma, Wayland und bestimmten GPU-Treibern.
-    #[cfg(target_os = "linux")]
-    {
-        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
