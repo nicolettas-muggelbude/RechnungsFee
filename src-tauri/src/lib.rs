@@ -86,36 +86,54 @@ pub fn run() {
             app.manage(BackendChild(Mutex::new(Some(child))));
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
 
-            // Linux: Hardware-Beschleunigung in WebKit deaktivieren.
-            // Env-Vars (LIBGL_ALWAYS_SOFTWARE etc.) reichen nicht – WebKits GPU-Subprocess
-            // crasht auf AMD + Mesa 26 mit EGL_BAD_PARAMETER bevor er sie liest.
-            // HardwareAccelerationPolicy::Never verhindert EGL-Init auf API-Ebene.
+            // Hauptfenster programmatisch erstellen.
+            // Schlüssel: Fenster wird IN setup() erstellt, NICHT aus tauri.conf.json.
+            // Dadurch kann HardwareAccelerationPolicy::Never synchron auf dem Main-Thread
+            // gesetzt werden, bevor der GTK-Event-Loop die URL-Ladung verarbeitet.
+            //
+            // Vorher-Problem: Fenster aus tauri.conf.json → WebKit-Content-Prozess spawnte
+            // BEVOR setup() lief → EGL_BAD_PARAMETER (Mesa 26 + AMD) nicht vermeidbar.
+            // Jetzt: build() in setup() → with_webview() synchron auf Main-Thread →
+            // Policy gesetzt → Event-Loop startet → URL-Ladung → Content-Prozess ohne EGL.
+            let main_window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("RechnungsFee")
+            .inner_size(1280.0, 800.0)
+            .min_inner_size(900.0, 600.0)
+            .resizable(true)
+            .build()
+            .expect("Hauptfenster konnte nicht erstellt werden");
+
+            // Linux: HardwareAccelerationPolicy::Never sofort nach Fenstererstellung setzen.
+            // glib::MainContext::invoke() läuft synchron wenn wir bereits auf dem Main-Thread
+            // sind (was in setup() der Fall ist) → Closure vor URL-Load garantiert.
             #[cfg(target_os = "linux")]
             {
                 use webkit2gtk::{SettingsExt, WebViewExt};
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.with_webview(|wv| {
-                        let settings = wv.inner().settings().unwrap();
+                let _ = main_window.with_webview(|wv| {
+                    if let Some(settings) = wv.inner().settings() {
                         settings.set_hardware_acceleration_policy(
                             webkit2gtk::HardwareAccelerationPolicy::Never,
                         );
-                    });
-                }
+                        log::info!("WebKit HardwareAccelerationPolicy::Never gesetzt");
+                    }
+                });
             }
 
             // Backend beim Schließen des Hauptfensters synchron beenden.
             // CloseRequested feuert zuverlässiger als RunEvent::Exit und
             // vermeidet Race-Conditions mit shell.open() (PDF-Links).
             let ah = app.handle().clone();
-            app.get_webview_window("main")
-                .expect("Hauptfenster nicht gefunden")
-                .on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
-                            kill_backend_inner(child);
-                        }
+            main_window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
+                        kill_backend_inner(child);
                     }
-                });
+                }
+            });
 
             Ok(())
         })
