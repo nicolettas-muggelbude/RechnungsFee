@@ -29,6 +29,17 @@ echo "AppImage: $APPIMAGE"
 # ── Ausführbar machen ──────────────────────────────────────────────────────────
 chmod +x "$APPIMAGE"
 
+# ── Systemabhängigkeit prüfen (Debian/Ubuntu/MX-Linux) ────────────────────────
+if command -v dpkg &>/dev/null; then
+  if ! dpkg -s libwebkit2gtk-4.1-0 &>/dev/null; then
+    echo ""
+    echo "⚠  Fehlende Systemabhängigkeit: libwebkit2gtk-4.1-0"
+    echo "   Bitte installieren mit:"
+    echo "   sudo apt install libwebkit2gtk-4.1-0"
+    echo ""
+  fi
+fi
+
 # ── Icon herunterladen ─────────────────────────────────────────────────────────
 ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
 ICON_FILE="$ICON_DIR/de.rechnungsfee.app.png"
@@ -52,7 +63,7 @@ cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
 Name=RechnungsFee
 Comment=Buchhaltung für Freiberufler & Kleinunternehmer (§19 UStG)
-Exec=$APPIMAGE %u
+Exec=env WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 $APPIMAGE %u
 Icon=de.rechnungsfee.app
 Type=Application
 Categories=Office;Finance;Accounting;

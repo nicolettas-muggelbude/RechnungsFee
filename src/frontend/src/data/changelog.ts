@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.30',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Linux: Weißes Fenster bei KDE Plasma / Wayland behoben – WEBKIT_DISABLE_COMPOSITING_MODE und WEBKIT_DISABLE_DMABUF_RENDERER werden beim App-Start gesetzt' },
+      { typ: 'verbesserung', text: 'install-linux.sh prüft jetzt ob libwebkit2gtk-4.1-0 installiert ist (Hinweis für Debian/MX-Linux-Nutzer)' },
+    ],
+  },
+  {
     version: 'v0.1.29',
     datum: 'März 2026',
     eintraege: [
