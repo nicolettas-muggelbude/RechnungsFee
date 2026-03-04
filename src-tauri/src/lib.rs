@@ -53,6 +53,15 @@ fn kill_backend(state: tauri::State<BackendChild>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Wayland/KDE-Plasma-Fix: GDK auf X11/XWayland zwingen, damit WebKit kein EGL
+    // initialisiert. Verhindert EGL_BAD_PARAMETER-Crash und weiße Fenster auf
+    // Fedora, Bazzite, KDE Plasma und anderen Wayland-Desktops.
+    #[cfg(target_os = "linux")]
+    {
+        std::env::set_var("GDK_BACKEND", "x11");
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
