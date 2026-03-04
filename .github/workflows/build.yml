@@ -208,8 +208,10 @@ jobs:
           # .tar.gz neu erstellen (tauri build löscht es möglicherweise)
           tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
 
-          # minisign installieren (robuster als tauri signer sign für CI-Secrets)
-          sudo apt-get install -y minisign
+          # minisign installieren – nicht in Ubuntu 22.04 Repos, daher Binary von GitHub
+          curl -sSL https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz \
+            | tar -xz --strip-components=2 -C /usr/local/bin minisign-linux/x86_64/minisign
+          chmod +x /usr/local/bin/minisign
 
           # Key in Temp-Datei schreiben; unterstützt base64-kodierten und raw-Format
           KEYFILE=$(mktemp)
