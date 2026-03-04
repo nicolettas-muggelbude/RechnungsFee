@@ -71,7 +71,7 @@ export async function getApiBase(): Promise<string> {
 }
 
 /** Öffnet eine URL in Tauri per Shell-Plugin (Systembrowser), im Browser per window.open. */
-async function openUrl(url: string) {
+export async function openUrl(url: string) {
   if (isTauri()) {
     try { await invoke('open_url', { url }) } catch { /* ignorieren */ }
   } else {

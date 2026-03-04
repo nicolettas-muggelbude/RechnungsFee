@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.29',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'openUrl-Hilfsfunktion jetzt zentral exportiert – doppelter Code in RechnungenPage entfernt, invoke-Import eliminiert' },
+    ],
+  },
+  {
     version: 'v0.1.28',
     datum: 'März 2026',
     eintraege: [

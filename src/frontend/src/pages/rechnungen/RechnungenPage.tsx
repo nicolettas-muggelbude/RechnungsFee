@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
-  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri,
+  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -287,16 +286,9 @@ function RechnungDetail({
     }
   }
 
-  // PDF öffnen: In Tauri über Shell-Plugin (öffnet Systembrowser mit PDF-Viewer),
-  // im Browser direkt per window.open.
   async function _openPdf() {
     const base = await getApiBase()
-    const url = `${base}/rechnungen/${rechnung.id}/pdf`
-    if (isTauri()) {
-      try { await invoke('open_url', { url }) } catch { /* ignorieren */ }
-    } else {
-      window.open(url, '_blank')
-    }
+    await openUrl(`${base}/rechnungen/${rechnung.id}/pdf`)
   }
 
   async function handleDrucken() {
@@ -362,13 +354,11 @@ function RechnungDetail({
       bodyText += `\n\n${unternehmen.mail_signatur}`
     }
 
-    // mailto öffnen – in Tauri über Shell-Plugin (funktioniert auf Linux + Windows),
-    // im Browser per window.location.href
     const subject = encodeURIComponent(subjectText)
     const body    = encodeURIComponent(bodyText)
     const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
     if (isTauri()) {
-      try { await invoke('open_url', { url: mailtoUrl }) } catch { /* ignorieren */ }
+      await openUrl(mailtoUrl)
     } else {
       window.location.href = mailtoUrl
     }
