@@ -53,18 +53,6 @@ fn kill_backend(state: tauri::State<BackendChild>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Linux-Rendering-Fix: WebKits GPU-Subprocess crasht auf bestimmten Systemen
-    // (AMD + Mesa 26, KDE Plasma/Wayland) mit EGL_BAD_PARAMETER.
-    // GDK_BACKEND allein reicht nicht – WebKit initialisiert EGL unabhängig vom
-    // GTK-Backend in einem eigenen Subprocess.
-    // LIBGL_ALWAYS_SOFTWARE=1 zwingt Mesa auf Software-Rendering (llvmpipe) bevor
-    // irgendjemand GPU-EGL anfasst. Für eine Business-App kein wahrnehmbarer Unterschied.
-    #[cfg(target_os = "linux")]
-    {
-        std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -97,6 +85,23 @@ pub fn run() {
 
             app.manage(BackendChild(Mutex::new(Some(child))));
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
+
+            // Linux: Hardware-Beschleunigung in WebKit deaktivieren.
+            // Env-Vars (LIBGL_ALWAYS_SOFTWARE etc.) reichen nicht – WebKits GPU-Subprocess
+            // crasht auf AMD + Mesa 26 mit EGL_BAD_PARAMETER bevor er sie liest.
+            // HardwareAccelerationPolicy::Never verhindert EGL-Init auf API-Ebene.
+            #[cfg(target_os = "linux")]
+            {
+                use webkit2gtk::{SettingsExt, WebViewExt};
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.with_webview(|wv| {
+                        let settings = wv.inner().settings().unwrap();
+                        settings.set_hardware_acceleration_policy(
+                            webkit2gtk::HardwareAccelerationPolicy::Never,
+                        );
+                    });
+                }
+            }
 
             // Backend beim Schließen des Hauptfensters synchron beenden.
             // CloseRequested feuert zuverlässiger als RunEvent::Exit und
