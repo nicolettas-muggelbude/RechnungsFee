@@ -70,6 +70,15 @@ export async function getApiBase(): Promise<string> {
   return getBaseUrl()
 }
 
+/** Öffnet eine URL in Tauri per Shell-Plugin (Systembrowser), im Browser per window.open. */
+async function openUrl(url: string) {
+  if (isTauri()) {
+    try { await invoke('open_url', { url }) } catch { /* ignorieren */ }
+  } else {
+    window.open(url, '_blank')
+  }
+}
+
 // --- Setup ---
 export type SetupStatus = {
   ist_eingerichtet: boolean
@@ -329,7 +338,7 @@ export async function downloadTagesabschlussPdf(params: {
   const searchParams = new URLSearchParams({ zeitraum })
   if (wert) searchParams.set('wert', wert)
   const base = await getBaseUrl()
-  window.open(`${base}/tagesabschluss/export/pdf?${searchParams}`, '_blank')
+  await openUrl(`${base}/tagesabschluss/export/pdf?${searchParams}`)
 }
 
 // --- Kunden ---
@@ -371,7 +380,7 @@ export const anonymisiereKunde = (id: number) =>
   request<AnonymisierungResult>(`/kunden/${id}/anonymisieren`, { method: 'POST' })
 export async function dsgvoExportKunde(id: number) {
   const base = await getBaseUrl()
-  window.open(`${base}/kunden/${id}/dsgvo-export`, '_blank')
+  await openUrl(`${base}/kunden/${id}/dsgvo-export`)
 }
 
 // --- Lieferanten ---
@@ -403,19 +412,19 @@ export const anonymisiereLieferant = (id: number) =>
   request<AnonymisierungResult>(`/lieferanten/${id}/anonymisieren`, { method: 'POST' })
 export async function dsgvoExportLieferant(id: number) {
   const base = await getBaseUrl()
-  window.open(`${base}/lieferanten/${id}/dsgvo-export`, '_blank')
+  await openUrl(`${base}/lieferanten/${id}/dsgvo-export`)
 }
 
 // --- Export ---
 export async function downloadGobdExport(jahr: number) {
   const base = await getBaseUrl()
-  window.open(`${base}/export/gobd?jahr=${jahr}`, '_blank')
+  await openUrl(`${base}/export/gobd?jahr=${jahr}`)
 }
 
 // --- Backup ---
 export async function downloadBackup() {
   const base = await getBaseUrl()
-  window.open(`${base}/backup/download`, '_blank')
+  await openUrl(`${base}/backup/download`)
 }
 
 // --- Nummernkreise ---

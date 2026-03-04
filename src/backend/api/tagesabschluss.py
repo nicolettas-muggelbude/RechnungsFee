@@ -183,7 +183,7 @@ def export_pdf(
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+        headers={"Content-Disposition": f'inline; filename="{dateiname}"'},
     )
 
 

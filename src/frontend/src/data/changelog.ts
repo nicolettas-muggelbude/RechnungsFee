@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'März 2026',
     eintraege: [
       { typ: 'fix', text: 'Windows: PDF-Generierung funktioniert jetzt – DejaVu-Schriften werden aus dem Projektverzeichnis (fonts/) geladen und per PyInstaller ins Backend-Bundle gepackt' },
+      { typ: 'fix', text: 'PDF öffnet sich jetzt in einem einzigen Browser-Tab statt zwei – Content-Disposition auf inline geändert, alle Downloads (PDF, ZIP, JSON, Backup) nutzen jetzt den Systembrowser statt WebView' },
     ],
   },
   {
