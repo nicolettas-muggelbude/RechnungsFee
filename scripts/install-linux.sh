@@ -63,7 +63,7 @@ cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
 Name=RechnungsFee
 Comment=Buchhaltung für Freiberufler & Kleinunternehmer (§19 UStG)
-Exec=env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 $APPIMAGE %u
+Exec=env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 $APPIMAGE %u
 Icon=de.rechnungsfee.app
 Type=Application
 Categories=Office;Finance;Accounting;

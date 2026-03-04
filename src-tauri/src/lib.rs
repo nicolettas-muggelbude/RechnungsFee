@@ -53,12 +53,15 @@ fn kill_backend(state: tauri::State<BackendChild>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Wayland/KDE-Plasma-Fix: GDK auf X11/XWayland zwingen, damit WebKit kein EGL
-    // initialisiert. Verhindert EGL_BAD_PARAMETER-Crash und weiße Fenster auf
-    // Fedora, Bazzite, KDE Plasma und anderen Wayland-Desktops.
+    // Linux-Rendering-Fix: WebKits GPU-Subprocess crasht auf bestimmten Systemen
+    // (AMD + Mesa 26, KDE Plasma/Wayland) mit EGL_BAD_PARAMETER.
+    // GDK_BACKEND allein reicht nicht – WebKit initialisiert EGL unabhängig vom
+    // GTK-Backend in einem eigenen Subprocess.
+    // LIBGL_ALWAYS_SOFTWARE=1 zwingt Mesa auf Software-Rendering (llvmpipe) bevor
+    // irgendjemand GPU-EGL anfasst. Für eine Business-App kein wahrnehmbarer Unterschied.
     #[cfg(target_os = "linux")]
     {
-        std::env::set_var("GDK_BACKEND", "x11");
+        std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
