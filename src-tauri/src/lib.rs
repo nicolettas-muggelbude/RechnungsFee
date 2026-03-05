@@ -106,9 +106,16 @@ pub fn run() {
                     ctx.set_sandbox_enabled(false);
                 }
                 log::info!("WebKit-Sandbox deaktiviert (EGL-Fix)");
-                // (B) DMA-Buffer-Renderer deaktivieren – Content-Prozess erbt Env-Var
+                // (B) GDK_BACKEND=x11 – GDK im Content-Prozess nutzt X11/GLX statt
+                //     Wayland/EGL. Der Crash passiert in GDK's EGL-Init (nicht in
+                //     WebKit's DMABuf-Code), daher greifen WEBKIT_DISABLE_*-Vars nicht.
+                //     GDK im Parent ist bereits initialisiert → Env-Var hat dort keine
+                //     Wirkung, wird aber vom Content-Prozess beim Start geerbt.
+                //     KDE Plasma hat immer XWayland → DISPLAY ist gesetzt.
+                std::env::set_var("GDK_BACKEND", "x11");
+                // DMA-Buffer-Renderer zusätzlich deaktivieren (belt-and-suspenders)
                 std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                log::info!("WEBKIT_DISABLE_DMABUF_RENDERER=1 gesetzt");
+                log::info!("GDK_BACKEND=x11 + WEBKIT_DISABLE_DMABUF_RENDERER=1 gesetzt");
             }
 
             // Hauptfenster programmatisch erstellen.
