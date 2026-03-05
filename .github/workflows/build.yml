@@ -114,6 +114,54 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
 
+      # ── AppImage: GPU-Bibliotheken entfernen (EGL-ABI-Fix) ──────────────────────
+      # Problem: AppImage bündelt libEGL.so aus Ubuntu 22.04 (Mesa 22.x).
+      # Auf Fedora/Bazzite setzt das AppImage diese alte libEGL per LD_LIBRARY_PATH
+      # an erste Stelle. WebKitWebProcess lädt gebündelte Mesa-22-libEGL, die dann
+      # AMD-DRI-Treiber aus dem System (Mesa 26.x) zu laden versucht → ABI-Mismatch
+      # → eglGetDisplay(EGL_DEFAULT_DISPLAY) = EGL_BAD_PARAMETER → Absturz.
+      # Fix: GPU-Bibliotheken aus AppImage entfernen → System-Mesa wird verwendet.
+      - name: AppImage GPU-Bibliotheken patchen (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
+          APPIMAGE="$BASE/RechnungsFee_${V}_amd64.AppImage"
+          SQUASH="${GITHUB_WORKSPACE}/squashfs-root"
+
+          chmod +x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract
+
+          echo "=== GPU-Bibliotheken im AppImage (vor Patch) ==="
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
+               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
+               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
+            -print 2>/dev/null | sort || echo "(keine gefunden)"
+
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
+               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
+               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
+            -delete 2>/dev/null || true
+
+          echo "=== Nach Patch: verbleibende GPU-Libs (sollte leer sein) ==="
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \) \
+            -print 2>/dev/null || echo "(keine – korrekt)"
+
+          wget -qO /tmp/appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool
+          ARCH=x86_64 /tmp/appimagetool --appimage-extract-and-run "$SQUASH" "$APPIMAGE"
+          echo "AppImage neu gepackt: $(du -sh "$APPIMAGE" | cut -f1)"
+
+          gh release upload "${{ github.ref_name }}" "$APPIMAGE" --clobber
+          rm -rf "$SQUASH"
+
       # ── Version-loses AppImage + Desktop-Integrations-Skript hochladen ──────────
       - name: Version-loses AppImage + install-linux.sh hochladen (Linux)
         if: matrix.platform == 'ubuntu-22.04'

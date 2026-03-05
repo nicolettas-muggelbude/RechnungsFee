@@ -1,0 +1,129 @@
+name: Test-AppImage (manuell)
+
+# Manuell auslösbar: GitHub → Actions → "Test-AppImage (manuell)" → Run workflow
+# Ergebnis: gepatchtes AppImage als Artifact (kein Release, kein Tag nötig)
+on:
+  workflow_dispatch:
+
+jobs:
+  build-test-appimage:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Linux-Deps installieren
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev
+
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python-Abhängigkeiten installieren
+        working-directory: src/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Backend-Sidecar bauen
+        run: bash scripts/build-sidecar.sh
+
+      - name: Node.js 22 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Frontend-Abhängigkeiten installieren
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Rust-Toolchain einrichten
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust-Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tauri CLI installieren
+        run: npm install -g @tauri-apps/cli@^2
+
+      # Version temporär auf "test" setzen (kein echtes Tag nötig)
+      - name: Test-Version setzen
+        run: |
+          python -c "
+          import json
+          f = 'src-tauri/tauri.conf.json'
+          d = json.load(open(f))
+          d['version'] = '0.0.0-test'
+          open(f, 'w').write(json.dumps(d, indent=2))
+          "
+
+      - name: Tauri AppImage bauen
+        run: npx tauri build --target x86_64-unknown-linux-gnu --bundles appimage
+        env:
+          # Ohne Signing – Test-Build braucht keine Signatur
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+
+      # ── GPU-Bibliotheken patchen ─────────────────────────────────────────────
+      - name: AppImage GPU-Bibliotheken patchen
+        run: |
+          BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
+          APPIMAGE="$BASE/RechnungsFee_0.0.0-test_amd64.AppImage"
+          SQUASH="${GITHUB_WORKSPACE}/squashfs-root"
+
+          chmod +x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract
+
+          echo "=== GPU-Bibliotheken VOR dem Patch ==="
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
+               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
+               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
+            -print 2>/dev/null | sort || echo "(keine gefunden)"
+
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
+               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
+               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
+            -delete 2>/dev/null || true
+
+          echo "=== GPU-Bibliotheken NACH dem Patch (sollte leer sein) ==="
+          find "$SQUASH/usr/lib" -maxdepth 1 \
+            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \) \
+            -print 2>/dev/null || echo "(keine – korrekt)"
+
+          wget -qO /tmp/appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool
+          ARCH=x86_64 /tmp/appimagetool --appimage-extract-and-run "$SQUASH" "$APPIMAGE"
+          echo "Gepatchtes AppImage: $(du -sh "$APPIMAGE" | cut -f1)"
+
+          cp "$APPIMAGE" "$BASE/RechnungsFee-test-patched.AppImage"
+          rm -rf "$SQUASH"
+
+      # ── Ungepatchtes AppImage als Vergleich ──────────────────────────────────
+      # (Das Original wurde durch das Repacking überschrieben, daher beide aus dem Patch-Schritt)
+
+      - name: AppImages als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-appimage-patched
+          path: |
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/RechnungsFee-test-patched.AppImage
+          retention-days: 3
