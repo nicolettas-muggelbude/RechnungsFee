@@ -86,15 +86,33 @@ pub fn run() {
             app.manage(BackendChild(Mutex::new(Some(child))));
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
 
+            // Linux: Sandbox + EGL deaktivieren BEVOR das Fenster erstellt wird.
+            //
+            // Problem: WebKit initialisiert EGL im Content-Prozess beim Start für
+            // Platform-Detection und DMA-Buffer-Support – UNABHÄNGIG von
+            // HardwareAccelerationPolicy::Never. Auf AMD + Mesa 26.0.1 schlägt
+            // eglGetDisplay(EGL_DEFAULT_DISPLAY) mit EGL_BAD_PARAMETER fehl.
+            //
+            // Zwei Ursachen möglich:
+            // (A) WebKit-Sandbox blockiert DRM-Device-Zugriff → EGL_BAD_PARAMETER statt
+            //     graceful fallback → set_sandbox_enabled(false) behebt das.
+            // (B) WebKit initialisiert DMA-Buffer-Renderer → WEBKIT_DISABLE_DMABUF_RENDERER=1
+            //     verhindert den EGL-Aufruf im Content-Prozess.
+            #[cfg(target_os = "linux")]
+            {
+                use webkit2gtk::{WebContext, WebContextExt};
+                // (A) Sandbox deaktivieren
+                if let Some(ctx) = WebContext::default() {
+                    ctx.set_sandbox_enabled(false);
+                }
+                log::info!("WebKit-Sandbox deaktiviert (EGL-Fix)");
+                // (B) DMA-Buffer-Renderer deaktivieren – Content-Prozess erbt Env-Var
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                log::info!("WEBKIT_DISABLE_DMABUF_RENDERER=1 gesetzt");
+            }
+
             // Hauptfenster programmatisch erstellen.
             // Schlüssel: Fenster wird IN setup() erstellt, NICHT aus tauri.conf.json.
-            // Dadurch kann HardwareAccelerationPolicy::Never synchron auf dem Main-Thread
-            // gesetzt werden, bevor der GTK-Event-Loop die URL-Ladung verarbeitet.
-            //
-            // Vorher-Problem: Fenster aus tauri.conf.json → WebKit-Content-Prozess spawnte
-            // BEVOR setup() lief → EGL_BAD_PARAMETER (Mesa 26 + AMD) nicht vermeidbar.
-            // Jetzt: build() in setup() → with_webview() synchron auf Main-Thread →
-            // Policy gesetzt → Event-Loop startet → URL-Ladung → Content-Prozess ohne EGL.
             let main_window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
