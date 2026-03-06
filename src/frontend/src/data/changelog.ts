@@ -26,7 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.30',
     datum: 'März 2026',
     eintraege: [
-      { typ: 'fix', text: 'Linux: Weißes Fenster / EGL-Absturz auf Fedora/Bazzite mit AMD GPU + Mesa 26 behoben – gebündelte GPU-Bibliotheken (libEGL, libGL, libgbm, libdrm) aus dem AppImage entfernt; das System liefert jetzt die Mesa-26-kompatiblen Versionen statt des inkompatiblen Ubuntu-22-Bündels' },
+      { typ: 'fix', text: 'Linux: Weißes Fenster / EGL-Absturz auf Fedora/Bazzite mit AMD GPU behoben – LD_PRELOAD-Shim fängt fehlschlagendes eglGetDisplay() ab (AMD EACCES auf /dev/dri/renderD128) und verhindert den webkit2gtk-g_error(); WebKit fällt auf Software-Rendering zurück' },
     ],
   },
   {

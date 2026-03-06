@@ -114,6 +114,16 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
 
+      # ── EGL-Shim kompilieren ────────────────────────────────────────────────────
+      - name: EGL-Shim kompilieren (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          gcc -shared -fPIC -O2 \
+            -o src-tauri/egl_shim.so \
+            src-tauri/egl_shim/egl_shim.c \
+            -ldl
+          echo "EGL-Shim gebaut: $(file src-tauri/egl_shim.so)"
+
       # ── AppImage: GPU-Bibliotheken entfernen (EGL-ABI-Fix) ──────────────────────
       # Problem: AppImage bündelt libEGL.so aus Ubuntu 22.04 (Mesa 22.x).
       # Auf Fedora/Bazzite setzt das AppImage diese alte libEGL per LD_LIBRARY_PATH
@@ -152,6 +162,10 @@ jobs:
           find "$SQUASH/usr/lib" -maxdepth 1 \
             \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \) \
             -print 2>/dev/null || echo "(keine – korrekt)"
+
+          # EGL-Shim ins AppImage einbetten
+          cp "${GITHUB_WORKSPACE}/src-tauri/egl_shim.so" "$SQUASH/usr/lib/egl_shim.so"
+          echo "EGL-Shim eingefügt: $(ls -lh "$SQUASH/usr/lib/egl_shim.so")"
 
           wget -qO /tmp/appimagetool \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
