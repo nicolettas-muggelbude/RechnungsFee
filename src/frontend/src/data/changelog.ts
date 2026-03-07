@@ -26,7 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.30',
     datum: 'März 2026',
     eintraege: [
-      { typ: 'fix', text: 'Linux: Weißes Fenster / EGL-Absturz auf Fedora/Bazzite mit AMD GPU behoben – LD_PRELOAD-Shim fängt fehlschlagendes eglGetDisplay() ab (AMD EACCES auf /dev/dri/renderD128) und verhindert den webkit2gtk-g_error(); WebKit fällt auf Software-Rendering zurück' },
+      { typ: 'fix', text: 'Linux: Weißes Fenster / GStreamer-Absturz auf Fedora, Bazzite und anderen neueren Distros behoben – gebündelte webkit2gtk- und GStreamer-Bibliotheken aus Ubuntu 22.04 werden jetzt aus dem AppImage entfernt; System-webkit2gtk und System-GStreamer werden stattdessen verwendet (kein Konflikt mehr zwischen alter und neuer GStreamer-Version)' },
     ],
   },
   {

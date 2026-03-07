@@ -80,17 +80,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
 
-      # ── EGL-Shim kompilieren ────────────────────────────────────────────────
-      - name: EGL-Shim kompilieren
-        run: |
-          gcc -shared -fPIC -O2 \
-            -o src-tauri/egl_shim.so \
-            src-tauri/egl_shim/egl_shim.c \
-            -ldl
-          echo "EGL-Shim gebaut: $(file src-tauri/egl_shim.so)"
-
-      # ── GPU-Bibliotheken patchen ─────────────────────────────────────────────
-      - name: AppImage GPU-Bibliotheken patchen
+      # ── usr/lib/ entfernen (System-Bibliotheken statt gebündelter verwenden) ──
+      # Problem: linuxdeploy bündelt webkit2gtk + GStreamer aus Ubuntu 22.04.
+      # Auf neueren Distros (Fedora, Bazzite) kollidieren diese mit den System-
+      # Bibliotheken → "undefined symbol: gst_video_is_dma_drm_caps" → Absturz.
+      # Fix: usr/lib/ komplett entfernen → System-webkit2gtk + System-GStreamer.
+      - name: AppImage Bibliotheken entbündeln
         run: |
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
           APPIMAGE="$BASE/RechnungsFee_0.0.0-test_amd64.AppImage"
@@ -99,44 +94,26 @@ jobs:
           chmod +x "$APPIMAGE"
           "$APPIMAGE" --appimage-extract
 
-          echo "=== GPU-Bibliotheken VOR dem Patch ==="
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
-               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
-               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
-            -print 2>/dev/null | sort || echo "(keine gefunden)"
+          echo "=== usr/lib vor dem Entfernen ==="
+          du -sh "$SQUASH/usr/lib/" 2>/dev/null || echo "(leer)"
+          ls "$SQUASH/usr/lib/" 2>/dev/null | head -20 || true
 
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
-               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
-               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
-            -delete 2>/dev/null || true
-
-          echo "=== GPU-Bibliotheken NACH dem Patch (sollte leer sein) ==="
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \) \
-            -print 2>/dev/null || echo "(keine – korrekt)"
-
-          # EGL-Shim ins AppImage einbetten
-          cp "${GITHUB_WORKSPACE}/src-tauri/egl_shim.so" "$SQUASH/usr/lib/egl_shim.so"
-          echo "EGL-Shim eingefügt: $(ls -lh "$SQUASH/usr/lib/egl_shim.so")"
+          rm -rf "$SQUASH/usr/lib/"
+          echo "=== usr/lib/ entfernt – System-Bibliotheken werden verwendet ==="
 
           wget -qO /tmp/appimagetool \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x /tmp/appimagetool
           ARCH=x86_64 /tmp/appimagetool --appimage-extract-and-run "$SQUASH" "$APPIMAGE"
-          echo "Gepatchtes AppImage: $(du -sh "$APPIMAGE" | cut -f1)"
+          echo "AppImage neu gepackt: $(du -sh "$APPIMAGE" | cut -f1)"
 
-          cp "$APPIMAGE" "$BASE/RechnungsFee-test-patched.AppImage"
+          cp "$APPIMAGE" "$BASE/RechnungsFee-test.AppImage"
           rm -rf "$SQUASH"
 
-      # ── Ungepatchtes AppImage als Vergleich ──────────────────────────────────
-      # (Das Original wurde durch das Repacking überschrieben, daher beide aus dem Patch-Schritt)
-
-      - name: AppImages als Artifact hochladen
+      - name: AppImage als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: test-appimage-patched
+          name: test-appimage
           path: |
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/RechnungsFee-test-patched.AppImage
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/RechnungsFee-test.AppImage
           retention-days: 3

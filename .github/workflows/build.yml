@@ -114,24 +114,15 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
 
-      # ── EGL-Shim kompilieren ────────────────────────────────────────────────────
-      - name: EGL-Shim kompilieren (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          gcc -shared -fPIC -O2 \
-            -o src-tauri/egl_shim.so \
-            src-tauri/egl_shim/egl_shim.c \
-            -ldl
-          echo "EGL-Shim gebaut: $(file src-tauri/egl_shim.so)"
-
-      # ── AppImage: GPU-Bibliotheken entfernen (EGL-ABI-Fix) ──────────────────────
-      # Problem: AppImage bündelt libEGL.so aus Ubuntu 22.04 (Mesa 22.x).
-      # Auf Fedora/Bazzite setzt das AppImage diese alte libEGL per LD_LIBRARY_PATH
-      # an erste Stelle. WebKitWebProcess lädt gebündelte Mesa-22-libEGL, die dann
-      # AMD-DRI-Treiber aus dem System (Mesa 26.x) zu laden versucht → ABI-Mismatch
-      # → eglGetDisplay(EGL_DEFAULT_DISPLAY) = EGL_BAD_PARAMETER → Absturz.
-      # Fix: GPU-Bibliotheken aus AppImage entfernen → System-Mesa wird verwendet.
-      - name: AppImage GPU-Bibliotheken patchen (Linux)
+      # ── AppImage: gebündelte Bibliotheken entfernen ──────────────────────────────
+      # Problem: linuxdeploy bündelt webkit2gtk + GStreamer aus Ubuntu 22.04.
+      # Auf neueren Distros (Fedora, Bazzite) kollidieren diese mit den System-
+      # Bibliotheken: System-webkit2gtk braucht gst_video_is_dma_drm_caps
+      # (GStreamer 1.24+), findet aber die gebündelte ältere Version → Absturz.
+      # Fix: usr/lib/ komplett entfernen → System-webkit2gtk + System-GStreamer
+      # + System-Mesa werden genutzt (getestet, funktioniert).
+      # install-linux.sh stellt sicher dass die nötigen Pakete installiert sind.
+      - name: AppImage Bibliotheken entbündeln (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -145,27 +136,13 @@ jobs:
           chmod +x "$APPIMAGE"
           "$APPIMAGE" --appimage-extract
 
-          echo "=== GPU-Bibliotheken im AppImage (vor Patch) ==="
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
-               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
-               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
-            -print 2>/dev/null | sort || echo "(keine gefunden)"
+          echo "=== usr/lib vor dem Entfernen ==="
+          du -sh "$SQUASH/usr/lib/" 2>/dev/null || echo "(leer)"
+          ls "$SQUASH/usr/lib/" 2>/dev/null | head -20 || true
 
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \
-               -o -name "libGLdispatch*.so*" -o -name "libGLESv2*.so*" \
-               -o -name "libgbm*.so*" -o -name "libdrm*.so*" \) \
-            -delete 2>/dev/null || true
-
-          echo "=== Nach Patch: verbleibende GPU-Libs (sollte leer sein) ==="
-          find "$SQUASH/usr/lib" -maxdepth 1 \
-            \( -name "libEGL*.so*" -o -name "libGL*.so*" -o -name "libGLX*.so*" \) \
-            -print 2>/dev/null || echo "(keine – korrekt)"
-
-          # EGL-Shim ins AppImage einbetten
-          cp "${GITHUB_WORKSPACE}/src-tauri/egl_shim.so" "$SQUASH/usr/lib/egl_shim.so"
-          echo "EGL-Shim eingefügt: $(ls -lh "$SQUASH/usr/lib/egl_shim.so")"
+          # Alle gebündelten Bibliotheken entfernen
+          rm -rf "$SQUASH/usr/lib/"
+          echo "=== usr/lib/ entfernt – System-Bibliotheken werden verwendet ==="
 
           wget -qO /tmp/appimagetool \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
