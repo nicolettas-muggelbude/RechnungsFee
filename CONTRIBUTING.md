@@ -202,7 +202,7 @@ cd RechnungsFee
 # pip install -r requirements.txt (Backend)
 
 # Development Server starten (Details folgen)
-# npm run dev
+# npx run dev
 ```
 
 ---
