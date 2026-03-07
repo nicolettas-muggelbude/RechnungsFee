@@ -139,7 +139,7 @@ bash scripts/build-sidecar.sh      # Linux
 # pwsh scripts/build-sidecar.ps1  # Windows
 
 cd src/frontend
-npm run tauri dev
+npx run tauri dev
 ```
 
 ---
