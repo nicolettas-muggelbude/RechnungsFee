@@ -402,8 +402,8 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
             {rechnungen.map((r, i) => (
               <div key={i} className="text-xs bg-slate-50 rounded px-2 py-1.5 flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-medium text-slate-700">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</div>
-                  {r.kunde_name && <div className="text-slate-500">{r.kunde_name}</div>}
+                  <span className="font-medium text-slate-700">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</span>
+                  {r.kunde_name && <span className="text-slate-500 ms-2">{r.kunde_name}</span>}
                 </div>
                 <div className="text-slate-400 text-right shrink-0">
                   <div>{r.menge} {r.einheit}</div>
