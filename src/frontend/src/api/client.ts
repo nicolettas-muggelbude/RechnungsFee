@@ -283,6 +283,8 @@ export const getMonatsUebersicht = (monat: string) =>
   request<MonatsUebersicht>(`/kassenbuch/statistik/monat?monat=${encodeURIComponent(monat)}`)
 export const getNaechsteBelegnr = (datum?: string) =>
   request<{ belegnr: string }>(`/kassenbuch/naechste-belegnr${datum ? `?datum=${datum}` : ''}`)
+export const getKassenstand = () =>
+  request<{ kassenstand: string }>('/kassenbuch/kassenstand')
 
 // --- Tagesabschluss ---
 export type Tagesabschluss = {

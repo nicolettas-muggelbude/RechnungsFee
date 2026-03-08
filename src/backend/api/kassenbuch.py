@@ -69,6 +69,23 @@ def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]
     return netto, ust_betrag
 
 
+def _get_kassenstand(db: Session) -> Decimal:
+    """Gibt den aktuellen Kassenstand zurück (Summe aller Einnahmen minus Ausgaben)."""
+    einnahmen = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
+        Kassenbucheintrag.art == "Einnahme"
+    ).scalar() or Decimal("0")
+    ausgaben = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
+        Kassenbucheintrag.art == "Ausgabe"
+    ).scalar() or Decimal("0")
+    return Decimal(str(einnahmen)) - Decimal(str(ausgaben))
+
+
+@router.get("/kassenstand")
+def get_kassenstand(db: Session = Depends(get_db)):
+    """Gibt den aktuellen Kassenstand zurück."""
+    return {"kassenstand": str(_get_kassenstand(db))}
+
+
 @router.get("/naechste-belegnr")
 def naechste_belegnr(datum: date = Query(default=None), db: Session = Depends(get_db)):
     """Gibt die nächste freie Belegnummer zurück."""
@@ -179,6 +196,15 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
 
+    # Kassenstand-Prüfung: Ausgabe darf den aktuellen Kassenstand nicht übersteigen
+    if data.art == "Ausgabe":
+        kassenstand = _get_kassenstand(db)
+        if data.brutto_betrag > kassenstand:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {data.brutto_betrag:.2f} €.",
+            )
+
     netto, ust_betrag = _berechne_ust(data.brutto_betrag, ust_satz)
     belegnr = _naechste_belegnr(db, data.datum)
 
@@ -209,6 +235,16 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
 @router.post("/split", response_model=list[KassenbuchEintragResponse], status_code=201)
 def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
     """Erstellt mehrere Kassenbucheinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
+    # Kassenstand-Prüfung für Split-Ausgaben (Gesamtbetrag aller Positionen)
+    if data.art == "Ausgabe":
+        gesamt = sum(pos.brutto_betrag for pos in data.positionen)
+        kassenstand = _get_kassenstand(db)
+        if gesamt > kassenstand:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe gesamt: {gesamt:.2f} €.",
+            )
+
     unternehmen = db.query(Unternehmen).first()
     ergebnisse = []
     for pos in data.positionen:

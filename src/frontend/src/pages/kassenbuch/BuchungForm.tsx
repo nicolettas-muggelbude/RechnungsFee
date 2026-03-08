@@ -10,6 +10,7 @@ import {
   getKategorien,
   getKunden,
   getUnternehmen,
+  getKassenstand,
 } from '../../api/client'
 
 // ---------------------------------------------------------------------------
@@ -78,8 +79,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+  const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
 
   const istKleinunternehmer = unternehmen?.ist_kleinunternehmer ?? false
+  const kassenstand = parseFloat(kassenstandData?.kassenstand ?? '0')
 
   // --- Einfache Buchung ---
   const {
@@ -129,6 +132,12 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const kategorie_id = watch('kategorie_id')
   const artSplit = watchS('art')
   const positionenSplit = watchS('positionen')
+
+  // Kassenstand-Prüfung
+  const bruttoSingle = parseFloat(bruttoStr ?? '0') || 0
+  const bruttoSplit = positionenSplit?.reduce((s, p) => s + (parseFloat(p.brutto_betrag) || 0), 0) ?? 0
+  const kassenstandUeberschrittenSingle = art === 'Ausgabe' && bruttoSingle > kassenstand && kassenstand >= 0
+  const kassenstandUeberschrittenSplit = artSplit === 'Ausgabe' && bruttoSplit > kassenstand && kassenstand >= 0
 
   // Beim Umschalten: gemeinsame Felder synchronisieren
   function toggleSplit(ein: boolean) {
@@ -276,6 +285,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kassenbuch'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
+      qc.invalidateQueries({ queryKey: ['kassenstand'] })
       onSuccess()
     },
   })
@@ -285,6 +295,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kassenbuch'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
+      qc.invalidateQueries({ queryKey: ['kassenstand'] })
       onSuccess()
     },
   })
@@ -589,6 +600,16 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </label>
             )}
 
+            {kassenstandUeberschrittenSingle && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
+                <span className="mt-0.5 shrink-0">⛔</span>
+                <span>
+                  <strong>Kassenstand nicht ausreichend.</strong> Aktueller Kassenstand:{' '}
+                  {formatEuro(kassenstand)} – Ausgabe: {formatEuro(bruttoSingle)}
+                </span>
+              </div>
+            )}
+
             {singleMutation.isError && (
               <p className="text-red-600 text-sm">{(singleMutation.error as Error).message}</p>
             )}
@@ -603,7 +624,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || kassenstandUeberschrittenSingle}
                 className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
               >
                 {isPending ? 'Speichert…' : 'Buchung speichern'}
@@ -893,6 +914,16 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               )}
             </div>
 
+            {kassenstandUeberschrittenSplit && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
+                <span className="mt-0.5 shrink-0">⛔</span>
+                <span>
+                  <strong>Kassenstand nicht ausreichend.</strong> Aktueller Kassenstand:{' '}
+                  {formatEuro(kassenstand)} – Ausgabe gesamt: {formatEuro(bruttoSplit)}
+                </span>
+              </div>
+            )}
+
             {splitMutation.isError && (
               <p className="text-red-600 text-sm">{(splitMutation.error as Error).message}</p>
             )}
@@ -907,7 +938,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || kassenstandUeberschrittenSplit}
                 className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
               >
                 {isPending ? 'Speichert…' : `${fields.length} Positionen speichern`}
