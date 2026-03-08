@@ -451,6 +451,7 @@ export const getNummernkreisVorschau = (id: number, format: string) =>
 export type Rechnungsposition = {
   id: number
   artikel_id: number | null
+  artikel_typ: string | null
   position_nr: number
   beschreibung: string
   menge: string

@@ -46,6 +46,7 @@ class RechnungspositionCreate(BaseModel):
 class RechnungspositionResponse(BaseModel):
     id: int
     artikel_id: Optional[int] = None
+    artikel_typ: Optional[str] = None
     position_nr: int
     beschreibung: str
     menge: Decimal
@@ -162,6 +163,9 @@ class RechnungResponse(BaseModel):
     @classmethod
     def from_orm_extended(cls, obj) -> "RechnungResponse":
         data = cls.model_validate(obj)
+        for pos_data, pos_orm in zip(data.positionen, obj.positionen):
+            if pos_orm.artikel:
+                pos_data.artikel_typ = pos_orm.artikel.typ
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None

@@ -79,8 +79,10 @@ function KundeRechnungen({ kunde }: { kunde: Kunde }) {
                   <div key={p.id} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0 text-xs">
                     <span className="text-slate-700 min-w-0">
                       {p.beschreibung}
-                      {p.artikel_id && (
-                        <span className="ms-1 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">Artikel</span>
+                      {p.artikel_typ && (
+                        <span className="ms-1 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">
+                          {p.artikel_typ === 'artikel' ? 'Artikel' : p.artikel_typ === 'dienstleistung' ? 'Dienstl.' : 'Fremdl.'}
+                        </span>
                       )}
                     </span>
                     <span className="text-slate-500 shrink-0">{formatEuro(p.brutto)}</span>
