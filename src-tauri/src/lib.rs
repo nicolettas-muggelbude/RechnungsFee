@@ -19,16 +19,24 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
 /// PyInstaller --onefile startet auf Windows zwei Prozesse (Bootloader + Python-Child).
 /// child.kill() tötet nur den Parent → Child läuft weiter.
 /// Lösung: zuerst taskkill /F /T /PID (killt ganzen Baum), dann Handle droppen.
-fn kill_backend_inner(child: CommandChild) {
+///
+/// wait=true  → output() – blockiert bis taskkill abgeschlossen ist (IPC vor exit(0))
+/// wait=false → spawn()  – non-blocking (CloseRequested / RunEvent::Exit)
+fn kill_backend_inner(child: CommandChild, wait: bool) {
     #[cfg(target_os = "windows")]
     {
         let pid = child.pid();
-        // Handle freigeben OHNE kill() – taskkill übernimmt den ganzen Baum atomisch
         drop(child);
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/T", "/PID", &pid.to_string()])
-            .spawn();  // spawn statt output – nicht auf Abschluss warten
-        log::info!("Backend-Prozessbaum (PID {}) per taskkill /T beendet", pid);
+        if wait {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .output();  // blockiert bis Backend-Prozessbaum beendet ist
+        } else {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .spawn();
+        }
+        log::info!("Backend-Prozessbaum (PID {}) per taskkill /T beendet (wait={})", pid, wait);
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -43,11 +51,11 @@ fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
     app.shell().open(&url, None).map_err(|e| e.to_string())
 }
 
-/// IPC-Command: wird vom Frontend beim Schließen und vor dem Update-Exit aufgerufen
+/// IPC-Command: vom Frontend vor exit(0) aufgerufen – wartet bis Backend wirklich beendet ist
 #[tauri::command]
 fn kill_backend(state: tauri::State<BackendChild>) {
     if let Some(child) = state.0.lock().unwrap().take() {
-        kill_backend_inner(child);
+        kill_backend_inner(child, true);  // wait=true: taskkill fertig bevor IPC zurückgibt
     }
 }
 
@@ -155,7 +163,7 @@ pub fn run() {
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
                     if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
-                        kill_backend_inner(child);
+                        kill_backend_inner(child, false);  // non-blocking: UI soll nicht einfrieren
                     }
                 }
             });
@@ -169,7 +177,7 @@ pub fn run() {
             // Fallback: Falls CloseRequested nicht gefeuert hat (z.B. kein Hauptfenster)
             if let tauri::RunEvent::Exit = event {
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
-                    kill_backend_inner(child);
+                    kill_backend_inner(child, false);  // non-blocking Fallback
                 }
             }
         });

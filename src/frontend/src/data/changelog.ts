@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.31',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: backend.exe wird beim Auto-Update jetzt zuverlässig beendet – taskkill wartet auf vollständige Beendigung bevor der NSIS-Installer startet (output() statt spawn())' },
+      { typ: 'fix', text: 'Kassenbuch: Bar-Ausgabe die den Kassenstand übersteigt wird jetzt abgelehnt – rotes Banner und gesperrter Speichern-Button (gilt nur für Barkasse, nicht für Karte/Bank/PayPal)' },
+    ],
+  },
+  {
     version: 'v0.1.30',
     datum: 'März 2026',
     eintraege: [
