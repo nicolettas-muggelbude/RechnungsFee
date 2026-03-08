@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Rechnungs-PDF: Standard-Zahlungshinweis (IBAN-Überweisungstext) kann in Unternehmen → Rechnungs-PDF deaktiviert werden – Notizfeld bleibt immer zusätzlich sichtbar (Issue #24)' },
       { typ: 'verbesserung', text: 'Kundenstamm: Split-View mit Suchleiste, vollständiger Tabelle, Stammdaten-Karte bei Klick und schmalem Rechnungspanel rechts' },
       { typ: 'fix', text: 'Kundenstamm: Artikel-Typ-Badge in Rechnungspositionen zeigt jetzt korrekt „Artikel", „Dienstl." oder „Fremdl." statt immer „Artikel"' },
+      { typ: 'fix', text: 'Kassenbuch: Bar-Ausgabe die den Kassenstand ins Minus treibt wird jetzt abgelehnt – rotes Banner und gesperrter Speichern-Button (gilt nur für Barkasse, nicht für Karte/Bank/PayPal)' },
     ],
   },
   {
