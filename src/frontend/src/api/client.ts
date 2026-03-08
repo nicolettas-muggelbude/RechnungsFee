@@ -661,8 +661,12 @@ export type ArtikelCreate = {
 
 export type ArtikelUpdate = Partial<ArtikelCreate> & { aktiv?: boolean }
 
-export const getArtikel = (params?: { aktiv?: boolean; typ?: string }) =>
-  request<Artikel[]>(`/artikel${toQuery(params ?? {})}`)
+export const getArtikel = (params?: { aktiv?: boolean; typ?: string }) => {
+  const q: Record<string, string | number | undefined> = {}
+  if (params?.aktiv !== undefined) q.aktiv = String(params.aktiv)
+  if (params?.typ !== undefined) q.typ = params.typ
+  return request<Artikel[]>(`/artikel${toQuery(q)}`)
+}
 export const sucheArtikel = (q: string) =>
   request<ArtikelSuche[]>(`/artikel/suche?q=${encodeURIComponent(q)}`)
 export const createArtikel = (data: ArtikelCreate) =>
