@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -27,6 +27,58 @@ const TYP_FARBEN: Record<ArtikelTyp, string> = {
 function hatEK(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'fremdleistung' }
 function hatLieferant(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'dienstleistung' || typ === 'fremdleistung' }
 function hatHersteller(typ: ArtikelTyp) { return typ === 'artikel' }
+
+// ---------------------------------------------------------------------------
+// Einheit-Auswahl (Dropdown + Freitext-Fallback)
+// ---------------------------------------------------------------------------
+
+const EINHEITEN = ['Stück', 'Pack', 'Set', 'Lizenz', 'Stunde', 'Tag', 'Monat', 'Pauschal', 'km', 'm²']
+
+function EinheitAuswahl({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const istBekannt = EINHEITEN.includes(value)
+  const [freitext, setFreitext] = useState(!istBekannt)
+
+  useEffect(() => {
+    if (EINHEITEN.includes(value)) setFreitext(false)
+  }, [value])
+
+  if (freitext) {
+    return (
+      <div className="flex items-center gap-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 border-0 outline-none bg-transparent text-slate-700 min-w-0"
+          placeholder="Einheit eingeben"
+        />
+        <button
+          type="button"
+          title="Zur Liste zurück"
+          onClick={() => { setFreitext(false); onChange('Stück') }}
+          className="text-slate-300 hover:text-slate-500 shrink-0 leading-none"
+        >
+          ↩
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === '__freitext__') { setFreitext(true); onChange('') }
+        else onChange(e.target.value)
+      }}
+      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
+      <option value="__freitext__">Freitext…</option>
+    </select>
+  )
+}
+
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -68,7 +120,7 @@ function ArtikelFormModal({
   const qc = useQueryClient()
   const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: initial ? {
       typ: initial.typ,
@@ -152,7 +204,7 @@ function ArtikelFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Einheit *</label>
-              <input {...register('einheit')} placeholder="Stunden, Stück, Pauschal …" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <EinheitAuswahl value={watch('einheit') ?? ''} onChange={(v) => setValue('einheit', v, { shouldValidate: true })} />
               {errors.einheit && <p className="text-red-600 text-xs mt-1">{errors.einheit.message}</p>}
             </div>
             <div>
