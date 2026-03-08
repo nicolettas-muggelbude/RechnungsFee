@@ -13,27 +13,27 @@ import {
 // ---------------------------------------------------------------------------
 
 const TYP_LABELS: Record<ArtikelTyp, string> = {
-  eigenleistung: 'Eigenleistung',
+  artikel: 'Artikel',
   dienstleistung: 'Dienstleistung',
   fremdleistung: 'Fremdleistung',
 }
 
 const TYP_FARBEN: Record<ArtikelTyp, string> = {
-  eigenleistung: 'bg-green-100 text-green-700',
+  artikel: 'bg-green-100 text-green-700',
   dienstleistung: 'bg-blue-100 text-blue-700',
   fremdleistung: 'bg-purple-100 text-purple-700',
 }
 
-function hatEK(typ: ArtikelTyp) { return typ === 'dienstleistung' || typ === 'fremdleistung' }
-function hatLieferant(typ: ArtikelTyp) { return typ === 'dienstleistung' || typ === 'fremdleistung' }
-function hatHersteller(typ: ArtikelTyp) { return typ === 'dienstleistung' }
+function hatEK(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'fremdleistung' }
+function hatLieferant(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'dienstleistung' || typ === 'fremdleistung' }
+function hatHersteller(typ: ArtikelTyp) { return typ === 'artikel' }
 
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
 
 const schema = z.object({
-  typ: z.enum(['eigenleistung', 'dienstleistung', 'fremdleistung']),
+  typ: z.enum(['artikel', 'dienstleistung', 'fremdleistung']),
   bezeichnung: z.string().min(1, 'Bezeichnung erforderlich'),
   einheit: z.string().min(1, 'Einheit erforderlich'),
   steuersatz: z.enum(['0', '7', '19']),
@@ -84,9 +84,9 @@ function ArtikelFormModal({
       beschreibung: initial.beschreibung ?? '',
       kategorie: initial.kategorie ?? '',
     } : {
-      typ: 'eigenleistung',
+      typ: 'artikel',
       steuersatz: '19',
-      einheit: 'Stunden',
+      einheit: 'Stück',
     },
   })
 
@@ -128,7 +128,7 @@ function ArtikelFormModal({
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Typ</label>
             <div className="flex gap-2">
-              {(['eigenleistung', 'dienstleistung', 'fremdleistung'] as ArtikelTyp[]).map(t => (
+              {(['artikel', 'dienstleistung', 'fremdleistung'] as ArtikelTyp[]).map(t => (
                 <label key={t} className="flex-1 cursor-pointer">
                   <input type="radio" value={t} {...register('typ')} className="sr-only" />
                   <div className={`text-center py-1.5 rounded-lg border-2 text-xs font-medium transition-colors ${
@@ -416,7 +416,7 @@ export function ArtikelPage() {
           />
           <div className="flex gap-2 flex-wrap">
             {/* Typ-Filter */}
-            {(['', 'eigenleistung', 'dienstleistung', 'fremdleistung'] as const).map(t => (
+            {(['', 'artikel', 'dienstleistung', 'fremdleistung'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTypFilter(t)}

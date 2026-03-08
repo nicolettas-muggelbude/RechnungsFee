@@ -9,7 +9,7 @@ from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -194,6 +194,13 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 4"))
             conn.commit()
             print("[Migration] Schema auf Version 4 gebracht (Artikelstamm)")
+
+        if version < 5:
+            # Typ-Umbenennung: eigenleistung → artikel
+            conn.execute(text("UPDATE artikel SET typ = 'artikel' WHERE typ = 'eigenleistung'"))
+            conn.execute(text("PRAGMA user_version = 5"))
+            conn.commit()
+            print("[Migration] Schema auf Version 5 gebracht (eigenleistung → artikel)")
 
 
 def _migrate_kategorien() -> None:

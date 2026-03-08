@@ -594,7 +594,7 @@ export async function getRechnungPdf(id: number): Promise<Blob> {
 }
 
 // --- Artikelstamm ---
-export type ArtikelTyp = 'eigenleistung' | 'dienstleistung' | 'fremdleistung'
+export type ArtikelTyp = 'artikel' | 'dienstleistung' | 'fremdleistung'
 
 export type Artikel = {
   id: number

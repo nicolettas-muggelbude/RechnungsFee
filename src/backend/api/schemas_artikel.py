@@ -6,7 +6,7 @@ from typing import Optional
 from pydantic import BaseModel, field_validator, model_validator
 
 
-GUELTIGE_TYPEN = {"eigenleistung", "dienstleistung", "fremdleistung"}
+GUELTIGE_TYPEN = {"artikel", "dienstleistung", "fremdleistung"}
 
 
 class ArtikelCreate(BaseModel):

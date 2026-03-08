@@ -271,7 +271,7 @@ class Artikel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     artikelnummer: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    typ: Mapped[str] = mapped_column(String(20), nullable=False)  # eigenleistung|dienstleistung|fremdleistung
+    typ: Mapped[str] = mapped_column(String(20), nullable=False)  # artikel|dienstleistung|fremdleistung
     bezeichnung: Mapped[str] = mapped_column(String(200), nullable=False)
     einheit: Mapped[str] = mapped_column(String(50), nullable=False, default="Stück")
     steuersatz: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=19)
