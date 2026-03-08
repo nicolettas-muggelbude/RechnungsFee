@@ -24,18 +24,10 @@ function kundeName(k: Kunde): string {
 }
 
 // ---------------------------------------------------------------------------
-// Detail-Panel
+// Rechts: Rechnungspanel
 // ---------------------------------------------------------------------------
 
-function KundeDetail({
-  kunde,
-  onEdit,
-  onDelete,
-}: {
-  kunde: Kunde
-  onEdit: () => void
-  onDelete: () => void
-}) {
+function KundeRechnungen({ kunde }: { kunde: Kunde }) {
   const [offeneRechnung, setOffeneRechnung] = useState<number | null>(null)
 
   const { data: rechnungen, isLoading } = useQuery({
@@ -44,138 +36,60 @@ function KundeDetail({
     staleTime: 1000 * 60,
   })
 
-  const adresse = [
-    kunde.strasse && kunde.hausnummer ? `${kunde.strasse} ${kunde.hausnummer}` : kunde.strasse,
-    kunde.plz && kunde.ort ? `${kunde.plz} ${kunde.ort}` : kunde.ort,
-    kunde.land !== 'DE' ? kunde.land : undefined,
-  ].filter(Boolean).join(', ')
-
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-100 shrink-0">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              {kunde.ist_verein && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Verein</span>
-              )}
-              {kunde.ist_gemeinnuetzig && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Gemeinnützig</span>
-              )}
-            </div>
-            <h3 className="font-bold text-slate-800 text-base">{kundeName(kunde)}</h3>
-            {kunde.kundennummer && (
-              <p className="text-xs text-slate-400 font-mono">{kunde.kundennummer}</p>
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-slate-200 shrink-0">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          Rechnungen ({rechnungen?.length ?? '…'})
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+        {isLoading && <p className="text-xs text-slate-400 p-1">Lade…</p>}
+        {!isLoading && !rechnungen?.length && (
+          <p className="text-xs text-slate-400 p-1">Noch keine Ausgangsrechnungen.</p>
+        )}
+        {rechnungen?.map((r: Rechnung) => (
+          <div key={r.id} className="border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setOffeneRechnung(offeneRechnung === r.id ? null : r.id)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 text-left gap-2"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-mono text-slate-400 shrink-0">{r.rechnungsnummer ?? '—'}</span>
+                  <span className="font-semibold text-slate-700">{formatEuro(r.brutto_gesamt)}</span>
+                </div>
+                <div className="text-slate-400">{formatDatum(r.datum)}</div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${
+                  r.zahlungsstatus === 'bezahlt' ? 'bg-green-50 text-green-700 border-green-200'
+                  : r.zahlungsstatus === 'teilweise' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                  {r.zahlungsstatus === 'bezahlt' ? 'Bezahlt' : r.zahlungsstatus === 'teilweise' ? 'Teil' : 'Offen'}
+                </span>
+                <span className="text-slate-400">{offeneRechnung === r.id ? '▲' : '▼'}</span>
+              </div>
+            </button>
+            {offeneRechnung === r.id && r.positionen.length > 0 && (
+              <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
+                {r.positionen.map((p) => (
+                  <div key={p.id} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0 text-xs">
+                    <span className="text-slate-700 min-w-0">
+                      {p.beschreibung}
+                      {p.artikel_id && (
+                        <span className="ms-1 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">Artikel</span>
+                      )}
+                    </span>
+                    <span className="text-slate-500 shrink-0">{formatEuro(p.brutto)}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-          <div className="flex gap-2 shrink-0">
-            <button onClick={onEdit} className="text-xs text-blue-600 hover:underline">Bearbeiten</button>
-            <button onClick={onDelete} className="text-xs text-red-500 hover:underline">Löschen</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-        {/* Kontaktdaten */}
-        <div className="grid grid-cols-2 gap-3">
-          {adresse && (
-            <div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2">
-              <p className="text-xs text-slate-500 mb-0.5">Adresse</p>
-              <p className="text-sm text-slate-700">{adresse}</p>
-            </div>
-          )}
-          {kunde.email && (
-            <div className="bg-slate-50 rounded-lg px-3 py-2">
-              <p className="text-xs text-slate-500 mb-0.5">E-Mail</p>
-              <p className="text-sm text-slate-700">{kunde.email}</p>
-            </div>
-          )}
-          {kunde.telefon && (
-            <div className="bg-slate-50 rounded-lg px-3 py-2">
-              <p className="text-xs text-slate-500 mb-0.5">Telefon</p>
-              <p className="text-sm text-slate-700">{kunde.telefon}</p>
-            </div>
-          )}
-          {kunde.ust_idnr && (
-            <div className="bg-slate-50 rounded-lg px-3 py-2">
-              <p className="text-xs text-slate-500 mb-0.5">USt-IdNr.</p>
-              <p className="text-sm text-slate-700 font-mono">{kunde.ust_idnr}</p>
-            </div>
-          )}
-        </div>
-
-        {kunde.notizen && (
-          <div className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">
-            {kunde.notizen}
-          </div>
-        )}
-
-        {/* Rechnungen */}
-        <div>
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Rechnungen ({rechnungen?.length ?? '…'})
-          </h4>
-          {isLoading && <p className="text-xs text-slate-400">Lade…</p>}
-          {!isLoading && !rechnungen?.length && (
-            <p className="text-xs text-slate-400">Noch keine Ausgangsrechnungen.</p>
-          )}
-          <div className="space-y-1.5">
-            {rechnungen?.map((r: Rechnung) => (
-              <div key={r.id} className="border border-slate-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setOffeneRechnung(offeneRechnung === r.id ? null : r.id)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 text-left"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="font-mono text-slate-400">{r.rechnungsnummer ?? '—'}</span>
-                    <span className="font-semibold text-slate-700">{formatEuro(r.brutto_gesamt)}</span>
-                    <span className="text-slate-400">{formatDatum(r.datum)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full border ${
-                      r.zahlungsstatus === 'bezahlt' ? 'bg-green-50 text-green-700 border-green-200'
-                      : r.zahlungsstatus === 'teilweise' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-red-50 text-red-700 border-red-200'
-                    }`}>
-                      {r.zahlungsstatus === 'bezahlt' ? 'Bezahlt' : r.zahlungsstatus === 'teilweise' ? 'Teilweise' : 'Offen'}
-                    </span>
-                    <span className="text-slate-400">{offeneRechnung === r.id ? '▲' : '▼'}</span>
-                  </div>
-                </button>
-
-                {offeneRechnung === r.id && r.positionen.length > 0 && (
-                  <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-slate-400 border-b border-slate-200">
-                          <th className="py-1 text-left font-medium">Artikel / Beschreibung</th>
-                          <th className="py-1 text-right font-medium">Menge</th>
-                          <th className="py-1 text-right font-medium">Brutto</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {r.positionen.map((p) => (
-                          <tr key={p.id} className="border-t border-slate-100">
-                            <td className="py-1.5 text-slate-700">
-                              {p.beschreibung}
-                              {p.artikel_id && (
-                                <span className="ms-1.5 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">Artikel</span>
-                              )}
-                            </td>
-                            <td className="py-1.5 text-right text-slate-500">{p.menge} {p.einheit}</td>
-                            <td className="py-1.5 text-right text-slate-700">{formatEuro(p.brutto)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   )
@@ -218,16 +132,14 @@ const EMPTY: FormValues = {
 export function KundenPage() {
   const qc = useQueryClient()
   const [selected, setSelected] = useState<Kunde | null>(null)
+  const [suche, setSuche] = useState('')
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
 
-  const { data: kunden, isLoading } = useQuery({
-    queryKey: ['kunden'],
-    queryFn: getKunden,
-  })
+  const { data: kunden, isLoading } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
 
   const createMutation = useMutation({
     mutationFn: createKunde,
@@ -235,22 +147,12 @@ export function KundenPage() {
   })
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Kunde> }) => updateKunde(id, data),
-    onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: ['kunden'] })
-      setSelected(updated)
-      closeForm()
-    },
+    onSuccess: (updated) => { qc.invalidateQueries({ queryKey: ['kunden'] }); setSelected(updated); closeForm() },
   })
   const deleteMutation = useMutation({
     mutationFn: (k: Kunde) => deleteKunde(k.id!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kunden'] })
-      setSelected(null)
-    },
-    onError: (_err: Error, k: Kunde) => {
-      setDeleteFehlgeschlagen(true)
-      openEdit(k)
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['kunden'] }); setSelected(null) },
+    onError: (_err: Error, k: Kunde) => { setDeleteFehlgeschlagen(true); openEdit(k) },
   })
   const anonymisierungMutation = useMutation({
     mutationFn: (id: number) => anonymisiereKunde(id),
@@ -266,11 +168,7 @@ export function KundenPage() {
     defaultValues: EMPTY,
   })
 
-  function openCreate() {
-    setEditKunde(null)
-    reset(EMPTY)
-    setShowForm(true)
-  }
+  function openCreate() { setEditKunde(null); reset(EMPTY); setShowForm(true) }
 
   function openEdit(k: Kunde) {
     setEditKunde(k)
@@ -285,11 +183,8 @@ export function KundenPage() {
   }
 
   function closeForm() {
-    setShowForm(false)
-    setEditKunde(null)
-    setDeleteFehlgeschlagen(false)
-    setShowDsgvoBestaetigung(false)
-    setAnonymisierungResult(null)
+    setShowForm(false); setEditKunde(null)
+    setDeleteFehlgeschlagen(false); setShowDsgvoBestaetigung(false); setAnonymisierungResult(null)
   }
 
   function onSubmit(values: FormValues) {
@@ -299,12 +194,7 @@ export function KundenPage() {
     if (editKunde?.id) {
       updateMutation.mutate({ id: editKunde.id, data: clean })
     } else {
-      createMutation.mutate({
-        ...clean,
-        ist_verein: values.ist_verein ?? false,
-        ist_gemeinnuetzig: values.ist_gemeinnuetzig ?? false,
-        land: values.land ?? 'DE',
-      })
+      createMutation.mutate({ ...clean, ist_verein: values.ist_verein ?? false, ist_gemeinnuetzig: values.ist_gemeinnuetzig ?? false, land: values.land ?? 'DE' })
     }
   }
 
@@ -314,58 +204,121 @@ export function KundenPage() {
     deleteMutation.mutate(k)
   }
 
+  const s = suche.toLowerCase()
+  const gefiltert = (kunden ?? []).filter((k) =>
+    !s || kundeName(k).toLowerCase().includes(s) ||
+    (k.email ?? '').toLowerCase().includes(s) ||
+    (k.kundennummer ?? '').toLowerCase().includes(s) ||
+    (k.ort ?? '').toLowerCase().includes(s)
+  )
+
   const isPending = createMutation.isPending || updateMutation.isPending
   const mutationError = createMutation.error || updateMutation.error
 
   return (
     <div className="flex h-full">
-      {/* Linke Spalte – Kundenliste */}
-      <div className="w-72 border-e border-slate-200 bg-white flex flex-col shrink-0">
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-800">Kunden</h2>
-          <button
-            onClick={openCreate}
-            className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-blue-700"
-          >
+
+      {/* ── Linke Spalte (breit) ─────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col border-e border-slate-200 bg-white min-w-0">
+
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3 shrink-0">
+          <h2 className="font-semibold text-slate-800 shrink-0">Kunden</h2>
+          <input
+            type="text"
+            placeholder="Suchen…"
+            value={suche}
+            onChange={(e) => setSuche(e.target.value)}
+            className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button onClick={openCreate} className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-blue-700 shrink-0">
             + Neu
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {isLoading && <p className="text-slate-400 text-sm p-4">Lade…</p>}
-          {!isLoading && !kunden?.length && (
-            <p className="text-slate-400 text-sm p-4">Noch keine Kunden.</p>
+        {/* Tabelle */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {isLoading ? (
+            <p className="text-slate-400 text-sm p-4">Lade…</p>
+          ) : !gefiltert.length ? (
+            <p className="text-slate-400 text-sm p-4">{suche ? 'Keine Treffer.' : 'Noch keine Kunden.'}</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+                <tr className="text-left">
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Name / Firma</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Adresse</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">E-Mail</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Kundennr.</th>
+                  <th className="px-4 py-2.5 w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {gefiltert.map((k) => (
+                  <tr
+                    key={k.id}
+                    onClick={() => setSelected(selected?.id === k.id ? null : k)}
+                    className={`border-b border-slate-100 last:border-0 cursor-pointer transition-colors ${
+                      selected?.id === k.id ? 'bg-blue-50' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <td className={`px-4 py-2.5 font-medium ${selected?.id === k.id ? 'text-blue-700' : 'text-slate-800'}`}>
+                      {kundeName(k)}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 text-xs">
+                      {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{k.email || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">{k.kundennummer || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => openEdit(k)} className="text-xs text-blue-600 hover:underline">Bearbeiten</button>
+                        <button onClick={() => handleDelete(k)} className="text-xs text-red-500 hover:underline">Löschen</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-          {kunden?.map((k) => (
-            <button
-              key={k.id}
-              onClick={() => setSelected(k)}
-              className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-0 transition-colors ${
-                selected?.id === k.id
-                  ? 'bg-blue-50 border-e-2 border-e-blue-600'
-                  : 'hover:bg-slate-50'
-              }`}
-            >
-              <p className={`text-sm font-medium truncate ${selected?.id === k.id ? 'text-blue-700' : 'text-slate-800'}`}>
-                {kundeName(k)}
-              </p>
-              {k.kundennummer && (
-                <p className="text-xs text-slate-400 font-mono">{k.kundennummer}</p>
-              )}
-            </button>
-          ))}
         </div>
+
+        {/* Stammdaten-Karte des ausgewählten Kunden */}
+        {selected && (
+          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-800">{kundeName(selected)}</span>
+                {selected.ist_verein && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Verein</span>}
+                {selected.ist_gemeinnuetzig && <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Gemeinnützig</span>}
+              </div>
+              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600 text-sm leading-none">×</button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              {selected.telefon && (
+                <div><span className="text-slate-400 block">Telefon</span><span className="text-slate-700">{selected.telefon}</span></div>
+              )}
+              {selected.ust_idnr && (
+                <div><span className="text-slate-400 block">USt-IdNr.</span><span className="text-slate-700 font-mono">{selected.ust_idnr}</span></div>
+              )}
+              {selected.email && (
+                <div><span className="text-slate-400 block">E-Mail</span><span className="text-slate-700">{selected.email}</span></div>
+              )}
+              {selected.kundennummer && (
+                <div><span className="text-slate-400 block">Kundennr.</span><span className="text-slate-700 font-mono">{selected.kundennummer}</span></div>
+              )}
+            </div>
+            {selected.notizen && (
+              <p className="mt-2 text-xs text-slate-600 bg-white rounded border border-slate-200 px-2 py-1.5 whitespace-pre-wrap">{selected.notizen}</p>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Rechte Spalte – Detail */}
-      <div className="flex-1 overflow-hidden">
+      {/* ── Rechte Spalte (schmal, Rechnungen) ───────────────────────── */}
+      <div className="w-80 shrink-0 bg-white">
         {selected ? (
-          <KundeDetail
-            key={selected.id}
-            kunde={selected}
-            onEdit={() => openEdit(selected)}
-            onDelete={() => handleDelete(selected)}
-          />
+          <KundeRechnungen key={selected.id} kunde={selected} />
         ) : (
           <div className="flex items-center justify-center h-full text-slate-400 text-sm">
             Kunden auswählen
@@ -373,7 +326,7 @@ export function KundenPage() {
         )}
       </div>
 
-      {/* Bearbeiten-Modal */}
+      {/* ── Bearbeiten-Modal ──────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -383,7 +336,7 @@ export function KundenPage() {
             {deleteFehlgeschlagen && (
               <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
                 <p className="font-medium">Löschen nicht möglich</p>
-                <p className="mt-0.5">Dieser Kunde hat verknüpfte Buchungen oder Rechnungen und kann nicht direkt gelöscht werden. Verwende unten <strong>„Anonymisieren (Art. 17)"</strong>, um die Daten datenschutzkonform zu entfernen.</p>
+                <p className="mt-0.5">Dieser Kunde hat verknüpfte Buchungen oder Rechnungen. Verwende <strong>„Anonymisieren (Art. 17)"</strong>.</p>
               </div>
             )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
@@ -433,47 +386,34 @@ export function KundenPage() {
                 </div>
                 <div className="col-span-2 flex gap-4">
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                    <input type="checkbox" {...register('ist_verein')} className="rounded" />
-                    Verein
+                    <input type="checkbox" {...register('ist_verein')} className="rounded" /> Verein
                   </label>
                   <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                    <input type="checkbox" {...register('ist_gemeinnuetzig')} className="rounded" />
-                    Gemeinnützig
+                    <input type="checkbox" {...register('ist_gemeinnuetzig')} className="rounded" /> Gemeinnützig
                   </label>
                 </div>
               </div>
 
-              {mutationError && (
-                <p className="text-red-600 text-sm">{(mutationError as Error).message}</p>
-              )}
+              {mutationError && <p className="text-red-600 text-sm">{(mutationError as Error).message}</p>}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">
-                  Abbrechen
-                </button>
+                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">Abbrechen</button>
                 <button type="submit" disabled={isPending} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                   {isPending ? 'Speichert…' : 'Speichern'}
                 </button>
               </div>
 
-              {/* DSGVO-Aktionen */}
               {editKunde?.id && !anonymisierungResult && (
                 <div className="border-t border-slate-200 pt-3 space-y-2">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
                     <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => dsgvoExportKunde(editKunde.id!)}
-                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50"
-                      >
+                      <button type="button" onClick={() => dsgvoExportKunde(editKunde.id!)}
+                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50">
                         📥 Datenauskunft exportieren
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowDsgvoBestaetigung(true)}
-                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50"
-                      >
+                      <button type="button" onClick={() => setShowDsgvoBestaetigung(true)}
+                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50">
                         🗑 Anonymisieren (Art. 17)
                       </button>
                     </div>
@@ -482,26 +422,20 @@ export function KundenPage() {
                       <p className="text-sm font-medium text-red-800">Kunden wirklich anonymisieren?</p>
                       <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
                         <li>Kundenstammdaten werden dauerhaft gelöscht</li>
-                        <li>Verknüpfungen in offenen Buchungen und Rechnungen werden entfernt</li>
-                        <li>Immutable Kassenbucheinträge bleiben aus rechtlichen Gründen erhalten (§147 AO)</li>
+                        <li>Verknüpfungen in Buchungen und Rechnungen werden entfernt</li>
+                        <li>Immutable Kassenbucheinträge bleiben erhalten (§147 AO)</li>
                       </ul>
                       {anonymisierungMutation.isError && (
                         <p className="text-xs text-red-600">{(anonymisierungMutation.error as Error).message}</p>
                       )}
                       <div className="flex gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => anonymisierungMutation.mutate(editKunde.id!)}
+                        <button type="button" onClick={() => anonymisierungMutation.mutate(editKunde.id!)}
                           disabled={anonymisierungMutation.isPending}
-                          className="flex-1 bg-red-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-red-700 disabled:opacity-50"
-                        >
+                          className="flex-1 bg-red-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-red-700 disabled:opacity-50">
                           {anonymisierungMutation.isPending ? '…' : 'Jetzt anonymisieren'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowDsgvoBestaetigung(false)}
-                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50"
-                        >
+                        <button type="button" onClick={() => setShowDsgvoBestaetigung(false)}
+                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50">
                           Abbrechen
                         </button>
                       </div>
@@ -523,11 +457,8 @@ export function KundenPage() {
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeForm}
-                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
-                  >
+                  <button type="button" onClick={closeForm}
+                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">
                     Schließen
                   </button>
                 </div>
