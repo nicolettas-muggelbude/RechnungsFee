@@ -122,8 +122,8 @@ def list_rechnungen(
     monat: Optional[str] = Query(None, description="YYYY-MM"),
     datum_von: Optional[date] = Query(None, description="YYYY-MM-DD"),
     datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
-    kunde_id: Optional[int] = None,
-    lieferant_id: Optional[int] = None,
+    kunde_id: Optional[int] = Query(None),
+    lieferant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Rechnung)
