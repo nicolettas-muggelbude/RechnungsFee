@@ -361,9 +361,15 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
           </div>
         )}
         {artikel.lieferant && (
-          <div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2">
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
             <p className="text-xs text-slate-500 mb-0.5">Lieferant</p>
             <p className="text-sm text-slate-700">{artikel.lieferant.firmenname}</p>
+          </div>
+        )}
+        {artikel.lieferanten_artikelnr && (
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-slate-500 mb-0.5">Lief.-ArtNr</p>
+            <p className="text-sm text-slate-700 font-mono">{artikel.lieferanten_artikelnr}</p>
           </div>
         )}
         {artikel.hersteller && (
@@ -372,21 +378,11 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
             <p className="text-sm text-slate-700">{artikel.hersteller}</p>
           </div>
         )}
-        {(artikel.artikelcode || artikel.lieferanten_artikelnr) && (
-          <>
-            {artikel.artikelcode && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <p className="text-xs text-slate-500 mb-0.5">Artikelcode</p>
-                <p className="text-sm text-slate-700 font-mono">{artikel.artikelcode}</p>
-              </div>
-            )}
-            {artikel.lieferanten_artikelnr && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <p className="text-xs text-slate-500 mb-0.5">Lief.-ArtNr</p>
-                <p className="text-sm text-slate-700 font-mono">{artikel.lieferanten_artikelnr}</p>
-              </div>
-            )}
-          </>
+        {artikel.artikelcode && (
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-slate-500 mb-0.5">Artikelcode</p>
+            <p className="text-sm text-slate-700 font-mono">{artikel.artikelcode}</p>
+          </div>
         )}
       </div>
 
