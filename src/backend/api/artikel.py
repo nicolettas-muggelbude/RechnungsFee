@@ -176,6 +176,6 @@ def get_artikel_rechnungen(artikel_id: int, db: Session = Depends(get_db)):
             einheit=pos.einheit,
             vk_brutto=pos.brutto,
             kunde_id=rechnung.kunde_id,
-            kunde_name=kunde.firmenname if kunde else None,
+            kunde_name=" ".join(p for p in [kunde.firmenname, kunde.vorname, kunde.nachname] if p) or None if kunde else None,
         ))
     return result

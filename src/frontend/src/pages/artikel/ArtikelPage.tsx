@@ -400,13 +400,14 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
         {rechnungen && rechnungen.length > 0 ? (
           <div className="space-y-1 overflow-y-auto max-h-48">
             {rechnungen.map((r, i) => (
-              <div key={i} className="flex items-center justify-between text-xs bg-slate-50 rounded px-2 py-1.5">
+              <div key={i} className="text-xs bg-slate-50 rounded px-2 py-1.5 flex items-start justify-between gap-2">
                 <div>
-                  <span className="font-medium text-slate-700">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</span>
-                  {r.kunde_name && <span className="text-slate-500 ms-2">· {r.kunde_name}</span>}
+                  <div className="font-medium text-slate-700">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</div>
+                  {r.kunde_name && <div className="text-slate-500">{r.kunde_name}</div>}
                 </div>
-                <div className="text-slate-500">
-                  {r.menge} {r.einheit} · {new Date(r.datum).toLocaleDateString('de-DE')}
+                <div className="text-slate-400 text-right shrink-0">
+                  <div>{r.menge} {r.einheit}</div>
+                  <div>{new Date(r.datum).toLocaleDateString('de-DE')}</div>
                 </div>
               </div>
             ))}
