@@ -43,6 +43,7 @@ class UnternehmenBase(BaseModel):
     bank_name: Optional[str] = None
     berufsbezeichnung: Optional[str] = None
     kammer_mitgliedschaft: Optional[str] = None
+    zahlungshinweis_aktiv: bool = True
     logo_pfad: Optional[str] = None
     mail_betreff_vorlage: Optional[str] = None
     mail_text_vorlage: Optional[str] = None

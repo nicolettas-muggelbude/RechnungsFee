@@ -368,6 +368,7 @@ def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
             "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
             "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
             "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
+            "zahlungshinweis_aktiv":   unternehmen.zahlungshinweis_aktiv,
         }
 
     ist_kopie = rechnung.ausgegeben

@@ -60,6 +60,8 @@ class Unternehmen(Base):
     # Beruf & Kammer
     berufsbezeichnung: Mapped[str | None] = mapped_column(String(100))       # z.B. "Rechtsanwältin"
     kammer_mitgliedschaft: Mapped[str | None] = mapped_column(String(200))   # z.B. "Rechtsanwaltskammer Berlin"
+    # Rechnungs-PDF-Einstellungen
+    zahlungshinweis_aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Logo & Mail-Vorlagen
     logo_pfad: Mapped[str | None] = mapped_column(String(500))
     mail_betreff_vorlage: Mapped[str | None] = mapped_column(String(500))

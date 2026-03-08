@@ -504,19 +504,20 @@ class RechnungPDF(FPDF):
                 )
                 self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
         else:
-            # Offene Rechnung – Überweisungsaufforderung
-            iban = unt.get("iban") or ""
-            if iban and r.typ == "ausgang":
-                bic     = unt.get("bic") or ""
-                faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
-                hinweis = (
-                    f"Bitte überweisen Sie {_fmt_euro(r.brutto_gesamt)} bis {faellig} "
-                    f"unter Angabe der Rechnungsnummer {r.rechnungsnummer or ''} "
-                    f"auf IBAN {iban}"
-                )
-                if bic: hinweis += f"  ·  BIC {bic}"
-                hinweis += "."
-                self.multi_cell(0, 5, hinweis)
+            # Offene Rechnung – Überweisungsaufforderung (nur wenn aktiv)
+            if unt.get("zahlungshinweis_aktiv", True):
+                iban = unt.get("iban") or ""
+                if iban and r.typ == "ausgang":
+                    bic     = unt.get("bic") or ""
+                    faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "sofort"
+                    hinweis = (
+                        f"Bitte überweisen Sie {_fmt_euro(r.brutto_gesamt)} bis {faellig} "
+                        f"unter Angabe der Rechnungsnummer {r.rechnungsnummer or ''} "
+                        f"auf IBAN {iban}"
+                    )
+                    if bic: hinweis += f"  ·  BIC {bic}"
+                    hinweis += "."
+                    self.multi_cell(0, 5, hinweis)
         self.ln(2)
 
         # --- Notizen ---

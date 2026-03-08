@@ -328,6 +328,25 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
         </div>
       </div>
 
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Rechnungs-PDF</h3>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.zahlungshinweis_aktiv !== false}
+            onChange={ev => set('zahlungshinweis_aktiv', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700">Standard-Zahlungshinweis anzeigen</span>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Fügt automatisch „Bitte überweisen Sie … auf IBAN …" unter dem Rechnungsbetrag ein.
+              Deaktivieren wenn du einen eigenen Text im Notizfeld der Rechnung hinterlegen möchtest.
+            </p>
+          </div>
+        </label>
+      </div>
+
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}
 
       <div className="flex items-center gap-3 pt-1">

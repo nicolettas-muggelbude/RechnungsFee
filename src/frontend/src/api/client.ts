@@ -123,6 +123,7 @@ export type Unternehmen = {
   bank_name?: string
   berufsbezeichnung?: string | null
   kammer_mitgliedschaft?: string | null
+  zahlungshinweis_aktiv?: boolean
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
