@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   getArtikel, createArtikel, updateArtikel, getArtikelRechnungen,
-  getLieferanten, type Artikel, type ArtikelTyp,
+  getLieferanten, getUstSaetze, type Artikel, type ArtikelTyp,
 } from '../../api/client'
 
 // ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ const schema = z.object({
   typ: z.enum(['artikel', 'dienstleistung', 'fremdleistung']),
   bezeichnung: z.string().min(1, 'Bezeichnung erforderlich'),
   einheit: z.string().min(1, 'Einheit erforderlich'),
-  steuersatz: z.enum(['0', '7', '19']),
+  steuersatz: z.string().min(1, 'Steuersatz erforderlich'),
   vk_brutto: z.string().refine(v => parseFloat(v) > 0, 'VK muss positiv sein'),
   ek_netto: z.string().optional(),
   lieferant_id: z.string().optional(),
@@ -119,6 +119,11 @@ function ArtikelFormModal({
 }) {
   const qc = useQueryClient()
   const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
+  const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
+  const aktiveSaetze = ustSaetze.filter((s) => s.ist_aktiv)
+  const defaultSatz = ustSaetze.find((s) => s.ist_default)?.satz
+    ? String(parseFloat(ustSaetze.find((s) => s.ist_default)!.satz))
+    : '19'
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -126,7 +131,7 @@ function ArtikelFormModal({
       typ: initial.typ,
       bezeichnung: initial.bezeichnung,
       einheit: initial.einheit,
-      steuersatz: String(initial.steuersatz) as '0' | '7' | '19',
+      steuersatz: String(parseFloat(String(initial.steuersatz))),
       vk_brutto: initial.vk_brutto,
       ek_netto: initial.ek_netto ?? '',
       lieferant_id: initial.lieferant_id ? String(initial.lieferant_id) : '',
@@ -137,7 +142,7 @@ function ArtikelFormModal({
       kategorie: initial.kategorie ?? '',
     } : {
       typ: 'artikel',
-      steuersatz: '19',
+      steuersatz: defaultSatz,
       einheit: 'Stück',
     },
   })
@@ -210,9 +215,14 @@ function ArtikelFormModal({
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Steuersatz *</label>
               <select {...register('steuersatz')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                <option value="19">19 %</option>
-                <option value="7">7 %</option>
-                <option value="0">0 %</option>
+                {aktiveSaetze.map((s) => {
+                  const val = String(parseFloat(s.satz))
+                  return (
+                    <option key={s.id} value={val}>
+                      {val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}
+                    </option>
+                  )
+                })}
               </select>
             </div>
           </div>

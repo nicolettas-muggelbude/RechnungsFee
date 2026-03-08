@@ -4,7 +4,7 @@ import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
-  sucheArtikel,
+  sucheArtikel, getUstSaetze,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type ArtikelSuche,
 } from '../../api/client'
@@ -1006,8 +1006,15 @@ function RechnungForm({
   const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
   const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+  const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
 
   const istKleinunternehmer = unternehmen?.ist_kleinunternehmer ?? false
+  const aktiveSaetze = ustSaetze.filter((s) => s.ist_aktiv)
+  const defaultUstGlobal = istKleinunternehmer
+    ? '0'
+    : (ustSaetze.find((s) => s.ist_default)?.satz
+        ? String(parseFloat(ustSaetze.find((s) => s.ist_default)!.satz))
+        : '19')
 
   const [rechnungsnummer, setRechnungsnummer] = useState(initial?.rechnungsnummer ?? '')
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
@@ -1032,7 +1039,7 @@ function RechnungForm({
       netto: p.netto,
       ust_satz: p.ust_satz,
       artikel_id: p.artikel_id ?? undefined,
-    })) ?? [leerPosition()]
+    })) ?? [leerPosition(defaultUstGlobal)]
   )
   const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('brutto')
 
@@ -1144,7 +1151,7 @@ function RechnungForm({
 
   function addPosition() {
     const kat = (kategorien ?? []).find((k) => String(k.id) === kategorieId)
-    const defaultUst = istKleinunternehmer ? '0' : (kat ? String(kat.ust_satz_standard) : '19')
+    const defaultUst = istKleinunternehmer ? '0' : (kat ? String(kat.ust_satz_standard) : defaultUstGlobal)
     setPositionen((prev) => [...prev, leerPosition(defaultUst)])
   }
 
@@ -1384,9 +1391,18 @@ function RechnungForm({
                       disabled={istKleinunternehmer}
                       className="w-full border-0 outline-none bg-transparent text-right text-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
                     >
-                      <option value="0">{istKleinunternehmer ? '0 (§19)' : '0'}</option>
-                      {!istKleinunternehmer && <option value="7">7</option>}
-                      {!istKleinunternehmer && <option value="19">19</option>}
+                      {istKleinunternehmer ? (
+                        <option value="0">0 (§19)</option>
+                      ) : (
+                        aktiveSaetze.map((s) => {
+                          const val = String(parseFloat(s.satz))
+                          return (
+                            <option key={s.id} value={val}>
+                              {val}{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}
+                            </option>
+                          )
+                        })
+                      )}
                     </select>
                   </td>
                   <td className="px-2 py-1.5 text-center">

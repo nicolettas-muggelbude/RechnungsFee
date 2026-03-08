@@ -671,3 +671,20 @@ export const updateArtikel = (id: number, data: ArtikelUpdate) =>
   request<Artikel>(`/artikel/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const getArtikelRechnungen = (id: number) =>
   request<ArtikelRechnungKurz[]>(`/artikel/${id}/rechnungen`)
+
+// --- USt-Sätze ---
+export type UstSatz = {
+  id: number
+  satz: string
+  bezeichnung: string | null
+  ist_aktiv: boolean
+  ist_default: boolean
+  ist_standard: boolean
+}
+export const getUstSaetze = () => request<UstSatz[]>('/ust-saetze')
+export const createUstSatz = (data: { satz: string; bezeichnung?: string }) =>
+  request<UstSatz>('/ust-saetze', { method: 'POST', body: JSON.stringify(data) })
+export const updateUstSatz = (id: number, data: { bezeichnung?: string; ist_aktiv?: boolean; ist_default?: boolean }) =>
+  request<UstSatz>(`/ust-saetze/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const deleteUstSatz = (id: number) =>
+  request<void>(`/ust-saetze/${id}`, { method: 'DELETE' })

@@ -16,6 +16,22 @@ from .connection import Base
 
 
 # ---------------------------------------------------------------------------
+# USt-Sätze (konfigurierbar)
+# ---------------------------------------------------------------------------
+
+class UstSatz(Base):
+    """Konfigurierbare Mehrwertsteuersätze."""
+    __tablename__ = "ust_saetze"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), unique=True, nullable=False)
+    bezeichnung: Mapped[str | None] = mapped_column(String(100))
+    ist_aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ist_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 0/7/19 – nicht löschbar
+
+
+# ---------------------------------------------------------------------------
 # Stammdaten
 # ---------------------------------------------------------------------------
 

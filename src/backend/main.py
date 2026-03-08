@@ -7,9 +7,9 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -33,6 +33,7 @@ app.include_router(export.router)
 app.include_router(rechnungen.router)
 app.include_router(backup.router)
 app.include_router(artikel.router)
+app.include_router(ust_saetze.router)
 
 
 def _backup_datenbank() -> None:
@@ -209,6 +210,35 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 6"))
             conn.commit()
             print("[Migration] Schema auf Version 6 gebracht (unternehmen.zahlungshinweis_aktiv)")
+
+        if version < 7:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS ust_saetze (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    satz NUMERIC(5,2) NOT NULL UNIQUE,
+                    bezeichnung VARCHAR(100),
+                    ist_aktiv INTEGER NOT NULL DEFAULT 1,
+                    ist_default INTEGER NOT NULL DEFAULT 0,
+                    ist_standard INTEGER NOT NULL DEFAULT 0
+                )
+            """))
+            # Standard-Sätze eintragen (nur wenn noch nicht vorhanden)
+            for satz, bezeichnung, ist_default in [
+                ("0.00", "Steuerfrei", 0),
+                ("7.00", "Ermäßigt", 0),
+                ("19.00", "Standard", 1),
+            ]:
+                existing = conn.execute(
+                    text("SELECT id FROM ust_saetze WHERE satz = :s"), {"s": satz}
+                ).fetchone()
+                if not existing:
+                    conn.execute(text(
+                        "INSERT INTO ust_saetze (satz, bezeichnung, ist_aktiv, ist_default, ist_standard) "
+                        "VALUES (:satz, :bez, 1, :def, 1)"
+                    ), {"satz": satz, "bez": bezeichnung, "def": ist_default})
+            conn.execute(text("PRAGMA user_version = 7"))
+            conn.commit()
+            print("[Migration] Schema auf Version 7 gebracht (ust_saetze)")
 
 
 def _migrate_kategorien() -> None:
