@@ -331,39 +331,63 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
         <button onClick={onEdit} className="text-sm text-blue-600 hover:underline">Bearbeiten</button>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
-        <div className="text-slate-500">VK brutto</div>
-        <div className="font-semibold text-slate-800">{formatEuro(artikel.vk_brutto)}</div>
-        <div className="text-slate-500">VK netto</div>
-        <div className="text-slate-700">{formatEuro(artikel.vk_netto)}</div>
-        {artikel.ek_netto && <>
-          <div className="text-slate-500">EK netto</div>
-          <div className="text-slate-700">{formatEuro(artikel.ek_netto)}</div>
-        </>}
-        <div className="text-slate-500">USt-Satz</div>
-        <div className="text-slate-700">{artikel.steuersatz} %</div>
-        <div className="text-slate-500">Einheit</div>
-        <div className="text-slate-700">{artikel.einheit}</div>
-        {artikel.kategorie && <>
-          <div className="text-slate-500">Kategorie</div>
-          <div className="text-slate-700">{artikel.kategorie}</div>
-        </>}
-        {artikel.lieferant && <>
-          <div className="text-slate-500">Lieferant</div>
-          <div className="text-slate-700">{artikel.lieferant.firmenname}</div>
-        </>}
-        {artikel.hersteller && <>
-          <div className="text-slate-500">Hersteller</div>
-          <div className="text-slate-700">{artikel.hersteller}</div>
-        </>}
-        {artikel.artikelcode && <>
-          <div className="text-slate-500">Artikelcode</div>
-          <div className="text-slate-700 font-mono text-xs">{artikel.artikelcode}</div>
-        </>}
-        {artikel.lieferanten_artikelnr && <>
-          <div className="text-slate-500">Lief.-ArtNr</div>
-          <div className="text-slate-700 font-mono text-xs">{artikel.lieferanten_artikelnr}</div>
-        </>}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-slate-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-slate-500 mb-0.5">VK brutto</p>
+          <p className="text-sm font-semibold text-slate-800">{formatEuro(artikel.vk_brutto)}</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-slate-500 mb-0.5">VK netto</p>
+          <p className="text-sm text-slate-700">{formatEuro(artikel.vk_netto)}</p>
+        </div>
+        {artikel.ek_netto ? (
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-slate-500 mb-0.5">EK netto</p>
+            <p className="text-sm text-slate-700">{formatEuro(artikel.ek_netto)}</p>
+          </div>
+        ) : <div />}
+        <div className="bg-slate-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-slate-500 mb-0.5">USt-Satz</p>
+          <p className="text-sm text-slate-700">{artikel.steuersatz} %</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-slate-500 mb-0.5">Einheit</p>
+          <p className="text-sm text-slate-700">{artikel.einheit}</p>
+        </div>
+        {artikel.kategorie && (
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-slate-500 mb-0.5">Kategorie</p>
+            <p className="text-sm text-slate-700">{artikel.kategorie}</p>
+          </div>
+        )}
+        {artikel.lieferant && (
+          <div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2">
+            <p className="text-xs text-slate-500 mb-0.5">Lieferant</p>
+            <p className="text-sm text-slate-700">{artikel.lieferant.firmenname}</p>
+          </div>
+        )}
+        {artikel.hersteller && (
+          <div className="bg-slate-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-slate-500 mb-0.5">Hersteller</p>
+            <p className="text-sm text-slate-700">{artikel.hersteller}</p>
+          </div>
+        )}
+        {(artikel.artikelcode || artikel.lieferanten_artikelnr) && (
+          <>
+            {artikel.artikelcode && (
+              <div className="bg-slate-50 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-500 mb-0.5">Artikelcode</p>
+                <p className="text-sm text-slate-700 font-mono">{artikel.artikelcode}</p>
+              </div>
+            )}
+            {artikel.lieferanten_artikelnr && (
+              <div className="bg-slate-50 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-500 mb-0.5">Lief.-ArtNr</p>
+                <p className="text-sm text-slate-700 font-mono">{artikel.lieferanten_artikelnr}</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {artikel.beschreibung && (
