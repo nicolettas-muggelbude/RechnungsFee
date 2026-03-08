@@ -133,11 +133,13 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const artSplit = watchS('art')
   const positionenSplit = watchS('positionen')
 
-  // Kassenstand-Prüfung
+  // Kassenstand-Prüfung (nur Barkasse)
+  const zahlungsart = watch('zahlungsart')
+  const zahlungsartSplit = watchS('zahlungsart')
   const bruttoSingle = parseFloat(bruttoStr ?? '0') || 0
   const bruttoSplit = positionenSplit?.reduce((s, p) => s + (parseFloat(p.brutto_betrag) || 0), 0) ?? 0
-  const kassenstandUeberschrittenSingle = art === 'Ausgabe' && bruttoSingle > kassenstand
-  const kassenstandUeberschrittenSplit = artSplit === 'Ausgabe' && bruttoSplit > kassenstand
+  const kassenstandUeberschrittenSingle = art === 'Ausgabe' && zahlungsart === 'Bar' && bruttoSingle > kassenstand
+  const kassenstandUeberschrittenSplit = artSplit === 'Ausgabe' && zahlungsartSplit === 'Bar' && bruttoSplit > kassenstand
 
   // Beim Umschalten: gemeinsame Felder synchronisieren
   function toggleSplit(ein: boolean) {

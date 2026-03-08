@@ -69,21 +69,23 @@ def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]
     return netto, ust_betrag
 
 
-def _get_kassenstand(db: Session) -> Decimal:
-    """Gibt den aktuellen Kassenstand zurück (Summe aller Einnahmen minus Ausgaben)."""
+def _get_bar_kassenstand(db: Session) -> Decimal:
+    """Gibt den aktuellen Kassenstand der Barkasse zurück (nur Bar-Buchungen)."""
     einnahmen = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-        Kassenbucheintrag.art == "Einnahme"
+        Kassenbucheintrag.art == "Einnahme",
+        Kassenbucheintrag.zahlungsart == "Bar",
     ).scalar() or Decimal("0")
     ausgaben = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-        Kassenbucheintrag.art == "Ausgabe"
+        Kassenbucheintrag.art == "Ausgabe",
+        Kassenbucheintrag.zahlungsart == "Bar",
     ).scalar() or Decimal("0")
     return Decimal(str(einnahmen)) - Decimal(str(ausgaben))
 
 
 @router.get("/kassenstand")
 def get_kassenstand(db: Session = Depends(get_db)):
-    """Gibt den aktuellen Kassenstand zurück."""
-    return {"kassenstand": str(_get_kassenstand(db))}
+    """Gibt den aktuellen Kassenstand der Barkasse zurück."""
+    return {"kassenstand": str(_get_bar_kassenstand(db))}
 
 
 @router.get("/naechste-belegnr")
@@ -196,9 +198,9 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
 
-    # Kassenstand-Prüfung: Ausgabe darf den aktuellen Kassenstand nicht übersteigen
-    if data.art == "Ausgabe":
-        kassenstand = _get_kassenstand(db)
+    # Barkassen-Prüfung: Bar-Ausgabe darf den Kassenstand nicht übersteigen
+    if data.art == "Ausgabe" and data.zahlungsart == "Bar":
+        kassenstand = _get_bar_kassenstand(db)
         if data.brutto_betrag > kassenstand:
             raise HTTPException(
                 status_code=409,
@@ -235,10 +237,10 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
 @router.post("/split", response_model=list[KassenbuchEintragResponse], status_code=201)
 def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
     """Erstellt mehrere Kassenbucheinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
-    # Kassenstand-Prüfung für Split-Ausgaben (Gesamtbetrag aller Positionen)
-    if data.art == "Ausgabe":
+    # Barkassen-Prüfung für Split-Ausgaben (nur Bar, Gesamtbetrag aller Positionen)
+    if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         gesamt = sum(pos.brutto_betrag for pos in data.positionen)
-        kassenstand = _get_kassenstand(db)
+        kassenstand = _get_bar_kassenstand(db)
         if gesamt > kassenstand:
             raise HTTPException(
                 status_code=409,
