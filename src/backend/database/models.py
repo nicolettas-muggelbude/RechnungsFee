@@ -258,6 +258,39 @@ class Lieferant(Base):
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     rechnungen: Mapped[list["Rechnung"]] = relationship(back_populates="lieferant")
+    artikel: Mapped[list["Artikel"]] = relationship(back_populates="lieferant")
+
+
+# ---------------------------------------------------------------------------
+# Artikelstamm
+# ---------------------------------------------------------------------------
+
+class Artikel(Base):
+    """Artikel- und Dienstleistungsstammdaten."""
+    __tablename__ = "artikel"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    artikelnummer: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    typ: Mapped[str] = mapped_column(String(20), nullable=False)  # eigenleistung|dienstleistung|fremdleistung
+    bezeichnung: Mapped[str] = mapped_column(String(200), nullable=False)
+    einheit: Mapped[str] = mapped_column(String(50), nullable=False, default="Stück")
+    steuersatz: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=19)
+    vk_brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    vk_netto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    ek_netto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    ek_brutto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    lieferant_id: Mapped[int | None] = mapped_column(ForeignKey("lieferanten.id"))
+    lieferanten_artikelnr: Mapped[str | None] = mapped_column(String(100))
+    hersteller: Mapped[str | None] = mapped_column(String(100))
+    artikelcode: Mapped[str | None] = mapped_column(String(100))
+    beschreibung: Mapped[str | None] = mapped_column(Text)
+    kategorie: Mapped[str | None] = mapped_column(String(100))
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    lieferant: Mapped["Lieferant | None"] = relationship(back_populates="artikel")
+    positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="artikel")
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +362,7 @@ class Rechnungsposition(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     rechnung_id: Mapped[int] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), nullable=False)
+    artikel_id: Mapped[int | None] = mapped_column(ForeignKey("artikel.id"))
     position_nr: Mapped[int] = mapped_column(Integer, nullable=False)
     beschreibung: Mapped[str] = mapped_column(String(500), nullable=False)
     menge: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=1, nullable=False)
@@ -339,6 +373,7 @@ class Rechnungsposition(Base):
     brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
     rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen")
+    artikel: Mapped["Artikel | None"] = relationship(back_populates="positionen")
 
     __table_args__ = (
         UniqueConstraint("rechnung_id", "position_nr", name="uq_rechnung_position"),

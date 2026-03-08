@@ -5,9 +5,100 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   getKunden, createKunde, updateKunde, deleteKunde,
-  anonymisiereKunde, dsgvoExportKunde,
-  type Kunde, type AnonymisierungResult,
+  anonymisiereKunde, dsgvoExportKunde, getRechnungen,
+  type Kunde, type AnonymisierungResult, type Rechnung,
 } from '../../api/client'
+
+function formatEuro(val: string | number): string {
+  const n = typeof val === 'string' ? parseFloat(val) : val
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n)
+}
+
+function formatDatum(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+function KundeRechnungenModal({ kunde, onClose }: { kunde: Kunde; onClose: () => void }) {
+  const [offeneRechnung, setOffeneRechnung] = useState<number | null>(null)
+
+  const { data: rechnungen, isLoading } = useQuery({
+    queryKey: ['kunden-rechnungen', kunde.id],
+    queryFn: () => getRechnungen({ typ: 'ausgang', kunde_id: kunde.id }),
+    staleTime: 1000 * 60,
+  })
+
+  const name = kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(' ') || '—'
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <h2 className="text-lg font-bold text-slate-800">Rechnungen – {name}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+          {isLoading && <p className="text-slate-400 text-sm p-2">Lade…</p>}
+          {!isLoading && !rechnungen?.length && (
+            <p className="text-slate-400 text-sm p-2">Keine Ausgangsrechnungen für diesen Kunden.</p>
+          )}
+          {rechnungen?.map((r: Rechnung) => (
+            <div key={r.id} className="border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOffeneRechnung(offeneRechnung === r.id ? null : r.id)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-slate-50 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-slate-400">{r.rechnungsnummer ?? '—'}</span>
+                  <span className="text-slate-700 font-medium">{formatEuro(r.brutto_gesamt)}</span>
+                  <span className="text-slate-400">{formatDatum(r.datum)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    r.zahlungsstatus === 'bezahlt' ? 'bg-green-50 text-green-700 border-green-200'
+                    : r.zahlungsstatus === 'teilweise' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                  }`}>{r.zahlungsstatus === 'bezahlt' ? 'Bezahlt' : r.zahlungsstatus === 'teilweise' ? 'Teilweise' : 'Offen'}</span>
+                  <span className="text-xs text-slate-400">{offeneRechnung === r.id ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {offeneRechnung === r.id && r.positionen.length > 0 && (
+                <div className="border-t border-slate-100 bg-slate-50 px-4 py-2">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-200">
+                        <th className="py-1 text-left font-medium">Artikel / Beschreibung</th>
+                        <th className="py-1 text-right font-medium">Menge</th>
+                        <th className="py-1 text-right font-medium">Brutto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {r.positionen.map((p) => (
+                        <tr key={p.id} className="border-t border-slate-100">
+                          <td className="py-1.5 text-slate-700">
+                            {p.beschreibung}
+                            {p.artikel_id && (
+                              <span className="ms-1.5 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">Artikel</span>
+                            )}
+                          </td>
+                          <td className="py-1.5 text-right text-slate-500">{p.menge} {p.einheit}</td>
+                          <td className="py-1.5 text-right text-slate-700">{formatEuro(p.brutto)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const schema = z.object({
   firmenname: z.string().optional(),
@@ -42,6 +133,7 @@ export function KundenPage() {
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
+  const [rechnungenKunde, setRechnungenKunde] = useState<Kunde | null>(null)
 
   const { data: kunden, isLoading } = useQuery({
     queryKey: ['kunden'],
@@ -168,6 +260,7 @@ export function KundenPage() {
                   <td className="px-4 py-3 text-slate-500">{k.email || '—'}</td>
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">{k.kundennummer || '—'}</td>
                   <td className="px-4 py-3 flex gap-2 justify-end">
+                    <button onClick={() => setRechnungenKunde(k)} className="text-xs text-slate-500 hover:underline">Rechnungen</button>
                     <button onClick={() => openEdit(k)} className="text-xs text-blue-600 hover:underline">Bearbeiten</button>
                     <button onClick={() => handleDelete(k)} className="text-xs text-red-500 hover:underline">Löschen</button>
                   </td>
@@ -177,6 +270,13 @@ export function KundenPage() {
           </table>
         )}
       </div>
+
+      {rechnungenKunde && (
+        <KundeRechnungenModal
+          kunde={rechnungenKunde}
+          onClose={() => setRechnungenKunde(null)}
+        />
+      )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

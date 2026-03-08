@@ -19,6 +19,7 @@ class RechnungspositionCreate(BaseModel):
     einheit: str = "Stück"
     netto: Decimal
     ust_satz: Decimal = Decimal("0")
+    artikel_id: Optional[int] = None
 
     @field_validator("netto")
     @classmethod
@@ -44,6 +45,7 @@ class RechnungspositionCreate(BaseModel):
 
 class RechnungspositionResponse(BaseModel):
     id: int
+    artikel_id: Optional[int] = None
     position_nr: int
     beschreibung: str
     menge: Decimal

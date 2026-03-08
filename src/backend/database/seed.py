@@ -146,6 +146,14 @@ def seed_nummernkreise(db: Session) -> None:
             naechste_nr=1,
             reset_jaehrlich=False,
         ))
+    if "artikel" not in typen:
+        neue.append(Nummernkreis(
+            bezeichnung="Artikelnummern",
+            typ="artikel",
+            format="ART-####",
+            naechste_nr=1,
+            reset_jaehrlich=False,
+        ))
     if neue:
         for nk in neue:
             db.add(nk)

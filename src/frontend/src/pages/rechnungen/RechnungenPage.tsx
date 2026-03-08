@@ -4,7 +4,9 @@ import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
+  sucheArtikel,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
+  type ArtikelSuche,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
@@ -904,6 +906,70 @@ function StammdatenCombobox({
 
 
 // ---------------------------------------------------------------------------
+// Artikel-Autocomplete für Positionsbeschreibung
+// ---------------------------------------------------------------------------
+
+function BeschreibungAutocomplete({
+  value,
+  onChange,
+  onArtikelWahl,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onArtikelWahl: (a: ArtikelSuche) => void
+}) {
+  const [offen, setOffen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const { data: treffer } = useQuery({
+    queryKey: ['artikel-suche', value],
+    queryFn: () => sucheArtikel(value),
+    enabled: value.length >= 3,
+    staleTime: 1000 * 30,
+  })
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOffen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const zeigeDropdown = offen && !!treffer && treffer.length > 0
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <input
+        required
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOffen(true) }}
+        onFocus={() => value.length >= 3 && setOffen(true)}
+        className="w-full border-0 outline-none bg-transparent text-slate-700 placeholder-slate-300"
+        placeholder="Beschreibung"
+      />
+      {zeigeDropdown && (
+        <div className="absolute top-full left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg min-w-64 max-h-52 overflow-y-auto">
+          {treffer!.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => { onArtikelWahl(a); setOffen(false) }}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-100 last:border-0"
+            >
+              <div className="font-medium text-slate-800">{a.bezeichnung}</div>
+              <div className="text-slate-400">{a.artikelnummer} · {a.einheit} · {formatEuro(a.vk_brutto)}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
 // Rechnungs-Formular
 // ---------------------------------------------------------------------------
 
@@ -913,6 +979,7 @@ type Positionszeile = {
   einheit: string
   netto: string
   ust_satz: string
+  artikel_id?: number
 }
 
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
@@ -921,6 +988,7 @@ const leerPosition = (defaultUst = '19'): Positionszeile => ({
   einheit: '',
   netto: '',
   ust_satz: defaultUst,
+  artikel_id: undefined,
 })
 
 function RechnungForm({
@@ -963,6 +1031,7 @@ function RechnungForm({
       einheit: p.einheit,
       netto: p.netto,
       ust_satz: p.ust_satz,
+      artikel_id: p.artikel_id ?? undefined,
     })) ?? [leerPosition()]
   )
   const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('brutto')
@@ -1084,6 +1153,16 @@ function RechnungForm({
     setPositionen((prev) => prev.filter((_, idx) => idx !== i))
   }
 
+  function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
+    const ust_satz = istKleinunternehmer ? '0' : String(parseInt(a.steuersatz))
+    const preis = eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto
+    setPositionen((prev) => prev.map((p, idx) =>
+      idx === i
+        ? { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, ust_satz, netto: preis.replace('.', ','), artikel_id: a.id }
+        : p
+    ))
+  }
+
   function buildData(istEntwurf: boolean): RechnungCreate {
     return {
       typ,
@@ -1107,6 +1186,7 @@ function RechnungForm({
           einheit: p.einheit || 'Stück',
           netto: netto.toFixed(2),
           ust_satz,
+          artikel_id: p.artikel_id,
         } as RechnungspositionCreate
       }),
     }
@@ -1267,13 +1347,10 @@ function RechnungForm({
               {positionen.map((pos, i) => (
                 <tr key={i} className="border-t border-slate-100">
                   <td className="px-2 py-1.5">
-                    <input
-                      required
-                      type="text"
+                    <BeschreibungAutocomplete
                       value={pos.beschreibung}
-                      onChange={(e) => updatePosition(i, 'beschreibung', e.target.value)}
-                      className="w-full border-0 outline-none bg-transparent text-slate-700 placeholder-slate-300"
-                      placeholder="Beschreibung"
+                      onChange={(v) => updatePosition(i, 'beschreibung', v)}
+                      onArtikelWahl={(a) => fillPositionFromArtikel(i, a)}
                     />
                   </td>
                   <td className="px-2 py-1.5">

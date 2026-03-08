@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.32',
+    datum: 'März 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Artikelstamm: Artikel und Dienstleistungen zentral verwalten (Eigenleistung, Dienstleistung, Fremdleistung) mit Artikelnummer, Preisen, Steuersatz, Lieferant und mehr' },
+      { typ: 'neu', text: 'Rechnungen: Artikel-Autocomplete in Positionen – ab 3 Zeichen werden passende Artikel aus dem Stamm vorgeschlagen und füllen Beschreibung, Einheit, Preis und USt automatisch' },
+      { typ: 'neu', text: 'Kundenstamm: „Rechnungen"-Button pro Kunde zeigt alle Ausgangsrechnungen mit aufklappbaren Positionen (Artikel-Badge wenn aus Artikelstamm)' },
+    ],
+  },
+  {
     version: 'v0.1.31',
     datum: 'März 2026',
     eintraege: [

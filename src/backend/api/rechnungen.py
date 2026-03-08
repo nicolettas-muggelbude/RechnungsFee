@@ -220,6 +220,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
 
         pos = Rechnungsposition(
             rechnung_id=rechnung.id,
+            artikel_id=getattr(pos_data, "artikel_id", None),
             position_nr=i,
             beschreibung=pos_data.beschreibung,
             menge=pos_data.menge,

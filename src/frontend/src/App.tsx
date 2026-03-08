@@ -8,6 +8,7 @@ import { KassenbuchPage } from './pages/kassenbuch/KassenbuchPage'
 import { TagesabschlussPage } from './pages/kassenbuch/TagesabschlussPage'
 import { KundenPage } from './pages/kunden/KundenPage'
 import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
+import { ArtikelPage } from './pages/artikel/ArtikelPage'
 import { NummernkreisePage } from './pages/einstellungen/NummernkreisePage'
 import { KontenPage } from './pages/stammdaten/KontenPage'
 import { KategorienPage } from './pages/stammdaten/KategorienPage'
@@ -65,6 +66,7 @@ function AppRoutes() {
           {/* Stammdaten */}
           <Route path="/kunden" element={<KundenPage />} />
           <Route path="/lieferanten" element={<LieferantenPage />} />
+          <Route path="/artikel" element={<ArtikelPage />} />
           <Route path="/konten" element={<KontenPage />} />
           <Route path="/kategorien" element={<KategorienPage />} />
           <Route path="/nummernkreise" element={<NummernkreisePage />} />

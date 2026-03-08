@@ -450,6 +450,7 @@ export const getNummernkreisVorschau = (id: number, format: string) =>
 // --- Rechnungen ---
 export type Rechnungsposition = {
   id: number
+  artikel_id: number | null
   position_nr: number
   beschreibung: string
   menge: string
@@ -466,6 +467,7 @@ export type RechnungspositionCreate = {
   einheit?: string
   netto: string
   ust_satz: string
+  artikel_id?: number
 }
 
 export type ZahlungKompakt = {
@@ -590,3 +592,80 @@ export async function getRechnungPdf(id: number): Promise<Blob> {
   }
   return res.blob()
 }
+
+// --- Artikelstamm ---
+export type ArtikelTyp = 'eigenleistung' | 'dienstleistung' | 'fremdleistung'
+
+export type Artikel = {
+  id: number
+  artikelnummer: string
+  typ: ArtikelTyp
+  bezeichnung: string
+  einheit: string
+  steuersatz: string
+  vk_brutto: string
+  vk_netto: string
+  ek_netto: string | null
+  ek_brutto: string | null
+  lieferant_id: number | null
+  lieferant: { id: number; firmenname: string; lieferantennummer: string | null } | null
+  lieferanten_artikelnr: string | null
+  hersteller: string | null
+  artikelcode: string | null
+  beschreibung: string | null
+  kategorie: string | null
+  aktiv: boolean
+  erstellt_am: string
+  aktualisiert_am: string
+}
+
+export type ArtikelSuche = {
+  id: number
+  artikelnummer: string
+  typ: ArtikelTyp
+  bezeichnung: string
+  einheit: string
+  steuersatz: string
+  vk_brutto: string
+  vk_netto: string
+  lieferant_name: string | null
+}
+
+export type ArtikelRechnungKurz = {
+  rechnung_id: number
+  rechnungsnummer: string | null
+  datum: string
+  menge: string
+  einheit: string
+  vk_brutto: string
+  kunde_id: number | null
+  kunde_name: string | null
+}
+
+export type ArtikelCreate = {
+  typ: ArtikelTyp
+  bezeichnung: string
+  einheit: string
+  steuersatz: string
+  vk_brutto: string
+  ek_netto?: string
+  lieferant_id?: number
+  lieferanten_artikelnr?: string
+  hersteller?: string
+  artikelcode?: string
+  beschreibung?: string
+  kategorie?: string
+}
+
+export type ArtikelUpdate = Partial<ArtikelCreate> & { aktiv?: boolean }
+
+export const getArtikel = (params?: { aktiv?: boolean; typ?: string }) =>
+  request<Artikel[]>(`/artikel${toQuery(params ?? {})}`)
+export const sucheArtikel = (q: string) =>
+  request<ArtikelSuche[]>(`/artikel/suche?q=${encodeURIComponent(q)}`)
+export const createArtikel = (data: ArtikelCreate) =>
+  request<Artikel>('/artikel', { method: 'POST', body: JSON.stringify(data) })
+export const updateArtikel = (id: number, data: ArtikelUpdate) =>
+  request<Artikel>(`/artikel/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const getArtikelRechnungen = (id: number) =>
+  request<ArtikelRechnungKurz[]>(`/artikel/${id}/rechnungen`)

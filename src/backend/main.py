@@ -7,9 +7,9 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -32,6 +32,7 @@ app.include_router(nummernkreise.router)
 app.include_router(export.router)
 app.include_router(rechnungen.router)
 app.include_router(backup.router)
+app.include_router(artikel.router)
 
 
 def _backup_datenbank() -> None:
@@ -160,6 +161,39 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 3"))
             conn.commit()
             print("[Migration] Schema auf Version 3 gebracht (berufsbezeichnung, kammer_mitgliedschaft)")
+
+        if version < 4:
+            # Artikelstamm-Tabelle anlegen
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS artikel (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    artikelnummer VARCHAR(50) UNIQUE NOT NULL,
+                    typ VARCHAR(20) NOT NULL,
+                    bezeichnung VARCHAR(200) NOT NULL,
+                    einheit VARCHAR(50) NOT NULL DEFAULT 'Stück',
+                    steuersatz NUMERIC(5,2) NOT NULL DEFAULT 19,
+                    vk_brutto NUMERIC(12,2) NOT NULL,
+                    vk_netto NUMERIC(12,2) NOT NULL,
+                    ek_netto NUMERIC(12,2),
+                    ek_brutto NUMERIC(12,2),
+                    lieferant_id INTEGER REFERENCES lieferanten(id),
+                    lieferanten_artikelnr VARCHAR(100),
+                    hersteller VARCHAR(100),
+                    artikelcode VARCHAR(100),
+                    beschreibung TEXT,
+                    kategorie VARCHAR(100),
+                    aktiv BOOLEAN NOT NULL DEFAULT 1,
+                    erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            # artikel_id zu rechnungspositionen hinzufügen
+            pos_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungspositionen)")).fetchall()}
+            if "artikel_id" not in pos_cols:
+                conn.execute(text("ALTER TABLE rechnungspositionen ADD COLUMN artikel_id INTEGER REFERENCES artikel(id)"))
+            conn.execute(text("PRAGMA user_version = 4"))
+            conn.commit()
+            print("[Migration] Schema auf Version 4 gebracht (Artikelstamm)")
 
 
 def _migrate_kategorien() -> None:

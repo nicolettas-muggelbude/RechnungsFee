@@ -18,6 +18,7 @@ const hauptNav = [
 const stammdatenNav = [
   { to: '/kunden', label: 'Kunden', icon: '👤' },
   { to: '/lieferanten', label: 'Lieferanten', icon: '🏭' },
+  { to: '/artikel', label: 'Artikelstamm', icon: '📦' },
   { to: '/konten', label: 'Konten', icon: '🏦' },
   { to: '/kategorien', label: 'Kategorien', icon: '🏷️' },
   { to: '/nummernkreise', label: 'Nummernkreise', icon: '🔢' },
