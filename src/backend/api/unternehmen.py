@@ -53,7 +53,7 @@ def update_unternehmen(data: UnternehmenUpdate, db: Session = Depends(get_db)):
     unternehmen = db.query(Unternehmen).first()
     if not unternehmen:
         raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
-    for key, value in data.model_dump(exclude_none=True).items():
+    for key, value in data.model_dump(exclude_unset=True).items():
         setattr(unternehmen, key, value)
     db.commit()
     db.refresh(unternehmen)
