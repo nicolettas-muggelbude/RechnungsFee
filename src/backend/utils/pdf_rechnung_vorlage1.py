@@ -39,7 +39,6 @@ from utils.pdf_rechnung import (
     _logo_abmessungen,
     _adresszeilen,
     GRAU_HELL,
-    GRAU_RAND,
     TEXT_GRAU,
     TEXT_DUNKEL,
     L_MARGIN,
@@ -52,6 +51,9 @@ from utils.pdf_rechnung import (
     BLOCK_W,
     FOOTER_H,
 )
+
+# Neutrales Grau ohne Grünstich (überschreibt GRAU_RAND aus dem Standard-Template)
+GRAU_RAND = (210, 210, 210)
 
 
 class RechnungPDFVorlage1(FPDF):
@@ -313,7 +315,7 @@ class RechnungPDFVorlage1(FPDF):
 
         self.set_font("DejaVu", "B", 8)
         self.set_draw_color(*GRAU_RAND)
-        self.set_text_color(*TEXT_GRAU)
+        self.set_text_color(*TEXT_DUNKEL)
         # Tabellenheader: nur Unterstrich, kein Hintergrund (lt. Vorlage)
         for i, h in enumerate(headers):
             self.cell(col_w[i], 6.5, h, border="B", align=aligns[i])
