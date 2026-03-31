@@ -18,6 +18,7 @@ from database.models import (
 )
 from utils.signatur import signatur_kassenbucheintrag
 from utils.pdf_rechnung import generate_rechnung_pdf
+from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from .schemas_rechnungen import (
     RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt,
@@ -331,7 +332,7 @@ def markiere_ausgegeben(rechnung_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{rechnung_id}/pdf")
-def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
+def rechnung_als_pdf(rechnung_id: int, vorlage: int = 0, db: Session = Depends(get_db)):
     """PDF der Rechnung generieren und zurückgeben.
     Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
     Folge-Abrufe erhalten ein KOPIE-Banner."""
@@ -372,7 +373,10 @@ def rechnung_als_pdf(rechnung_id: int, db: Session = Depends(get_db)):
         }
 
     ist_kopie = rechnung.ausgegeben
-    pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie)
+    if vorlage == 1:
+        pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie)
+    else:
+        pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie)
 
     if not rechnung.ausgegeben:
         rechnung.ausgegeben = True
