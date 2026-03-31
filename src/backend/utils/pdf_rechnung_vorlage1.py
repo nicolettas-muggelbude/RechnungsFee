@@ -52,8 +52,10 @@ from utils.pdf_rechnung import (
     FOOTER_H,
 )
 
-# Neutrales Grau ohne Grünstich (überschreibt GRAU_RAND aus dem Standard-Template)
-GRAU_RAND = (210, 210, 210)
+# Vorlage-Farben: Grüntöne passend zu #eff4ef
+GRUEN_HELL = (239, 244, 239)   # #eff4ef – Tabellenkopf-Füllung
+GRUEN_RAND = (180, 210, 180)   # etwas kräftiger – Tabellenlinien
+GRAU_RAND  = (210, 213, 220)   # Standard-Grau für Header/Footer-Linien
 
 
 class RechnungPDFVorlage1(FPDF):
@@ -314,11 +316,11 @@ class RechnungPDFVorlage1(FPDF):
         aligns  = ["L",    "L",             "R"]
 
         self.set_font("DejaVu", "B", 8)
-        self.set_draw_color(*GRAU_RAND)
+        self.set_fill_color(*GRUEN_HELL)
+        self.set_draw_color(*GRUEN_RAND)
         self.set_text_color(*TEXT_DUNKEL)
-        # Tabellenheader: nur Unterstrich, kein Hintergrund (lt. Vorlage)
         for i, h in enumerate(headers):
-            self.cell(col_w[i], 6.5, h, border="B", align=aligns[i])
+            self.cell(col_w[i], 6.5, h, border="B", fill=True, align=aligns[i])
         self.ln()
 
         self.set_font("DejaVu", "", 8.5)
@@ -328,6 +330,9 @@ class RechnungPDFVorlage1(FPDF):
             self.cell(col_w[1], 6.5, pos.beschreibung[:90])
             self.cell(col_w[2], 6.5, _fmt_euro(pos.brutto), align="R",
                       new_x="LMARGIN", new_y="NEXT")
+        # Abschlusslinie der Tabelle
+        self.set_draw_color(*GRUEN_RAND)
+        self.line(L_MARGIN, self.get_y(), L_MARGIN + sum(col_w), self.get_y())
 
         self.ln(6)
 
