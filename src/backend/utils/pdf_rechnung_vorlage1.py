@@ -314,6 +314,8 @@ class RechnungPDFVorlage1(FPDF):
         col_w   = [35, 112, 28]
         headers = ["Datum", "Beschreibung", "Saldo"]
         aligns  = ["L",    "L",             "R"]
+        tbl_x   = L_MARGIN
+        tbl_top = self.get_y()
 
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRUEN_HELL)
@@ -330,19 +332,18 @@ class RechnungPDFVorlage1(FPDF):
             self.cell(col_w[1], 6.5, pos.beschreibung[:90])
             self.cell(col_w[2], 6.5, _fmt_euro(pos.brutto), align="R",
                       new_x="LMARGIN", new_y="NEXT")
-        # Abschlusslinie der Tabelle
+
+        tbl_bottom = self.get_y()
+        tbl_total_w = sum(col_w)
+        # Äußerer Rahmen + vertikale Spaltentrennlinien
         self.set_draw_color(*GRUEN_RAND)
-        self.line(L_MARGIN, self.get_y(), L_MARGIN + sum(col_w), self.get_y())
+        self.rect(tbl_x, tbl_top, tbl_total_w, tbl_bottom - tbl_top)
+        x = tbl_x + col_w[0]
+        self.line(x, tbl_top, x, tbl_bottom)
+        x += col_w[1]
+        self.line(x, tbl_top, x, tbl_bottom)
 
         self.ln(6)
-
-        # --- Danksagung nach Positionen ---
-        self.set_font("DejaVu", "", 9)
-        self.set_text_color(*TEXT_GRAU)
-        self.cell(0, 5.5,
-                  "Vielen Dank für deinen Auftrag und das entgegengebrachte Vertrauen.",
-                  new_x="LMARGIN", new_y="NEXT")
-        self.ln(5)
 
         # --- §19-Hinweis ---
         if unt.get("ist_kleinunternehmer"):
@@ -388,21 +389,26 @@ class RechnungPDFVorlage1(FPDF):
         val_w = 80.0
         lh    = 6.5
         box_w = lbl_w + val_w
+        # Zentriert auf den Nutzbereich
+        x_start = L_MARGIN + (NUTZ_W - box_w) / 2
 
-        # Tabellenkopf "Überweisung" im gleichen Grün wie die Positionstabelle
+        block_top = self.get_y()
+
+        # Tabellenkopf "Überweisung" – linksbündig, grüne Füllung
         kopf_titel = "Zahlung erhalten" if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen else "Überweisung"
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRUEN_HELL)
         self.set_draw_color(*GRUEN_RAND)
         self.set_text_color(*TEXT_DUNKEL)
+        self.set_xy(x_start, block_top)
         self.cell(box_w, 6.5, kopf_titel, border="B", fill=True, align="L",
                   new_x="LMARGIN", new_y="NEXT")
 
         def _row(lbl: str, val: str, bold_val: bool = False):
             y = self.get_y()
             self.set_draw_color(*GRUEN_RAND)
-            self.line(L_MARGIN, y, L_MARGIN + box_w, y)
-            self.set_xy(L_MARGIN, y)
+            self.line(x_start, y, x_start + box_w, y)
+            self.set_xy(x_start, y)
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
             self.cell(lbl_w, lh, lbl, align="L")
@@ -411,7 +417,6 @@ class RechnungPDFVorlage1(FPDF):
             self.cell(val_w, lh, val, align="L", new_x="LMARGIN", new_y="NEXT")
 
         if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen:
-            # Bezahlte Rechnung: Zahlungsbestätigung im Tabellenstil
             art_labels = {
                 "Bar": "Barzahlung", "Karte": "Kartenzahlung",
                 "PayPal": "PayPal", "Bank": "Überweisung",
@@ -428,7 +433,6 @@ class RechnungPDFVorlage1(FPDF):
                 )
                 _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(z.brutto_betrag), bold_val=True)
         else:
-            # Offene Rechnung: Zahlungsdaten für Überweisung
             if empfaenger:
                 _row("Empfänger", empfaenger, bold_val=True)
             _row("Rechnungsbetrag", _fmt_euro(r.brutto_gesamt), bold_val=True)
@@ -442,9 +446,11 @@ class RechnungPDFVorlage1(FPDF):
             if bic:
                 _row("BIC", bic)
 
-        # Abschlusslinie des Blocks
+        block_bottom = self.get_y()
+        # Äußerer Rahmen + vertikale Trennlinie zwischen Label und Wert
         self.set_draw_color(*GRUEN_RAND)
-        self.line(L_MARGIN, self.get_y(), L_MARGIN + box_w, self.get_y())
+        self.rect(x_start, block_top, box_w, block_bottom - block_top)
+        self.line(x_start + lbl_w, block_top, x_start + lbl_w, block_bottom)
 
 
 # ---------------------------------------------------------------------------
