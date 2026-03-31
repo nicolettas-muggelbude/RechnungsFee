@@ -389,13 +389,18 @@ class RechnungPDFVorlage1(FPDF):
         lh    = 6.5
         box_w = lbl_w + val_w
 
-        # Hintergrundblock (helles Grau) für den gesamten Bezahldaten-Block
-        block_y = self.get_y()
+        # Tabellenkopf "Überweisung" im gleichen Grün wie die Positionstabelle
+        kopf_titel = "Zahlung erhalten" if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen else "Überweisung"
+        self.set_font("DejaVu", "B", 8)
+        self.set_fill_color(*GRUEN_HELL)
+        self.set_draw_color(*GRUEN_RAND)
+        self.set_text_color(*TEXT_DUNKEL)
+        self.cell(box_w, 6.5, kopf_titel, border="B", fill=True, align="L",
+                  new_x="LMARGIN", new_y="NEXT")
 
         def _row(lbl: str, val: str, bold_val: bool = False):
             y = self.get_y()
-            # Trennlinie oben
-            self.set_draw_color(*GRAU_RAND)
+            self.set_draw_color(*GRUEN_RAND)
             self.line(L_MARGIN, y, L_MARGIN + box_w, y)
             self.set_xy(L_MARGIN, y)
             self.set_font("DejaVu", "", 8)
@@ -438,7 +443,7 @@ class RechnungPDFVorlage1(FPDF):
                 _row("BIC", bic)
 
         # Abschlusslinie des Blocks
-        self.set_draw_color(*GRAU_RAND)
+        self.set_draw_color(*GRUEN_RAND)
         self.line(L_MARGIN, self.get_y(), L_MARGIN + box_w, self.get_y())
 
 
