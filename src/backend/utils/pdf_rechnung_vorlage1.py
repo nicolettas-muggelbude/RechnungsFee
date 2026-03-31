@@ -286,6 +286,20 @@ class RechnungPDFVorlage1(FPDF):
             self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5, "– Kopie –", new_x="LMARGIN", new_y="NEXT")
 
+        self.ln(5)
+
+        # --- Anrede + Einleitung ---
+        self.set_font("DejaVu", "", 9.5)
+        self.set_text_color(*TEXT_DUNKEL)
+        vorname_kunde = getattr(partner_obj, "vorname", None) or ""
+        anrede = f"Hallo {vorname_kunde}," if vorname_kunde else "Hallo,"
+        self.cell(0, 6, anrede, new_x="LMARGIN", new_y="NEXT")
+        self.ln(1)
+        self.set_font("DejaVu", "", 9)
+        self.set_text_color(*TEXT_GRAU)
+        self.cell(0, 5.5,
+                  "Vielen Dank für Dein Vertrauen. Wir stellen hiermit folgende Leistungen in Rechnung:",
+                  new_x="LMARGIN", new_y="NEXT")
         self.ln(4)
 
         # --- Positionstabelle: Datum | Beschreibung | Saldo ---
@@ -315,6 +329,14 @@ class RechnungPDFVorlage1(FPDF):
 
         self.ln(6)
 
+        # --- Danksagung nach Positionen ---
+        self.set_font("DejaVu", "", 9)
+        self.set_text_color(*TEXT_GRAU)
+        self.cell(0, 5.5,
+                  "Vielen Dank für deinen Auftrag und das entgegengebrachte Vertrauen.",
+                  new_x="LMARGIN", new_y="NEXT")
+        self.ln(5)
+
         # --- §19-Hinweis ---
         if unt.get("ist_kleinunternehmer"):
             self.set_font("DejaVu", "", 7.5)
@@ -343,6 +365,11 @@ class RechnungPDFVorlage1(FPDF):
         bic    = unt.get("bic") or ""
         bank   = unt.get("bank_name") or ""
         faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "nach Erhalt"
+
+        # Empfänger = Firmenname, sonst Vor- + Nachname
+        empfaenger = unt.get("firmenname") or " ".join(filter(None, [
+            unt.get("vorname"), unt.get("nachname")
+        ]))
 
         zahlungsstatus = str(getattr(r, "zahlungsstatus", "offen") or "offen")
         zahlungen = [
@@ -390,6 +417,8 @@ class RechnungPDFVorlage1(FPDF):
                 _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(z.brutto_betrag), bold_val=True)
         else:
             # Offene Rechnung: Zahlungsdaten für Überweisung
+            if empfaenger:
+                _row("Empfänger", empfaenger, bold_val=True)
             _row("Rechnungsbetrag", _fmt_euro(r.brutto_gesamt), bold_val=True)
             _row("Zahlungsziel", faellig)
             if r.rechnungsnummer:
