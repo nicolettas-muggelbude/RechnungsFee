@@ -332,7 +332,7 @@ def markiere_ausgegeben(rechnung_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{rechnung_id}/pdf")
-def rechnung_als_pdf(rechnung_id: int, vorlage: int = 0, db: Session = Depends(get_db)):
+def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, db: Session = Depends(get_db)):
     """PDF der Rechnung generieren und zurückgeben.
     Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
     Folge-Abrufe erhalten ein KOPIE-Banner."""
@@ -370,10 +370,12 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = 0, db: Session = Depends(g
             "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
             "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
             "zahlungshinweis_aktiv":   unternehmen.zahlungshinweis_aktiv,
+            "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
         }
 
     ist_kopie = rechnung.ausgegeben
-    if vorlage == 1:
+    vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
+    if vorlage_nr == 1:
         pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie)
     else:
         pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie)

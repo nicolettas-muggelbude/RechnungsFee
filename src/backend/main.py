@@ -7,9 +7,9 @@ from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze
+from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -34,6 +34,7 @@ app.include_router(rechnungen.router)
 app.include_router(backup.router)
 app.include_router(artikel.router)
 app.include_router(ust_saetze.router)
+app.include_router(pdf_vorlagen.router)
 
 
 def _backup_datenbank() -> None:
@@ -239,6 +240,14 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 7"))
             conn.commit()
             print("[Migration] Schema auf Version 7 gebracht (ust_saetze)")
+
+        if version < 8:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "pdf_vorlage" not in cols:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN pdf_vorlage INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 8"))
+            conn.commit()
+            print("[Migration] Schema auf Version 8 gebracht (unternehmen.pdf_vorlage)")
 
 
 def _migrate_kategorien() -> None:

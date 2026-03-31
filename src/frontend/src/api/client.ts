@@ -124,6 +124,7 @@ export type Unternehmen = {
   berufsbezeichnung?: string | null
   kammer_mitgliedschaft?: string | null
   zahlungshinweis_aktiv?: boolean
+  pdf_vorlage?: number
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
@@ -692,3 +693,16 @@ export const updateUstSatz = (id: number, data: { bezeichnung?: string; ist_akti
   request<UstSatz>(`/ust-saetze/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteUstSatz = (id: number) =>
   request<void>(`/ust-saetze/${id}`, { method: 'DELETE' })
+
+// --- PDF-Vorlagen ---
+export type PdfVorlage = {
+  id: number
+  name: string
+  beschreibung: string
+}
+export const getPdfVorlagen = () => request<PdfVorlage[]>('/pdf-vorlagen')
+
+export async function openDemoPdf(vorlage: number): Promise<void> {
+  const base = await getApiBase()
+  await openUrl(`${base}/pdf-vorlagen/demo?vorlage=${vorlage}`)
+}

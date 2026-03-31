@@ -11,6 +11,7 @@ import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
 import { ArtikelPage } from './pages/artikel/ArtikelPage'
 import { NummernkreisePage } from './pages/einstellungen/NummernkreisePage'
 import { UstSaetzePage } from './pages/einstellungen/UstSaetzePage'
+import { VorlagenPage } from './pages/einstellungen/VorlagenPage'
 import { KontenPage } from './pages/stammdaten/KontenPage'
 import { KategorienPage } from './pages/stammdaten/KategorienPage'
 import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
@@ -72,6 +73,7 @@ function AppRoutes() {
           <Route path="/kategorien" element={<KategorienPage />} />
           <Route path="/nummernkreise" element={<NummernkreisePage />} />
           <Route path="/ust-saetze" element={<UstSaetzePage />} />
+          <Route path="/vorlagen" element={<VorlagenPage />} />
           <Route path="/unternehmen" element={<UnternehmenPage />} />
           <Route path="/rechnungen" element={<RechnungenPage />} />
           <Route path="/exporte" element={<ExportPage />} />

@@ -23,6 +23,7 @@ const stammdatenNav = [
   { to: '/kategorien', label: 'Kategorien', icon: '🏷️' },
   { to: '/nummernkreise', label: 'Nummernkreise', icon: '🔢' },
   { to: '/ust-saetze', label: 'MwSt.-Sätze', icon: '%' },
+  { to: '/vorlagen', label: 'Rechnungsvorlagen', icon: '📄' },
   { to: '/unternehmen', label: 'Unternehmen', icon: '🏢' },
 ]
 
