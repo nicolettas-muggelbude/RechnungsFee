@@ -23,6 +23,20 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.34',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Rechnungsvorlagen: Community-Vorlage „Sandra grün" für Kleinunternehmer – Tabelle mit Pos./Datum/Beschreibung/Saldo, grünes Design, persönliche Anrede, Überweisungsblock mit IBAN (Issue #33, Dank an @trinity2701)' },
+      { typ: 'neu', text: 'Rechnungsvorlagen-Auswahl: unter Stammdaten → Rechnungsvorlagen kann die Standard-Vorlage für alle Ausgangsrechnungen gewählt werden – mit Vorschau-Funktion' },
+      { typ: 'neu', text: 'Dark Mode: folgt automatisch dem System-Theme (prefers-color-scheme) – kein manueller Toggle (Issue #29)' },
+      { typ: 'neu', text: 'Kleinunternehmer-Umsatzwarnung: Dashboard zeigt ab 80.000 € Netto-Jahresumsatz ein Warn-Banner, ab 100.000 € eine kritische Warnung mit Handlungsaufforderung (Issue #30)' },
+      { typ: 'verbesserung', text: 'Kleinunternehmer-Infotext in Stammdaten auf neue Grenzen ab 2025 aktualisiert: Vorjahresumsatz ≤ 25.000 € netto, laufendes Jahr unter 100.000 € netto (Issue #30)' },
+      { typ: 'fix', text: 'Info-Tooltips werden nicht mehr am linken Bildschirmrand abgeschnitten – öffnen sich jetzt linksbündig statt zentriert (Issue #31)' },
+      { typ: 'fix', text: 'USt-IdNr. wird jetzt auf gültiges Format geprüft: deutsche IdNr. muss DE + 9 Ziffern sein (Issue #31)' },
+      { typ: 'fix', text: 'Stammdaten: Partial-Updates (z.B. Vorlagenauswahl) überschreiben keine anderen gespeicherten Felder mehr' },
+    ],
+  },
+  {
     version: 'v0.1.33',
     datum: 'März 2026',
     eintraege: [
