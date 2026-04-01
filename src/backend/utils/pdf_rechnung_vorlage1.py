@@ -311,9 +311,9 @@ class RechnungPDFVorlage1(FPDF):
         # da Rechnungsposition kein eigenes Datum-Feld hat)
         pos_datum_str = _iso_zu_de(str(r.leistungsdatum or r.datum))
 
-        col_w   = [35, 112, 28]
-        headers = ["Datum", "Beschreibung", "Saldo"]
-        aligns  = ["L",    "L",             "R"]
+        col_w   = [12, 30, 105, 28]
+        headers = ["Pos.", "Datum", "Beschreibung", "Saldo"]
+        aligns  = ["R",   "L",     "L",             "R"]
         tbl_x   = L_MARGIN
         tbl_top = self.get_y()
 
@@ -328,9 +328,10 @@ class RechnungPDFVorlage1(FPDF):
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
-            self.cell(col_w[0], 6.5, pos_datum_str, align="L")
-            self.cell(col_w[1], 6.5, pos.beschreibung[:90])
-            self.cell(col_w[2], 6.5, _fmt_euro(pos.brutto), align="R",
+            self.cell(col_w[0], 6.5, str(pos.position_nr), align="R")
+            self.cell(col_w[1], 6.5, pos_datum_str, align="L")
+            self.cell(col_w[2], 6.5, pos.beschreibung[:85])
+            self.cell(col_w[3], 6.5, _fmt_euro(pos.brutto), align="R",
                       new_x="LMARGIN", new_y="NEXT")
 
         tbl_bottom = self.get_y()
@@ -341,6 +342,8 @@ class RechnungPDFVorlage1(FPDF):
         x = tbl_x + col_w[0]
         self.line(x, tbl_top, x, tbl_bottom)
         x += col_w[1]
+        self.line(x, tbl_top, x, tbl_bottom)
+        x += col_w[2]
         self.line(x, tbl_top, x, tbl_bottom)
 
         self.ln(6)
