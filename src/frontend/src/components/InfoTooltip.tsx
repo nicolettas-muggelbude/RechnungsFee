@@ -1,21 +1,27 @@
 import { useState } from 'react'
 
+type HAlign = 'left' | 'center' | 'right'
+
 interface Props {
   text: string
   side?: 'top' | 'bottom'
+  align?: HAlign
   className?: string
 }
 
-export function InfoTooltip({ text, side = 'top', className = '' }: Props) {
+export function InfoTooltip({ text, side = 'top', align = 'left', className = '' }: Props) {
   const [visible, setVisible] = useState(false)
 
+  const hPos = align === 'left' ? 'left-0' : align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'
+  const arrowH = align === 'left' ? 'left-3.5' : align === 'right' ? 'right-3.5' : 'left-1/2 -translate-x-1/2'
+
   const popupPos = side === 'top'
-    ? 'bottom-full left-1/2 -translate-x-1/2 mb-2'
-    : 'top-full left-1/2 -translate-x-1/2 mt-2'
+    ? `bottom-full ${hPos} mb-2`
+    : `top-full ${hPos} mt-2`
 
   const arrowPos = side === 'top'
-    ? 'top-full left-1/2 -translate-x-1/2 border-t-slate-700'
-    : 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-700'
+    ? `top-full ${arrowH} border-t-slate-700`
+    : `bottom-full ${arrowH} border-b-slate-700`
 
   return (
     <span

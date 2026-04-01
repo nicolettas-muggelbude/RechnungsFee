@@ -148,6 +148,20 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
   function handleSpeichern(e: React.FormEvent) {
     e.preventDefault()
+    const ustId = (form.ust_idnr ?? '').trim()
+    if (ustId) {
+      // Basis-Formatprüfung: 2 Buchstaben Ländercode + mind. 2 Zeichen, max. 15
+      if (!/^[A-Z]{2}[A-Z0-9+*]{2,13}$/i.test(ustId)) {
+        setFehler('USt-IdNr. hat ein ungültiges Format (z.B. DE123456789).')
+        return
+      }
+      // Deutschland: DE + genau 9 Ziffern
+      if (ustId.toUpperCase().startsWith('DE') && !/^DE[0-9]{9}$/i.test(ustId)) {
+        setFehler('Deutsche USt-IdNr. muss das Format DE + 9 Ziffern haben (z.B. DE123456789).')
+        return
+      }
+    }
+    setFehler(null)
     mut.mutate(form)
   }
 
