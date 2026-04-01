@@ -92,6 +92,8 @@ export const setKassenbestand = (betrag: string) =>
     method: 'POST',
     body: JSON.stringify({ betrag }),
   })
+export const getKleinunternehmerUmsatz = () =>
+  request<{ jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number }>('/setup/kleinunternehmer-umsatz')
 
 // --- Unternehmen ---
 export type Unternehmen = {

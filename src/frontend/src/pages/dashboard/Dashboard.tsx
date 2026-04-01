@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getKassenbuch, getUnternehmen } from '../../api/client'
+import { getKassenbuch, getUnternehmen, getKleinunternehmerUmsatz } from '../../api/client'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -137,6 +137,59 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
 }
 
 // ---------------------------------------------------------------------------
+// Kleinunternehmer-Umsatzwarnung (§19 UStG)
+// ---------------------------------------------------------------------------
+
+function KleinunternehmerWarnung() {
+  const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+  const { data: ku } = useQuery({
+    queryKey: ['kleinunternehmer-umsatz'],
+    queryFn: getKleinunternehmerUmsatz,
+    enabled: !!unt?.ist_kleinunternehmer,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  if (!unt?.ist_kleinunternehmer || !ku) return null
+
+  const prozent = Math.min((ku.umsatz_netto / ku.grenze_kritisch) * 100, 100)
+  const ueberschritten = ku.umsatz_netto >= ku.grenze_kritisch
+  const kritisch = ku.umsatz_netto >= ku.grenze_warnung
+
+  if (!kritisch) return null
+
+  return (
+    <div className={`rounded-lg border p-4 mb-4 ${
+      ueberschritten
+        ? 'bg-red-50 border-red-300 dark:bg-red-950 dark:border-red-800'
+        : 'bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-800'
+    }`}>
+      <div className="flex items-start gap-3">
+        <span className="text-xl">{ueberschritten ? '🚨' : '⚠️'}</span>
+        <div className="flex-1">
+          <p className={`font-semibold text-sm ${ueberschritten ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}`}>
+            {ueberschritten
+              ? 'Kleinunternehmergrenze überschritten!'
+              : 'Achtung: Kleinunternehmergrenze in Sicht'}
+          </p>
+          <p className={`text-sm mt-0.5 ${ueberschritten ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+            {ueberschritten
+              ? `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} und hat die 100.000 €-Grenze überschritten. Ab diesem Zeitpunkt bist du regelbesteuert – stelle ab sofort Rechnungen mit Umsatzsteuer aus und informiere dein Finanzamt.`
+              : `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} (${prozent.toFixed(1)} % der 100.000 €-Grenze). Bei Überschreitung wechselst du sofort zur Regelbesteuerung.`
+            }
+          </p>
+          <div className="mt-2 h-1.5 rounded-full bg-amber-200 dark:bg-amber-900 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${ueberschritten ? 'bg-red-500' : 'bg-amber-500'}`}
+              style={{ width: `${prozent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -203,6 +256,7 @@ export function Dashboard() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      <KleinunternehmerWarnung />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
 

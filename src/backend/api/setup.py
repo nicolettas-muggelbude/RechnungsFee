@@ -3,7 +3,7 @@ Setup-Status-Endpunkt – wird beim App-Start abgefragt um zu entscheiden,
 ob der Einrichtungs-Assistent gezeigt werden soll.
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -81,3 +81,30 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
     db.add(eintrag)
     db.commit()
     return {"belegnr": belegnr, "betrag": str(data.betrag)}
+
+
+@router.get("/kleinunternehmer-umsatz")
+def kleinunternehmer_umsatz(db: Session = Depends(get_db)):
+    """
+    Netto-Jahresumsatz aus bezahlten Ausgangsrechnungen im laufenden Kalenderjahr.
+    Nur relevant für Kleinunternehmer (§19 UStG).
+    """
+    from sqlalchemy import func, extract
+    from database.models import Rechnung
+
+    jahr = datetime.now().year
+    ergebnis = db.query(func.sum(Rechnung.netto_gesamt)).filter(
+        Rechnung.typ == "ausgang",
+        Rechnung.ist_entwurf == False,
+        Rechnung.storniert == False,
+        Rechnung.zahlungsstatus.in_(["bezahlt", "teilweise"]),
+        extract("year", Rechnung.datum) == jahr,
+    ).scalar()
+
+    umsatz = float(ergebnis or 0)
+    return {
+        "jahr": jahr,
+        "umsatz_netto": umsatz,
+        "grenze_kritisch": 100000.0,
+        "grenze_warnung": 80000.0,
+    }

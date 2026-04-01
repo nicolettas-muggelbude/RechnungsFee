@@ -228,7 +228,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
           <div>
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
               Kleinunternehmer (§19 UStG)
-              <InfoTooltip text="Als Kleinunternehmer nach §19 UStG weist du keine Umsatzsteuer auf Rechnungen aus und kannst keine Vorsteuer abziehen. Voraussetzung: Jahresumsatz im Vorjahr unter 25.000 €. Diese Einstellung wirkt auf alle Rechnungen und Buchungen." side="bottom" />
+              <InfoTooltip text="Als Kleinunternehmer nach §19 UStG weist du keine Umsatzsteuer auf Rechnungen aus und kannst keine Vorsteuer abziehen. Voraussetzungen (ab 2025): Netto-Gesamtumsatz im Vorjahr ≤ 25.000 € und im laufenden Jahr unter 100.000 € netto. Wird die 100.000 €-Grenze unterjährig überschritten, endet die Kleinunternehmerregelung sofort mit diesem Umsatz." side="bottom" />
             </span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Keine USt auf Rechnungen, kein Vorsteuerabzug.</p>
           </div>
