@@ -40,9 +40,9 @@ function aktuellerMonat(): string {
 
 function StatusBadge({ status }: { status: 'offen' | 'teilweise' | 'bezahlt' }) {
   const cfg = {
-    offen:     { cls: 'bg-red-50 text-red-700 border-red-200',    label: 'Offen' },
-    teilweise: { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Teilweise' },
-    bezahlt:   { cls: 'bg-green-50 text-green-700 border-green-200', label: 'Bezahlt' },
+    offen:     { cls: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',    label: 'Offen' },
+    teilweise: { cls: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800', label: 'Teilweise' },
+    bezahlt:   { cls: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800', label: 'Bezahlt' },
   }[status]
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.cls}`}>
@@ -101,64 +101,64 @@ function ZahlungsDialog({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">
             {rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Rechnungsinfo */}
-          <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-1">
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3 text-sm space-y-1">
             <div className="flex justify-between">
-              <span className="text-slate-500">Rechnung</span>
-              <span className="font-medium">{rechnung.rechnungsnummer}</span>
+              <span className="text-slate-500 dark:text-slate-400">Rechnung</span>
+              <span className="font-medium dark:text-slate-200">{rechnung.rechnungsnummer}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Gesamt</span>
-              <span className="font-medium">{formatEuro(rechnung.brutto_gesamt)}</span>
+              <span className="text-slate-500 dark:text-slate-400">Gesamt</span>
+              <span className="font-medium dark:text-slate-200">{formatEuro(rechnung.brutto_gesamt)}</span>
             </div>
             {parseFloat(rechnung.bezahlt_betrag) > 0 && (
-              <div className="flex justify-between text-green-700">
+              <div className="flex justify-between text-green-700 dark:text-green-400">
                 <span>Bereits bezahlt</span>
                 <span>{formatEuro(rechnung.bezahlt_betrag)}</span>
               </div>
             )}
-            <div className="flex justify-between font-semibold border-t border-slate-200 pt-1 mt-1">
-              <span className="text-slate-600">Restbetrag</span>
-              <span>{formatEuro(restbetrag)}</span>
+            <div className="flex justify-between font-semibold border-t border-slate-200 dark:border-slate-700 pt-1 mt-1">
+              <span className="text-slate-600 dark:text-slate-300">Restbetrag</span>
+              <span className="dark:text-slate-100">{formatEuro(restbetrag)}</span>
             </div>
           </div>
 
           {/* Betrag */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Betrag (€)</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Betrag (€)</label>
             <input
               type="text"
               value={betrag}
               onChange={(e) => setBetrag(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               placeholder="0,00"
             />
           </div>
 
           {/* Datum */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Zahlungsdatum</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Zahlungsdatum</label>
             <input
               type="date"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
 
           {/* Zahlungsart */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Zahlungsart</label>
-            <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Zahlungsart</label>
+            <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
               {([['Bar', 'Bar'], ['Karte', 'Karte'], ['PayPal', 'PayPal'], ['Bank', 'Überw.']] as const).map(([val, label]) => (
                 <button
                   key={val}
@@ -167,7 +167,7 @@ function ZahlungsDialog({
                   className={`flex-1 py-2 transition-colors ${
                     zahlungsart === val
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {label}
@@ -178,30 +178,30 @@ function ZahlungsDialog({
 
           {/* Beschreibung (optional) */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Beschreibung <span className="text-slate-400 font-normal">(optional)</span>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+              Beschreibung <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
             </label>
             <input
               type="text"
               value={beschreibung}
               onChange={(e) => setBeschreibung(e.target.value)}
               placeholder={`Zahlung ${rechnung.rechnungsnummer ?? ''}`}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             />
           </div>
 
           {/* Vorschau */}
           {!isNaN(betragDecimal) && betragDecimal > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm">
-              <p className="text-blue-700 font-medium">Kassenbuchung wird erstellt:</p>
-              <p className="text-blue-600 mt-0.5">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-sm">
+              <p className="text-blue-700 dark:text-blue-300 font-medium">Kassenbuchung wird erstellt:</p>
+              <p className="text-blue-600 dark:text-blue-400 mt-0.5">
                 {artLabel} {formatEuro(betragDecimal)} via {zahlungsart === 'Bank' ? 'Überweisung' : zahlungsart}
               </p>
             </div>
           )}
 
           {fehler && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
               {fehler}
             </p>
           )}
@@ -210,7 +210,7 @@ function ZahlungsDialog({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50"
+              className="flex-1 px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300"
             >
               Abbrechen
             </button>
@@ -369,13 +369,13 @@ function RechnungDetail({
   }
 
   return (
-    <div className="border-l border-slate-200 bg-white h-full overflow-auto flex flex-col">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <div className="border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-full overflow-auto flex flex-col">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
-          <p className="font-semibold text-slate-800">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
-          <p className="text-xs text-slate-400">{rechnung.typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">{rechnung.typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}</p>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
       </div>
 
       <div className="p-5 space-y-5 flex-1">
@@ -384,13 +384,13 @@ function RechnungDetail({
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleDrucken}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             🖨️ {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie drucken' : 'Drucken'}
           </button>
           <button
             onClick={handlePdfOeffnen}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             📄 {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
           </button>
@@ -401,7 +401,7 @@ function RechnungDetail({
             <button
               onClick={handleMail}
               disabled={pdfLaeuft}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50"
             >
               {pdfLaeuft ? '⏳ PDF…' : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
             </button>
@@ -409,7 +409,7 @@ function RechnungDetail({
           {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && (
             <button
               onClick={() => setZeigStornoEingabe(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400"
             >
               ✕ Stornieren
             </button>
@@ -427,7 +427,7 @@ function RechnungDetail({
               value={mailAdresse}
               onChange={(e) => setMailAdresse(e.target.value)}
               placeholder="E-Mail-Adresse eingeben…"
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleMail()}
             />
@@ -440,7 +440,7 @@ function RechnungDetail({
             </button>
             <button
               onClick={() => { setZeigMailEingabe(false); setMailAdresse('') }}
-              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Abbrechen
             </button>
@@ -449,22 +449,22 @@ function RechnungDetail({
 
         {/* PDF-Hinweis nach Mail-Versand */}
         {pdfHinweis && (
-          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-sm text-blue-800">
+          <div className="flex items-start gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm text-blue-800 dark:text-blue-300">
             <span className="mt-0.5 shrink-0">📎</span>
             <span className="flex-1">
               PDF wurde gespeichert. Bitte die Datei als Anhang in dein E-Mail-Programm einfügen.
             </span>
-            <button onClick={() => setPdfHinweis(false)} className="text-blue-400 hover:text-blue-600 shrink-0">×</button>
+            <button onClick={() => setPdfHinweis(false)} className="text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 shrink-0">×</button>
           </div>
         )}
 
         {/* Storno-Bestätigung */}
         {zeigStornoEingabe && (
-          <div className="flex gap-2 items-center bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-            <span className="text-sm text-red-700 flex-1">
+          <div className="flex gap-2 items-center bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2">
+            <span className="text-sm text-red-700 dark:text-red-300 flex-1">
               Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.
               {rechnung.zahlungen.length > 0 && (
-                <span className="block mt-0.5 text-xs text-red-600">
+                <span className="block mt-0.5 text-xs text-red-600 dark:text-red-400">
                   Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Kassenbuch erstellt.
                 </span>
               )}
@@ -478,7 +478,7 @@ function RechnungDetail({
             </button>
             <button
               onClick={() => setZeigStornoEingabe(false)}
-              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Abbrechen
             </button>
@@ -490,8 +490,8 @@ function RechnungDetail({
 
         {/* Entwurf-Banner */}
         {rechnung.ist_entwurf && (
-          <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            <span className="text-sm text-amber-800 flex items-center gap-1">
+          <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+            <span className="text-sm text-amber-800 dark:text-amber-300 flex items-center gap-1">
               📝 <strong>Entwurf</strong>
               <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
             </span>
@@ -508,24 +508,24 @@ function RechnungDetail({
         {/* Stammdaten */}
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-slate-500">Partner</span>
-            <span className="text-right font-medium text-slate-800">
+            <span className="text-slate-500 dark:text-slate-400">Partner</span>
+            <span className="text-right font-medium text-slate-800 dark:text-slate-100">
               {rechnung.typ === 'ausgang'
                 ? (rechnung.kunde_name ?? rechnung.partner_freitext ?? '—')
                 : (rechnung.lieferant_name ?? rechnung.partner_freitext ?? '—')}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Rechnungsdatum</span>
-            <span>{formatDatum(rechnung.datum)}</span>
+            <span className="text-slate-500 dark:text-slate-400">Rechnungsdatum</span>
+            <span className="dark:text-slate-200">{formatDatum(rechnung.datum)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Leistungsdatum</span>
-            <span>{rechnung.leistungsdatum ? formatDatum(rechnung.leistungsdatum) : formatDatum(rechnung.datum)}</span>
+            <span className="text-slate-500 dark:text-slate-400">Leistungsdatum</span>
+            <span className="dark:text-slate-200">{rechnung.leistungsdatum ? formatDatum(rechnung.leistungsdatum) : formatDatum(rechnung.datum)}</span>
           </div>
           {rechnung.faellig_am && (
             <div className="flex justify-between">
-              <span className="text-slate-500">Fällig am</span>
+              <span className="text-slate-500 dark:text-slate-400">Fällig am</span>
               <span className={
                 rechnung.zahlungsstatus !== 'bezahlt' && rechnung.faellig_am < heuteIso()
                   ? 'text-red-600 font-medium'
@@ -534,7 +534,7 @@ function RechnungDetail({
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-slate-500">Status</span>
+            <span className="text-slate-500 dark:text-slate-400">Status</span>
             <StatusBadge status={rechnung.zahlungsstatus} />
           </div>
         </div>
@@ -542,36 +542,36 @@ function RechnungDetail({
         {/* Positionen */}
         {rechnung.positionen.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Positionen</p>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Positionen</p>
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
               <table className="w-full text-xs">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
-                    <th className="px-3 py-2 text-left text-slate-500 font-medium">Beschreibung</th>
-                    <th className="px-3 py-2 text-right text-slate-500 font-medium">Netto</th>
-                    <th className="px-3 py-2 text-right text-slate-500 font-medium">USt</th>
-                    <th className="px-3 py-2 text-right text-slate-500 font-medium">Brutto</th>
+                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Netto</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">USt</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Brutto</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rechnung.positionen.map((pos) => (
-                    <tr key={pos.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2 text-slate-700">
+                    <tr key={pos.id} className="border-t border-slate-100 dark:border-slate-700">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {pos.beschreibung}
                         {parseFloat(pos.menge) !== 1 && (
-                          <span className="text-slate-400"> × {pos.menge} {pos.einheit}</span>
+                          <span className="text-slate-400 dark:text-slate-500"> × {pos.menge} {pos.einheit}</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right">{formatEuro(pos.netto)}</td>
-                      <td className="px-3 py-2 text-right text-slate-400">{pos.ust_satz}%</td>
-                      <td className="px-3 py-2 text-right font-medium">{formatEuro(pos.brutto)}</td>
+                      <td className="px-3 py-2 text-right dark:text-slate-200">{formatEuro(pos.netto)}</td>
+                      <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500">{pos.ust_satz}%</td>
+                      <td className="px-3 py-2 text-right font-medium dark:text-slate-200">{formatEuro(pos.brutto)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-slate-50 border-t border-slate-200">
+                <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                   <tr>
-                    <td colSpan={3} className="px-3 py-2 text-right text-slate-500 font-medium">Gesamt</td>
-                    <td className="px-3 py-2 text-right font-bold text-slate-800">{formatEuro(rechnung.brutto_gesamt)}</td>
+                    <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamt</td>
+                    <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(rechnung.brutto_gesamt)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -581,16 +581,16 @@ function RechnungDetail({
 
         {/* Zahlungsstatus */}
         <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1">
             Zahlung
             <InfoTooltip text="Offen: noch keine Zahlung eingegangen. Teilweise: mindestens eine Teilzahlung verbucht. Bezahlt: Rechnungsbetrag vollständig beglichen. Zahlungen werden automatisch als Kassenbucheinträge gespeichert." />
           </p>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Bezahlt</span>
-              <span className="font-medium">{formatEuro(rechnung.bezahlt_betrag)}</span>
+              <span className="text-slate-500 dark:text-slate-400">Bezahlt</span>
+              <span className="font-medium dark:text-slate-200">{formatEuro(rechnung.bezahlt_betrag)}</span>
             </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
                   rechnung.zahlungsstatus === 'bezahlt'
@@ -602,7 +602,7 @@ function RechnungDetail({
                 style={{ width: `${fortschritt}%` }}
               />
             </div>
-            <div className="flex justify-between text-xs text-slate-400">
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500">
               <span>0 €</span>
               <span>{formatEuro(rechnung.brutto_gesamt)}</span>
             </div>
@@ -612,16 +612,16 @@ function RechnungDetail({
         {/* Verknüpfte Zahlungen */}
         {rechnung.zahlungen.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
               Verknüpfte Kassenbuchungen
             </p>
             <div className="space-y-1">
               {rechnung.zahlungen.map((z) => (
-                <div key={z.id} className="flex items-center justify-between text-sm bg-slate-50 rounded-lg px-3 py-2">
+                <div key={z.id} className="flex items-center justify-between text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
                   <div>
-                    <span className="font-mono text-xs text-slate-400 mr-2">{z.belegnr}</span>
-                    <span className="text-slate-600">{formatDatum(z.datum)}</span>
-                    <span className="ml-1.5 text-xs text-slate-400">{z.zahlungsart}</span>
+                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-2">{z.belegnr}</span>
+                    <span className="text-slate-600 dark:text-slate-300">{formatDatum(z.datum)}</span>
+                    <span className="ml-1.5 text-xs text-slate-400 dark:text-slate-500">{z.zahlungsart}</span>
                   </div>
                   <span className={`font-medium ${z.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'}`}>
                     {z.art === 'Ausgabe' ? '−' : '+'}{formatEuro(z.brutto_betrag)}
@@ -634,14 +634,14 @@ function RechnungDetail({
 
         {rechnung.notizen && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Notizen</p>
-            <p className="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">{rechnung.notizen}</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Notizen</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">{rechnung.notizen}</p>
           </div>
         )}
       </div>
 
       {/* Aktionen */}
-      <div className="p-5 border-t border-slate-100 space-y-2">
+      <div className="p-5 border-t border-slate-100 dark:border-slate-700 space-y-2">
         {hatZahlungsoption && (
           <button
             onClick={() => setZahlungsDialog(true)}
@@ -655,13 +655,13 @@ function RechnungDetail({
           <>
             <button
               onClick={onEdit}
-              className="w-full py-2 text-sm border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
+              className="w-full py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300 transition-colors"
             >
               Bearbeiten
             </button>
             <button
               onClick={onDelete}
-              className="w-full py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+              className="w-full py-2 text-sm text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
             >
               Entwurf löschen
             </button>
@@ -702,7 +702,7 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full border-0 outline-none bg-transparent text-slate-700 min-w-0"
+          className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 min-w-0"
           placeholder="Einheit"
         />
         <button
@@ -728,7 +728,7 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
           onChange(e.target.value)
         }
       }}
-      className="w-full border-0 outline-none bg-transparent text-slate-700 cursor-pointer"
+      className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 cursor-pointer"
     >
       {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
       <option value="__freitext__">Freitext…</option>
@@ -849,7 +849,7 @@ function StammdatenCombobox({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
         />
         {selectedId != null && (
           <span className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-green-600 font-medium whitespace-nowrap">
@@ -869,9 +869,9 @@ function StammdatenCombobox({
       </div>
 
       {offen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-64 overflow-y-auto">
           {gefiltert.length === 0 ? (
-            <div className="px-3 py-2.5 text-sm text-slate-400 italic">
+            <div className="px-3 py-2.5 text-sm text-slate-400 dark:text-slate-500 italic">
               Kein Treffer – wird als Freitext übernommen
             </div>
           ) : (
@@ -884,15 +884,15 @@ function StammdatenCombobox({
                   onMouseEnter={() => setHighlightIdx(idx)}
                   className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                     idx === highlightIdx
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-slate-700 hover:bg-slate-50'
+                      ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {item.label}
                 </button>
               ))}
               {mehrVorhanden && (
-                <div className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
+                <div className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                   Weitere Treffer – Suche verfeinern
                 </div>
               )}
@@ -946,20 +946,20 @@ function BeschreibungAutocomplete({
         value={value}
         onChange={(e) => { onChange(e.target.value); setOffen(true) }}
         onFocus={() => value.length >= 3 && setOffen(true)}
-        className="w-full border-0 outline-none bg-transparent text-slate-700 placeholder-slate-300"
+        className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-500"
         placeholder="Beschreibung"
       />
       {zeigeDropdown && (
-        <div className="absolute top-full left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg min-w-64 max-h-52 overflow-y-auto">
+        <div className="absolute top-full left-0 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg min-w-64 max-h-52 overflow-y-auto">
           {treffer!.map((a) => (
             <button
               key={a.id}
               type="button"
               onClick={() => { onArtikelWahl(a); setOffen(false) }}
-              className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-100 last:border-0"
+              className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 dark:hover:bg-blue-950 border-b border-slate-100 dark:border-slate-700 last:border-0"
             >
-              <div className="font-medium text-slate-800">{a.bezeichnung}</div>
-              <div className="text-slate-400">{a.artikelnummer} · {a.einheit} · {formatEuro(a.vk_brutto)}</div>
+              <div className="font-medium text-slate-800 dark:text-slate-100">{a.bezeichnung}</div>
+              <div className="text-slate-400 dark:text-slate-500">{a.artikelnummer} · {a.einheit} · {formatEuro(a.vk_brutto)}</div>
             </button>
           ))}
         </div>
@@ -1216,34 +1216,34 @@ function RechnungForm({
     <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Rechnungsnummer <span className="text-slate-400 font-normal">(leer = auto)</span>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Rechnungsnummer <span className="text-slate-400 dark:text-slate-500 font-normal">(leer = auto)</span>
           </label>
           <input
             type="text"
             value={rechnungsnummer}
             onChange={(e) => setRechnungsnummer(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             placeholder="wird automatisch vergeben"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Rechnungsdatum *</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Rechnungsdatum *</label>
           <input
             type="date"
             required
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Leistungsdatum
-            {!leistungsdatumManuell && <span className="text-slate-400 font-normal ml-1">(= Rechnungsdatum)</span>}
+            {!leistungsdatumManuell && <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(= Rechnungsdatum)</span>}
           </label>
           <input
             type="date"
@@ -1252,27 +1252,27 @@ function RechnungForm({
               setLeistungsdatum(e.target.value)
               setLeistungsdatumManuell(e.target.value !== datum)
             }}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Fällig am</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig am</label>
           <input
             type="date"
             value={faelligAm}
             min={datum}
             onChange={(e) => setFaelligAm(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Kategorie</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Kategorie</label>
         <select
           value={kategorieId}
           onChange={(e) => setKategorieId(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
         >
           <option value="">— keine —</option>
           {kategorieOptionen}
@@ -1280,7 +1280,7 @@ function RechnungForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
           {typ === 'ausgang' ? 'Kunde' : 'Lieferant'}
         </label>
         <StammdatenCombobox
@@ -1304,7 +1304,7 @@ function RechnungForm({
 
       {/* §19-Hinweis */}
       {istKleinunternehmer && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
           <span className="mt-0.5">ℹ️</span>
           <span>
             <strong>Kleinunternehmer §19 UStG</strong> – Keine Umsatzsteuer ausgewiesen.
@@ -1316,7 +1316,7 @@ function RechnungForm({
       {/* Positionen */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-slate-700">Positionen *</label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Positionen *</label>
           <div className="flex items-center gap-3">
             {!istKleinunternehmer && (
               <button
@@ -1336,23 +1336,23 @@ function RechnungForm({
             </button>
           </div>
         </div>
-        <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50 dark:bg-slate-900">
               <tr>
-                <th className="px-3 py-2 text-left text-slate-500 font-medium">Beschreibung</th>
-                <th className="px-3 py-2 text-right text-slate-500 font-medium w-16">Menge</th>
-                <th className="px-3 py-2 text-left text-slate-500 font-medium w-20">Einheit</th>
-                <th className="px-3 py-2 text-right text-slate-500 font-medium w-24">
+                <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
+                <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
+                <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
+                <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
                   {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
                 </th>
-                <th className="px-3 py-2 text-right text-slate-500 font-medium w-16">USt %</th>
+                <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
                 <th className="px-3 py-2 w-8"></th>
               </tr>
             </thead>
             <tbody>
               {positionen.map((pos, i) => (
-                <tr key={i} className="border-t border-slate-100">
+                <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                   <td className="px-2 py-1.5">
                     <BeschreibungAutocomplete
                       value={pos.beschreibung}
@@ -1365,7 +1365,7 @@ function RechnungForm({
                       type="text"
                       value={pos.menge}
                       onChange={(e) => updatePosition(i, 'menge', e.target.value)}
-                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700"
+                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
                     />
                   </td>
                   <td className="px-2 py-1.5">
@@ -1380,7 +1380,7 @@ function RechnungForm({
                       type="text"
                       value={pos.netto}
                       onChange={(e) => updatePosition(i, 'netto', e.target.value)}
-                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700"
+                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
                       placeholder="0,00"
                     />
                   </td>
@@ -1389,7 +1389,7 @@ function RechnungForm({
                       value={pos.ust_satz}
                       onChange={(e) => updatePosition(i, 'ust_satz', e.target.value)}
                       disabled={istKleinunternehmer}
-                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                     >
                       {istKleinunternehmer ? (
                         <option value="0">0 (§19)</option>
@@ -1419,22 +1419,22 @@ function RechnungForm({
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-slate-50 border-t border-slate-200">
+            <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 text-xs">
-                  Netto{eingabeModus === 'brutto' && <span className="text-slate-400"> (berechnet)</span>}
+                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                  Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
-                <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700">{formatEuro(summen.netto)}</td>
+                <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(summen.netto)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 text-xs">USt</td>
-                <td colSpan={2} className="px-3 py-2 text-right text-slate-600">{formatEuro(summen.ust)}</td>
+                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.ust)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700">
-                  Brutto{eingabeModus === 'netto' && <span className="text-slate-400 font-normal"> (berechnet)</span>}
+                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
+                  Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
-                <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800">{formatEuro(summen.brutto)}</td>
+                <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(summen.brutto)}</td>
               </tr>
             </tfoot>
           </table>
@@ -1442,12 +1442,12 @@ function RechnungForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Notizen</label>
         <textarea
           value={notizen}
           onChange={(e) => setNotizen(e.target.value)}
           rows={2}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
           placeholder="Optionale Bemerkungen"
         />
       </div>
@@ -1456,14 +1456,14 @@ function RechnungForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50"
+          className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300"
         >
           Abbrechen
         </button>
         <button
           type="button"
           onClick={(e) => handleSubmit(e, true)}
-          className="flex-1 px-4 py-2 text-sm border border-slate-300 bg-white text-slate-700 rounded-lg hover:bg-slate-50"
+          className="flex-1 px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
         >
           📝 Entwurf speichern
         </button>
@@ -1560,7 +1560,7 @@ export function RechnungenPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-6 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-2xl font-bold text-slate-800">Rechnungen</h2>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Rechnungen</h2>
             <button
               onClick={() => { setFormModus('neu'); setSelectedId(null) }}
               className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
@@ -1572,13 +1572,13 @@ export function RechnungenPage() {
           {/* Tabs + Filter */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Eingang/Ausgang */}
-            <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+            <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
               {(['ausgang', 'eingang'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => { setTyp(t); setSelectedId(null) }}
                   className={`px-4 py-1.5 transition-colors ${
-                    typ === t ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    typ === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {t === 'ausgang' ? 'Ausgang' : 'Eingang'}
@@ -1587,7 +1587,7 @@ export function RechnungenPage() {
             </div>
 
             {/* Zeitraum-Modus */}
-            <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+            <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
               {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
                 <button
                   key={m}
@@ -1595,7 +1595,7 @@ export function RechnungenPage() {
                   className={`px-3 py-1.5 transition-colors ${
                     filterModus === m
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
@@ -1609,7 +1609,7 @@ export function RechnungenPage() {
                 type="month"
                 value={monat}
                 onChange={(e) => setMonat(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             )}
             {filterModus === 'datum' && (
@@ -1617,7 +1617,7 @@ export function RechnungenPage() {
                 type="date"
                 value={datum}
                 onChange={(e) => setDatum(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             )}
             {filterModus === 'zeitraum' && (
@@ -1626,15 +1626,15 @@ export function RechnungenPage() {
                   type="date"
                   value={datumVon}
                   onChange={(e) => setDatumVon(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
-                <span className="text-slate-400 text-sm">bis</span>
+                <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
                 <input
                   type="date"
                   value={datumBis}
                   min={datumVon}
                   onChange={(e) => setDatumBis(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
             )}
@@ -1643,7 +1643,7 @@ export function RechnungenPage() {
             <select
               value={zahlungsstatus}
               onChange={(e) => setZahlungsstatus(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             >
               <option value="">Alle Status</option>
               <option value="offen">Offen</option>
@@ -1654,9 +1654,9 @@ export function RechnungenPage() {
 
           {/* Fehlermeldung */}
           {fehler && (
-            <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-700 flex items-center justify-between">
+            <div className="mt-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 text-sm text-red-700 dark:text-red-300 flex items-center justify-between">
               <span>{fehler}</span>
-              <button onClick={() => setFehler(null)} className="text-red-400 hover:text-red-600">×</button>
+              <button onClick={() => setFehler(null)} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300">×</button>
             </div>
           )}
         </div>
@@ -1664,37 +1664,37 @@ export function RechnungenPage() {
         {/* Kennzahlen */}
         {liste.length > 0 && (
           <div className="px-6 pb-3 grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
-              <p className="text-xs text-slate-500 mb-0.5">Rechnungen</p>
-              <p className="text-lg font-bold text-slate-800">{liste.length}</p>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Rechnungen</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{liste.length}</p>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
-              <p className="text-xs text-slate-500 mb-0.5">Gesamt</p>
-              <p className="text-lg font-bold text-slate-800">{formatEuro(gesamt.brutto)}</p>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Gesamt</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatEuro(gesamt.brutto)}</p>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
-              <p className="text-xs text-slate-500 mb-0.5">Offen</p>
-              <p className="text-lg font-bold text-amber-600">{formatEuro(gesamt.brutto - gesamt.bezahlt)}</p>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
+              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatEuro(gesamt.brutto - gesamt.bezahlt)}</p>
             </div>
           </div>
         )}
 
         {/* Tabelle */}
         <div className="flex-1 overflow-auto px-6 pb-6">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {isLoading ? (
-              <p className="p-5 text-slate-400 text-sm">Lade Rechnungen…</p>
+              <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Lade Rechnungen…</p>
             ) : liste.length === 0 ? (
-              <p className="p-5 text-slate-400 text-sm">Keine Rechnungen im gewählten Zeitraum.</p>
+              <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Keine Rechnungen im gewählten Zeitraum.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Datum</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nummer</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Partner</th>
-                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Brutto</th>
-                    <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Partner</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
+                    <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1702,27 +1702,27 @@ export function RechnungenPage() {
                     <tr
                       key={r.id}
                       onClick={() => { setSelectedId(r.id); setFormModus(null) }}
-                      className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors ${
-                        selectedId === r.id ? 'bg-blue-50/50' : ''
+                      className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
+                        selectedId === r.id ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''
                       } ${r.storniert ? 'opacity-50' : ''}`}
                     >
-                      <td className="px-5 py-3 text-slate-500">{formatDatum(r.datum)}</td>
-                      <td className="px-5 py-3 font-mono text-xs text-slate-400">
+                      <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(r.datum)}</td>
+                      <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
                         {r.rechnungsnummer ?? '—'}
-                        {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">Entwurf</span>}
-                        {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 bg-slate-100 border border-slate-200 rounded px-1">Storniert</span>}
+                        {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1">Entwurf</span>}
+                        {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1">Storniert</span>}
                       </td>
-                      <td className="px-5 py-3 text-slate-700">
+                      <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
                         {r.typ === 'ausgang'
                           ? (r.kunde_name ?? r.partner_freitext ?? '—')
                           : (r.lieferant_name ?? r.partner_freitext ?? '—')}
                         {r.faellig_am && r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
-                          <span className="ml-1.5 text-[10px] text-red-600 bg-red-50 border border-red-200 rounded px-1">
+                          <span className="ml-1.5 text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">
                             Überfällig
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right font-medium text-slate-800">
+                      <td className="px-5 py-3 text-right font-medium text-slate-800 dark:text-slate-100">
                         {formatEuro(r.brutto_gesamt)}
                       </td>
                       <td className="px-5 py-3 text-center">
@@ -1741,14 +1741,14 @@ export function RechnungenPage() {
 
       {/* Rechte Spalte: Detail oder Formular */}
       {formModus && (
-        <div className="w-[480px] shrink-0 border-l border-slate-200 bg-white overflow-auto">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-800">
+        <div className="w-[480px] shrink-0 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-auto">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">
               {formModus === 'neu'
                 ? `Neue ${typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}`
                 : 'Rechnung bearbeiten'}
             </h3>
-            <button onClick={() => setFormModus(null)} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
+            <button onClick={() => setFormModus(null)} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
           </div>
           <div className="p-6">
             <RechnungForm

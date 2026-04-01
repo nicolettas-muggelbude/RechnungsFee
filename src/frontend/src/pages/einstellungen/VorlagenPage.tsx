@@ -16,8 +16,8 @@ export function VorlagenPage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="text-xl font-semibold text-slate-800 mb-1">Rechnungsvorlagen</h1>
-      <p className="text-sm text-slate-500 mb-6">
+      <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-1">Rechnungsvorlagen</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         Wähle die Vorlage die für alle Ausgangsrechnungen verwendet wird.
       </p>
       <div className="flex flex-col gap-4">
@@ -26,8 +26,8 @@ export function VorlagenPage() {
             key={v.id}
             className={`border rounded-lg p-4 flex items-start gap-4 cursor-pointer transition-colors ${
               aktuelleVorlage === v.id
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-slate-200 hover:border-slate-300 bg-white'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 dark:border-blue-700'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800'
             }`}
             onClick={() => mutation.mutate(v.id)}
           >
@@ -38,13 +38,13 @@ export function VorlagenPage() {
               className="mt-0.5 accent-blue-600"
             />
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-slate-800">{v.name}</div>
-              <div className="text-sm text-slate-500 mt-0.5">{v.beschreibung}</div>
+              <div className="font-medium text-slate-800 dark:text-slate-100">{v.name}</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{v.beschreibung}</div>
             </div>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); openDemoPdf(v.id) }}
-              className="shrink-0 text-sm px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+              className="shrink-0 text-sm px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
             >
               Vorschau
             </button>

@@ -72,11 +72,11 @@ export function KassenbuchPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-slate-800">Kassenbuch</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Kassenbuch</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setShowAbschluss(true)}
-            className="border border-slate-300 text-slate-600 rounded-lg px-4 py-2 text-sm hover:bg-slate-50"
+            className="border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Tagesabschluss
           </button>
@@ -92,7 +92,7 @@ export function KassenbuchPage() {
       {/* Filter */}
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         {/* Modus-Umschalter */}
-        <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+        <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
           {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
             <button
               key={m}
@@ -100,7 +100,7 @@ export function KassenbuchPage() {
               className={`px-3 py-1.5 capitalize transition-colors ${
                 filterModus === m
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-50'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
               {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
@@ -114,7 +114,7 @@ export function KassenbuchPage() {
             type="month"
             value={monat}
             onChange={(e) => setMonat(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
           />
         )}
         {filterModus === 'datum' && (
@@ -122,7 +122,7 @@ export function KassenbuchPage() {
             type="date"
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
           />
         )}
         {filterModus === 'zeitraum' && (
@@ -131,15 +131,15 @@ export function KassenbuchPage() {
               type="date"
               value={datumVon}
               onChange={(e) => setDatumVon(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
-            <span className="text-slate-400 text-sm">bis</span>
+            <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
             <input
               type="date"
               value={datumBis}
               min={datumVon}
               onChange={(e) => setDatumBis(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
           </div>
         )}
@@ -148,7 +148,7 @@ export function KassenbuchPage() {
         <select
           value={art}
           onChange={(e) => setArt(e.target.value as '' | 'Einnahme' | 'Ausgabe')}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
         >
           <option value="">Alle Arten</option>
           <option value="Einnahme">Einnahmen</option>
@@ -157,7 +157,7 @@ export function KassenbuchPage() {
         <select
           value={kategorieId}
           onChange={(e) => setKategorieId(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
         >
           <option value="">Alle Kategorien</option>
           {(kategorien ?? []).map((k) => (
@@ -167,21 +167,21 @@ export function KassenbuchPage() {
       </div>
 
       {/* Tabelle */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {isLoading ? (
-          <p className="text-slate-400 text-sm p-5">Lade…</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
         ) : !eintraege?.length ? (
-          <p className="text-slate-400 text-sm p-5">Keine Buchungen gefunden.</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen gefunden.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-left">
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 w-28">Datum</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 w-36">Belegnr.</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Beschreibung</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 w-24">Zahlung</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-right w-28">Einnahme</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-right w-28">Ausgabe</th>
+              <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-28">Datum</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-36">Belegnr.</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Beschreibung</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-24">Zahlung</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 text-right w-28">Einnahme</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 text-right w-28">Ausgabe</th>
               </tr>
             </thead>
             <tbody>
@@ -194,25 +194,25 @@ export function KassenbuchPage() {
                     <tr
                       key={e.id}
                       onClick={() => toggleEintrag(e.id)}
-                      className={`border-b border-slate-100 cursor-pointer select-none transition-colors ${
-                        istAktiv ? 'bg-blue-50' : istStorno ? 'hover:bg-slate-50 opacity-60' : 'hover:bg-slate-50'
+                      className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer select-none transition-colors ${
+                        istAktiv ? 'bg-blue-50 dark:bg-blue-950' : istStorno ? 'hover:bg-slate-50 dark:hover:bg-slate-700 opacity-60' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <td className="px-4 py-3 text-slate-500">{formatDatum(e.datum)}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-400 flex items-center gap-1">
-                        <span className={`inline-block w-3 text-slate-300 transition-transform ${istAktiv ? 'rotate-90' : ''}`}>▶</span>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{formatDatum(e.datum)}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                        <span className={`inline-block w-3 text-slate-300 dark:text-slate-600 transition-transform ${istAktiv ? 'rotate-90' : ''}`}>▶</span>
                         {e.belegnr}
                       </td>
-                      <td className="px-4 py-3 text-slate-700">
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
                         {e.beschreibung}
                         {e.steuerbefreiung_grund && (
-                          <span className="ml-2 text-xs text-slate-400">({e.steuerbefreiung_grund})</span>
+                          <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({e.steuerbefreiung_grund})</span>
                         )}
                         {bereitsStorniert && (
-                          <span className="ml-2 text-xs bg-slate-100 text-slate-400 rounded px-1">storniert</span>
+                          <span className="ml-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded px-1">storniert</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{e.zahlungsart}</td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{e.zahlungsart}</td>
                       <td className="px-4 py-3 text-right font-medium text-green-600">
                         {e.art === 'Einnahme' ? formatEuro(e.brutto_betrag) : ''}
                       </td>

@@ -51,19 +51,19 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
   else                                   stufe = 'kritisch'
 
   const farben = {
-    ok:       { balken: 'bg-green-500',  text: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200' },
-    warn:     { balken: 'bg-amber-400',  text: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-    kritisch: { balken: 'bg-red-500',    text: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'   },
+    ok:       { balken: 'bg-green-500',  text: 'text-green-700 dark:text-green-300',  bg: 'bg-green-50 dark:bg-green-950',  border: 'border-green-200 dark:border-green-800' },
+    warn:     { balken: 'bg-amber-400',  text: 'text-amber-700 dark:text-amber-300',  bg: 'bg-amber-50 dark:bg-amber-950',  border: 'border-amber-200 dark:border-amber-800' },
+    kritisch: { balken: 'bg-red-500',    text: 'text-red-700 dark:text-red-300',    bg: 'bg-red-50 dark:bg-red-950',    border: 'border-red-200 dark:border-red-800'   },
   }[stufe]
 
   return (
     <div className={`rounded-xl border ${farben.border} ${farben.bg} p-4 space-y-3`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
             Zufluss-Monitor
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">Bürgergeld-Grenzwert (§ 11b SGB II)</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Bürgergeld-Grenzwert (§ 11b SGB II)</p>
         </div>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${farben.bg} ${farben.text} border ${farben.border}`}>
           {stufe === 'ok' ? 'Im Freibetrag' : stufe === 'warn' ? 'Achtung' : 'Grenze überschritten'}
@@ -72,12 +72,12 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
 
       {/* Fortschrittsbalken */}
       <div>
-        <div className="flex justify-between text-xs text-slate-400 mb-1">
+        <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 mb-1">
           <span>0 €</span>
-          <span className="text-slate-500 font-medium">{formatEuro(zufluss)}</span>
+          <span className="text-slate-500 dark:text-slate-400 font-medium">{formatEuro(zufluss)}</span>
           <span>{OBERE_GRENZE} €</span>
         </div>
-        <div className="h-3 bg-white rounded-full border border-slate-200 overflow-hidden relative">
+        <div className="h-3 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden relative">
           <div
             className={`h-full rounded-full transition-all ${farben.balken}`}
             style={{ width: `${prozent}%` }}
@@ -88,7 +88,7 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
             style={{ left: `${(GRUNDFREIBETRAG / OBERE_GRENZE) * 100}%` }}
           />
         </div>
-        <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+        <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
           <span />
           <span style={{ marginLeft: `${(GRUNDFREIBETRAG / OBERE_GRENZE) * 100 - 8}%` }}>
             100 €
@@ -100,15 +100,15 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
       {/* Kennzahlen */}
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div>
-          <span className="block text-slate-400">Monatlicher Zufluss</span>
-          <span className="font-semibold text-slate-800">{formatEuro(zufluss)}</span>
+          <span className="block text-slate-400 dark:text-slate-500">Monatlicher Zufluss</span>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">{formatEuro(zufluss)}</span>
         </div>
         <div>
-          <span className="block text-slate-400">Freibetrag (ca.)</span>
-          <span className="font-semibold text-green-700">{formatEuro(freibetrag)}</span>
+          <span className="block text-slate-400 dark:text-slate-500">Freibetrag (ca.)</span>
+          <span className="font-semibold text-green-700 dark:text-green-300">{formatEuro(freibetrag)}</span>
         </div>
         <div>
-          <span className="block text-slate-400">Anrechenbar (ca.)</span>
+          <span className="block text-slate-400 dark:text-slate-500">Anrechenbar (ca.)</span>
           <span className={`font-semibold ${anrechenbar > 0 ? farben.text : 'text-slate-400'}`}>
             {formatEuro(anrechenbar)}
           </span>
@@ -128,7 +128,7 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
         </p>
       )}
 
-      <p className="text-[10px] text-slate-400">
+      <p className="text-[10px] text-slate-400 dark:text-slate-500">
         Berechnungsgrundlage: § 11b Abs. 2 SGB II (Stand 2026). Privateinlagen sind
         ausgeschlossen. Kein Ersatz für individuelle Rechtsberatung.
       </p>
@@ -204,11 +204,11 @@ export function Dashboard() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
 
         {/* Zeitfilter */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+          <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
             {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
               <button
                 key={m}
@@ -216,7 +216,7 @@ export function Dashboard() {
                 className={`px-3 py-1.5 transition-colors ${
                   filterModus === m
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-600 hover:bg-slate-50'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
                 {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
@@ -229,7 +229,7 @@ export function Dashboard() {
               type="month"
               value={monat}
               onChange={(e) => setMonat(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
           )}
           {filterModus === 'datum' && (
@@ -237,7 +237,7 @@ export function Dashboard() {
               type="date"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
           )}
           {filterModus === 'zeitraum' && (
@@ -246,15 +246,15 @@ export function Dashboard() {
                 type="date"
                 value={datumVon}
                 onChange={(e) => setDatumVon(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
-              <span className="text-slate-400 text-sm">bis</span>
+              <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
               <input
                 type="date"
                 value={datumBis}
                 min={datumVon}
                 onChange={(e) => setDatumBis(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
             </div>
           )}
@@ -270,20 +270,20 @@ export function Dashboard() {
 
       {/* Kacheln (nur Betriebsbuchungen) */}
       <div className="grid grid-cols-3 gap-4 mb-2">
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <p className="text-sm text-slate-500 mb-1">Betriebseinnahmen</p>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebseinnahmen</p>
           <p className="text-2xl font-bold text-green-600">
             {loaded ? formatEuro(einnahmen) : '—'}
           </p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <p className="text-sm text-slate-500 mb-1">Betriebsausgaben</p>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebsausgaben</p>
           <p className="text-2xl font-bold text-red-600">
             {loaded ? formatEuro(ausgaben) : '—'}
           </p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <p className="text-sm text-slate-500 mb-1">Saldo</p>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Saldo</p>
           <p className={`text-2xl font-bold ${saldo >= 0 ? 'text-blue-600' : 'text-red-700'}`}>
             {loaded ? formatEuro(saldo) : '—'}
           </p>
@@ -292,7 +292,7 @@ export function Dashboard() {
 
       {/* Privat-Hinweis unter den Kacheln */}
       {hatPrivatbuchungen && (
-        <p className="text-xs text-slate-400 mb-6 pl-1">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 pl-1">
           🏠 {privat.length} Privatbuchung{privat.length !== 1 ? 'en' : ''} (
           {formatEuro(privat.reduce((s, e) => s + parseFloat(e.brutto_betrag), 0))}) im
           gewählten Zeitraum – nicht in den Kacheln enthalten.
@@ -301,23 +301,23 @@ export function Dashboard() {
       {!hatPrivatbuchungen && <div className="mb-6" />}
 
       {/* Letzte Buchungen */}
-      <div className="bg-white rounded-xl border border-slate-200">
-        <div className="px-5 py-3 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-700">Letzte Buchungen</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700">
+          <h3 className="font-semibold text-slate-700 dark:text-slate-200">Letzte Buchungen</h3>
         </div>
         {letzte5.length === 0 ? (
-          <p className="text-slate-400 text-sm p-5">Keine Buchungen im gewählten Zeitraum.</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen im gewählten Zeitraum.</p>
         ) : (
           <table className="w-full text-sm">
             <tbody>
               {letzte5.map((e) => (
-                <tr key={e.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-5 py-3 text-slate-500 w-28">{formatDatum(e.datum)}</td>
-                  <td className="px-5 py-3 text-slate-400 w-32 font-mono text-xs">{e.belegnr}</td>
-                  <td className="px-5 py-3 text-slate-700">
+                <tr key={e.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <td className="px-5 py-3 text-slate-500 dark:text-slate-400 w-28">{formatDatum(e.datum)}</td>
+                  <td className="px-5 py-3 text-slate-400 dark:text-slate-500 w-32 font-mono text-xs">{e.belegnr}</td>
+                  <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
                     {e.beschreibung}
                     {e.kategorie_kontenart === 'Privat' && (
-                      <span className="ml-1.5 text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded px-1">
+                      <span className="ml-1.5 text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded px-1 dark:bg-purple-950 dark:border-purple-800">
                         Privat
                       </span>
                     )}

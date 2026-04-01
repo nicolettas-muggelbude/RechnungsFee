@@ -66,12 +66,12 @@ export function SetupWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">🧾 RechnungsFee</h1>
-          <p className="text-slate-500 mt-1">Einrichtung in 4 Schritten</p>
+          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">🧾 RechnungsFee</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Einrichtung in 4 Schritten</p>
         </div>
 
         {/* Fortschrittsanzeige */}
@@ -81,38 +81,38 @@ export function SetupWizard() {
               {/* Verbindungslinie zur linken Seite (zum vorigen Schritt) */}
               {i > 0 && (
                 <div className={`absolute left-0 right-1/2 top-[17px] h-0.5 ${
-                  i <= step ? 'bg-green-400' : 'bg-slate-200'
+                  i <= step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
                 }`} />
               )}
               {/* Verbindungslinie zur rechten Seite (zum nächsten Schritt) */}
               {i < STEPS.length - 1 && (
                 <div className={`absolute left-1/2 right-0 top-[17px] h-0.5 ${
-                  i < step ? 'bg-green-400' : 'bg-slate-200'
+                  i < step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
                 }`} />
               )}
               {/* Schritt-Kreis (z-10 überdeckt die Linien) */}
               <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
                 i < step ? 'bg-green-500 text-white' :
                 i === step ? 'bg-blue-600 text-white' :
-                'bg-slate-200 text-slate-500'
+                'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>
               <div className="text-center mt-1">
-                <p className={`text-xs font-medium ${i === step ? 'text-blue-700' : 'text-slate-500'}`}>{s.label}</p>
-                <p className="text-xs text-slate-400 hidden sm:block">{s.desc}</p>
+                <p className={`text-xs font-medium ${i === step ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{s.label}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 hidden sm:block">{s.desc}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Formular-Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-1">{STEPS[step].label}</h2>
-          <p className="text-sm text-slate-500 mb-5">{STEPS[step].desc}</p>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">{STEPS[step].label}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{STEPS[step].desc}</p>
 
           {error && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
               ⚠️ {error}
             </div>
           )}
@@ -123,7 +123,7 @@ export function SetupWizard() {
           {step === 3 && <StepKassenbestand onNext={handleStep3} onBack={() => setStep(2)} isLoading={saveMutation.isPending} />}
         </div>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-6">
           Du kannst alle Angaben später unter Einstellungen ändern.
         </p>
       </div>

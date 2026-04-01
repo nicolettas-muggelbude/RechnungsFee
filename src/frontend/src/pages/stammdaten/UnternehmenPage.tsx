@@ -13,14 +13,14 @@ import { InfoTooltip } from '../../components/InfoTooltip'
 function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{label}</label>
       {children}
     </div>
   )
 }
 
-const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-const selectCls = `${inputCls} bg-white`
+const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
+const selectCls = `${inputCls} bg-white dark:bg-slate-700`
 
 // ---------------------------------------------------------------------------
 // Logo-Sektion
@@ -74,7 +74,7 @@ function LogoSektion({
   return (
     <div className="flex items-start gap-6">
       {/* Vorschau */}
-      <div className="w-28 h-20 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 flex-shrink-0">
+      <div className="w-28 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-900 flex-shrink-0">
         {logoVorhanden ? (
           <img
             src={logoSrc}
@@ -100,7 +100,7 @@ function LogoSektion({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploadMut.isPending}
-          className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+          className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
         >
           {uploadMut.isPending ? 'Lädt…' : logoVorhanden ? 'Logo ändern' : 'Logo hochladen'}
         </button>
@@ -109,12 +109,12 @@ function LogoSektion({
             type="button"
             onClick={() => deleteMut.mutate()}
             disabled={deleteMut.isPending}
-            className="px-4 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600 disabled:opacity-50"
+            className="px-4 py-2 text-sm border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400 disabled:opacity-50"
           >
             {deleteMut.isPending ? '…' : 'Entfernen'}
           </button>
         )}
-        <p className="text-xs text-slate-400">PNG, JPEG oder WEBP · max. 2 MB</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">PNG, JPEG oder WEBP · max. 2 MB</p>
         {fehler && <p className="text-xs text-red-600">{fehler}</p>}
       </div>
     </div>
@@ -174,7 +174,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       {/* Kontaktdaten */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Firmendaten</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Firmendaten</h3>
         <Field label="Firmen- oder Tätigkeitsname *">{inp('firmenname', 'z.B. Maria Muster Webdesign')}</Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Vorname">{inp('vorname', 'Maria')}</Field>
@@ -211,7 +211,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       {/* Steuer */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Steuer</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Steuer</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label={<>Steuernummer <InfoTooltip text="Deine Steuernummer vom Finanzamt (z.B. 12/345/67890). Muss auf Rechnungen nach §14 UStG angegeben werden, wenn keine USt-IdNr. vorhanden ist." /></>}>{inp('steuernummer', '12/345/67890')}</Field>
           <Field label="Finanzamt">{inp('finanzamt', 'Finanzamt Berlin-Mitte')}</Field>
@@ -226,11 +226,11 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700 flex items-center gap-1">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
               Kleinunternehmer (§19 UStG)
               <InfoTooltip text="Als Kleinunternehmer nach §19 UStG weist du keine Umsatzsteuer auf Rechnungen aus und kannst keine Vorsteuer abziehen. Voraussetzung: Jahresumsatz im Vorjahr unter 25.000 €. Diese Einstellung wirkt auf alle Rechnungen und Buchungen." side="bottom" />
             </span>
-            <p className="text-xs text-slate-500 mt-0.5">Keine USt auf Rechnungen, kein Vorsteuerabzug.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Keine USt auf Rechnungen, kein Vorsteuerabzug.</p>
           </div>
         </label>
 
@@ -294,8 +294,8 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       {/* Beruf & Kammer */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Beruf & Kammermitgliedschaft</h3>
-        <p className="text-xs text-slate-400">
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Beruf & Kammermitgliedschaft</h3>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
           Optional – erscheint auf Rechnungen. Relevant für Anwälte, Steuerberater, Architekten und andere Kammerberufe.
         </p>
         <div className="grid grid-cols-2 gap-4">
@@ -308,8 +308,8 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       {/* Handelsregister */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Handelsregister</h3>
-        <p className="text-xs text-slate-400">Nur für GmbH, UG, AG etc. – Einzelunternehmer und Freiberufler leer lassen.</p>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Handelsregister</h3>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Nur für GmbH, UG, AG etc. – Einzelunternehmer und Freiberufler leer lassen.</p>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Register-Nr.">{inp('handelsregister_nr', 'HRB 215517')}</Field>
           <Field label="Registergericht">{inp('handelsregister_gericht', 'Oldenburg')}</Field>
@@ -320,7 +320,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
       {/* Bank */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Bankverbindung</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Bankverbindung</h3>
         <Field label="IBAN">{inp('iban', 'DE89 3704 0044 0532 0130 00')}</Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="BIC">{inp('bic', 'COBADEFFXXX')}</Field>
@@ -329,7 +329,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Rechnungs-PDF</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Rechnungs-PDF</h3>
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -338,8 +338,8 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
           />
           <div>
-            <span className="text-sm font-medium text-slate-700">Standard-Zahlungshinweis anzeigen</span>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Standard-Zahlungshinweis anzeigen</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Fügt automatisch „Bitte überweisen Sie … auf IBAN …" unter dem Rechnungsbetrag ein.
               Deaktivieren wenn du einen eigenen Text im Notizfeld der Rechnung hinterlegen möchtest.
             </p>
@@ -413,13 +413,13 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
   return (
     <div className="space-y-5">
       {/* Platzhalter-Legende */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <p className="text-sm font-medium text-blue-800 mb-2">Verfügbare Platzhalter</p>
+      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+        <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Verfügbare Platzhalter</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-1">
           {PLATZHALTER.map(p => (
             <div key={p.key} className="flex gap-2 text-xs">
-              <code className="text-blue-700 font-mono whitespace-nowrap">{p.key}</code>
-              <span className="text-blue-600">{p.desc}</span>
+              <code className="text-blue-700 dark:text-blue-300 font-mono whitespace-nowrap">{p.key}</code>
+              <span className="text-blue-600 dark:text-blue-400">{p.desc}</span>
             </div>
           ))}
         </div>
@@ -459,7 +459,7 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
         <button
           type="button"
           onClick={() => { setBetreff(DEFAULT_BETREFF); setText(DEFAULT_TEXT) }}
-          className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+          className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
         >
           Zurücksetzen
         </button>
@@ -512,9 +512,9 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
 
         {/* Vorschau */}
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700">Vorschau</p>
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 min-h-32">
-            <pre className="text-xs text-slate-600 whitespace-pre-wrap font-sans">{signatur || <span className="text-slate-300 italic">Noch kein Text eingegeben</span>}</pre>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</p>
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 min-h-32">
+            <pre className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans">{signatur || <span className="text-slate-300 dark:text-slate-600 italic">Noch kein Text eingegeben</span>}</pre>
           </div>
         </div>
       </div>
@@ -533,7 +533,7 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
         <button
           type="button"
           onClick={() => setSignatur(DEFAULT_SIGNATUR(data.firmenname))}
-          className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+          className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
         >
           Zurücksetzen
         </button>
@@ -549,9 +549,9 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100">
-        <h2 className="font-semibold text-slate-800">{title}</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
       </div>
       <div className="p-6">{children}</div>
     </div>
@@ -586,8 +586,8 @@ export function UnternehmenPage() {
   return (
     <div className="p-6 max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-1">Unternehmen</h1>
-        <p className="text-slate-500 text-sm">Firmendaten, Logo und Mail-Vorlagen verwalten</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Unternehmen</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">Firmendaten, Logo und Mail-Vorlagen verwalten</p>
       </div>
 
       <Card title="Firmendaten & Logo">

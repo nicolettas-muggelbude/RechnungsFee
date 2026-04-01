@@ -358,18 +358,18 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-800">Neue Buchung</h2>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Neue Buchung</h2>
           {isSplit && (
-            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
               Split-Modus
             </span>
           )}
         </div>
 
         {istKleinunternehmer && (
-          <div className="mb-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+          <div className="mb-4 flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
             <span className="mt-0.5">ℹ️</span>
             <span>
               <strong>Kleinunternehmer §19 UStG</strong> – Keine Umsatzsteuer ausgewiesen. USt-Satz
@@ -392,9 +392,9 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                     className={`text-center py-2 rounded-lg border-2 font-medium text-sm transition-colors ${
                       art === a
                         ? a === 'Einnahme'
-                          ? 'border-green-500 bg-green-50 text-green-700'
-                          : 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300'
+                          : 'border-red-500 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
                     {a}
@@ -408,7 +408,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               <button
                 type="button"
                 onClick={() => toggleSplit(true)}
-                className="w-full flex items-center justify-between border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                className="w-full flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
               >
                 <span>Mehrere Positionen auf unterschiedliche Kategorien?</span>
                 <span className="flex items-center gap-1 font-medium">
@@ -421,21 +421,21 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             {/* Datum + Zahlungsart */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Datum</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Datum</label>
                 <input
                   type="date"
                   {...register('datum')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
                 {errors.datum && (
                   <p className="text-red-500 text-xs mt-0.5">{errors.datum.message}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Zahlungsart</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Zahlungsart</label>
                 <select
                   {...register('zahlungsart')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 >
                   {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
                 </select>
@@ -444,12 +444,12 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Beschreibung */}
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Beschreibung</label>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Beschreibung</label>
               <input
                 type="text"
                 {...register('beschreibung')}
                 placeholder="z.B. Büromaterial"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
               {errors.beschreibung && (
                 <p className="text-red-500 text-xs mt-0.5">{errors.beschreibung.message}</p>
@@ -458,23 +458,23 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Externe Belegnr. */}
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                Externe Belegnr. <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                Externe Belegnr. <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 {...register('externe_belegnr')}
                 placeholder="z.B. RE-2024-00123"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
 
             {/* Kategorie */}
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Kategorie</label>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Kategorie</label>
               <select
                 {...register('kategorie_id')}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               >
                 <option value="">— keine —</option>
                 {renderKategorieOptgroups(art)}
@@ -483,7 +483,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Privat-Hinweis */}
             {istPrivatKategorie && (
-              <div className="flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800">
+              <div className="flex items-start gap-2 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2 text-xs text-purple-800 dark:text-purple-300">
                 <span className="mt-0.5 shrink-0">🏠</span>
                 <span>
                   <strong>Privatbuchung</strong> – kein Betriebsvorgang. Wird nicht in der
@@ -496,12 +496,12 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             {/* Kunde (nur Einnahmen) */}
             {art === 'Einnahme' && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Kunde <span className="text-slate-400 font-normal">(optional)</span>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  Kunde <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
                 </label>
                 <select
                   {...register('kunde_id')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 >
                   <option value="">— kein Kunde —</option>
                   {(kunden ?? [])
@@ -523,7 +523,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-600">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                     {eingabeModus === 'brutto' ? 'Brutto-Betrag (€)' : 'Netto-Betrag (€)'}
                   </label>
                   {!istKleinunternehmer && (
@@ -542,14 +542,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                   min="0.01"
                   {...register('brutto_betrag')}
                   placeholder="0,00"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
                 {errors.brutto_betrag && (
                   <p className="text-red-500 text-xs mt-0.5">{errors.brutto_betrag.message}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                   USt-Satz (%)
                   {!istKleinunternehmer && unternehmen?.taetigkeitsart === 'freiberuflich' && (
                     <span className="ml-1 text-slate-400 font-normal">
@@ -560,7 +560,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                 <select
                   {...register('ust_satz')}
                   disabled={istKleinunternehmer || istPrivatKategorie}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
                   <option value="0">
                     {istKleinunternehmer ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : '0 %'}
@@ -573,17 +573,17 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* USt-Vorschau */}
             {ustSatz > 0 && eingabeWert > 0 && (
-              <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 grid grid-cols-3 gap-2">
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-300 grid grid-cols-3 gap-2">
                 <div>
-                  <span className="block text-slate-400">Netto</span>
+                  <span className="block text-slate-400 dark:text-slate-500">Netto</span>
                   {netto.toFixed(2)} €
                 </div>
                 <div>
-                  <span className="block text-slate-400">USt {ustSatz} %</span>
+                  <span className="block text-slate-400 dark:text-slate-500">USt {ustSatz} %</span>
                   {ustBetrag.toFixed(2)} €
                 </div>
                 <div>
-                  <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400'}`}>
+                  <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`}>
                     Brutto {eingabeModus === 'netto' ? '(berechnet)' : ''}
                   </span>
                   {brutto.toFixed(2)} €
@@ -593,7 +593,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Vorsteuerabzug */}
             {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && (
-              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
                 <span className="flex items-center gap-1">
                   Vorsteuerabzug geltend machen
@@ -603,7 +603,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             )}
 
             {kassenstandUeberschrittenSingle && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
+              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-800 dark:text-red-300">
                 <span className="mt-0.5 shrink-0">⛔</span>
                 <span>
                   <strong>Kassenstand nicht ausreichend.</strong> Aktueller Kassenstand:{' '}
@@ -620,7 +620,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 Abbrechen
               </button>
@@ -649,9 +649,9 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                     className={`text-center py-2 rounded-lg border-2 font-medium text-sm transition-colors ${
                       artSplit === a
                         ? a === 'Einnahme'
-                          ? 'border-green-500 bg-green-50 text-green-700'
-                          : 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300'
+                          : 'border-red-500 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
                     {a}
@@ -664,30 +664,30 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             <button
               type="button"
               onClick={() => toggleSplit(false)}
-              className="w-full flex items-center justify-between border border-dashed border-blue-200 rounded-lg px-3 py-2 text-sm text-blue-500 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+              className="w-full flex items-center justify-between border border-dashed border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-sm text-blue-500 dark:text-blue-400 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
             >
               <span>← Zurück zur einfachen Buchung</span>
-              <span className="text-xs text-slate-400">eine Position, eine Kategorie</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">eine Position, eine Kategorie</span>
             </button>
 
             {/* Datum + Zahlungsart */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Datum</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Datum</label>
                 <input
                   type="date"
                   {...registerS('datum')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
                 {errorsS.datum && (
                   <p className="text-red-500 text-xs mt-0.5">{errorsS.datum.message}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Zahlungsart</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Zahlungsart</label>
                 <select
                   {...registerS('zahlungsart')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 >
                   {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
                 </select>
@@ -696,26 +696,26 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Externe Belegnr. */}
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                Externe Belegnr. <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                Externe Belegnr. <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 {...registerS('externe_belegnr')}
                 placeholder="z.B. Kassenbon-Nr."
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
 
             {/* Kunde (nur Einnahmen) */}
             {artSplit === 'Einnahme' && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Kunde <span className="text-slate-400 font-normal">(optional)</span>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  Kunde <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
                 </label>
                 <select
                   {...registerS('kunde_id')}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 >
                   <option value="">— kein Kunde —</option>
                   {(kunden ?? [])
@@ -735,8 +735,8 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
             {/* Eingabemodus-Umschalter für Split */}
             {!istKleinunternehmer && (
-              <div className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
-                <span className="text-slate-600">
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 text-sm">
+                <span className="text-slate-600 dark:text-slate-300">
                   Beträge eingeben als:{' '}
                   <strong>{eingabeModus === 'brutto' ? 'Brutto' : 'Netto'}</strong>
                 </span>
@@ -753,7 +753,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             {/* Positionen */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
                   Positionen
                 </label>
                 <button
@@ -791,10 +791,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                   return (
                     <div
                       key={field.id}
-                      className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50"
+                      className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2 bg-slate-50 dark:bg-slate-900"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-500">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                           Position {i + 1}
                         </span>
                         {fields.length > 2 && (
@@ -812,7 +812,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                         type="text"
                         {...registerS(`positionen.${i}.beschreibung`)}
                         placeholder="Beschreibung *"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {errorsS.positionen?.[i]?.beschreibung && (
                         <p className="text-red-500 text-xs">
@@ -829,7 +829,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                             <select
                               value={f.value}
                               onChange={(e) => handleSplitKategorieChange(i, e.target.value)}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                               <option value="">— Kategorie —</option>
                               {renderKategorieOptgroups(artSplit)}
@@ -845,7 +845,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                             min="0.01"
                             {...registerS(`positionen.${i}.brutto_betrag`)}
                             placeholder={eingabeModus === 'brutto' ? 'Brutto (€)' : 'Netto (€)'}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           {errorsS.positionen?.[i]?.brutto_betrag && (
                             <p className="text-red-500 text-xs mt-0.5">
@@ -859,7 +859,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                         <select
                           {...registerS(`positionen.${i}.ust_satz`)}
                           disabled={istKleinunternehmer}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                         >
                           <option value="0">
                             {istKleinunternehmer ? '0 % (§19 UStG)' : '0 %'}
@@ -869,7 +869,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                         </select>
 
                         {artSplit === 'Ausgabe' && !istKleinunternehmer ? (
-                          <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
                             <input
                               type="checkbox"
                               {...registerS(`positionen.${i}.vorsteuerabzug`)}
@@ -886,17 +886,17 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                       </div>
 
                       {u > 0 && inputVal > 0 && (
-                        <div className="bg-white rounded p-2 text-xs text-slate-500 grid grid-cols-3 gap-1">
+                        <div className="bg-white dark:bg-slate-800 rounded p-2 text-xs text-slate-500 dark:text-slate-300 grid grid-cols-3 gap-1">
                           <div>
-                            <span className="block text-slate-400">Netto</span>
+                            <span className="block text-slate-400 dark:text-slate-500">Netto</span>
                             {posNetto.toFixed(2)} €
                           </div>
                           <div>
-                            <span className="block text-slate-400">USt {u} %</span>
+                            <span className="block text-slate-400 dark:text-slate-500">USt {u} %</span>
                             {posUst.toFixed(2)} €
                           </div>
                           <div>
-                            <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400'}`}>
+                            <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`}>
                               Brutto {eingabeModus === 'netto' ? '→' : ''}
                             </span>
                             {b.toFixed(2)} €
@@ -909,7 +909,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </div>
 
               {gesamtBrutto > 0 && (
-                <div className="mt-3 flex justify-between items-center bg-slate-100 rounded-lg px-4 py-2 text-sm font-semibold text-slate-700">
+                <div className="mt-3 flex justify-between items-center bg-slate-100 dark:bg-slate-700 rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                   <span>Gesamt-Brutto</span>
                   <span>{formatEuro(gesamtBrutto)}</span>
                 </div>
@@ -917,7 +917,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
             </div>
 
             {kassenstandUeberschrittenSplit && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-800">
+              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-800 dark:text-red-300">
                 <span className="mt-0.5 shrink-0">⛔</span>
                 <span>
                   <strong>Kassenstand nicht ausreichend.</strong> Aktueller Kassenstand:{' '}
@@ -934,7 +934,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 Abbrechen
               </button>

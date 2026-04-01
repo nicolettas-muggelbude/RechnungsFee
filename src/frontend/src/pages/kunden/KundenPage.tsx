@@ -38,54 +38,54 @@ function KundeRechnungen({ kunde }: { kunde: Kunde }) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-slate-200 shrink-0">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
           Rechnungen ({rechnungen?.length ?? '…'})
         </p>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
-        {isLoading && <p className="text-xs text-slate-400 p-1">Lade…</p>}
+        {isLoading && <p className="text-xs text-slate-400 dark:text-slate-500 p-1">Lade…</p>}
         {!isLoading && !rechnungen?.length && (
-          <p className="text-xs text-slate-400 p-1">Noch keine Ausgangsrechnungen.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 p-1">Noch keine Ausgangsrechnungen.</p>
         )}
         {rechnungen?.map((r: Rechnung) => (
-          <div key={r.id} className="border border-slate-200 rounded-lg overflow-hidden">
+          <div key={r.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button
               type="button"
               onClick={() => setOffeneRechnung(offeneRechnung === r.id ? null : r.id)}
-              className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 text-left gap-2"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-left gap-2 dark:bg-slate-800"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-slate-400 shrink-0">{r.rechnungsnummer ?? '—'}</span>
-                  <span className="font-semibold text-slate-700">{formatEuro(r.brutto_gesamt)}</span>
+                  <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0">{r.rechnungsnummer ?? '—'}</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{formatEuro(r.brutto_gesamt)}</span>
                 </div>
-                <div className="text-slate-400">{formatDatum(r.datum)}</div>
+                <div className="text-slate-400 dark:text-slate-500">{formatDatum(r.datum)}</div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${
-                  r.zahlungsstatus === 'bezahlt' ? 'bg-green-50 text-green-700 border-green-200'
-                  : r.zahlungsstatus === 'teilweise' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-red-50 text-red-700 border-red-200'
+                  r.zahlungsstatus === 'bezahlt' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800'
+                  : r.zahlungsstatus === 'teilweise' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                  : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800'
                 }`}>
                   {r.zahlungsstatus === 'bezahlt' ? 'Bezahlt' : r.zahlungsstatus === 'teilweise' ? 'Teil' : 'Offen'}
                 </span>
-                <span className="text-slate-400">{offeneRechnung === r.id ? '▲' : '▼'}</span>
+                <span className="text-slate-400 dark:text-slate-500">{offeneRechnung === r.id ? '▲' : '▼'}</span>
               </div>
             </button>
             {offeneRechnung === r.id && r.positionen.length > 0 && (
-              <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
                 {r.positionen.map((p) => (
-                  <div key={p.id} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0 text-xs">
-                    <span className="text-slate-700 min-w-0">
+                  <div key={p.id} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-700 last:border-0 text-xs">
+                    <span className="text-slate-700 dark:text-slate-200 min-w-0">
                       {p.beschreibung}
                       {p.artikel_typ && (
-                        <span className="ms-1 text-slate-400 bg-slate-200 rounded px-1 py-0.5 text-[10px]">
+                        <span className="ms-1 text-slate-400 dark:text-slate-500 bg-slate-200 dark:bg-slate-700 rounded px-1 py-0.5 text-[10px]">
                           {p.artikel_typ === 'artikel' ? 'Artikel' : p.artikel_typ === 'dienstleistung' ? 'Dienstl.' : 'Fremdl.'}
                         </span>
                       )}
                     </span>
-                    <span className="text-slate-500 shrink-0">{formatEuro(p.brutto)}</span>
+                    <span className="text-slate-500 dark:text-slate-400 shrink-0">{formatEuro(p.brutto)}</span>
                   </div>
                 ))}
               </div>
@@ -221,17 +221,17 @@ export function KundenPage() {
     <div className="flex h-full">
 
       {/* ── Linke Spalte (breit) ─────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col border-e border-slate-200 bg-white min-w-0">
+      <div className="flex-1 flex flex-col border-e border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-w-0">
 
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3 shrink-0">
-          <h2 className="font-semibold text-slate-800 shrink-0">Kunden</h2>
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shrink-0">
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100 shrink-0">Kunden</h2>
           <input
             type="text"
             placeholder="Suchen…"
             value={suche}
             onChange={(e) => setSuche(e.target.value)}
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
           />
           <button onClick={openCreate} className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-blue-700 shrink-0">
             + Neu
@@ -241,17 +241,17 @@ export function KundenPage() {
         {/* Tabelle */}
         <div className="flex-1 overflow-y-auto min-h-0">
           {isLoading ? (
-            <p className="text-slate-400 text-sm p-4">Lade…</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-4">Lade…</p>
           ) : !gefiltert.length ? (
-            <p className="text-slate-400 text-sm p-4">{suche ? 'Keine Treffer.' : 'Noch keine Kunden.'}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-4">{suche ? 'Keine Treffer.' : 'Noch keine Kunden.'}</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr className="text-left">
-                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Name / Firma</th>
-                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Adresse</th>
-                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">E-Mail</th>
-                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Kundennr.</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Name / Firma</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Adresse</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">E-Mail</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Kundennr.</th>
                   <th className="px-4 py-2.5 w-28"></th>
                 </tr>
               </thead>
@@ -260,22 +260,22 @@ export function KundenPage() {
                   <tr
                     key={k.id}
                     onClick={() => setSelected(selected?.id === k.id ? null : k)}
-                    className={`border-b border-slate-100 last:border-0 cursor-pointer transition-colors ${
-                      selected?.id === k.id ? 'bg-blue-50' : 'hover:bg-slate-50'
+                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer transition-colors ${
+                      selected?.id === k.id ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <td className={`px-4 py-2.5 font-medium ${selected?.id === k.id ? 'text-blue-700' : 'text-slate-800'}`}>
+                    <td className={`px-4 py-2.5 font-medium ${selected?.id === k.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100'}`}>
                       {kundeName(k)}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-500 text-xs">
+                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs">
                       {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-500">{k.email || '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">{k.kundennummer || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{k.email || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{k.kundennummer || '—'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => openEdit(k)} className="text-xs text-blue-600 hover:underline">Bearbeiten</button>
-                        <button onClick={() => handleDelete(k)} className="text-xs text-red-500 hover:underline">Löschen</button>
+                        <button onClick={() => openEdit(k)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
+                        <button onClick={() => handleDelete(k)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>
                       </div>
                     </td>
                   </tr>
@@ -287,10 +287,10 @@ export function KundenPage() {
 
         {/* Stammdaten-Karte des ausgewählten Kunden */}
         {selected && (
-          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-800">{kundeName(selected)}</span>
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{kundeName(selected)}</span>
                 {selected.ist_verein && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Verein</span>}
                 {selected.ist_gemeinnuetzig && <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Gemeinnützig</span>}
               </div>
@@ -298,31 +298,31 @@ export function KundenPage() {
             </div>
             <div className="grid grid-cols-4 gap-2 text-xs">
               {selected.telefon && (
-                <div><span className="text-slate-400 block">Telefon</span><span className="text-slate-700">{selected.telefon}</span></div>
+                <div><span className="text-slate-400 dark:text-slate-500 block">Telefon</span><span className="text-slate-700 dark:text-slate-200">{selected.telefon}</span></div>
               )}
               {selected.ust_idnr && (
-                <div><span className="text-slate-400 block">USt-IdNr.</span><span className="text-slate-700 font-mono">{selected.ust_idnr}</span></div>
+                <div><span className="text-slate-400 dark:text-slate-500 block">USt-IdNr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.ust_idnr}</span></div>
               )}
               {selected.email && (
-                <div><span className="text-slate-400 block">E-Mail</span><span className="text-slate-700">{selected.email}</span></div>
+                <div><span className="text-slate-400 dark:text-slate-500 block">E-Mail</span><span className="text-slate-700 dark:text-slate-200">{selected.email}</span></div>
               )}
               {selected.kundennummer && (
-                <div><span className="text-slate-400 block">Kundennr.</span><span className="text-slate-700 font-mono">{selected.kundennummer}</span></div>
+                <div><span className="text-slate-400 dark:text-slate-500 block">Kundennr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.kundennummer}</span></div>
               )}
             </div>
             {selected.notizen && (
-              <p className="mt-2 text-xs text-slate-600 bg-white rounded border border-slate-200 px-2 py-1.5 whitespace-pre-wrap">{selected.notizen}</p>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 whitespace-pre-wrap">{selected.notizen}</p>
             )}
           </div>
         )}
       </div>
 
       {/* ── Rechte Spalte (schmal, Rechnungen) ───────────────────────── */}
-      <div className="w-80 shrink-0 bg-white">
+      <div className="w-80 shrink-0 bg-white dark:bg-slate-800">
         {selected ? (
           <KundeRechnungen key={selected.id} kunde={selected} />
         ) : (
-          <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+          <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
             Kunden auswählen
           </div>
         )}
@@ -331,12 +331,12 @@ export function KundenPage() {
       {/* ── Bearbeiten-Modal ──────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
               {editKunde ? 'Kunde bearbeiten' : 'Neuer Kunde'}
             </h2>
             {deleteFehlgeschlagen && (
-              <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+              <div className="mb-4 bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-lg px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-medium">Löschen nicht möglich</p>
                 <p className="mt-0.5">Dieser Kunde hat verknüpfte Buchungen oder Rechnungen. Verwende <strong>„Anonymisieren (Art. 17)"</strong>.</p>
               </div>
@@ -344,53 +344,53 @@ export function KundenPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Firmenname</label>
-                  <input type="text" {...register('firmenname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Firmenname</label>
+                  <input type="text" {...register('firmenname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Vorname</label>
-                  <input type="text" {...register('vorname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Vorname</label>
+                  <input type="text" {...register('vorname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nachname</label>
-                  <input type="text" {...register('nachname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Nachname</label>
+                  <input type="text" {...register('nachname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Adresse</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Adresse</label>
                   <div className="grid grid-cols-3 gap-2">
-                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">E-Mail</label>
-                  <input type="email" {...register('email')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">E-Mail</label>
+                  <input type="email" {...register('email')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   {errors.email && <p className="text-red-500 text-xs mt-0.5">{errors.email.message}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Telefon</label>
-                  <input type="text" {...register('telefon')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Telefon</label>
+                  <input type="text" {...register('telefon')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Kundennummer</label>
-                  <input type="text" {...register('kundennummer')} placeholder="Wird automatisch vergeben" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Kundennummer</label>
+                  <input type="text" {...register('kundennummer')} placeholder="Wird automatisch vergeben" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">USt-IdNr.</label>
-                  <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
+                  <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Notizen</label>
-                  <textarea {...register('notizen')} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Notizen</label>
+                  <textarea {...register('notizen')} rows={2} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2 flex gap-4">
-                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                     <input type="checkbox" {...register('ist_verein')} className="rounded" /> Verein
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                     <input type="checkbox" {...register('ist_gemeinnuetzig')} className="rounded" /> Gemeinnützig
                   </label>
                 </div>
@@ -399,36 +399,36 @@ export function KundenPage() {
               {mutationError && <p className="text-red-600 text-sm">{(mutationError as Error).message}</p>}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">Abbrechen</button>
+                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">Abbrechen</button>
                 <button type="submit" disabled={isPending} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                   {isPending ? 'Speichert…' : 'Speichern'}
                 </button>
               </div>
 
               {editKunde?.id && !anonymisierungResult && (
-                <div className="border-t border-slate-200 pt-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Datenschutz (DSGVO)</p>
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
                     <div className="flex gap-2">
                       <button type="button" onClick={() => dsgvoExportKunde(editKunde.id!)}
-                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50">
+                        className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
                         📥 Datenauskunft exportieren
                       </button>
                       <button type="button" onClick={() => setShowDsgvoBestaetigung(true)}
-                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50">
+                        className="flex-1 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-950">
                         🗑 Anonymisieren (Art. 17)
                       </button>
                     </div>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
-                      <p className="text-sm font-medium text-red-800">Kunden wirklich anonymisieren?</p>
-                      <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                    <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-red-800 dark:text-red-300">Kunden wirklich anonymisieren?</p>
+                      <ul className="text-xs text-red-700 dark:text-red-400 space-y-0.5 list-disc list-inside">
                         <li>Kundenstammdaten werden dauerhaft gelöscht</li>
                         <li>Verknüpfungen in Buchungen und Rechnungen werden entfernt</li>
                         <li>Immutable Kassenbucheinträge bleiben erhalten (§147 AO)</li>
                       </ul>
                       {anonymisierungMutation.isError && (
-                        <p className="text-xs text-red-600">{(anonymisierungMutation.error as Error).message}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">{(anonymisierungMutation.error as Error).message}</p>
                       )}
                       <div className="flex gap-2 pt-1">
                         <button type="button" onClick={() => anonymisierungMutation.mutate(editKunde.id!)}
@@ -437,7 +437,7 @@ export function KundenPage() {
                           {anonymisierungMutation.isPending ? '…' : 'Jetzt anonymisieren'}
                         </button>
                         <button type="button" onClick={() => setShowDsgvoBestaetigung(false)}
-                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50">
+                          className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700">
                           Abbrechen
                         </button>
                       </div>
@@ -447,20 +447,20 @@ export function KundenPage() {
               )}
 
               {anonymisierungResult && (
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
-                    <p className="text-sm font-medium text-green-800">Anonymisierung abgeschlossen</p>
-                    <p className="text-xs text-green-700">
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                  <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-300">Anonymisierung abgeschlossen</p>
+                    <p className="text-xs text-green-700 dark:text-green-400">
                       {anonymisierungResult.anonymisierte_buchungen} Buchung(en) und {anonymisierungResult.anonymisierte_rechnungen} Rechnung(en) anonymisiert.
                     </p>
                     {anonymisierungResult.unveraenderlich_verblieben > 0 && (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+                      <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-2 py-1 mt-1">
                         ⚠ {anonymisierungResult.hinweis}
                       </p>
                     )}
                   </div>
                   <button type="button" onClick={closeForm}
-                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">
+                    className="w-full mt-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">
                     Schließen
                   </button>
                 </div>

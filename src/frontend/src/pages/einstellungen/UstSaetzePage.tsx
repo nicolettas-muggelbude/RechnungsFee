@@ -64,31 +64,31 @@ export function UstSaetzePage() {
   return (
     <div className="max-w-xl mx-auto py-8 px-4 space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-800">MwSt.-Sätze</h2>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">MwSt.-Sätze</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           Aktive Sätze erscheinen im Rechnungsformular und Artikelstamm. Der Standard-Satz wird automatisch vorausgefüllt.
         </p>
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Lade…</p>}
 
-      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+      <div className="divide-y divide-slate-100 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
         {saetze.map((s) => (
           <div
             key={s.id}
-            className={`flex items-center gap-3 px-4 py-3 ${s.ist_aktiv ? 'bg-white' : 'bg-slate-50'}`}
+            className={`flex items-center gap-3 px-4 py-3 ${s.ist_aktiv ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900'}`}
           >
             {/* Satz + Bezeichnung */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`font-mono font-semibold ${s.ist_aktiv ? 'text-slate-800' : 'text-slate-400'}`}>
+                <span className={`font-mono font-semibold ${s.ist_aktiv ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
                   {formatSatz(s.satz)}
                 </span>
                 {s.bezeichnung && (
-                  <span className="text-xs text-slate-500">{s.bezeichnung}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{s.bezeichnung}</span>
                 )}
                 {s.ist_standard && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">Standard</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">Standard</span>
                 )}
               </div>
             </div>
@@ -100,8 +100,8 @@ export function UstSaetzePage() {
               onClick={() => !s.ist_default && setDefault(s.id)}
               className={`text-sm px-2 py-1 rounded-lg border transition-colors ${
                 s.ist_default
-                  ? 'bg-blue-100 text-blue-700 border-blue-200 cursor-default'
-                  : 'border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600'
+                  ? 'bg-blue-100 text-blue-700 border-blue-200 cursor-default dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
+                  : 'border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:text-slate-500 dark:hover:border-blue-700 dark:hover:text-blue-400'
               }`}
             >
               {s.ist_default ? '★ Standard' : '☆ Standard'}
@@ -141,8 +141,8 @@ export function UstSaetzePage() {
       </div>
 
       {/* Neuen Satz hinzufügen */}
-      <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-        <p className="text-sm font-medium text-slate-700">Neuen Steuersatz hinzufügen</p>
+      <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3 dark:bg-slate-800">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Neuen Steuersatz hinzufügen</p>
         <div className="flex gap-2">
           <div className="relative">
             <input
@@ -151,16 +151,16 @@ export function UstSaetzePage() {
               placeholder="z.B. 5,5"
               value={neuerSatz}
               onChange={(e) => setNeuerSatz(e.target.value)}
-              className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pe-6"
+              className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pe-6 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
             />
-            <span className="absolute end-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">%</span>
+            <span className="absolute end-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">%</span>
           </div>
           <input
             type="text"
             placeholder="Bezeichnung (optional)"
             value={neueBez}
             onChange={(e) => setNeueBez(e.target.value)}
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
           />
           <button
             type="button"

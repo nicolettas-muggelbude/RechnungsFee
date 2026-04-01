@@ -20,14 +20,14 @@ export function ExportPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Exporte</h1>
-        <p className="text-slate-500 mt-1 text-sm">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Exporte</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
           Daten für Steuerberater, Betriebsprüfung und Archivierung exportieren.
         </p>
       </div>
 
       {/* GoBD-Export-Card */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
         <div className="bg-blue-600 px-6 py-4">
           <h2 className="text-white font-bold text-lg">GoBD-Export (Betriebsprüfung)</h2>
           <p className="text-blue-100 text-sm mt-0.5">
@@ -39,14 +39,14 @@ export function ExportPage() {
           {/* Jahresauswahl + Button */}
           <div className="flex items-end gap-4">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700" htmlFor="export-jahr">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="export-jahr">
                 Wirtschaftsjahr
               </label>
               <select
                 id="export-jahr"
                 value={jahr}
                 onChange={(e) => setJahr(Number(e.target.value))}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               >
                 {JAHRE.map((j) => (
                   <option key={j} value={j}>{j}</option>
@@ -73,8 +73,8 @@ export function ExportPage() {
           </div>
 
           {/* Infobox: enthaltene Dateien */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium text-slate-700">Das ZIP-Archiv enthält:</p>
+          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Das ZIP-Archiv enthält:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { datei: 'kassenbuch_journal.csv', beschreibung: 'Alle Kassenbucheinträge (IDEA-kompatibel)' },
@@ -89,15 +89,15 @@ export function ExportPage() {
                 <div key={datei} className="flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5 shrink-0">📄</span>
                   <div>
-                    <p className="text-xs font-mono font-medium text-slate-800">{datei}</p>
-                    <p className="text-xs text-slate-500">{beschreibung}</p>
+                    <p className="text-xs font-mono font-medium text-slate-800 dark:text-slate-100">{datei}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{beschreibung}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="pt-2 border-t border-slate-200">
-              <p className="text-xs text-slate-500">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 <span className="font-medium">CSV-Format:</span>{' '}
                 UTF-8 mit BOM · Semikolon-getrennt · Dezimalkomma · Datum TT.MM.JJJJ
                 · kompatibel mit IDEA, Excel und LibreOffice
@@ -106,9 +106,9 @@ export function ExportPage() {
           </div>
 
           {/* GoBD-Hinweis */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex gap-3">
-            <span className="text-amber-500 shrink-0">⚠</span>
-            <p className="text-xs text-amber-800">
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 flex gap-3">
+            <span className="text-amber-500 dark:text-amber-400 shrink-0">⚠</span>
+            <p className="text-xs text-amber-800 dark:text-amber-300">
               Alle Kassenbuchdaten sind GoBD-konform unveränderbar gespeichert und durch SHA-256-Signaturen
               gesichert. Der Export enthält eine vollständige Integritätsprüfung. Bei einer Betriebsprüfung
               nach §147 AO ist dieser Export als Z3-Datenträgerüberlassung geeignet.

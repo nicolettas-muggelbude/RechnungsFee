@@ -111,12 +111,12 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="px-6 pt-6 pb-4 shrink-0">
-          <h2 className="text-lg font-bold text-slate-800 mb-0.5">Tagesabschluss</h2>
-          <p className="text-sm text-slate-500">{datum.split('-').reverse().join('.')}</p>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-0.5">Tagesabschluss</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{datum.split('-').reverse().join('.')}</p>
         </div>
 
         {/* Scrollbarer Inhalt */}
@@ -127,60 +127,60 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
             <form id="tagesabschluss-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5 pb-4">
 
               {/* Vorschau-Kacheln */}
-              <div className="bg-slate-50 rounded-lg p-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <span className="block text-xs text-slate-400 mb-0.5">Anfangsbestand</span>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 mb-0.5">Anfangsbestand</span>
                   <span className="font-medium">{formatEuro(vorschau.anfangsbestand)}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400 mb-0.5">Buchungen</span>
-                  <span className="font-medium">{vorschau.kassenbewegungen_anzahl}</span>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 mb-0.5">Buchungen</span>
+                  <span className="font-medium dark:text-slate-200">{vorschau.kassenbewegungen_anzahl}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400 mb-0.5">Einnahmen (Bar)</span>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 mb-0.5">Einnahmen (Bar)</span>
                   <span className="font-medium text-green-600">{formatEuro(vorschau.einnahmen_bar)}</span>
                 </div>
                 <div>
-                  <span className="block text-xs text-slate-400 mb-0.5">Ausgaben (Bar)</span>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 mb-0.5">Ausgaben (Bar)</span>
                   <span className="font-medium text-red-600">{formatEuro(vorschau.ausgaben_bar)}</span>
                 </div>
-                <div className="col-span-2 pt-2 border-t border-slate-200">
-                  <span className="block text-xs text-slate-400 mb-0.5">Soll-Endbestand</span>
+                <div className="col-span-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span className="block text-xs text-slate-400 dark:text-slate-500 mb-0.5">Soll-Endbestand</span>
                   <span className="text-lg font-bold">{formatEuro(vorschau.soll_endbestand)}</span>
                 </div>
               </div>
 
               {/* Zählprotokoll */}
               <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-2">Zählprotokoll</h3>
-                <div className="border border-slate-200 rounded-lg overflow-hidden text-sm">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Zählprotokoll</h3>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden text-sm">
 
                   {/* Spalten-Header */}
-                  <div className="grid grid-cols-[1fr_72px_88px] px-3 py-1.5 bg-slate-100 text-xs font-medium text-slate-500 border-b border-slate-200">
+                  <div className="grid grid-cols-[1fr_72px_88px] px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600">
                     <span>Denomination</span>
                     <span className="text-right">Anzahl</span>
                     <span className="text-right">Betrag</span>
                   </div>
 
                   {/* Scheine */}
-                  <div className="px-3 py-1 bg-slate-50 text-xs font-medium text-slate-400 border-b border-slate-100">
+                  <div className="px-3 py-1 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
                     Scheine
                   </div>
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700">
                     {SCHEINE.map((wert) => {
                       const betrag = wert * (scheine[wert] || 0)
                       return (
-                        <div key={wert} className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-1.5 gap-2">
-                          <span className="text-slate-700">{wert},00 €</span>
+                        <div key={wert} className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-1.5 gap-2 dark:bg-slate-800">
+                          <span className="text-slate-700 dark:text-slate-200">{wert},00 €</span>
                           <input
                             type="number"
                             min="0"
                             value={scheine[wert] || ''}
                             onChange={(e) => setSchein(wert, parseInt(e.target.value) || 0)}
                             placeholder="0"
-                            className="border border-slate-300 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="border border-slate-300 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                           />
-                          <span className="text-right text-xs text-slate-500">
+                          <span className="text-right text-xs text-slate-500 dark:text-slate-400">
                             {betrag > 0 ? formatEuro(betrag) : '—'}
                           </span>
                         </div>
@@ -189,24 +189,24 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
                   </div>
 
                   {/* Münzen */}
-                  <div className="px-3 py-1 bg-slate-50 text-xs font-medium text-slate-400 border-y border-slate-100">
+                  <div className="px-3 py-1 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-400 dark:text-slate-500 border-y border-slate-100 dark:border-slate-700">
                     Münzen
                   </div>
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700">
                     {MUENZEN_CENT.map((cent) => {
                       const betrag = (cent / 100) * (muenzen[cent] || 0)
                       return (
-                        <div key={cent} className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-1.5 gap-2">
-                          <span className="text-slate-700">{muenzLabel(cent)}</span>
+                        <div key={cent} className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-1.5 gap-2 dark:bg-slate-800">
+                          <span className="text-slate-700 dark:text-slate-200">{muenzLabel(cent)}</span>
                           <input
                             type="number"
                             min="0"
                             value={muenzen[cent] || ''}
                             onChange={(e) => setMuenze(cent, parseInt(e.target.value) || 0)}
                             placeholder="0"
-                            className="border border-slate-300 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="border border-slate-300 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                           />
-                          <span className="text-right text-xs text-slate-500">
+                          <span className="text-right text-xs text-slate-500 dark:text-slate-400">
                             {betrag > 0 ? formatEuro(betrag) : '—'}
                           </span>
                         </div>
@@ -215,8 +215,8 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
                   </div>
 
                   {/* Gesamt-Zeile */}
-                  <div className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-2 gap-2 bg-slate-50 border-t border-slate-200">
-                    <span className="text-xs font-semibold text-slate-600 col-span-2">Summe Zählung</span>
+                  <div className="grid grid-cols-[1fr_72px_88px] items-center px-3 py-2 gap-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 col-span-2">Summe Zählung</span>
                     <span className={`text-right text-sm font-bold ${hatZaehlung ? 'text-blue-700' : 'text-slate-300'}`}>
                       {formatEuro(zaehlsumme)}
                     </span>
@@ -226,10 +226,10 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
 
               {/* Ist-Endbestand */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                   Ist-Endbestand (gezählt) €
                   {hatZaehlung && (
-                    <span className="ml-1.5 text-blue-500 font-normal">— aus Zählprotokoll übernommen</span>
+                    <span className="ml-1.5 text-blue-500 dark:text-blue-400 font-normal">— aus Zählprotokoll übernommen</span>
                   )}
                 </label>
                 <input
@@ -238,7 +238,7 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
                   min="0"
                   {...register('ist_endbestand')}
                   placeholder="0,00"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                 />
                 {errors.ist_endbestand && (
                   <p className="text-red-500 text-xs mt-0.5">{errors.ist_endbestand.message}</p>
@@ -247,7 +247,7 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
 
               {/* Differenz */}
               {istEndbestandStr && (
-                <div className={`rounded-lg p-3 text-sm ${hatDifferenz ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                <div className={`rounded-lg p-3 text-sm ${hatDifferenz ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300' : 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>
                   <span className="font-medium">Differenz: {formatEuro(differenz)}</span>
                   {!hatDifferenz && <span className="ml-2 text-xs">✓ Kasse stimmt</span>}
                 </div>
@@ -257,10 +257,10 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
               {hatDifferenz && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Buchungsart der Differenz</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Buchungsart der Differenz</label>
                     <select
                       {...register('differenz_buchungsart')}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                     >
                       <option value="">— wählen —</option>
                       <option value="Privatentnahme">Privatentnahme</option>
@@ -269,12 +269,12 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Begründung</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Begründung</label>
                     <input
                       type="text"
                       {...register('differenz_begruendung')}
                       placeholder="Kurze Erläuterung…"
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
                     />
                   </div>
                 </>
@@ -291,11 +291,11 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
 
         {/* Footer */}
         {vorschau && (
-          <div className="px-6 py-4 shrink-0 border-t border-slate-100 flex gap-3">
+          <div className="px-6 py-4 shrink-0 border-t border-slate-100 dark:border-slate-700 flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+              className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Abbrechen
             </button>

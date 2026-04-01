@@ -69,14 +69,14 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
     else setValue('kammer_mitgliedschaft', '')
   }
 
-  const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const inp = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400'
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
 
       {/* Berufsauswahl */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Welche Tätigkeit übst du aus?
         </label>
         <div className="grid grid-cols-3 gap-2">
@@ -87,8 +87,8 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
               onClick={() => handleBerufWahl(beruf)}
               className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-medium transition-colors
                 ${selectedBeruf?.label === beruf.label
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50'}`}
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-slate-700'}`}
             >
               <span className="text-lg leading-none">{beruf.emoji}</span>
               <span className="text-center leading-tight">{beruf.label}</span>
@@ -99,9 +99,9 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       {/* Berufsbezeichnung + Kammer (erscheinen nach Auswahl) */}
       {selectedBeruf && (
-        <div className="space-y-3 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+        <div className="space-y-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
               Berufsbezeichnung <span className="text-slate-400 font-normal">(erscheint auf Rechnungen)</span>
             </label>
             <input
@@ -112,7 +112,7 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
           </div>
           {selectedBeruf.kammer && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
                 Kammermitgliedschaft <span className="text-slate-400 font-normal">(optional, erscheint im Rechnungs-Footer)</span>
               </label>
               <input
@@ -127,7 +127,7 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       {/* Firmendaten */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
           Firmen- oder Tätigkeitsname <span className="text-red-500">*</span>
         </label>
         <input
@@ -140,25 +140,25 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Vorname</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Vorname</label>
           <input {...register('vorname')} placeholder="Maria" className={inp} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Nachname</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Nachname</label>
           <input {...register('nachname')} placeholder="Muster" className={inp} />
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Straße <span className="text-red-500">*</span>
           </label>
           <input {...register('strasse')} placeholder="Musterstraße" className={inp} />
           {errors.strasse && <p className="text-red-500 text-xs mt-1">{errors.strasse.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Nr. <span className="text-red-500">*</span>
           </label>
           <input {...register('hausnummer')} placeholder="1a" className={inp} />
@@ -168,14 +168,14 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             PLZ <span className="text-red-500">*</span>
           </label>
           <input {...register('plz')} placeholder="12345" className={inp} />
           {errors.plz && <p className="text-red-500 text-xs mt-1">{errors.plz.message}</p>}
         </div>
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Ort <span className="text-red-500">*</span>
           </label>
           <input {...register('ort')} placeholder="Berlin" className={inp} />
@@ -185,23 +185,23 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">E-Mail</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">E-Mail</label>
           <input {...register('email')} type="email" placeholder="maria@beispiel.de" className={inp} />
           {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Telefon</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Telefon</label>
           <input {...register('telefon')} placeholder="+49 30 12345678" className={inp} />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Steuernummer</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Steuernummer</label>
           <input {...register('steuernummer')} placeholder="12/345/67890" className={inp} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Finanzamt</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Finanzamt</label>
           <input {...register('finanzamt')} placeholder="Finanzamt Berlin-Mitte" className={inp} />
         </div>
       </div>

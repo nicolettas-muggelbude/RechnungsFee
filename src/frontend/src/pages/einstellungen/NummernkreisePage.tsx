@@ -62,12 +62,12 @@ export function NummernkreisePage() {
 
   return (
     <div className="p-6 max-w-2xl">
-      <h2 className="text-2xl font-bold text-slate-800 mb-1">Nummernkreise</h2>
-      <p className="text-sm text-slate-500 mb-6">
+      <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Nummernkreise</h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         Lege fest, wie Belegnummern aufgebaut werden.
-        <span className="ml-1 font-mono bg-slate-100 px-1 rounded text-xs">YY</span> = Jahreszahl 2-stellig,
-        <span className="ml-1 font-mono bg-slate-100 px-1 rounded text-xs">YYYY</span> = 4-stellig,
-        <span className="ml-1 font-mono bg-slate-100 px-1 rounded text-xs">#</span> = Nummernstelle (Anzahl bestimmt Stellen)
+        <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">YY</span> = Jahreszahl 2-stellig,
+        <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">YYYY</span> = 4-stellig,
+        <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">#</span> = Nummernstelle (Anzahl bestimmt Stellen)
       </p>
 
       {isLoading ? (
@@ -75,33 +75,33 @@ export function NummernkreisePage() {
       ) : (
         <div className="space-y-4">
           {(nummernkreise ?? []).map((nk) => (
-            <div key={nk.id} className="bg-white rounded-xl border border-slate-200 p-5">
+            <div key={nk.id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
               {editId === nk.id && editState ? (
                 /* Bearbeitungs-Modus */
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Bezeichnung</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Bezeichnung</label>
                     <input
                       type="text"
                       value={editState.bezeichnung}
                       onChange={(e) => setEditState({ ...editState, bezeichnung: e.target.value })}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Format</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Format</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={editState.format}
                         onChange={(e) => setEditState({ ...editState, format: e.target.value })}
-                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                         placeholder="z.B. YY####"
                       />
                       <select
                         onChange={(e) => e.target.value && setEditState({ ...editState, format: e.target.value })}
-                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                         value=""
                       >
                         <option value="">Vorlage…</option>
@@ -113,7 +113,7 @@ export function NummernkreisePage() {
                     {liveVorschau && (
                       <p className="mt-1.5 text-xs text-slate-500">
                         Vorschau nächste Nummer:
-                        <span className="ml-1.5 font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                        <span className="ml-1.5 font-mono font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded">
                           {liveVorschau}
                         </span>
                       </p>
@@ -125,17 +125,17 @@ export function NummernkreisePage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Nächste Nummer</label>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Nächste Nummer</label>
                       <input
                         type="number"
                         min={1}
                         value={editState.naechste_nr}
                         onChange={(e) => setEditState({ ...editState, naechste_nr: parseInt(e.target.value) || 1 })}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                       />
                     </div>
                     <div className="flex items-end pb-2">
-                      <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={editState.reset_jaehrlich}
@@ -154,7 +154,7 @@ export function NummernkreisePage() {
                   <div className="flex gap-3 pt-1">
                     <button
                       onClick={() => { setEditId(null); setEditState(null) }}
-                      className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                      className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
                     >
                       Abbrechen
                     </button>
@@ -171,22 +171,22 @@ export function NummernkreisePage() {
                 /* Anzeige-Modus */
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-slate-800">{nk.bezeichnung}</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-100">{nk.bezeichnung}</p>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="font-mono text-sm text-slate-500">{nk.format}</span>
+                      <span className="font-mono text-sm text-slate-500 dark:text-slate-400">{nk.format}</span>
                       {nk.vorschau && (
-                        <span className="text-xs text-slate-400">
-                          → nächste: <span className="font-mono font-semibold text-slate-600">{nk.vorschau}</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">
+                          → nächste: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">{nk.vorschau}</span>
                         </span>
                       )}
                       {nk.reset_jaehrlich && (
-                        <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">jährlicher Reset</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">jährlicher Reset</span>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={() => openEdit(nk)}
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     Bearbeiten
                   </button>

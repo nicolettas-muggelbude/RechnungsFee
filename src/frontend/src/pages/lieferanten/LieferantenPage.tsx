@@ -128,40 +128,40 @@ export function LieferantenPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-slate-800">Lieferanten</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Lieferanten</h2>
         <button onClick={openCreate} className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700">
           + Neuer Lieferant
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {isLoading ? (
-          <p className="text-slate-400 text-sm p-5">Lade…</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
         ) : !lieferanten?.length ? (
-          <p className="text-slate-400 text-sm p-5">Noch keine Lieferanten angelegt.</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Noch keine Lieferanten angelegt.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-left">
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Firmenname</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Adresse</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500">E-Mail</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500">Lieferantennr.</th>
+              <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Firmenname</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Adresse</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">E-Mail</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Lieferantennr.</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
               {lieferanten.map((l) => (
-                <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-700">{l.firmenname}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">
+                <tr key={l.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{l.firmenname}</td>
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
                     {[l.strasse && l.hausnummer ? `${l.strasse} ${l.hausnummer}` : l.strasse, l.plz && l.ort ? `${l.plz} ${l.ort}` : l.ort].filter(Boolean).join(', ') || '—'}
                   </td>
-                  <td className="px-4 py-3 text-slate-500">{l.email || '—'}</td>
-                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">{l.lieferantennummer || '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{l.email || '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 dark:text-slate-500 font-mono text-xs">{l.lieferantennummer || '—'}</td>
                   <td className="px-4 py-3 flex gap-2 justify-end">
-                    <button onClick={() => openEdit(l)} className="text-xs text-blue-600 hover:underline">Bearbeiten</button>
-                    <button onClick={() => handleDelete(l)} className="text-xs text-red-500 hover:underline">Löschen</button>
+                    <button onClick={() => openEdit(l)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
+                    <button onClick={() => handleDelete(l)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>
                   </td>
                 </tr>
               ))}
@@ -172,13 +172,13 @@ export function LieferantenPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
               {editLieferant ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}
             </h2>
 
             {deleteFehlgeschlagen && (
-              <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+              <div className="mb-4 bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-lg px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-medium">Löschen nicht möglich</p>
                 <p className="mt-0.5">Dieser Lieferant hat verknüpfte Rechnungen und kann nicht direkt gelöscht werden. Verwende unten <strong>„Anonymisieren (Art. 17)"</strong>, um die Daten datenschutzkonform zu entfernen.</p>
               </div>
@@ -187,48 +187,48 @@ export function LieferantenPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Firmenname *</label>
-                  <input type="text" {...register('firmenname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Firmenname *</label>
+                  <input type="text" {...register('firmenname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   {errors.firmenname && <p className="text-red-500 text-xs mt-0.5">{errors.firmenname.message}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Vorname</label>
-                  <input type="text" {...register('vorname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Vorname</label>
+                  <input type="text" {...register('vorname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nachname</label>
-                  <input type="text" {...register('nachname')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Nachname</label>
+                  <input type="text" {...register('nachname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Adresse</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Adresse</label>
                   <div className="grid grid-cols-3 gap-2">
-                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">E-Mail</label>
-                  <input type="email" {...register('email')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">E-Mail</label>
+                  <input type="email" {...register('email')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   {errors.email && <p className="text-red-500 text-xs mt-0.5">{errors.email.message}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Telefon</label>
-                  <input type="text" {...register('telefon')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Telefon</label>
+                  <input type="text" {...register('telefon')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Lieferantennummer</label>
-                  <input type="text" {...register('lieferantennummer')} placeholder="Wird automatisch vergeben" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Lieferantennummer</label>
+                  <input type="text" {...register('lieferantennummer')} placeholder="Wird automatisch vergeben" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">USt-IdNr.</label>
-                  <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
+                  <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Notizen</label>
-                  <textarea {...register('notizen')} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Notizen</label>
+                  <textarea {...register('notizen')} rows={2} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
               </div>
 
@@ -237,7 +237,7 @@ export function LieferantenPage() {
               )}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50">
+                <button type="button" onClick={closeForm} className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">
                   Abbrechen
                 </button>
                 <button type="submit" disabled={isPending} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
@@ -247,35 +247,35 @@ export function LieferantenPage() {
 
               {/* DSGVO-Aktionen (nur im Bearbeitungs-Modus) */}
               {editLieferant?.id && !anonymisierungResult && (
-                <div className="border-t border-slate-200 pt-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Datenschutz (DSGVO)</p>
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => dsgvoExportLieferant(editLieferant.id!)}
-                        className="flex-1 text-xs border border-slate-300 text-slate-600 rounded-lg py-1.5 hover:bg-slate-50"
+                        className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         📥 Datenauskunft exportieren
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowDsgvoBestaetigung(true)}
-                        className="flex-1 text-xs border border-red-200 text-red-600 rounded-lg py-1.5 hover:bg-red-50"
+                        className="flex-1 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-950"
                       >
                         🗑 Anonymisieren (Art. 17)
                       </button>
                     </div>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
-                      <p className="text-sm font-medium text-red-800">Lieferant wirklich anonymisieren?</p>
-                      <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                    <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-red-800 dark:text-red-300">Lieferant wirklich anonymisieren?</p>
+                      <ul className="text-xs text-red-700 dark:text-red-400 space-y-0.5 list-disc list-inside">
                         <li>Lieferantenstammdaten werden dauerhaft gelöscht</li>
                         <li>Verknüpfungen in Rechnungen werden entfernt</li>
                         <li>Der Lieferantenname bleibt in den Rechnungen als Freitext erhalten</li>
                       </ul>
                       {anonymisierungMutation.isError && (
-                        <p className="text-xs text-red-600">{(anonymisierungMutation.error as Error).message}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">{(anonymisierungMutation.error as Error).message}</p>
                       )}
                       <div className="flex gap-2 pt-1">
                         <button
@@ -289,7 +289,7 @@ export function LieferantenPage() {
                         <button
                           type="button"
                           onClick={() => setShowDsgvoBestaetigung(false)}
-                          className="flex-1 border border-slate-300 text-slate-600 rounded-lg py-1.5 text-xs hover:bg-slate-50"
+                          className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           Abbrechen
                         </button>
@@ -301,17 +301,17 @@ export function LieferantenPage() {
 
               {/* Ergebnis der Anonymisierung */}
               {anonymisierungResult && (
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
-                    <p className="text-sm font-medium text-green-800">Anonymisierung abgeschlossen</p>
-                    <p className="text-xs text-green-700">
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                  <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-300">Anonymisierung abgeschlossen</p>
+                    <p className="text-xs text-green-700 dark:text-green-400">
                       {anonymisierungResult.anonymisierte_rechnungen} Rechnung(en) anonymisiert.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={closeForm}
-                    className="w-full mt-2 border border-slate-300 text-slate-600 rounded-lg py-2 text-sm hover:bg-slate-50"
+                    className="w-full mt-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
                   >
                     Schließen
                   </button>

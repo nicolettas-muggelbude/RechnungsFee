@@ -96,26 +96,26 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
 
   return (
     <tr>
-      <td colSpan={6} className="bg-slate-50 border-b border-slate-200 px-4 py-4">
+      <td colSpan={6} className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-4">
 
         {/* Aktionsleiste – waagerecht als erste Zeile */}
         <div className="flex flex-wrap gap-2 mb-4">
           <button
             onClick={() => oeffneBelegFenster(e, true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white text-slate-600"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             🖨️ Drucken
           </button>
           <button
             onClick={() => oeffneBelegFenster(e, false)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white text-slate-600"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             📄 PDF öffnen
           </button>
           {!istStorno && (
             <button
               onClick={handleMail}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white text-slate-600"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
             >
               ✉️ Mail senden{!e.kunde_email ? ' …' : ''}
             </button>
@@ -132,7 +132,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             </div>
           )}
           {bereitsStorniert && (
-            <span className="self-center text-xs text-slate-400 italic">Bereits storniert</span>
+            <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits storniert</span>
           )}
         </div>
 
@@ -144,7 +144,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
               value={mailAdresse}
               onChange={(ev) => setMailAdresse(ev.target.value)}
               placeholder="E-Mail-Adresse eingeben…"
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
               autoFocus
               onKeyDown={(ev) => ev.key === 'Enter' && handleMail()}
             />
@@ -157,7 +157,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             </button>
             <button
               onClick={() => { setZeigMailEingabe(false); setMailAdresse('') }}
-              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Abbrechen
             </button>
@@ -172,7 +172,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
               value={stornoGrund}
               onChange={(ev) => setStornoGrund(ev.target.value)}
               placeholder="Storno-Grund eingeben…"
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
               autoFocus
             />
             <button
@@ -184,7 +184,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             </button>
             <button
               onClick={() => { setZeigStornoEingabe(false); setStornoGrund('') }}
-              className="px-3 py-1.5 border border-slate-300 text-slate-600 rounded-lg text-sm hover:bg-slate-50"
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Abbrechen
             </button>
@@ -197,22 +197,22 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
         {/* Betragsdetails + Kundendaten */}
         <div className="flex gap-6">
           <div className="flex-1 text-sm space-y-1">
-            <div className="flex justify-between text-slate-500">
+            <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span>Netto</span>
               <span>{formatEuro(e.netto_betrag)}</span>
             </div>
-            <div className="flex justify-between text-slate-500">
+            <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span>USt {e.ust_satz} %</span>
               <span>{formatEuro(e.ust_betrag)}</span>
             </div>
             {e.steuerbefreiung_grund && (
-              <div className="text-xs text-slate-400">{e.steuerbefreiung_grund}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">{e.steuerbefreiung_grund}</div>
             )}
-            <div className="flex justify-between font-semibold text-slate-800 border-t border-slate-200 pt-1">
+            <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-100 border-t border-slate-200 dark:border-slate-700 pt-1">
               <span>Brutto</span>
               <span>{formatEuro(e.brutto_betrag)}</span>
             </div>
-            <div className="text-xs text-slate-400 pt-1">
+            <div className="text-xs text-slate-400 dark:text-slate-500 pt-1">
               {e.externe_belegnr && <span>Ext. Belegnr.: {e.externe_belegnr} &nbsp;·&nbsp;</span>}
               {e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
             </div>
@@ -221,18 +221,18 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
           <div className="w-52 text-sm">
             {e.kunde_name ? (
               <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Kunde</p>
-                <p className="font-medium text-slate-800">{e.kunde_name}</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Kunde</p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{e.kunde_name}</p>
                 {e.kunde_email ? (
-                  <a href={`mailto:${e.kunde_email}`} className="text-blue-600 hover:underline text-xs break-all">
+                  <a href={`mailto:${e.kunde_email}`} className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-all">
                     {e.kunde_email}
                   </a>
                 ) : (
-                  <p className="text-xs text-slate-400 italic">Keine E-Mail hinterlegt</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">Keine E-Mail hinterlegt</p>
                 )}
               </div>
             ) : (
-              <p className="text-slate-300 text-xs italic">Kein Kunde verknüpft</p>
+              <p className="text-slate-300 dark:text-slate-600 text-xs italic">Kein Kunde verknüpft</p>
             )}
           </div>
         </div>
