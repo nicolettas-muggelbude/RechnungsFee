@@ -22,12 +22,12 @@ VORLAGEN = [
     {
         "id": 0,
         "name": "Standard",
-        "beschreibung": "Klassisches DIN 5008-Layout · Spalten: Beschreibung, Menge, Einheit, Netto, MwSt, Brutto",
+        "beschreibung": "DIN 5008-Layout · Spalten: Beschreibung, Menge, Einheit, Netto, MwSt, Brutto · für alle Unternehmensformen",
     },
     {
         "id": 1,
         "name": "Kleinunternehmer mit Zahlungsziel",
-        "beschreibung": "Kompaktes Layout · Spalten: Datum, Beschreibung, Saldo · Überweisungsblock mit IBAN",
+        "beschreibung": "Nur für Kleinunternehmer (§ 19 UStG) · Grünes Design · Spalten: Datum, Beschreibung, Saldo · Überweisungsblock mit IBAN",
     },
 ]
 
