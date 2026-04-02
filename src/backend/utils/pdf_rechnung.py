@@ -164,7 +164,7 @@ def _adresszeilen(obj) -> list[str]:
 
 class RechnungPDF(FPDF):
 
-    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False):
+    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.set_margins(L_MARGIN, 10, R_MARGIN)
         self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
@@ -174,6 +174,7 @@ class RechnungPDF(FPDF):
         self._unt        = unternehmen
         self._r          = rechnung
         self._ist_kopie  = ist_kopie
+        self._ist_entwurf = ist_entwurf
         self._druckdatum = datetime.now().strftime("%d.%m.%Y")
 
     # -------------------------------------------------------------------------
@@ -407,7 +408,11 @@ class RechnungPDF(FPDF):
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
 
-        if self._ist_kopie:
+        if self._ist_entwurf:
+            self.set_font("DejaVu", "", 8)
+            self.set_text_color(*TEXT_GRAU)
+            self.cell(0, 5, "– Entwurf –", new_x="LMARGIN", new_y="NEXT")
+        elif self._ist_kopie:
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5, "– Kopie –", new_x="LMARGIN", new_y="NEXT")
@@ -534,13 +539,14 @@ class RechnungPDF(FPDF):
 # Öffentliche Funktion
 # ---------------------------------------------------------------------------
 
-def generate_rechnung_pdf(rechnung, unternehmen: dict, ist_kopie: bool = False) -> bytes:
+def generate_rechnung_pdf(rechnung, unternehmen: dict, ist_kopie: bool = False, ist_entwurf: bool = False) -> bytes:
     """
     Erzeugt ein PDF für die übergebene Rechnung.
 
     :param rechnung:    SQLAlchemy-Rechnung-Objekt (mit .positionen, .kunde, .lieferant)
     :param unternehmen: dict mit allen Firmendaten
     :param ist_kopie:   True → dezenter „– Kopie –"-Hinweis unter dem Titel
+    :param ist_entwurf: True → „– Entwurf –"-Hinweis, kein ausgegeben-Flag
     """
-    pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie)
+    pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
     return pdf.render()

@@ -339,9 +339,6 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, db: Session = Depends(
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.ist_entwurf:
-        raise HTTPException(status_code=409, detail="Entwürfe können nicht als PDF exportiert werden.")
-
     unternehmen = db.query(Unternehmen).first()
     unt_dict = {}
     if unternehmen:
@@ -373,14 +370,16 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, db: Session = Depends(
             "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
         }
 
-    ist_kopie = rechnung.ausgegeben
+    ist_entwurf = rechnung.ist_entwurf
+    # Entwürfe bekommen kein ausgegeben-Flag und keinen Kopie-Hinweis
+    ist_kopie = (not ist_entwurf) and rechnung.ausgegeben
     vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
     if vorlage_nr == 1:
-        pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie)
+        pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
     else:
-        pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie)
+        pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
 
-    if not rechnung.ausgegeben:
+    if not ist_entwurf and not rechnung.ausgegeben:
         rechnung.ausgegeben = True
         db.commit()
 

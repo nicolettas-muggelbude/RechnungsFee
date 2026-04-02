@@ -61,17 +61,18 @@ GRAU_RAND  = (210, 213, 220)   # Standard-Grau für Header/Footer-Linien
 class RechnungPDFVorlage1(FPDF):
     """Vorlage 1: Kleinunternehmer mit Zahlungsziel – Tabelle Datum/Beschreibung/Saldo."""
 
-    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False):
+    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.set_margins(L_MARGIN, 10, R_MARGIN)
         self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
         dv_dir = _find_dejavu_dir()
         self.add_font("DejaVu", style="",  fname=str(dv_dir / "DejaVuSans.ttf"))
         self.add_font("DejaVu", style="B", fname=str(dv_dir / "DejaVuSans-Bold.ttf"))
-        self._unt        = unternehmen
-        self._r          = rechnung
-        self._ist_kopie  = ist_kopie
-        self._druckdatum = datetime.now().strftime("%d.%m.%Y")
+        self._unt         = unternehmen
+        self._r           = rechnung
+        self._ist_kopie   = ist_kopie
+        self._ist_entwurf = ist_entwurf
+        self._druckdatum  = datetime.now().strftime("%d.%m.%Y")
 
     # -------------------------------------------------------------------------
     # Header (identisch mit Standard-Template)
@@ -285,7 +286,11 @@ class RechnungPDFVorlage1(FPDF):
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
 
-        if self._ist_kopie:
+        if self._ist_entwurf:
+            self.set_font("DejaVu", "", 8)
+            self.set_text_color(*TEXT_GRAU)
+            self.cell(0, 5, "– Entwurf –", new_x="LMARGIN", new_y="NEXT")
+        elif self._ist_kopie:
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5, "– Kopie –", new_x="LMARGIN", new_y="NEXT")
@@ -460,7 +465,7 @@ class RechnungPDFVorlage1(FPDF):
 # Öffentliche Funktion
 # ---------------------------------------------------------------------------
 
-def generate_rechnung_pdf_vorlage1(rechnung, unternehmen: dict, ist_kopie: bool = False) -> bytes:
+def generate_rechnung_pdf_vorlage1(rechnung, unternehmen: dict, ist_kopie: bool = False, ist_entwurf: bool = False) -> bytes:
     """
     Erzeugt ein PDF für die übergebene Rechnung nach Vorlage 1
     (Kleinunternehmer mit Zahlungsziel, Issue #33).
@@ -469,5 +474,5 @@ def generate_rechnung_pdf_vorlage1(rechnung, unternehmen: dict, ist_kopie: bool 
     :param unternehmen: dict mit allen Firmendaten
     :param ist_kopie:   True → dezenter „– Kopie –"-Hinweis unter dem Titel
     """
-    pdf = RechnungPDFVorlage1(unternehmen, rechnung, ist_kopie=ist_kopie)
+    pdf = RechnungPDFVorlage1(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
     return pdf.render()
