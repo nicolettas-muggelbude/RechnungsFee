@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "RechnungsFee Testing",
+  "productName": "RechnungsFee",
   "version": "0.1.0",
   "identifier": "de.rechnungsfee.testing",
   "build": {
@@ -27,6 +27,11 @@
       "appimage",
       "nsis"
     ],
+    "windows": {
+      "nsis": {
+        "installationPath": "RechnungsFee Testing"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
