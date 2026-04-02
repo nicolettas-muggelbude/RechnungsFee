@@ -40,6 +40,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.33',
     datum: 'März 2026',
     eintraege: [
+      { typ: 'neu', text: 'Neues App-Icon von @Adler_real (LinuxGuidesDECommunity) – herzlichen Dank!' },
       { typ: 'neu', text: 'MwSt.-Sätze konfigurierbar: eigene Sätze hinzufügen (z.B. 5,5 %), Sätze aktivieren/deaktivieren und einen Standard-Satz festlegen – gilt für Rechnungsformular und Artikelstamm (Issue #23)' },
       { typ: 'neu', text: 'Rechnungs-PDF: Standard-Zahlungshinweis (IBAN-Überweisungstext) kann in Unternehmen → Rechnungs-PDF deaktiviert werden – Notizfeld bleibt immer zusätzlich sichtbar (Issue #24)' },
       { typ: 'verbesserung', text: 'Kundenstamm: Split-View mit Suchleiste, vollständiger Tabelle, Stammdaten-Karte bei Klick und schmalem Rechnungspanel rechts' },

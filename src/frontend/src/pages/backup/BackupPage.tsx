@@ -94,9 +94,18 @@ export function BackupPage() {
           App-Update Datenbankmigrationen durchgeführt werden. Die letzten 5 Backups werden
           aufbewahrt.
         </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">
-          ~/.local/share/RechnungsFee/backups/
-        </p>
+        <div className="space-y-1.5">
+          {[
+            { os: 'Linux', pfad: '~/.local/share/RechnungsFee/backups/' },
+            { os: 'Windows', pfad: '%APPDATA%\\RechnungsFee\\backups\\' },
+            { os: 'macOS', pfad: '~/Library/Application Support/RechnungsFee/backups/' },
+          ].map(({ os, pfad }) => (
+            <div key={os} className="flex items-center gap-2 text-sm">
+              <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-medium w-16 text-center shrink-0">{os}</span>
+              <code className="text-slate-600 dark:text-slate-300 font-mono text-xs">{pfad}</code>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Wiederherstellen */}
@@ -106,20 +115,36 @@ export function BackupPage() {
           Eine automatische Wiederherstellungsfunktion ist in Vorbereitung. Bis dahin kannst
           du ein Backup manuell wiederherstellen:
         </p>
-        <ol className="text-sm text-slate-600 dark:text-slate-300 space-y-1.5 list-none">
-          {[
-            'RechnungsFee beenden',
-            'Aktuelle Datenbank sichern (optional): ~/.local/share/RechnungsFee/rechnungsfee.db umbenennen',
-            'Backup-Datei nach ~/.local/share/RechnungsFee/rechnungsfee.db kopieren',
-            'RechnungsFee neu starten',
-          ].map((step, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
-                {i + 1}
-              </span>
-              {step}
-            </li>
-          ))}
+        <ol className="text-sm text-slate-600 dark:text-slate-300 space-y-2 list-none">
+          <li className="flex items-start gap-2">
+            <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">1</span>
+            RechnungsFee beenden
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">2</span>
+            <span>Aktuelle Datenbank sichern (optional) – Datei umbenennen:
+              <div className="mt-1 space-y-0.5">
+                {[
+                  { os: 'Linux', pfad: '~/.local/share/RechnungsFee/rechnungsfee.db' },
+                  { os: 'Windows', pfad: '%APPDATA%\\RechnungsFee\\rechnungsfee.db' },
+                  { os: 'macOS', pfad: '~/Library/Application Support/RechnungsFee/rechnungsfee.db' },
+                ].map(({ os, pfad }) => (
+                  <div key={os} className="flex items-center gap-2">
+                    <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-medium w-16 text-center shrink-0">{os}</span>
+                    <code className="font-mono text-xs text-slate-500 dark:text-slate-400">{pfad}</code>
+                  </div>
+                ))}
+              </div>
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">3</span>
+            Backup-Datei in den jeweiligen Ordner kopieren und in <code className="font-mono text-xs">rechnungsfee.db</code> umbenennen
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">4</span>
+            RechnungsFee neu starten
+          </li>
         </ol>
       </div>
     </div>
