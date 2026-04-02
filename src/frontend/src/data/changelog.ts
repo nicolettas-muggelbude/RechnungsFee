@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: 'Windows: Rechnungsvorlage „Sandra grün" (Vorlage 2) war im gepackten Binary nicht enthalten und führte zu einem internen Fehler – PyInstaller-Build ergänzt' },
       { typ: 'fix', text: 'Windows: Backend-Prozess wird beim Update jetzt vollständig beendet bevor der Installer startet – 2s Wartezeit nach taskkill verhindert „Datei gesperrt"-Fehler' },
+      { typ: 'fix', text: 'Vorschau Rechnungsvorlage „Sandra grün": Interner Fehler 500 behoben – fehlende Positions-Nummer in der Demo-Rechnung' },
       { typ: 'verbesserung', text: 'Backup-Seite zeigt jetzt Datenpfade für alle Betriebssysteme (Linux, Windows, macOS) – sowohl für automatische Backups als auch in der Wiederherstellungsanleitung (Issue #34)' },
     ],
   },
