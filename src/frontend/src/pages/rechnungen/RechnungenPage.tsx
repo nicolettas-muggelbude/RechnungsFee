@@ -1037,7 +1037,7 @@ function RechnungForm({
       menge: p.menge,
       einheit: p.einheit,
       netto: p.netto,
-      ust_satz: p.ust_satz,
+      ust_satz: String(parseFloat(p.ust_satz)),
       artikel_id: p.artikel_id ?? undefined,
     })) ?? [leerPosition(defaultUstGlobal)]
   )
