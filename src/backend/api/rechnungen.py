@@ -135,6 +135,7 @@ def list_rechnungen(
         q = q.filter(Rechnung.typ == typ)
     if zahlungsstatus:
         q = q.filter(Rechnung.zahlungsstatus == zahlungsstatus)
+        q = q.filter(Rechnung.storniert == False)
     if monat:
         try:
             jahr, mon = monat.split("-")
