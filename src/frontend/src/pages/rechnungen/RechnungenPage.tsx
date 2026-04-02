@@ -535,7 +535,9 @@ function RechnungDetail({
           )}
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Status</span>
-            <StatusBadge status={rechnung.zahlungsstatus} />
+            {rechnung.storniert
+              ? <span className="text-xs text-slate-400 italic">—</span>
+              : <StatusBadge status={rechnung.zahlungsstatus} />}
           </div>
         </div>
 

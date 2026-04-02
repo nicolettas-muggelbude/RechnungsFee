@@ -110,6 +110,7 @@ def get_offene_rechnungen(db: Session = Depends(get_db)):
     rechnungen = (
         db.query(Rechnung)
         .filter(Rechnung.zahlungsstatus.in_(["offen", "teilweise"]))
+        .filter(Rechnung.storniert == False)
         .order_by(Rechnung.datum.desc())
         .all()
     )
