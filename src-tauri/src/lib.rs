@@ -16,30 +16,52 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
 }
 
 /// Backend-Prozessbaum beenden.
-/// PyInstaller --onefile startet auf Windows zwei Prozesse (Bootloader + Python-Child).
-/// child.kill() tötet nur den Parent → Child läuft weiter.
-/// Lösung: zuerst taskkill /F /T /PID (killt ganzen Baum), dann Handle droppen.
+/// Strategie (Windows):
+///   1. POST /api/shutdown  → uvicorn beendet sich selbst sauber (Handles frei)
+///      curl.exe ist seit Windows 10 eingebaut, kein extra Prozess nötig.
+///   2. 1,5 s warten – uvicorn + Bootloader beenden sich in der Regel in < 300 ms
+///   3. taskkill /F /T /PID als Fallback falls noch alive
 ///
-/// wait=true  → output() – blockiert bis taskkill abgeschlossen ist (IPC vor exit(0))
-/// wait=false → spawn()  – non-blocking (CloseRequested / RunEvent::Exit)
-fn kill_backend_inner(child: CommandChild, wait: bool) {
+/// wait=true  → blockiert komplett (IPC vor exit(0), NSIS wartet)
+/// wait=false → non-blocking (CloseRequested / RunEvent::Exit)
+fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
     #[cfg(target_os = "windows")]
     {
         let pid = child.pid();
         drop(child);
+
+        let shutdown_url = format!("http://127.0.0.1:{}/api/shutdown", port);
+        log::info!("Sende Shutdown-Request an {} (PID {})", shutdown_url, pid);
+
         if wait {
+            // 1. Graceful: HTTP POST an /api/shutdown – curl.exe blockiert bis Antwort
+            let status = std::process::Command::new("curl.exe")
+                .args(["-s", "-m", "3", "-X", "POST", &shutdown_url])
+                .output();
+            match &status {
+                Ok(o) if o.status.success() => log::info!("Graceful shutdown OK"),
+                _ => log::warn!("Graceful shutdown fehlgeschlagen – fahre mit taskkill fort"),
+            }
+
+            // 2. Kurz warten: Prozess beendet sich nach /shutdown selbst
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+
+            // 3. Fallback: taskkill falls noch alive
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
-                .output();  // blockiert bis Backend-Prozessbaum beendet ist
-            // Windows gibt Datei-Handles asynchron frei – kurz warten bevor
-            // exit(0) den NSIS-Installer freigibt (verhindert "Datei gesperrt")
-            std::thread::sleep(std::time::Duration::from_millis(2000));
+                .output();
+
+            log::info!("Backend (PID {}) beendet (wait=true)", pid);
         } else {
+            // Non-blocking: Shutdown-Request feuern und nicht warten
+            let _ = std::process::Command::new("curl.exe")
+                .args(["-s", "-m", "2", "-X", "POST", &shutdown_url])
+                .spawn();
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .spawn();
+            log::info!("Backend (PID {}) beendet (wait=false)", pid);
         }
-        log::info!("Backend-Prozessbaum (PID {}) per taskkill /T beendet (wait={})", pid, wait);
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -56,9 +78,10 @@ fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
 
 /// IPC-Command: vom Frontend vor exit(0) aufgerufen – wartet bis Backend wirklich beendet ist
 #[tauri::command]
-fn kill_backend(state: tauri::State<BackendChild>) {
-    if let Some(child) = state.0.lock().unwrap().take() {
-        kill_backend_inner(child, true);  // wait=true: taskkill fertig bevor IPC zurückgibt
+fn kill_backend(child_state: tauri::State<BackendChild>, port_state: tauri::State<BackendPort>) {
+    let port = *port_state.0.lock().unwrap();
+    if let Some(child) = child_state.0.lock().unwrap().take() {
+        kill_backend_inner(child, port, true);  // wait=true: blockiert bis Backend weg ist
     }
 }
 
@@ -136,7 +159,7 @@ pub fn run() {
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("RechnungsFee")
+            .title("RechnungsFee Testing")
             .inner_size(1280.0, 800.0)
             .min_inner_size(900.0, 600.0)
             .resizable(true)
@@ -165,8 +188,9 @@ pub fn run() {
             let ah = app.handle().clone();
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let port = *ah.state::<BackendPort>().0.lock().unwrap();
                     if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
-                        kill_backend_inner(child, false);  // non-blocking: UI soll nicht einfrieren
+                        kill_backend_inner(child, port, false);  // non-blocking: UI soll nicht einfrieren
                     }
                 }
             });
@@ -179,8 +203,9 @@ pub fn run() {
         .run(|app_handle, event| {
             // Fallback: Falls CloseRequested nicht gefeuert hat (z.B. kein Hauptfenster)
             if let tauri::RunEvent::Exit = event {
+                let port = *app_handle.state::<BackendPort>().0.lock().unwrap();
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
-                    kill_backend_inner(child, false);  // non-blocking Fallback
+                    kill_backend_inner(child, port, false);  // non-blocking Fallback
                 }
             }
         });
