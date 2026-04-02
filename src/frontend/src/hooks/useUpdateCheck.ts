@@ -68,32 +68,47 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
       const update = await check()
       if (!update?.available) return
 
-      let total: number | null = null
-      let downloaded = 0
-      await update.downloadAndInstall(event => {
-        if (event.event === 'Started') {
-          total = event.data.contentLength ?? null
-        } else if (event.event === 'Progress') {
-          downloaded += event.data.chunkLength
-          const pct = total ? Math.round((downloaded / total) * 100) : null
-          setState(s => ({ ...s, progress: pct }))
-        }
-      })
-
       const isWindows = navigator.userAgent.toLowerCase().includes('win')
 
+      let total: number | null = null
+      let downloaded = 0
+
       if (isWindows) {
-        // NSIS-Installer braucht freie Datei-Sperre.
-        // Nutzer informieren, dann Backend explizit beenden, dann App beenden.
+        // Windows: Download und Install trennen, damit Backend vor NSIS beendet werden kann.
+        // NSIS überschreibt backend.exe – die Datei muss vorher freigegeben sein.
+        await update.download(event => {
+          if (event.event === 'Started') {
+            total = event.data.contentLength ?? null
+          } else if (event.event === 'Progress') {
+            downloaded += event.data.chunkLength
+            const pct = total ? Math.round((downloaded / total) * 100) : null
+            setState(s => ({ ...s, progress: pct }))
+          }
+        })
+
+        // Download abgeschlossen – Backend beenden BEVOR NSIS startet
         setState(s => ({ ...s, downloading: false, readyToRestart: true }))
-        await new Promise(resolve => setTimeout(resolve, 3000))
-        // Backend-Sidecar explizit killen – exit(0) umgeht ggf. RunEvent::Exit
         const { invoke } = await import('@tauri-apps/api/core')
         await invoke('kill_backend').catch(() => {})
+
+        // Kurz warten damit backend.exe-Handle wirklich freigegeben ist
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // Jetzt NSIS starten – backend.exe ist frei
+        await update.install()
         const { exit } = await import('@tauri-apps/plugin-process')
         await exit(0)
       } else {
-        // Linux/macOS: AppImage/Bundle wurde bereits ersetzt – direkt neu starten.
+        // Linux/macOS: AppImage/Bundle wird ersetzt – direkt neu starten.
+        await update.downloadAndInstall(event => {
+          if (event.event === 'Started') {
+            total = event.data.contentLength ?? null
+          } else if (event.event === 'Progress') {
+            downloaded += event.data.chunkLength
+            const pct = total ? Math.round((downloaded / total) * 100) : null
+            setState(s => ({ ...s, progress: pct }))
+          }
+        })
         const { relaunch } = await import('@tauri-apps/plugin-process')
         await relaunch()
       }
