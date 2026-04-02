@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import threading
 from datetime import datetime
 
 from fastapi import FastAPI
@@ -35,6 +37,17 @@ app.include_router(backup.router)
 app.include_router(artikel.router)
 app.include_router(ust_saetze.router)
 app.include_router(pdf_vorlagen.router)
+
+
+@app.post("/api/shutdown")
+def shutdown():
+    """Graceful Shutdown – Tauri ruft diesen Endpoint vor dem Update-Installer auf."""
+    def _exit():
+        import time
+        time.sleep(0.15)   # Antwort zuerst senden, dann beenden
+        os._exit(0)
+    threading.Thread(target=_exit, daemon=True).start()
+    return {"ok": True}
 
 
 def _backup_datenbank() -> None:

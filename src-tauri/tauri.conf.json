@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "RechnungsFee",
+  "productName": "RechnungsFee Testing",
   "version": "0.1.0",
-  "identifier": "de.rechnungsfee.app",
+  "identifier": "de.rechnungsfee.testing",
   "build": {
     "frontendDist": "../src/frontend/dist",
     "devUrl": "http://localhost:5173",
@@ -17,9 +17,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": [
-        "https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest/download/latest.json"
-      ],
+      "endpoints": [],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwNTBDOTQ5RjJEQTlCMzcKUldRM205cnlTY2xROEI2WUpkbFhyajQ3dS9hQlkvWkc5ZHhPZnNkS3hNcEJZMWZFbTFzZUdVbVgK"
     }
   },
