@@ -536,7 +536,7 @@ function RechnungDetail({
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Status</span>
             {rechnung.storniert
-              ? <span className="text-xs text-slate-400 italic">—</span>
+              ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
               : <StatusBadge status={rechnung.zahlungsstatus} />}
           </div>
         </div>
@@ -1729,7 +1729,7 @@ export function RechnungenPage() {
                       </td>
                       <td className="px-5 py-3 text-center">
                         {r.storniert
-                          ? <span className="text-xs text-slate-400 italic">—</span>
+                          ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
                           : <StatusBadge status={r.zahlungsstatus} />}
                       </td>
                     </tr>
