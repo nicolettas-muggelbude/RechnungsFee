@@ -35,18 +35,21 @@ VORLAGEN = [
 def _demo_rechnung(unt: dict) -> Any:
     """Erzeugt eine Muster-Rechnung mit Dummy-Daten für die Vorschau."""
     pos1 = SimpleNamespace(
+        position_nr=1,
         beschreibung="Webdesign – Startseite", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("800.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "152.00"),
         brutto=Decimal("800.00" if unt.get("ist_kleinunternehmer") else "952.00"),
     )
     pos2 = SimpleNamespace(
+        position_nr=2,
         beschreibung="Logo-Erstellung und CI-Konzept", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("300.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "57.00"),
         brutto=Decimal("300.00" if unt.get("ist_kleinunternehmer") else "357.00"),
     )
     pos3 = SimpleNamespace(
+        position_nr=3,
         beschreibung="Technischer Support (3 Stunden)", menge=Decimal("3"), einheit="Std",
         netto=Decimal("180.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "34.20"),
