@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.35',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: Rechnungsvorlage „Sandra grün" (Vorlage 2) war im gepackten Binary nicht enthalten und führte zu einem internen Fehler – PyInstaller-Build ergänzt' },
+      { typ: 'fix', text: 'Windows: Backend-Prozess wird beim Update jetzt vollständig beendet bevor der Installer startet – 2s Wartezeit nach taskkill verhindert „Datei gesperrt"-Fehler' },
+      { typ: 'verbesserung', text: 'Backup-Seite zeigt jetzt Datenpfade für alle Betriebssysteme (Linux, Windows, macOS) – sowohl für automatische Backups als auch in der Wiederherstellungsanleitung (Issue #34)' },
+    ],
+  },
+  {
     version: 'v0.1.34',
     datum: 'April 2026',
     eintraege: [
