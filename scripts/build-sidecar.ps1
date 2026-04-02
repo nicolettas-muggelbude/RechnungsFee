@@ -65,6 +65,7 @@ try {
         --hidden-import api.export `
         --hidden-import api.rechnungen `
         --hidden-import api.backup `
+        --hidden-import api.pdf_vorlagen `
         --hidden-import database.models `
         --hidden-import database.connection `
         --hidden-import database.seed `
@@ -72,6 +73,7 @@ try {
         --hidden-import utils.pdf_gobd_bericht `
         --hidden-import utils.pdf_tagesabschluss `
         --hidden-import utils.pdf_rechnung `
+        --hidden-import utils.pdf_rechnung_vorlage1 `
         --hidden-import utils.signatur `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py

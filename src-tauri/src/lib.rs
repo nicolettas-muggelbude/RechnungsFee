@@ -31,6 +31,9 @@ fn kill_backend_inner(child: CommandChild, wait: bool) {
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .output();  // blockiert bis Backend-Prozessbaum beendet ist
+            // Windows gibt Datei-Handles asynchron frei – kurz warten bevor
+            // exit(0) den NSIS-Installer freigibt (verhindert "Datei gesperrt")
+            std::thread::sleep(std::time::Duration::from_millis(2000));
         } else {
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
