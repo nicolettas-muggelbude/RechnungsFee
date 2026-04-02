@@ -130,7 +130,7 @@ jobs:
           V="${{ github.ref_name }}"
           V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          APPIMAGE="$BASE/RechnungsFee_${V}_amd64.AppImage"
+          APPIMAGE="$BASE/RechnungsFee-Testing_${V}_amd64.AppImage"
           SQUASH="${GITHUB_WORKSPACE}/squashfs-root"
 
           chmod +x "$APPIMAGE"
@@ -162,9 +162,9 @@ jobs:
           V="${{ github.ref_name }}"
           V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          cp "$BASE/RechnungsFee_${V}_amd64.AppImage" "$BASE/RechnungsFee_amd64.AppImage"
+          cp "$BASE/RechnungsFee-Testing_${V}_amd64.AppImage" "$BASE/RechnungsFee-Testing_amd64.AppImage"
           gh release upload "${{ github.ref_name }}" \
-            "$BASE/RechnungsFee_amd64.AppImage" \
+            "$BASE/RechnungsFee-Testing_amd64.AppImage" \
             "${GITHUB_WORKSPACE}/scripts/install-linux.sh" \
             --clobber
 
@@ -179,8 +179,8 @@ jobs:
         run: |
           $V = "${{ github.ref_name }}".TrimStart('v')
           $base = "${{ github.workspace }}\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
-          $exe = "$base\RechnungsFee_${V}_x64-setup.exe"
-          $zip = "$base\RechnungsFee_${V}_x64-setup.nsis.zip"
+          $exe = "$base\RechnungsFee-Testing_${V}_x64-setup.exe"
+          $zip = "$base\RechnungsFee-Testing_${V}_x64-setup.nsis.zip"
           $sig = "${zip}.sig"
 
           # .nsis.zip aus .exe erstellen (tauri build erstellt es nicht ohne Signing-Konfig)
@@ -231,7 +231,7 @@ jobs:
           V="${{ github.ref_name }}"
           V="${V#v}"
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          TAR="$BASE/RechnungsFee_${V}_amd64.AppImage.tar.gz"
+          TAR="$BASE/RechnungsFee-Testing_${V}_amd64.AppImage.tar.gz"
           SIG="${TAR}.sig"
 
           echo "=== bundle/appimage Inhalt ==="
@@ -245,7 +245,7 @@ jobs:
           fi
 
           # .tar.gz neu erstellen (tauri build löscht es möglicherweise)
-          tar -czf "$TAR" -C "$BASE" "RechnungsFee_${V}_amd64.AppImage"
+          tar -czf "$TAR" -C "$BASE" "RechnungsFee-Testing_${V}_amd64.AppImage"
 
           # minisign installieren – nicht in Ubuntu 22.04 Repos, daher Binary von GitHub
           curl -sSL https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz \
@@ -308,12 +308,12 @@ jobs:
             'pub_date': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
             'platforms': {
               'windows-x86_64': {
-                'signature': sig_b64(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig'),
-                'url': f'{base}/RechnungsFee_{v}_x64-setup.nsis.zip',
+                'signature': sig_b64(f'sigs/RechnungsFee-Testing_{v}_x64-setup.nsis.zip.sig'),
+                'url': f'{base}/RechnungsFee-Testing_{v}_x64-setup.nsis.zip',
               },
               'linux-x86_64': {
-                'signature': sig_b64(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig'),
-                'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
+                'signature': sig_b64(f'sigs/RechnungsFee-Testing_{v}_amd64.AppImage.tar.gz.sig'),
+                'url': f'{base}/RechnungsFee-Testing_{v}_amd64.AppImage.tar.gz',
               },
             },
           }
@@ -334,9 +334,9 @@ jobs:
           changelog_md = '\n'.join(changelog_lines) if changelog_lines else '_Keine Einträge gefunden._'
 
           # ── Release-Body zusammenbauen ──────────────────────────────────────
-          win_exe      = f'RechnungsFee_{v}_x64-setup.exe'
-          lin_img      = 'RechnungsFee_amd64.AppImage'
-          lin_img_ver  = f'RechnungsFee_{v}_amd64.AppImage'
+          win_exe      = f'RechnungsFee-Testing_{v}_x64-setup.exe'
+          lin_img      = 'RechnungsFee-Testing_amd64.AppImage'
+          lin_img_ver  = f'RechnungsFee-Testing_{v}_amd64.AppImage'
           win_url      = f'{base}/{win_exe}'
           lin_url      = f'{base}/{lin_img}'
           lin_url_ver  = f'{base}/{lin_img_ver}'
@@ -366,12 +366,12 @@ jobs:
 
           ```bash
           # 1. AppImage herunterladen und ausführbar machen
-          chmod +x RechnungsFee_amd64.AppImage
+          chmod +x RechnungsFee-Testing_amd64.AppImage
 
           # 2. Integrations-Skript ausführen (einmalig)
           wget -qO install-linux.sh {base}/install-linux.sh
           chmod +x install-linux.sh
-          ./install-linux.sh ./RechnungsFee_amd64.AppImage
+          ./install-linux.sh ./RechnungsFee-Testing_amd64.AppImage
           ```
 
           > ℹ️ Die Dateien `.tar.gz`, `.nsis.zip` und `.sig` sind für den eingebauten Auto-Updater – **nicht manuell herunterladen**.
