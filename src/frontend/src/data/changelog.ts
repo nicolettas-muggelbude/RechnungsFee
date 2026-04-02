@@ -23,6 +23,16 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.37',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Windows: Update-Prozess beendet das Backend jetzt vor dem Start des Installers – backend.exe war bisher gesperrt und der Installer schlug fehl (Issue #35)' },
+      { typ: 'fix', text: 'USt-Satz springt beim Bearbeiten einer gespeicherten Rechnung nicht mehr auf 0% – Decimal-Format der API wurde nicht mit den Select-Optionen abgeglichen (Issue #40)' },
+      { typ: 'fix', text: 'Stornierte Rechnungen zeigen jetzt „Storniert" als Status statt „Offen" – in der Übersicht und in den Rechnungsdetails (Issue #41)' },
+      { typ: 'fix', text: 'Stornierte Rechnungen erscheinen nicht mehr in der Liste offener Rechnungen' },
+    ],
+  },
+  {
     version: 'v0.1.36',
     datum: 'April 2026',
     eintraege: [
