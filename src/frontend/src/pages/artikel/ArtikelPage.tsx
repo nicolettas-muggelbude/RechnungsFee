@@ -329,7 +329,9 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-start justify-between mb-4">
+
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYP_FARBEN[artikel.typ]}`}>
@@ -339,102 +341,120 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">Inaktiv</span>
             )}
           </div>
-          <h3 className="font-bold text-slate-800 dark:text-slate-100">{artikel.bezeichnung}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{artikel.artikelnummer}</p>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">{artikel.bezeichnung}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{artikel.artikelnummer}</p>
         </div>
-        <button onClick={onEdit} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
+        <button onClick={onEdit} className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0 mt-0.5">Bearbeiten</button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK brutto</p>
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatEuro(artikel.vk_brutto)}</p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK netto</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.vk_netto)}</p>
-        </div>
-        {artikel.ek_netto ? (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">EK netto</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.ek_netto)}</p>
-          </div>
-        ) : <div />}
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">USt-Satz</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.steuersatz} %</p>
-        </div>
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Einheit</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.einheit}</p>
-        </div>
-        {artikel.kategorie && (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Kategorie</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.kategorie}</p>
-          </div>
-        )}
-        {artikel.lieferant && (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Lieferant</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.lieferant.firmenname}</p>
-          </div>
-        )}
-        {artikel.lieferanten_artikelnr && (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Lief.-ArtNr</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200 font-mono">{artikel.lieferanten_artikelnr}</p>
-          </div>
-        )}
-        {artikel.hersteller && (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Hersteller</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.hersteller}</p>
-          </div>
-        )}
-        {artikel.artikelcode && (
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Artikelcode</p>
-            <p className="text-sm text-slate-700 dark:text-slate-200 font-mono">{artikel.artikelcode}</p>
-          </div>
-        )}
-      </div>
+      {/* Scrollbarer Content */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
-      {artikel.beschreibung && (
-        <div className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg p-3 mb-4 whitespace-pre-wrap">
-          {artikel.beschreibung}
-        </div>
-      )}
-
-      {/* Verknüpfte Rechnungen */}
-      <div className="border-t border-slate-100 dark:border-slate-700 pt-3 flex-1 min-h-0">
-        <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-          Verknüpfte Rechnungen ({rechnungen?.length ?? 0})
-        </h4>
-        {rechnungen && rechnungen.length > 0 ? (
-          <div className="space-y-1 overflow-y-auto max-h-48">
-            {rechnungen.map((r, i) => (
-              <div key={i} className="text-xs bg-slate-50 dark:bg-slate-900 rounded px-2 py-1.5 flex items-start justify-between gap-2">
-                <div>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</span>
-                  {r.kunde_name && <span className="text-slate-500 dark:text-slate-400 ms-2">{r.kunde_name}</span>}
-                </div>
-                <div className="text-slate-400 dark:text-slate-500 text-right shrink-0">
-                  <div>{r.menge} {r.einheit}</div>
-                  <div>{new Date(r.datum).toLocaleDateString('de-DE')}</div>
-                </div>
+        {/* Preise */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Preise</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK brutto</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatEuro(artikel.vk_brutto)}</p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK netto</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.vk_netto)}</p>
+            </div>
+            {artikel.ek_netto && (
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">EK netto</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.ek_netto)}</p>
               </div>
-            ))}
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-slate-400 dark:text-slate-500">Noch in keiner Rechnung verwendet.</p>
+        </div>
+
+        {/* Details */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Details</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">USt-Satz</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.steuersatz} %</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Einheit</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.einheit}</p>
+            </div>
+            {artikel.kategorie && (
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Kategorie</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.kategorie}</p>
+              </div>
+            )}
+            {artikel.lieferant && (
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Lieferant</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.lieferant.firmenname}</p>
+              </div>
+            )}
+            {artikel.lieferanten_artikelnr && (
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Lief.-ArtNr</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200 font-mono">{artikel.lieferanten_artikelnr}</p>
+              </div>
+            )}
+            {artikel.hersteller && (
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Hersteller</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{artikel.hersteller}</p>
+              </div>
+            )}
+            {artikel.artikelcode && (
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Artikelcode</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200 font-mono">{artikel.artikelcode}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Beschreibung */}
+        {artikel.beschreibung && (
+          <div>
+            <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Beschreibung</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 whitespace-pre-wrap">{artikel.beschreibung}</p>
+          </div>
         )}
+
+        {/* Verknüpfte Rechnungen */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
+            Verknüpfte Rechnungen ({rechnungen?.length ?? 0})
+          </p>
+          {rechnungen && rechnungen.length > 0 ? (
+            <div className="space-y-1.5">
+              {rechnungen.map((r, i) => (
+                <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 flex items-start justify-between gap-2">
+                  <div>
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{r.rechnungsnummer ?? `RE-${r.rechnung_id}`}</span>
+                    {r.kunde_name && <span className="text-xs text-slate-500 dark:text-slate-400 ms-2">{r.kunde_name}</span>}
+                  </div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500 text-right shrink-0">
+                    <div>{r.menge} {r.einheit}</div>
+                    <div>{new Date(r.datum).toLocaleDateString('de-DE')}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 dark:text-slate-500">Noch in keiner Rechnung verwendet.</p>
+          )}
+        </div>
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-700 pt-3 mt-3">
+      {/* Footer */}
+      <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 py-3">
         <button
           onClick={() => toggleAktiv.mutate()}
-          className={`text-xs ${artikel.aktiv ? 'text-slate-400 hover:text-red-500' : 'text-green-600 hover:text-green-700'}`}
+          className={`text-xs ${artikel.aktiv ? 'text-slate-400 hover:text-red-500 dark:hover:text-red-400' : 'text-green-600 dark:text-green-400 hover:text-green-700'}`}
         >
           {artikel.aktiv ? 'Als inaktiv markieren' : 'Wieder aktivieren'}
         </button>
@@ -566,7 +586,7 @@ export function ArtikelPage() {
 
       {/* Detail-Panel */}
       {!showForm && (
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           {selected ? (
             <ArtikelDetail
               key={selected.id}
