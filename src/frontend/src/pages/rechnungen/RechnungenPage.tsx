@@ -1559,7 +1559,7 @@ export function RechnungenPage() {
         const q = suche.trim().toLowerCase()
         return (
           (r.rechnungsnummer ?? '').toLowerCase().includes(q) ||
-          (r.kunden_name ?? '').toLowerCase().includes(q)
+          (r.kunde_name ?? '').toLowerCase().includes(q)
         )
       })
     : alleRechnungen
