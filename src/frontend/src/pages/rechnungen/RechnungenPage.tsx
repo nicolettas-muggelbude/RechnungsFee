@@ -91,6 +91,10 @@ function ZahlungsDialog({
       setFehler('Bitte einen gültigen Betrag eingeben.')
       return
     }
+    if (datum > new Date().toISOString().slice(0, 10)) {
+      setFehler('Das Zahlungsdatum darf nicht in der Zukunft liegen.')
+      return
+    }
     mutation.mutate({
       betrag: betragDecimal.toFixed(2),
       datum,
@@ -150,6 +154,7 @@ function ZahlungsDialog({
             <input
               type="date"
               value={datum}
+              max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setDatum(e.target.value)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />

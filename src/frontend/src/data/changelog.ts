@@ -33,6 +33,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
       { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
       { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
+      { typ: 'fix', text: 'Zahlungsdialog: Zukunftsdaten werden jetzt abgelehnt – Datumsauswahl ist auf heute begrenzt, Fehlermeldung bei manuellem Eintrag eines zukünftigen Datums (Issue #44)' },
     ],
   },
   {
