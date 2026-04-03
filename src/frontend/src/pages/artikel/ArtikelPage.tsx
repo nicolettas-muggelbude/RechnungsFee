@@ -483,14 +483,14 @@ export function ArtikelPage() {
   return (
     <div className="flex h-full gap-0">
       {/* Liste */}
-      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'w-full max-w-xl'} flex flex-col border-e border-slate-200 dark:border-slate-700 transition-all`}>
+      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
         {/* Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Artikelstamm</h1>
+        <div className="p-6 pb-4 shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Artikelstamm</h1>
             <button
               onClick={() => { setEditArtikel(undefined); setShowForm(true) }}
-              className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700"
+              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700"
             >
               + Neu
             </button>
@@ -499,7 +499,7 @@ export function ArtikelPage() {
             value={suche}
             onChange={e => setSuche(e.target.value)}
             placeholder="Suche nach Bezeichnung, Artikelnummer, Lieferant …"
-            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm mb-2 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm mb-3 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
           />
           <div className="flex gap-2 flex-wrap">
             {/* Typ-Filter */}
@@ -530,7 +530,8 @@ export function ArtikelPage() {
         </div>
 
         {/* Liste */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
           {isLoading ? (
             <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm">Lädt…</div>
           ) : gefiltert.length === 0 ? (
@@ -559,6 +560,7 @@ export function ArtikelPage() {
               </button>
             ))
           )}
+          </div>
         </div>
       </div>
 

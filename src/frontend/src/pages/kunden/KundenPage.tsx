@@ -224,29 +224,32 @@ export function KundenPage() {
       <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
 
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shrink-0">
-          <h2 className="font-semibold text-slate-800 dark:text-slate-100 shrink-0">Kunden</h2>
+        <div className="p-6 pb-4 shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Kunden</h2>
+            <button onClick={openCreate} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700">
+              + Neu
+            </button>
+          </div>
           <input
             type="text"
             placeholder="Suchen…"
             value={suche}
             onChange={(e) => setSuche(e.target.value)}
-            className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
           />
-          <button onClick={openCreate} className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-blue-700 shrink-0">
-            + Neu
-          </button>
         </div>
 
         {/* Tabelle */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           {isLoading ? (
-            <p className="text-slate-400 dark:text-slate-500 text-sm p-4">Lade…</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
           ) : !gefiltert.length ? (
-            <p className="text-slate-400 dark:text-slate-500 text-sm p-4">{suche ? 'Keine Treffer.' : 'Noch keine Kunden.'}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-5">{suche ? 'Keine Treffer.' : 'Noch keine Kunden.'}</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <thead className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr className="text-left">
                   <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Name / Firma</th>
                   <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Adresse</th>
@@ -283,6 +286,7 @@ export function KundenPage() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
 
         {/* Stammdaten-Karte des ausgewählten Kunden */}
