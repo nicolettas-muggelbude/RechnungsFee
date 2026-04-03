@@ -23,6 +23,19 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.38',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Split-Screen-Layout: Beim Öffnen des Formulars kollabiert die Liste auf ¼ Breite, das Formular bekommt ¾ – einheitlich für Rechnungen, Kunden, Lieferanten und Artikelstamm (Issue #39)' },
+      { typ: 'verbesserung', text: 'Kunden, Lieferanten und Artikelstamm: permanentes Detail-Panel rechts (wie Rechnungsdetails) – zeigt beim Anklicken einer Zeile Details, verschwindet beim Bearbeiten (Issue #36)' },
+      { typ: 'verbesserung', text: 'Artikelstamm Detail-Panel: strukturierter Aufbau mit Header, Sections (Preise, Details, Beschreibung, Verknüpfte Rechnungen) und Footer – analog Rechnungsdetails (Issue #46)' },
+      { typ: 'verbesserung', text: 'Lieferanten Detail-Panel: Header mit Name, Sections für Adresse, Kontakt, Steuer und Notizen' },
+      { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
+      { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
+      { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
+    ],
+  },
+  {
     version: 'v0.1.37',
     datum: 'April 2026',
     eintraege: [
