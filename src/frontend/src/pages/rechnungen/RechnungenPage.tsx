@@ -1557,7 +1557,7 @@ export function RechnungenPage() {
   // Summen (Entwürfe + Stornierte werden aus dem offenen Saldo ausgeschlossen)
   const gesamt = liste.reduce(
     (acc, r) => ({
-      brutto: acc.brutto + parseFloat(r.brutto_gesamt),
+      brutto: acc.brutto + (r.ist_entwurf || r.storniert ? 0 : parseFloat(r.brutto_gesamt)),
       offen: acc.offen + (r.ist_entwurf || r.storniert
         ? 0
         : Math.max(0, parseFloat(r.brutto_gesamt) - parseFloat(r.bezahlt_betrag))),
