@@ -111,11 +111,12 @@ function formatEuro(v: string | null | undefined) {
 // ---------------------------------------------------------------------------
 
 function ArtikelFormModal({
-  initial, onClose, onSuccess,
+  initial, onClose, onSuccess, inline = false,
 }: {
   initial?: Artikel
   onClose: () => void
   onSuccess: () => void
+  inline?: boolean
 }) {
   const qc = useQueryClient()
   const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
@@ -173,14 +174,8 @@ function ArtikelFormModal({
     },
   })
 
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
-          {initial ? 'Artikel bearbeiten' : 'Neuer Artikel'}
-        </h2>
-
-        <form onSubmit={handleSubmit(v => mutation.mutate(v))} className="space-y-4">
+  const formContent = (
+    <form onSubmit={handleSubmit(v => mutation.mutate(v))} className="space-y-4">
           {/* Typ */}
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Typ</label>
@@ -302,6 +297,15 @@ function ArtikelFormModal({
             </button>
           </div>
         </form>
+  )
+
+  return inline ? formContent : (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
+          {initial ? 'Artikel bearbeiten' : 'Neuer Artikel'}
+        </h2>
+        {formContent}
       </div>
     </div>
   )
@@ -479,7 +483,7 @@ export function ArtikelPage() {
   return (
     <div className="flex h-full gap-0">
       {/* Liste */}
-      <div className="flex flex-col w-full max-w-xl border-e border-slate-200 dark:border-slate-700">
+      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'w-full max-w-xl'} flex flex-col border-e border-slate-200 dark:border-slate-700 transition-all`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-3">
@@ -559,30 +563,43 @@ export function ArtikelPage() {
       </div>
 
       {/* Detail-Panel */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        {selected ? (
-          <ArtikelDetail
-            key={selected.id}
-            artikel={selected}
-            onEdit={() => openEdit(selected)}
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">
-            Artikel auswählen
-          </div>
-        )}
-      </div>
+      {!showForm && (
+        <div className="flex-1 p-6 overflow-y-auto">
+          {selected ? (
+            <ArtikelDetail
+              key={selected.id}
+              artikel={selected}
+              onEdit={() => openEdit(selected)}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">
+              Artikel auswählen
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Formular-Modal */}
+      {/* Formular-Panel */}
       {showForm && (
-        <ArtikelFormModal
-          initial={editArtikel}
-          onClose={closeForm}
-          onSuccess={() => {
-            closeForm()
-            if (editArtikel) setSelected(prev => prev?.id === editArtikel.id ? null : prev)
-          }}
-        />
+        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+              {editArtikel ? 'Artikel bearbeiten' : 'Neuer Artikel'}
+            </h3>
+            <button onClick={closeForm} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl leading-none">×</button>
+          </div>
+          <div className="p-6">
+            <ArtikelFormModal
+              initial={editArtikel}
+              onClose={closeForm}
+              onSuccess={() => {
+                closeForm()
+                if (editArtikel) setSelected(prev => prev?.id === editArtikel.id ? null : prev)
+              }}
+              inline
+            />
+          </div>
+        </div>
       )}
     </div>
   )
