@@ -1559,7 +1559,7 @@ export function RechnungenPage() {
   return (
     <div className="flex h-full">
       {/* Linke Spalte */}
-      <div className={`${formModus ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col overflow-hidden transition-all`}>
+      <div className={`${formModus ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-w-0 transition-all`}>
         <div className="p-6 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Rechnungen</h2>
@@ -1769,18 +1769,24 @@ export function RechnungenPage() {
         </div>
       )}
 
-      {!formModus && selectedRechnung && (
-        <div className="w-96 shrink-0">
-          <RechnungDetail
-            rechnung={selectedRechnung}
-            onClose={() => setSelectedId(null)}
-            onEdit={() => setFormModus('bearbeiten')}
-            onDelete={() => {
-              if (confirm('Rechnung wirklich löschen?')) {
-                deleteMutation.mutate(selectedRechnung.id)
-              }
-            }}
-          />
+      {!formModus && (
+        <div className="w-96 shrink-0 bg-white dark:bg-slate-800">
+          {selectedRechnung ? (
+            <RechnungDetail
+              rechnung={selectedRechnung}
+              onClose={() => setSelectedId(null)}
+              onEdit={() => setFormModus('bearbeiten')}
+              onDelete={() => {
+                if (confirm('Rechnung wirklich löschen?')) {
+                  deleteMutation.mutate(selectedRechnung.id)
+                }
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
+              Rechnung auswählen
+            </div>
+          )}
         </div>
       )}
     </div>

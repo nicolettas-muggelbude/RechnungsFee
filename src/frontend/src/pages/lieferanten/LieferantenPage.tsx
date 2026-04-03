@@ -33,8 +33,83 @@ const EMPTY: FormValues = {
   lieferantennummer: '', notizen: '',
 }
 
+// ---------------------------------------------------------------------------
+// Detail-Panel (rechts)
+// ---------------------------------------------------------------------------
+
+function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+          Lieferant
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{lieferant.firmenname}</p>
+          {(lieferant.vorname || lieferant.nachname) && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">{[lieferant.vorname, lieferant.nachname].filter(Boolean).join(' ')}</p>
+          )}
+        </div>
+        {(lieferant.strasse || lieferant.ort) && (
+          <div>
+            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1">Adresse</p>
+            {lieferant.strasse && (
+              <p className="text-xs text-slate-700 dark:text-slate-200">{lieferant.strasse} {lieferant.hausnummer}</p>
+            )}
+            {lieferant.ort && (
+              <p className="text-xs text-slate-700 dark:text-slate-200">{lieferant.plz} {lieferant.ort}</p>
+            )}
+            {lieferant.land && lieferant.land !== 'DE' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">{lieferant.land}</p>
+            )}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-2">
+          {lieferant.email && (
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">E-Mail</p>
+              <p className="text-xs text-slate-700 dark:text-slate-200 break-all">{lieferant.email}</p>
+            </div>
+          )}
+          {lieferant.telefon && (
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Telefon</p>
+              <p className="text-xs text-slate-700 dark:text-slate-200">{lieferant.telefon}</p>
+            </div>
+          )}
+          {lieferant.ust_idnr && (
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">USt-IdNr.</p>
+              <p className="text-xs text-slate-700 dark:text-slate-200 font-mono">{lieferant.ust_idnr}</p>
+            </div>
+          )}
+          {lieferant.lieferantennummer && (
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Lieferantennr.</p>
+              <p className="text-xs text-slate-700 dark:text-slate-200 font-mono">{lieferant.lieferantennummer}</p>
+            </div>
+          )}
+        </div>
+        {lieferant.notizen && (
+          <div>
+            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1">Notizen</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 whitespace-pre-wrap">{lieferant.notizen}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Hauptseite
+// ---------------------------------------------------------------------------
+
 export function LieferantenPage() {
   const qc = useQueryClient()
+  const [selected, setSelected] = useState<Lieferant | null>(null)
   const [editLieferant, setEditLieferant] = useState<Lieferant | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
@@ -56,7 +131,7 @@ export function LieferantenPage() {
   })
   const deleteMutation = useMutation({
     mutationFn: (l: Lieferant) => deleteLieferant(l.id!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lieferanten'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lieferanten'] }); setSelected(null) },
     onError: (_err: Error, l: Lieferant) => {
       setDeleteFehlgeschlagen(true)
       openEdit(l)
@@ -127,8 +202,11 @@ export function LieferantenPage() {
 
   return (
     <div className="flex h-full">
-      {/* Linke Spalte – Liste */}
-      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col overflow-hidden transition-all`}>
+
+      {/* ── Linke Spalte ─────────────────────────────────────────────── */}
+      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-w-0 transition-all`}>
+
+        {/* Header */}
         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shrink-0">
           <h2 className="font-semibold text-slate-800 dark:text-slate-100 shrink-0">Lieferanten</h2>
           <div className="flex-1" />
@@ -136,46 +214,96 @@ export function LieferantenPage() {
             + Neu
           </button>
         </div>
+
+        {/* Tabelle */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="bg-white dark:bg-slate-800 overflow-hidden">
-            {isLoading ? (
-              <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
-            ) : !lieferanten?.length ? (
-              <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Noch keine Lieferanten angelegt.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Firmenname</th>
-                    {!showForm && <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Adresse</th>}
-                    {!showForm && <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">E-Mail</th>}
-                    {!showForm && <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Lieferantennr.</th>}
-                    <th className="px-4 py-3 w-20"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lieferanten.map((l) => (
-                    <tr key={l.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700">
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{l.firmenname}</td>
-                      {!showForm && <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
-                        {[l.strasse && l.hausnummer ? `${l.strasse} ${l.hausnummer}` : l.strasse, l.plz && l.ort ? `${l.plz} ${l.ort}` : l.ort].filter(Boolean).join(', ') || '—'}
-                      </td>}
-                      {!showForm && <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{l.email || '—'}</td>}
-                      {!showForm && <td className="px-4 py-3 text-slate-400 dark:text-slate-500 font-mono text-xs">{l.lieferantennummer || '—'}</td>}
-                      <td className="px-4 py-3 flex gap-2 justify-end">
+          {isLoading ? (
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
+          ) : !lieferanten?.length ? (
+            <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Noch keine Lieferanten angelegt.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <tr className="text-left">
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Firmenname</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Adresse</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">E-Mail</th>
+                  <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Lieferantennr.</th>
+                  <th className="px-4 py-2.5 w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lieferanten.map((l) => (
+                  <tr
+                    key={l.id}
+                    onClick={() => setSelected(selected?.id === l.id ? null : l)}
+                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer transition-colors ${
+                      selected?.id === l.id ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <td className={`px-4 py-2.5 font-medium truncate max-w-[120px] ${selected?.id === l.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100'}`}>
+                      {l.firmenname}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs">
+                      {[l.strasse && l.hausnummer ? `${l.strasse} ${l.hausnummer}` : l.strasse, l.plz && l.ort ? `${l.plz} ${l.ort}` : l.ort].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{l.email || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{l.lieferantennummer || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => openEdit(l)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
-                        {!showForm && <button onClick={() => handleDelete(l)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <button onClick={() => handleDelete(l)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Stammdaten-Karte des ausgewählten Lieferanten */}
+        {selected && (
+          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{selected.firmenname}</span>
+              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600 text-sm leading-none">×</button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              {selected.telefon && (
+                <div><span className="text-slate-400 dark:text-slate-500 block">Telefon</span><span className="text-slate-700 dark:text-slate-200">{selected.telefon}</span></div>
+              )}
+              {selected.ust_idnr && (
+                <div><span className="text-slate-400 dark:text-slate-500 block">USt-IdNr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.ust_idnr}</span></div>
+              )}
+              {selected.email && (
+                <div><span className="text-slate-400 dark:text-slate-500 block">E-Mail</span><span className="text-slate-700 dark:text-slate-200">{selected.email}</span></div>
+              )}
+              {selected.lieferantennummer && (
+                <div><span className="text-slate-400 dark:text-slate-500 block">Lieferantennr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.lieferantennummer}</span></div>
+              )}
+            </div>
+            {selected.notizen && (
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 whitespace-pre-wrap">{selected.notizen}</p>
             )}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Rechte Spalte – Formular */}
+      {/* ── Rechte Spalte (Detail oder Formular) ─────────────────────── */}
+      {!showForm && (
+        <div className="w-80 shrink-0 bg-white dark:bg-slate-800">
+          {selected ? (
+            <LieferantDetail key={selected.id} lieferant={selected} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
+              Lieferant auswählen
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Formular-Panel ───────────────────────────────────────────── */}
       {showForm && (
         <div className="flex-1 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
@@ -184,8 +312,7 @@ export function LieferantenPage() {
             </h3>
             <button onClick={closeForm} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl leading-none">×</button>
           </div>
-          <div className="p-6">
-            <div className="max-w-lg">
+          <div className="p-6 max-w-lg">
             {deleteFehlgeschlagen && (
               <div className="mb-4 bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 rounded-lg px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-medium">Löschen nicht möglich</p>
@@ -327,7 +454,6 @@ export function LieferantenPage() {
                 </div>
               )}
             </form>
-            </div>
           </div>
         </div>
       )}
