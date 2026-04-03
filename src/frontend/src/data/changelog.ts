@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.39',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Split-Screen: Liste beim Bearbeiten von ¼ auf ⅓ Breite vergrößert – kein Textüberlauf mehr bei Standardfenstergröße (1280px)' },
+    ],
+  },
+  {
     version: 'v0.1.38',
     datum: 'April 2026',
     eintraege: [
