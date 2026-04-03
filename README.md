@@ -47,6 +47,13 @@ Installierte Apps aktualisieren sich automatisch – beim nächsten Start ersche
 - Zahlungsverfolgung mit Teilzahlungen und Fortschrittsbalken
 - Bar-, Karte-, PayPal- und Banküberweisungserfassung
 - Entwurfsmodus & Finalisierung, Storno mit automatischer Kassenbuchgegenbuchung
+- Suche nach Rechnungsnummer und Partnername, kombinierbar mit Status-Filter
+
+### 📦 Artikelstamm
+- Artikel, Dienstleistungen und Fremdleistungen verwalten
+- VK und EK – Eingabe wahlweise als Netto oder Brutto, automatische Gegenrechnung
+- Verknüpfung mit Lieferanten, Rechnungshistorie je Artikel
+- Autocomplete beim Erstellen von Rechnungspositionen
 
 ### 📋 Tagesabschlüsse
 - Soll/Ist-Vergleich mit Differenzprotokoll
@@ -65,6 +72,7 @@ Installierte Apps aktualisieren sich automatisch – beim nächsten Start ersche
 - Logo-Upload, Steuernummer, USt-IdNr., IBAN, Rechtsform
 - Mail-Vorlagen mit Platzhaltern für Rechnungsversand
 - **Kleinunternehmer §19 UStG** vollständig unterstützt (USt automatisch 0 %)
+- **Umsatzwarnung** – Dashboard-Hinweis wenn die Jahresumsatzgrenze (100.000 €) in Sicht ist oder überschritten wurde
 
 ### 🔧 Weitere Funktionen
 - **Setup-Assistent** für den ersten Start
@@ -139,7 +147,7 @@ bash scripts/build-sidecar.sh      # Linux
 # pwsh scripts/build-sidecar.ps1  # Windows
 
 cd src/frontend
-npx run tauri dev
+npm run tauri dev
 ```
 
 ---
