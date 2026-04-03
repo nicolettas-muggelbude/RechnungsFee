@@ -1498,6 +1498,7 @@ export function RechnungenPage() {
   const qc = useQueryClient()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
   const [zahlungsstatus, setZahlungsstatus] = useState('')
+  const [suche, setSuche] = useState('')
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')
   const [monat, setMonat] = useState(aktuellerMonat())
   const [datum, setDatum] = useState(heuteIso())
@@ -1552,7 +1553,16 @@ export function RechnungenPage() {
     onError: (e: Error) => setFehler(e.message),
   })
 
-  const liste = rechnungen ?? []
+  const alleRechnungen = rechnungen ?? []
+  const liste = suche.trim()
+    ? alleRechnungen.filter(r => {
+        const q = suche.trim().toLowerCase()
+        return (
+          (r.rechnungsnummer ?? '').toLowerCase().includes(q) ||
+          (r.kunden_name ?? '').toLowerCase().includes(q)
+        )
+      })
+    : alleRechnungen
 
   // Summen (Entwürfe + Stornierte werden aus dem offenen Saldo ausgeschlossen)
   const gesamt = liste.reduce(
@@ -1649,6 +1659,15 @@ export function RechnungenPage() {
                 />
               </div>
             )}
+
+            {/* Suche */}
+            <input
+              type="search"
+              placeholder="Nummer oder Partner suchen…"
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 w-56"
+            />
 
             {/* Zahlungsstatus */}
             <select
