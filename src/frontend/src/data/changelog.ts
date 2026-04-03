@@ -36,7 +36,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Zahlungsdialog: Zukunftsdaten werden jetzt abgelehnt – Datumsauswahl ist auf heute begrenzt, Fehlermeldung bei manuellem Eintrag eines zukünftigen Datums (Issue #44)' },
       { typ: 'fix', text: 'Rechnungsübersicht: Entwürfe werden jetzt korrekt als „Entwurf" angezeigt statt als „Offen" – in der Liste und im Detailpanel (Issue #45)' },
       { typ: 'fix', text: 'Rechnungsübersicht: Filter-Dropdown um „Entwurf" und „Storniert" erweitert (Issue #45)' },
-      { typ: 'fix', text: 'Rechnungsübersicht: Saldo „Offen" berücksichtigt jetzt nur echte offene Rechnungen – Entwürfe und stornierte Rechnungen werden nicht mehr als offen gewertet (Issue #45)' },
+      { typ: 'fix', text: 'Rechnungsübersicht: Saldo „Offen" und Kachel „Gesamt" berücksichtigen jetzt nur echte Rechnungen – Entwürfe und stornierte Rechnungen werden nicht mehr eingerechnet (Issue #45)' },
     ],
   },
   {
