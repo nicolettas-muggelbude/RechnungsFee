@@ -149,6 +149,50 @@ function ArtikelFormModal({
   })
 
   const typ = watch('typ') as ArtikelTyp
+  const steuersatz = parseFloat(watch('steuersatz') || '0')
+
+  // Hilfswerte für die jeweils berechnete Seite (nicht im RHF-Schema)
+  const [vkNetto, setVkNetto] = useState(
+    initial?.vk_netto ? String(parseFloat(initial.vk_netto)) : ''
+  )
+  const [ekBrutto, setEkBrutto] = useState(
+    initial?.ek_brutto ? String(parseFloat(initial.ek_brutto)) : ''
+  )
+  useEffect(() => {
+    setVkNetto(initial?.vk_netto ? String(parseFloat(initial.vk_netto)) : '')
+    setEkBrutto(initial?.ek_brutto ? String(parseFloat(initial.ek_brutto)) : '')
+  }, [initial?.id])
+
+  function bruttoAusNetto(netto: number) {
+    return Math.round(netto * (1 + steuersatz / 100) * 100) / 100
+  }
+  function nettoAusBrutto(brutto: number) {
+    return Math.round(brutto / (1 + steuersatz / 100) * 100) / 100
+  }
+
+  function onVkNettoChange(val: string) {
+    setVkNetto(val)
+    const n = parseFloat(val)
+    if (!isNaN(n) && n > 0) setValue('vk_brutto', String(bruttoAusNetto(n)), { shouldValidate: true })
+  }
+  function onVkBruttoChange(val: string) {
+    setValue('vk_brutto', val, { shouldValidate: true })
+    const b = parseFloat(val)
+    if (!isNaN(b) && b > 0) setVkNetto(String(nettoAusBrutto(b)))
+    else setVkNetto('')
+  }
+  function onEkBruttoChange(val: string) {
+    setEkBrutto(val)
+    const b = parseFloat(val)
+    if (!isNaN(b) && b >= 0) setValue('ek_netto', String(nettoAusBrutto(b)), { shouldValidate: true })
+    else setValue('ek_netto', '')
+  }
+  function onEkNettoChange(val: string) {
+    setValue('ek_netto', val, { shouldValidate: true })
+    const n = parseFloat(val)
+    if (!isNaN(n) && n >= 0) setEkBrutto(String(bruttoAusNetto(n)))
+    else setEkBrutto('')
+  }
 
   const mutation = useMutation({
     mutationFn: (v: FormValues) => {
@@ -224,16 +268,54 @@ function ArtikelFormModal({
 
           {/* VK */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">VK brutto *</label>
-            <input {...register('vk_brutto')} type="number" step="0.01" min="0.01" placeholder="0,00" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400" />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Verkaufspreis *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
+                <input
+                  type="number" step="0.01" min="0.01" placeholder="0,00"
+                  value={vkNetto}
+                  onChange={(e) => onVkNettoChange(e.target.value)}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                />
+              </div>
+              <div>
+                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
+                <input
+                  type="number" step="0.01" min="0.01" placeholder="0,00"
+                  value={watch('vk_brutto') ?? ''}
+                  onChange={(e) => onVkBruttoChange(e.target.value)}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                />
+              </div>
+            </div>
             {errors.vk_brutto && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.vk_brutto.message}</p>}
           </div>
 
-          {/* EK (nur bei DL + Fremdleistung) */}
+          {/* EK (nur bei Artikel + Fremdleistung) */}
           {hatEK(typ) && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">EK netto</label>
-              <input {...register('ek_netto')} type="number" step="0.01" min="0" placeholder="0,00" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400" />
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einkaufspreis</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
+                  <input
+                    type="number" step="0.01" min="0" placeholder="0,00"
+                    value={watch('ek_netto') ?? ''}
+                    onChange={(e) => onEkNettoChange(e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                  />
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
+                  <input
+                    type="number" step="0.01" min="0" placeholder="0,00"
+                    value={ekBrutto}
+                    onChange={(e) => onEkBruttoChange(e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

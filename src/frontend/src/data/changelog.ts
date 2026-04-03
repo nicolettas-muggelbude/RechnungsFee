@@ -33,6 +33,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
       { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
       { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
+      { typ: 'neu', text: 'Artikelstamm: VK und EK können jetzt wahlweise als Netto oder Brutto eingegeben werden – der jeweils andere Wert wird automatisch anhand des Steuersatzes berechnet (Issue #38)' },
       { typ: 'verbesserung', text: 'Infotexte präzisiert: Handelsregister erklärt jetzt Abteilung A (HRA) und B (HRB), Ist-Versteuerung weist auf einmaligen Antrag beim Finanzamt hin (Issue #37)' },
       { typ: 'fix', text: 'Fenstertitel zeigte „RechnungsFee Testing" statt „RechnungsFee" (Issue #43)' },
       { typ: 'neu', text: 'Rechnungen: Suchfeld nach Rechnungsnummer und Partnername – Volltextsuche mit Teiltreffern, kombinierbar mit dem Status-Filter (Issue #49)' },
