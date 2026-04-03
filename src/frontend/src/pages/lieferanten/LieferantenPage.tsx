@@ -204,7 +204,7 @@ export function LieferantenPage() {
     <div className="flex h-full">
 
       {/* ── Linke Spalte ─────────────────────────────────────────────── */}
-      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-w-0 transition-all`}>
+      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
 
         {/* Header */}
         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shrink-0">
@@ -292,7 +292,7 @@ export function LieferantenPage() {
 
       {/* ── Rechte Spalte (Detail oder Formular) ─────────────────────── */}
       {!showForm && (
-        <div className="w-80 shrink-0 bg-white dark:bg-slate-800">
+        <div className="w-80 shrink-0">
           {selected ? (
             <LieferantDetail key={selected.id} lieferant={selected} />
           ) : (
@@ -305,7 +305,7 @@ export function LieferantenPage() {
 
       {/* ── Formular-Panel ───────────────────────────────────────────── */}
       {showForm && (
-        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
+        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">
               {editLieferant ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}

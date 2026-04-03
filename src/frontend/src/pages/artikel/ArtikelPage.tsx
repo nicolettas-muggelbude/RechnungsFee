@@ -581,7 +581,7 @@ export function ArtikelPage() {
 
       {/* Formular-Panel */}
       {showForm && (
-        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
+        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">
               {editArtikel ? 'Artikel bearbeiten' : 'Neuer Artikel'}

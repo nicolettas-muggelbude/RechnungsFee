@@ -369,7 +369,7 @@ function RechnungDetail({
   }
 
   return (
-    <div className="border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-full overflow-auto flex flex-col">
+    <div className="border-l border-slate-200 dark:border-slate-700 h-full overflow-auto flex flex-col">
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
@@ -1559,7 +1559,7 @@ export function RechnungenPage() {
   return (
     <div className="flex h-full">
       {/* Linke Spalte */}
-      <div className={`${formModus ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-w-0 transition-all`}>
+      <div className={`${formModus ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
         <div className="p-6 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Rechnungen</h2>
@@ -1743,7 +1743,7 @@ export function RechnungenPage() {
 
       {/* Rechte Spalte: Detail oder Formular */}
       {formModus && (
-        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-auto">
+        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">
               {formModus === 'neu'
@@ -1770,7 +1770,7 @@ export function RechnungenPage() {
       )}
 
       {!formModus && (
-        <div className="w-96 shrink-0 bg-white dark:bg-slate-800">
+        <div className="w-96 shrink-0">
           {selectedRechnung ? (
             <RechnungDetail
               rechnung={selectedRechnung}
