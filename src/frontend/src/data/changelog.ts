@@ -34,6 +34,9 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
       { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
       { typ: 'fix', text: 'Zahlungsdialog: Zukunftsdaten werden jetzt abgelehnt – Datumsauswahl ist auf heute begrenzt, Fehlermeldung bei manuellem Eintrag eines zukünftigen Datums (Issue #44)' },
+      { typ: 'fix', text: 'Rechnungsübersicht: Entwürfe werden jetzt korrekt als „Entwurf" angezeigt statt als „Offen" – in der Liste und im Detailpanel (Issue #45)' },
+      { typ: 'fix', text: 'Rechnungsübersicht: Filter-Dropdown um „Entwurf" und „Storniert" erweitert (Issue #45)' },
+      { typ: 'fix', text: 'Rechnungsübersicht: Saldo „Offen" berücksichtigt jetzt nur echte offene Rechnungen – Entwürfe und stornierte Rechnungen werden nicht mehr als offen gewertet (Issue #45)' },
     ],
   },
   {

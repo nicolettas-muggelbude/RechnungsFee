@@ -542,7 +542,9 @@ function RechnungDetail({
             <span className="text-slate-500 dark:text-slate-400">Status</span>
             {rechnung.storniert
               ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
-              : <StatusBadge status={rechnung.zahlungsstatus} />}
+              : rechnung.ist_entwurf
+                ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
+                : <StatusBadge status={rechnung.zahlungsstatus} />}
           </div>
         </div>
 
@@ -1552,13 +1554,15 @@ export function RechnungenPage() {
 
   const liste = rechnungen ?? []
 
-  // Summen
+  // Summen (Entwürfe + Stornierte werden aus dem offenen Saldo ausgeschlossen)
   const gesamt = liste.reduce(
     (acc, r) => ({
       brutto: acc.brutto + parseFloat(r.brutto_gesamt),
-      bezahlt: acc.bezahlt + parseFloat(r.bezahlt_betrag),
+      offen: acc.offen + (r.ist_entwurf || r.storniert
+        ? 0
+        : Math.max(0, parseFloat(r.brutto_gesamt) - parseFloat(r.bezahlt_betrag))),
     }),
-    { brutto: 0, bezahlt: 0 }
+    { brutto: 0, offen: 0 }
   )
 
   return (
@@ -1656,6 +1660,8 @@ export function RechnungenPage() {
               <option value="offen">Offen</option>
               <option value="teilweise">Teilweise bezahlt</option>
               <option value="bezahlt">Bezahlt</option>
+              <option value="entwurf">Entwurf</option>
+              <option value="storniert">Storniert</option>
             </select>
           </div>
 
@@ -1681,7 +1687,7 @@ export function RechnungenPage() {
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
-              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatEuro(gesamt.brutto - gesamt.bezahlt)}</p>
+              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatEuro(gesamt.offen)}</p>
             </div>
           </div>
         )}
@@ -1735,7 +1741,9 @@ export function RechnungenPage() {
                       <td className="px-5 py-3 text-center">
                         {r.storniert
                           ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
-                          : <StatusBadge status={r.zahlungsstatus} />}
+                          : r.ist_entwurf
+                            ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
+                            : <StatusBadge status={r.zahlungsstatus} />}
                       </td>
                     </tr>
                   ))}

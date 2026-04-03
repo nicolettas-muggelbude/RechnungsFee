@@ -120,7 +120,7 @@ def get_offene_rechnungen(db: Session = Depends(get_db)):
 @router.get("", response_model=list[RechnungResponse])
 def list_rechnungen(
     typ: Optional[str] = Query(None, description="eingang|ausgang"),
-    zahlungsstatus: Optional[str] = Query(None, description="offen|teilweise|bezahlt"),
+    zahlungsstatus: Optional[str] = Query(None, description="offen|teilweise|bezahlt|entwurf|storniert"),
     monat: Optional[str] = Query(None, description="YYYY-MM"),
     datum_von: Optional[date] = Query(None, description="YYYY-MM-DD"),
     datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
@@ -133,9 +133,14 @@ def list_rechnungen(
         if typ not in ("eingang", "ausgang"):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
         q = q.filter(Rechnung.typ == typ)
-    if zahlungsstatus:
+    if zahlungsstatus == "entwurf":
+        q = q.filter(Rechnung.ist_entwurf == True)
+    elif zahlungsstatus == "storniert":
+        q = q.filter(Rechnung.storniert == True)
+    elif zahlungsstatus:
         q = q.filter(Rechnung.zahlungsstatus == zahlungsstatus)
         q = q.filter(Rechnung.storniert == False)
+        q = q.filter(Rechnung.ist_entwurf == False)
     if monat:
         try:
             jahr, mon = monat.split("-")
