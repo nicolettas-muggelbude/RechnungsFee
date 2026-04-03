@@ -33,6 +33,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
       { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
       { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
+      { typ: 'fix', text: 'Fenstertitel zeigte „RechnungsFee Testing" statt „RechnungsFee" (Issue #43)' },
       { typ: 'neu', text: 'Rechnungen: Suchfeld nach Rechnungsnummer und Partnername – Volltextsuche mit Teiltreffern, kombinierbar mit dem Status-Filter (Issue #49)' },
       { typ: 'fix', text: 'Tagesabschluss-PDF auf Windows: Interner Fehler 500 behoben – DejaVu-Fonts wurden im PyInstaller-Bundle nicht gefunden (Issue #47)' },
       { typ: 'fix', text: 'GoBD-Export-PDF: gleicher Font-Suchpfad-Fix wie Tagesabschluss (Issue #47)' },
