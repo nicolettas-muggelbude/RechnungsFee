@@ -33,6 +33,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
       { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
       { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
+      { typ: 'fix', text: 'Tagesabschluss-PDF auf Windows: Interner Fehler 500 behoben – DejaVu-Fonts wurden im PyInstaller-Bundle nicht gefunden (Issue #47)' },
+      { typ: 'fix', text: 'GoBD-Export-PDF: gleicher Font-Suchpfad-Fix wie Tagesabschluss (Issue #47)' },
       { typ: 'fix', text: 'Zahlungsdialog: Zukunftsdaten werden jetzt abgelehnt – Datumsauswahl ist auf heute begrenzt, Fehlermeldung bei manuellem Eintrag eines zukünftigen Datums (Issue #44)' },
       { typ: 'fix', text: 'Rechnungsübersicht: Entwürfe werden jetzt korrekt als „Entwurf" angezeigt statt als „Offen" – in der Liste und im Detailpanel (Issue #45)' },
       { typ: 'fix', text: 'Rechnungsübersicht: Filter-Dropdown um „Entwurf" und „Storniert" erweitert (Issue #45)' },

@@ -19,6 +19,20 @@ from fpdf import FPDF
 
 def _find_dejavu_dir() -> Path:
     """Sucht das DejaVu-Font-Verzeichnis auf gaengigen Systemen."""
+    import sys
+
+    # PyInstaller-Bundle: Fonts werden nach sys._MEIPASS/fonts/ extrahiert
+    if getattr(sys, "frozen", False):
+        p = Path(sys._MEIPASS) / "fonts"  # type: ignore[attr-defined]
+        if (p / "DejaVuSans.ttf").exists():
+            return p
+
+    # Entwicklung / direkter Start: Fonts liegen im Projekt unter src/backend/fonts/
+    local = Path(__file__).parent.parent / "fonts"
+    if (local / "DejaVuSans.ttf").exists():
+        return local
+
+    # Fallback: System-Fonts (Linux/macOS)
     candidates = [
         Path("/usr/share/fonts/truetype/dejavu"),
         Path("/usr/share/fonts/dejavu"),
