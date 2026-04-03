@@ -249,7 +249,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
         </label>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label={<>Versteuerungsart <InfoTooltip text="Ist-Versteuerung: USt wird fällig wenn der Kunde zahlt. Soll-Versteuerung: USt ist bereits bei Rechnungsstellung fällig. Für die meisten Freiberufler und Kleinunternehmer gilt die Ist-Versteuerung." /></>}>
+          <Field label={<>Versteuerungsart <InfoTooltip text="Ist-Versteuerung: USt wird fällig wenn der Kunde zahlt. Soll-Versteuerung: USt ist bereits bei Rechnungsstellung fällig. Für die meisten Freiberufler und Kleinunternehmer gilt die Ist-Versteuerung – sie muss einmalig beim Finanzamt beantragt werden." /></>}>
             <select
               value={form.versteuerungsart ?? 'ist'}
               onChange={ev => set('versteuerungsart', ev.target.value)}
@@ -323,7 +323,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       {/* Handelsregister */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Handelsregister</h3>
-        <p className="text-xs text-slate-400 dark:text-slate-500">Nur für GmbH, UG, AG etc. – Einzelunternehmer und Freiberufler leer lassen.</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Wenn dein Unternehmen im Handelsregister eingetragen ist, ergänze Register-Nr. und Registergericht. Abteilung A (HRA) gilt für Einzelkaufleute und Personengesellschaften, Abteilung B (HRB) für Kapitalgesellschaften (GmbH, UG, AG). Nicht eingetragene Einzelunternehmer und Freiberufler lassen diese Felder leer.</p>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Register-Nr.">{inp('handelsregister_nr', 'HRB 215517')}</Field>
           <Field label="Registergericht">{inp('handelsregister_gericht', 'Oldenburg')}</Field>
