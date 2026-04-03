@@ -585,7 +585,7 @@ export function ArtikelPage() {
   return (
     <div className="flex h-full gap-0">
       {/* Liste */}
-      <div className={`${showForm ? 'w-1/4 min-w-[200px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
+      <div className={`${showForm ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
         {/* Header */}
         <div className="p-6 pb-4 shrink-0">
           <div className="flex items-center justify-between mb-4">
