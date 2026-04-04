@@ -1045,7 +1045,7 @@ function RechnungForm({
       beschreibung: p.beschreibung,
       menge: p.menge,
       einheit: p.einheit,
-      netto: p.netto,
+      netto: p.brutto,  // eingabeModus startet als 'brutto' → Bruttowert vorbefüllen
       ust_satz: String(parseFloat(p.ust_satz)),
       artikel_id: p.artikel_id ?? undefined,
     })) ?? [leerPosition(defaultUstGlobal)]
