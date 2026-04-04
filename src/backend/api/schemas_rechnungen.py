@@ -20,6 +20,7 @@ class RechnungspositionCreate(BaseModel):
     netto: Decimal
     ust_satz: Decimal = Decimal("0")
     artikel_id: Optional[int] = None
+    kategorie_id: Optional[int] = None
 
     @field_validator("netto")
     @classmethod
@@ -47,6 +48,7 @@ class RechnungspositionResponse(BaseModel):
     id: int
     artikel_id: Optional[int] = None
     artikel_typ: Optional[str] = None
+    kategorie_id: Optional[int] = None
     position_nr: int
     beschreibung: str
     menge: Decimal

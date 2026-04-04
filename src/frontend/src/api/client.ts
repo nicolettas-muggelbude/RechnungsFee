@@ -456,6 +456,7 @@ export type Rechnungsposition = {
   id: number
   artikel_id: number | null
   artikel_typ: string | null
+  kategorie_id: number | null
   position_nr: number
   beschreibung: string
   menge: string
@@ -473,6 +474,7 @@ export type RechnungspositionCreate = {
   netto: string
   ust_satz: string
   artikel_id?: number
+  kategorie_id?: number
 }
 
 export type ZahlungKompakt = {

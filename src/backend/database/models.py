@@ -392,6 +392,8 @@ class Rechnungsposition(Base):
     ust_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
+    kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
+
     rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen")
     artikel: Mapped["Artikel | None"] = relationship(back_populates="positionen")
 

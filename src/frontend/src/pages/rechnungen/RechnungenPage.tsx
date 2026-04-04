@@ -1002,6 +1002,7 @@ type Positionszeile = {
   netto: string
   ust_satz: string
   artikel_id?: number
+  kategorie_id?: string  // nur Eingang, per-Position-Kategorie
 }
 
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
@@ -1011,6 +1012,7 @@ const leerPosition = (defaultUst = '19'): Positionszeile => ({
   netto: '',
   ust_satz: defaultUst,
   artikel_id: undefined,
+  kategorie_id: undefined,
 })
 
 function RechnungForm({
@@ -1062,9 +1064,14 @@ function RechnungForm({
       netto: p.brutto,  // eingabeModus startet als 'brutto' → Bruttowert vorbefüllen
       ust_satz: String(parseFloat(p.ust_satz)),
       artikel_id: p.artikel_id ?? undefined,
+      kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
     })) ?? [leerPosition(defaultUstGlobal)]
   )
   const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>('brutto')
+  // Schnellmodus: einfache Betragseingabe für Eingangsrechnungen (default für neue + 1-Positions-Rechnungen)
+  const [schnellmodus, setSchnellmodus] = useState(
+    typ === 'eingang' && (!initial || initial.positionen.length <= 1)
+  )
 
   const partnerListe = typ === 'ausgang' ? (kunden ?? []) : (lieferanten ?? [])
 
@@ -1218,6 +1225,7 @@ function RechnungForm({
           netto: netto.toFixed(2),
           ust_satz,
           artikel_id: p.artikel_id,
+          kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
         } as RechnungspositionCreate
       }),
     }
@@ -1340,9 +1348,20 @@ function RechnungForm({
       {/* Positionen */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Positionen *</label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            {typ === 'eingang' && schnellmodus ? 'Rechnungsbetrag *' : 'Positionen *'}
+          </label>
           <div className="flex items-center gap-3">
-            {!istKleinunternehmer && (
+            {typ === 'eingang' && (
+              <button
+                type="button"
+                onClick={() => setSchnellmodus((v) => !v)}
+                className="text-xs text-blue-600 hover:text-blue-700 underline"
+              >
+                {schnellmodus ? 'Positionen aufschlüsseln →' : '← Einfache Eingabe'}
+              </button>
+            )}
+            {(!schnellmodus || typ === 'ausgang') && !istKleinunternehmer && (
               <button
                 type="button"
                 onClick={toggleEingabeModus}
@@ -1351,15 +1370,86 @@ function RechnungForm({
                 {eingabeModus === 'netto' ? 'Brutto eingeben' : 'Netto eingeben'}
               </button>
             )}
-            <button
-              type="button"
-              onClick={addPosition}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              + Position hinzufügen
-            </button>
+            {!schnellmodus && (
+              <button
+                type="button"
+                onClick={addPosition}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                + Position hinzufügen
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Schnellmodus (nur Eingang) */}
+        {typ === 'eingang' && schnellmodus ? (
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Beschreibung / Verwendungszweck</label>
+              <input
+                type="text"
+                value={positionen[0]?.beschreibung ?? ''}
+                onChange={(e) => updatePosition(0, 'beschreibung', e.target.value)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                placeholder="z. B. Lieferantenrechnung Bürobedarf"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  {eingabeModus === 'netto' ? 'Nettobetrag (€)' : 'Bruttobetrag (€)'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    required
+                    type="text"
+                    value={positionen[0]?.netto ?? ''}
+                    onChange={(e) => updatePosition(0, 'netto', e.target.value)}
+                    className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    placeholder="0,00"
+                  />
+                  {!istKleinunternehmer && (
+                    <button
+                      type="button"
+                      onClick={toggleEingabeModus}
+                      className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
+                    >
+                      {eingabeModus === 'netto' ? '→ Brutto' : '→ Netto'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">USt-Satz</label>
+                <select
+                  value={positionen[0]?.ust_satz ?? defaultUstGlobal}
+                  onChange={(e) => updatePosition(0, 'ust_satz', e.target.value)}
+                  disabled={istKleinunternehmer}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                >
+                  {istKleinunternehmer ? (
+                    <option value="0">0 % (§19)</option>
+                  ) : (
+                    aktiveSaetze.map((s) => {
+                      const val = String(parseFloat(s.satz))
+                      return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                    })
+                  )}
+                </select>
+              </div>
+            </div>
+            {/* Summenanzeige */}
+            {parseFloat((positionen[0]?.netto ?? '').replace(',', '.')) > 0 && (
+              <div className="text-xs text-right text-slate-500 dark:text-slate-400 space-y-0.5 pt-1 border-t border-slate-100 dark:border-slate-700">
+                <div>Netto{eingabeModus === 'brutto' && ' (berechnet)'}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatEuro(summen.netto)}</span></div>
+                {summen.ust > 0 && <div>USt: <span className="text-slate-600 dark:text-slate-300">{formatEuro(summen.ust)}</span></div>}
+                <div className="font-semibold text-slate-800 dark:text-slate-100">Brutto{eingabeModus === 'netto' && ' (berechnet)'}: {formatEuro(summen.brutto)}</div>
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Positionstabelle */
         <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 dark:bg-slate-900">
@@ -1371,6 +1461,9 @@ function RechnungForm({
                   {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
                 </th>
                 <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
+                {typ === 'eingang' && (
+                  <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">Konto</th>
+                )}
                 <th className="px-3 py-2 w-8"></th>
               </tr>
             </thead>
@@ -1429,6 +1522,20 @@ function RechnungForm({
                       )}
                     </select>
                   </td>
+                  {typ === 'eingang' && (
+                    <td className="px-2 py-1.5">
+                      <select
+                        value={pos.kategorie_id ?? ''}
+                        onChange={(e) => updatePosition(i, 'kategorie_id', e.target.value)}
+                        className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
+                      >
+                        <option value="">— Hauptkategorie —</option>
+                        {(kategorien ?? []).filter((k) => k.kontenart === 'Aufwand' || k.kontenart === 'Anlage').map((k) => (
+                          <option key={k.id} value={String(k.id)}>{k.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   <td className="px-2 py-1.5 text-center">
                     {positionen.length > 1 && (
                       <button
@@ -1445,17 +1552,17 @@ function RechnungForm({
             </tbody>
             <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
                   Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(summen.netto)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                 <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.ust)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
+                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(summen.brutto)}</td>
@@ -1463,6 +1570,7 @@ function RechnungForm({
             </tfoot>
           </table>
         </div>
+        )}
       </div>
 
       <div>

@@ -29,6 +29,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Rechnungsentwurf: Preis änderte sich jedes Mal beim erneuten Öffnen und Speichern – Brutto-Eingabemodus wurde fälschlich als Netto interpretiert (Issue #50)' },
       { typ: 'fix', text: 'Stückzahl „10" wurde als „10.000" (Zehntausend) angezeigt – Python Decimal-Trailing-Zeros werden jetzt beim Laden normalisiert' },
       { typ: 'neu', text: 'Eingangsrechnungen: Belegnummer des Lieferanten kann optional erfasst werden – wird im Detail-Panel angezeigt und ist über die Suchfunktion durchsuchbar (Issue #52)' },
+      { typ: 'neu', text: 'Eingangsrechnungen: Schnelleingabe-Modus – statt Positionstabelle nur Betrag, USt-Satz und Beschreibung eingeben; mit einem Klick auf „Positionen aufschlüsseln" wechseln (Issue #42)' },
+      { typ: 'neu', text: 'Eingangsrechnungen: Im Positionsmodus kann jeder Zeile ein eigenes Konto (Kategorie) zugewiesen werden – überschreibt die Hauptkategorie der Rechnung (Issue #42)' },
     ],
   },
   {
