@@ -14,6 +14,12 @@ import { InfoTooltip } from '../../components/InfoTooltip'
 // Hilfsfunktionen
 // ---------------------------------------------------------------------------
 
+function formatMenge(v: string | number): string {
+  const n = parseFloat(String(v).replace(',', '.'))
+  if (isNaN(n)) return String(v)
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 }).format(n)
+}
+
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n)
@@ -568,7 +574,7 @@ function RechnungDetail({
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {pos.beschreibung}
                         {parseFloat(pos.menge) !== 1 && (
-                          <span className="text-slate-400 dark:text-slate-500"> × {pos.menge} {pos.einheit}</span>
+                          <span className="text-slate-400 dark:text-slate-500"> × {formatMenge(pos.menge)} {pos.einheit}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right dark:text-slate-200">{formatEuro(pos.netto)}</td>
@@ -1043,7 +1049,7 @@ function RechnungForm({
   const [positionen, setPositionen] = useState<Positionszeile[]>(
     initial?.positionen?.map((p) => ({
       beschreibung: p.beschreibung,
-      menge: p.menge,
+      menge: String(parseFloat(p.menge)),  // Decimal-Trailing-Zeros entfernen (z.B. "10.000" → "10")
       einheit: p.einheit,
       netto: p.brutto,  // eingabeModus startet als 'brutto' → Bruttowert vorbefüllen
       ust_satz: String(parseFloat(p.ust_satz)),
