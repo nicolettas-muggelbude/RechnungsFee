@@ -507,6 +507,7 @@ export type Rechnung = {
   zahlungsstatus: 'offen' | 'teilweise' | 'bezahlt'
   zahlungsdatum: string | null
   notizen: string | null
+  externe_belegnr: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   ist_entwurf: boolean
@@ -528,6 +529,7 @@ export type RechnungCreate = {
   partner_freitext?: string
   kategorie_id?: number
   notizen?: string
+  externe_belegnr?: string
   ist_entwurf?: boolean
   positionen: RechnungspositionCreate[]
 }

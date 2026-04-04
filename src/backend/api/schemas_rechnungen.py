@@ -74,6 +74,7 @@ class RechnungCreate(BaseModel):
     partner_freitext: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
+    externe_belegnr: Optional[str] = None
     ist_entwurf: bool = True
     positionen: List[RechnungspositionCreate]
 
@@ -110,6 +111,7 @@ class RechnungUpdate(BaseModel):
     partner_freitext: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
+    externe_belegnr: Optional[str] = None
     ist_entwurf: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
@@ -148,6 +150,7 @@ class RechnungResponse(BaseModel):
     zahlungsstatus: str
     zahlungsdatum: Optional[date]
     notizen: Optional[str]
+    externe_belegnr: Optional[str]
     leistungsdatum: Optional[date]
     ist_entwurf: bool
     ausgegeben: bool

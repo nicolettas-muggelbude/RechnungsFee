@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.40',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Rechnungsentwurf: Preis änderte sich jedes Mal beim erneuten Öffnen und Speichern – Brutto-Eingabemodus wurde fälschlich als Netto interpretiert (Issue #50)' },
+      { typ: 'fix', text: 'Stückzahl „10" wurde als „10.000" (Zehntausend) angezeigt – Python Decimal-Trailing-Zeros werden jetzt beim Laden normalisiert' },
+      { typ: 'neu', text: 'Eingangsrechnungen: Belegnummer des Lieferanten kann optional erfasst werden – wird im Detail-Panel angezeigt und ist über die Suchfunktion durchsuchbar (Issue #52)' },
+    ],
+  },
+  {
     version: 'v0.1.39',
     datum: 'April 2026',
     eintraege: [

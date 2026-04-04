@@ -358,6 +358,7 @@ class Rechnung(Base):
     datei_pfad: Mapped[str | None] = mapped_column(String(500))
     datei_name: Mapped[str | None] = mapped_column(String(200))
     notizen: Mapped[str | None] = mapped_column(Text)
+    externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
     leistungsdatum: Mapped[date | None] = mapped_column(Date)
     # GoBD
     ist_entwurf: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

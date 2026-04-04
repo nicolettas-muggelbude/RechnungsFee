@@ -647,6 +647,13 @@ function RechnungDetail({
           </div>
         )}
 
+        {rechnung.typ === 'eingang' && rechnung.externe_belegnr && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Belegnr. Lieferant</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">{rechnung.externe_belegnr}</p>
+          </div>
+        )}
+
         {rechnung.notizen && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Notizen</p>
@@ -1046,6 +1053,7 @@ function RechnungForm({
   const [partnerFreitext, setPartnerFreitext] = useState(initial?.partner_freitext ?? '')
   const [kategorieId, setKategorieId] = useState<string>(String(initial?.kategorie_id ?? ''))
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
+  const [externeBelegnr, setExterneBelegnr] = useState(initial?.externe_belegnr ?? '')
   const [positionen, setPositionen] = useState<Positionszeile[]>(
     initial?.positionen?.map((p) => ({
       beschreibung: p.beschreibung,
@@ -1196,6 +1204,7 @@ function RechnungForm({
       partner_freitext: partnerFreitext || undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
       notizen: notizen || undefined,
+      externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       ist_entwurf: istEntwurf,
       positionen: positionen.map((p) => {
         const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
@@ -1467,6 +1476,22 @@ function RechnungForm({
         />
       </div>
 
+      {typ === 'eingang' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Belegnr. des Lieferanten
+            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={externeBelegnr}
+            onChange={(e) => setExterneBelegnr(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+            placeholder="z. B. RE-2025-0042"
+          />
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           type="button"
@@ -1565,7 +1590,9 @@ export function RechnungenPage() {
         const q = suche.trim().toLowerCase()
         return (
           (r.rechnungsnummer ?? '').toLowerCase().includes(q) ||
-          (r.kunde_name ?? '').toLowerCase().includes(q)
+          (r.kunde_name ?? '').toLowerCase().includes(q) ||
+          (r.lieferant_name ?? '').toLowerCase().includes(q) ||
+          (r.externe_belegnr ?? '').toLowerCase().includes(q)
         )
       })
     : alleRechnungen
