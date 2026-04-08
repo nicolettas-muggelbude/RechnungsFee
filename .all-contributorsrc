@@ -19,6 +19,16 @@
       "contributions": [
         "design"
       ]
+    },
+    {
+      "login": "Peter1061",
+      "name": "Peter1061",
+      "avatar_url": "https://avatars.githubusercontent.com/u/267404634?v=4",
+      "profile": "https://github.com/Peter1061",
+      "contributions": [
+        "userTesting",
+        "bug"
+      ]
     }
   ],
   "commitConvention": "angular"
