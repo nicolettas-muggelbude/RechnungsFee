@@ -163,6 +163,28 @@ Dieses Projekt wird offen entwickelt – die Community soll von Anfang an dabei 
 
 ---
 
+## 🌟 Mitwirkende
+
+Danke an alle, die RechnungsFee besser machen – durch Code, Tests, Ideen, Design und Feedback!
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Adler-real"><img src="https://avatars.githubusercontent.com/u/166315348?v=4?s=100" width="100px;" alt="Adlerreal"/><br /><sub><b>Adlerreal</b></sub></a><br /><a href="#design-Adler-real" title="Design">🎨</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+---
+
 ## 📄 Lizenz
 
 Lizenziert unter der **GNU Affero General Public License v3.0 (AGPL-3.0)**.

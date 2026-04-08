@@ -1,0 +1,25 @@
+{
+  "projectName": "RechnungsFee",
+  "projectOwner": "nicolettas-muggelbude",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributorsPerLine": 7,
+  "badgeTemplate": "[![All Contributors](https://img.shields.io/badge/all_contributors-<%= contributors.length %>-orange.svg?style=flat-square)](#contributors)",
+  "contributors": [
+    {
+      "login": "Adler-real",
+      "name": "Adlerreal",
+      "avatar_url": "https://avatars.githubusercontent.com/u/166315348?v=4",
+      "profile": "https://github.com/Adler-real",
+      "contributions": [
+        "design"
+      ]
+    }
+  ],
+  "commitConvention": "angular"
+}
