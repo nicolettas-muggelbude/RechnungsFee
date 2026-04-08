@@ -184,6 +184,8 @@ Danke an alle, die RechnungsFee besser machen – durch Code, Tests, Ideen, Desi
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
+🎨 Design &nbsp;·&nbsp; 💻 Code &nbsp;·&nbsp; 📓 Testen &nbsp;·&nbsp; 🐛 Bugs gemeldet &nbsp;·&nbsp; 🤔 Ideen &nbsp;·&nbsp; 📖 Dokumentation
+
 ---
 
 ## 📄 Lizenz
