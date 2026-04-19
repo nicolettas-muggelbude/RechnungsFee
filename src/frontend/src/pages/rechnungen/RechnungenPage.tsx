@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
+  stornoRechnung, finalisiereRechnung,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
   sucheArtikel, getUstSaetze, getKassenstand,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
@@ -302,25 +302,12 @@ function RechnungDetail({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
   })
 
-  const markiereAusgegebenMutation = useMutation({
-    mutationFn: () => markiereRechnungAusgegeben(rechnung.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
-  })
-
-  // Beim ersten Druck/Öffnen/Mail: Rechnung als "ausgegeben" markieren
-  function _markiereWennNoetig() {
-    if (!rechnung.ist_entwurf && !rechnung.ausgegeben) {
-      markiereAusgegebenMutation.mutate()
-    }
-  }
-
   async function _openPdf() {
     const base = await getApiBase()
     await openUrl(`${base}/rechnungen/${rechnung.id}/pdf`)
   }
 
   async function handleDrucken() {
-    _markiereWennNoetig()
     if (isTauri()) {
       await _openPdf()
     } else {
@@ -332,7 +319,6 @@ function RechnungDetail({
   }
 
   async function handlePdfOeffnen() {
-    _markiereWennNoetig()
     await _openPdf()
     qc.invalidateQueries({ queryKey: ['rechnungen'] })
   }
@@ -345,7 +331,6 @@ function RechnungDetail({
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
-      _markiereWennNoetig()
       const base = await getApiBase()
       await openUrl(`${base}/rechnungen/${rechnung.id}/pdf?download=1`)
       setPdfHinweis(true)
