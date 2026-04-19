@@ -343,7 +343,7 @@ def markiere_ausgegeben(rechnung_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{rechnung_id}/pdf")
-def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, db: Session = Depends(get_db)):
+def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False, db: Session = Depends(get_db)):
     """PDF der Rechnung generieren und zurückgeben.
     Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
     Folge-Abrufe erhalten ein KOPIE-Banner."""
@@ -395,10 +395,11 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, db: Session = Depends(
         db.commit()
 
     dateiname = f"Rechnung_{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    disposition = "attachment" if download else "inline"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{dateiname}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{dateiname}"'},
     )
 
 

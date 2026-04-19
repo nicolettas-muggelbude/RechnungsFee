@@ -341,11 +341,13 @@ function RechnungDetail({
     const email = partnerEmail || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
 
-    // PDF im Systembrowser öffnen (kein neues WebView-Fenster – WebView kann keine PDFs rendern)
+    // PDF als Download speichern damit es manuell als Anhang hinzugefügt werden kann
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
-      await _openPdf()
+      _markiereWennNoetig()
+      const base = await getApiBase()
+      await openUrl(`${base}/rechnungen/${rechnung.id}/pdf?download=1`)
       setPdfHinweis(true)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
     } finally {
