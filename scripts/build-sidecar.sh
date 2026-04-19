@@ -70,9 +70,7 @@ pyinstaller \
     --hidden-import utils.pdf_rechnung_vorlage1 \
     --hidden-import utils.pdf_shared \
     --hidden-import utils.signatur \
-    --hidden-import segno \
-    --hidden-import segno.encoder \
-    --hidden-import segno.writer \
+    --collect-all segno \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 
