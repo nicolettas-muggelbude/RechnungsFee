@@ -91,6 +91,7 @@ function AppRoutes() {
 
 export default function App() {
   const [zeigSchliessen, setZeigSchliessen] = useState(false)
+  const [inlineViewerUrl, setInlineViewerUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isTauri()) return
@@ -99,6 +100,12 @@ export default function App() {
       listen('confirm-close', () => setZeigSchliessen(true)).then(fn => { unlisten = fn })
     })
     return () => { unlisten?.() }
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: Event) => setInlineViewerUrl((e as CustomEvent).detail.url)
+    window.addEventListener('rechnungsfee:inline-viewer', handler)
+    return () => window.removeEventListener('rechnungsfee:inline-viewer', handler)
   }, [])
 
   async function handleBestaetigenSchliessen() {
@@ -110,6 +117,24 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppRoutes />
+      {inlineViewerUrl && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-800 text-white text-sm">
+            <span className="text-slate-300 truncate">{inlineViewerUrl.split('/').slice(-2).join('/')}</span>
+            <button
+              onClick={() => setInlineViewerUrl(null)}
+              className="ml-4 px-3 py-1 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium"
+            >
+              ✕ Schließen
+            </button>
+          </div>
+          <iframe
+            src={inlineViewerUrl}
+            className="flex-1 w-full border-0 bg-white"
+            title="Dokument"
+          />
+        </div>
+      )}
       {zeigSchliessen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 w-80 space-y-4">
