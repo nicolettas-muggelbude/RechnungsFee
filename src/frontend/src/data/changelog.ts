@@ -23,6 +23,27 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.45',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien lokal, aber nicht in der installierten App – qrcode und PIL fehlten als PyInstaller-Abhängigkeiten im Build' },
+    ],
+  },
+  {
+    version: 'v0.1.44',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'neu', text: 'GiroCode (EPC-QR) auf Ausgangsrechnungen – aktivierbar in den Unternehmenseinstellungen. Kunden können direkt per Banking-App überweisen, IBAN, Betrag und Rechnungsnummer werden vorausgefüllt (Issue #53)' },
+      { typ: 'neu', text: 'Digitale Unterschrift – einmal hinterlegen, optional auf Ausgangsrechnungen und Tagesabschlüssen ausgeben (Issue #58)' },
+      { typ: 'neu', text: 'Fälligkeiten-Dashboard – neue Kachel zeigt fällige und überfällige Rechnungen; zusätzliche „Fällig am"-Spalte in der Rechnungsliste mit Sortierung (Issue #59)' },
+      { typ: 'neu', text: 'Standard-Zahlungsziel – einstellbar in den Unternehmenseinstellungen (Standard: 14 Tage); neue Rechnungen erhalten automatisch das korrekte Fälligkeitsdatum' },
+      { typ: 'neu', text: 'Gutschriften – negative Menge (z. B. −1) und negative Beträge in Rechnungspositionen jetzt möglich' },
+      { typ: 'fix', text: 'PDF-Original statt Kopie: Race-Condition behoben, bei der das erste PDF fälschlicherweise als Kopie gestempelt wurde (Issue #57)' },
+      { typ: 'fix', text: 'Vorlage Sandra grün: Unterschrift kollidierte mit dem Überweisungsblock – Cursor-Position korrigiert' },
+      { typ: 'fix', text: 'Rechnungsformular: Summenanzeige zeigt jetzt auch negative Beträge korrekt an' },
+    ],
+  },
+  {
     version: 'v0.1.40',
     datum: 'April 2026',
     eintraege: [
