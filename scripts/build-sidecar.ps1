@@ -74,7 +74,15 @@ try {
         --hidden-import utils.pdf_tagesabschluss `
         --hidden-import utils.pdf_rechnung `
         --hidden-import utils.pdf_rechnung_vorlage1 `
+        --hidden-import utils.pdf_shared `
         --hidden-import utils.signatur `
+        --hidden-import qrcode `
+        --hidden-import qrcode.constants `
+        --hidden-import qrcode.image.pil `
+        --hidden-import qrcode.main `
+        --hidden-import PIL `
+        --hidden-import PIL.Image `
+        --hidden-import PIL.ImageDraw `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {
