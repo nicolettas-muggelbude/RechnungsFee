@@ -359,6 +359,19 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             </p>
           </div>
         </label>
+
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">Standard-Zahlungsziel</label>
+          <input
+            type="number"
+            min={0}
+            max={365}
+            value={form.standard_zahlungsziel ?? 14}
+            onChange={ev => set('standard_zahlungsziel', parseInt(ev.target.value) || 0)}
+            className="w-20 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          />
+          <span className="text-sm text-slate-500 dark:text-slate-400">Tage nach Rechnungsdatum</span>
+        </div>
       </div>
 
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}

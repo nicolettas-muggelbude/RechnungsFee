@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getKassenbuch, getUnternehmen, getKleinunternehmerUmsatz } from '../../api/client'
+import { getKassenbuch, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, type Rechnung } from '../../api/client'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -193,6 +193,65 @@ function KleinunternehmerWarnung() {
 // Dashboard
 // ---------------------------------------------------------------------------
 
+function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
+  const heute = heuteIso()
+  const ausgang = rechnungen.filter(r => r.typ === 'ausgang')
+  const eingang = rechnungen.filter(r => r.typ === 'eingang')
+
+  function FaelligTabelle({ liste, titel }: { liste: Rechnung[], titel: string }) {
+    if (liste.length === 0) return null
+    return (
+      <div>
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{titel}</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500">
+              <th className="pb-1.5 text-left font-medium">Rg.-Datum</th>
+              <th className="pb-1.5 text-left font-medium">Fällig am</th>
+              <th className="pb-1.5 text-left font-medium">Partner</th>
+              <th className="pb-1.5 text-left font-medium">Rg.-Nr.</th>
+              <th className="pb-1.5 text-right font-medium">Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {liste.map(r => {
+              const ueberfaellig = r.faellig_am && r.faellig_am < heute
+              return (
+                <tr key={r.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0">
+                  <td className="py-2 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDatum(r.datum)}</td>
+                  <td className={`py-2 pr-4 whitespace-nowrap font-medium ${ueberfaellig ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {r.faellig_am ? formatDatum(r.faellig_am) : '—'}
+                    {ueberfaellig && <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>}
+                  </td>
+                  <td className="py-2 pr-4 text-slate-700 dark:text-slate-200 truncate max-w-[140px]">
+                    {r.typ === 'ausgang' ? (r.kunde_name ?? r.partner_freitext ?? '—') : (r.lieferant_name ?? r.partner_freitext ?? '—')}
+                  </td>
+                  <td className="py-2 pr-4 font-mono text-xs text-slate-400 dark:text-slate-500">{r.rechnungsnummer ?? '—'}</td>
+                  <td className="py-2 text-right font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">{formatEuro(r.brutto_gesamt)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 mb-6">
+      <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
+        <span className="text-amber-500">⚠️</span>
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fällige Rechnungen</h3>
+        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">nächste 7 Tage + überfällig</span>
+      </div>
+      <div className="px-5 py-4 space-y-5">
+        <FaelligTabelle liste={ausgang} titel="Ausgangsrechnungen" />
+        <FaelligTabelle liste={eingang} titel="Eingangsrechnungen" />
+      </div>
+    </div>
+  )
+}
+
 export function Dashboard() {
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')
   const [monat, setMonat] = useState(aktuellerMonat)
@@ -226,6 +285,12 @@ export function Dashboard() {
     queryKey: ['kassenbuch-aktuell', aktuellerMonat()],
     queryFn: () => getKassenbuch({ monat: aktuellerMonat() }),
     enabled: unternehmen?.bezieht_transferleistungen === true,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const { data: faellige } = useQuery({
+    queryKey: ['rechnungen-faellig'],
+    queryFn: () => getFaelligeRechnungen(7),
     staleTime: 1000 * 60 * 5,
   })
 
@@ -356,6 +421,11 @@ export function Dashboard() {
         </p>
       )}
       {!hatPrivatbuchungen && <div className="mb-6" />}
+
+      {/* Fällige Rechnungen */}
+      {faellige && faellige.length > 0 && (
+        <FaelligeKachel rechnungen={faellige} />
+      )}
 
       {/* Letzte Buchungen */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">

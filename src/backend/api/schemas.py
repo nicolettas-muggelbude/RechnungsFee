@@ -51,6 +51,7 @@ class UnternehmenBase(BaseModel):
     mail_signatur: Optional[str] = None
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
+    standard_zahlungsziel: int = 14
 
     @field_validator("versteuerungsart")
     @classmethod

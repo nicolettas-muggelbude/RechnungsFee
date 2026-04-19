@@ -133,6 +133,7 @@ export type Unternehmen = {
   mail_signatur?: string | null
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
+  standard_zahlungsziel?: number
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -572,6 +573,7 @@ export const getRechnungen = (filter?: {
 }) => request<Rechnung[]>(`/rechnungen${toQuery(filter ?? {})}`)
 
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
+export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)
 
 export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
 

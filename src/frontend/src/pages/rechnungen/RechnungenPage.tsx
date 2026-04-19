@@ -1063,7 +1063,14 @@ function RechnungForm({
   const [leistungsdatumManuell, setLeistungsdatumManuell] = useState(
     !!(initial?.leistungsdatum && initial.leistungsdatum !== initial.datum)
   )
-  const [faelligAm, setFaelligAm] = useState(initial?.faellig_am ?? '')
+  const zahlungsziel = unternehmen?.standard_zahlungsziel ?? 14
+  const [faelligAm, setFaelligAm] = useState(() => {
+    if (initial?.faellig_am) return initial.faellig_am
+    if (initial) return ''  // Bearbeiten ohne Fälligkeitsdatum → leer lassen
+    const d = new Date(heuteIso())
+    d.setDate(d.getDate() + (unternehmen?.standard_zahlungsziel ?? 14))
+    return d.toISOString().slice(0, 10)
+  })
   const [partnerId, setPartnerId] = useState<string>(
     typ === 'ausgang'
       ? String(initial?.kunde_id ?? '')
@@ -1107,6 +1114,14 @@ function RechnungForm({
   useEffect(() => {
     if (!leistungsdatumManuell) setLeistungsdatum(datum)
   }, [datum, leistungsdatumManuell])
+
+  // Fälligkeitsdatum = Rechnungsdatum + Zahlungsziel (nur neue Rechnungen, nur wenn unternehmen geladen)
+  useEffect(() => {
+    if (initial) return
+    const d = new Date(datum)
+    d.setDate(d.getDate() + zahlungsziel)
+    setFaelligAm(d.toISOString().slice(0, 10))
+  }, [datum, zahlungsziel, initial])
 
   // USt-Satz aller Positionen aus gewählter Kategorie ableiten
   useEffect(() => {
@@ -1663,6 +1678,7 @@ export function RechnungenPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
+  const [sortFaellig, setSortFaellig] = useState<'asc' | 'desc' | null>(null)
 
   const aktivesJahr = new Date().getFullYear()
   const filterParams =
@@ -1724,6 +1740,14 @@ export function RechnungenPage() {
         )
       })
     : alleRechnungen
+
+  const listeSortiert = sortFaellig
+    ? [...liste].sort((a, b) => {
+        const fa = a.faellig_am ?? ''
+        const fb = b.faellig_am ?? ''
+        return sortFaellig === 'asc' ? fa.localeCompare(fb) : fb.localeCompare(fa)
+      })
+    : liste
 
   // Summen (Entwürfe + Stornierte werden aus dem offenen Saldo ausgeschlossen)
   const gesamt = liste.reduce(
@@ -1877,7 +1901,7 @@ export function RechnungenPage() {
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {isLoading ? (
               <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Lade Rechnungen…</p>
-            ) : liste.length === 0 ? (
+            ) : listeSortiert.length === 0 ? (
               <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Keine Rechnungen im gewählten Zeitraum.</p>
             ) : (
               <table className="w-full text-sm">
@@ -1886,12 +1910,18 @@ export function RechnungenPage() {
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Partner</th>
+                    <th
+                      className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200"
+                      onClick={() => setSortFaellig(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc')}
+                    >
+                      Fällig am {sortFaellig === 'asc' ? '↑' : sortFaellig === 'desc' ? '↓' : ''}
+                    </th>
                     <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                     <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {liste.map((r) => (
+                  {listeSortiert.map((r) => (
                     <tr
                       key={r.id}
                       onClick={() => { setSelectedId(r.id); setFormModus(null) }}
@@ -1909,11 +1939,20 @@ export function RechnungenPage() {
                         {r.typ === 'ausgang'
                           ? (r.kunde_name ?? r.partner_freitext ?? '—')
                           : (r.lieferant_name ?? r.partner_freitext ?? '—')}
-                        {r.faellig_am && r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
-                          <span className="ml-1.5 text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">
-                            Überfällig
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        {r.faellig_am ? (
+                          <span className={`text-sm font-medium ${
+                            r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso()
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}>
+                            {formatDatum(r.faellig_am)}
+                            {r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
+                              <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>
+                            )}
                           </span>
-                        )}
+                        ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                       </td>
                       <td className="px-5 py-3 text-right font-medium text-slate-800 dark:text-slate-100">
                         {formatEuro(r.brutto_gesamt)}

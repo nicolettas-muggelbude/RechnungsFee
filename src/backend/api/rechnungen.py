@@ -104,6 +104,24 @@ def _partner_name(rechnung: Rechnung) -> str:
 # Endpunkte
 # ---------------------------------------------------------------------------
 
+@router.get("/faellig", response_model=list[RechnungResponse])
+def get_faellige_rechnungen(tage: int = Query(7, ge=0, le=365), db: Session = Depends(get_db)):
+    """Überfällige + in den nächsten N Tagen fällige, unbezahlte Rechnungen."""
+    from datetime import date, timedelta
+    bis = date.today() + timedelta(days=tage)
+    rechnungen = (
+        db.query(Rechnung)
+        .filter(Rechnung.faellig_am != None)
+        .filter(Rechnung.faellig_am <= bis)
+        .filter(Rechnung.zahlungsstatus.in_(["offen", "teilweise"]))
+        .filter(Rechnung.storniert == False)
+        .filter(Rechnung.ist_entwurf == False)
+        .order_by(Rechnung.faellig_am.asc())
+        .all()
+    )
+    return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
+
+
 @router.get("/offene", response_model=list[RechnungResponse])
 def get_offene_rechnungen(db: Session = Depends(get_db)):
     """Offene und teilweise bezahlte Rechnungen (für Zahlungs-Vorschläge)."""
