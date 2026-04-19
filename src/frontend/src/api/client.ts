@@ -289,6 +289,10 @@ export const getNaechsteBelegnr = (datum?: string) =>
   request<{ belegnr: string }>(`/kassenbuch/naechste-belegnr${datum ? `?datum=${datum}` : ''}`)
 export const getKassenstand = () =>
   request<{ kassenstand: string }>('/kassenbuch/kassenstand')
+export const getKassenbuchBelegUrl = async (id: number, drucken = false): Promise<string> => {
+  const base = await getApiBase()
+  return `${base}/kassenbuch/${id}/beleg${drucken ? '?drucken=1' : ''}`
+}
 
 // --- Tagesabschluss ---
 export type Tagesabschluss = {

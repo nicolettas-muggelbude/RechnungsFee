@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { stornoKassenbuchEintrag, getUnternehmen, type KassenbuchEintrag } from '../../api/client'
+import { stornoKassenbuchEintrag, getUnternehmen, getKassenbuchBelegUrl, openUrl, type KassenbuchEintrag } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
 interface Props {
@@ -13,47 +13,9 @@ function formatEuro(val: string): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(val))
 }
 
-function belegHtml(e: KassenbuchEintrag): string {
-  const datum = e.datum.split('-').reverse().join('.')
-  return `<!DOCTYPE html><html><head>
-    <meta charset="utf-8">
-    <title>Beleg ${e.belegnr}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }
-      h1 { font-size: 18px; margin-bottom: 4px; }
-      .meta { color: #64748b; font-size: 13px; margin-bottom: 24px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-      td { padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-      td:last-child { text-align: right; }
-      .label { color: #64748b; }
-      .total { font-weight: bold; font-size: 16px; }
-      .footer { margin-top: 40px; font-size: 12px; color: #94a3b8; }
-    </style>
-    </head><body>
-    <h1>RechnungsFee – Beleg</h1>
-    <div class="meta">${e.belegnr} &nbsp;·&nbsp; ${datum} &nbsp;·&nbsp; ${e.art}</div>
-    ${e.kunde_name ? `<p><strong>Kunde:</strong> ${e.kunde_name}${e.kunde_email ? ' &lt;' + e.kunde_email + '&gt;' : ''}</p>` : ''}
-    <table>
-      <tr><td class="label">Beschreibung</td><td>${e.beschreibung}</td></tr>
-      <tr><td class="label">Zahlungsart</td><td>${e.zahlungsart}</td></tr>
-      <tr><td class="label">Netto</td><td>${formatEuro(e.netto_betrag)}</td></tr>
-      <tr><td class="label">USt (${e.ust_satz} %)</td><td>${formatEuro(e.ust_betrag)}</td></tr>
-      ${e.steuerbefreiung_grund ? `<tr><td class="label">Steuerbefreiung</td><td>${e.steuerbefreiung_grund}</td></tr>` : ''}
-      <tr class="total"><td>Brutto</td><td>${formatEuro(e.brutto_betrag)}</td></tr>
-    </table>
-    <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; ${new Date().toLocaleDateString('de-DE')}</div>
-    </body></html>`
-}
-
-function oeffneBelegFenster(e: KassenbuchEintrag, drucken: boolean) {
-  const blob = new Blob([belegHtml(e)], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const win = window.open(url, '_blank', 'width=640,height=750')
-  if (!win) { URL.revokeObjectURL(url); return }
-  win.addEventListener('load', () => {
-    if (drucken) win.print()
-    URL.revokeObjectURL(url)
-  })
+async function oeffneBelegFenster(id: number, drucken: boolean) {
+  const url = await getKassenbuchBelegUrl(id, drucken)
+  await openUrl(url)
 }
 
 export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) {
@@ -101,13 +63,13 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
         {/* Aktionsleiste – waagerecht als erste Zeile */}
         <div className="flex flex-wrap gap-2 mb-4">
           <button
-            onClick={() => oeffneBelegFenster(e, true)}
+            onClick={() => oeffneBelegFenster(e.id, true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             🖨️ Drucken
           </button>
           <button
-            onClick={() => oeffneBelegFenster(e, false)}
+            onClick={() => oeffneBelegFenster(e.id, false)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
           >
             📄 PDF öffnen

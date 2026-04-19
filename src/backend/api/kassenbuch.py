@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
@@ -289,6 +290,49 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
     for e in ergebnisse:
         db.refresh(e)
     return [KassenbuchEintragResponse.from_orm_with_kunde(e) for e in ergebnisse]
+
+
+@router.get("/{eintrag_id}/beleg", response_class=HTMLResponse)
+def get_beleg(eintrag_id: int, drucken: bool = Query(False), db: Session = Depends(get_db)):
+    """Gibt einen druckbaren HTML-Beleg für einen Kassenbucheintrag zurück."""
+    eintrag = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
+    if not eintrag:
+        raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
+
+    datum = eintrag.datum.strftime("%d.%m.%Y")
+    ust_satz = float(eintrag.ust_satz)
+    print_script = "<script>window.addEventListener('load', () => { window.print() })</script>" if drucken else ""
+
+    html = f"""<!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <title>Beleg {eintrag.belegnr}</title>
+    {print_script}
+    <style>
+      body {{ font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }}
+      h1 {{ font-size: 18px; margin-bottom: 4px; }}
+      .meta {{ color: #64748b; font-size: 13px; margin-bottom: 24px; }}
+      table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+      td {{ padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }}
+      td:last-child {{ text-align: right; }}
+      .label {{ color: #64748b; }}
+      .total {{ font-weight: bold; font-size: 16px; }}
+      .footer {{ margin-top: 40px; font-size: 12px; color: #94a3b8; }}
+    </style>
+    </head><body>
+    <h1>RechnungsFee – Beleg</h1>
+    <div class="meta">{eintrag.belegnr} &nbsp;·&nbsp; {datum} &nbsp;·&nbsp; {eintrag.art}</div>
+    <table>
+      <tr><td class="label">Beschreibung</td><td>{eintrag.beschreibung}</td></tr>
+      <tr><td class="label">Zahlungsart</td><td>{eintrag.zahlungsart}</td></tr>
+      <tr><td class="label">Netto</td><td>{float(eintrag.netto_betrag):.2f} €</td></tr>
+      <tr><td class="label">USt ({ust_satz:.0f} %)</td><td>{float(eintrag.ust_betrag):.2f} €</td></tr>
+      {"" if not eintrag.steuerbefreiung_grund else f'<tr><td class="label">Steuerbefreiung</td><td>{eintrag.steuerbefreiung_grund}</td></tr>'}
+      <tr class="total"><td>Brutto</td><td>{float(eintrag.brutto_betrag):.2f} €</td></tr>
+    </table>
+    <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; {datetime.now().strftime("%d.%m.%Y")}</div>
+    </body></html>"""
+
+    return HTMLResponse(content=html)
 
 
 @router.get("/{eintrag_id}", response_model=KassenbuchEintragResponse)
