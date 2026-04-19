@@ -70,13 +70,9 @@ pyinstaller \
     --hidden-import utils.pdf_rechnung_vorlage1 \
     --hidden-import utils.pdf_shared \
     --hidden-import utils.signatur \
-    --hidden-import qrcode \
-    --hidden-import qrcode.constants \
-    --hidden-import qrcode.image.pil \
-    --hidden-import qrcode.main \
-    --hidden-import PIL \
-    --hidden-import PIL.Image \
-    --hidden-import PIL.ImageDraw \
+    --hidden-import segno \
+    --hidden-import segno.encoder \
+    --hidden-import segno.writer \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 

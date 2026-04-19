@@ -43,7 +43,7 @@ def epc_qr_bytes(
     if not iban or not empfaenger:
         return None
     try:
-        import qrcode
+        import segno
 
         content = "\n".join([
             "BCD",
@@ -58,16 +58,9 @@ def epc_qr_bytes(
             "",
             (verwendungszweck or "")[:140],
         ])
-        qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=10,
-            border=1,
-        )
-        qr.add_data(content)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
+        qr = segno.make(content, error="m")
         buf = BytesIO()
-        img.save(buf, format="PNG")
+        qr.save(buf, kind="png", scale=10, border=1)
         return buf.getvalue()
     except Exception:
         return None
