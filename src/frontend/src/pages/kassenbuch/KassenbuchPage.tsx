@@ -20,7 +20,7 @@ function aktuellerMonat(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-type FilterModus = 'monat' | 'datum' | 'zeitraum'
+type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr'
 
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -38,11 +38,14 @@ export function KassenbuchPage() {
   const [showAbschluss, setShowAbschluss] = useState(false)
   const [aktiverEintragId, setAktiverEintragId] = useState<number | null>(null)
 
+  const aktivesJahr = new Date().getFullYear()
   const filterParams = filterModus === 'monat'
     ? { monat }
     : filterModus === 'datum'
       ? { datum_von: datum, datum_bis: datum }
-      : { datum_von: datumVon, datum_bis: datumBis }
+      : filterModus === 'zeitraum'
+        ? { datum_von: datumVon, datum_bis: datumBis }
+        : { datum_von: `${aktivesJahr}-01-01`, datum_bis: `${aktivesJahr}-12-31` }
 
   const { data: eintraege, isLoading } = useQuery({
     queryKey: ['kassenbuch', filterModus, monat, datum, datumVon, datumBis, art, kategorieId],
@@ -93,7 +96,7 @@ export function KassenbuchPage() {
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         {/* Modus-Umschalter */}
         <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
-          {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
+          {(['monat', 'datum', 'zeitraum', 'alle'] as FilterModus[]).map((m) => (
             <button
               key={m}
               onClick={() => setFilterModus(m)}
@@ -103,7 +106,7 @@ export function KassenbuchPage() {
                   : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
-              {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
+              {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : m === 'zeitraum' ? 'Zeitraum' : 'Jahr'}
             </button>
           ))}
         </div>

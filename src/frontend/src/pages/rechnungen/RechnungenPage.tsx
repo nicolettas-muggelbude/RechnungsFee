@@ -4,7 +4,7 @@ import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, markiereRechnungAusgegeben,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
-  sucheArtikel, getUstSaetze,
+  sucheArtikel, getUstSaetze, getKassenstand,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type ArtikelSuche,
 } from '../../api/client'
@@ -78,6 +78,10 @@ function ZahlungsDialog({
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
+  const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
+  const kassenstand = parseFloat(kassenstandData?.kassenstand ?? '0')
+  const istBarAusgabe = rechnung.typ === 'eingang' && zahlungsart === 'Bar'
+
   const mutation = useMutation({
     mutationFn: (data: BarZahlungCreate) => barZahlungErstellen(rechnung.id, data),
     onSuccess: () => {
@@ -89,6 +93,7 @@ function ZahlungsDialog({
   })
 
   const betragDecimal = parseFloat(betrag.replace(',', '.'))
+  const kassenstandUeberschritten = istBarAusgabe && !isNaN(betragDecimal) && betragDecimal > kassenstand
   const artLabel = rechnung.typ === 'ausgang' ? 'Einnahme' : 'Ausgabe'
 
   function handleSubmit(e: React.FormEvent) {
@@ -211,6 +216,16 @@ function ZahlungsDialog({
             </div>
           )}
 
+          {kassenstandUeberschritten && (
+            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-800 dark:text-red-300">
+              <span className="mt-0.5 shrink-0">⛔</span>
+              <span>
+                <strong>Kassenstand nicht ausreichend.</strong> Aktueller Kassenstand:{' '}
+                {formatEuro(kassenstand)} – Ausgabe: {formatEuro(betragDecimal)}
+              </span>
+            </div>
+          )}
+
           {fehler && (
             <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
               {fehler}
@@ -227,7 +242,7 @@ function ZahlungsDialog({
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || kassenstandUeberschritten}
               className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {mutation.isPending ? 'Wird gebucht…' : 'Bestätigen'}
@@ -1631,7 +1646,7 @@ function RechnungForm({
 // Haupt-Seite
 // ---------------------------------------------------------------------------
 
-type FilterModus = 'monat' | 'datum' | 'zeitraum'
+type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr'
 
 export function RechnungenPage() {
   const qc = useQueryClient()
@@ -1647,12 +1662,15 @@ export function RechnungenPage() {
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
 
+  const aktivesJahr = new Date().getFullYear()
   const filterParams =
     filterModus === 'monat'
       ? { monat }
       : filterModus === 'datum'
         ? { datum_von: datum, datum_bis: datum }
-        : { datum_von: datumVon, datum_bis: datumBis }
+        : filterModus === 'zeitraum'
+          ? { datum_von: datumVon, datum_bis: datumBis }
+          : { datum_von: `${aktivesJahr}-01-01`, datum_bis: `${aktivesJahr}-12-31` }
 
   const { data: rechnungen, isLoading } = useQuery({
     queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis],
@@ -1750,7 +1768,7 @@ export function RechnungenPage() {
 
             {/* Zeitraum-Modus */}
             <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
-              {(['monat', 'datum', 'zeitraum'] as FilterModus[]).map((m) => (
+              {(['monat', 'datum', 'zeitraum', 'alle'] as FilterModus[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => setFilterModus(m)}
@@ -1760,7 +1778,7 @@ export function RechnungenPage() {
                       : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
-                  {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
+                  {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : m === 'zeitraum' ? 'Zeitraum' : 'Jahr'}
                 </button>
               ))}
             </div>

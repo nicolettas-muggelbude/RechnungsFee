@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import extract
+from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
@@ -441,6 +441,24 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         )
 
     art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+
+    # Barkassen-Prüfung: Eingangsrechnung per Bar darf Kassenstand nicht übersteigen
+    if art == "Ausgabe" and data.zahlungsart == "Bar":
+        einnahmen = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
+            Kassenbucheintrag.art == "Einnahme",
+            Kassenbucheintrag.zahlungsart == "Bar",
+        ).scalar() or Decimal("0")
+        ausgaben = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
+            Kassenbucheintrag.art == "Ausgabe",
+            Kassenbucheintrag.zahlungsart == "Bar",
+        ).scalar() or Decimal("0")
+        kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
+        if betrag > kassenstand:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {betrag:.2f} €.",
+            )
+
     partner = _partner_name(rechnung)
     beschreibung = data.beschreibung or f"Zahlung {rechnung.rechnungsnummer}: {partner}"
 
