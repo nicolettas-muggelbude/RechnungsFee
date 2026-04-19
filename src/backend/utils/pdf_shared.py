@@ -62,7 +62,9 @@ def epc_qr_bytes(
         buf = BytesIO()
         qr.save(buf, kind="png", scale=10, border=1)
         return buf.getvalue()
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("epc_qr_bytes Fehler: %s", e)
         return None
 
 

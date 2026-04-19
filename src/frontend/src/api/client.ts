@@ -73,15 +73,17 @@ export async function getApiBase(): Promise<string> {
 /** Öffnet eine URL in Tauri per Shell-Plugin (Systembrowser), im Browser per window.open. */
 export async function openUrl(url: string) {
   if (isTauri()) {
-    try {
-      await invoke('open_url', { url })
-    } catch {
-      // Fallback: neues Tauri-Fenster – zuverlässiger als xdg-open im AppImage-Kontext
+    // Lokale Backend-URLs: immer WebviewWindow – xdg-open gibt im AppImage-Kontext
+    // auf Linux keinen Fehler zurück, öffnet aber nichts Sichtbares.
+    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
       try {
         const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
         new WebviewWindow(`viewer-${Date.now()}`, { url, title: 'Dokument', width: 950, height: 780 })
       } catch { /* nichts */ }
+      return
     }
+    // Externe URLs (mailto:, https:): per Shell-Plugin / Systembrowser
+    try { await invoke('open_url', { url }) } catch { /* ignorieren */ }
   } else {
     window.open(url, '_blank')
   }
