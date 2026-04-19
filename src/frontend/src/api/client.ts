@@ -345,7 +345,7 @@ export const createTagesabschluss = (data: {
 }) => request<Tagesabschluss>('/tagesabschluss', { method: 'POST', body: JSON.stringify(data) })
 
 export async function downloadTagesabschlussPdf(params: {
-  zeitraum?: 'monat' | 'jahr' | 'alle'
+  zeitraum?: 'monat' | 'jahr' | 'alle' | 'tag'
   wert?: string
 }) {
   const { zeitraum = 'alle', wert } = params

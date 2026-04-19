@@ -136,6 +136,14 @@ def export_pdf(
             dateiname_suffix = wert
         except Exception:
             raise HTTPException(status_code=400, detail="Ungültiger Jahreswert (erwartet: YYYY).")
+    elif zeitraum == "tag" and wert:
+        try:
+            q = q.filter(Tagesabschluss.datum == wert)
+            tag_dt = wert.split("-")
+            zeitraum_label = f"{tag_dt[2]}.{tag_dt[1]}.{tag_dt[0]}"
+            dateiname_suffix = wert
+        except Exception:
+            raise HTTPException(status_code=400, detail="Ungültiger Tageswert (erwartet: YYYY-MM-DD).")
 
     abschluesse_db = q.order_by(Tagesabschluss.datum.asc()).all()
     if not abschluesse_db:

@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTagesabschlussVorschau, createTagesabschluss } from '../../api/client'
+import { getTagesabschlussVorschau, createTagesabschluss, downloadTagesabschlussPdf } from '../../api/client'
 
 const schema = z.object({
   ist_endbestand: z.string().refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, 'Betrag muss >= 0 sein'),
@@ -45,6 +45,7 @@ function muenzLabel(cent: number): string {
 export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: Props) {
   const qc = useQueryClient()
   const datum = datumProp ?? heute()
+  const [gespeichert, setGespeichert] = useState(false)
 
   const [scheine, setScheine] = useState<Record<number, number>>(
     Object.fromEntries(SCHEINE.map((s) => [s, 0])) as Record<number, number>,
@@ -84,7 +85,7 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kassenbuch'] })
       qc.invalidateQueries({ queryKey: ['tagesabschluss'] })
-      onSuccess()
+      setGespeichert(true)
     },
   })
 
@@ -119,8 +120,25 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
           <p className="text-sm text-slate-500 dark:text-slate-400">{datum.split('-').reverse().join('.')}</p>
         </div>
 
+        {/* Erfolgs-Screen nach dem Buchen */}
+        {gespeichert && (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 gap-4">
+            <div className="text-4xl">✅</div>
+            <p className="text-base font-semibold text-slate-800 dark:text-slate-100">Tagesabschluss gebucht!</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{datum.split('-').reverse().join('.')}</p>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => downloadTagesabschlussPdf({ zeitraum: 'tag', wert: datum })}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                📄 PDF öffnen
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Scrollbarer Inhalt */}
-        <div className="overflow-y-auto flex-1 px-6">
+        <div className={`overflow-y-auto flex-1 px-6 ${gespeichert ? 'hidden' : ''}`}>
           {isLoading ? (
             <p className="text-slate-400 text-sm pb-4">Lade Vorschau…</p>
           ) : vorschau ? (
@@ -290,25 +308,35 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
         </div>
 
         {/* Footer */}
-        {vorschau && (
-          <div className="px-6 py-4 shrink-0 border-t border-slate-100 dark:border-slate-700 flex gap-3">
+        <div className="px-6 py-4 shrink-0 border-t border-slate-100 dark:border-slate-700 flex gap-3">
+          {gespeichert ? (
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              onClick={onSuccess}
+              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700"
             >
-              Abbrechen
+              Fertig
             </button>
-            <button
-              type="submit"
-              form="tagesabschluss-form"
-              disabled={mutation.isPending}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {mutation.isPending ? 'Speichert…' : 'Abschluss buchen'}
-            </button>
-          </div>
-        )}
+          ) : vorschau ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="submit"
+                form="tagesabschluss-form"
+                disabled={mutation.isPending}
+                className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {mutation.isPending ? 'Speichert…' : 'Abschluss buchen'}
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   )
