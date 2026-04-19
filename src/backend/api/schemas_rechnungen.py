@@ -25,8 +25,8 @@ class RechnungspositionCreate(BaseModel):
     @field_validator("netto")
     @classmethod
     def check_netto(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("netto muss positiv sein")
+        if v == 0:
+            raise ValueError("netto darf nicht 0 sein")
         return v
 
     @field_validator("ust_satz")
@@ -39,8 +39,8 @@ class RechnungspositionCreate(BaseModel):
     @field_validator("menge")
     @classmethod
     def check_menge(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("menge muss positiv sein")
+        if v == 0:
+            raise ValueError("menge darf nicht 0 sein")
         return v
 
 

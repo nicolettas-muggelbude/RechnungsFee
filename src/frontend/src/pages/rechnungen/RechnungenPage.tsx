@@ -1457,10 +1457,10 @@ function RechnungForm({
               </div>
             </div>
             {/* Summenanzeige */}
-            {parseFloat((positionen[0]?.netto ?? '').replace(',', '.')) > 0 && (
+            {parseFloat((positionen[0]?.netto ?? '').replace(',', '.')) !== 0 && (
               <div className="text-xs text-right text-slate-500 dark:text-slate-400 space-y-0.5 pt-1 border-t border-slate-100 dark:border-slate-700">
                 <div>Netto{eingabeModus === 'brutto' && ' (berechnet)'}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatEuro(summen.netto)}</span></div>
-                {summen.ust > 0 && <div>USt: <span className="text-slate-600 dark:text-slate-300">{formatEuro(summen.ust)}</span></div>}
+                {summen.ust !== 0 && <div>USt: <span className="text-slate-600 dark:text-slate-300">{formatEuro(summen.ust)}</span></div>}
                 <div className="font-semibold text-slate-800 dark:text-slate-100">Brutto{eingabeModus === 'netto' && ' (berechnet)'}: {formatEuro(summen.brutto)}</div>
               </div>
             )}
