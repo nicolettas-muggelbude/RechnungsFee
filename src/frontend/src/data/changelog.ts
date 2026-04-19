@@ -23,6 +23,21 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.47',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien nicht in der installierten App – segno.writers fehlte im PyInstaller-Bundle; jetzt mit --collect-all vollständig gebundelt' },
+      { typ: 'fix', text: 'PDF öffnen auf Linux: öffnet sich jetzt zuverlässig – Fallback auf Tauri-Fenster wenn xdg-open im AppImage-Kontext fehlschlägt' },
+    ],
+  },
+  {
+    version: 'v0.1.46',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien nicht in der installierten App – Pillow-C-Extensions wurden durch reines Python-Paket segno ersetzt' },
+    ],
+  },
+  {
     version: 'v0.1.45',
     datum: 'April 2026',
     eintraege: [
