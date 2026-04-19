@@ -325,7 +325,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Handelsregister</h3>
         <p className="text-xs text-slate-400 dark:text-slate-500">Wenn dein Unternehmen im Handelsregister eingetragen ist, ergänze Register-Nr. und Registergericht. Abteilung A (HRA) gilt für Einzelkaufleute und Personengesellschaften, Abteilung B (HRB) für Kapitalgesellschaften (GmbH, UG, AG). Nicht eingetragene Einzelunternehmer und Freiberufler lassen diese Felder leer.</p>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Register-Nr.">{inp('handelsregister_nr', 'HRB 215517')}</Field>
+          <Field label="Register-Nr.">{inp('handelsregister_nr', 'z.B. HRA 12345 oder HRB 215517')}</Field>
           <Field label="Registergericht">{inp('handelsregister_gericht', 'Oldenburg')}</Field>
         </div>
       </div>

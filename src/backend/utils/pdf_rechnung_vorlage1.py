@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from utils.pdf_shared import build_hr_zeile
 
 # Wiederverwendung aus dem Standard-Template
 from utils.pdf_rechnung import (
@@ -161,8 +162,6 @@ class RechnungPDFVorlage1(FPDF):
         webseite   = unt.get("webseite") or ""
         ust_id     = unt.get("ust_idnr") or ""
         steuernr   = unt.get("steuernummer") or ""
-        hr_nr      = unt.get("handelsregister_nr") or ""
-        hr_ger     = unt.get("handelsregister_gericht") or ""
         iban       = unt.get("iban") or ""
         bic        = unt.get("bic") or ""
         bank       = unt.get("bank_name") or ""
@@ -186,7 +185,7 @@ class RechnungPDFVorlage1(FPDF):
         inhaber      = " ".join(filter(None, [vorname, nachname])) if firmenname else ""
         person_label = _person_bezeichnung(unt.get("rechtsform") or "")
         steuer    = f"USt-ID: {ust_id}" if ust_id else (f"StNr: {steuernr}" if steuernr else "")
-        hr_zeile  = (f"HRB {hr_nr}" + (f", {hr_ger}" if hr_ger else "")) if hr_nr else ""
+        hr_zeile  = build_hr_zeile(unt)
         kammer    = unt.get("kammer_mitgliedschaft") or ""
         _col(L_MARGIN + col_w, list(filter(None, [
             f"{person_label} {inhaber}" if inhaber else "",
