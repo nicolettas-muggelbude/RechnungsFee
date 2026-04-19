@@ -293,7 +293,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
 
 
 @router.get("/{eintrag_id}/beleg", response_class=HTMLResponse)
-def get_beleg(eintrag_id: int, drucken: bool = Query(False), db: Session = Depends(get_db)):
+def get_beleg(eintrag_id: int, drucken: bool = Query(False), download: bool = Query(False), db: Session = Depends(get_db)):
     """Gibt einen druckbaren HTML-Beleg für einen Kassenbucheintrag zurück."""
     eintrag = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
     if not eintrag:
@@ -332,7 +332,10 @@ def get_beleg(eintrag_id: int, drucken: bool = Query(False), db: Session = Depen
     <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; {datetime.now().strftime("%d.%m.%Y")}</div>
     </body></html>"""
 
-    return HTMLResponse(content=html)
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="Beleg_{eintrag.belegnr}.html"'
+    return HTMLResponse(content=html, headers=headers)
 
 
 @router.get("/{eintrag_id}", response_model=KassenbuchEintragResponse)

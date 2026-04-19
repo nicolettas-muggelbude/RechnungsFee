@@ -289,9 +289,13 @@ export const getNaechsteBelegnr = (datum?: string) =>
   request<{ belegnr: string }>(`/kassenbuch/naechste-belegnr${datum ? `?datum=${datum}` : ''}`)
 export const getKassenstand = () =>
   request<{ kassenstand: string }>('/kassenbuch/kassenstand')
-export const getKassenbuchBelegUrl = async (id: number, drucken = false): Promise<string> => {
+export const getKassenbuchBelegUrl = async (id: number, drucken = false, download = false): Promise<string> => {
   const base = await getApiBase()
-  return `${base}/kassenbuch/${id}/beleg${drucken ? '?drucken=1' : ''}`
+  const params = new URLSearchParams()
+  if (drucken) params.set('drucken', '1')
+  if (download) params.set('download', '1')
+  const qs = params.toString()
+  return `${base}/kassenbuch/${id}/beleg${qs ? `?${qs}` : ''}`
 }
 
 // --- Tagesabschluss ---

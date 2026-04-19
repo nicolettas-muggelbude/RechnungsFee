@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { stornoKassenbuchEintrag, getUnternehmen, getKassenbuchBelegUrl, openUrl, type KassenbuchEintrag } from '../../api/client'
+import { stornoKassenbuchEintrag, getUnternehmen, getKassenbuchBelegUrl, openUrl, isTauri, type KassenbuchEintrag } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
 interface Props {
@@ -24,6 +24,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
+  const [belegHinweis, setBelegHinweis] = useState(false)
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const stornoMutation = useMutation({
@@ -39,19 +40,30 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
   const kannStorniert = !istStorno && !bereitsStorniert
   const datum = e.datum.split('-').reverse().join('.')
 
-  function handleMail() {
+  async function handleMail() {
     const email = e.kunde_email || mailAdresse.trim()
     if (!email) {
       setZeigMailEingabe(true)
       return
     }
+
+    // Beleg als Download speichern damit er manuell angehängt werden kann
+    const belegUrl = await getKassenbuchBelegUrl(e.id, false, true)
+    await openUrl(belegUrl)
+    setBelegHinweis(true)
+
     const subject = encodeURIComponent(`Beleg ${e.belegnr}`)
-    let bodyText = `Anbei dein Beleg vom ${datum}.\n\nBeleg-Nr.: ${e.belegnr}\nBetrag: ${formatEuro(e.brutto_betrag)}`
+    let bodyText = `anbei der Beleg vom ${datum}.\n\nBeleg-Nr.: ${e.belegnr}\nBetrag: ${formatEuro(e.brutto_betrag)}\n\nBitte den heruntergeladenen Beleg als Anhang einfügen.`
     if (unternehmen?.mail_signatur) {
       bodyText += `\n\n${unternehmen.mail_signatur}`
     }
     const body = encodeURIComponent(bodyText)
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
+    if (isTauri()) {
+      await openUrl(mailtoUrl)
+    } else {
+      window.location.href = mailtoUrl
+    }
     setZeigMailEingabe(false)
     setMailAdresse('')
   }
@@ -97,6 +109,13 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits storniert</span>
           )}
         </div>
+
+        {belegHinweis && (
+          <div className="mb-3 flex items-start gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
+            <span className="shrink-0 mt-0.5">📎</span>
+            <span>Der Beleg wurde geöffnet – bitte als Anhang zur Mail hinzufügen.</span>
+          </div>
+        )}
 
         {/* Mail-Eingabe (wenn kein Kunde oder keine E-Mail hinterlegt) */}
         {zeigMailEingabe && (
