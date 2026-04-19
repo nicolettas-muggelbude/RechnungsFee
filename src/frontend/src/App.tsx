@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { getSetupStatus } from './api/client'
+import { getSetupStatus, isTauri } from './api/client'
 import { SetupWizard } from './pages/setup/SetupWizard'
 import { AppLayout } from './components/AppLayout'
 import { Dashboard } from './pages/dashboard/Dashboard'
@@ -89,9 +90,48 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const [zeigSchliessen, setZeigSchliessen] = useState(false)
+
+  useEffect(() => {
+    if (!isTauri()) return
+    let unlisten: (() => void) | undefined
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('confirm-close', () => setZeigSchliessen(true)).then(fn => { unlisten = fn })
+    })
+    return () => { unlisten?.() }
+  }, [])
+
+  async function handleBestaetigenSchliessen() {
+    setZeigSchliessen(false)
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('confirm_close')
+  }
+
   return (
     <BrowserRouter>
       <AppRoutes />
+      {zeigSchliessen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 w-80 space-y-4">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">RechnungsFee beenden?</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Möchtest du RechnungsFee wirklich schließen?</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setZeigSchliessen(false)}
+                className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleBestaetigenSchliessen}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Ja, beenden
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </BrowserRouter>
   )
 }

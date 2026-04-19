@@ -1,7 +1,11 @@
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild;
+
+/// Globaler State: wurde das Schließen vom User bestätigt?
+struct CloseConfirmed(AtomicBool);
 
 /// Globaler State: der vom Sidecar belegte Port
 struct BackendPort(Mutex<u16>);
@@ -85,6 +89,24 @@ fn kill_backend(child_state: tauri::State<BackendChild>, port_state: tauri::Stat
     }
 }
 
+/// IPC-Command: User hat Schließen bestätigt – Backend beenden und Fenster schließen
+#[tauri::command]
+fn confirm_close(
+    app: tauri::AppHandle,
+    child_state: tauri::State<BackendChild>,
+    port_state: tauri::State<BackendPort>,
+    close_confirmed: tauri::State<CloseConfirmed>,
+) {
+    close_confirmed.0.store(true, Ordering::Relaxed);
+    let port = *port_state.0.lock().unwrap();
+    if let Some(child) = child_state.0.lock().unwrap().take() {
+        kill_backend_inner(child, port, false);
+    }
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.close();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -118,6 +140,7 @@ pub fn run() {
                 .expect("Backend-Sidecar konnte nicht gestartet werden");
 
             app.manage(BackendChild(Mutex::new(Some(child))));
+            app.manage(CloseConfirmed(AtomicBool::new(false)));
             log::info!("Backend-Sidecar gestartet auf Port {}", port);
 
             // Linux: Sandbox + EGL deaktivieren BEVOR das Fenster erstellt wird.
@@ -182,22 +205,29 @@ pub fn run() {
                 });
             }
 
-            // Backend beim Schließen des Hauptfensters synchron beenden.
-            // CloseRequested feuert zuverlässiger als RunEvent::Exit und
-            // vermeidet Race-Conditions mit shell.open() (PDF-Links).
+            // Schließen des Hauptfensters: erst Rückfrage ans Frontend, dann Backend beenden.
             let ah = app.handle().clone();
+            let win_for_event = main_window.clone();
             main_window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    let port = *ah.state::<BackendPort>().0.lock().unwrap();
-                    if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
-                        kill_backend_inner(child, port, false);  // non-blocking: UI soll nicht einfrieren
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    let confirmed = ah.state::<CloseConfirmed>().0.load(Ordering::Relaxed);
+                    if confirmed {
+                        // Bestätigt: Backend beenden, Fenster schließen lassen
+                        let port = *ah.state::<BackendPort>().0.lock().unwrap();
+                        if let Some(child) = ah.state::<BackendChild>().0.lock().unwrap().take() {
+                            kill_backend_inner(child, port, false);
+                        }
+                    } else {
+                        // Noch nicht bestätigt: Schließen verhindern, Frontend fragen
+                        api.prevent_close();
+                        let _ = win_for_event.emit("confirm-close", ());
                     }
                 }
             });
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url])
+        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url, confirm_close])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
