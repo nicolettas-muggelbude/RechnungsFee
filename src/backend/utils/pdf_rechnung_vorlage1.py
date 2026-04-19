@@ -25,11 +25,12 @@ Besonderheiten:
 """
 
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
-from utils.pdf_shared import build_hr_zeile, embed_unterschrift
+from utils.pdf_shared import build_hr_zeile, embed_unterschrift, epc_qr_bytes
 
 # Wiederverwendung aus dem Standard-Template
 from utils.pdf_rechnung import (
@@ -399,19 +400,32 @@ class RechnungPDFVorlage1(FPDF):
         val_w = 80.0
         lh    = 6.5
         box_w = lbl_w + val_w
-        # Zentriert auf den Nutzbereich
-        x_start = L_MARGIN + (NUTZ_W - box_w) / 2
+
+        qr_aktiv = (
+            unt.get("qr_zahlung_aktiv", False)
+            and iban
+            and r.typ == "ausgang"
+            and zahlungsstatus not in ("bezahlt", "teilweise")
+        )
+        qr_col_w = NUTZ_W - box_w  # 40 mm (175 - 135)
+
+        # QR aktiv: linksbündig und volle Nutzbreite; sonst zentriert
+        if qr_aktiv:
+            x_start = float(L_MARGIN)
+        else:
+            x_start = L_MARGIN + (NUTZ_W - box_w) / 2
 
         block_top = self.get_y()
 
         # Tabellenkopf "Überweisung" – linksbündig, grüne Füllung
         kopf_titel = "Zahlung erhalten" if zahlungsstatus in ("bezahlt", "teilweise") and zahlungen else "Überweisung"
+        kopf_w = box_w + qr_col_w if qr_aktiv else box_w
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRUEN_HELL)
         self.set_draw_color(*GRUEN_RAND)
         self.set_text_color(*TEXT_DUNKEL)
         self.set_xy(x_start, block_top)
-        self.cell(box_w, 6.5, kopf_titel, border="B", fill=True, align="L",
+        self.cell(kopf_w, 6.5, kopf_titel, border="B", fill=True, align="L",
                   new_x="LMARGIN", new_y="NEXT")
 
         def _row(lbl: str, val: str, bold_val: bool = False):
@@ -457,10 +471,46 @@ class RechnungPDFVorlage1(FPDF):
                 _row("BIC", bic)
 
         block_bottom = self.get_y()
-        # Äußerer Rahmen + vertikale Trennlinie zwischen Label und Wert
+
+        if qr_aktiv:
+            qr_size    = 25
+            label_h    = 5
+            # Spalte: Kopfzeile (6.5) + 3mm Pad + QR + Label + 3mm Pad
+            min_bottom = block_top + 6.5 + 3 + qr_size + label_h + 3
+            if block_bottom < min_bottom:
+                block_bottom = min_bottom
+                self.set_y(block_bottom)
+
+            empf = unt.get("firmenname") or " ".join(
+                p for p in [unt.get("vorname"), unt.get("nachname")] if p
+            )
+            qr_data = epc_qr_bytes(iban, bic, empf, float(r.brutto_gesamt), r.rechnungsnummer or "")
+            if qr_data:
+                # QR zentriert in der Spalte
+                qr_x = x_start + box_w + (qr_col_w - qr_size) / 2
+                qr_y = block_top + 6.5 + 3
+                self.image(BytesIO(qr_data), x=qr_x, y=qr_y, w=qr_size, h=qr_size)
+                # Label zentriert unter dem QR
+                self.set_font("DejaVu", "", 6)
+                self.set_text_color(*TEXT_GRAU)
+                self.set_xy(x_start + box_w, qr_y + qr_size + 1)
+                self.cell(qr_col_w, 4, "Per Banking-App zahlen", align="C")
+                self.set_font("DejaVu", "", 8)
+                self.set_text_color(*TEXT_DUNKEL)
+
+            total_w = box_w + qr_col_w
+        else:
+            total_w = box_w
+
+        # Äußerer Rahmen + Trennlinien
         self.set_draw_color(*GRUEN_RAND)
-        self.rect(x_start, block_top, box_w, block_bottom - block_top)
+        self.rect(x_start, block_top, total_w, block_bottom - block_top)
         self.line(x_start + lbl_w, block_top, x_start + lbl_w, block_bottom)
+        if qr_aktiv:
+            self.line(x_start + box_w, block_top, x_start + box_w, block_bottom)
+
+        # Cursor immer ans Ende des Blocks setzen
+        self.set_y(block_bottom)
 
 
 # ---------------------------------------------------------------------------

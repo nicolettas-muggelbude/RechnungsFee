@@ -52,6 +52,7 @@ class UnternehmenBase(BaseModel):
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
     standard_zahlungsziel: int = 14
+    qr_zahlung_aktiv: bool = False
 
     @field_validator("versteuerungsart")
     @classmethod

@@ -96,7 +96,7 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
             "iban": "DE89 3704 0044 0532 0130 00", "bic": "COBADEFFXXX", "bank_name": "Musterbank",
             "logo_pfad": "", "berufsbezeichnung": "", "kammer_mitgliedschaft": "",
             "rechtsform": "Einzelunternehmen", "ist_kleinunternehmer": True,
-            "zahlungshinweis_aktiv": True,
+            "zahlungshinweis_aktiv": True, "qr_zahlung_aktiv": True,
         }
     return {
         "firmenname":              unternehmen.firmenname or "",
@@ -124,6 +124,9 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "rechtsform":              getattr(unternehmen, "rechtsform", "") or "",
         "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
         "zahlungshinweis_aktiv":   unternehmen.zahlungshinweis_aktiv,
+        "qr_zahlung_aktiv":        unternehmen.qr_zahlung_aktiv or False,
+        "unterschrift_bild":       unternehmen.unterschrift_bild or "",
+        "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
     }
 
 

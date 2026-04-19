@@ -372,6 +372,23 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
           />
           <span className="text-sm text-slate-500 dark:text-slate-400">Tage nach Rechnungsdatum</span>
         </div>
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.qr_zahlung_aktiv}
+            onChange={ev => set('qr_zahlung_aktiv', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">GiroCode (QR) auf Rechnung</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Fügt einen EPC-QR-Code (GiroCode) neben den Zahlungshinweis ein.
+              Kunden können damit per Banking-App direkt überweisen – mit vorausgefüllten Daten.
+              Nur auf Ausgangsrechnungen mit hinterlegter IBAN.
+            </p>
+          </div>
+        </label>
       </div>
 
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}

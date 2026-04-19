@@ -23,11 +23,12 @@ Fonts: DejaVu (kommt mit fpdf2) für volle Unicode-Unterstützung.
 """
 
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
-from utils.pdf_shared import build_hr_zeile, embed_unterschrift
+from utils.pdf_shared import build_hr_zeile, embed_unterschrift, epc_qr_bytes
 
 
 def _find_dejavu_dir() -> Path:
@@ -521,7 +522,31 @@ class RechnungPDF(FPDF):
                     )
                     if bic: hinweis += f"  ·  BIC {bic}"
                     hinweis += "."
-                    self.multi_cell(0, 5, hinweis)
+
+                    qr_aktiv = unt.get("qr_zahlung_aktiv", False)
+                    if qr_aktiv:
+                        qr_size  = 25
+                        gap      = 4
+                        text_w   = NUTZ_W - qr_size - gap
+                        y_start  = self.get_y()
+                        qr_x     = L_MARGIN + text_w + gap
+                        self.multi_cell(text_w, 5, hinweis)
+                        empf = unt.get("firmenname") or " ".join(
+                            p for p in [unt.get("vorname"), unt.get("nachname")] if p
+                        )
+                        qr_data = epc_qr_bytes(iban, bic, empf, float(r.brutto_gesamt), r.rechnungsnummer or "")
+                        if qr_data:
+                            self.image(BytesIO(qr_data), x=qr_x, y=y_start, w=qr_size, h=qr_size)
+                            # Label unterhalb des QR
+                            self.set_font("DejaVu", "", 6)
+                            self.set_text_color(*TEXT_GRAU)
+                            self.set_xy(qr_x, y_start + qr_size + 1)
+                            self.cell(qr_size, 4, "Per Banking-App zahlen", align="C")
+                            self.set_font("DejaVu", "", 8)
+                            if self.get_y() < y_start + qr_size + 5:
+                                self.set_y(y_start + qr_size + 5)
+                    else:
+                        self.multi_cell(0, 5, hinweis)
         self.ln(2)
 
         # --- Notizen ---

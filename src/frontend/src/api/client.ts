@@ -134,6 +134,7 @@ export type Unternehmen = {
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
   standard_zahlungsziel?: number
+  qr_zahlung_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
