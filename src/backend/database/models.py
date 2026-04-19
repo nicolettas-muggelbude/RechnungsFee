@@ -84,6 +84,8 @@ class Unternehmen(Base):
     mail_betreff_vorlage: Mapped[str | None] = mapped_column(String(500))
     mail_text_vorlage: Mapped[str | None] = mapped_column(Text)
     mail_signatur: Mapped[str | None] = mapped_column(Text)
+    unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
+    unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

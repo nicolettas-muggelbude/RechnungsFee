@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
-from utils.pdf_shared import build_hr_zeile
+from utils.pdf_shared import build_hr_zeile, embed_unterschrift
 
 # Wiederverwendung aus dem Standard-Template
 from utils.pdf_rechnung import (
@@ -370,6 +370,9 @@ class RechnungPDFVorlage1(FPDF):
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
             self.multi_cell(0, 5, r.notizen)
+
+        # --- Digitale Unterschrift ---
+        embed_unterschrift(self, unt, L_MARGIN)
 
         self.set_text_color(0, 0, 0)
         return bytes(self.output())

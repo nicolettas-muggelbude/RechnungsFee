@@ -163,6 +163,7 @@ def export_pdf(
             "ort": unt.ort,
             "steuernummer": unt.steuernummer or "",
             "ust_idnr": unt.ust_idnr or "",
+            "unterschrift_bild": unt.unterschrift_bild or "",
         }
 
     # Abschlüsse als dicts

@@ -49,6 +49,8 @@ class UnternehmenBase(BaseModel):
     mail_betreff_vorlage: Optional[str] = None
     mail_text_vorlage: Optional[str] = None
     mail_signatur: Optional[str] = None
+    unterschrift_bild: Optional[str] = None
+    unterschrift_auf_rechnung: bool = False
 
     @field_validator("versteuerungsart")
     @classmethod

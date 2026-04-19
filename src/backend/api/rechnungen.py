@@ -377,8 +377,10 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
             "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
             "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
-            "zahlungshinweis_aktiv":   unternehmen.zahlungshinweis_aktiv,
-            "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
+            "zahlungshinweis_aktiv":      unternehmen.zahlungshinweis_aktiv,
+            "pdf_vorlage":                unternehmen.pdf_vorlage if unternehmen else 0,
+            "unterschrift_bild":          unternehmen.unterschrift_bild or "",
+            "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
         }
 
     ist_entwurf = rechnung.ist_entwurf

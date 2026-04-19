@@ -558,6 +558,211 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
 }
 
 // ---------------------------------------------------------------------------
+// Digitale Unterschrift
+// ---------------------------------------------------------------------------
+
+function UnterschriftModal({ onSpeichern, onAbbrechen }: {
+  onSpeichern: (bild: string) => void
+  onAbbrechen: () => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const letzterPunkt = useRef<{ x: number; y: number } | null>(null)
+  const [zeichnen, setZeichnen] = useState(false)
+  const [hatInhalt, setHatInhalt] = useState(false)
+
+  // HiDPI: Canvas-Interne Auflösung = CSS-Größe × devicePixelRatio
+  useEffect(() => {
+    const canvas = canvasRef.current!
+    const dpr = window.devicePixelRatio || 1
+    const size = canvas.offsetWidth
+    canvas.width = size * dpr
+    canvas.height = size * dpr
+    const ctx = canvas.getContext('2d')!
+    ctx.scale(dpr, dpr)
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.strokeStyle = '#1e293b'
+  }, [])
+
+  function getPos(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function startZeichnen(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault()
+    const pos = getPos(e)
+    letzterPunkt.current = pos
+    const ctx = canvasRef.current!.getContext('2d')!
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
+    setZeichnen(true)
+  }
+
+  function weiterZeichnen(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault()
+    if (!zeichnen || !letzterPunkt.current) return
+    const ctx = canvasRef.current!.getContext('2d')!
+    const curr = getPos(e)
+    const prev = letzterPunkt.current
+    // Glatte Kurve durch Mittelpunkt zwischen letztem und aktuellem Punkt
+    const mid = { x: (prev.x + curr.x) / 2, y: (prev.y + curr.y) / 2 }
+    ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(mid.x, mid.y)
+    letzterPunkt.current = curr
+    setHatInhalt(true)
+  }
+
+  function stopZeichnen() {
+    setZeichnen(false)
+    letzterPunkt.current = null
+  }
+
+  function leeren() {
+    const canvas = canvasRef.current!
+    const dpr = window.devicePixelRatio || 1
+    canvas.getContext('2d')!.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
+    setHatInhalt(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl space-y-4 p-6">
+        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Unterschrift zeichnen</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Zeichne deine Unterschrift im weißen Feld.</p>
+        <canvas
+          ref={canvasRef}
+          className="w-full aspect-square border-2 border-slate-300 dark:border-slate-600 rounded-xl bg-white cursor-crosshair touch-none"
+          onMouseDown={startZeichnen}
+          onMouseMove={weiterZeichnen}
+          onMouseUp={stopZeichnen}
+          onMouseLeave={stopZeichnen}
+          onTouchStart={startZeichnen}
+          onTouchMove={weiterZeichnen}
+          onTouchEnd={stopZeichnen}
+        />
+        <div className="flex gap-2 justify-between">
+          <button type="button" onClick={leeren}
+            className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
+            Leeren
+          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={onAbbrechen}
+              className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
+              Abbrechen
+            </button>
+            <button type="button" disabled={!hatInhalt}
+              onClick={() => {
+                const canvas = canvasRef.current!
+                const out = document.createElement('canvas')
+                out.width = canvas.width
+                out.height = canvas.height
+                const ctx = out.getContext('2d')!
+                ctx.fillStyle = '#ffffff'
+                ctx.fillRect(0, 0, out.width, out.height)
+                ctx.drawImage(canvas, 0, 0)
+                onSpeichern(out.toDataURL('image/png'))
+              }}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+              Übernehmen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UnterschriftSektion({ data }: { data: Unternehmen }) {
+  const qc = useQueryClient()
+  const [zeigModal, setZeigModal] = useState(false)
+  const [vorschau, setVorschau] = useState<string>(data.unterschrift_bild ?? '')
+  const [aufRechnung, setAufRechnung] = useState(!!data.unterschrift_auf_rechnung)
+  const [gespeichert, setGespeichert] = useState(false)
+  const [fehler, setFehler] = useState<string | null>(null)
+
+  const toggleMut = useMutation({
+    mutationFn: (val: boolean) => updateUnternehmen({ unterschrift_auf_rechnung: val }),
+    onSuccess: (_, val) => {
+      setAufRechnung(val)
+      qc.invalidateQueries({ queryKey: ['unternehmen'] })
+    },
+  })
+
+  const mut = useMutation({
+    mutationFn: (bild: string | null) => updateUnternehmen({ unterschrift_bild: bild }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['unternehmen'] })
+      setGespeichert(true)
+      setFehler(null)
+      setTimeout(() => setGespeichert(false), 2500)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
+  function handleSpeichern(bild: string) {
+    setVorschau(bild)
+    setZeigModal(false)
+    mut.mutate(bild)
+  }
+
+  function handleEntfernen() {
+    setVorschau('')
+    mut.mutate(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      {zeigModal && (
+        <UnterschriftModal
+          onSpeichern={handleSpeichern}
+          onAbbrechen={() => setZeigModal(false)}
+        />
+      )}
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Einmal hinterlegen – wird automatisch in Tagesabschluss-PDFs eingebettet.
+      </p>
+      <label className="flex items-center gap-2 cursor-pointer w-fit">
+        <input
+          type="checkbox"
+          checked={aufRechnung}
+          onChange={e => toggleMut.mutate(e.target.checked)}
+          className="w-4 h-4 rounded accent-blue-600"
+        />
+        <span className="text-sm text-slate-700 dark:text-slate-200">Unterschrift auf Rechnungen anzeigen</span>
+      </label>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white p-4 min-h-[100px] flex items-center justify-center">
+        {vorschau
+          ? <img src={vorschau} alt="Unterschrift" className="max-h-24 max-w-full" />
+          : <span className="text-sm text-slate-300 dark:text-slate-600 italic">Noch keine Unterschrift hinterlegt</span>
+        }
+      </div>
+      <div className="flex gap-2 items-center">
+        <button type="button" onClick={() => setZeigModal(true)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+          {vorschau ? 'Unterschrift ändern' : 'Unterschrift zeichnen'}
+        </button>
+        {vorschau && (
+          <button type="button" onClick={handleEntfernen}
+            className="px-3 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600">
+            Entfernen
+          </button>
+        )}
+        {gespeichert && <span className="text-sm text-green-600">✓ Gespeichert</span>}
+        {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Haupt-Seite
 // ---------------------------------------------------------------------------
 
@@ -614,6 +819,10 @@ export function UnternehmenPage() {
 
       <Card title="Mail-Signatur">
         <SignaturSektion data={data} />
+      </Card>
+
+      <Card title="Digitale Unterschrift">
+        <UnterschriftSektion data={data} />
       </Card>
     </div>
   )

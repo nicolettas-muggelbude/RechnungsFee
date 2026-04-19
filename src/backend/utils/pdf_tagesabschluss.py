@@ -7,8 +7,10 @@ Fonts: DejaVu (kommt mit fpdf2 mit) für volle Unicode-Unterstützung
        (Umlaute, Euro-Zeichen, Sonderzeichen).
 """
 
+import base64
 import json
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -323,7 +325,19 @@ class TagesabschlussPDF(FPDF):
             self.cell(col_w[2], 5, _fmt_euro(z["betrag"]), align="R", ln=True)
 
     def _unterschrift(self):
-        linie_y = self.get_y() + 14
+        unterschrift_b64 = self._unt.get("unterschrift_bild") or ""
+        if unterschrift_b64:
+            try:
+                # Führendes "data:image/png;base64," entfernen falls vorhanden
+                raw = unterschrift_b64.split(",", 1)[-1]
+                img_bytes = base64.b64decode(raw)
+                y_start = self.get_y() + 4
+                self.image(BytesIO(img_bytes), x=10, y=y_start, w=60, h=15)
+                linie_y = y_start + 17
+            except Exception:
+                linie_y = self.get_y() + 14
+        else:
+            linie_y = self.get_y() + 14
         self.set_draw_color(80, 80, 100)
         self.line(10, linie_y, 100, linie_y)
         self.set_y(linie_y + 1)

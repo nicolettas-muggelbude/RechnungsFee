@@ -131,6 +131,8 @@ export type Unternehmen = {
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
   mail_signatur?: string | null
+  unterschrift_bild?: string | null
+  unterschrift_auf_rechnung?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
