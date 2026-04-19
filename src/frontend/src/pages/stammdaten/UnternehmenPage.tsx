@@ -142,7 +142,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
     onError: (e: Error) => setFehler(e.message),
   })
 
-  function set(key: keyof Unternehmen, value: string | boolean) {
+  function set(key: keyof Unternehmen, value: string | boolean | number) {
     setForm(f => ({ ...f, [key]: value }))
   }
 
