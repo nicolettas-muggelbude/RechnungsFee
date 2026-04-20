@@ -1450,7 +1450,7 @@ function RechnungForm({
                   ) : (
                     aktiveSaetze.map((s) => {
                       const val = String(parseFloat(s.satz))
-                      return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                      return <option key={s.id} value={val}>{val} %</option>
                     })
                   )}
                 </select>
@@ -1531,9 +1531,7 @@ function RechnungForm({
                         aktiveSaetze.map((s) => {
                           const val = String(parseFloat(s.satz))
                           return (
-                            <option key={s.id} value={val}>
-                              {val}{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}
-                            </option>
+                            <option key={s.id} value={val}>{val} %</option>
                           )
                         })
                       )}

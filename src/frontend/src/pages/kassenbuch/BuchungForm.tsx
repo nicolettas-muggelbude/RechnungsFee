@@ -570,7 +570,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                   ) : (
                     aktiveSaetze.map((s) => {
                       const val = String(parseFloat(s.satz))
-                      return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                      return <option key={s.id} value={val}>{val} %</option>
                     })
                   )}
                 </select>
@@ -872,7 +872,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                           ) : (
                             aktiveSaetze.map((s) => {
                               const val = String(parseFloat(s.satz))
-                              return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                              return <option key={s.id} value={val}>{val} %</option>
                             })
                           )}
                         </select>
