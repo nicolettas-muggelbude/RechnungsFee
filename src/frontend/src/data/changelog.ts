@@ -28,6 +28,9 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'neu', text: 'GiroCode (QR) auf Ausgangsrechnungen – EPC-QR-Code wird neben dem Zahlungshinweis eingebettet; Kunden können per Banking-App mit vorausgefüllten Daten direkt überweisen (aktivierbar in Unternehmenseinstellungen → Zahlungseinstellungen)' },
       { typ: 'verbesserung', text: 'GiroCode-Aktivierung gesperrt wenn keine IBAN hinterlegt ist – Tooltip erklärt warum' },
+      { typ: 'fix', text: 'Dark-Mode: Alle Formular-Felder (select, input, textarea) auf allen Seiten korrekt dunkel – Browser-Default war weiß' },
+      { typ: 'fix', text: 'Kassenbuch: Eigene MwSt-Sätze aus den Einstellungen erscheinen jetzt im USt-Dropdown (nicht mehr nur 0/7/19 %)' },
+      { typ: 'fix', text: 'USt-Dropdown in Rechnungen und Kassenbuch: Bezeichnung nicht mehr abgeschnitten – zeigt nur die Prozentzahl' },
     ],
   },
   {
