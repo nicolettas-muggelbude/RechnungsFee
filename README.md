@@ -87,11 +87,12 @@ Installierte Apps aktualisieren sich automatisch – beim nächsten Start ersche
 
 | Version | Inhalt | Status |
 |---------|--------|--------|
-| **v0.1.x** | Kassenbuch, Rechnungen, GoBD, Tauri-App, Auto-Updater | ✅ Aktuell |
-| **v0.2** | Bank-CSV-Import (Postbank, Sparkasse, Volksbank …), Auto-Filter-Regeln | 🔲 Ziel: Juni 2026 |
+| **v0.1.x** | Kassenbuch, Rechnungen, GoBD, GiroCode, Dark Mode, Tauri-App, Auto-Updater | ✅ Aktuell |
+| **v0.2** | Bank-CSV-Import (Postbank, Sparkasse, Volksbank …), Auto-Filter-Regeln, Duplikat-Erkennung | 🔲 Ziel: Juni 2026 |
 | **v0.3** | EÜR, UStVA-Voranmeldung, DATEV-Export, Jahresübersicht | 🔲 Ziel: August 2026 |
-| **v1.0** | Einstellungen, Flatpak/Flathub | 🔲 Ziel: Oktober 2026 |
-| **v1.1** | ZUGFeRD/XRechnung, PDF+OCR-Import, Rechnungs-PDF-Vorschau | 🔲 Ziel: Dezember 2026 |
+| **v0.4** | Eingangsrechnungen digitalisieren – PDF/Foto-Upload mit OCR-gestützter Felderkennung | 🔲 Ziel: Oktober 2026 |
+| **v1.0** | Mehrsprachigkeit (DE/EN/TR/AR/UK/FA), Einstellungen, Flatpak/Flathub | 🔲 Ziel: Dezember 2026 |
+| **v1.1** | ZUGFeRD/XRechnung, Rechnungs-PDF-Vorschau im App | 🔲 Ziel: Februar 2027 |
 
 ---
 
