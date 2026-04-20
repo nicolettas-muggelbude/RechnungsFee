@@ -71,6 +71,7 @@ pyinstaller \
     --hidden-import utils.pdf_shared \
     --hidden-import utils.signatur \
     --collect-all segno \
+    --collect-all fpdf \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 

@@ -77,6 +77,7 @@ try {
         --hidden-import utils.pdf_shared `
         --hidden-import utils.signatur `
         --collect-all segno `
+        --collect-all fpdf `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {

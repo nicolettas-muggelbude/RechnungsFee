@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.52',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'neu', text: 'GiroCode (QR) auf Ausgangsrechnungen – EPC-QR-Code wird neben dem Zahlungshinweis eingebettet; Kunden können per Banking-App mit vorausgefüllten Daten direkt überweisen (aktivierbar in Unternehmenseinstellungen → Zahlungseinstellungen)' },
+      { typ: 'verbesserung', text: 'GiroCode-Aktivierung gesperrt wenn keine IBAN hinterlegt ist – Tooltip erklärt warum' },
+    ],
+  },
+  {
     version: 'v0.1.51',
     datum: 'April 2026',
     eintraege: [
