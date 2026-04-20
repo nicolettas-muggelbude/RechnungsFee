@@ -115,7 +115,7 @@ def debug_qr_pdf():
         pdf_bytes = pdf.output()
         result["pdf_bytes"] = len(pdf_bytes)
 
-        return Response(content=pdf_bytes, media_type="application/pdf",
+        return Response(content=bytes(pdf_bytes), media_type="application/pdf",
                         headers={"Content-Disposition": "inline; filename=\"qr-test.pdf\""})
     except Exception as e:
         result["fehler"] = str(e)
@@ -123,6 +123,43 @@ def debug_qr_pdf():
         import traceback
         result["traceback"] = traceback.format_exc()
         return result
+
+
+@app.get("/api/debug/qr-bedingungen")
+def debug_qr_bedingungen():
+    """Debug: Zeigt alle Werte der QR-Bedingungskette aus der DB."""
+    from database.connection import SessionLocal
+    from database.models import Unternehmen, Rechnung
+    db = SessionLocal()
+    try:
+        unt = db.query(Unternehmen).first()
+        if not unt:
+            return {"fehler": "Kein Unternehmen in DB"}
+        rechnungen = db.query(Rechnung).filter(
+            Rechnung.typ == "ausgang",
+            Rechnung.storniert == False,
+        ).order_by(Rechnung.id.desc()).limit(5).all()
+        return {
+            "unternehmen": {
+                "iban": unt.iban,
+                "bic": unt.bic,
+                "zahlungshinweis_aktiv": unt.zahlungshinweis_aktiv,
+                "qr_zahlung_aktiv": unt.qr_zahlung_aktiv,
+            },
+            "ausgangsrechnungen": [
+                {
+                    "id": r.id,
+                    "rechnungsnummer": r.rechnungsnummer,
+                    "zahlungsstatus": r.zahlungsstatus,
+                    "brutto_gesamt": str(r.brutto_gesamt),
+                    "ist_entwurf": r.ist_entwurf,
+                    "storniert": r.storniert,
+                }
+                for r in rechnungen
+            ],
+        }
+    finally:
+        db.close()
 
 
 @app.post("/api/shutdown")
