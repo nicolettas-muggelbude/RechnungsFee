@@ -12,4 +12,21 @@ body {
     background-color: #0f172a;
     color: #f1f5f9;
   }
+
+  /* Formular-Elemente: Browser-Default ist weiß – global auf Dark-Palette setzen.
+     Tailwind-Utility-Classes (.dark:bg-slate-700 etc.) haben höhere Spezifität
+     und überschreiben diese Basis-Werte wo nötig. */
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea {
+    background-color: #334155; /* slate-700 */
+    color: #f1f5f9;            /* slate-100 */
+    border-color: #475569;     /* slate-600 */
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #1e293b; /* slate-800 */
+    color: #f1f5f9;
+  }
 }
