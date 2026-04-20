@@ -39,6 +39,48 @@ app.include_router(ust_saetze.router)
 app.include_router(pdf_vorlagen.router)
 
 
+@app.get("/api/debug/qr")
+def debug_qr():
+    """Debug: segno-Import und QR-Generierung testen (nur Testing-Build)."""
+    result = {}
+    try:
+        import segno
+        result["segno_version"] = segno.__version__
+        result["segno_import"] = "ok"
+    except Exception as e:
+        result["segno_import"] = f"FEHLER: {e}"
+        return result
+
+    try:
+        from io import BytesIO
+        qr = segno.make("BCD\n002\n2\nSCT\nCOBADEFFXXX\nTest GmbH\nDE89370400440532013000\nEUR42.00\n\n\nRE-TEST", error="m")
+        buf = BytesIO()
+        qr.save(buf, kind="png", scale=10, border=1)
+        png_bytes = buf.getvalue()
+        result["qr_generierung"] = "ok"
+        result["png_bytes"] = len(png_bytes)
+        result["png_header"] = png_bytes[:4].hex()
+    except Exception as e:
+        result["qr_generierung"] = f"FEHLER: {e}"
+
+    return result
+
+
+@app.get("/api/debug/qr.png")
+def debug_qr_png():
+    """Debug: QR-Code direkt als PNG zurückgeben."""
+    from fastapi.responses import Response
+    from io import BytesIO
+    try:
+        import segno
+        qr = segno.make("BCD\n002\n2\nSCT\nCOBADEFFXXX\nTest GmbH\nDE89370400440532013000\nEUR42.00\n\n\nRE-TEST", error="m")
+        buf = BytesIO()
+        qr.save(buf, kind="png", scale=10, border=1)
+        return Response(content=buf.getvalue(), media_type="image/png")
+    except Exception as e:
+        return Response(content=f"Fehler: {e}", media_type="text/plain", status_code=500)
+
+
 @app.post("/api/shutdown")
 def shutdown():
     """Graceful Shutdown – Tauri ruft diesen Endpoint vor dem Update-Installer auf."""
