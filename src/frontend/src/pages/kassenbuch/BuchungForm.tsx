@@ -11,6 +11,7 @@ import {
   getKunden,
   getUnternehmen,
   getKassenstand,
+  getUstSaetze,
 } from '../../api/client'
 
 // ---------------------------------------------------------------------------
@@ -80,8 +81,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
+  const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
 
   const istKleinunternehmer = unternehmen?.ist_kleinunternehmer ?? false
+  const aktiveSaetze = ustSaetze.filter((s) => s.ist_aktiv)
   const kassenstand = parseFloat(kassenstandData?.kassenstand ?? '0')
 
   // --- Einfache Buchung ---
@@ -562,11 +565,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                   disabled={istKleinunternehmer || istPrivatKategorie}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
-                  <option value="0">
-                    {istKleinunternehmer ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : '0 %'}
-                  </option>
-                  {!istKleinunternehmer && !istPrivatKategorie && <option value="7">7 %</option>}
-                  {!istKleinunternehmer && !istPrivatKategorie && <option value="19">19 %</option>}
+                  {istKleinunternehmer || istPrivatKategorie ? (
+                    <option value="0">{istKleinunternehmer ? '0 % (§19 UStG)' : '0 % (Privat)'}</option>
+                  ) : (
+                    aktiveSaetze.map((s) => {
+                      const val = String(parseFloat(s.satz))
+                      return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                    })
+                  )}
                 </select>
               </div>
             </div>
@@ -861,11 +867,14 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
                           disabled={istKleinunternehmer}
                           className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                         >
-                          <option value="0">
-                            {istKleinunternehmer ? '0 % (§19 UStG)' : '0 %'}
-                          </option>
-                          {!istKleinunternehmer && <option value="7">7 %</option>}
-                          {!istKleinunternehmer && <option value="19">19 %</option>}
+                          {istKleinunternehmer ? (
+                            <option value="0">0 % (§19 UStG)</option>
+                          ) : (
+                            aktiveSaetze.map((s) => {
+                              const val = String(parseFloat(s.satz))
+                              return <option key={s.id} value={val}>{val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}</option>
+                            })
+                          )}
                         </select>
 
                         {artSplit === 'Ausgabe' && !istKleinunternehmer ? (
