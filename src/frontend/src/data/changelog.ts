@@ -35,12 +35,36 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'April 2026',
     eintraege: [
       { typ: 'fix', text: 'PDF öffnen auf Linux: PDFs und Exporte öffnen sich jetzt inline im App-Fenster – xdg-open öffnet lokale HTTP-URLs im AppImage-Kontext nicht zuverlässig' },
+      { typ: 'fix', text: 'PDF öffnen auf Windows: Regression behoben – Buttons zum Öffnen von PDFs und Exporten funktionierten nach v0.1.49 nicht mehr' },
+    ],
+  },
+  {
+    version: 'v0.1.47',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien nicht in der installierten App – segno.writers fehlte im PyInstaller-Bundle; jetzt mit --collect-all vollständig gebundelt' },
+      { typ: 'fix', text: 'PDF öffnen auf Linux: erster Lösungsversuch – Fallback auf WebviewWindow wenn xdg-open fehlschlägt (vollständig behoben in v0.1.51)' },
+    ],
+  },
+  {
+    version: 'v0.1.46',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien nicht in der installierten App – Pillow-C-Extensions durch reines Python-Paket segno ersetzt' },
+    ],
+  },
+  {
+    version: 'v0.1.45',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'GiroCode (QR-Code) erschien lokal, aber nicht in der installierten App – qrcode und PIL fehlten als PyInstaller-Abhängigkeiten im Build' },
     ],
   },
   {
     version: 'v0.1.44',
     datum: 'April 2026',
     eintraege: [
+      { typ: 'neu', text: 'GiroCode (EPC-QR) auf Ausgangsrechnungen – aktivierbar in den Unternehmenseinstellungen; Kunden können per Banking-App überweisen, IBAN, Betrag und Rechnungsnummer werden vorausgefüllt (Issue #53)' },
       { typ: 'neu', text: 'Digitale Unterschrift – einmal hinterlegen, optional auf Ausgangsrechnungen und Tagesabschlüssen ausgeben (Issue #58)' },
       { typ: 'neu', text: 'Fälligkeiten-Dashboard – neue Kachel zeigt fällige und überfällige Rechnungen; zusätzliche „Fällig am"-Spalte in der Rechnungsliste mit Sortierung (Issue #59)' },
       { typ: 'neu', text: 'Standard-Zahlungsziel – einstellbar in den Unternehmenseinstellungen (Standard: 14 Tage); neue Rechnungen erhalten automatisch das korrekte Fälligkeitsdatum' },
@@ -54,11 +78,11 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.40',
     datum: 'April 2026',
     eintraege: [
-      { typ: 'fix', text: 'Rechnungsentwurf: Preis änderte sich jedes Mal beim erneuten Öffnen und Speichern – Brutto-Eingabemodus wurde fälschlich als Netto interpretiert (Issue #50)' },
-      { typ: 'fix', text: 'Stückzahl „10" wurde als „10.000" (Zehntausend) angezeigt – Python Decimal-Trailing-Zeros werden jetzt beim Laden normalisiert' },
       { typ: 'neu', text: 'Eingangsrechnungen: Belegnummer des Lieferanten kann optional erfasst werden – wird im Detail-Panel angezeigt und ist über die Suchfunktion durchsuchbar (Issue #52)' },
       { typ: 'neu', text: 'Eingangsrechnungen: Schnelleingabe-Modus – statt Positionstabelle nur Betrag, USt-Satz und Beschreibung eingeben; mit einem Klick auf „Positionen aufschlüsseln" wechseln (Issue #42)' },
       { typ: 'neu', text: 'Eingangsrechnungen: Im Positionsmodus kann jeder Zeile ein eigenes Konto (Kategorie) zugewiesen werden – überschreibt die Hauptkategorie der Rechnung (Issue #42)' },
+      { typ: 'fix', text: 'Rechnungsentwurf: Preis änderte sich jedes Mal beim erneuten Öffnen und Speichern – Brutto-Eingabemodus wurde fälschlich als Netto interpretiert (Issue #50)' },
+      { typ: 'fix', text: 'Stückzahl „10" wurde als „10.000" (Zehntausend) angezeigt – Python Decimal-Trailing-Zeros werden jetzt beim Laden normalisiert' },
     ],
   },
   {
@@ -72,17 +96,17 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.38',
     datum: 'April 2026',
     eintraege: [
+      { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
+      { typ: 'neu', text: 'Artikelstamm: VK und EK können jetzt wahlweise als Netto oder Brutto eingegeben werden – der jeweils andere Wert wird automatisch anhand des Steuersatzes berechnet (Issue #38)' },
+      { typ: 'neu', text: 'Rechnungen: Suchfeld nach Rechnungsnummer und Partnername – Volltextsuche mit Teiltreffern, kombinierbar mit dem Status-Filter (Issue #49)' },
       { typ: 'verbesserung', text: 'Split-Screen-Layout: Beim Öffnen des Formulars kollabiert die Liste auf ¼ Breite, das Formular bekommt ¾ – einheitlich für Rechnungen, Kunden, Lieferanten und Artikelstamm (Issue #39)' },
       { typ: 'verbesserung', text: 'Kunden, Lieferanten und Artikelstamm: permanentes Detail-Panel rechts (wie Rechnungsdetails) – zeigt beim Anklicken einer Zeile Details, verschwindet beim Bearbeiten (Issue #36)' },
       { typ: 'verbesserung', text: 'Artikelstamm Detail-Panel: strukturierter Aufbau mit Header, Sections (Preise, Details, Beschreibung, Verknüpfte Rechnungen) und Footer – analog Rechnungsdetails (Issue #46)' },
       { typ: 'verbesserung', text: 'Lieferanten Detail-Panel: Header mit Name, Sections für Adresse, Kontakt, Steuer und Notizen' },
       { typ: 'verbesserung', text: 'Kunden, Lieferanten, Artikelstamm: einheitliches Design – p-6 Header, text-2xl Titel, rounded-xl Buttons, Tabelle/Liste in Card-Wrapper (Issue #36)' },
-      { typ: 'neu', text: 'Lieferanten: Suchfeld hinzugefügt – Suche nach Firmenname, E-Mail, Lieferantennummer und Ort' },
-      { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
-      { typ: 'neu', text: 'Artikelstamm: VK und EK können jetzt wahlweise als Netto oder Brutto eingegeben werden – der jeweils andere Wert wird automatisch anhand des Steuersatzes berechnet (Issue #38)' },
       { typ: 'verbesserung', text: 'Infotexte präzisiert: Handelsregister erklärt jetzt Abteilung A (HRA) und B (HRB), Ist-Versteuerung weist auf einmaligen Antrag beim Finanzamt hin (Issue #37)' },
+      { typ: 'fix', text: 'Background-Inkonsistenz behoben: Kunden, Lieferanten, Rechnungen und Artikelstamm hatten einen anderen Hintergrund als der Rest der App' },
       { typ: 'fix', text: 'Fenstertitel zeigte „RechnungsFee Testing" statt „RechnungsFee" (Issue #43)' },
-      { typ: 'neu', text: 'Rechnungen: Suchfeld nach Rechnungsnummer und Partnername – Volltextsuche mit Teiltreffern, kombinierbar mit dem Status-Filter (Issue #49)' },
       { typ: 'fix', text: 'Tagesabschluss-PDF auf Windows: Interner Fehler 500 behoben – DejaVu-Fonts wurden im PyInstaller-Bundle nicht gefunden (Issue #47)' },
       { typ: 'fix', text: 'GoBD-Export-PDF: gleicher Font-Suchpfad-Fix wie Tagesabschluss (Issue #47)' },
       { typ: 'fix', text: 'Zahlungsdialog: Zukunftsdaten werden jetzt abgelehnt – Datumsauswahl ist auf heute begrenzt, Fehlermeldung bei manuellem Eintrag eines zukünftigen Datums (Issue #44)' },
@@ -105,11 +129,11 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.36',
     datum: 'April 2026',
     eintraege: [
+      { typ: 'verbesserung', text: 'Backup-Seite zeigt jetzt Datenpfade für alle Betriebssysteme (Linux, Windows, macOS) – sowohl für automatische Backups als auch in der Wiederherstellungsanleitung (Issue #34)' },
       { typ: 'fix', text: 'Windows: Rechnungsvorlage „Sandra grün" (Vorlage 2) war im gepackten Binary nicht enthalten und führte zu einem internen Fehler – PyInstaller-Build ergänzt' },
       { typ: 'fix', text: 'Windows: Backend-Prozess wird beim Update jetzt vollständig beendet bevor der Installer startet – 2s Wartezeit nach taskkill verhindert „Datei gesperrt"-Fehler' },
       { typ: 'fix', text: 'Vorschau Rechnungsvorlage „Sandra grün": Interner Fehler 500 behoben – fehlende Positions-Nummer in der Demo-Rechnung' },
       { typ: 'fix', text: 'Rechnungsentwurf kann jetzt als PDF geöffnet und gedruckt werden – Entwürfe zeigen „– Entwurf –" unter dem Titel und setzen kein ausgegeben-Flag' },
-      { typ: 'verbesserung', text: 'Backup-Seite zeigt jetzt Datenpfade für alle Betriebssysteme (Linux, Windows, macOS) – sowohl für automatische Backups als auch in der Wiederherstellungsanleitung (Issue #34)' },
     ],
   },
   {
