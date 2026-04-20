@@ -81,6 +81,50 @@ def debug_qr_png():
         return Response(content=f"Fehler: {e}", media_type="text/plain", status_code=500)
 
 
+@app.get("/api/debug/qr-pdf")
+def debug_qr_pdf():
+    """Debug: Mini-PDF mit eingebettetem QR-Code – testet ob self.image(BytesIO) in fpdf2 funktioniert."""
+    from fastapi.responses import Response
+    from io import BytesIO
+    from fpdf import FPDF
+    from utils.pdf_shared import epc_qr_bytes
+
+    result = {"schritt": "start"}
+    try:
+        qr_data = epc_qr_bytes(
+            iban="DE89370400440532013000",
+            bic="COBADEFFXXX",
+            empfaenger="Test GmbH",
+            betrag_euro=42.00,
+            verwendungszweck="RE-TEST-001",
+        )
+        result["epc_qr_bytes"] = len(qr_data) if qr_data else "None"
+        if not qr_data:
+            return result
+
+        result["schritt"] = "fpdf_init"
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=12)
+        pdf.cell(0, 10, "QR-Test", new_x="LMARGIN", new_y="NEXT")
+
+        result["schritt"] = "image_call"
+        pdf.image(BytesIO(qr_data), x=20, y=30, w=40, h=40)
+
+        result["schritt"] = "output"
+        pdf_bytes = pdf.output()
+        result["pdf_bytes"] = len(pdf_bytes)
+
+        return Response(content=pdf_bytes, media_type="application/pdf",
+                        headers={"Content-Disposition": "inline; filename=\"qr-test.pdf\""})
+    except Exception as e:
+        result["fehler"] = str(e)
+        result["fehler_typ"] = type(e).__name__
+        import traceback
+        result["traceback"] = traceback.format_exc()
+        return result
+
+
 @app.post("/api/shutdown")
 def shutdown():
     """Graceful Shutdown – Tauri ruft diesen Endpoint vor dem Update-Installer auf."""
