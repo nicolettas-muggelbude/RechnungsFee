@@ -88,7 +88,7 @@ jobs:
       - name: AppImage Bibliotheken entbündeln
         run: |
           BASE="${GITHUB_WORKSPACE}/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage"
-          APPIMAGE="$BASE/RechnungsFee_0.0.0-test_amd64.AppImage"
+          APPIMAGE="$BASE/RechnungsFee-Testing_0.0.0-test_amd64.AppImage"
           SQUASH="${GITHUB_WORKSPACE}/squashfs-root"
 
           chmod +x "$APPIMAGE"
