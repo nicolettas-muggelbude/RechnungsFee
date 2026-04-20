@@ -129,10 +129,15 @@ pub fn run() {
             log::info!("Backend-Port: {}", port);
             app.manage(BackendPort(Mutex::new(port)));
 
+            let data_dir = app.path().data_dir()
+                .expect("App-Datenverzeichnis nicht ermittelbar")
+                .join("RechnungsFee-Testing");
+
             let sidecar_cmd = app
                 .shell()
                 .sidecar("backend")
                 .expect("Backend-Sidecar nicht gefunden")
+                .env("RECHNUNGSFEE_DATA_DIR", data_dir.to_string_lossy().as_ref())
                 .args(["--port", &port.to_string()]);
 
             let (_rx, child) = sidecar_cmd

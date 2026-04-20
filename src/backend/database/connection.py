@@ -5,7 +5,11 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 # Plattformübergreifender Datenpfad
-if platform.system() == "Windows":
+# RECHNUNGSFEE_DATA_DIR kann per Umgebungsvariable überschrieben werden (z.B. Testing-Build)
+_data_dir_override = os.environ.get("RECHNUNGSFEE_DATA_DIR")
+if _data_dir_override:
+    APP_DATA_DIR = Path(_data_dir_override)
+elif platform.system() == "Windows":
     APP_DATA_DIR = Path(os.environ.get("APPDATA", Path.home())) / "RechnungsFee"
 else:
     APP_DATA_DIR = Path.home() / ".local" / "share" / "RechnungsFee"
