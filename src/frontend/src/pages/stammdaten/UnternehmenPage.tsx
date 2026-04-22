@@ -389,20 +389,17 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
           <span className="text-sm text-slate-500 dark:text-slate-400">Tage nach Rechnungsdatum</span>
         </div>
 
-        <label className={`flex items-start gap-3 ${form.iban?.trim() ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+        <label className={`flex items-start gap-3 ${form.iban?.trim() ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
           <input
             type="checkbox"
             checked={!!form.qr_zahlung_aktiv}
             onChange={ev => set('qr_zahlung_aktiv', ev.target.checked)}
             disabled={!form.iban?.trim()}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 disabled:cursor-not-allowed"
+            className={`mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 disabled:cursor-not-allowed${form.iban?.trim() ? '' : ' opacity-50'}`}
           />
-          <div>
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
+          <div className={form.iban?.trim() ? '' : 'opacity-50'}>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
               GiroCode (QR) auf Rechnung
-              {!form.iban?.trim() && (
-                <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen – der QR-Code benötigt die Kontonummer für den EPC-Standard." />
-              )}
             </span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Fügt einen EPC-QR-Code (GiroCode) neben den Zahlungshinweis ein.
@@ -410,6 +407,9 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
               Nur auf Ausgangsrechnungen mit hinterlegter IBAN.
             </p>
           </div>
+          {!form.iban?.trim() && (
+            <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen – der QR-Code benötigt die Kontonummer für den EPC-Standard." />
+          )}
         </label>
       </div>
 
