@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.54',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Logo-Upload: Dateien werden jetzt anhand des Dateiinhalts erkannt – Upload schlug fehl wenn die WebView einen falschen MIME-Typ übermittelte (Linux AppImage, Windows)' },
+      { typ: 'fix', text: 'Bürgergeld/Transferleistungen: Checkbox jetzt auch in Stammdaten → Unternehmen → Steuer & Rechtsform – war bisher nur im Setup-Wizard erreichbar (Issue #64)' },
+    ],
+  },
+  {
     version: 'v0.1.52',
     datum: 'April 2026',
     eintraege: [

@@ -248,6 +248,22 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
           </div>
         </label>
 
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.bezieht_transferleistungen}
+            onChange={ev => set('bezieht_transferleistungen', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              Transferleistungen (ALG II / Bürgergeld)
+              <InfoTooltip text="Aktiviere diese Option wenn du Bürgergeld oder ALG II beziehst. RechnungsFee berücksichtigt dann den Grundfreibetrag nach §11b SGB II und zeigt passende Hinweise im Dashboard an." side="bottom" />
+            </span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Freibetrag nach §11b SGB II wird berücksichtigt.</p>
+          </div>
+        </label>
+
         <div className="grid grid-cols-2 gap-4">
           <Field label={<>Versteuerungsart <InfoTooltip text="Ist-Versteuerung: USt wird fällig wenn der Kunde zahlt. Soll-Versteuerung: USt ist bereits bei Rechnungsstellung fällig. Für die meisten Freiberufler und Kleinunternehmer gilt die Ist-Versteuerung – sie muss einmalig beim Finanzamt beantragt werden." /></>}>
             <select

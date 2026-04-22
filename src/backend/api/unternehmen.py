@@ -3,6 +3,7 @@ API-Endpunkte für Unternehmensstammdaten.
 Es gibt immer genau einen Datensatz (id=1).
 """
 
+import imghdr
 import os
 from pathlib import Path
 
@@ -71,16 +72,20 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     if not unternehmen:
         raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
 
-    if file.content_type not in ERLAUBTE_TYPEN:
-        raise HTTPException(status_code=400, detail="Nur PNG, JPEG und WEBP sind erlaubt.")
-
     inhalt = await file.read()
     if len(inhalt) > MAX_LOGO_BYTES:
         raise HTTPException(status_code=400, detail="Logo darf maximal 2 MB groß sein.")
 
+    # Content-Type aus Dateiinhalt ermitteln (Fallback wenn Browser keinen/falschen Typ sendet)
+    erkannt = imghdr.what(None, h=inhalt)
+    typ_map = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
+    content_type = typ_map.get(erkannt or "", file.content_type or "")
+    if content_type not in ERLAUBTE_TYPEN:
+        raise HTTPException(status_code=400, detail="Nur PNG, JPEG und WEBP sind erlaubt.")
+
     # Dateierweiterung bestimmen
     ext_map = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
-    ext = ext_map[file.content_type]
+    ext = ext_map[content_type]
     ziel = _upload_dir() / f"logo.{ext}"
 
     # Altes Logo löschen (andere Erweiterung)
