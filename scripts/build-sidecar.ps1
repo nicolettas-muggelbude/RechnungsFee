@@ -78,6 +78,8 @@ try {
         --hidden-import utils.signatur `
         --collect-all segno `
         --collect-all fpdf `
+        --collect-all drafthorse `
+        --collect-all facturx `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {

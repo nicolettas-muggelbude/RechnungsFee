@@ -19,6 +19,7 @@ from database.models import (
 from utils.signatur import signatur_kassenbucheintrag
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
+from utils.zugferd import generate_zugferd_pdf
 from .schemas_rechnungen import (
     RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt,
@@ -405,11 +406,27 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     ist_entwurf = rechnung.ist_entwurf
     # Entwürfe bekommen kein ausgegeben-Flag und keinen Kopie-Hinweis
     ist_kopie = (not ist_entwurf) and rechnung.ausgegeben
-    vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
-    if vorlage_nr == 1:
-        pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+
+    # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv gesetzt hat
+    kunde_zugferd = (
+        not ist_entwurf
+        and rechnung.typ == "ausgang"
+        and rechnung.kunde is not None
+        and rechnung.kunde.zugferd_aktiv
+        and (unternehmen.steuernummer or unternehmen.ust_idnr)
+    )
+    if kunde_zugferd:
+        try:
+            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+        except Exception:
+            # Fallback auf normales PDF wenn ZUGFeRD fehlschlägt
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
     else:
-        pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+        vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
+        if vorlage_nr == 1:
+            pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+        else:
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
 
     if not ist_entwurf and not rechnung.ausgegeben:
         rechnung.ausgegeben = True
@@ -421,6 +438,70 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'{disposition}; filename="{dateiname}"'},
+    )
+
+
+@router.get("/{rechnung_id}/zugferd")
+def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
+    """ZUGFeRD 2.3 / FacturX EN 16931 (Comfort) – PDF/A-3 mit eingebettetem XML.
+    Nur für finalisierte Ausgangsrechnungen."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.typ != "ausgang":
+        raise HTTPException(status_code=400, detail="ZUGFeRD ist nur für Ausgangsrechnungen verfügbar.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=400, detail="Entwürfe können nicht als ZUGFeRD exportiert werden.")
+    if rechnung.storniert:
+        raise HTTPException(status_code=400, detail="Stornierte Rechnungen können nicht als ZUGFeRD exportiert werden.")
+
+    unternehmen = db.query(Unternehmen).first()
+    if not unternehmen:
+        raise HTTPException(status_code=400, detail="Unternehmensdaten nicht gefunden.")
+    if not unternehmen.steuernummer and not unternehmen.ust_idnr:
+        raise HTTPException(status_code=400, detail="Für ZUGFeRD wird eine Steuernummer oder USt-IdNr. benötigt.")
+
+    unt_dict = {
+        "firmenname":              unternehmen.firmenname or "",
+        "vorname":                 unternehmen.vorname or "",
+        "nachname":                unternehmen.nachname or "",
+        "strasse":                 unternehmen.strasse or "",
+        "hausnummer":              unternehmen.hausnummer or "",
+        "plz":                     unternehmen.plz or "",
+        "ort":                     unternehmen.ort or "",
+        "land":                    unternehmen.land or "DE",
+        "steuernummer":            unternehmen.steuernummer or "",
+        "ust_idnr":                unternehmen.ust_idnr or "",
+        "finanzamt":               unternehmen.finanzamt or "",
+        "handelsregister_nr":      unternehmen.handelsregister_nr or "",
+        "handelsregister_gericht": unternehmen.handelsregister_gericht or "",
+        "telefon":                 unternehmen.telefon or "",
+        "email":                   unternehmen.email or "",
+        "webseite":                unternehmen.webseite or "",
+        "iban":                    unternehmen.iban or "",
+        "bic":                     unternehmen.bic or "",
+        "bank_name":               unternehmen.bank_name or "",
+        "logo_pfad":               unternehmen.logo_pfad or "",
+        "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
+        "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
+        "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
+        "zahlungshinweis_aktiv":   unternehmen.zahlungshinweis_aktiv,
+        "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
+        "unterschrift_bild":       unternehmen.unterschrift_bild or "",
+        "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
+        "qr_zahlung_aktiv":        unternehmen.qr_zahlung_aktiv or False,
+    }
+
+    try:
+        pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ZUGFeRD-Generierung fehlgeschlagen: {e}")
+
+    dateiname = f"ZUGFeRD_{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
     )
 
 

@@ -11,7 +11,7 @@ from database.connection import Base, engine, SessionLocal, DB_PATH
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -309,6 +309,14 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 14"))
             conn.commit()
             print("[Migration] Schema auf Version 14 gebracht (unternehmen.qr_zahlung_aktiv)")
+
+        if version < 15:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "zugferd_aktiv" not in cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN zugferd_aktiv INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 15"))
+            conn.commit()
+            print("[Migration] Schema auf Version 15 gebracht (kunden.zugferd_aktiv)")
 
 
 def _migrate_kategorien() -> None:

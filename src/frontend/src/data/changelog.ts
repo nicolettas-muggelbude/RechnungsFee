@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.54',
     datum: 'April 2026',
     eintraege: [
+      { typ: 'neu', text: 'ZUGFeRD / E-Rechnung: Ausgangsrechnungen an Firmenkunden werden automatisch als PDF/A-3 mit eingebettetem FacturX-XML (EN 16931 Comfort) ausgegeben wenn im Kundenstamm ZUGFeRD aktiviert ist – erfüllt die B2B-E-Rechnungspflicht (Issue #62)' },
       { typ: 'fix', text: 'Logo-Upload: Dateien werden jetzt anhand des Dateiinhalts erkannt – Upload schlug fehl wenn die WebView einen falschen MIME-Typ übermittelte (Linux AppImage, Windows)' },
       { typ: 'fix', text: 'Bürgergeld/Transferleistungen: Checkbox jetzt auch in Stammdaten → Unternehmen → Steuer & Rechtsform – war bisher nur im Setup-Wizard erreichbar (Issue #64)' },
       { typ: 'fix', text: 'Zombie-Backend: Beim App-Start werden jetzt eventuell noch laufende Backend-Prozesse vom letzten Absturz beendet – verhindert DB-Sperren und "Failed to Fetch" nach einem Absturz (Issue #67)' },

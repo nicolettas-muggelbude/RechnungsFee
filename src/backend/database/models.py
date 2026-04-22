@@ -252,6 +252,7 @@ class Kunde(Base):
     bescheinigung_gueltig_bis: Mapped[date | None] = mapped_column(Date)
     kundennummer: Mapped[str | None] = mapped_column(String(50))
     notizen: Mapped[str | None] = mapped_column(Text)
+    zugferd_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

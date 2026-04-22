@@ -6,3 +6,5 @@ python-multipart==0.0.22
 fpdf2
 Pillow==12.1.1
 segno==1.6.1
+drafthorse
+factur-x

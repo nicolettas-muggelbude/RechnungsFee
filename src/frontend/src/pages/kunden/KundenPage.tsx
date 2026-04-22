@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -117,6 +117,7 @@ const schema = z.object({
   notizen: z.string().optional(),
   ist_verein: z.boolean().optional(),
   ist_gemeinnuetzig: z.boolean().optional(),
+  zugferd_aktiv: z.boolean().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -124,7 +125,7 @@ type FormValues = z.infer<typeof schema>
 const EMPTY: FormValues = {
   firmenname: '', vorname: '', nachname: '', strasse: '', hausnummer: '',
   plz: '', ort: '', land: 'DE', ust_idnr: '', email: '', telefon: '',
-  kundennummer: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false,
+  kundennummer: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -165,10 +166,13 @@ export function KundenPage() {
     },
   })
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: EMPTY,
   })
+  const watchFirmenname = useWatch({ control, name: 'firmenname' })
+  const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
+  const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
 
   function openCreate() { setEditKunde(null); reset(EMPTY); setShowForm(true) }
 
@@ -180,6 +184,7 @@ export function KundenPage() {
       ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '',
       email: k.email ?? '', telefon: k.telefon ?? '', kundennummer: k.kundennummer ?? '',
       notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
+      zugferd_aktiv: k.zugferd_aktiv ?? false,
     })
     setShowForm(true)
   }
@@ -401,6 +406,25 @@ export function KundenPage() {
                   </label>
                   <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                     <input type="checkbox" {...register('ist_gemeinnuetzig')} className="rounded" /> Gemeinnützig
+                  </label>
+                </div>
+                <div className="col-span-2">
+                  <label className={`flex items-start gap-2 text-sm cursor-pointer ${zugferdAutoAktiv ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}`}>
+                    <input
+                      type="checkbox"
+                      className="rounded mt-0.5"
+                      disabled={zugferdAutoAktiv}
+                      checked={zugferdAutoAktiv || undefined}
+                      {...(!zugferdAutoAktiv ? register('zugferd_aktiv') : {})}
+                      onChange={zugferdAutoAktiv ? undefined : (e) => setValue('zugferd_aktiv', e.target.checked)}
+                    />
+                    <span>
+                      ZUGFeRD / E-Rechnung
+                      {zugferdAutoAktiv
+                        ? <span className="ml-1 text-xs text-blue-500 dark:text-blue-400">(automatisch aktiv – Firma + USt-IdNr. vorhanden)</span>
+                        : <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">PDF enthält maschinenlesbares XML für B2B-Empfänger</span>
+                      }
+                    </span>
                   </label>
                 </div>
               </div>

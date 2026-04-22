@@ -388,6 +388,7 @@ export type Kunde = {
   ist_gemeinnuetzig: boolean
   kundennummer?: string
   notizen?: string
+  zugferd_aktiv?: boolean
   ust_idnr_validiert?: boolean
   aktiv?: boolean
 }
@@ -622,6 +623,16 @@ export async function getRechnungPdf(id: number): Promise<Blob> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'PDF-Export fehlgeschlagen')
+  }
+  return res.blob()
+}
+
+export async function getRechnungZugferd(id: number): Promise<Blob> {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/rechnungen/${id}/zugferd`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'ZUGFeRD-Export fehlgeschlagen')
   }
   return res.blob()
 }

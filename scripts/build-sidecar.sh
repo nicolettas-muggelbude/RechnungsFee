@@ -72,6 +72,8 @@ pyinstaller \
     --hidden-import utils.signatur \
     --collect-all segno \
     --collect-all fpdf \
+    --collect-all drafthorse \
+    --collect-all facturx \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 
