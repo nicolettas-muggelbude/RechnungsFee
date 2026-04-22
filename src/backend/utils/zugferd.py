@@ -55,7 +55,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ist_ku = unternehmen.get("ist_kleinunternehmer", False)
 
     doc = Document()
-    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017"
+    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:en16931"
     doc.header.id._text = rechnung.rechnungsnummer or str(rechnung.id)
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
