@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -173,6 +173,10 @@ export function KundenPage() {
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
+
+  useEffect(() => {
+    if (zugferdAutoAktiv) setValue('zugferd_aktiv', true)
+  }, [zugferdAutoAktiv, setValue])
 
   function openCreate() { setEditKunde(null); reset(EMPTY); setShowForm(true) }
 

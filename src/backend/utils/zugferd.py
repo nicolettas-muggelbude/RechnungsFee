@@ -55,9 +55,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ist_ku = unternehmen.get("ist_kleinunternehmer", False)
 
     doc = Document()
-    doc.context.guideline_parameter.id = (
-        "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:en16931"
-    )
+    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017"
     doc.header.id._text = rechnung.rechnungsnummer or str(rechnung.id)
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
@@ -134,12 +132,10 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         # Menge
         li.delivery.billed_quantity = (pos.menge, einheit_code)
 
-        # Steuer auf Position (single object, kein Container)
+        # Steuer auf Position – nur Kategorie+Satz, kein Betrag (EN16931-Regel)
         li.settlement.trade_tax.type_code = "VAT"
         li.settlement.trade_tax.category_code = _steuerkategorie(pos.ust_satz, ist_ku)
         li.settlement.trade_tax.rate_applicable_percent = pos.ust_satz
-        li.settlement.trade_tax.calculated_amount = pos.ust_betrag
-        li.settlement.trade_tax.basis_amount = pos.netto
 
         # Zeilensumme
         li.settlement.monetary_summation.total_amount = pos.netto
@@ -169,9 +165,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Gesamtsummen ──────────────────────────────────────────────────────────
     ms = doc.trade.settlement.monetary_summation
     ms.line_total = rechnung.netto_gesamt
-    ms.tax_basis_total = (rechnung.netto_gesamt, "EUR")
-    ms.tax_total = (rechnung.ust_gesamt, "EUR")
-    ms.grand_total = (rechnung.brutto_gesamt, "EUR")
+    ms.tax_basis_total = rechnung.netto_gesamt        # kein currencyID (EN16931)
+    ms.tax_total = (rechnung.ust_gesamt, "EUR")       # currencyID required
+    ms.grand_total = rechnung.brutto_gesamt           # kein currencyID (EN16931)
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
     return doc.serialize(schema="FACTUR-X_EN16931")
