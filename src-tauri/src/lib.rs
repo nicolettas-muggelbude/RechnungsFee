@@ -125,6 +125,21 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // Zombie-Backend vom letzten Absturz killen bevor ein neues gestartet wird.
+            // Schützt vor DB-Schreibsperren wenn CloseRequested nicht gefeuert hat.
+            #[cfg(target_os = "windows")]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/IM", "backend.exe"])
+                    .output();
+            }
+            #[cfg(target_os = "linux")]
+            {
+                let _ = std::process::Command::new("pkill")
+                    .args(["-f", "binaries/backend"])
+                    .output();
+            }
+
             let port = portpicker::pick_unused_port().expect("Kein freier Port gefunden");
             log::info!("Backend-Port: {}", port);
             app.manage(BackendPort(Mutex::new(port)));

@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: 'Logo-Upload: Dateien werden jetzt anhand des Dateiinhalts erkannt – Upload schlug fehl wenn die WebView einen falschen MIME-Typ übermittelte (Linux AppImage, Windows)' },
       { typ: 'fix', text: 'Bürgergeld/Transferleistungen: Checkbox jetzt auch in Stammdaten → Unternehmen → Steuer & Rechtsform – war bisher nur im Setup-Wizard erreichbar (Issue #64)' },
+      { typ: 'fix', text: 'Zombie-Backend: Beim App-Start werden jetzt eventuell noch laufende Backend-Prozesse vom letzten Absturz beendet – verhindert DB-Sperren und "Failed to Fetch" nach einem Absturz (Issue #67)' },
     ],
   },
   {
