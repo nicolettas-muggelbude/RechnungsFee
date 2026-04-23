@@ -30,6 +30,11 @@ def _einheit_code(einheit: str) -> str:
     return _EINHEIT_CODE.get(einheit, "C62")
 
 
+def _ust_satz(satz: Decimal) -> Decimal:
+    """19.00 → 19, 7.00 → 7, 5.50 → 5.50 (Nachkommastellen nur wenn nötig)."""
+    return satz.normalize()
+
+
 def _kunde_name(kunde) -> str:
     if kunde.firmenname:
         return kunde.firmenname
@@ -108,9 +113,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     else:
         doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)
 
-    # ── Lieferdatum ───────────────────────────────────────────────────────────
-    if rechnung.leistungsdatum:
-        doc.trade.delivery.event.occurrence._value = rechnung.leistungsdatum
+    # ── Lieferdatum (XRechnung BR-13: Pflicht – Fallback auf Rechnungsdatum) ───
+    doc.trade.delivery.event.occurrence._value = rechnung.leistungsdatum or rechnung.datum
 
     # ── Fälligkeitsdatum ──────────────────────────────────────────────────────
     if rechnung.faellig_am:
@@ -151,7 +155,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         # Steuer auf Position – nur Kategorie+Satz, kein Betrag (EN16931-Regel)
         li.settlement.trade_tax.type_code = "VAT"
         li.settlement.trade_tax.category_code = _steuerkategorie(pos.ust_satz, ist_ku)
-        li.settlement.trade_tax.rate_applicable_percent = pos.ust_satz
+        li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
 
         # Zeilensumme
         li.settlement.monetary_summation.total_amount = pos.netto
@@ -171,7 +175,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         tax = ApplicableTradeTax()
         tax.type_code = "VAT"
         tax.category_code = _steuerkategorie(eintrag["satz"], ist_ku)
-        tax.rate_applicable_percent = eintrag["satz"]
+        tax.rate_applicable_percent = _ust_satz(eintrag["satz"])
         tax.basis_amount = eintrag["basis"]
         tax.calculated_amount = eintrag["betrag"]
         if ist_ku and eintrag["satz"] == 0:
