@@ -56,7 +56,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
     doc = Document()
     doc.context.business_parameter.id = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
-    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended"
+    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0"
     doc.header.id._text = rechnung.rechnungsnummer or str(rechnung.id)
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
@@ -97,6 +97,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         buyer.address.country_id = k.land or "DE"
     else:
         buyer.name = rechnung.partner_freitext or "Kunde"
+
+    # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer)
+    if rechnung.kunde and rechnung.kunde.kundennummer:
+        doc.trade.agreement.buyer_reference = rechnung.kunde.kundennummer
+    else:
+        doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)
 
     # ── Lieferdatum ───────────────────────────────────────────────────────────
     if rechnung.leistungsdatum:
@@ -178,7 +184,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ms.grand_total = rechnung.brutto_gesamt           # kein currencyID (EN16931)
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
-    return doc.serialize(schema="FACTUR-X_EXTENDED")
+    return doc.serialize(schema="FACTUR-X_EN16931")
 
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
@@ -193,7 +199,7 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
         pdf_bytes,
         xml_bytes,
         flavor="factur-x",
-        level="extended",
+        level="en16931",
         check_xsd=False,
         check_schematron=False,
         xmp_compression=False,
