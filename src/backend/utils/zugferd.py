@@ -193,7 +193,10 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ms.prepaid_total = rechnung.bezahlt_betrag
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
-    return doc.serialize(schema="FACTUR-X_EN16931")
+    xml = doc.serialize(schema="FACTUR-X_EN16931")
+    # xmlns:xsi entfernen (unused, stört manche XSLT-Renderer wie hellocash)
+    xml = xml.replace(b' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"', b'')
+    return xml
 
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
