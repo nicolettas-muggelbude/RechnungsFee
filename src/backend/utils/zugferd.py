@@ -232,31 +232,37 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
-    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes FacturX-XML."""
+    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML."""
     import facturx
     import facturx.facturx as _fx
     from utils.pdf_rechnung import generate_rechnung_pdf
 
-    pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False)
+    # sRGB-OutputIntent für PDF/A-3-Konformität
+    pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
+                                      mit_output_intent=True)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
-    # XML-Dateiname identisch zum PDF-Dateinamen (wie bei IT-Recht / ZUGFeRD-Konvention)
-    rn = rechnung.rechnungsnummer or str(rechnung.id)
-    xml_name = f"Rechnung_{rn}.xml"
-    _orig = _fx.FACTURX_FILENAME
-    _fx.FACTURX_FILENAME = xml_name
+    # XRechnung-Profil in facturx registrieren (einmalig; idempotent)
+    if "xrechnung" not in _fx.FACTURX_LEVEL2xsd:
+        _fx.FACTURX_LEVEL2xsd["xrechnung"] = _fx.FACTURX_LEVEL2xsd["en16931"]
+    if "xrechnung" not in _fx.FACTURX_LEVEL2xmp:
+        _fx.FACTURX_LEVEL2xmp["xrechnung"] = "XRECHNUNG"
+
+    # Pflicht-Dateiname für XRechnung laut ZUGFeRD 2.3.2 §6.2
+    _orig_fname = _fx.FACTURX_FILENAME
+    _fx.FACTURX_FILENAME = "xrechnung.xml"
     try:
         result = facturx.generate_from_binary(
             pdf_bytes,
             xml_bytes,
             flavor="factur-x",
-            level="en16931",
+            level="xrechnung",
             check_xsd=False,
             check_schematron=False,
             xmp_compression=False,
             afrelationship="alternative",
         )
     finally:
-        _fx.FACTURX_FILENAME = _orig
+        _fx.FACTURX_FILENAME = _orig_fname
 
     return result

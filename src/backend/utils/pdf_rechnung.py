@@ -566,14 +566,36 @@ class RechnungPDF(FPDF):
 # Öffentliche Funktion
 # ---------------------------------------------------------------------------
 
-def generate_rechnung_pdf(rechnung, unternehmen: dict, ist_kopie: bool = False, ist_entwurf: bool = False) -> bytes:
+def generate_rechnung_pdf(
+    rechnung, unternehmen: dict,
+    ist_kopie: bool = False,
+    ist_entwurf: bool = False,
+    mit_output_intent: bool = False,
+) -> bytes:
     """
     Erzeugt ein PDF für die übergebene Rechnung.
 
-    :param rechnung:    SQLAlchemy-Rechnung-Objekt (mit .positionen, .kunde, .lieferant)
-    :param unternehmen: dict mit allen Firmendaten
-    :param ist_kopie:   True → dezenter „– Kopie –"-Hinweis unter dem Titel
-    :param ist_entwurf: True → „– Entwurf –"-Hinweis, kein ausgegeben-Flag
+    :param rechnung:            SQLAlchemy-Rechnung-Objekt (mit .positionen, .kunde, .lieferant)
+    :param unternehmen:         dict mit allen Firmendaten
+    :param ist_kopie:           True → dezenter „– Kopie –"-Hinweis unter dem Titel
+    :param ist_entwurf:         True → „– Entwurf –"-Hinweis, kein ausgegeben-Flag
+    :param mit_output_intent:   True → sRGB-OutputIntent für PDF/A-3 (ZUGFeRD)
     """
     pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+    if mit_output_intent:
+        from fpdf.enums import OutputIntentSubType
+        from fpdf.output import PDFICCProfile
+        from fpdf.util import builtin_srgb2014_bytes
+        pdf.add_output_intent(
+            OutputIntentSubType.PDFA,
+            output_condition_identifier="sRGB",
+            output_condition="IEC 61966-2-1:1999",
+            registry_name="http://www.color.org",
+            dest_output_profile=PDFICCProfile(
+                contents=builtin_srgb2014_bytes(),
+                n=3,
+                alternate="DeviceRGB",
+            ),
+            info="sRGB2014 (v2)",
+        )
     return pdf.render()
