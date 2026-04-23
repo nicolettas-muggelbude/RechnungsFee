@@ -128,11 +128,28 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Lieferdatum (XRechnung BR-13: Pflicht – Fallback auf Rechnungsdatum) ───
     doc.trade.delivery.event.occurrence._value = rechnung.leistungsdatum or rechnung.datum
 
-    # ── Fälligkeitsdatum ──────────────────────────────────────────────────────
-    if rechnung.faellig_am:
+    # ── Fälligkeitsdatum + Zahlungshinweis ───────────────────────────────────
+    iban = unternehmen.get("iban") or ""
+    bic  = unternehmen.get("bic") or ""
+    if rechnung.faellig_am or iban:
         pt = PaymentTerms()
-        pt.description._text = f"Zahlbar bis {rechnung.faellig_am.strftime('%d.%m.%Y')}."
-        pt.due._value = rechnung.faellig_am
+        faellig_str = rechnung.faellig_am.strftime("%d.%m.%Y") if rechnung.faellig_am else "sofort"
+        offen = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
+        betrag_str = f"{offen:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " \u20ac"
+        if iban and rechnung.typ == "ausgang":
+            hinweis = (
+                f"Bitte \u00fcberweisen Sie {betrag_str} bis {faellig_str} "
+                f"unter Angabe der Rechnungsnummer {rechnung.rechnungsnummer or ''} "
+                f"auf IBAN {iban}"
+            )
+            if bic:
+                hinweis += f"  \u00b7  BIC {bic}"
+            hinweis += "."
+        else:
+            hinweis = f"Zahlbar bis {faellig_str}."
+        pt.description._text = hinweis
+        if rechnung.faellig_am:
+            pt.due._value = rechnung.faellig_am
         doc.trade.settlement.terms.add(pt)
 
     # ── Zahlungsweise (SEPA-Überweisung) ──────────────────────────────────────
