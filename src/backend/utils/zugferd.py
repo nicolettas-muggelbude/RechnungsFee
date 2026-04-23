@@ -63,11 +63,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     doc.context.business_parameter.id = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
     doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0"
     doc.header.id._text = rechnung.rechnungsnummer or str(rechnung.id)
+    doc.header.name._text = "RECHNUNG"
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
 
     if rechnung.notizen:
         note = IncludedNote()
+        note.subject_code._text = "AAI"
         note.content._text = rechnung.notizen
         doc.header.notes.add(note)
 
