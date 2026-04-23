@@ -240,8 +240,8 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
     pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
-    # XML-Dateiname = PDF-Dateiname (nur Endung .xml statt .pdf)
-    xml_name = f"Rechnung_{rechnung.rechnungsnummer or rechnung.id}.xml"
+    # ZUGFeRD-Standardname – wird von hellocash und anderen Viewern erkannt
+    xml_name = "ZUGFeRD-invoice.xml"
     _orig = _fx.FACTURX_FILENAME
     _fx.FACTURX_FILENAME = xml_name
     try:
