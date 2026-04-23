@@ -83,6 +83,10 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         reg.id = ("FC", unternehmen["steuernummer"])
         seller.tax_registrations.add(reg)
 
+    # BT-34: Elektronische Adresse des Verkäufers (XRechnung-Pflichtfeld)
+    if unternehmen.get("email"):
+        seller.electronic_address.uri_ID = ("EM", unternehmen["email"])
+
     # ── Käufer ────────────────────────────────────────────────────────────────
     buyer = doc.trade.agreement.buyer
     if rechnung.kunde:
@@ -119,7 +123,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         pm = PaymentMeans()
         pm.type_code._text = "58"
         pm.payee_account.iban = unternehmen["iban"]
+        if unternehmen.get("bic"):
+            pm.payee_institution.bic = unternehmen["bic"]
         doc.trade.settlement.payment_means.add(pm)
+
+    # ── Verwendungszweck ──────────────────────────────────────────────────────
+    doc.trade.settlement.payment_reference = rechnung.rechnungsnummer or str(rechnung.id)
 
     # ── Währung ───────────────────────────────────────────────────────────────
     doc.trade.settlement.currency_code = "EUR"
@@ -130,10 +139,11 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         li.document.line_id._text = str(pos.position_nr)
         li.product.name = pos.beschreibung
 
-        # Nettopreis pro Einheit (XRechnung: nur NetPrice, kein GrossPrice)
+        # Nettopreis pro Einheit
         einheit_code = _einheit_code(pos.einheit)
         netto_pro_einheit = (pos.netto / pos.menge) if pos.menge else pos.netto
         li.agreement.net.amount = netto_pro_einheit
+        li.agreement.net.basis_quantity = (Decimal("1"), einheit_code)
 
         # Menge
         li.delivery.billed_quantity = (pos.menge, einheit_code)
@@ -171,9 +181,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Gesamtsummen ──────────────────────────────────────────────────────────
     ms = doc.trade.settlement.monetary_summation
     ms.line_total = rechnung.netto_gesamt
-    ms.tax_basis_total = rechnung.netto_gesamt        # kein currencyID (EN16931)
-    ms.tax_total = (rechnung.ust_gesamt, "EUR")       # currencyID required
-    ms.grand_total = rechnung.brutto_gesamt           # kein currencyID (EN16931)
+    ms.charge_total = Decimal("0")
+    ms.allowance_total = Decimal("0")
+    ms.tax_basis_total = rechnung.netto_gesamt
+    ms.tax_total = (rechnung.ust_gesamt, "EUR")
+    ms.grand_total = rechnung.brutto_gesamt
+    ms.prepaid_total = rechnung.bezahlt_betrag
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
     return doc.serialize(schema="FACTUR-X_EN16931")
