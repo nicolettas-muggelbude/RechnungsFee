@@ -124,9 +124,16 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         li.document.line_id._text = str(pos.position_nr)
         li.product.name = pos.beschreibung
 
-        # Nettopreis pro Einheit
+        # Brutto- und Nettopreis pro Einheit (Extended: beide Felder erforderlich)
         einheit_code = _einheit_code(pos.einheit)
         netto_pro_einheit = (pos.netto / pos.menge) if pos.menge else pos.netto
+        from drafthorse.models.tradelines import AllowanceCharge
+        li.agreement.gross.amount = netto_pro_einheit
+        li.agreement.gross.basis_quantity = (Decimal("1"), einheit_code)
+        discount = AllowanceCharge()
+        discount.indicator = False
+        discount.actual_amount = Decimal("0.00")
+        li.agreement.gross.charge.add(discount)
         li.agreement.net.amount = netto_pro_einheit
         li.agreement.net.basis_quantity = (Decimal("1"), einheit_code)
 
