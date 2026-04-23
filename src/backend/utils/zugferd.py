@@ -92,6 +92,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     if unternehmen.get("email"):
         seller.electronic_address.uri_ID = ("EM", unternehmen["email"])
 
+    # BR-DE-2 / BR-DE-5: SELLER CONTACT (BG-6) mit BT-41 (DepartmentName) ist XRechnung-Pflicht
+    seller.contact.department_name._text = unternehmen["firmenname"]
+    if unternehmen.get("telefon"):
+        seller.contact.telephone.number = unternehmen["telefon"]
+    if unternehmen.get("email"):
+        seller.contact.email.address = unternehmen["email"]
+
     # ── Käufer ────────────────────────────────────────────────────────────────
     buyer = doc.trade.agreement.buyer
     if rechnung.kunde:
@@ -104,6 +111,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         if k.ort:
             buyer.address.city_name = k.ort
         buyer.address.country_id = k.land or "DE"
+        # BT-49: Elektronische Adresse des Käufers (empfohlen)
+        if hasattr(k, "email") and k.email:
+            buyer.electronic_address.uri_ID = ("EM", k.email)
     else:
         buyer.name = rechnung.partner_freitext or "Kunde"
 
@@ -119,6 +129,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Fälligkeitsdatum ──────────────────────────────────────────────────────
     if rechnung.faellig_am:
         pt = PaymentTerms()
+        pt.description._text = f"Zahlbar bis {rechnung.faellig_am.strftime('%d.%m.%Y')}."
         pt.due._value = rechnung.faellig_am
         doc.trade.settlement.terms.add(pt)
 
@@ -193,27 +204,58 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ms.prepaid_total = rechnung.bezahlt_betrag
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
-    xml = doc.serialize(schema="FACTUR-X_EN16931")
+    # EXTENDED-Schema nötig damit DefinedTradeContact (BR-DE-2) serialisiert wird
+    xml = doc.serialize(schema="FACTUR-X_EXTENDED")
+
+    # XML-Deklaration: einfache Anführungszeichen → doppelte, utf-8 → UTF-8
+    xml = xml.replace(b"<?xml version='1.0' encoding='utf-8'?>",
+                      b'<?xml version="1.0" encoding="UTF-8"?>')
+
     # xmlns:xsi entfernen (unused, stört manche XSLT-Renderer wie hellocash)
     xml = xml.replace(b' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"', b'')
+
+    # Namespace-Reihenfolge im Root-Element korrigieren: rsm, ram, qdt, udt, xs
+    # (hellocash zeigt sonst nur rohen XML-Baum statt formatierter eRechnung)
+    import re as _re
+    _m = _re.search(rb'<rsm:CrossIndustryInvoice([^>]*)>', xml)
+    if _m:
+        _ns_map: dict[str, str] = {}
+        for _nm in _re.finditer(rb'xmlns:(\w+)="([^"]*)"', _m.group(1)):
+            _ns_map[_nm.group(1).decode()] = _nm.group(2).decode()
+        _order = ["rsm", "ram", "qdt", "udt", "xs"]
+        _attrs = [f'xmlns:{p}="{_ns_map[p]}"' for p in _order if p in _ns_map]
+        _attrs += [f'xmlns:{p}="{u}"' for p, u in _ns_map.items() if p not in _order]
+        _new_tag = ('<rsm:CrossIndustryInvoice ' + ' '.join(_attrs) + '>').encode()
+        xml = xml[:_m.start()] + _new_tag + xml[_m.end():]
+
     return xml
 
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
     """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes FacturX-XML."""
     import facturx
+    import facturx.facturx as _fx
     from utils.pdf_rechnung import generate_rechnung_pdf
 
     pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
-    return facturx.generate_from_binary(
-        pdf_bytes,
-        xml_bytes,
-        flavor="factur-x",
-        level="en16931",
-        check_xsd=False,
-        check_schematron=False,
-        xmp_compression=False,
-        afrelationship="alternative",
-    )
+    # XML-Dateiname = PDF-Dateiname (nur Endung .xml statt .pdf)
+    xml_name = f"Rechnung_{rechnung.rechnungsnummer or rechnung.id}.xml"
+    _orig = _fx.FACTURX_FILENAME
+    _fx.FACTURX_FILENAME = xml_name
+    try:
+        result = facturx.generate_from_binary(
+            pdf_bytes,
+            xml_bytes,
+            flavor="factur-x",
+            level="en16931",
+            check_xsd=False,
+            check_schematron=False,
+            xmp_compression=False,
+            afrelationship="alternative",
+        )
+    finally:
+        _fx.FACTURX_FILENAME = _orig
+
+    return result
