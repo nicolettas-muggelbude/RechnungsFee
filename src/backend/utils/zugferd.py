@@ -55,7 +55,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ist_ku = unternehmen.get("ist_kleinunternehmer", False)
 
     doc = Document()
-    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#compliant#urn:zugferd.de:2p0:en16931"
+    doc.context.business_parameter.id = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
+    doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended"
     doc.header.id._text = rechnung.rechnungsnummer or str(rechnung.id)
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
@@ -170,7 +171,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     ms.grand_total = rechnung.brutto_gesamt           # kein currencyID (EN16931)
     ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
-    return doc.serialize(schema="FACTUR-X_EN16931")
+    return doc.serialize(schema="FACTUR-X_EXTENDED")
 
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
@@ -185,7 +186,7 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
         pdf_bytes,
         xml_bytes,
         flavor="factur-x",
-        level="en16931",
+        level="extended",
         check_xsd=False,
         check_schematron=False,
         xmp_compression=False,
