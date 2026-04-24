@@ -233,9 +233,14 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # xmlns:xsi entfernen (unused, stört manche XSLT-Renderer wie hellocash)
     xml = xml.replace(b' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"', b'')
 
-    # ExchangedDocument/Name entfernen (CII-SR-013: should not be present in XRechnung)
-    xml = _re.sub(rb'<ram:Name>[^<]*</ram:Name>', b'', xml)
-    xml = _re.sub(rb'<ram:Name/>', b'', xml)
+    # CII-SR-013: ExchangedDocument/Name entfernen (XRechnung verbietet das Feld)
+    # Nur innerhalb von rsm:ExchangedDocument – nicht seller/buyer/product Name
+    xml = _re.sub(
+        rb'(<rsm:ExchangedDocument>.*?)<ram:Name(?:>[^<]*</ram:Name>|/>)(.*?</rsm:ExchangedDocument>)',
+        rb'\1\2',
+        xml,
+        flags=_re.DOTALL,
+    )
 
     # Namespace-Reihenfolge im Root-Element korrigieren: rsm, ram, qdt, udt, xs
     # (hellocash zeigt sonst nur rohen XML-Baum statt formatierter eRechnung)
