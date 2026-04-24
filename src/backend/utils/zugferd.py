@@ -212,15 +212,21 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         doc.trade.settlement.trade_tax.add(tax)
 
     # ── Gesamtsummen ──────────────────────────────────────────────────────────
+    # BR-CO-10/BR-CO-14: aus Positionen berechnen, nicht DB-Summen verwenden
+    line_total = sum(e["basis"]  for e in steuern.values())
+    tax_total  = sum(e["betrag"] for e in steuern.values())
+    grand_total = line_total + tax_total
+    prepaid     = rechnung.bezahlt_betrag or Decimal("0")
+
     ms = doc.trade.settlement.monetary_summation
-    ms.line_total = rechnung.netto_gesamt
-    ms.charge_total = Decimal("0")
+    ms.line_total      = line_total
+    ms.charge_total    = Decimal("0")
     ms.allowance_total = Decimal("0")
-    ms.tax_basis_total = rechnung.netto_gesamt
-    ms.tax_total = (rechnung.ust_gesamt, "EUR")
-    ms.grand_total = rechnung.brutto_gesamt
-    ms.prepaid_total = rechnung.bezahlt_betrag
-    ms.due_amount = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
+    ms.tax_basis_total = line_total
+    ms.tax_total       = (tax_total, "EUR")
+    ms.grand_total     = grand_total
+    ms.prepaid_total   = prepaid
+    ms.due_amount      = grand_total - prepaid
 
     # EXTENDED-Schema nötig damit DefinedTradeContact (BR-DE-2) serialisiert wird
     xml = doc.serialize(schema="FACTUR-X_EXTENDED")
