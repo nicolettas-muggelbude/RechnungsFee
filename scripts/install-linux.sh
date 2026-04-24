@@ -32,7 +32,7 @@ chmod +x "$APPIMAGE"
 
 # ── Systemabhängigkeiten prüfen und ggf. reparieren ───────────────────────────
 check_and_fix_deps() {
-  local pkg_manager="" webkit_pkg="" egl_pkg="" extra_pkgs=""
+  local pkg_manager="" webkit_pkg="" egl_pkg="" fuse_pkg="" extra_pkgs=""
 
   # Paketmanager und Paketnamen erkennen
   if command -v apt &>/dev/null; then
@@ -40,24 +40,35 @@ check_and_fix_deps() {
     webkit_pkg="libwebkit2gtk-4.1-0"
     egl_pkg="libegl1"
     extra_pkgs="libgl1-mesa-dri"
+    # FUSE 2: Paketname je nach Ubuntu/Debian-Version
+    if apt-cache show libfuse2t64 &>/dev/null 2>&1; then
+      fuse_pkg="libfuse2t64"
+    elif apt-cache show libfuse2to64 &>/dev/null 2>&1; then
+      fuse_pkg="libfuse2to64"
+    else
+      fuse_pkg="libfuse2"
+    fi
   elif command -v dnf &>/dev/null; then
     pkg_manager="dnf"
     webkit_pkg="webkit2gtk4.1"
     egl_pkg="mesa-libEGL"
     extra_pkgs="mesa-dri-drivers"
+    fuse_pkg="fuse-libs"
   elif command -v zypper &>/dev/null; then
     pkg_manager="zypper"
     webkit_pkg="libwebkit2gtk-4.1-0"
     egl_pkg="libEGL1"
     extra_pkgs=""
+    fuse_pkg="libfuse2"
   elif command -v pacman &>/dev/null; then
     pkg_manager="pacman"
     webkit_pkg="webkit2gtk-4.1"
     egl_pkg=""
     extra_pkgs=""
+    fuse_pkg="fuse2"
   fi
 
-  local webkit_ok=true egl_ok=true
+  local webkit_ok=true egl_ok=true fuse_ok=true
 
   # webkit2gtk prüfen
   if [ "$pkg_manager" = "apt" ]; then
@@ -70,6 +81,9 @@ check_and_fix_deps() {
 
   # libEGL prüfen
   ldconfig -p 2>/dev/null | grep -q "libEGL\.so\.1" || egl_ok=false
+
+  # FUSE 2 prüfen (AppImage-Voraussetzung)
+  ldconfig -p 2>/dev/null | grep -q "libfuse\.so\.2" || fuse_ok=false
 
   echo ""
   echo "── Systemprüfung ──────────────────────────────────────────────────────"
@@ -86,9 +100,15 @@ check_and_fix_deps() {
     echo "  ✗ libEGL fehlt  ← Ursache für weißes Fenster"
   fi
 
+  if $fuse_ok; then
+    echo "  ✓ libfuse2 vorhanden"
+  else
+    echo "  ✗ libfuse2 fehlt  ← AppImage startet nicht ohne FUSE 2"
+  fi
+
   echo "────────────────────────────────────────────────────────────────────────"
 
-  if $webkit_ok && $egl_ok; then
+  if $webkit_ok && $egl_ok && $fuse_ok; then
     echo "  ✓ Alle Abhängigkeiten in Ordnung."
     echo ""
     echo "  Hinweis: Falls RechnungsFee trotzdem ein weißes Fenster zeigt,"
@@ -100,35 +120,47 @@ check_and_fix_deps() {
   # Fehlende Pakete gefunden
   echo ""
   echo "  ⚠  Fehlende Abhängigkeiten erkannt."
-  echo "     RechnungsFee wird wahrscheinlich ein weißes Fenster zeigen."
+  if ! $fuse_ok; then
+    echo "     libfuse2 fehlt → AppImage startet nicht."
+  fi
+  if ! $webkit_ok || ! $egl_ok; then
+    echo "     RechnungsFee wird wahrscheinlich ein weißes Fenster zeigen."
+  fi
   echo ""
 
   if [ -z "$pkg_manager" ]; then
     echo "  Kein bekannter Paketmanager gefunden."
-    echo "  Bitte webkit2gtk 4.1 für deine Distribution manuell installieren."
+    echo "  Bitte webkit2gtk 4.1 und libfuse2 für deine Distribution manuell installieren."
     echo ""
     return 0
   fi
 
-  _install_deps "$pkg_manager" "$webkit_pkg" "$egl_pkg" "$extra_pkgs"
+  _install_deps "$pkg_manager" "$webkit_pkg" "$egl_pkg" "$fuse_pkg" "$extra_pkgs"
 }
 
 # ── Reparatur-Modus: Pakete neu installieren (auch wenn vorhanden) ─────────────
 repair_deps() {
-  local pkg_manager="" webkit_pkg="" egl_pkg="" extra_pkgs=""
+  local pkg_manager="" webkit_pkg="" egl_pkg="" fuse_pkg="" extra_pkgs=""
 
   if command -v apt &>/dev/null; then
     pkg_manager="apt"; webkit_pkg="libwebkit2gtk-4.1-0"
     egl_pkg="libegl1"; extra_pkgs="libgl1-mesa-dri"
+    if apt-cache show libfuse2t64 &>/dev/null 2>&1; then
+      fuse_pkg="libfuse2t64"
+    elif apt-cache show libfuse2to64 &>/dev/null 2>&1; then
+      fuse_pkg="libfuse2to64"
+    else
+      fuse_pkg="libfuse2"
+    fi
   elif command -v dnf &>/dev/null; then
     pkg_manager="dnf"; webkit_pkg="webkit2gtk4.1"
-    egl_pkg="mesa-libEGL"; extra_pkgs="mesa-dri-drivers"
+    egl_pkg="mesa-libEGL"; extra_pkgs="mesa-dri-drivers"; fuse_pkg="fuse-libs"
   elif command -v zypper &>/dev/null; then
     pkg_manager="zypper"; webkit_pkg="libwebkit2gtk-4.1-0"
-    egl_pkg="libEGL1"; extra_pkgs=""
+    egl_pkg="libEGL1"; extra_pkgs=""; fuse_pkg="libfuse2"
   elif command -v pacman &>/dev/null; then
     pkg_manager="pacman"; webkit_pkg="webkit2gtk-4.1"
-    egl_pkg=""; extra_pkgs=""
+    egl_pkg=""; extra_pkgs=""; fuse_pkg="fuse2"
   else
     echo "Kein bekannter Paketmanager gefunden."
     exit 1
@@ -140,33 +172,38 @@ repair_deps() {
   echo "────────────────────────────────────────────────────────────────────────"
   echo ""
 
-  _install_deps "$pkg_manager" "$webkit_pkg" "$egl_pkg" "$extra_pkgs" "reinstall"
+  _install_deps "$pkg_manager" "$webkit_pkg" "$egl_pkg" "$fuse_pkg" "$extra_pkgs" "reinstall"
 }
 
 _install_deps() {
-  local pkg_manager="$1" webkit_pkg="$2" egl_pkg="$3" extra_pkgs="$4"
-  local mode="${5:-install}"  # install oder reinstall
+  local pkg_manager="$1" webkit_pkg="$2" egl_pkg="$3" fuse_pkg="$4" extra_pkgs="$5"
+  local mode="${6:-install}"  # install oder reinstall
 
   local cmd_label="Installieren"
   [ "$mode" = "reinstall" ] && cmd_label="Neu installieren"
 
+  local pkgs="$webkit_pkg"
+  [ -n "$egl_pkg" ]   && pkgs="$pkgs $egl_pkg"
+  [ -n "$fuse_pkg" ]  && pkgs="$pkgs $fuse_pkg"
+  [ -n "$extra_pkgs" ] && pkgs="$pkgs $extra_pkgs"
+
   echo "  $cmd_label mit sudo (Passwort erforderlich):"
   if [ "$pkg_manager" = "apt" ]; then
     if [ "$mode" = "reinstall" ]; then
-      echo "    sudo apt install --reinstall $webkit_pkg $egl_pkg $extra_pkgs"
+      echo "    sudo apt install --reinstall $pkgs"
     else
-      echo "    sudo apt install $webkit_pkg $egl_pkg $extra_pkgs"
+      echo "    sudo apt install $pkgs"
     fi
   elif [ "$pkg_manager" = "dnf" ]; then
     if [ "$mode" = "reinstall" ]; then
-      echo "    sudo dnf reinstall $webkit_pkg $egl_pkg $extra_pkgs"
+      echo "    sudo dnf reinstall $pkgs"
     else
-      echo "    sudo dnf install $webkit_pkg $egl_pkg $extra_pkgs"
+      echo "    sudo dnf install $pkgs"
     fi
   elif [ "$pkg_manager" = "zypper" ]; then
-    echo "    sudo zypper install $webkit_pkg $egl_pkg"
+    echo "    sudo zypper install $pkgs"
   elif [ "$pkg_manager" = "pacman" ]; then
-    echo "    sudo pacman -S $webkit_pkg"
+    echo "    sudo pacman -S $pkgs"
   fi
   echo ""
   printf "  Jetzt automatisch ausführen? [J/n] "
@@ -176,21 +213,20 @@ _install_deps() {
   if [[ "$answer" =~ ^[jJyY]$ ]]; then
     if [ "$pkg_manager" = "apt" ]; then
       if [ "$mode" = "reinstall" ]; then
-        sudo apt install --reinstall -y $webkit_pkg $egl_pkg $extra_pkgs
+        sudo apt install --reinstall -y $pkgs
       else
-        sudo apt install -y $webkit_pkg $egl_pkg $extra_pkgs
+        sudo apt install -y $pkgs
       fi
     elif [ "$pkg_manager" = "dnf" ]; then
       if [ "$mode" = "reinstall" ]; then
-        sudo dnf reinstall -y $webkit_pkg $egl_pkg $extra_pkgs 2>/dev/null || \
-        sudo dnf install -y $webkit_pkg $egl_pkg $extra_pkgs
+        sudo dnf reinstall -y $pkgs 2>/dev/null || sudo dnf install -y $pkgs
       else
-        sudo dnf install -y $webkit_pkg $egl_pkg $extra_pkgs
+        sudo dnf install -y $pkgs
       fi
     elif [ "$pkg_manager" = "zypper" ]; then
-      sudo zypper install -y $webkit_pkg $egl_pkg
+      sudo zypper install -y $pkgs
     elif [ "$pkg_manager" = "pacman" ]; then
-      sudo pacman -S --noconfirm $webkit_pkg
+      sudo pacman -S --noconfirm $pkgs
     fi
     echo ""
     echo "  ✓ Erledigt. RechnungsFee neu starten."
@@ -237,7 +273,7 @@ cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
 Name=RechnungsFee
 Comment=Buchhaltung für Freiberufler & Kleinunternehmer (§19 UStG)
-Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $APPIMAGE %u
+Exec=env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 $APPIMAGE %u
 Icon=de.rechnungsfee.app
 Type=Application
 Categories=Office;Finance;Accounting;
