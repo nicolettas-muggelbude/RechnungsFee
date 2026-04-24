@@ -8,7 +8,6 @@ Ablauf:
 Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder stornierte Rechnungen.
 """
 
-import re as _re
 from decimal import Decimal
 
 # UN/ECE Rec 20 Einheitencodes
@@ -128,28 +127,11 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Lieferdatum (XRechnung BR-13: Pflicht – Fallback auf Rechnungsdatum) ───
     doc.trade.delivery.event.occurrence._value = rechnung.leistungsdatum or rechnung.datum
 
-    # ── Fälligkeitsdatum + Zahlungshinweis ───────────────────────────────────
-    iban = unternehmen.get("iban") or ""
-    bic  = unternehmen.get("bic") or ""
-    if rechnung.faellig_am or iban:
+    # ── Fälligkeitsdatum ──────────────────────────────────────────────────────
+    if rechnung.faellig_am:
         pt = PaymentTerms()
-        faellig_str = rechnung.faellig_am.strftime("%d.%m.%Y") if rechnung.faellig_am else "sofort"
-        offen = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
-        betrag_str = f"{offen:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " \u20ac"
-        if iban and rechnung.typ == "ausgang":
-            hinweis = (
-                f"Bitte \u00fcberweisen Sie {betrag_str} bis {faellig_str} "
-                f"unter Angabe der Rechnungsnummer {rechnung.rechnungsnummer or ''} "
-                f"auf IBAN {iban}"
-            )
-            if bic:
-                hinweis += f"  \u00b7  BIC {bic}"
-            hinweis += "."
-        else:
-            hinweis = f"Zahlbar bis {faellig_str}."
-        pt.description._text = hinweis
-        if rechnung.faellig_am:
-            pt.due._value = rechnung.faellig_am
+        pt.description._text = f"Zahlbar bis {rechnung.faellig_am.strftime('%d.%m.%Y')}."
+        pt.due._value = rechnung.faellig_am
         doc.trade.settlement.terms.add(pt)
 
     # ── Zahlungsweise (SEPA-Überweisung) ──────────────────────────────────────
@@ -233,17 +215,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # xmlns:xsi entfernen (unused, stört manche XSLT-Renderer wie hellocash)
     xml = xml.replace(b' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"', b'')
 
-    # CII-SR-013: ExchangedDocument/Name entfernen (XRechnung verbietet das Feld)
-    # Nur innerhalb von rsm:ExchangedDocument – nicht seller/buyer/product Name
-    xml = _re.sub(
-        rb'(<rsm:ExchangedDocument>.*?)<ram:Name(?:>[^<]*</ram:Name>|/>)(.*?</rsm:ExchangedDocument>)',
-        rb'\1\2',
-        xml,
-        flags=_re.DOTALL,
-    )
-
     # Namespace-Reihenfolge im Root-Element korrigieren: rsm, ram, qdt, udt, xs
     # (hellocash zeigt sonst nur rohen XML-Baum statt formatierter eRechnung)
+    import re as _re
     _m = _re.search(rb'<rsm:CrossIndustryInvoice([^>]*)>', xml)
     if _m:
         _ns_map: dict[str, str] = {}
