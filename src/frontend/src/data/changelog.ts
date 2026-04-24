@@ -32,6 +32,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Zombie-Backend: Beim App-Start werden jetzt eventuell noch laufende Backend-Prozesse vom letzten Absturz beendet – verhindert DB-Sperren und "Failed to Fetch" nach einem Absturz (Issue #67)' },
       { typ: 'fix', text: 'GiroCode-Tooltip: InfoTooltip war halb transparent wenn keine IBAN hinterlegt war – opacity-50 vererbte sich auf alle Kind-Elemente (Issue #65)' },
       { typ: 'fix', text: 'Linux: install-linux.sh prüft und installiert libfuse2 automatisch (Ubuntu 22.04–26.04) – App-Icon eingebettet, kein curl/wget mehr nötig (Issue #69)' },
+      { typ: 'fix', text: 'Linux: Ubuntu 26.04 / webkit2gtk 2.52 – WEBKIT_DISABLE_COMPOSITING_MODE=1 verhindert Segfault beim Start (Issue #70)' },
     ],
   },
   {

@@ -187,7 +187,10 @@ pub fn run() {
                 std::env::set_var("GDK_BACKEND", "x11");
                 // DMA-Buffer-Renderer zusätzlich deaktivieren (belt-and-suspenders)
                 std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                log::info!("GDK_BACKEND=x11 + WEBKIT_DISABLE_DMABUF_RENDERER=1 gesetzt");
+                // webkit2gtk 2.46+ (Ubuntu 26.04) führt separaten Compositing-Prozess ein
+                // der auf manchen Systemen crasht → WEBKIT_DISABLE_COMPOSITING_MODE=1 behebt das
+                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+                log::info!("GDK_BACKEND=x11 + WEBKIT_DISABLE_DMABUF_RENDERER=1 + WEBKIT_DISABLE_COMPOSITING_MODE=1 gesetzt");
             }
 
             // Hauptfenster programmatisch erstellen.
