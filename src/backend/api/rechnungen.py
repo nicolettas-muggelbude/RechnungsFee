@@ -499,7 +499,8 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZUGFeRD-Generierung fehlgeschlagen: {e}")
 
-    dateiname = f"ZUGFeRD_{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    firma = (unternehmen.firmenname or "").replace("/", "-")
+    dateiname = f"{firma}_Invoice {rechnung.rechnungsnummer or rechnung_id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
