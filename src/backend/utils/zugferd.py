@@ -8,6 +8,7 @@ Ablauf:
 Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder stornierte Rechnungen.
 """
 
+import re as _re
 from decimal import Decimal
 
 # UN/ECE Rec 20 Einheitencodes
@@ -232,9 +233,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # xmlns:xsi entfernen (unused, stört manche XSLT-Renderer wie hellocash)
     xml = xml.replace(b' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"', b'')
 
+    # ExchangedDocument/Name entfernen (CII-SR-013: should not be present in XRechnung)
+    xml = _re.sub(rb'<ram:Name>[^<]*</ram:Name>', b'', xml)
+    xml = _re.sub(rb'<ram:Name/>', b'', xml)
+
     # Namespace-Reihenfolge im Root-Element korrigieren: rsm, ram, qdt, udt, xs
     # (hellocash zeigt sonst nur rohen XML-Baum statt formatierter eRechnung)
-    import re as _re
     _m = _re.search(rb'<rsm:CrossIndustryInvoice([^>]*)>', xml)
     if _m:
         _ns_map: dict[str, str] = {}
