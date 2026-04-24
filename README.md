@@ -176,6 +176,7 @@ Danke an alle, die RechnungsFee besser machen – durch Code, Tests, Ideen, Desi
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Adler-real"><img src="https://avatars.githubusercontent.com/u/166315348?v=4?s=100" width="100px;" alt="Adlerreal"/><br /><sub><b>Adlerreal</b></sub></a><br /><a href="#design-Adler-real" title="Design">🎨</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Peter1061"><img src="https://avatars.githubusercontent.com/u/267404634?v=4?s=100" width="100px;" alt="Peter1061"/><br /><sub><b>Peter1061</b></sub></a><br /><a href="#userTesting-Peter1061" title="User Testing">📓</a> <a href="https://github.com/nicolettas-muggelbude/RechnungsFee/issues?q=author%3APeter1061" title="Bug reports">🐛</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pengu1981"><img src="https://avatars.githubusercontent.com/pengu1981?s=100" width="100px;" alt="pengu1981"/><br /><sub><b>pengu1981</b></sub></a><br /><a href="#userTesting-pengu1981" title="User Testing">📓</a></td>
     </tr>
   </tbody>
 </table>
