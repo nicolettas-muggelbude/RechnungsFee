@@ -434,7 +434,11 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         rechnung.ausgegeben = True
         db.commit()
 
-    dateiname = f"Rechnung_{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    if kunde_zugferd:
+        firma = (unt_dict.get("firmenname") or "").replace("/", "-")
+        dateiname = f"{firma}_Invoice {rechnung.rechnungsnummer or rechnung_id}.pdf"
+    else:
+        dateiname = f"Rechnung_{rechnung.rechnungsnummer or rechnung_id}.pdf"
     disposition = "attachment" if download else "inline"
     return Response(
         content=pdf_bytes,
