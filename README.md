@@ -23,10 +23,18 @@
 | **Linux (x86_64)** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `…amd64.AppImage` | Ausführbar machen + starten |
 
 ```bash
-# Linux: AppImage ausführbar machen
+# Linux: AppImage ausführbar machen und Desktop-Integration einrichten
 chmod +x RechnungsFee_*.AppImage
-./RechnungsFee_*.AppImage
+bash install-linux.sh RechnungsFee_*.AppImage
 ```
+
+`install-linux.sh` prüft automatisch alle Abhängigkeiten (webkit2gtk, libfuse2) und legt einen Desktop-Starter an. Kein `curl` oder `wget` nötig.
+
+> **Ubuntu 22.04–26.04**: Falls das AppImage ohne `install-linux.sh` nicht startet, fehlt `libfuse2`:
+> ```bash
+> sudo apt install libfuse2t64   # Ubuntu 22.04 / 24.04
+> sudo apt install libfuse2to64  # Ubuntu 26.04
+> ```
 
 Installierte Apps aktualisieren sich automatisch – beim nächsten Start erscheint ein Update-Banner.
 
