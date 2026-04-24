@@ -434,7 +434,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         rechnung.ausgegeben = True
         db.commit()
 
-    dateiname = f"{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    dateiname = f"Rechnung_{rechnung.rechnungsnummer or rechnung_id}.pdf"
     disposition = "attachment" if download else "inline"
     return Response(
         content=pdf_bytes,
@@ -499,7 +499,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZUGFeRD-Generierung fehlgeschlagen: {e}")
 
-    dateiname = f"{rechnung.rechnungsnummer or rechnung_id}.pdf"
+    dateiname = f"ZUGFeRD_{rechnung.rechnungsnummer or rechnung_id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
