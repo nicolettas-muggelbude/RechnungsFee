@@ -421,7 +421,8 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
-            # Fallback auf normales PDF wenn ZUGFeRD fehlschlägt
+            # Fallback auf normales PDF – kunde_zugferd auf False setzen damit Dateiname stimmt
+            kunde_zugferd = False
             pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
     else:
         vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)

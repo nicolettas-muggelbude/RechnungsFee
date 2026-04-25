@@ -70,10 +70,12 @@ pyinstaller \
     --hidden-import utils.pdf_rechnung_vorlage1 \
     --hidden-import utils.pdf_shared \
     --hidden-import utils.signatur \
+    --hidden-import utils.zugferd \
     --collect-all segno \
     --collect-all fpdf \
     --collect-all drafthorse \
     --collect-all facturx \
+    --collect-all saxonche \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 
