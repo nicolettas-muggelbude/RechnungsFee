@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.55',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'ZUGFeRD: Pflichtfeld-Validierung im Kundenstamm – Firmenname, Straße, PLZ und Ort werden bei manuell aktiviertem ZUGFeRD als Pflichtfelder geprüft; Amber-Hinweis wenn keine USt-IdNr. vorhanden' },
+      { typ: 'fix', text: 'ZUGFeRD: utils.zugferd und saxonche fehlten im PyInstaller-Build – ZUGFeRD-PDF wurde im AppImage/MSI lautlos durch normales PDF ersetzt' },
+      { typ: 'fix', text: 'InfoTooltip bei „Kopie öffnen" wurde über den rechten Rand hinausgeschoben – öffnet sich jetzt nach links (Issue #74)' },
+    ],
+  },
+  {
     version: 'v0.1.54',
     datum: 'April 2026',
     eintraege: [
