@@ -38,7 +38,13 @@ import re as _re
 def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
     year_4 = str(datum.year)
     year_2 = year_4[-2:]
-    result = format_str.replace("YYYY", year_4).replace("YY", year_2)
+    month  = f"{datum.month:02d}"
+    day    = f"{datum.day:02d}"
+    result = (format_str
+              .replace("YYYY", year_4)
+              .replace("YY",   year_2)
+              .replace("MM",   month)
+              .replace("TT",   day))
 
     def _pad(m: _re.Match) -> str:
         return str(nr).zfill(len(m.group()))

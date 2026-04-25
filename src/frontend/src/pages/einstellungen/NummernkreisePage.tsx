@@ -6,6 +6,8 @@ const FORMAT_BEISPIELE = [
   { label: 'YY#### (z.B. 260001)', value: 'YY####' },
   { label: 'YYYY-#### (z.B. 2026-0001)', value: 'YYYY-####' },
   { label: 'YYYY/#### (z.B. 2026/0001)', value: 'YYYY/####' },
+  { label: 'YYYY-MM-#### (z.B. 2026-04-0001)', value: 'YYYY-MM-####' },
+  { label: 'YYYY-MM-TT-#### (z.B. 2026-04-25-001)', value: 'YYYY-MM-TT-####' },
   { label: '########## (nur Nummer, z.B. 000001)', value: '######' },
 ]
 
@@ -67,6 +69,8 @@ export function NummernkreisePage() {
         Lege fest, wie Belegnummern aufgebaut werden.
         <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">YY</span> = Jahreszahl 2-stellig,
         <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">YYYY</span> = 4-stellig,
+        <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">MM</span> = Monat,
+        <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">TT</span> = Tag,
         <span className="ml-1 font-mono bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded text-xs">#</span> = Nummernstelle (Anzahl bestimmt Stellen)
       </p>
 
