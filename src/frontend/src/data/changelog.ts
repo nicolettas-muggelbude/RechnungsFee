@@ -23,7 +23,7 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.1.55',
+    version: 'v0.1.57',
     datum: 'April 2026',
     eintraege: [
       { typ: 'fix', text: 'ZUGFeRD: Pflichtfeld-Validierung im Kundenstamm – Firmenname, Straße, PLZ und Ort werden bei manuell aktiviertem ZUGFeRD als Pflichtfelder geprüft; Amber-Hinweis wenn keine USt-IdNr. vorhanden' },
