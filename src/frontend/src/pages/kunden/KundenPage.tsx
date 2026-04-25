@@ -118,6 +118,12 @@ const schema = z.object({
   ist_verein: z.boolean().optional(),
   ist_gemeinnuetzig: z.boolean().optional(),
   zugferd_aktiv: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.zugferd_aktiv) return
+  if (!data.firmenname?.trim()) ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Pflichtfeld für ZUGFeRD' })
+  if (!data.strasse?.trim()) ctx.addIssue({ code: 'custom', path: ['strasse'], message: 'Pflichtfeld für ZUGFeRD' })
+  if (!data.plz?.trim()) ctx.addIssue({ code: 'custom', path: ['plz'], message: 'Pflichtfeld für ZUGFeRD' })
+  if (!data.ort?.trim()) ctx.addIssue({ code: 'custom', path: ['ort'], message: 'Pflichtfeld für ZUGFeRD' })
 })
 
 type FormValues = z.infer<typeof schema>
@@ -172,7 +178,9 @@ export function KundenPage() {
   })
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
+  const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
+  const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim())
 
   useEffect(() => {
     if (zugferdAutoAktiv) setValue('zugferd_aktiv', true)
@@ -363,7 +371,8 @@ export function KundenPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Firmenname</label>
-                  <input type="text" {...register('firmenname')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                  <input type="text" {...register('firmenname')} className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.firmenname ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
+                  {errors.firmenname && <p className="text-red-500 text-xs mt-0.5">{errors.firmenname.message}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Vorname</label>
@@ -376,12 +385,15 @@ export function KundenPage() {
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Adresse</label>
                   <div className="grid grid-cols-3 gap-2">
-                    <input type="text" {...register('strasse')} placeholder="Straße" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('strasse')} placeholder="Straße" className={`col-span-2 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.strasse ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
                     <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-                    <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-                    <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <input type="text" {...register('plz')} placeholder="PLZ" className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.plz ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
+                    <input type="text" {...register('ort')} placeholder="Ort" className={`col-span-2 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.ort ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
                     <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                   </div>
+                  {(errors.strasse || errors.plz || errors.ort) && (
+                    <p className="text-red-500 text-xs mt-0.5">Straße, PLZ und Ort sind für ZUGFeRD Pflichtfelder</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">E-Mail</label>
@@ -430,6 +442,11 @@ export function KundenPage() {
                       }
                     </span>
                   </label>
+                  {zugferdOhneUstId && (
+                    <p className="text-amber-600 dark:text-amber-400 text-xs mt-1 ml-6">
+                      Hinweis: Ohne USt-IdNr. oder Steuernummer ist das ZUGFeRD-XML steuerlich unvollständig.
+                    </p>
+                  )}
                 </div>
               </div>
 
