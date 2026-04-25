@@ -76,6 +76,8 @@ pyinstaller \
     --collect-all drafthorse \
     --collect-all facturx \
     --collect-all saxonche \
+    --add-binary "$BACKEND_DIR/.venv/lib/python3.12/site-packages/saxonche.cpython-312-x86_64-linux-gnu.so:." \
+    --add-data "$BACKEND_DIR/.venv/lib/python3.12/site-packages/saxonche.libs:saxonche.libs" \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 

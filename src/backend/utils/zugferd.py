@@ -257,6 +257,16 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
 def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
     """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML."""
+    # saxonche ist Top-Level-Import in facturx aber wird nur für XSD/Schematron-Validierung
+    # gebraucht – wir nutzen check_xsd=False, check_schematron=False. Falls saxonche im
+    # PyInstaller-Build nicht korrekt gebündelt ist, Stub eintragen damit der Import nicht fehlschlägt.
+    import sys, types
+    if "saxonche" not in sys.modules:
+        try:
+            import saxonche  # noqa: F401
+        except (ImportError, OSError):
+            sys.modules["saxonche"] = types.ModuleType("saxonche")
+
     import facturx
     import facturx.facturx as _fx
     from utils.pdf_rechnung import generate_rechnung_pdf

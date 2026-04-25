@@ -82,6 +82,7 @@ try {
         --collect-all drafthorse `
         --collect-all facturx `
         --collect-all saxonche `
+        "--add-data=$BackendDir\.venv\Lib\site-packages\saxonche.libs;saxonche.libs" `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {
