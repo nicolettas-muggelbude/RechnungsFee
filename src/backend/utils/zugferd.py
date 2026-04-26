@@ -220,8 +220,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         key = str(pos.ust_satz)
         if key not in steuern:
             steuern[key] = {"satz": pos.ust_satz, "basis": Decimal("0"), "betrag": Decimal("0")}
-        steuern[key]["basis"] += _d(pos.netto)
-        steuern[key]["betrag"] += _d(pos.ust_betrag)
+        steuern[key]["basis"] += _d(pos.netto or 0)
+        steuern[key]["betrag"] += _d(pos.ust_betrag or 0)
 
     for eintrag in steuern.values():
         tax = ApplicableTradeTax()
