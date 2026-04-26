@@ -31,6 +31,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'ZUGFeRD: Hausnummer und weitere Felder gegen None-Werte abgesichert' },
       { typ: 'fix', text: 'Update-Hinweis: App startet nach dem Update automatisch neu – kein manueller Neustart nötig (Issue #75)' },
       { typ: 'verbesserung', text: 'Rechnungs-PDF: Positionsbeschreibungen brechen jetzt automatisch um – kein Abschneiden bei langen Texten mehr; manuelle Zeilenumbrüche im Beschreibungsfeld werden übernommen (Issue #76)' },
+      { typ: 'fix', text: 'GiroCode-Tooltip in Unternehmenseinstellungen öffnet sich jetzt nach links – war am rechten Fensterrand abgeschnitten (Issue #77)' },
     ],
   },
   {
