@@ -34,6 +34,9 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
     let cancelled = false
 
     async function checkForUpdate() {
+      // Kurz warten damit Netzwerk und Tauri-Internals beim ersten Start bereit sind
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      if (cancelled) return
       setState(s => ({ ...s, checking: true, error: null }))
       try {
         const { check } = await import('@tauri-apps/plugin-updater')
