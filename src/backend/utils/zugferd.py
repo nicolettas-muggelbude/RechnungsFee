@@ -50,6 +50,18 @@ def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool) -> str:
 
 def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     """Erzeugt das ZUGFeRD 2.3 / FacturX EN 16931 (Comfort) XML als UTF-8-bytes."""
+    # Pflichtfelder früh prüfen – gibt sprechenden Fehler statt kryptischem drafthorse-Crash
+    _fehlend = [label for label, wert in [
+        ("Firmenname", unternehmen.get("firmenname", "")),
+        ("Straße",     unternehmen.get("strasse", "")),
+        ("PLZ",        unternehmen.get("plz", "")),
+        ("Ort",        unternehmen.get("ort", "")),
+    ] if not str(wert).strip()]
+    if not unternehmen.get("steuernummer", "").strip() and not unternehmen.get("ust_idnr", "").strip():
+        _fehlend.append("Steuernummer oder USt-IdNr.")
+    if _fehlend:
+        raise ValueError(f"ZUGFeRD-Pflichtfelder in Unternehmensdaten fehlen: {', '.join(_fehlend)}")
+
     from drafthorse.models.document import Document
     from drafthorse.models.accounting import ApplicableTradeTax
     from drafthorse.models.note import IncludedNote

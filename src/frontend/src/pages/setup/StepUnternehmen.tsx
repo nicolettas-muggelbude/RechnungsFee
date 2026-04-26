@@ -27,14 +27,21 @@ type Berufsgruppe = typeof BERUFSGRUPPEN[number]
 
 // ---------------------------------------------------------------------------
 
+// Erlaubte Zeichen für ZUGFeRD/XRechnung: keine XML-Steuerzeichen (außer Tab, LF, CR)
+const xmlSauber = (label: string) =>
+  z.string().regex(/^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$/, `${label} enthält ungültige Zeichen`)
+
 const schema = z.object({
-  firmenname:            z.string().min(1, 'Name ist erforderlich'),
-  vorname:               z.string().optional(),
-  nachname:              z.string().optional(),
-  strasse:               z.string().min(1, 'Straße ist erforderlich'),
-  hausnummer:            z.string().min(1, 'Hausnummer ist erforderlich'),
-  plz:                   z.string().min(4, 'PLZ ist erforderlich'),
-  ort:                   z.string().min(1, 'Ort ist erforderlich'),
+  firmenname:            xmlSauber('Name').min(1, 'Name ist erforderlich').max(200, 'Maximal 200 Zeichen'),
+  vorname:               z.string().max(100, 'Maximal 100 Zeichen').optional(),
+  nachname:              z.string().max(100, 'Maximal 100 Zeichen').optional(),
+  strasse:               xmlSauber('Straße').min(1, 'Straße ist erforderlich').max(200, 'Maximal 200 Zeichen'),
+  hausnummer:            z.string().min(1, 'Hausnummer ist erforderlich').max(10, 'Maximal 10 Zeichen'),
+  plz:                   z.string()
+    .min(4, 'PLZ ist erforderlich')
+    .max(10, 'Maximal 10 Zeichen')
+    .regex(/^[0-9A-Za-z\s-]+$/, 'PLZ enthält ungültige Zeichen'),
+  ort:                   xmlSauber('Ort').min(1, 'Ort ist erforderlich').max(200, 'Maximal 200 Zeichen'),
   email:                 z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon:               z.string().optional(),
   steuernummer:          z.string().optional(),

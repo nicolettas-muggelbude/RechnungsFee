@@ -18,7 +18,7 @@ type Props = {
 }
 
 export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
-  const { register, handleSubmit, watch } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       rechtsform: defaultValues?.rechtsform ?? 'Einzelunternehmer',
       taetigkeitsart: defaultValues?.taetigkeitsart ?? 'freiberuflich',
@@ -81,8 +81,19 @@ export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
                 Umsatzsteuer-Identifikationsnummer
               </label>
-              <input {...register('ust_idnr')} placeholder="DE123456789"
+              <input {...register('ust_idnr', {
+                validate: (v) => {
+                  if (!v?.trim()) return true
+                  const id = v.trim().toUpperCase()
+                  if (!/^[A-Z]{2}[A-Z0-9+*]{2,13}$/.test(id))
+                    return 'Ungültiges Format (z.B. DE123456789)'
+                  if (id.startsWith('DE') && !/^DE[0-9]{9}$/.test(id))
+                    return 'Deutsche USt-IdNr.: DE + genau 9 Ziffern'
+                  return true
+                },
+              })} placeholder="DE123456789"
                 className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400" />
+              {errors.ust_idnr && <p className="text-red-500 text-xs mt-1">{errors.ust_idnr.message}</p>}
             </div>
 
             <div>

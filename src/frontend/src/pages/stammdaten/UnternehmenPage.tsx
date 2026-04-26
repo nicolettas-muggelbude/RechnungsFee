@@ -148,19 +148,52 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
 
   function handleSpeichern(e: React.FormEvent) {
     e.preventDefault()
+
+    // Keine XML-Steuerzeichen (außer Tab, LF, CR) – XRechnung/ZUGFeRD-Anforderung
+    const steuerzeichen = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
+
+    if (!form.firmenname?.trim()) { setFehler('Firmen- oder Tätigkeitsname ist erforderlich.'); return }
+    if (steuerzeichen.test(form.firmenname)) { setFehler('Firmenname enthält ungültige Zeichen.'); return }
+    if ((form.firmenname ?? '').length > 200) { setFehler('Firmenname: maximal 200 Zeichen.'); return }
+
+    if (!form.strasse?.trim()) { setFehler('Straße ist erforderlich.'); return }
+    if (steuerzeichen.test(form.strasse)) { setFehler('Straße enthält ungültige Zeichen.'); return }
+    if ((form.strasse ?? '').length > 200) { setFehler('Straße: maximal 200 Zeichen.'); return }
+
+    if (!form.hausnummer?.trim()) { setFehler('Hausnummer ist erforderlich.'); return }
+    if ((form.hausnummer ?? '').length > 10) { setFehler('Hausnummer: maximal 10 Zeichen.'); return }
+
+    if (!form.plz?.trim()) { setFehler('PLZ ist erforderlich.'); return }
+    const land = (form.land ?? 'DE').toUpperCase()
+    const plzRegeln: Record<string, { re: RegExp; hint: string }> = {
+      DE: { re: /^[0-9]{5}$/,              hint: '5 Ziffern (z.B. 10115)' },
+      AT: { re: /^[0-9]{4}$/,              hint: '4 Ziffern (z.B. 1010)' },
+      CH: { re: /^[0-9]{4}$/,              hint: '4 Ziffern (z.B. 8001)' },
+      LI: { re: /^[0-9]{4}$/,              hint: '4 Ziffern (z.B. 9490)' },
+      NL: { re: /^[0-9]{4}\s?[A-Z]{2}$/i, hint: '4 Ziffern + 2 Buchstaben (z.B. 1234 AB)' },
+    }
+    const plzRegel = plzRegeln[land]
+    if (plzRegel && !plzRegel.re.test(form.plz.trim())) {
+      setFehler(`PLZ für ${land} hat ein ungültiges Format – erwartet: ${plzRegel.hint}.`); return
+    }
+    if (!plzRegel && !/^[0-9A-Za-z\s-]{4,10}$/.test(form.plz.trim())) {
+      setFehler('PLZ hat ein ungültiges Format (4–10 alphanumerische Zeichen).'); return
+    }
+
+    if (!form.ort?.trim()) { setFehler('Ort ist erforderlich.'); return }
+    if (steuerzeichen.test(form.ort)) { setFehler('Ort enthält ungültige Zeichen.'); return }
+    if ((form.ort ?? '').length > 200) { setFehler('Ort: maximal 200 Zeichen.'); return }
+
     const ustId = (form.ust_idnr ?? '').trim()
     if (ustId) {
-      // Basis-Formatprüfung: 2 Buchstaben Ländercode + mind. 2 Zeichen, max. 15
       if (!/^[A-Z]{2}[A-Z0-9+*]{2,13}$/i.test(ustId)) {
-        setFehler('USt-IdNr. hat ein ungültiges Format (z.B. DE123456789).')
-        return
+        setFehler('USt-IdNr. hat ein ungültiges Format (z.B. DE123456789).'); return
       }
-      // Deutschland: DE + genau 9 Ziffern
       if (ustId.toUpperCase().startsWith('DE') && !/^DE[0-9]{9}$/i.test(ustId)) {
-        setFehler('Deutsche USt-IdNr. muss das Format DE + 9 Ziffern haben (z.B. DE123456789).')
-        return
+        setFehler('Deutsche USt-IdNr. muss das Format DE + 9 Ziffern haben (z.B. DE123456789).'); return
       }
     }
+
     setFehler(null)
     mut.mutate(form)
   }

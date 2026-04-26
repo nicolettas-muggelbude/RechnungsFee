@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.59',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Unternehmensdaten: Pflichtfelder (Firmenname, Straße, Hausnummer, PLZ, Ort) werden jetzt beim Speichern geprüft – länderspezifische PLZ-Validierung (DE/AT/CH/NL/LI), ZUGFeRD-Zeichensatz-Prüfung (keine XML-Steuerzeichen)' },
+      { typ: 'verbesserung', text: 'Setup-Wizard: gleiche Pflichtfeld- und Formatprüfung für Adressfelder und USt-IdNr. wie in den Stammdaten' },
+      { typ: 'fix', text: 'ZUGFeRD: fehlende Unternehmenspflichtfelder (Straße, PLZ, Ort) erzeugen jetzt eine klare Fehlermeldung im Log statt eines kryptischen drafthorse-Fehlers' },
+    ],
+  },
+  {
     version: 'v0.1.57',
     datum: 'April 2026',
     eintraege: [
