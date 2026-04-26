@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'ZUGFeRD: Vorname+Nachname wird als Firmenname verwendet wenn kein Firmenname eingetragen ist (Freiberufler)' },
       { typ: 'fix', text: 'ZUGFeRD: Hausnummer und weitere Felder gegen None-Werte abgesichert' },
       { typ: 'fix', text: 'Update-Hinweis: App startet nach dem Update automatisch neu – kein manueller Neustart nötig (Issue #75)' },
+      { typ: 'verbesserung', text: 'Rechnungs-PDF: Positionsbeschreibungen brechen jetzt automatisch um – kein Abschneiden bei langen Texten mehr; manuelle Zeilenumbrüche im Beschreibungsfeld werden übernommen (Issue #76)' },
     ],
   },
   {
