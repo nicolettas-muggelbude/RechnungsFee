@@ -29,6 +29,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'ZUGFeRD: Decimal-Division erzeugte bei bestimmten Beträgen wissenschaftliche Notation (1E+2 statt 100.00) – xs:decimal-Validierungsfehler auf Windows (Issue #71)' },
       { typ: 'fix', text: 'ZUGFeRD: Vorname+Nachname wird als Firmenname verwendet wenn kein Firmenname eingetragen ist (Freiberufler)' },
       { typ: 'fix', text: 'ZUGFeRD: Hausnummer und weitere Felder gegen None-Werte abgesichert' },
+      { typ: 'fix', text: 'Update-Hinweis: App startet nach dem Update automatisch neu – kein manueller Neustart nötig (Issue #75)' },
     ],
   },
   {
