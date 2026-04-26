@@ -32,9 +32,9 @@ const xmlSauber = (label: string) =>
   z.string().regex(/^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$/, `${label} enthält ungültige Zeichen`)
 
 const schema = z.object({
-  firmenname:            xmlSauber('Name').min(1, 'Name ist erforderlich').max(200, 'Maximal 200 Zeichen'),
-  vorname:               z.string().max(100, 'Maximal 100 Zeichen').optional(),
-  nachname:              z.string().max(100, 'Maximal 100 Zeichen').optional(),
+  firmenname:            xmlSauber('Firmenname').max(200, 'Maximal 200 Zeichen').optional().or(z.literal('')),
+  vorname:               xmlSauber('Vorname').max(100, 'Maximal 100 Zeichen').optional().or(z.literal('')),
+  nachname:              xmlSauber('Nachname').max(100, 'Maximal 100 Zeichen').optional().or(z.literal('')),
   strasse:               xmlSauber('Straße').min(1, 'Straße ist erforderlich').max(200, 'Maximal 200 Zeichen'),
   hausnummer:            z.string().min(1, 'Hausnummer ist erforderlich').max(10, 'Maximal 10 Zeichen'),
   plz:                   z.string()
@@ -44,10 +44,16 @@ const schema = z.object({
   ort:                   xmlSauber('Ort').min(1, 'Ort ist erforderlich').max(200, 'Maximal 200 Zeichen'),
   email:                 z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon:               z.string().optional(),
-  steuernummer:          z.string().optional(),
+  steuernummer:          z.string().min(1, 'Steuernummer ist erforderlich (§14 UStG – wird für Rechnungen benötigt)'),
   finanzamt:             z.string().optional(),
   berufsbezeichnung:     z.string().optional(),
   kammer_mitgliedschaft: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const hatFirma = !!(data.firmenname?.trim())
+  const hatName  = !!(data.vorname?.trim() || data.nachname?.trim())
+  if (!hatFirma && !hatName) {
+    ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Firmenname oder Vor- und Nachname ist erforderlich' })
+  }
 })
 
 type FormData = z.infer<typeof schema>
@@ -133,26 +139,32 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
       )}
 
       {/* Firmendaten */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-          Firmen- oder Tätigkeitsname <span className="text-red-500">*</span>
-        </label>
-        <input
-          {...register('firmenname')}
-          placeholder="z.B. Maria Muster Webdesign"
-          className={inp}
-        />
-        {errors.firmenname && <p className="text-red-500 text-xs mt-1">{errors.firmenname.message}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Firmenname <span className="font-medium">oder</span> Vor- und Nachname ist erforderlich – beides zusammen möglich.
+        </p>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Vorname</label>
-          <input {...register('vorname')} placeholder="Maria" className={inp} />
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Firmen- oder Tätigkeitsname
+          </label>
+          <input
+            {...register('firmenname')}
+            placeholder="z.B. Maria Muster Webdesign"
+            className={inp}
+          />
+          {errors.firmenname && <p className="text-red-500 text-xs mt-1">{errors.firmenname.message}</p>}
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Nachname</label>
-          <input {...register('nachname')} placeholder="Muster" className={inp} />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Vorname</label>
+            <input {...register('vorname')} placeholder="Maria" className={inp} />
+            {errors.vorname && <p className="text-red-500 text-xs mt-1">{errors.vorname.message}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Nachname</label>
+            <input {...register('nachname')} placeholder="Muster" className={inp} />
+            {errors.nachname && <p className="text-red-500 text-xs mt-1">{errors.nachname.message}</p>}
+          </div>
         </div>
       </div>
 
@@ -204,8 +216,11 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Steuernummer</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Steuernummer <span className="text-red-500">*</span>
+          </label>
           <input {...register('steuernummer')} placeholder="12/345/67890" className={inp} />
+          {errors.steuernummer && <p className="text-red-500 text-xs mt-1">{errors.steuernummer.message}</p>}
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Finanzamt</label>

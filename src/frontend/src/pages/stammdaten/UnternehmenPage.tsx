@@ -152,8 +152,11 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
     // Keine XML-Steuerzeichen (außer Tab, LF, CR) – XRechnung/ZUGFeRD-Anforderung
     const steuerzeichen = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
 
-    if (!form.firmenname?.trim()) { setFehler('Firmen- oder Tätigkeitsname ist erforderlich.'); return }
-    if (steuerzeichen.test(form.firmenname)) { setFehler('Firmenname enthält ungültige Zeichen.'); return }
+    // Name: Firmenname ODER Vor-/Nachname muss gefüllt sein
+    const hatFirma = !!(form.firmenname?.trim())
+    const hatName  = !!(form.vorname?.trim() || form.nachname?.trim())
+    if (!hatFirma && !hatName) { setFehler('Firmenname oder Vor- und Nachname ist erforderlich.'); return }
+    if (hatFirma && steuerzeichen.test(form.firmenname!)) { setFehler('Firmenname enthält ungültige Zeichen.'); return }
     if ((form.firmenname ?? '').length > 200) { setFehler('Firmenname: maximal 200 Zeichen.'); return }
 
     if (!form.strasse?.trim()) { setFehler('Straße ist erforderlich.'); return }
@@ -184,7 +187,12 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
     if (steuerzeichen.test(form.ort)) { setFehler('Ort enthält ungültige Zeichen.'); return }
     if ((form.ort ?? '').length > 200) { setFehler('Ort: maximal 200 Zeichen.'); return }
 
+    // Steuernummer ODER USt-IdNr. ist Pflicht (§14 UStG / ZUGFeRD BT-31/BT-32)
+    const stNr = (form.steuernummer ?? '').trim()
     const ustId = (form.ust_idnr ?? '').trim()
+    if (!stNr && !ustId) {
+      setFehler('Steuernummer oder USt-IdNr. ist erforderlich (§14 UStG).'); return
+    }
     if (ustId) {
       if (!/^[A-Z]{2}[A-Z0-9+*]{2,13}$/i.test(ustId)) {
         setFehler('USt-IdNr. hat ein ungültiges Format (z.B. DE123456789).'); return
@@ -192,6 +200,13 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       if (ustId.toUpperCase().startsWith('DE') && !/^DE[0-9]{9}$/i.test(ustId)) {
         setFehler('Deutsche USt-IdNr. muss das Format DE + 9 Ziffern haben (z.B. DE123456789).'); return
       }
+    }
+
+    // IBAN ist Pflicht (Bankverbindung auf Rechnungen / ZUGFeRD BT-84)
+    const iban = (form.iban ?? '').replace(/\s/g, '').toUpperCase()
+    if (!iban) { setFehler('IBAN ist erforderlich.'); return }
+    if (iban.length < 15 || iban.length > 34 || !/^[A-Z]{2}[0-9A-Z]+$/.test(iban)) {
+      setFehler('IBAN hat ein ungültiges Format (z.B. DE89 3704 0044 0532 0130 00).'); return
     }
 
     setFehler(null)
@@ -222,7 +237,8 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       {/* Kontaktdaten */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Firmendaten</h3>
-        <Field label="Firmen- oder Tätigkeitsname *">{inp('firmenname', 'z.B. Maria Muster Webdesign')}</Field>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Firmenname <span className="font-medium">oder</span> Vor- und Nachname ist erforderlich.</p>
+        <Field label="Firmen- oder Tätigkeitsname">{inp('firmenname', 'z.B. Maria Muster Webdesign')}</Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Vorname">{inp('vorname', 'Maria')}</Field>
           <Field label="Nachname">{inp('nachname', 'Muster')}</Field>
@@ -260,7 +276,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Steuer</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label={<>Steuernummer <InfoTooltip text="Deine Steuernummer vom Finanzamt (z.B. 12/345/67890). Muss auf Rechnungen nach §14 UStG angegeben werden, wenn keine USt-IdNr. vorhanden ist." /></>}>{inp('steuernummer', '12/345/67890')}</Field>
+          <Field label={<>Steuernummer * <InfoTooltip text="Deine Steuernummer vom Finanzamt (z.B. 12/345/67890). Mindestens Steuernummer oder USt-IdNr. ist Pflicht (§14 UStG / ZUGFeRD)." /></>}>{inp('steuernummer', '12/345/67890')}</Field>
           <Field label="Finanzamt">{inp('finanzamt', 'Finanzamt Berlin-Mitte')}</Field>
         </div>
         <Field label={<>USt-IdNr. <InfoTooltip text="Umsatzsteuer-Identifikationsnummer (z.B. DE123456789) – benötigt für EU-Geschäfte (innergemeinschaftliche Lieferungen und Leistungen). Bei rein inländischen Geschäften genügt die Steuernummer." /></>}>{inp('ust_idnr', 'DE123456789')}</Field>
@@ -384,7 +400,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
       {/* Bank */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Bankverbindung</h3>
-        <Field label="IBAN">{inp('iban', 'DE89 3704 0044 0532 0130 00')}</Field>
+        <Field label="IBAN *">{inp('iban', 'DE89 3704 0044 0532 0130 00')}</Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="BIC">{inp('bic', 'COBADEFFXXX')}</Field>
           <Field label="Bank">{inp('bank_name', 'Deutsche Bank')}</Field>

@@ -26,9 +26,9 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.1.59',
     datum: 'April 2026',
     eintraege: [
-      { typ: 'verbesserung', text: 'Unternehmensdaten: Pflichtfelder (Firmenname, Straße, Hausnummer, PLZ, Ort) werden jetzt beim Speichern geprüft – länderspezifische PLZ-Validierung (DE/AT/CH/NL/LI), ZUGFeRD-Zeichensatz-Prüfung (keine XML-Steuerzeichen)' },
-      { typ: 'verbesserung', text: 'Setup-Wizard: gleiche Pflichtfeld- und Formatprüfung für Adressfelder und USt-IdNr. wie in den Stammdaten' },
-      { typ: 'fix', text: 'ZUGFeRD: fehlende Unternehmenspflichtfelder (Straße, PLZ, Ort) erzeugen jetzt eine klare Fehlermeldung im Log statt eines kryptischen drafthorse-Fehlers' },
+      { typ: 'verbesserung', text: 'Unternehmensdaten & Setup-Wizard: Pflichtfeld-Validierung überarbeitet – Firmenname oder Vor-/Nachname (beides möglich), Steuernummer oder USt-IdNr., IBAN sowie Adressfelder sind jetzt Pflicht; länderspezifische PLZ-Prüfung (DE/AT/CH/NL/LI), ZUGFeRD-Zeichensatz-Prüfung' },
+      { typ: 'verbesserung', text: 'Setup-Wizard: IBAN aus StepKonto wird jetzt automatisch in die Unternehmensdaten übernommen – Bankverbindung erscheint sofort auf Rechnungen' },
+      { typ: 'fix', text: 'ZUGFeRD: fehlende Unternehmenspflichtfelder erzeugen jetzt eine klare Fehlermeldung im Log; Seller-Name nutzt Firmenname oder Vor-/Nachname als Fallback' },
       { typ: 'verbesserung', text: 'Backend-Logging: FastAPI/uvicorn schreibt Fehler jetzt in eine Datei (APP_DATA_DIR/logs/backend.log, max. 5 MB × 3) – auf Windows waren Backend-Fehler bisher unsichtbar' },
     ],
   },

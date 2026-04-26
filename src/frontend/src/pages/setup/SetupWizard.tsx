@@ -33,6 +33,10 @@ export function SetupWizard() {
         kontenrahmen: formData.kontenrahmen ?? 'SKR03',
         taetigkeitsart: formData.taetigkeitsart ?? 'freiberuflich',
         rechtsform: formData.rechtsform ?? 'Einzelunternehmer',
+        // Bankdaten aus StepKonto übernehmen damit IBAN auf Rechnungen erscheint
+        iban: kontoData?.iban ?? '',
+        bic: kontoData?.bic ?? '',
+        bank_name: kontoData?.bank ?? '',
       } as Unternehmen)
       await createKonto({ ...kontoData!, ist_standard: true })
       const b = parseFloat(betrag)
