@@ -308,6 +308,12 @@ export function KundenPage() {
                         <tr key={`${k.id}-detail`} className="bg-blue-50 dark:bg-blue-950 border-b border-slate-200 dark:border-slate-700">
                           <td colSpan={5} className="px-6 py-4">
                             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs">
+                              {(k.vorname || k.nachname) && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Name</span>
+                                  <span className="text-slate-700 dark:text-slate-200">{[k.vorname, k.nachname].filter(Boolean).join(' ')}</span>
+                                </div>
+                              )}
                               {(k.strasse || k.ort) && (
                                 <div>
                                   <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Adresse</span>
