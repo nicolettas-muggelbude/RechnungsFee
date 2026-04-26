@@ -437,13 +437,18 @@ class RechnungPDF(FPDF):
         for pos in r.positionen:
             menge     = float(str(pos.menge))
             menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
-            self.cell(col_w[0], 6, pos.beschreibung[:70])
+            row_y = self.get_y()
+            # Rechte Zellen zuerst – einzeilig, an row_y ausgerichtet
+            self.set_x(L_MARGIN + col_w[0])
             self.cell(col_w[1], 6, menge_str,             align="R")
             self.cell(col_w[2], 6, pos.einheit[:12])
             self.cell(col_w[3], 6, _fmt_euro(pos.netto),  align="R")
             self.cell(col_w[4], 6, f"{int(pos.ust_satz)} %", align="R")
-            self.cell(col_w[5], 6, _fmt_euro(pos.brutto), align="R",
-                      new_x="LMARGIN", new_y="NEXT")
+            self.cell(col_w[5], 6, _fmt_euro(pos.brutto), align="R")
+            # Beschreibung als multi_cell – unterstützt Zeilenumbrüche und \n
+            self.set_xy(L_MARGIN, row_y)
+            self.multi_cell(col_w[0], 6, pos.beschreibung or "",
+                            new_x="LMARGIN", new_y="NEXT")
 
         # --- Summenblock ---
         self.ln(3)
