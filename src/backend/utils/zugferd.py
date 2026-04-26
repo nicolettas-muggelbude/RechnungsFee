@@ -156,7 +156,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     if rechnung.faellig_am or iban:
         pt = PaymentTerms()
         faellig_str = rechnung.faellig_am.strftime("%d.%m.%Y") if rechnung.faellig_am else "sofort"
-        offen = _d(rechnung.brutto_gesamt) - _d(rechnung.bezahlt_betrag or 0)
+        offen = _d(rechnung.brutto_gesamt or 0) - _d(rechnung.bezahlt_betrag or 0)
         betrag_str = f"{offen:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " \u20ac"
         if iban and rechnung.typ == "ausgang":
             hinweis = (
@@ -193,7 +193,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     for pos in sorted(rechnung.positionen, key=lambda p: p.position_nr):
         li = LineItem()
         li.document.line_id._text = str(pos.position_nr)
-        li.product.name = pos.beschreibung
+        li.product.name = pos.beschreibung or "-"
 
         # Nettopreis pro Einheit
         einheit_code = _einheit_code(pos.einheit)
