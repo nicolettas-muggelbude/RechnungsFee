@@ -139,13 +139,19 @@ def _adresszeilen(obj) -> list[str]:
     if obj is None:
         return []
     zeilen: list[str] = []
-    name = " ".join(filter(None, [
-        getattr(obj, "firmenname", None) or "",
-        getattr(obj, "vorname", None) or "",
-        getattr(obj, "nachname", None) or "",
-    ])).strip()
-    if name:
-        zeilen.append(name)
+    firma   = (getattr(obj, "firmenname", None) or "").strip()
+    vorname = (getattr(obj, "vorname",    None) or "").strip()
+    nachname= (getattr(obj, "nachname",   None) or "").strip()
+    person  = " ".join(filter(None, [vorname, nachname]))
+    if firma:
+        zeilen.append(firma)
+        if person:
+            zeilen.append(person)
+    elif person:
+        zeilen.append(person)
+    z_hd = (getattr(obj, "z_hd", None) or "").strip()
+    if z_hd:
+        zeilen.append(f"z.Hd. {z_hd}")
     strasse = getattr(obj, "strasse", None) or ""
     hausnr  = getattr(obj, "hausnummer", None) or ""
     if strasse:

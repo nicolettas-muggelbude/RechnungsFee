@@ -114,6 +114,7 @@ const schema = z.object({
   email: z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon: z.string().optional(),
   kundennummer: z.string().optional(),
+  z_hd: z.string().optional(),
   notizen: z.string().optional(),
   ist_verein: z.boolean().optional(),
   ist_gemeinnuetzig: z.boolean().optional(),
@@ -131,7 +132,7 @@ type FormValues = z.infer<typeof schema>
 const EMPTY: FormValues = {
   firmenname: '', vorname: '', nachname: '', strasse: '', hausnummer: '',
   plz: '', ort: '', land: 'DE', ust_idnr: '', email: '', telefon: '',
-  kundennummer: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
+  kundennummer: '', z_hd: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +197,7 @@ export function KundenPage() {
       strasse: k.strasse ?? '', hausnummer: k.hausnummer ?? '', plz: k.plz ?? '',
       ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '',
       email: k.email ?? '', telefon: k.telefon ?? '', kundennummer: k.kundennummer ?? '',
-      notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
+      z_hd: k.z_hd ?? '', notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
       zugferd_aktiv: k.zugferd_aktiv ?? false,
     })
     setShowForm(true)
@@ -348,6 +349,12 @@ export function KundenPage() {
                                   <span className="text-slate-700 dark:text-slate-200 font-mono">{k.kundennummer}</span>
                                 </div>
                               )}
+                              {k.z_hd && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">z.Hd. von</span>
+                                  <span className="text-slate-700 dark:text-slate-200">{k.z_hd}</span>
+                                </div>
+                              )}
                               {(k.ist_verein || k.ist_gemeinnuetzig || k.zugferd_aktiv) && (
                                 <div>
                                   <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Eigenschaften</span>
@@ -452,6 +459,10 @@ export function KundenPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
                   <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">z.Hd. von</label>
+                  <input type="text" {...register('z_hd')} placeholder="z.B. Max Mustermann oder Buchhaltung" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Notizen</label>

@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -338,6 +338,17 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 15"))
             conn.commit()
             print("[Migration] Schema auf Version 15 gebracht (kunden.zugferd_aktiv)")
+
+        if version < 16:
+            kunden_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "z_hd" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN z_hd VARCHAR(200)"))
+            lief_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(lieferanten)")).fetchall()}
+            if "z_hd" not in lief_cols:
+                conn.execute(text("ALTER TABLE lieferanten ADD COLUMN z_hd VARCHAR(200)"))
+            conn.execute(text("PRAGMA user_version = 16"))
+            conn.commit()
+            print("[Migration] Schema auf Version 16 gebracht (kunden.z_hd, lieferanten.z_hd)")
 
 
 def _migrate_kategorien() -> None:
