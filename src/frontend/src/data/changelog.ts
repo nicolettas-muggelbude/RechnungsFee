@@ -30,7 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Setup-Wizard: IBAN aus StepKonto wird jetzt automatisch in die Unternehmensdaten übernommen – Bankverbindung erscheint sofort auf Rechnungen' },
       { typ: 'fix', text: 'ZUGFeRD: fehlende Unternehmenspflichtfelder erzeugen jetzt eine klare Fehlermeldung im Log; Seller-Name nutzt Firmenname oder Vor-/Nachname als Fallback' },
       { typ: 'verbesserung', text: 'Backend-Logging: FastAPI/uvicorn schreibt Fehler jetzt in eine Datei (APP_DATA_DIR/logs/backend.log, max. 5 MB × 3) – auf Windows waren Backend-Fehler bisher unsichtbar' },
-      { typ: 'verbesserung', text: 'Kunden: Anklicken eines Kunden zeigt jetzt alle Stammdaten aufgeklappt (Adresse, E-Mail, Telefon, USt-IdNr., Notizen, Bearbeiten/Löschen) – die rechte Spalte mit den Rechnungen bleibt unverändert' },
+      { typ: 'verbesserung', text: 'Kunden: Zeile anklicken klappt alle Stammdaten direkt in der Tabelle auf (Akkordeon) – Vorname/Nachname, Adresse, E-Mail, Telefon, USt-IdNr., Kundennr., Badges, Notizen; alle weiteren Zeilen schieben sich nach unten' },
     ],
   },
   {
