@@ -285,9 +285,18 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
     # Pflicht-Dateiname für XRechnung laut ZUGFeRD 2.3.2 §6.2
     _orig_fname = _fx.FACTURX_FILENAME
     _fx.FACTURX_FILENAME = "xrechnung.xml"
+
+    # generate_from_binary nutzt NamedTemporaryFile ohne delete=False – auf Windows
+    # kann die Temp-Datei nicht von einem zweiten Handle geöffnet werden (PermissionError).
+    # Workaround: Temp-Datei selbst anlegen, generate_from_file aufrufen, dann einlesen.
+    import tempfile, os
+    tmp = tempfile.NamedTemporaryFile(prefix="facturx-", suffix=".pdf", delete=False)
     try:
-        result = facturx.generate_from_binary(
-            pdf_bytes,
+        tmp.write(pdf_bytes)
+        tmp.flush()
+        tmp.close()  # explizit schließen damit generate_from_file es öffnen kann (Windows)
+        _fx.generate_from_file(
+            tmp.name,
             xml_bytes,
             flavor="factur-x",
             level="xrechnung",
@@ -296,7 +305,13 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
             xmp_compression=False,
             afrelationship="alternative",
         )
+        with open(tmp.name, "rb") as f:
+            result = f.read()
     finally:
         _fx.FACTURX_FILENAME = _orig_fname
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
 
     return result
