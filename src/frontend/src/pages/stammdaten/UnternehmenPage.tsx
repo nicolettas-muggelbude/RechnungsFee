@@ -457,7 +457,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             </p>
           </div>
           {!form.iban?.trim() && (
-            <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen – der QR-Code benötigt die Kontonummer für den EPC-Standard." />
+            <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen – der QR-Code benötigt die Kontonummer für den EPC-Standard." side="left" />
           )}
         </label>
       </div>
