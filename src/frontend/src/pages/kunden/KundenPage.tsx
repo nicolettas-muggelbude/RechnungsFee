@@ -144,6 +144,7 @@ export function KundenPage() {
   const [suche, setSuche] = useState('')
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [detailAufgeklappt, setDetailAufgeklappt] = useState(false)
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
@@ -279,7 +280,7 @@ export function KundenPage() {
                 {gefiltert.map((k) => (
                   <tr
                     key={k.id}
-                    onClick={() => setSelected(selected?.id === k.id ? null : k)}
+                    onClick={() => { const next = selected?.id === k.id ? null : k; setSelected(next); setDetailAufgeklappt(false) }}
                     className={`border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer transition-colors ${
                       selected?.id === k.id ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
@@ -308,31 +309,93 @@ export function KundenPage() {
 
         {/* Stammdaten-Karte des ausgewählten Kunden */}
         {selected && (
-          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{kundeName(selected)}</span>
-                {selected.ist_verein && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Verein</span>}
-                {selected.ist_gemeinnuetzig && <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Gemeinnützig</span>}
+          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+            {/* Kopfzeile – immer sichtbar, klickbar zum Aufklappen */}
+            <button
+              type="button"
+              onClick={() => setDetailAufgeklappt(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{kundeName(selected)}</span>
+                {selected.kundennummer && <span className="text-xs text-slate-400 dark:text-slate-500 font-mono shrink-0">{selected.kundennummer}</span>}
+                {selected.ist_verein && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 shrink-0">Verein</span>}
+                {selected.ist_gemeinnuetzig && <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 shrink-0">Gemeinnützig</span>}
+                {selected.zugferd_aktiv && <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 shrink-0">ZUGFeRD</span>}
               </div>
-              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600 text-sm leading-none">×</button>
-            </div>
-            <div className="grid grid-cols-4 gap-2 text-xs">
-              {selected.telefon && (
-                <div><span className="text-slate-400 dark:text-slate-500 block">Telefon</span><span className="text-slate-700 dark:text-slate-200">{selected.telefon}</span></div>
-              )}
-              {selected.ust_idnr && (
-                <div><span className="text-slate-400 dark:text-slate-500 block">USt-IdNr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.ust_idnr}</span></div>
-              )}
-              {selected.email && (
-                <div><span className="text-slate-400 dark:text-slate-500 block">E-Mail</span><span className="text-slate-700 dark:text-slate-200">{selected.email}</span></div>
-              )}
-              {selected.kundennummer && (
-                <div><span className="text-slate-400 dark:text-slate-500 block">Kundennr.</span><span className="text-slate-700 dark:text-slate-200 font-mono">{selected.kundennummer}</span></div>
-              )}
-            </div>
-            {selected.notizen && (
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 whitespace-pre-wrap">{selected.notizen}</p>
+              <div className="flex items-center gap-3 shrink-0 ml-2">
+                <span className="text-xs text-slate-400 dark:text-slate-500">{detailAufgeklappt ? '▲' : '▼'}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSelected(null); setDetailAufgeklappt(false) }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-base leading-none"
+                >×</button>
+              </div>
+            </button>
+
+            {/* Aufgeklappte Stammdaten */}
+            {detailAufgeklappt && (
+              <div className="px-4 pb-4 space-y-3 border-t border-slate-200 dark:border-slate-700">
+                {/* Adresse */}
+                {(selected.strasse || selected.ort) && (
+                  <div className="pt-3">
+                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">Adresse</span>
+                    <p className="text-xs text-slate-700 dark:text-slate-200 mt-1">
+                      {[selected.strasse, selected.hausnummer].filter(Boolean).join(' ')}<br />
+                      {[selected.plz, selected.ort].filter(Boolean).join(' ')}
+                      {selected.land && selected.land !== 'DE' && <><br />{selected.land}</>}
+                    </p>
+                  </div>
+                )}
+
+                {/* Kontakt */}
+                {(selected.email || selected.telefon) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {selected.email && (
+                      <div>
+                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">E-Mail</span>
+                        <a href={`mailto:${selected.email}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline break-all">{selected.email}</a>
+                      </div>
+                    )}
+                    {selected.telefon && (
+                      <div>
+                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Telefon</span>
+                        <a href={`tel:${selected.telefon}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">{selected.telefon}</a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Steuer */}
+                {selected.ust_idnr && (
+                  <div>
+                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">USt-IdNr.</span>
+                    <span className="text-xs text-slate-700 dark:text-slate-200 font-mono">{selected.ust_idnr}</span>
+                  </div>
+                )}
+
+                {/* Notizen */}
+                {selected.notizen && (
+                  <div>
+                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Notizen</span>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 mt-1 whitespace-pre-wrap">{selected.notizen}</p>
+                  </div>
+                )}
+
+                {/* Aktionen */}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { openEdit(selected); setDetailAufgeklappt(false) }}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >Bearbeiten</button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selected)}
+                    className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                  >Löschen</button>
+                </div>
+              </div>
             )}
           </div>
         )}
