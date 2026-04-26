@@ -311,10 +311,12 @@ export function KundenPage() {
         {selected && (
           <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
             {/* Kopfzeile – immer sichtbar, klickbar zum Aufklappen */}
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setDetailAufgeklappt(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
+              onKeyDown={(e) => e.key === 'Enter' && setDetailAufgeklappt(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer select-none"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{kundeName(selected)}</span>
@@ -331,7 +333,7 @@ export function KundenPage() {
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-base leading-none"
                 >×</button>
               </div>
-            </button>
+            </div>
 
             {/* Aufgeklappte Stammdaten */}
             {detailAufgeklappt && (
