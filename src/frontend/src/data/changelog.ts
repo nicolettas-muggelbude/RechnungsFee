@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.60',
+    datum: 'April 2026',
+    eintraege: [
+      { typ: 'fix', text: 'ZUGFeRD: Decimal-Division erzeugte bei bestimmten Beträgen wissenschaftliche Notation (1E+2 statt 100.00) – xs:decimal-Validierungsfehler auf Windows (Issue #71)' },
+      { typ: 'fix', text: 'ZUGFeRD: Vorname+Nachname wird als Firmenname verwendet wenn kein Firmenname eingetragen ist (Freiberufler)' },
+      { typ: 'fix', text: 'ZUGFeRD: Hausnummer und weitere Felder gegen None-Werte abgesichert' },
+    ],
+  },
+  {
     version: 'v0.1.59',
     datum: 'April 2026',
     eintraege: [
