@@ -1,3 +1,5 @@
+import logging
+import logging.handlers
 import os
 import sqlite3
 import threading
@@ -7,7 +9,26 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from database.connection import Base, engine, SessionLocal, DB_PATH
+from database.connection import Base, engine, SessionLocal, DB_PATH, APP_DATA_DIR
+
+# ── Backend-Datei-Logging ─────────────────────────────────────────────────────
+# Logs landen neben der DB unter APP_DATA_DIR/logs/backend.log (max. 5 MB × 3)
+# so dass sie auch im gebündelten PyInstaller-Build auf Windows auffindbar sind.
+_log_dir = APP_DATA_DIR / "logs"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_handler = logging.handlers.RotatingFileHandler(
+    _log_dir / "backend.log",
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8",
+)
+_log_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logging.root.setLevel(logging.INFO)
+logging.root.addHandler(_log_handler)
+# ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
 

@@ -29,6 +29,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Unternehmensdaten: Pflichtfelder (Firmenname, Straße, Hausnummer, PLZ, Ort) werden jetzt beim Speichern geprüft – länderspezifische PLZ-Validierung (DE/AT/CH/NL/LI), ZUGFeRD-Zeichensatz-Prüfung (keine XML-Steuerzeichen)' },
       { typ: 'verbesserung', text: 'Setup-Wizard: gleiche Pflichtfeld- und Formatprüfung für Adressfelder und USt-IdNr. wie in den Stammdaten' },
       { typ: 'fix', text: 'ZUGFeRD: fehlende Unternehmenspflichtfelder (Straße, PLZ, Ort) erzeugen jetzt eine klare Fehlermeldung im Log statt eines kryptischen drafthorse-Fehlers' },
+      { typ: 'verbesserung', text: 'Backend-Logging: FastAPI/uvicorn schreibt Fehler jetzt in eine Datei (APP_DATA_DIR/logs/backend.log, max. 5 MB × 3) – auf Windows waren Backend-Fehler bisher unsichtbar' },
     ],
   },
   {
