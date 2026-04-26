@@ -144,7 +144,7 @@ export function KundenPage() {
   const [suche, setSuche] = useState('')
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [detailAufgeklappt, setDetailAufgeklappt] = useState(false)
+
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
@@ -277,130 +277,100 @@ export function KundenPage() {
                 </tr>
               </thead>
               <tbody>
-                {gefiltert.map((k) => (
-                  <tr
-                    key={k.id}
-                    onClick={() => { const next = selected?.id === k.id ? null : k; setSelected(next); setDetailAufgeklappt(false) }}
-                    className={`border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer transition-colors ${
-                      selected?.id === k.id ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <td className={`px-4 py-2.5 font-medium ${selected?.id === k.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100'}`}>
-                      {kundeName(k)}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs">
-                      {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{k.email || '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{k.kundennummer || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => openEdit(k)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
-                        <button onClick={() => handleDelete(k)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {gefiltert.map((k) => {
+                  const isSelected = selected?.id === k.id
+                  return (
+                    <>
+                      <tr
+                        key={k.id}
+                        onClick={() => setSelected(isSelected ? null : k)}
+                        className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-colors ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <td className={`px-4 py-2.5 font-medium ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100'}`}>
+                          <span className="mr-1 text-slate-400">{isSelected ? '▼' : '▶'}</span>
+                          {kundeName(k)}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs">
+                          {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{k.email || '—'}</td>
+                        <td className="px-4 py-2.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{k.kundennummer || '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => openEdit(k)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Bearbeiten</button>
+                            <button onClick={() => handleDelete(k)} className="text-xs text-red-500 dark:text-red-400 hover:underline">Löschen</button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isSelected && (
+                        <tr key={`${k.id}-detail`} className="bg-blue-50 dark:bg-blue-950 border-b border-slate-200 dark:border-slate-700">
+                          <td colSpan={5} className="px-6 py-4">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs">
+                              {(k.strasse || k.ort) && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Adresse</span>
+                                  <span className="text-slate-700 dark:text-slate-200">
+                                    {[k.strasse, k.hausnummer].filter(Boolean).join(' ')}
+                                    {(k.plz || k.ort) && <>, {[k.plz, k.ort].filter(Boolean).join(' ')}</>}
+                                    {k.land && k.land !== 'DE' && <>, {k.land}</>}
+                                  </span>
+                                </div>
+                              )}
+                              {k.email && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">E-Mail</span>
+                                  <a href={`mailto:${k.email}`} className="text-blue-600 dark:text-blue-400 hover:underline break-all">{k.email}</a>
+                                </div>
+                              )}
+                              {k.telefon && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Telefon</span>
+                                  <a href={`tel:${k.telefon}`} className="text-blue-600 dark:text-blue-400 hover:underline">{k.telefon}</a>
+                                </div>
+                              )}
+                              {k.ust_idnr && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">USt-IdNr.</span>
+                                  <span className="text-slate-700 dark:text-slate-200 font-mono">{k.ust_idnr}</span>
+                                </div>
+                              )}
+                              {k.kundennummer && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Kundennr.</span>
+                                  <span className="text-slate-700 dark:text-slate-200 font-mono">{k.kundennummer}</span>
+                                </div>
+                              )}
+                              {(k.ist_verein || k.ist_gemeinnuetzig || k.zugferd_aktiv) && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Eigenschaften</span>
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {k.ist_verein && <span className="px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">Verein</span>}
+                                    {k.ist_gemeinnuetzig && <span className="px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">Gemeinnützig</span>}
+                                    {k.zugferd_aktiv && <span className="px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300">ZUGFeRD</span>}
+                                  </div>
+                                </div>
+                              )}
+                              {k.notizen && (
+                                <div className="col-span-2">
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Notizen</span>
+                                  <p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 whitespace-pre-wrap">{k.notizen}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           )}
           </div>
         </div>
 
-        {/* Stammdaten-Karte des ausgewählten Kunden */}
-        {selected && (
-          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-            {/* Kopfzeile – immer sichtbar, klickbar zum Aufklappen */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => setDetailAufgeklappt(v => !v)}
-              onKeyDown={(e) => e.key === 'Enter' && setDetailAufgeklappt(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer select-none"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{kundeName(selected)}</span>
-                {selected.kundennummer && <span className="text-xs text-slate-400 dark:text-slate-500 font-mono shrink-0">{selected.kundennummer}</span>}
-                {selected.ist_verein && <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 shrink-0">Verein</span>}
-                {selected.ist_gemeinnuetzig && <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 shrink-0">Gemeinnützig</span>}
-                {selected.zugferd_aktiv && <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 shrink-0">ZUGFeRD</span>}
-              </div>
-              <div className="flex items-center gap-3 shrink-0 ml-2">
-                <span className="text-xs text-slate-400 dark:text-slate-500">{detailAufgeklappt ? '▲' : '▼'}</span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelected(null); setDetailAufgeklappt(false) }}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-base leading-none"
-                >×</button>
-              </div>
-            </div>
-
-            {/* Aufgeklappte Stammdaten */}
-            {detailAufgeklappt && (
-              <div className="px-4 pb-4 space-y-3 border-t border-slate-200 dark:border-slate-700">
-                {/* Adresse */}
-                {(selected.strasse || selected.ort) && (
-                  <div className="pt-3">
-                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">Adresse</span>
-                    <p className="text-xs text-slate-700 dark:text-slate-200 mt-1">
-                      {[selected.strasse, selected.hausnummer].filter(Boolean).join(' ')}<br />
-                      {[selected.plz, selected.ort].filter(Boolean).join(' ')}
-                      {selected.land && selected.land !== 'DE' && <><br />{selected.land}</>}
-                    </p>
-                  </div>
-                )}
-
-                {/* Kontakt */}
-                {(selected.email || selected.telefon) && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {selected.email && (
-                      <div>
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">E-Mail</span>
-                        <a href={`mailto:${selected.email}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline break-all">{selected.email}</a>
-                      </div>
-                    )}
-                    {selected.telefon && (
-                      <div>
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Telefon</span>
-                        <a href={`tel:${selected.telefon}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">{selected.telefon}</a>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Steuer */}
-                {selected.ust_idnr && (
-                  <div>
-                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">USt-IdNr.</span>
-                    <span className="text-xs text-slate-700 dark:text-slate-200 font-mono">{selected.ust_idnr}</span>
-                  </div>
-                )}
-
-                {/* Notizen */}
-                {selected.notizen && (
-                  <div>
-                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Notizen</span>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 mt-1 whitespace-pre-wrap">{selected.notizen}</p>
-                  </div>
-                )}
-
-                {/* Aktionen */}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { openEdit(selected); setDetailAufgeklappt(false) }}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >Bearbeiten</button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(selected)}
-                    className="text-xs text-red-500 dark:text-red-400 hover:underline"
-                  >Löschen</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Rechte Spalte (Rechnungen oder Formular) ─────────────────── */}
