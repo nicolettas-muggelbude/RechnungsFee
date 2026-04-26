@@ -98,7 +98,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # ── Verkäufer ─────────────────────────────────────────────────────────────
     seller = doc.trade.agreement.seller
     seller.name = _seller_name
-    seller.address.line_one = f"{unternehmen['strasse']} {unternehmen['hausnummer']}"
+    seller.address.line_one = f"{unternehmen['strasse']} {unternehmen.get('hausnummer') or ''}".strip()
     seller.address.postcode = unternehmen["plz"]
     seller.address.city_name = unternehmen["ort"]
     seller.address.country_id = unternehmen.get("land", "DE")
@@ -117,7 +117,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         seller.electronic_address.uri_ID = ("EM", unternehmen["email"])
 
     # BR-DE-2 / BR-DE-5: SELLER CONTACT (BG-6) mit BT-41 (DepartmentName) ist XRechnung-Pflicht
-    seller.contact.department_name._text = unternehmen["firmenname"]
+    seller.contact.department_name._text = _seller_name
     if unternehmen.get("telefon"):
         seller.contact.telephone.number = unternehmen["telefon"]
     if unternehmen.get("email"):
