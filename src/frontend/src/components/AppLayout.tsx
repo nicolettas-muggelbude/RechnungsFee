@@ -136,7 +136,8 @@ export function AppLayout() {
               : 'text-green-800 dark:text-green-200'
             }`}>
               {readyToRestart ? (
-                <><span className="font-semibold">Update installiert!</span> Die App schließt sich gleich – bitte danach manuell neu starten.</>
+                <><span className="font-semibold">Update installiert!</span> Die App startet gleich automatisch neu.</>
+
               ) : updateError ? (
                 <><span className="font-semibold">Update fehlgeschlagen:</span> {updateError}</>
               ) : (
