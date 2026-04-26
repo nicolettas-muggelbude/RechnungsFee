@@ -30,9 +30,14 @@ def _einheit_code(einheit: str) -> str:
     return _EINHEIT_CODE.get(einheit, "C62")
 
 
+def _d(wert) -> Decimal:
+    """Geldbeträge immer als xx.xx – verhindert 1E+2-Notation bei Decimal-Division."""
+    return Decimal(str(wert)).quantize(Decimal("0.01"))
+
+
 def _ust_satz(satz: Decimal) -> Decimal:
-    """19.00 → 19, 7.00 → 7, 5.50 → 5.50 (Nachkommastellen nur wenn nötig)."""
-    return satz.normalize()
+    """19.00 → 19, 7.00 → 7, 5.50 → 5.50 – normalize() ist sicher für kleine Prozentwerte."""
+    return Decimal(str(satz)).quantize(Decimal("0.01")).normalize()
 
 
 def _kunde_name(kunde) -> str:
@@ -151,7 +156,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     if rechnung.faellig_am or iban:
         pt = PaymentTerms()
         faellig_str = rechnung.faellig_am.strftime("%d.%m.%Y") if rechnung.faellig_am else "sofort"
-        offen = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
+        offen = _d(rechnung.brutto_gesamt) - _d(rechnung.bezahlt_betrag or 0)
         betrag_str = f"{offen:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " \u20ac"
         if iban and rechnung.typ == "ausgang":
             hinweis = (
@@ -192,12 +197,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
         # Nettopreis pro Einheit
         einheit_code = _einheit_code(pos.einheit)
-        netto_pro_einheit = (pos.netto / pos.menge) if pos.menge else pos.netto
+        netto_pro_einheit = _d(pos.netto / pos.menge) if pos.menge else _d(pos.netto)
         li.agreement.net.amount = netto_pro_einheit
         li.agreement.net.basis_quantity = (Decimal("1"), einheit_code)
 
         # Menge
-        li.delivery.billed_quantity = (pos.menge, einheit_code)
+        li.delivery.billed_quantity = (_d(pos.menge), einheit_code)
 
         # Steuer auf Position – nur Kategorie+Satz, kein Betrag (EN16931-Regel)
         li.settlement.trade_tax.type_code = "VAT"
@@ -205,7 +210,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
 
         # Zeilensumme
-        li.settlement.monetary_summation.total_amount = pos.netto
+        li.settlement.monetary_summation.total_amount = _d(pos.netto)
 
         doc.trade.items.add(li)
 
@@ -215,16 +220,16 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         key = str(pos.ust_satz)
         if key not in steuern:
             steuern[key] = {"satz": pos.ust_satz, "basis": Decimal("0"), "betrag": Decimal("0")}
-        steuern[key]["basis"] += pos.netto
-        steuern[key]["betrag"] += pos.ust_betrag
+        steuern[key]["basis"] += _d(pos.netto)
+        steuern[key]["betrag"] += _d(pos.ust_betrag)
 
     for eintrag in steuern.values():
         tax = ApplicableTradeTax()
         tax.type_code = "VAT"
         tax.category_code = _steuerkategorie(eintrag["satz"], ist_ku)
         tax.rate_applicable_percent = _ust_satz(eintrag["satz"])
-        tax.basis_amount = eintrag["basis"]
-        tax.calculated_amount = eintrag["betrag"]
+        tax.basis_amount = _d(eintrag["basis"])
+        tax.calculated_amount = _d(eintrag["betrag"])
         if ist_ku and eintrag["satz"] == 0:
             tax.exemption_reason = "Umsatzsteuerbefreiung gemäß §19 UStG"
         doc.trade.settlement.trade_tax.add(tax)
@@ -237,14 +242,14 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     prepaid     = rechnung.bezahlt_betrag or Decimal("0")
 
     ms = doc.trade.settlement.monetary_summation
-    ms.line_total      = line_total
-    ms.charge_total    = Decimal("0")
-    ms.allowance_total = Decimal("0")
-    ms.tax_basis_total = line_total
-    ms.tax_total       = (tax_total, "EUR")
-    ms.grand_total     = grand_total
-    ms.prepaid_total   = prepaid
-    ms.due_amount      = grand_total - prepaid
+    ms.line_total      = _d(line_total)
+    ms.charge_total    = Decimal("0.00")
+    ms.allowance_total = Decimal("0.00")
+    ms.tax_basis_total = _d(line_total)
+    ms.tax_total       = (_d(tax_total), "EUR")
+    ms.grand_total     = _d(grand_total)
+    ms.prepaid_total   = _d(prepaid)
+    ms.due_amount      = _d(grand_total - prepaid)
 
     # EXTENDED-Schema nötig damit DefinedTradeContact (BR-DE-2) serialisiert wird
     xml = doc.serialize(schema="FACTUR-X_EXTENDED")
