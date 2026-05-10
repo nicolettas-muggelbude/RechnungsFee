@@ -257,7 +257,7 @@ class GobdBerichtPDF(FPDF):
         self.multi_cell(170, 5,
             "Dieser Export wurde gemaess den Grundsaetzen zur ordnungsmaessigen Fuehrung "
             "und Aufbewahrung von Buecher, Aufzeichnungen, Unterlagen und Daten (GoBD) "
-            "erstellt. Die enthaltenen Kassenbuchdaten sind unveraenderbar (immutable) "
+            "erstellt. Die enthaltenen Journaldaten sind unveraenderbar (immutable) "
             "gespeichert und durch SHA-256-Signaturen gesichert.",
             border=1, fill=True)
         self.set_text_color(0, 0, 0)
@@ -386,7 +386,7 @@ class GobdBerichtPDF(FPDF):
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(60, 60, 70)
         text = (
-            "Jeder Kassenbucheintrag und jeder Tagesabschluss wird mit einem SHA-256-Hash "
+            "Jeder Journaleintrag und jeder Tagesabschluss wird mit einem SHA-256-Hash "
             "gesichert, der aus den buchungsrelevanten Feldern berechnet wird. "
             "Der Hash wird bei der Erstellung des Datensatzes generiert und unveraenderbar "
             "gespeichert (immutable=1).\n\n"

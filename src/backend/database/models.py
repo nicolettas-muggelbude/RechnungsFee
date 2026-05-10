@@ -131,7 +131,7 @@ class Kategorie(Base):
     ist_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    kassenbucheintraege: Mapped[list["Kassenbucheintrag"]] = relationship(back_populates="kategorie")
+    journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="kategorie")
     rechnungen: Mapped[list["Rechnung"]] = relationship(back_populates="kategorie")
     transaktionen: Mapped[list["BankTransaktion"]] = relationship(back_populates="kategorie")
 
@@ -150,7 +150,7 @@ class Nummernkreis(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bezeichnung: Mapped[str] = mapped_column(String(100), nullable=False)
-    typ: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)  # kassenbuch, rechnung_ausgang, ...
+    typ: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)  # journal, rechnung_ausgang, ...
     format: Mapped[str] = mapped_column(String(50), default="YY####", nullable=False)
     naechste_nr: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     reset_jaehrlich: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -161,15 +161,15 @@ class Nummernkreis(Base):
 
 
 # ---------------------------------------------------------------------------
-# Kassenbuch (GoBD-konform, unveränderbar)
+# Journal (GoBD-konform, unveränderbar)
 # ---------------------------------------------------------------------------
 
-class Kassenbucheintrag(Base):
+class Journaleintrag(Base):
     """
-    GoBD-konformes Kassenbuch.
+    GoBD-konformes Journal.
     Einträge sind nach Erstellung unveränderbar (immutable=True).
     """
-    __tablename__ = "kassenbuch"
+    __tablename__ = "journal"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     datum: Mapped[date] = mapped_column(Date, nullable=False)
@@ -193,13 +193,13 @@ class Kassenbucheintrag(Base):
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     erstellt_von: Mapped[str | None] = mapped_column(String(100))
 
-    kategorie: Mapped["Kategorie | None"] = relationship(back_populates="kassenbucheintraege")
+    kategorie: Mapped["Kategorie | None"] = relationship(back_populates="journaleintraege")
     kunde: Mapped["Kunde | None"] = relationship()
-    rechnung: Mapped["Rechnung | None"] = relationship(back_populates="kassenbucheintraege")
+    rechnung: Mapped["Rechnung | None"] = relationship(back_populates="journaleintraege")
 
 
 class Tagesabschluss(Base):
-    """Kassenbuch-Tagesabschluss (GoBD-konform, unveränderbar)."""
+    """Journal-Tagesabschluss (GoBD-konform, unveränderbar)."""
     __tablename__ = "tagesabschluesse"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -380,7 +380,7 @@ class Rechnung(Base):
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan")
     anlagegueter: Mapped[list["Anlagegut"]] = relationship(back_populates="rechnung")
-    kassenbucheintraege: Mapped[list["Kassenbucheintrag"]] = relationship(back_populates="rechnung")
+    journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="rechnung")
 
 
 class Rechnungsposition(Base):

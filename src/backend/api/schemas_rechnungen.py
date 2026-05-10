@@ -188,7 +188,7 @@ class RechnungResponse(BaseModel):
                 art=e.art,
                 zahlungsart=e.zahlungsart,
             )
-            for e in obj.kassenbucheintraege
+            for e in obj.journaleintraege
         ]
         return data
 
@@ -219,6 +219,6 @@ class BarZahlungCreate(BaseModel):
 
 
 class BarZahlungResult(BaseModel):
-    kassenbucheintrag_id: int
-    kassenbucheintrag_belegnr: str
+    journaleintrag_id: int
+    journaleintrag_belegnr: str
     rechnung: RechnungResponse

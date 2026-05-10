@@ -12,14 +12,14 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 - Skripte mit neuer Version: Änderungen nicht einzeln nachfragen
 
 ## Ports & Pfade
-- Backend: Port **8001** – `cd src/backend && .venv/bin/uvicorn main:app --port 8001`
+- Backend: Port **8002** – `cd src/backend && .venv/bin/uvicorn main:app --port 8002`
 - DB: `~/.local/share/RechnungsFee/rechnungsfee.db`
 - Uploads: `~/.local/share/RechnungsFee/uploads/`
 - Backups: `~/.local/share/RechnungsFee/backups/`
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 3` – zentrale Konstante.
+`SCHEMA_VERSION = 19` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -40,9 +40,9 @@ def _run_migrations():
         # Am Ende: PRAGMA user_version = 1 + commit
     if version < 2:
         # PRAGMA user_version = 2 + commit
-    if version < 3:
-        # PRAGMA user_version = 3 + commit
-    # if version < 4: ...
+    # ...
+    if version < N:
+        # PRAGMA user_version = N + commit
 ```
 
 ### Neue Migration hinzufügen
@@ -50,12 +50,28 @@ def _run_migrations():
 2. `SCHEMA_VERSION = N` erhöhen
 3. Pro Tabelle nur **1×** `PRAGMA table_info` – alle neuen Spalten in einem Loop
 
-### Versionsverlauf
+### Versionsverlauf (Kurzfassung – Details in main.py)
 | Version | Inhalt |
 |---------|--------|
 | 0→1 | kassenbuch (kunde_id, rechnung_id, externe_belegnr, signatur), rechnungen (bezahlt_betrag, zahlungsstatus, leistungsdatum, ist_entwurf, storniert, ausgegeben), tagesabschluesse (zaehlung_json, signatur), unternehmen (handelsregister_nr/gericht, logo_pfad, mail_*), kategorien.ust_satz_standard, ist_entwurf-Korrektur |
 | 1→2 | Formalisierung – bestehende DBs auf Versioning-System heben |
 | 2→3 | unternehmen (berufsbezeichnung VARCHAR(100), kammer_mitgliedschaft VARCHAR(200)) |
+| 4 | artikel-Tabelle + Seed ART-#### Nummernkreis |
+| 5 | UPDATE artikel SET typ='artikel' WHERE typ='eigenleistung' |
+| 6 | unternehmen.zahlungshinweis_aktiv |
+| 7 | ust_saetze-Tabelle (0%, 7%, 19%) |
+| 8 | unternehmen.pdf_vorlage |
+| 9 | rechnungen.externe_belegnr |
+| 10 | rechnungspositionen.kategorie_id |
+| 11 | unternehmen.unterschrift_bild |
+| 12 | unternehmen.unterschrift_auf_rechnung |
+| 13 | unternehmen.standard_zahlungsziel |
+| 14 | unternehmen.qr_zahlung_aktiv |
+| 15 | kunden.zugferd_aktiv |
+| 16 | kunden.z_hd, lieferanten.z_hd |
+| 17 | kassenbuch → journal (Tabellenumbenennung + Trigger-Rename auf protect_journal_*) |
+| 18 | nummernkreise: typ='kassenbuch' → 'journal', bezeichnung='Journal' |
+| 19 | Unique-Indizes uix_kunden_kundennummer + uix_lieferanten_lieferantennummer (WHERE NOT NULL) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
@@ -78,10 +94,11 @@ sonst findet GitHub Actions die Workflow-Datei nicht.
 
 ### GitHub Actions (`.github/workflows/build.yml`)
 - Trigger: `push tags v*`
-- Matrix: Ubuntu (AppImage) + Windows (MSI)
-- Sidecar: PyInstaller (Linux: `build-sidecar.sh`, Windows: `build-sidecar.ps1`)
+- Matrix: Ubuntu (AppImage) + Windows (MSI/NSIS) + macOS arm64 + macOS x86_64 (DMG, unsigned)
+- Sidecar: PyInstaller (Linux/macOS: `build-sidecar.sh`, Windows: `build-sidecar.ps1`)
 - Signierung: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` als GitHub Secrets
-- Ergebnis: Draft-Release mit `.AppImage`, `.msi`, `latest.json`
+- macOS: kein Apple-Zertifikat → Gatekeeper-Bypass per Rechtsklick→Öffnen oder `xattr -cr`
+- Ergebnis: Draft-Release mit `.AppImage`, `.msi`, `.dmg` (arm64+x64), `latest.json`
 - Release manuell auf GitHub veröffentlichen → erst dann ist Updater aktiv
 
 ### Tauri Updater (`tauri-plugin-updater`)

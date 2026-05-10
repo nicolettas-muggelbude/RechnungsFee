@@ -9,7 +9,7 @@ export function StepKassenbestand({ onNext, onBack, isLoading }: Props) {
     <div className="space-y-5">
       <p className="text-sm text-slate-600 dark:text-slate-300">
         Falls du bereits Bargeld in deiner Kasse hast, trag hier den aktuellen Bestand ein.
-        Dieser Anfangsbestand wird als unveränderlicher Kassenbucheintrag gespeichert.
+        Dieser Anfangsbestand wird als unveränderlicher Journaleintrag gespeichert.
       </p>
       <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
         <strong>Kein Bargeld?</strong> Kein Problem – einfach 0 lassen und überspringen.

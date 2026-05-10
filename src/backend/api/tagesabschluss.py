@@ -12,7 +12,7 @@ from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Tagesabschluss, Kassenbucheintrag, Unternehmen
+from database.models import Tagesabschluss, Journaleintrag, Unternehmen
 from .schemas import TagesabschlussCreate, TagesabschlussResponse, TagesabschlussVorschau
 from utils.signatur import signatur_tagesabschluss
 from utils.pdf_tagesabschluss import generate_tagesabschluss_pdf
@@ -33,28 +33,28 @@ def _berechne_vorschau(datum: date, db: Session) -> dict:
 
     # Nur Barbuchungen des Tages
     einnahmen = (
-        db.query(func.sum(Kassenbucheintrag.brutto_betrag))
+        db.query(func.sum(Journaleintrag.brutto_betrag))
         .filter(
-            Kassenbucheintrag.datum == datum,
-            Kassenbucheintrag.art == "Einnahme",
-            Kassenbucheintrag.zahlungsart == "Bar",
+            Journaleintrag.datum == datum,
+            Journaleintrag.art == "Einnahme",
+            Journaleintrag.zahlungsart == "Bar",
         )
         .scalar()
         or Decimal("0")
     )
     ausgaben = (
-        db.query(func.sum(Kassenbucheintrag.brutto_betrag))
+        db.query(func.sum(Journaleintrag.brutto_betrag))
         .filter(
-            Kassenbucheintrag.datum == datum,
-            Kassenbucheintrag.art == "Ausgabe",
-            Kassenbucheintrag.zahlungsart == "Bar",
+            Journaleintrag.datum == datum,
+            Journaleintrag.art == "Ausgabe",
+            Journaleintrag.zahlungsart == "Bar",
         )
         .scalar()
         or Decimal("0")
     )
     anzahl = (
-        db.query(func.count(Kassenbucheintrag.id))
-        .filter(Kassenbucheintrag.datum == datum)
+        db.query(func.count(Journaleintrag.id))
+        .filter(Journaleintrag.datum == datum)
         .scalar()
         or 0
     )
@@ -80,8 +80,8 @@ def fehlt_gestern(db: Session = Depends(get_db)):
     verhindert Fehlalarm bei Ersteinrichtung."""
     gestern = date.today() - timedelta(days=1)
     hat_buchungen = (
-        db.query(func.count(Kassenbucheintrag.id))
-        .filter(Kassenbucheintrag.datum == gestern)
+        db.query(func.count(Journaleintrag.id))
+        .filter(Journaleintrag.datum == gestern)
         .scalar() or 0
     ) > 0
     if not hat_buchungen:

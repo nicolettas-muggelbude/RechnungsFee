@@ -10,8 +10,8 @@ from fastapi.responses import Response as _Response
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Kunde, Kassenbucheintrag, Rechnung, Nummernkreis
-from .kassenbuch import _belegnr_aus_format
+from database.models import Kunde, Journaleintrag, Rechnung, Nummernkreis
+from .journal import _belegnr_aus_format
 from .schemas import KundeCreate, KundeUpdate, KundeResponse
 
 
@@ -43,6 +43,9 @@ def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
     kunde_data = data.model_dump()
     if not kunde_data.get("kundennummer"):
         kunde_data["kundennummer"] = _naechste_nummer("kunde", db)
+    nr = kunde_data.get("kundennummer")
+    if nr and db.query(Kunde).filter(Kunde.kundennummer == nr).first():
+        raise HTTPException(status_code=409, detail=f"Kundennummer '{nr}' ist bereits vergeben.")
     kunde = Kunde(**kunde_data)
     db.add(kunde)
     db.commit()
@@ -59,9 +62,9 @@ def dsgvo_export(kunde_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
 
     eintraege = (
-        db.query(Kassenbucheintrag)
-        .filter(Kassenbucheintrag.kunde_id == kunde_id)
-        .order_by(Kassenbucheintrag.datum)
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.kunde_id == kunde_id)
+        .order_by(Journaleintrag.datum)
         .all()
     )
     rechnungen = (
@@ -95,7 +98,7 @@ def dsgvo_export(kunde_id: int, db: Session = Depends(get_db)):
             "ist_gemeinnuetzig": kunde.ist_gemeinnuetzig,
             "notizen": kunde.notizen,
         },
-        "kassenbuch": [
+        "journal": [
             {
                 "id": e.id,
                 "datum": str(e.datum),
@@ -148,7 +151,7 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     Löscht den Kundenstammsatz und entfernt die Verknüpfung in allen
     nicht-immutable Buchungen und Rechnungen.
 
-    Immutable Kassenbucheinträge (nach Tagesabschluss) können nicht
+    Immutable Journaleinträge (nach Tagesabschluss) können nicht
     geändert werden (GoBD-Schutz, §147 AO hat Vorrang vor DSGVO Art. 17).
     """
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
@@ -158,19 +161,19 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     name_teile = [kunde.firmenname, kunde.vorname, kunde.nachname]
     kunde_name = " ".join(t for t in name_teile if t) or f"Kunde #{kunde_id}"
 
-    # Mutable Kassenbucheinträge anonymisieren
+    # Mutable Journaleinträge anonymisieren
     mutable = (
-        db.query(Kassenbucheintrag)
-        .filter(Kassenbucheintrag.kunde_id == kunde_id, Kassenbucheintrag.immutable == False)
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.kunde_id == kunde_id, Journaleintrag.immutable == False)
         .all()
     )
     for e in mutable:
         e.kunde_id = None
 
-    # Immutable Kassenbucheinträge: GoBD-Trigger blockiert jede Änderung → nur zählen
+    # Immutable Journaleinträge: GoBD-Trigger blockiert jede Änderung → nur zählen
     immutable_anzahl = (
-        db.query(Kassenbucheintrag)
-        .filter(Kassenbucheintrag.kunde_id == kunde_id, Kassenbucheintrag.immutable == True)
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.kunde_id == kunde_id, Journaleintrag.immutable == True)
         .count()
     )
 
@@ -189,7 +192,7 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
         "anonymisierte_rechnungen": len(rechnungen),
         "unveraenderlich_verblieben": immutable_anzahl,
         "hinweis": (
-            f"{immutable_anzahl} immutable Kassenbucheinträge konnten nicht anonymisiert werden "
+            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
             f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
             if immutable_anzahl else ""
         ),
@@ -209,6 +212,10 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
     if not kunde:
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
+    neue_nr = data.model_dump(exclude_none=True).get("kundennummer")
+    if neue_nr and neue_nr != kunde.kundennummer:
+        if db.query(Kunde).filter(Kunde.kundennummer == neue_nr, Kunde.id != kunde_id).first():
+            raise HTTPException(status_code=409, detail=f"Kundennummer '{neue_nr}' ist bereits vergeben.")
     for key, value in data.model_dump(exclude_none=True).items():
         setattr(kunde, key, value)
     db.commit()
@@ -225,12 +232,12 @@ def delete_kunde(kunde_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
     hat_rechnungen = bool(kunde.rechnungen)
     hat_buchungen = (
-        db.query(Kassenbucheintrag).filter(Kassenbucheintrag.kunde_id == kunde_id).count() > 0
+        db.query(Journaleintrag).filter(Journaleintrag.kunde_id == kunde_id).count() > 0
     )
     if hat_rechnungen or hat_buchungen:
         raise HTTPException(
             status_code=409,
-            detail="Kunde hat verknüpfte Buchungen oder Rechnungen. "
+            detail="Kunde hat verknüpfte Rechnungen oder Journaleinträge. "
                    "Bitte 'Anonymisieren (DSGVO)' verwenden.",
         )
     db.delete(kunde)

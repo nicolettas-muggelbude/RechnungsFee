@@ -10,7 +10,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from database.models import Kassenbucheintrag, Tagesabschluss
+    from database.models import Journaleintrag, Tagesabschluss
 
 
 def berechne_signatur(felder: dict) -> str:
@@ -20,8 +20,8 @@ def berechne_signatur(felder: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def signatur_kassenbucheintrag(e: "Kassenbucheintrag") -> str:
-    """Signatur über alle buchungsrelevanten Felder eines Kassenbucheintrags."""
+def signatur_journaleintrag(e: "Journaleintrag") -> str:
+    """Signatur über alle buchungsrelevanten Felder eines Journaleintrags."""
     return berechne_signatur({
         "art": str(e.art),
         "belegnr": str(e.belegnr),

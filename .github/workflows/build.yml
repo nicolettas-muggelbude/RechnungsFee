@@ -19,6 +19,12 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             sidecar_ext: '.exe'
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            sidecar_ext: ''
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            sidecar_ext: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -59,6 +65,10 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: pwsh scripts/build-sidecar.ps1
+
+      - name: Backend-Sidecar bauen (macOS)
+        if: runner.os == 'macOS'
+        run: bash scripts/build-sidecar.sh
 
       # ── Node.js / Frontend ──────────────────────────────────────────────────
       - name: Node.js 22 einrichten
@@ -270,6 +280,76 @@ jobs:
 
           gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
 
+      # ── macOS: Versionlose DMG-Kopie hochladen ──────────────────────────────
+      - name: Versionlose DMG-Kopie hochladen (macOS)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          TARGET="${{ matrix.target }}"
+          if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
+            ARCH="aarch64"
+          else
+            ARCH="x64"
+          fi
+          BASE="${GITHUB_WORKSPACE}/src-tauri/target/${TARGET}/release/bundle/dmg"
+          echo "=== bundle/dmg Inhalt ==="
+          ls -la "$BASE/" || echo "(leer)"
+          cp "$BASE/RechnungsFee_${V}_${ARCH}.dmg" "$BASE/RechnungsFee_${ARCH}.dmg"
+          gh release upload "${{ github.ref_name }}" "$BASE/RechnungsFee_${ARCH}.dmg" --clobber
+
+      # ── macOS: Updater-TAR und Signatur hochladen ───────────────────────────
+      - name: Updater-TAR und Signatur hochladen (macOS)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          TARGET="${{ matrix.target }}"
+          if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
+            ARCH="aarch64"
+          else
+            ARCH="x64"
+          fi
+
+          BASE="${GITHUB_WORKSPACE}/src-tauri/target/${TARGET}/release/bundle/macos"
+          TAR="$BASE/RechnungsFee_${V}_${ARCH}.app.tar.gz"
+          SIG="${TAR}.sig"
+
+          echo "=== bundle/macos Inhalt ==="
+          ls -la "$BASE/" || echo "(leer)"
+
+          if [ -f "$SIG" ]; then
+            echo "Signatur bereits vorhanden, direkt hochladen"
+            gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
+            exit 0
+          fi
+
+          # .app.tar.gz erstellen falls Tauri es nicht angelegt hat
+          if [ ! -f "$TAR" ]; then
+            tar -czf "$TAR" -C "$BASE" "RechnungsFee.app"
+          fi
+
+          brew install minisign
+
+          KEYFILE=$(mktemp)
+          STRIPPED=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '[:space:]')
+          if echo "$STRIPPED" | base64 -d 2>/dev/null | grep -q "^untrusted comment:"; then
+            echo "$STRIPPED" | base64 -d > "$KEYFILE"
+          else
+            printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\\n/\n/g' > "$KEYFILE"
+          fi
+
+          printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}" | minisign -SHm "$TAR" -s "$KEYFILE" -x "$SIG"
+          rm -f "$KEYFILE"
+
+          gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
+
   # ── latest.json generieren + Release-Notes aktualisieren ──────────────────
   updater-json:
     needs: build
@@ -302,20 +382,33 @@ jobs:
               return base64.b64encode(open(path, 'rb').read()).decode('ascii')
 
           # ── latest.json ────────────────────────────────────────────────────
+          platforms = {
+            'windows-x86_64': {
+              'signature': sig_b64(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig'),
+              'url': f'{base}/RechnungsFee_{v}_x64-setup.nsis.zip',
+            },
+            'linux-x86_64': {
+              'signature': sig_b64(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig'),
+              'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
+            },
+          }
+          # macOS – optional, nur wenn Signaturen vorhanden
+          for arch, platform_key in [('aarch64', 'darwin-aarch64'), ('x64', 'darwin-x86_64')]:
+            sig_path = f'sigs/RechnungsFee_{v}_{arch}.app.tar.gz.sig'
+            if os.path.exists(sig_path):
+              platforms[platform_key] = {
+                'signature': sig_b64(sig_path),
+                'url': f'{base}/RechnungsFee_{v}_{arch}.app.tar.gz',
+              }
+              print(f'{platform_key} zur latest.json hinzugefügt')
+            else:
+              print(f'{platform_key}: keine Signatur gefunden, übersprungen')
+
           data = {
             'version': v,
             'notes': '',
             'pub_date': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'platforms': {
-              'windows-x86_64': {
-                'signature': sig_b64(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig'),
-                'url': f'{base}/RechnungsFee_{v}_x64-setup.nsis.zip',
-              },
-              'linux-x86_64': {
-                'signature': sig_b64(f'sigs/RechnungsFee_{v}_amd64.AppImage.tar.gz.sig'),
-                'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
-              },
-            },
+            'platforms': platforms,
           }
           json.dump(data, open('latest.json', 'w'), indent=2)
           print('latest.json generiert')
@@ -337,9 +430,13 @@ jobs:
           win_exe      = f'RechnungsFee_{v}_x64-setup.exe'
           lin_img      = 'RechnungsFee_amd64.AppImage'
           lin_img_ver  = f'RechnungsFee_{v}_amd64.AppImage'
+          mac_arm      = 'RechnungsFee_aarch64.dmg'
+          mac_x64      = 'RechnungsFee_x64.dmg'
           win_url      = f'{base}/{win_exe}'
           lin_url      = f'{base}/{lin_img}'
           lin_url_ver  = f'{base}/{lin_img_ver}'
+          mac_arm_url  = f'{base}/{mac_arm}'
+          mac_x64_url  = f'{base}/{mac_x64}'
           install_sh   = 'install-linux.sh'
           install_url  = f'{base}/{install_sh}'
 
@@ -357,6 +454,8 @@ jobs:
           | **Linux** | [⬇ {lin_img}]({lin_url}) | **Empfohlen** – Dateiname bleibt nach Auto-Updates korrekt |
           | **Linux (versioniert)** | [⬇ {lin_img_ver}]({lin_url_ver}) | Alternative mit Versionsnummer im Dateinamen |
           | **Linux: Menü-Integration** | [⬇ {install_sh}]({install_url}) | Einmalig ausführen → Icon + Starter im Anwendungsmenü |
+          | **macOS (Apple Silicon)** | [⬇ {mac_arm}]({mac_arm_url}) | M1/M2/M3/M4 – siehe Hinweis unten |
+          | **macOS (Intel)** | [⬇ {mac_x64}]({mac_x64_url}) | Ältere Macs – siehe Hinweis unten |
 
           **Auto-Update:** Wer v0.1.3 oder neuer installiert hat, bekommt das Update automatisch beim nächsten App-Start angeboten.
 
@@ -374,7 +473,20 @@ jobs:
           ./install-linux.sh ./RechnungsFee_amd64.AppImage
           ```
 
-          > ℹ️ Die Dateien `.tar.gz`, `.nsis.zip` und `.sig` sind für den eingebauten Auto-Updater – **nicht manuell herunterladen**.
+          ### macOS: Gatekeeper-Hinweis
+
+          Da RechnungsFee kein kostenpflichtiges Apple-Entwicklerzertifikat besitzt, zeigt macOS beim ersten Start eine Warnung. So öffnest du die App trotzdem:
+
+          **Methode 1 (einfach):** Rechtsklick auf `RechnungsFee.app` → „Öffnen" → im Dialog erneut „Öffnen" klicken.
+
+          **Methode 2 (Terminal):**
+          ```bash
+          xattr -cr /Applications/RechnungsFee.app
+          ```
+
+          Danach startet die App normal und die Warnung erscheint nicht mehr.
+
+          > ℹ️ Die Dateien `.tar.gz`, `.nsis.zip`, `.app.tar.gz` und `.sig` sind für den eingebauten Auto-Updater – **nicht manuell herunterladen**.
 
           ---
 

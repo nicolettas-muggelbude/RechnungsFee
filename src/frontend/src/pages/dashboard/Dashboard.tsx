@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getKassenbuch, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, type Rechnung } from '../../api/client'
+import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, type Rechnung } from '../../api/client'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -27,18 +27,21 @@ type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr'
 // Zufluss-Monitor für Transferleistungen (Bürgergeld / ALG I)
 // ---------------------------------------------------------------------------
 
-// Bürgergeld 2026: § 11b SGB II
-const GRUNDFREIBETRAG = 100   // erste 100 € immer anrechnungsfrei
-const OBERE_GRENZE   = 520   // bis 520 €: 20 % Freibetrag; darüber volle Anrechnung
+// Bürgergeld 2026: § 11b SGB II – dreistufige Freibetragsberechnung
+// Stufe 1:    0–100 €:   vollständig anrechnungsfrei (Grundfreibetrag)
+// Stufe 2: 100–1000 €:   20 % Freibetrag auf diesen Anteil (max. 180 €)
+// Stufe 3: 1000–1200 €:  10 % Freibetrag auf diesen Anteil (max. 20 €)
+// Über 1200 €:           kein weiterer Freibetrag, vollständige Anrechnung
+const GRUNDFREIBETRAG = 100
+const GRENZE_20 = 1000
+const OBERE_GRENZE = 1200   // ab hier: volle Anrechnung des Überschusses
 
 function berechneEks(zufluss: number): { freibetrag: number; anrechenbar: number } {
-  if (zufluss <= GRUNDFREIBETRAG) {
-    return { freibetrag: zufluss, anrechenbar: 0 }
-  }
-  const freibetragErweiterung = Math.min(zufluss - GRUNDFREIBETRAG, OBERE_GRENZE - GRUNDFREIBETRAG) * 0.2
-  const freibetrag = GRUNDFREIBETRAG + freibetragErweiterung
-  const anrechenbar = Math.max(0, zufluss - freibetrag)
-  return { freibetrag, anrechenbar }
+  if (zufluss <= GRUNDFREIBETRAG) return { freibetrag: zufluss, anrechenbar: 0 }
+  const stufe2 = Math.min(zufluss - GRUNDFREIBETRAG, GRENZE_20 - GRUNDFREIBETRAG) * 0.2
+  const stufe3 = Math.min(Math.max(zufluss - GRENZE_20, 0), OBERE_GRENZE - GRENZE_20) * 0.1
+  const freibetrag = GRUNDFREIBETRAG + stufe2 + stufe3
+  return { freibetrag, anrechenbar: Math.max(0, zufluss - freibetrag) }
 }
 
 function ZuflussMonitor({ zufluss }: { zufluss: number }) {
@@ -46,15 +49,18 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
   const { freibetrag, anrechenbar } = berechneEks(zufluss)
 
   let stufe: 'ok' | 'warn' | 'kritisch'
-  if (zufluss <= GRUNDFREIBETRAG)       stufe = 'ok'
-  else if (zufluss < OBERE_GRENZE)      stufe = 'warn'
-  else                                   stufe = 'kritisch'
+  if (zufluss <= GRUNDFREIBETRAG) stufe = 'ok'
+  else if (zufluss < OBERE_GRENZE) stufe = 'warn'
+  else stufe = 'kritisch'
 
   const farben = {
-    ok:       { balken: 'bg-green-500',  text: 'text-green-700 dark:text-green-300',  bg: 'bg-green-50 dark:bg-green-950',  border: 'border-green-200 dark:border-green-800' },
-    warn:     { balken: 'bg-amber-400',  text: 'text-amber-700 dark:text-amber-300',  bg: 'bg-amber-50 dark:bg-amber-950',  border: 'border-amber-200 dark:border-amber-800' },
-    kritisch: { balken: 'bg-red-500',    text: 'text-red-700 dark:text-red-300',    bg: 'bg-red-50 dark:bg-red-950',    border: 'border-red-200 dark:border-red-800'   },
+    ok:       { balken: 'bg-green-500', text: 'text-green-700 dark:text-green-300', bg: 'bg-green-50 dark:bg-green-950', border: 'border-green-200 dark:border-green-800' },
+    warn:     { balken: 'bg-amber-400', text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950', border: 'border-amber-200 dark:border-amber-800' },
+    kritisch: { balken: 'bg-red-500',   text: 'text-red-700 dark:text-red-300',    bg: 'bg-red-50 dark:bg-red-950',    border: 'border-red-200 dark:border-red-800'   },
   }[stufe]
+
+  const pct100  = (GRUNDFREIBETRAG / OBERE_GRENZE) * 100
+  const pct1000 = (GRENZE_20 / OBERE_GRENZE) * 100
 
   return (
     <div className={`rounded-xl border ${farben.border} ${farben.bg} p-4 space-y-3`}>
@@ -63,7 +69,7 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
             Zufluss-Monitor
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Bürgergeld-Grenzwert (§ 11b SGB II)</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Stufenfreibetrag (§ 11b SGB II)</p>
         </div>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${farben.bg} ${farben.text} border ${farben.border}`}>
           {stufe === 'ok' ? 'Im Freibetrag' : stufe === 'warn' ? 'Achtung' : 'Grenze überschritten'}
@@ -75,25 +81,20 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
         <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 mb-1">
           <span>0 €</span>
           <span className="text-slate-500 dark:text-slate-400 font-medium">{formatEuro(zufluss)}</span>
-          <span>{OBERE_GRENZE} €</span>
+          <span>1.200 €</span>
         </div>
         <div className="h-3 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden relative">
           <div
             className={`h-full rounded-full transition-all ${farben.balken}`}
             style={{ width: `${prozent}%` }}
           />
-          {/* Grundfreibetrag-Markierung */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-slate-400/60"
-            style={{ left: `${(GRUNDFREIBETRAG / OBERE_GRENZE) * 100}%` }}
-          />
+          {/* Stufenmarkierungen */}
+          <div className="absolute top-0 bottom-0 w-px bg-slate-400/60" style={{ left: `${pct100}%` }} />
+          <div className="absolute top-0 bottom-0 w-px bg-slate-400/60" style={{ left: `${pct1000}%` }} />
         </div>
-        <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-          <span />
-          <span style={{ marginLeft: `${(GRUNDFREIBETRAG / OBERE_GRENZE) * 100 - 8}%` }}>
-            100 €
-          </span>
-          <span />
+        <div className="relative text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 h-3">
+          <span className="absolute" style={{ left: `${pct100}%`, transform: 'translateX(-50%)' }}>100 €</span>
+          <span className="absolute" style={{ left: `${pct1000}%`, transform: 'translateX(-50%)' }}>1.000 €</span>
         </div>
       </div>
 
@@ -115,22 +116,27 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
         </div>
       </div>
 
-      {stufe === 'warn' && (
-        <p className="text-xs text-amber-800">
-          Dein monatlicher Zufluss liegt über dem Grundfreibetrag von 100 €. Melde deinen
-          Gewinn über die EKS-Erklärung bei der Agentur für Arbeit.
+      {stufe === 'warn' && zufluss <= GRENZE_20 && (
+        <p className="text-xs text-amber-800 dark:text-amber-300">
+          Dein Zufluss liegt über dem Grundfreibetrag. Auf den Anteil zwischen 100 € und 1.000 €
+          werden 20 % anrechnungsfrei gestellt. Melde deinen Gewinn über die EKS-Erklärung.
+        </p>
+      )}
+      {stufe === 'warn' && zufluss > GRENZE_20 && (
+        <p className="text-xs text-amber-800 dark:text-amber-300">
+          Zwischen 1.000 € und 1.200 € gilt noch ein Freibetrag von 10 %. Darüber hinaus wird
+          der Überschuss vollständig angerechnet. EKS aktuell halten.
         </p>
       )}
       {stufe === 'kritisch' && (
         <p className={`text-xs font-medium ${farben.text}`}>
-          Der Zufluss übersteigt 520 €. Oberhalb dieser Grenze wird das Einkommen vollständig
-          auf Bürgergeld angerechnet. Stelle sicher, dass deine EKS aktuell ist.
+          Der Zufluss übersteigt 1.200 €. Der Überschuss über dem Gesamtfreibetrag von 300 €
+          wird vollständig auf das Bürgergeld angerechnet. Stelle sicher, dass deine EKS aktuell ist.
         </p>
       )}
 
       <p className="text-[10px] text-slate-400 dark:text-slate-500">
-        Berechnungsgrundlage: § 11b Abs. 2 SGB II (Stand 2026). Privateinlagen sind
-        ausgeschlossen. Kein Ersatz für individuelle Rechtsberatung.
+        § 11b Abs. 2 SGB II: 0–100 € frei · 100–1.000 € → 20 % Freibetrag · 1.000–1.200 € → 10 % Freibetrag · darüber volle Anrechnung. Kein Ersatz für Rechtsberatung.
       </p>
     </div>
   )
@@ -270,8 +276,8 @@ export function Dashboard() {
       : { datum_von: `${aktivesJahr}-01-01`, datum_bis: `${aktivesJahr}-12-31` }
 
   const { data: eintraege } = useQuery({
-    queryKey: ['kassenbuch', filterModus, monat, datum, datumVon, datumBis],
-    queryFn: () => getKassenbuch(filterParams),
+    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis],
+    queryFn: () => getJournal(filterParams),
   })
 
   const { data: unternehmen } = useQuery({
@@ -282,8 +288,8 @@ export function Dashboard() {
 
   // Aktuellen Monat immer laden für Zufluss-Monitor
   const { data: aktuelleEintraege } = useQuery({
-    queryKey: ['kassenbuch-aktuell', aktuellerMonat()],
-    queryFn: () => getKassenbuch({ monat: aktuellerMonat() }),
+    queryKey: ['journal-aktuell', aktuellerMonat()],
+    queryFn: () => getJournal({ monat: aktuellerMonat() }),
     enabled: unternehmen?.bezieht_transferleistungen === true,
     staleTime: 1000 * 60 * 5,
   })

@@ -60,7 +60,7 @@ export function BackupPage() {
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Was wird gesichert?</p>
             <ul className="text-sm text-slate-600 dark:text-slate-300 space-y-1 list-none">
               {[
-                'Alle Kassenbucheinträge und Tagesabschlüsse',
+                'Alle Journaleinträge und Tagesabschlüsse',
                 'Rechnungen (Eingang & Ausgang) mit Zahlungen',
                 'Kunden und Lieferanten',
                 'Unternehmensdaten, Konten, Kategorien',

@@ -5,8 +5,8 @@ import { getSetupStatus, isTauri } from './api/client'
 import { SetupWizard } from './pages/setup/SetupWizard'
 import { AppLayout } from './components/AppLayout'
 import { Dashboard } from './pages/dashboard/Dashboard'
-import { KassenbuchPage } from './pages/kassenbuch/KassenbuchPage'
-import { TagesabschlussPage } from './pages/kassenbuch/TagesabschlussPage'
+import { JournalPage } from './pages/journal/JournalPage'
+import { TagesabschlussPage } from './pages/journal/TagesabschlussPage'
 import { KundenPage } from './pages/kunden/KundenPage'
 import { LieferantenPage } from './pages/lieferanten/LieferantenPage'
 import { ArtikelPage } from './pages/artikel/ArtikelPage'
@@ -64,7 +64,7 @@ function AppRoutes() {
       {status.ist_eingerichtet ? (
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/kassenbuch" element={<KassenbuchPage />} />
+          <Route path="/journal" element={<JournalPage />} />
           <Route path="/tagesabschluesse" element={<TagesabschlussPage />} />
           {/* Stammdaten */}
           <Route path="/kunden" element={<KundenPage />} />

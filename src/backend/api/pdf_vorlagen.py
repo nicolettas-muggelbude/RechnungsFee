@@ -72,7 +72,7 @@ def _demo_rechnung(unt: dict) -> Any:
         ust_gesamt=ust,
         brutto_gesamt=brutto,
         zahlungsstatus="offen",
-        kassenbucheintraege=[],
+        journaleintraege=[],
         positionen=[pos1, pos2, pos3],
         kunde=kunde,
         lieferant=None,

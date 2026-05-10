@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getKassenbuch, getKategorien } from '../../api/client'
+import { getJournal, getKategorien } from '../../api/client'
 import { BuchungForm } from './BuchungForm'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
 import { BuchungDetail } from './BuchungDetail'
@@ -26,7 +26,7 @@ function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function KassenbuchPage() {
+export function JournalPage() {
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')
   const [monat, setMonat] = useState(aktuellerMonat)
   const [datum, setDatum] = useState(heuteIso)
@@ -34,6 +34,7 @@ export function KassenbuchPage() {
   const [datumBis, setDatumBis] = useState(heuteIso)
   const [art, setArt] = useState<'' | 'Einnahme' | 'Ausgabe'>('')
   const [kategorieId, setKategorieId] = useState<string>('')
+  const [zahlungsartTyp, setZahlungsartTyp] = useState<'' | 'bar' | 'unbar'>('')
   const [showBuchung, setShowBuchung] = useState(false)
   const [showAbschluss, setShowAbschluss] = useState(false)
   const [aktiverEintragId, setAktiverEintragId] = useState<number | null>(null)
@@ -48,11 +49,12 @@ export function KassenbuchPage() {
         : { datum_von: `${aktivesJahr}-01-01`, datum_bis: `${aktivesJahr}-12-31` }
 
   const { data: eintraege, isLoading } = useQuery({
-    queryKey: ['kassenbuch', filterModus, monat, datum, datumVon, datumBis, art, kategorieId],
-    queryFn: () => getKassenbuch({
+    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis, art, kategorieId, zahlungsartTyp],
+    queryFn: () => getJournal({
       ...filterParams,
       art: art || undefined,
       kategorie_id: kategorieId ? Number(kategorieId) : undefined,
+      zahlungsart_typ: zahlungsartTyp || undefined,
     }),
   })
 
@@ -75,7 +77,7 @@ export function KassenbuchPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Kassenbuch</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Journal</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setShowAbschluss(true)}
@@ -166,6 +168,15 @@ export function KassenbuchPage() {
           {(kategorien ?? []).map((k) => (
             <option key={k.id} value={k.id}>{k.name}</option>
           ))}
+        </select>
+        <select
+          value={zahlungsartTyp}
+          onChange={(e) => setZahlungsartTyp(e.target.value as '' | 'bar' | 'unbar')}
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+        >
+          <option value="">Bar &amp; Unbar</option>
+          <option value="bar">Nur Bar</option>
+          <option value="unbar">Nur Unbar</option>
         </select>
       </div>
 

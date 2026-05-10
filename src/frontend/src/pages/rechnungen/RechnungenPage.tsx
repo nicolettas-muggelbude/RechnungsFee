@@ -86,7 +86,7 @@ function ZahlungsDialog({
     mutationFn: (data: BarZahlungCreate) => barZahlungErstellen(rechnung.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
       onSuccess()
     },
     onError: (e: Error) => setFehler(e.message),
@@ -209,7 +209,7 @@ function ZahlungsDialog({
           {/* Vorschau */}
           {!isNaN(betragDecimal) && betragDecimal > 0 && (
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-sm">
-              <p className="text-blue-700 dark:text-blue-300 font-medium">Kassenbuchung wird erstellt:</p>
+              <p className="text-blue-700 dark:text-blue-300 font-medium">Journalbuchung wird erstellt:</p>
               <p className="text-blue-600 dark:text-blue-400 mt-0.5">
                 {artLabel} {formatEuro(betragDecimal)} via {zahlungsart === 'Bank' ? 'Überweisung' : zahlungsart}
               </p>
@@ -478,7 +478,7 @@ function RechnungDetail({
               Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.
               {rechnung.zahlungen.length > 0 && (
                 <span className="block mt-0.5 text-xs text-red-600 dark:text-red-400">
-                  Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Kassenbuch erstellt.
+                  Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Journal erstellt.
                 </span>
               )}
             </span>
@@ -600,7 +600,7 @@ function RechnungDetail({
         <div>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1">
             Zahlung
-            <InfoTooltip text="Offen: noch keine Zahlung eingegangen. Teilweise: mindestens eine Teilzahlung verbucht. Bezahlt: Rechnungsbetrag vollständig beglichen. Zahlungen werden automatisch als Kassenbucheinträge gespeichert." />
+            <InfoTooltip text="Offen: noch keine Zahlung eingegangen. Teilweise: mindestens eine Teilzahlung verbucht. Bezahlt: Rechnungsbetrag vollständig beglichen. Zahlungen werden automatisch als Journaleinträge gespeichert." />
           </p>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
@@ -630,7 +630,7 @@ function RechnungDetail({
         {rechnung.zahlungen.length > 0 && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-              Verknüpfte Kassenbuchungen
+              Verknüpfte Journalbuchungen
             </p>
             <div className="space-y-1">
               {rechnung.zahlungen.map((z) => (

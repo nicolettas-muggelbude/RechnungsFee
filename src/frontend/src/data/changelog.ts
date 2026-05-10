@@ -23,6 +23,21 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.1.62',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Kassenbuch wurde in Journal umbenannt – der Begriff Kassenbuch bleibt für eine spätere Funktion frei' },
+      { typ: 'neu', text: 'Journal: Filter für Bar- und Unbar-Zahlungen (Karte, Bank, PayPal)' },
+      { typ: 'neu', text: 'Journal-Detailansicht: Belegnummer per Klick in die Zwischenablage kopieren' },
+      { typ: 'neu', text: 'macOS-Build: DMG für Apple Silicon (M1–M4) und Intel in GitHub Actions' },
+      { typ: 'fix', text: 'GoBD-Export auf Linux: weißes Fenster behoben – ZIP wird jetzt direkt heruntergeladen mit Erfolgsmeldung' },
+      { typ: 'fix', text: 'Nummernkreis: Nächste Nummer kann nicht mehr verringert werden – verhindert doppelte Belegnummern' },
+      { typ: 'fix', text: 'Kunden- und Lieferantennummern: Doppelvergabe wird jetzt auf API- und Datenbankebene verhindert' },
+      { typ: 'fix', text: 'Artikel: benutzerdefinierte MwSt.-Sätze (z.B. 7,8 % Landwirtschaft) wurden beim Anlegen und Bearbeiten fälschlich abgelehnt – Prüfung erfolgt jetzt gegen die hinterlegten aktiven Steuersätze' },
+      { typ: 'fix', text: 'Dashboard Zufluss-Monitor: Bürgergeld-Berechnung korrigiert – § 11b SGB II verwendet eine dreistufige Freibetragsregelung (0–100 € frei, 100–1.000 € 20 % frei, 1.000–1.200 € 10 % frei), nicht eine Pauschal-Grenze bei 520 €' },
+    ],
+  },
+  {
     version: 'v0.1.60',
     datum: 'April 2026',
     eintraege: [

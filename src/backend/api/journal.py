@@ -1,5 +1,5 @@
 """
-Kassenbuch-API (GoBD-konform, unveränderbar).
+Journal-API (GoBD-konform, unveränderbar).
 Kein PUT/DELETE – nur Storno als Gegenbuchung.
 """
 
@@ -13,17 +13,17 @@ from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Kassenbucheintrag, Kategorie, Unternehmen, Nummernkreis
-from utils.signatur import signatur_kassenbucheintrag
+from database.models import Journaleintrag, Kategorie, Unternehmen, Nummernkreis
+from utils.signatur import signatur_journaleintrag
 from .schemas import (
-    KassenbuchEintragCreate,
-    KassenbuchEintragResponse,
+    JournalEintragCreate,
+    JournalEintragResponse,
     StornoRequest,
     SplitBuchungCreate,
     MonatsUebersicht,
 )
 
-router = APIRouter(prefix="/api/kassenbuch", tags=["Kassenbuch"])
+router = APIRouter(prefix="/api/journal", tags=["Journal"])
 
 
 import re as _re
@@ -48,12 +48,12 @@ def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
 
 
 def _naechste_belegnr(db: Session, datum: date) -> str:
-    """Liest den Kassenbuch-Nummernkreis, generiert die nächste Belegnummer
+    """Liest den Journal-Nummernkreis, generiert die nächste Belegnummer
     und speichert den inkrementierten Zähler (atomar im selben Commit)."""
-    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "kassenbuch").first()
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "journal").first()
     if not nk:
         # Fallback falls Seed fehlt
-        count = db.query(Kassenbucheintrag).count()
+        count = db.query(Journaleintrag).count()
         return f"{str(datum.year)[-2:]}{count + 1:04d}"
 
     # Jahreswechsel-Reset
@@ -78,13 +78,13 @@ def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]
 
 def _get_bar_kassenstand(db: Session) -> Decimal:
     """Gibt den aktuellen Kassenstand der Barkasse zurück (nur Bar-Buchungen)."""
-    einnahmen = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-        Kassenbucheintrag.art == "Einnahme",
-        Kassenbucheintrag.zahlungsart == "Bar",
+    einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+        Journaleintrag.art == "Einnahme",
+        Journaleintrag.zahlungsart == "Bar",
     ).scalar() or Decimal("0")
-    ausgaben = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-        Kassenbucheintrag.art == "Ausgabe",
-        Kassenbucheintrag.zahlungsart == "Bar",
+    ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+        Journaleintrag.art == "Ausgabe",
+        Journaleintrag.zahlungsart == "Bar",
     ).scalar() or Decimal("0")
     return Decimal(str(einnahmen)) - Decimal(str(ausgaben))
 
@@ -112,30 +112,30 @@ def monat_statistik(monat: str = Query(..., description="Format: YYYY-MM"), db: 
         raise HTTPException(status_code=422, detail="monat muss im Format YYYY-MM sein")
 
     einnahmen = (
-        db.query(func.sum(Kassenbucheintrag.brutto_betrag))
+        db.query(func.sum(Journaleintrag.brutto_betrag))
         .filter(
-            extract("year", Kassenbucheintrag.datum) == jahr_int,
-            extract("month", Kassenbucheintrag.datum) == mon_int,
-            Kassenbucheintrag.art == "Einnahme",
+            extract("year", Journaleintrag.datum) == jahr_int,
+            extract("month", Journaleintrag.datum) == mon_int,
+            Journaleintrag.art == "Einnahme",
         )
         .scalar()
         or Decimal("0")
     )
     ausgaben = (
-        db.query(func.sum(Kassenbucheintrag.brutto_betrag))
+        db.query(func.sum(Journaleintrag.brutto_betrag))
         .filter(
-            extract("year", Kassenbucheintrag.datum) == jahr_int,
-            extract("month", Kassenbucheintrag.datum) == mon_int,
-            Kassenbucheintrag.art == "Ausgabe",
+            extract("year", Journaleintrag.datum) == jahr_int,
+            extract("month", Journaleintrag.datum) == mon_int,
+            Journaleintrag.art == "Ausgabe",
         )
         .scalar()
         or Decimal("0")
     )
     anzahl = (
-        db.query(func.count(Kassenbucheintrag.id))
+        db.query(func.count(Journaleintrag.id))
         .filter(
-            extract("year", Kassenbucheintrag.datum) == jahr_int,
-            extract("month", Kassenbucheintrag.datum) == mon_int,
+            extract("year", Journaleintrag.datum) == jahr_int,
+            extract("month", Journaleintrag.datum) == mon_int,
         )
         .scalar()
         or 0
@@ -149,44 +149,49 @@ def monat_statistik(monat: str = Query(..., description="Format: YYYY-MM"), db: 
     )
 
 
-@router.get("", response_model=list[KassenbuchEintragResponse])
+@router.get("", response_model=list[JournalEintragResponse])
 def list_eintraege(
     monat: Optional[str] = Query(None, description="Format: YYYY-MM"),
     datum_von: Optional[date] = Query(None, description="Von-Datum (YYYY-MM-DD)"),
     datum_bis: Optional[date] = Query(None, description="Bis-Datum (YYYY-MM-DD)"),
     kategorie_id: Optional[int] = None,
     art: Optional[str] = Query(None, description="Einnahme oder Ausgabe"),
+    zahlungsart_typ: Optional[str] = Query(None, description="bar oder unbar"),
     db: Session = Depends(get_db),
 ):
-    """Kassenbucheinträge mit optionalen Filtern."""
-    q = db.query(Kassenbucheintrag)
+    """Journaleinträge mit optionalen Filtern."""
+    q = db.query(Journaleintrag)
     if monat:
         try:
             jahr, mon = monat.split("-")
             q = q.filter(
-                extract("year", Kassenbucheintrag.datum) == int(jahr),
-                extract("month", Kassenbucheintrag.datum) == int(mon),
+                extract("year", Journaleintrag.datum) == int(jahr),
+                extract("month", Journaleintrag.datum) == int(mon),
             )
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="monat muss im Format YYYY-MM sein")
     else:
         if datum_von:
-            q = q.filter(Kassenbucheintrag.datum >= datum_von)
+            q = q.filter(Journaleintrag.datum >= datum_von)
         if datum_bis:
-            q = q.filter(Kassenbucheintrag.datum <= datum_bis)
+            q = q.filter(Journaleintrag.datum <= datum_bis)
     if kategorie_id is not None:
-        q = q.filter(Kassenbucheintrag.kategorie_id == kategorie_id)
+        q = q.filter(Journaleintrag.kategorie_id == kategorie_id)
     if art:
         if art not in ("Einnahme", "Ausgabe"):
             raise HTTPException(status_code=422, detail="art muss Einnahme oder Ausgabe sein")
-        q = q.filter(Kassenbucheintrag.art == art)
-    eintraege = q.order_by(Kassenbucheintrag.datum.desc(), Kassenbucheintrag.id.desc()).all()
-    return [KassenbuchEintragResponse.from_orm_with_kunde(e) for e in eintraege]
+        q = q.filter(Journaleintrag.art == art)
+    if zahlungsart_typ == "bar":
+        q = q.filter(Journaleintrag.zahlungsart == "Bar")
+    elif zahlungsart_typ == "unbar":
+        q = q.filter(Journaleintrag.zahlungsart != "Bar")
+    eintraege = q.order_by(Journaleintrag.datum.desc(), Journaleintrag.id.desc()).all()
+    return [JournalEintragResponse.from_orm_with_kunde(e) for e in eintraege]
 
 
-@router.post("", response_model=KassenbuchEintragResponse, status_code=201)
-def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db)):
-    """Legt einen neuen unveränderlichen Kassenbucheintrag an."""
+@router.post("", response_model=JournalEintragResponse, status_code=201)
+def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
+    """Legt einen neuen unveränderlichen Journaleintrag an."""
     # Kleinunternehmer-Check
     unternehmen = db.query(Unternehmen).first()
     ust_satz = data.ust_satz
@@ -217,7 +222,7 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
     netto, ust_betrag = _berechne_ust(data.brutto_betrag, ust_satz)
     belegnr = _naechste_belegnr(db, data.datum)
 
-    eintrag = Kassenbucheintrag(
+    journaleintrag = Journaleintrag(
         datum=data.datum,
         belegnr=belegnr,
         beschreibung=data.beschreibung,
@@ -234,16 +239,16 @@ def create_eintrag(data: KassenbuchEintragCreate, db: Session = Depends(get_db))
         externe_belegnr=data.externe_belegnr,
         immutable=True,
     )
-    eintrag.signatur = signatur_kassenbucheintrag(eintrag)
-    db.add(eintrag)
+    journaleintrag.signatur = signatur_journaleintrag(journaleintrag)
+    db.add(journaleintrag)
     db.commit()
-    db.refresh(eintrag)
-    return KassenbuchEintragResponse.from_orm_with_kunde(eintrag)
+    db.refresh(journaleintrag)
+    return JournalEintragResponse.from_orm_with_kunde(journaleintrag)
 
 
-@router.post("/split", response_model=list[KassenbuchEintragResponse], status_code=201)
+@router.post("/split", response_model=list[JournalEintragResponse], status_code=201)
 def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
-    """Erstellt mehrere Kassenbucheinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
+    """Erstellt mehrere Journaleinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
     # Barkassen-Prüfung für Split-Ausgaben (nur Bar, Gesamtbetrag aller Positionen)
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         gesamt = sum(pos.brutto_betrag for pos in data.positionen)
@@ -272,7 +277,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
                     steuerbefreiung_grund = "Privatbuchung"
         netto, ust_betrag = _berechne_ust(pos.brutto_betrag, ust_satz)
         belegnr = _naechste_belegnr(db, data.datum)
-        eintrag = Kassenbucheintrag(
+        journaleintrag = Journaleintrag(
             datum=data.datum,
             belegnr=belegnr,
             beschreibung=pos.beschreibung,
@@ -289,21 +294,21 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             steuerbefreiung_grund=steuerbefreiung_grund,
             immutable=True,
         )
-        eintrag.signatur = signatur_kassenbucheintrag(eintrag)
-        db.add(eintrag)
-        ergebnisse.append(eintrag)
+        journaleintrag.signatur = signatur_journaleintrag(journaleintrag)
+        db.add(journaleintrag)
+        ergebnisse.append(journaleintrag)
     db.commit()
     for e in ergebnisse:
         db.refresh(e)
-    return [KassenbuchEintragResponse.from_orm_with_kunde(e) for e in ergebnisse]
+    return [JournalEintragResponse.from_orm_with_kunde(e) for e in ergebnisse]
 
 
 @router.get("/{eintrag_id}/beleg", response_class=HTMLResponse)
 def get_beleg(eintrag_id: int, drucken: bool = Query(False), download: bool = Query(False), db: Session = Depends(get_db)):
-    """Gibt einen druckbaren HTML-Beleg für einen Kassenbucheintrag zurück."""
-    eintrag = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
+    """Gibt einen druckbaren HTML-Beleg für einen Journaleintrag zurück."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not eintrag:
-        raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
 
     datum = eintrag.datum.strftime("%d.%m.%Y")
     ust_satz = float(eintrag.ust_satz)
@@ -344,26 +349,26 @@ def get_beleg(eintrag_id: int, drucken: bool = Query(False), download: bool = Qu
     return HTMLResponse(content=html, headers=headers)
 
 
-@router.get("/{eintrag_id}", response_model=KassenbuchEintragResponse)
+@router.get("/{eintrag_id}", response_model=JournalEintragResponse)
 def get_eintrag(eintrag_id: int, db: Session = Depends(get_db)):
-    eintrag = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
-    if not eintrag:
-        raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
-    return KassenbuchEintragResponse.from_orm_with_kunde(eintrag)
+    journaleintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not journaleintrag:
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
+    return JournalEintragResponse.from_orm_with_kunde(journaleintrag)
 
 
-@router.post("/{eintrag_id}/storno", response_model=KassenbuchEintragResponse, status_code=201)
+@router.post("/{eintrag_id}/storno", response_model=JournalEintragResponse, status_code=201)
 def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(get_db)):
     """Storniert einen Eintrag durch eine Gegenbuchung (GoBD-konform)."""
-    original = db.query(Kassenbucheintrag).filter(Kassenbucheintrag.id == eintrag_id).first()
+    original = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not original:
-        raise HTTPException(status_code=404, detail="Kassenbucheintrag nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
     # Storno eines Stornos verhindern
     if original.beschreibung.startswith("STORNO "):
         raise HTTPException(status_code=409, detail="Ein Storno-Eintrag kann nicht erneut storniert werden.")
     # Bereits stornierte Buchung erkennen
-    bereits_storniert = db.query(Kassenbucheintrag).filter(
-        Kassenbucheintrag.beschreibung.like(f"STORNO {original.belegnr}:%")
+    bereits_storniert = db.query(Journaleintrag).filter(
+        Journaleintrag.beschreibung.like(f"STORNO {original.belegnr}:%")
     ).first()
     if bereits_storniert:
         raise HTTPException(
@@ -375,7 +380,7 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     storno_datum = date.today()
     belegnr = _naechste_belegnr(db, storno_datum)
 
-    storno = Kassenbucheintrag(
+    storno = Journaleintrag(
         datum=storno_datum,
         belegnr=belegnr,
         beschreibung=f"STORNO {original.belegnr}: {data.grund}",
@@ -390,8 +395,8 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         steuerbefreiung_grund=None,
         immutable=True,
     )
-    storno.signatur = signatur_kassenbucheintrag(storno)
+    storno.signatur = signatur_journaleintrag(storno)
     db.add(storno)
     db.commit()
     db.refresh(storno)
-    return KassenbuchEintragResponse.from_orm_with_kunde(storno)
+    return JournalEintragResponse.from_orm_with_kunde(storno)

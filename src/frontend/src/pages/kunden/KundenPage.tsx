@@ -531,7 +531,7 @@ export function KundenPage() {
                       <ul className="text-xs text-red-700 dark:text-red-400 space-y-0.5 list-disc list-inside">
                         <li>Kundenstammdaten werden dauerhaft gelöscht</li>
                         <li>Verknüpfungen in Buchungen und Rechnungen werden entfernt</li>
-                        <li>Immutable Kassenbucheinträge bleiben erhalten (§147 AO)</li>
+                        <li>Immutable Journaleinträge bleiben erhalten (§147 AO)</li>
                       </ul>
                       {anonymisierungMutation.isError && (
                         <p className="text-xs text-red-600 dark:text-red-400">{(anonymisierungMutation.error as Error).message}</p>

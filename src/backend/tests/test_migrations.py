@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS kassenbuch (
     art VARCHAR(10) NOT NULL,
     immutable BOOLEAN NOT NULL DEFAULT 0
 );
+/* Hinweis: kassenbuch wird durch Migration 17 zu journal umbenannt */
 CREATE TABLE IF NOT EXISTS tagesabschluesse (
     id INTEGER PRIMARY KEY,
     datum DATE NOT NULL,
@@ -104,7 +105,7 @@ def setup_old_db(db_path: Path, version: int = 0) -> None:
 class TestMigrationen:
 
     def test_frische_db(self, tmp_path, monkeypatch):
-        """Frische DB: create_all legt vollständiges Schema an, Migration bringt auf version=2."""
+        """Frische DB: create_all legt vollständiges Schema an, Migration bringt auf SCHEMA_VERSION."""
         db_path = tmp_path / "fresh.db"
         backup_dir = tmp_path / "backups"
 
@@ -118,12 +119,12 @@ class TestMigrationen:
 
         main._run_migrations()
 
-        assert get_user_version(db_path) == 2
+        assert get_user_version(db_path) == main.SCHEMA_VERSION
         assert backup_dir.exists()
         assert len(list(backup_dir.glob("rechnungsfee_*.db"))) == 1
 
     def test_alte_db_version_0_spalten_ergaenzt(self, tmp_path, monkeypatch):
-        """Alte DB (version=0, fehlende Spalten) → alle Spalten ergänzt, Backup erstellt, version=2."""
+        """Alte DB (version=0, fehlende Spalten) → alle Spalten ergänzt, Backup erstellt, SCHEMA_VERSION."""
         db_path = tmp_path / "old.db"
         backup_dir = tmp_path / "backups"
 
@@ -135,11 +136,11 @@ class TestMigrationen:
 
         main._run_migrations()
 
-        assert get_user_version(db_path) == 2
+        assert get_user_version(db_path) == main.SCHEMA_VERSION
         assert len(list(backup_dir.glob("rechnungsfee_*.db"))) == 1
 
-        # kassenbuch
-        assert {"kunde_id", "rechnung_id", "externe_belegnr", "signatur"} <= get_columns(db_path, "kassenbuch")
+        # journal (nach Migration 17 umbenannt von kassenbuch)
+        assert {"kunde_id", "rechnung_id", "externe_belegnr", "signatur"} <= get_columns(db_path, "journal")
         # rechnungen
         assert {"bezahlt_betrag", "zahlungsstatus", "leistungsdatum",
                 "ist_entwurf", "storniert", "ausgegeben"} <= get_columns(db_path, "rechnungen")
@@ -153,7 +154,7 @@ class TestMigrationen:
         assert "ust_satz_standard" in get_columns(db_path, "kategorien")
 
     def test_version_1_nur_bump(self, tmp_path, monkeypatch):
-        """DB auf version=1 → nur Bump auf 2, Backup vorhanden."""
+        """DB auf version=1 → Migration bis SCHEMA_VERSION, Backup vorhanden."""
         db_path = tmp_path / "v1.db"
         backup_dir = tmp_path / "backups"
 
@@ -171,7 +172,7 @@ class TestMigrationen:
 
         main._run_migrations()
 
-        assert get_user_version(db_path) == 2
+        assert get_user_version(db_path) == main.SCHEMA_VERSION
         assert len(list(backup_dir.glob("rechnungsfee_*.db"))) == 1
 
     def test_aktuelle_db_early_return_kein_backup(self, tmp_path, monkeypatch):

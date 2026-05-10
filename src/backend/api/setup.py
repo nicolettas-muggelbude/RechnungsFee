@@ -11,10 +11,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Unternehmen, Konto, Kategorie, Kassenbucheintrag, Nummernkreis
-from utils.signatur import signatur_kassenbucheintrag
+from database.models import Unternehmen, Konto, Kategorie, Journaleintrag, Nummernkreis
+from utils.signatur import signatur_journaleintrag
 from .schemas import SetupStatus
-from .kassenbuch import _naechste_belegnr
+from .journal import _naechste_belegnr
 
 router = APIRouter(prefix="/api/setup", tags=["Setup"])
 
@@ -44,15 +44,15 @@ class KassenbestandRequest(BaseModel):
 @router.post("/kassenbestand", status_code=201)
 def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db)):
     """
-    Legt den einmaligen Kassenanfangsbestand als unveränderlichen Kassenbucheintrag an.
+    Legt den einmaligen Kassenanfangsbestand als unveränderlichen Journaleintrag an.
     Wird nur beim Setup aufgerufen. Bereits vorhandene Einträge werden abgewiesen.
     """
     if data.betrag <= 0:
         return {"detail": "Betrag ist 0 – kein Eintrag angelegt."}
 
     # Doppelaufruf verhindern
-    bereits = db.query(Kassenbucheintrag).filter(
-        Kassenbucheintrag.beschreibung == "Kassenanfangsbestand"
+    bereits = db.query(Journaleintrag).filter(
+        Journaleintrag.beschreibung == "Kassenanfangsbestand"
     ).first()
     if bereits:
         raise HTTPException(status_code=409, detail="Kassenanfangsbestand wurde bereits gesetzt.")
@@ -63,7 +63,7 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
     heute = date.today()
     belegnr = _naechste_belegnr(db, heute)
 
-    eintrag = Kassenbucheintrag(
+    eintrag = Journaleintrag(
         datum=heute,
         belegnr=belegnr,
         beschreibung="Kassenanfangsbestand",
@@ -77,7 +77,7 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
         vorsteuerabzug=False,
         immutable=True,
     )
-    eintrag.signatur = signatur_kassenbucheintrag(eintrag)
+    eintrag.signatur = signatur_journaleintrag(eintrag)
     db.add(eintrag)
     db.commit()
     return {"belegnr": belegnr, "betrag": str(data.betrag)}

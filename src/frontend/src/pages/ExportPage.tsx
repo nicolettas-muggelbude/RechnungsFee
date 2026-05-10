@@ -7,13 +7,20 @@ const JAHRE = Array.from({ length: 5 }, (_, i) => AKTUELLES_JAHR - i)
 export function ExportPage() {
   const [jahr, setJahr] = useState(AKTUELLES_JAHR)
   const [laedt, setLaedt] = useState(false)
+  const [erfolg, setErfolg] = useState<string | null>(null)
+  const [fehler, setFehler] = useState<string | null>(null)
 
-  function handleExport() {
+  async function handleExport() {
     setLaedt(true)
+    setErfolg(null)
+    setFehler(null)
     try {
-      downloadGobdExport(jahr)
+      const filename = await downloadGobdExport(jahr)
+      setErfolg(filename)
+    } catch (e: any) {
+      setFehler(e?.message ?? 'Unbekannter Fehler')
     } finally {
-      setTimeout(() => setLaedt(false), 1500)
+      setLaedt(false)
     }
   }
 
@@ -72,12 +79,30 @@ export function ExportPage() {
             </button>
           </div>
 
+          {/* Erfolgs-/Fehlermeldung */}
+          {erfolg && (
+            <div className="flex items-start gap-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
+              <span className="text-green-600 dark:text-green-400 shrink-0 mt-0.5">✓</span>
+              <div className="text-sm text-green-800 dark:text-green-300">
+                <p className="font-medium">Export erfolgreich erstellt</p>
+                <p className="mt-0.5 font-mono text-xs">{erfolg}</p>
+                <p className="mt-1 text-xs opacity-75">Die Datei wurde in deinen Downloads-Ordner gespeichert.</p>
+              </div>
+            </div>
+          )}
+          {fehler && (
+            <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
+              <span className="text-red-600 dark:text-red-400 shrink-0 mt-0.5">✗</span>
+              <p className="text-sm text-red-800 dark:text-red-300">{fehler}</p>
+            </div>
+          )}
+
           {/* Infobox: enthaltene Dateien */}
           <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Das ZIP-Archiv enthält:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
-                { datei: 'kassenbuch_journal.csv', beschreibung: 'Alle Kassenbucheinträge (IDEA-kompatibel)' },
+                { datei: 'journal.csv', beschreibung: 'Alle Journaleinträge (IDEA-kompatibel)' },
                 { datei: 'tagesabschluesse.csv',   beschreibung: 'Alle Tagesabschlüsse mit Kennzahlen' },
                 { datei: 'kategorien.csv',          beschreibung: 'Kategorie-Stammdaten (SKR03/04/49)' },
                 { datei: 'kunden.csv',              beschreibung: 'Kunden-Stammdaten' },
@@ -109,7 +134,7 @@ export function ExportPage() {
           <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 flex gap-3">
             <span className="text-amber-500 dark:text-amber-400 shrink-0">⚠</span>
             <p className="text-xs text-amber-800 dark:text-amber-300">
-              Alle Kassenbuchdaten sind GoBD-konform unveränderbar gespeichert und durch SHA-256-Signaturen
+              Alle Journaldaten sind GoBD-konform unveränderbar gespeichert und durch SHA-256-Signaturen
               gesichert. Der Export enthält eine vollständige Integritätsprüfung. Bei einer Betriebsprüfung
               nach §147 AO ist dieser Export als Z3-Datenträgerüberlassung geeignet.
             </p>

@@ -491,7 +491,7 @@ class RechnungPDF(FPDF):
         # --- Zahlungshinweis / Zahlungsbestätigung ---
         zahlungsstatus = str(getattr(r, "zahlungsstatus", "offen") or "offen")
         zahlungen = [
-            z for z in (getattr(r, "kassenbucheintraege", None) or [])
+            z for z in (getattr(r, "journaleintraege", None) or [])
             if not getattr(z, "storniert", False)
         ]
 

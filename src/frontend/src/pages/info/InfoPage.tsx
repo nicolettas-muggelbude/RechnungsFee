@@ -130,7 +130,7 @@ export function InfoPage() {
         <p className="text-sm text-slate-600 dark:text-slate-300">
           RechnungsFee ist eine <strong>Open-Source-Buchhaltungssoftware</strong> für
           Freiberufler, Selbstständige und Kleinunternehmer (§19 UStG). Sie unterstützt
-          GoBD-konforme Kassenbuchführung, Rechnungsstellung und den gesetzlich
+          GoBD-konforme Journalführung, Rechnungsstellung und den gesetzlich
           vorgeschriebenen Datenexport für Betriebsprüfungen.
         </p>
         <p className="text-sm text-slate-500 dark:text-slate-400">

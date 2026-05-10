@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Nummernkreis
-from .kassenbuch import _belegnr_aus_format
+from .journal import _belegnr_aus_format
 from .schemas import NummernkreisUpdate, NummernkreisResponse
 
 router = APIRouter(prefix="/api/nummernkreise", tags=["Stammdaten"])
@@ -42,6 +42,14 @@ def update_nummernkreis(nk_id: int, data: NummernkreisUpdate, db: Session = Depe
     nk = db.query(Nummernkreis).filter(Nummernkreis.id == nk_id).first()
     if not nk:
         raise HTTPException(status_code=404, detail="Nummernkreis nicht gefunden.")
+    if data.naechste_nr is not None and data.naechste_nr < nk.naechste_nr:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Die nächste Nummer darf nicht verringert werden (aktuell: {nk.naechste_nr}). "
+                "Eine Verringerung würde bereits vergebene Nummern erneut ausgeben."
+            ),
+        )
     for key, value in data.model_dump(exclude_none=True).items():
         setattr(nk, key, value)
     db.commit()

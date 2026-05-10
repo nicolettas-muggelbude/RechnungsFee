@@ -178,10 +178,10 @@ class SetupStatus(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Kassenbuch
+# Journal
 # ---------------------------------------------------------------------------
 
-class KassenbuchEintragCreate(BaseModel):
+class JournalEintragCreate(BaseModel):
     datum: date
     beschreibung: str
     kategorie_id: Optional[int] = None
@@ -215,7 +215,7 @@ class KassenbuchEintragCreate(BaseModel):
         return v
 
 
-class KassenbuchEintragResponse(BaseModel):
+class JournalEintragResponse(BaseModel):
     id: int
     datum: date
     belegnr: str
@@ -240,7 +240,7 @@ class KassenbuchEintragResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_orm_with_kunde(cls, obj) -> "KassenbuchEintragResponse":
+    def from_orm_with_kunde(cls, obj) -> "JournalEintragResponse":
         data = cls.model_validate(obj)
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]

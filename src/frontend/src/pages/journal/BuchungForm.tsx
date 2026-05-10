@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  createKassenbuchEintrag,
+  createJournaleintrag,
   createSplitBuchung,
   getKategorien,
   getKunden,
@@ -286,9 +286,9 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
 
   // Mutations
   const singleMutation = useMutation({
-    mutationFn: createKassenbuchEintrag,
+    mutationFn: createJournaleintrag,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
       onSuccess()
@@ -298,7 +298,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const splitMutation = useMutation({
     mutationFn: createSplitBuchung,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
       onSuccess()

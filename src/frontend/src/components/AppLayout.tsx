@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern } from '../api/client'
-import { TagesabschlussDialog } from '../pages/kassenbuch/TagesabschlussDialog'
+import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
 const hauptNav = [
   { to: '/', label: 'Dashboard', icon: '📊', end: true },
-  { to: '/kassenbuch', label: 'Kassenbuch', icon: '📒' },
+  { to: '/journal', label: 'Journal', icon: '📒' },
   { to: '/rechnungen', label: 'Rechnungen', icon: '🧾' },
   { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
   { to: '/exporte', label: 'Exporte', icon: '📦' },

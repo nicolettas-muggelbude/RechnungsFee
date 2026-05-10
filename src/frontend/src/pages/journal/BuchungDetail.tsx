@@ -1,10 +1,36 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { stornoKassenbuchEintrag, getUnternehmen, getKassenbuchBelegUrl, openUrl, isTauri, type KassenbuchEintrag } from '../../api/client'
+import { stornoJournaleintrag, getUnternehmen, getJournalBelegUrl, openUrl, isTauri, type JournalEintrag } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
+function BelegnrKopieren({ belegnr }: { belegnr: string }) {
+  const [kopiert, setKopiert] = useState(false)
+
+  function kopieren() {
+    navigator.clipboard.writeText(belegnr).then(() => {
+      setKopiert(true)
+      setTimeout(() => setKopiert(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={kopieren}
+      title="Belegnummer in Zwischenablage kopieren"
+      className="inline-flex items-center gap-1 font-mono hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-copy select-all"
+    >
+      {kopiert ? (
+        <span className="text-green-500 dark:text-green-400 not-italic">✓ Kopiert</span>
+      ) : (
+        belegnr
+      )}
+    </button>
+  )
+}
+
 interface Props {
-  eintrag: KassenbuchEintrag
+  eintrag: JournalEintrag
   bereitsStorniert: boolean
   onClose: () => void
 }
@@ -14,7 +40,7 @@ function formatEuro(val: string): string {
 }
 
 async function oeffneBelegFenster(id: number, drucken: boolean) {
-  const url = await getKassenbuchBelegUrl(id, drucken)
+  const url = await getJournalBelegUrl(id, drucken)
   await openUrl(url)
 }
 
@@ -28,9 +54,9 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const stornoMutation = useMutation({
-    mutationFn: () => stornoKassenbuchEintrag(e.id, stornoGrund),
+    mutationFn: () => stornoJournaleintrag(e.id, stornoGrund),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       onClose()
     },
@@ -48,7 +74,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
     }
 
     // Beleg als Download speichern damit er manuell angehängt werden kann
-    const belegUrl = await getKassenbuchBelegUrl(e.id, false, true)
+    const belegUrl = await getJournalBelegUrl(e.id, false, true)
     await openUrl(belegUrl)
     setBelegHinweis(true)
 
@@ -102,7 +128,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
               >
                 ✕ Stornieren
               </button>
-              <InfoTooltip text="Kassenbucheinträge sind nach GoBD §146 unveränderbar – löschen ist nicht erlaubt. Eine Stornierung erzeugt einen Gegeneintrag mit negativem Betrag. Beide Buchungen bleiben sichtbar und bilden gemeinsam die korrekte Buchungshistorie." side="bottom" />
+              <InfoTooltip text="Journaleinträge sind nach GoBD §146 unveränderbar – löschen ist nicht erlaubt. Eine Stornierung erzeugt einen Gegeneintrag mit negativem Betrag. Beide Buchungen bleiben sichtbar und bilden gemeinsam die korrekte Buchungshistorie." side="bottom" />
             </div>
           )}
           {bereitsStorniert && (
@@ -193,9 +219,11 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
               <span>Brutto</span>
               <span>{formatEuro(e.brutto_betrag)}</span>
             </div>
-            <div className="text-xs text-slate-400 dark:text-slate-500 pt-1">
+            <div className="text-xs text-slate-400 dark:text-slate-500 pt-1 flex items-center gap-1 flex-wrap">
               {e.externe_belegnr && <span>Ext. Belegnr.: {e.externe_belegnr} &nbsp;·&nbsp;</span>}
               {e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
+              &nbsp;·&nbsp;
+              <BelegnrKopieren belegnr={e.belegnr} />
             </div>
           </div>
 

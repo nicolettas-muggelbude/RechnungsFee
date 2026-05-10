@@ -2,7 +2,7 @@
 GoBD-Export für Betriebsprüfung (Z3-Datenträgerüberlassung).
 
 Erzeugt ein ZIP-Archiv mit:
-  - kassenbuch_journal.csv       IDEA-kompatibles Kassenbuch-Journal
+  - journal.csv                  IDEA-kompatibles Journal
   - tagesabschluesse.csv         Alle Tagesabschlüsse
   - kategorien.csv               Kategorie-Stammdaten
   - kunden.csv                   Kunden-Stammdaten
@@ -23,14 +23,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from database.models import (
-    Kassenbucheintrag,
+    Journaleintrag,
     Kategorie,
     Kunde,
     Lieferant,
     Tagesabschluss,
     Unternehmen,
 )
-from utils.signatur import signatur_kassenbucheintrag, signatur_tagesabschluss
+from utils.signatur import signatur_journaleintrag, signatur_tagesabschluss
 
 
 # ---------------------------------------------------------------------------
@@ -104,14 +104,14 @@ def _make_csv(header: list[str], rows: list[list[str]]) -> bytes:
 # Einzelne CSV-Exporte
 # ---------------------------------------------------------------------------
 
-def export_kassenbuch_csv(db: Session, jahr: int, kontenrahmen: str = "SKR03") -> tuple[bytes, int]:
-    """Kassenbuch-Journal als CSV. Gibt (bytes, anzahl_datensaetze) zurück."""
+def export_journal_csv(db: Session, jahr: int, kontenrahmen: str = "SKR03") -> tuple[bytes, int]:
+    """Journal als CSV. Gibt (bytes, anzahl_datensaetze) zurück."""
     eintraege = (
-        db.query(Kassenbucheintrag)
+        db.query(Journaleintrag)
         .filter(
-            Kassenbucheintrag.immutable == True,
+            Journaleintrag.immutable == True,
         )
-        .order_by(Kassenbucheintrag.datum.asc(), Kassenbucheintrag.id.asc())
+        .order_by(Journaleintrag.datum.asc(), Journaleintrag.id.asc())
         .all()
     )
     # Auf Jahr filtern
@@ -321,9 +321,9 @@ def export_integritaet_csv(db: Session, jahr: int) -> tuple[bytes, dict]:
     stats = {gesamt, gueltig, ungueltig, ohne_signatur}
     """
     eintraege = (
-        db.query(Kassenbucheintrag)
-        .filter(Kassenbucheintrag.immutable == True)
-        .order_by(Kassenbucheintrag.datum.asc(), Kassenbucheintrag.id.asc())
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.immutable == True)
+        .order_by(Journaleintrag.datum.asc(), Journaleintrag.id.asc())
         .all()
     )
     eintraege = [e for e in eintraege if e.datum.year == jahr]
@@ -345,7 +345,7 @@ def export_integritaet_csv(db: Session, jahr: int) -> tuple[bytes, dict]:
 
     for e in eintraege:
         gesamt += 1
-        berechnet = signatur_kassenbucheintrag(e)
+        berechnet = signatur_journaleintrag(e)
         if not e.signatur:
             status = "OHNE SIGNATUR"
             ohne += 1
@@ -356,7 +356,7 @@ def export_integritaet_csv(db: Session, jahr: int) -> tuple[bytes, dict]:
             status = "UNGÜLTIG"
             ungueltig += 1
         rows.append([
-            "Kassenbucheintrag",
+            "Journaleintrag",
             str(e.id),
             _fmt_date(e.datum),
             e.belegnr,
@@ -404,12 +404,12 @@ def _sammle_statistiken(db: Session, jahr: int) -> dict:
     """Sammelt alle Kennzahlen für den PDF-Bericht."""
     from sqlalchemy import extract, func
 
-    # Kassenbuch
+    # Journal
     eintraege = (
-        db.query(Kassenbucheintrag)
+        db.query(Journaleintrag)
         .filter(
-            Kassenbucheintrag.immutable == True,
-            extract("year", Kassenbucheintrag.datum) == jahr,
+            Journaleintrag.immutable == True,
+            extract("year", Journaleintrag.datum) == jahr,
         )
         .all()
     )
@@ -574,7 +574,7 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
     kontenrahmen = unt_dict.get("kontenrahmen", "SKR03")
 
     # CSVs erzeugen
-    kb_csv, kb_anzahl = export_kassenbuch_csv(db, jahr, kontenrahmen)
+    kb_csv, kb_anzahl = export_journal_csv(db, jahr, kontenrahmen)
     ta_csv, ta_anzahl = export_tagesabschluesse_csv(db, jahr)
     kat_csv, kat_anzahl = export_kategorien_csv(db)
     kd_csv, kd_anzahl = export_kunden_csv(db)
@@ -586,7 +586,7 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
     stats["integritaet"] = integ_stats
 
     datei_infos = [
-        {"name": "kassenbuch_journal.csv",   "beschreibung": "Kassenbuch-Journal (alle immutable Einträge)", "anzahl": kb_anzahl},
+        {"name": "journal.csv",              "beschreibung": "Journal (alle immutable Einträge)",           "anzahl": kb_anzahl},
         {"name": "tagesabschluesse.csv",     "beschreibung": "Tagesabschlüsse",                              "anzahl": ta_anzahl},
         {"name": "kategorien.csv",           "beschreibung": "Kategorie-Stammdaten",                         "anzahl": kat_anzahl},
         {"name": "kunden.csv",               "beschreibung": "Kunden-Stammdaten",                            "anzahl": kd_anzahl},
@@ -604,7 +604,7 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.xml",                  index_xml)
-        zf.writestr("kassenbuch_journal.csv",     kb_csv)
+        zf.writestr("journal.csv",                kb_csv)
         zf.writestr("tagesabschluesse.csv",       ta_csv)
         zf.writestr("kategorien.csv",             kat_csv)
         zf.writestr("kunden.csv",                 kd_csv)

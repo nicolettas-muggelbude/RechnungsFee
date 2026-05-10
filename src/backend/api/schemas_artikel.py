@@ -37,13 +37,6 @@ class ArtikelCreate(BaseModel):
             raise ValueError("vk_brutto muss positiv sein")
         return v
 
-    @field_validator("steuersatz")
-    @classmethod
-    def check_steuersatz(cls, v: Decimal) -> Decimal:
-        if v not in (Decimal("0"), Decimal("7"), Decimal("19")):
-            raise ValueError("steuersatz muss 0, 7 oder 19 sein")
-        return v
-
     @model_validator(mode="after")
     def check_fremdleistung(self) -> "ArtikelCreate":
         if self.typ == "fremdleistung" and not self.lieferant_id:

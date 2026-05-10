@@ -106,10 +106,10 @@ def seed_eu_laender(db: Session) -> None:
 def seed_nummernkreise(db: Session) -> None:
     typen = {nk.typ for nk in db.query(Nummernkreis).all()}
     neue = []
-    if "kassenbuch" not in typen:
+    if "journal" not in typen and "kassenbuch" not in typen:
         neue.append(Nummernkreis(
-            bezeichnung="Kassenbuch",
-            typ="kassenbuch",
+            bezeichnung="Journal",
+            typ="journal",
             format="YY####",
             naechste_nr=1,
             reset_jaehrlich=True,

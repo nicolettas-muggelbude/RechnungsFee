@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 // --- API-Basis-URL ---
 // Im Tauri-Produktionsmodus: Backend-Port per IPC-Command holen.
-// Im Vite-Dev-Modus: Vite-Proxy leitet /api → http://localhost:8001 weiter.
+// Im Vite-Dev-Modus: Vite-Proxy leitet /api → http://localhost:8002 weiter.
 
 let _baseUrl: string | null = null
 
@@ -205,8 +205,8 @@ export type Kategorie = {
 }
 export const getKategorien = () => request<Kategorie[]>('/kategorien')
 
-// --- Kassenbuch ---
-export type KassenbuchEintrag = {
+// --- Journal ---
+export type JournalEintrag = {
   id: number
   datum: string
   belegnr: string
@@ -230,7 +230,7 @@ export type KassenbuchEintrag = {
   erstellt_am: string
 }
 
-export type KassenbuchEintragCreate = {
+export type JournalEintragCreate = {
   datum: string
   beschreibung: string
   kategorie_id?: number
@@ -259,19 +259,20 @@ function toQuery(params: Record<string, string | number | undefined | null>): st
   return q ? `?${q}` : ''
 }
 
-export const getKassenbuch = (filter?: {
+export const getJournal = (filter?: {
   monat?: string
   datum_von?: string
   datum_bis?: string
   kategorie_id?: number
   art?: string
-}) => request<KassenbuchEintrag[]>(`/kassenbuch${toQuery(filter ?? {})}`)
-export const createKassenbuchEintrag = (data: KassenbuchEintragCreate) =>
-  request<KassenbuchEintrag>('/kassenbuch', { method: 'POST', body: JSON.stringify(data) })
-export const getKassenbuchEintrag = (id: number) =>
-  request<KassenbuchEintrag>(`/kassenbuch/${id}`)
-export const stornoKassenbuchEintrag = (id: number, grund: string) =>
-  request<KassenbuchEintrag>(`/kassenbuch/${id}/storno`, {
+  zahlungsart_typ?: 'bar' | 'unbar'
+}) => request<JournalEintrag[]>(`/journal${toQuery(filter ?? {})}`)
+export const createJournaleintrag = (data: JournalEintragCreate) =>
+  request<JournalEintrag>('/journal', { method: 'POST', body: JSON.stringify(data) })
+export const getJournaleintrag = (id: number) =>
+  request<JournalEintrag>(`/journal/${id}`)
+export const stornoJournaleintrag = (id: number, grund: string) =>
+  request<JournalEintrag>(`/journal/${id}/storno`, {
     method: 'POST',
     body: JSON.stringify({ grund }),
   })
@@ -294,23 +295,23 @@ export type SplitBuchungCreate = {
 }
 
 export const createSplitBuchung = (data: SplitBuchungCreate) =>
-  request<KassenbuchEintrag[]>('/kassenbuch/split', {
+  request<JournalEintrag[]>('/journal/split', {
     method: 'POST',
     body: JSON.stringify(data),
   })
 export const getMonatsUebersicht = (monat: string) =>
-  request<MonatsUebersicht>(`/kassenbuch/statistik/monat?monat=${encodeURIComponent(monat)}`)
+  request<MonatsUebersicht>(`/journal/statistik/monat?monat=${encodeURIComponent(monat)}`)
 export const getNaechsteBelegnr = (datum?: string) =>
-  request<{ belegnr: string }>(`/kassenbuch/naechste-belegnr${datum ? `?datum=${datum}` : ''}`)
+  request<{ belegnr: string }>(`/journal/naechste-belegnr${datum ? `?datum=${datum}` : ''}`)
 export const getKassenstand = () =>
-  request<{ kassenstand: string }>('/kassenbuch/kassenstand')
-export const getKassenbuchBelegUrl = async (id: number, drucken = false, download = false): Promise<string> => {
+  request<{ kassenstand: string }>('/journal/kassenstand')
+export const getJournalBelegUrl = async (id: number, drucken = false, download = false): Promise<string> => {
   const base = await getApiBase()
   const params = new URLSearchParams()
   if (drucken) params.set('drucken', '1')
   if (download) params.set('download', '1')
   const qs = params.toString()
-  return `${base}/kassenbuch/${id}/beleg${qs ? `?${qs}` : ''}`
+  return `${base}/journal/${id}/beleg${qs ? `?${qs}` : ''}`
 }
 
 // --- Tagesabschluss ---
@@ -448,15 +449,38 @@ export async function dsgvoExportLieferant(id: number) {
 }
 
 // --- Export ---
-export async function downloadGobdExport(jahr: number) {
+export async function downloadGobdExport(jahr: number): Promise<string> {
   const base = await getBaseUrl()
-  await openUrl(`${base}/export/gobd?jahr=${jahr}`)
+  const res = await fetch(`${base}/export/gobd?jahr=${jahr}`)
+  if (!res.ok) throw new Error('Export fehlgeschlagen')
+  const blob = await res.blob()
+  const filename = `gobd_export_${jahr}.zip`
+  _triggerBlobDownload(blob, filename)
+  return filename
 }
 
 // --- Backup ---
-export async function downloadBackup() {
+export async function downloadBackup(): Promise<string> {
   const base = await getBaseUrl()
-  await openUrl(`${base}/backup/download`)
+  const res = await fetch(`${base}/backup/download`)
+  if (!res.ok) throw new Error('Backup-Download fehlgeschlagen')
+  const blob = await res.blob()
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const match = cd.match(/filename="?([^"]+)"?/)
+  const filename = match?.[1] ?? 'rechnungsfee_backup.db'
+  _triggerBlobDownload(blob, filename)
+  return filename
+}
+
+function _triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // --- Nummernkreise ---
@@ -572,8 +596,8 @@ export type BarZahlungCreate = {
 }
 
 export type BarZahlungResult = {
-  kassenbucheintrag_id: number
-  kassenbucheintrag_belegnr: string
+  journaleintrag_id: number
+  journaleintrag_belegnr: string
   rechnung: Rechnung
 }
 

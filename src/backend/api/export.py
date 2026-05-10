@@ -10,7 +10,7 @@ from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Kassenbucheintrag, Tagesabschluss
+from database.models import Journaleintrag, Tagesabschluss
 from utils.gobd_export import generate_gobd_zip
 
 router = APIRouter(prefix="/api/export", tags=["Export"])
@@ -28,10 +28,10 @@ def gobd_export(
     """
     # Prüfen ob Daten für das Jahr vorhanden sind
     anzahl_buchungen = (
-        db.query(Kassenbucheintrag)
+        db.query(Journaleintrag)
         .filter(
-            Kassenbucheintrag.immutable == True,
-            extract("year", Kassenbucheintrag.datum) == jahr,
+            Journaleintrag.immutable == True,
+            extract("year", Journaleintrag.datum) == jahr,
         )
         .count()
     )

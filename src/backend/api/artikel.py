@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Artikel, Lieferant, Nummernkreis, Rechnung, Rechnungsposition, Kunde
+from database.models import Artikel, Lieferant, Nummernkreis, Rechnung, Rechnungsposition, Kunde, UstSatz
 from .schemas_artikel import ArtikelCreate, ArtikelUpdate, ArtikelResponse, ArtikelSucheResponse, ArtikelRechnungKurz
 
 router = APIRouter(prefix="/api/artikel", tags=["Artikel"])
@@ -91,8 +91,18 @@ def list_artikel(
     return q.order_by(Artikel.bezeichnung).all()
 
 
+def _prüfe_steuersatz(satz: Decimal, db: Session) -> None:
+    erlaubt = {row.satz for row in db.query(UstSatz).filter(UstSatz.ist_aktiv == True).all()}
+    if satz not in erlaubt:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Steuersatz {satz}% ist nicht in den aktiven MwSt.-Sätzen vorhanden.",
+        )
+
+
 @router.post("", response_model=ArtikelResponse, status_code=201)
 def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
+    _prüfe_steuersatz(data.steuersatz, db)
     vk_netto, ek_brutto = _berechne_preise(data.vk_brutto, data.ek_netto, data.steuersatz)
     artikelnummer = _naechste_artikelnummer(db)
     artikel = Artikel(
@@ -133,6 +143,9 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden.")
 
     update = data.model_dump(exclude_none=True)
+
+    if "steuersatz" in update:
+        _prüfe_steuersatz(update["steuersatz"], db)
 
     # Preise neu berechnen wenn vk_brutto oder steuersatz geändert wurde
     vk_brutto = update.get("vk_brutto", artikel.vk_brutto)

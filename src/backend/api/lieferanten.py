@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Lieferant, Rechnung, Nummernkreis
-from .kassenbuch import _belegnr_aus_format
+from .journal import _belegnr_aus_format
 from .schemas import LieferantCreate, LieferantUpdate, LieferantResponse
 
 
@@ -43,6 +43,9 @@ def create_lieferant(data: LieferantCreate, db: Session = Depends(get_db)):
     lieferant_data = data.model_dump()
     if not lieferant_data.get("lieferantennummer"):
         lieferant_data["lieferantennummer"] = _naechste_nummer("lieferant", db)
+    nr = lieferant_data.get("lieferantennummer")
+    if nr and db.query(Lieferant).filter(Lieferant.lieferantennummer == nr).first():
+        raise HTTPException(status_code=409, detail=f"Lieferantennummer '{nr}' ist bereits vergeben.")
     lieferant = Lieferant(**lieferant_data)
     db.add(lieferant)
     db.commit()
@@ -163,6 +166,10 @@ def update_lieferant(lieferant_id: int, data: LieferantUpdate, db: Session = Dep
     lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
     if not lieferant:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
+    neue_nr = data.model_dump(exclude_none=True).get("lieferantennummer")
+    if neue_nr and neue_nr != lieferant.lieferantennummer:
+        if db.query(Lieferant).filter(Lieferant.lieferantennummer == neue_nr, Lieferant.id != lieferant_id).first():
+            raise HTTPException(status_code=409, detail=f"Lieferantennummer '{neue_nr}' ist bereits vergeben.")
     for key, value in data.model_dump(exclude_none=True).items():
         setattr(lieferant, key, value)
     db.commit()

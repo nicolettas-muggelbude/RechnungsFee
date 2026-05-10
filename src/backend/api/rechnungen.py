@@ -1,5 +1,5 @@
 """
-Rechnungen-API (Eingang + Ausgang) mit Kassenbuch-Verknüpfung.
+Rechnungen-API (Eingang + Ausgang) mit Journal-Verknüpfung.
 """
 
 from datetime import date, datetime
@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import (
-    Rechnung, Rechnungsposition, Kassenbucheintrag,
+    Rechnung, Rechnungsposition, Journaleintrag,
     Kategorie, Unternehmen, Nummernkreis,
 )
-from utils.signatur import signatur_kassenbucheintrag
+from utils.signatur import signatur_journaleintrag
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
@@ -52,11 +52,11 @@ def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
     return _re.sub(r"#+", _pad, result)
 
 
-def _naechste_belegnr_kassenbuch(db: Session, datum: date) -> str:
-    """Kassenbuch-Belegnummer (analog zu kassenbuch.py)."""
-    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "kassenbuch").first()
+def _naechste_belegnr_journal(db: Session, datum: date) -> str:
+    """Journal-Belegnummer (analog zu journal.py)."""
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "journal").first()
     if not nk:
-        count = db.query(Kassenbucheintrag).count()
+        count = db.query(Journaleintrag).count()
         return f"{str(datum.year)[-2:]}{count + 1:04d}"
     if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
         nk.naechste_nr = 1
@@ -77,8 +77,8 @@ def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
 
 
 def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
-    """Berechnet bezahlt_betrag aus verknüpften Kassenbucheinträgen und setzt zahlungsstatus."""
-    bezahlt = sum(e.brutto_betrag for e in rechnung.kassenbucheintraege)
+    """Berechnet bezahlt_betrag aus verknüpften Journaleinträgen und setzt zahlungsstatus."""
+    bezahlt = sum(e.brutto_betrag for e in rechnung.journaleintraege)
     rechnung.bezahlt_betrag = bezahlt.quantize(Decimal("0.01"), ROUND_HALF_UP) if bezahlt else Decimal("0.00")
 
     if rechnung.bezahlt_betrag >= rechnung.brutto_gesamt:
@@ -537,7 +537,7 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 @router.post("/{rechnung_id}/zahlung-bar", response_model=BarZahlungResult, status_code=201)
 def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session = Depends(get_db)):
     """
-    Erstellt eine Kassenbuchung für eine Bar-/Kartenzahlung und verknüpft sie mit der Rechnung.
+    Erstellt eine Journalbuchung für eine Bar-/Kartenzahlung und verknüpft sie mit der Rechnung.
     Bei Eingangsrechnung → Ausgabe, bei Ausgangsrechnung → Einnahme.
     """
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
@@ -561,13 +561,13 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
     # Barkassen-Prüfung: Eingangsrechnung per Bar darf Kassenstand nicht übersteigen
     if art == "Ausgabe" and data.zahlungsart == "Bar":
-        einnahmen = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-            Kassenbucheintrag.art == "Einnahme",
-            Kassenbucheintrag.zahlungsart == "Bar",
+        einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+            Journaleintrag.art == "Einnahme",
+            Journaleintrag.zahlungsart == "Bar",
         ).scalar() or Decimal("0")
-        ausgaben = db.query(func.sum(Kassenbucheintrag.brutto_betrag)).filter(
-            Kassenbucheintrag.art == "Ausgabe",
-            Kassenbucheintrag.zahlungsart == "Bar",
+        ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+            Journaleintrag.art == "Ausgabe",
+            Journaleintrag.zahlungsart == "Bar",
         ).scalar() or Decimal("0")
         kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
         if betrag > kassenstand:
@@ -599,9 +599,9 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         netto = betrag
         ust_betrag = Decimal("0.00")
 
-    belegnr = _naechste_belegnr_kassenbuch(db, data.datum)
+    belegnr = _naechste_belegnr_journal(db, data.datum)
 
-    eintrag = Kassenbucheintrag(
+    eintrag = Journaleintrag(
         datum=data.datum,
         belegnr=belegnr,
         beschreibung=beschreibung,
@@ -617,7 +617,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         rechnung_id=rechnung_id,
         immutable=True,
     )
-    eintrag.signatur = signatur_kassenbucheintrag(eintrag)
+    eintrag.signatur = signatur_journaleintrag(eintrag)
     db.add(eintrag)
     db.flush()
 
@@ -629,15 +629,15 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     db.refresh(eintrag)
 
     return BarZahlungResult(
-        kassenbucheintrag_id=eintrag.id,
-        kassenbucheintrag_belegnr=eintrag.belegnr,
+        journaleintrag_id=eintrag.id,
+        journaleintrag_belegnr=eintrag.belegnr,
         rechnung=RechnungResponse.from_orm_extended(rechnung),
     )
 
 
 @router.post("/{rechnung_id}/storno", response_model=RechnungResponse)
 def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
-    """Rechnung stornieren (irreversibel). Hat die Rechnung verknüpfte Kassenbuch-
+    """Rechnung stornieren (irreversibel). Hat die Rechnung verknüpfte Journal-
     Zahlungen, werden automatisch GoBD-konforme Gegenbuchungen erstellt."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
@@ -650,17 +650,17 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
     heute = date.today()
 
-    # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Kassenbuch-Storno)
-    for eintrag in list(rechnung.kassenbucheintraege):
+    # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Journal-Storno)
+    for eintrag in list(rechnung.journaleintraege):
         # Nicht doppelt stornieren
-        bereits = db.query(Kassenbucheintrag).filter(
-            Kassenbucheintrag.beschreibung.like(f"STORNO {eintrag.belegnr}:%")
+        bereits = db.query(Journaleintrag).filter(
+            Journaleintrag.beschreibung.like(f"STORNO {eintrag.belegnr}:%")
         ).first()
         if bereits:
             continue
         storno_art = "Ausgabe" if eintrag.art == "Einnahme" else "Einnahme"
-        belegnr = _naechste_belegnr_kassenbuch(db, heute)
-        gegenbuchung = Kassenbucheintrag(
+        belegnr = _naechste_belegnr_journal(db, heute)
+        gegenbuchung = Journaleintrag(
             datum=heute,
             belegnr=belegnr,
             beschreibung=f"STORNO {eintrag.belegnr}: Rechnung {re_nr} storniert",
@@ -675,7 +675,7 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             steuerbefreiung_grund=None,
             immutable=True,
         )
-        gegenbuchung.signatur = signatur_kassenbucheintrag(gegenbuchung)
+        gegenbuchung.signatur = signatur_journaleintrag(gegenbuchung)
         db.add(gegenbuchung)
 
     rechnung.storniert = True
@@ -687,7 +687,7 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{rechnung_id}/zahlungen", response_model=list[ZahlungKompakt])
 def get_rechnung_zahlungen(rechnung_id: int, db: Session = Depends(get_db)):
-    """Alle verknüpften Kassenbucheinträge für eine Rechnung."""
+    """Alle verknüpften Journaleinträge für eine Rechnung."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -700,5 +700,5 @@ def get_rechnung_zahlungen(rechnung_id: int, db: Session = Depends(get_db)):
             art=e.art,
             zahlungsart=e.zahlungsart,
         )
-        for e in rechnung.kassenbucheintraege
+        for e in rechnung.journaleintraege
     ]

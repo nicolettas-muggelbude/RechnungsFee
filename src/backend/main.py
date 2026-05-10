@@ -30,9 +30,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, kassenbuch, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 19
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -47,7 +47,7 @@ app.include_router(setup.router)
 app.include_router(unternehmen.router)
 app.include_router(konten.router)
 app.include_router(kategorien.router)
-app.include_router(kassenbuch.router)
+app.include_router(journal.router)
 app.include_router(kunden.router)
 app.include_router(lieferanten.router)
 app.include_router(tagesabschluss.router)
@@ -107,7 +107,7 @@ def _run_migrations() -> None:
 
     with engine.connect() as conn:
         if version < 1:
-            # kassenbuch – 1× PRAGMA für alle Spalten
+            # journal/kassenbuch – 1× PRAGMA für alle Spalten (Tabelle heißt noch kassenbuch bei version < 1)
             cols = {row[1] for row in conn.execute(text("PRAGMA table_info(kassenbuch)"))}
             for col_name, ddl in [
                 ("kunde_id",        "INTEGER REFERENCES kunden(id)"),
@@ -350,6 +350,50 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 16 gebracht (kunden.z_hd, lieferanten.z_hd)")
 
+        if version < 17:
+            # Tabelle kassenbuch → journal umbenennen.
+            # create_all() legt 'journal' bereits leer an (neues Model) – diese leere
+            # Tabelle muss zuerst weg, bevor die alte 'kassenbuch' umbenannt werden kann.
+            vorhandene = {r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ))}
+            conn.execute(text("DROP TRIGGER IF EXISTS protect_kassenbuch_update"))
+            conn.execute(text("DROP TRIGGER IF EXISTS protect_kassenbuch_delete"))
+            if 'kassenbuch' in vorhandene:
+                if 'journal' in vorhandene:
+                    conn.execute(text("DROP TABLE journal"))
+                conn.execute(text("ALTER TABLE kassenbuch RENAME TO journal"))
+            conn.execute(text("PRAGMA user_version = 17"))
+            conn.commit()
+            print("[Migration] Schema auf Version 17 gebracht (kassenbuch → journal)")
+
+        if version < 18:
+            # Nummernkreis-Typ und -Bezeichnung umbenennen
+            conn.execute(text(
+                "UPDATE nummernkreise SET typ='journal', bezeichnung='Journal' WHERE typ='kassenbuch'"
+            ))
+            conn.execute(text("PRAGMA user_version = 18"))
+            conn.commit()
+            print("[Migration] Schema auf Version 18 gebracht (nummernkreise: kassenbuch → journal)")
+
+        if version < 19:
+            # Partielle Unique-Indizes: doppelte Kunden-/Lieferantennummern verhindern.
+            # WHERE NOT NULL erlaubt mehrere Datensätze ohne Nummer (NULL).
+            try:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uix_kunden_kundennummer "
+                    "ON kunden(kundennummer) WHERE kundennummer IS NOT NULL"
+                ))
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uix_lieferanten_lieferantennummer "
+                    "ON lieferanten(lieferantennummer) WHERE lieferantennummer IS NOT NULL"
+                ))
+            except Exception as e:
+                print(f"[Migration] Warnung: Unique-Index konnte nicht angelegt werden (Duplikate vorhanden?): {e}")
+            conn.execute(text("PRAGMA user_version = 19"))
+            conn.commit()
+            print("[Migration] Schema auf Version 19 gebracht (unique Kunden-/Lieferantennummern)")
+
 
 def _migrate_kategorien() -> None:
     """Fehlende Kategorien in bestehende Datenbanken eintragen."""
@@ -402,14 +446,14 @@ def _migrate_signaturen() -> None:
     3. Nur tatsächlich abweichende Einträge aktualisieren.
     4. Trigger werden danach durch _setup_gobd_triggers() neu erstellt.
     """
-    from utils.signatur import signatur_kassenbucheintrag, signatur_tagesabschluss
-    from database.models import Kassenbucheintrag, Tagesabschluss
+    from utils.signatur import signatur_journaleintrag, signatur_tagesabschluss
+    from database.models import Journaleintrag, Tagesabschluss
 
     # Trigger temporär entfernen
     with engine.connect() as conn:
         for trigger in [
-            "protect_kassenbuch_update",
-            "protect_kassenbuch_delete",
+            "protect_journal_update",
+            "protect_journal_delete",
             "protect_tagesabschluesse_update",
             "protect_tagesabschluesse_delete",
         ]:
@@ -420,12 +464,12 @@ def _migrate_signaturen() -> None:
     db = SessionLocal()
     try:
         eintraege = (
-            db.query(Kassenbucheintrag)
-            .filter(Kassenbucheintrag.immutable == True)
+            db.query(Journaleintrag)
+            .filter(Journaleintrag.immutable == True)
             .all()
         )
         for e in eintraege:
-            neu = signatur_kassenbucheintrag(e)
+            neu = signatur_journaleintrag(e)
             if e.signatur != neu:
                 e.signatur = neu
 
@@ -454,21 +498,21 @@ def _setup_gobd_triggers() -> None:
     """
     triggers = [
         """
-        CREATE TRIGGER IF NOT EXISTS protect_kassenbuch_update
-        BEFORE UPDATE ON kassenbuch
+        CREATE TRIGGER IF NOT EXISTS protect_journal_update
+        BEFORE UPDATE ON journal
         WHEN OLD.immutable = 1
         BEGIN
             SELECT RAISE(ABORT,
-                'GoBD-Verstoß: Kassenbucheinträge sind unveränderbar (immutable=1).');
+                'GoBD-Verstoß: Journaleinträge sind unveränderbar (immutable=1).');
         END
         """,
         """
-        CREATE TRIGGER IF NOT EXISTS protect_kassenbuch_delete
-        BEFORE DELETE ON kassenbuch
+        CREATE TRIGGER IF NOT EXISTS protect_journal_delete
+        BEFORE DELETE ON journal
         WHEN OLD.immutable = 1
         BEGIN
             SELECT RAISE(ABORT,
-                'GoBD-Verstoß: Kassenbucheinträge können nicht gelöscht werden (immutable=1).');
+                'GoBD-Verstoß: Journaleinträge können nicht gelöscht werden (immutable=1).');
         END
         """,
         """
@@ -520,6 +564,6 @@ if __name__ == "__main__":
     import uvicorn
 
     parser = argparse.ArgumentParser(description="RechnungsFee Backend")
-    parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--port", type=int, default=8002)
     args = parser.parse_args()
     uvicorn.run(app, host="127.0.0.1", port=args.port)

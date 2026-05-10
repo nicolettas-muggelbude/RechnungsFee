@@ -83,7 +83,7 @@ export function TagesabschlussDialog({ onClose, onSuccess, datum: datumProp }: P
   const mutation = useMutation({
     mutationFn: createTagesabschluss,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kassenbuch'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['tagesabschluss'] })
       setGespeichert(true)
     },
