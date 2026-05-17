@@ -32,8 +32,8 @@ class RechnungspositionCreate(BaseModel):
     @field_validator("ust_satz")
     @classmethod
     def check_ust_satz(cls, v: Decimal) -> Decimal:
-        if v not in (Decimal("0"), Decimal("7"), Decimal("19")):
-            raise ValueError("ust_satz muss 0, 7 oder 19 sein")
+        if v < Decimal("0") or v > Decimal("100"):
+            raise ValueError("ust_satz muss zwischen 0 und 100 liegen")
         return v
 
     @field_validator("menge")
