@@ -195,22 +195,20 @@ export function JournalPage() {
           ))}
         </select>
 
-        {/* Zahlungsart als Toggle-Buttons */}
-        <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
-          {([['', 'Bar & Unbar'], ['bar', 'Bar'], ['unbar', 'Unbar']] as [string, string][]).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setZahlungsartTyp(val as '' | 'bar' | 'unbar')}
-              className={`px-3 py-1.5 transition-colors ${
-                zahlungsartTyp === val
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Zahlungsart */}
+        <select
+          value={zahlungsartTyp}
+          onChange={(e) => setZahlungsartTyp(e.target.value as '' | 'bar' | 'unbar')}
+          className={`rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 border transition-colors dark:bg-slate-700 dark:text-slate-100 ${
+            zahlungsartTyp !== ''
+              ? 'border-blue-500 bg-blue-50 text-blue-800 focus:ring-blue-400 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-300'
+              : 'border-slate-300 dark:border-slate-600 focus:ring-blue-500'
+          }`}
+        >
+          <option value="">Bar &amp; Unbar</option>
+          <option value="bar">Nur Bar</option>
+          <option value="unbar">Nur Unbar</option>
+        </select>
 
         {/* Reset */}
         {hatAktiveFilter && (
