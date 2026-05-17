@@ -63,6 +63,19 @@ export function JournalPage() {
     queryFn: getKategorien,
   })
 
+  const hatAktiveFilter = art !== '' || kategorieId !== '' || zahlungsartTyp !== '' || filterModus !== 'monat'
+
+  function resetFilter() {
+    setArt('')
+    setKategorieId('')
+    setZahlungsartTyp('')
+    setFilterModus('monat')
+    setMonat(aktuellerMonat())
+    setDatum(heuteIso())
+    setDatumVon(heuteIso())
+    setDatumBis(heuteIso())
+  }
+
   // Belegnummern die bereits storniert wurden (aus der geladenen Liste ableiten)
   const bereitsStornieterteBelegnrn = new Set(
     (eintraege ?? [])
@@ -149,35 +162,65 @@ export function JournalPage() {
           </div>
         )}
 
-        {/* Art + Kategorie */}
+        {/* Art */}
         <select
           value={art}
           onChange={(e) => setArt(e.target.value as '' | 'Einnahme' | 'Ausgabe')}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+          className={`rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 border transition-colors dark:bg-slate-700 dark:text-slate-100 ${
+            art === 'Einnahme'
+              ? 'border-green-500 bg-green-50 text-green-800 focus:ring-green-400 dark:bg-green-900/20 dark:border-green-500 dark:text-green-300'
+              : art === 'Ausgabe'
+              ? 'border-red-500 bg-red-50 text-red-800 focus:ring-red-400 dark:bg-red-900/20 dark:border-red-500 dark:text-red-300'
+              : 'border-slate-300 dark:border-slate-600 focus:ring-blue-500'
+          }`}
         >
           <option value="">Alle Arten</option>
           <option value="Einnahme">Einnahmen</option>
           <option value="Ausgabe">Ausgaben</option>
         </select>
+
+        {/* Kategorie */}
         <select
           value={kategorieId}
           onChange={(e) => setKategorieId(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+          className={`rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 border transition-colors dark:bg-slate-700 dark:text-slate-100 ${
+            kategorieId !== ''
+              ? 'border-blue-500 bg-blue-50 text-blue-800 focus:ring-blue-400 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-300'
+              : 'border-slate-300 dark:border-slate-600 focus:ring-blue-500'
+          }`}
         >
           <option value="">Alle Kategorien</option>
           {(kategorien ?? []).map((k) => (
             <option key={k.id} value={k.id}>{k.name}</option>
           ))}
         </select>
-        <select
-          value={zahlungsartTyp}
-          onChange={(e) => setZahlungsartTyp(e.target.value as '' | 'bar' | 'unbar')}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-        >
-          <option value="">Bar &amp; Unbar</option>
-          <option value="bar">Nur Bar</option>
-          <option value="unbar">Nur Unbar</option>
-        </select>
+
+        {/* Zahlungsart als Toggle-Buttons */}
+        <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
+          {([['', 'Bar & Unbar'], ['bar', 'Bar'], ['unbar', 'Unbar']] as [string, string][]).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setZahlungsartTyp(val as '' | 'bar' | 'unbar')}
+              className={`px-3 py-1.5 transition-colors ${
+                zahlungsartTyp === val
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Reset */}
+        {hatAktiveFilter && (
+          <button
+            onClick={resetFilter}
+            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2 transition-colors"
+          >
+            Filter zurücksetzen
+          </button>
+        )}
       </div>
 
       {/* Tabelle */}
