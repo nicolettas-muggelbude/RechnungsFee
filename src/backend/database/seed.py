@@ -1,6 +1,6 @@
 """
 Startwerte für die Datenbank:
-- Standard-Kategorien (SKR03/SKR04 + EKS-Zuordnung)
+- Standard-Kategorien (SKR03/SKR04 + EKS-Zuordnung nach offiziellem Formular 04/2025)
 - EU-Mitgliedsstaaten
 """
 
@@ -9,56 +9,64 @@ from .models import Kategorie, EuLand, Nummernkreis
 
 
 STANDARD_KATEGORIEN = [
-    # --- Tabelle A: Einnahmen ---
-    {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",  "euer_zeile": 11,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
-    {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",  "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
-    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Kleinunternehmer-Einnahmen",     "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",  "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Privatentnahme",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": "A2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Privateinlage",                  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "A4",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Umsatzsteuer (vereinnahmt)",     "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "1776", "eks_kategorie": "A5_1","euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Umsatzsteuer-Erstattung FA",     "kontenart": "Erlös",   "konto_skr03": "1779", "konto_skr04": "1779", "eks_kategorie": "A5_2","euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    # --- Tabelle B: Betriebsausgaben ---
-    {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",  "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",  "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
-    {"name": "Löhne & Gehälter",              "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B3",  "euer_zeile": 44,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Fremdleistungen",               "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B4",  "euer_zeile": 45,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Miete Büro",                    "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B5",  "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Nebenkosten Büro",              "kontenart": "Aufwand", "konto_skr03": "4230", "konto_skr04": "6320", "eks_kategorie": "B5",  "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Arbeitszimmer (anteilig)",      "kontenart": "Aufwand", "konto_skr03": "4215", "konto_skr04": "6315", "eks_kategorie": "B5",  "euer_zeile": 46,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Betriebsversicherungen",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B6",  "euer_zeile": 47,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Berufsgenossenschaft",          "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6450", "eks_kategorie": "B6",  "euer_zeile": 47,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "KFZ-Kosten",                    "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6520", "eks_kategorie": "B7",  "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "KFZ-Versicherung",              "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B7",  "euer_zeile": 48,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Reisekosten",                   "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B8",  "euer_zeile": 49,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Büromaterial",                  "kontenart": "Aufwand", "konto_skr03": "4910", "konto_skr04": "6815", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Büroausstattung",               "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Porto & Versand",               "kontenart": "Aufwand", "konto_skr03": "4930", "konto_skr04": "6825", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Software & Abonnements",        "kontenart": "Aufwand", "konto_skr03": "4940", "konto_skr04": "6831", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Werbung & Marketing",           "kontenart": "Aufwand", "konto_skr03": "4600", "konto_skr04": "6600", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Bewirtungskosten",              "kontenart": "Aufwand", "konto_skr03": "4650", "konto_skr04": "6620", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 70,  "ust_satz_standard": 19},
-    {"name": "Bankgebühren",                  "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6855", "eks_kategorie": "B9",  "euer_zeile": 50,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Geringwertige Wirtschaftsgüter (GWG)", "kontenart": "Aufwand", "konto_skr03": "0480", "konto_skr04": "0680", "eks_kategorie": "B9", "euer_zeile": 50, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Telefon & Internet",            "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B10", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Steuerberatung",                "kontenart": "Aufwand", "konto_skr03": "4960", "konto_skr04": "6835", "eks_kategorie": "B11", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Rechts- & Beratungskosten",    "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6840", "eks_kategorie": "B11", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Buchführungskosten",            "kontenart": "Aufwand", "konto_skr03": "4975", "konto_skr04": "6845", "eks_kategorie": "B11", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Fortbildung & Fachliteratur",   "kontenart": "Aufwand", "konto_skr03": "4945", "konto_skr04": "6820", "eks_kategorie": "B12", "euer_zeile": 40,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Zinsen & Darlehenskosten",      "kontenart": "Aufwand", "konto_skr03": "4315", "konto_skr04": "7310", "eks_kategorie": "B14", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Kredittilgung",                 "kontenart": "Aufwand", "konto_skr03": "2100", "konto_skr04": "3150", "eks_kategorie": "B15", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Umsatzsteuer-Zahlung FA",       "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "1780", "eks_kategorie": "B16", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Vorsteuererstattung FA",        "kontenart": "Erlös",   "konto_skr03": "1570", "konto_skr04": "1570", "eks_kategorie": "B17", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Sonstige Betriebsausgaben",     "kontenart": "Aufwand", "konto_skr03": "4980", "konto_skr04": "6880", "eks_kategorie": "B18", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Anlagevermögen (Kauf)",         "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "B18", "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    # --- Tabelle C: Absetzungsbeträge (persönliche Abzüge) ---
-    {"name": "Einkommensteuer-Vorauszahlung", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Gewerbesteuer",                 "kontenart": "Aufwand", "konto_skr03": "7600", "konto_skr04": "7610", "eks_kategorie": "C1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Krankenversicherung (Pflicht)", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Pflegeversicherung (Pflicht)",  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C3",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Rentenversicherung (freiwillig)","kontenart": "Privat", "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Riester-Beiträge",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C5",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Sonstige Absetzungen",          "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C6",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # ── Tabelle A: Betriebseinnahmen ──────────────────────────────────────
+    {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",    "euer_zeile": 11,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+    {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",    "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
+    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Kleinunternehmer-Einnahmen",     "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Privatentnahme",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Zuwendungen von Dritten",        "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4910", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Privateinlage ist kein EKS-Feld (nicht im offiziellen Formular)
+    {"name": "Privateinlage",                  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Umsatzsteuer (vereinnahmt)",     "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "1776", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # A5_3: Erstattungen vom Finanzamt sind Einnahmen
+    {"name": "Umsatzsteuer-Erstattung FA",     "kontenart": "Erlös",   "konto_skr03": "1779", "konto_skr04": "1779", "eks_kategorie": "A5_3",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Vorsteuererstattung FA",         "kontenart": "Erlös",   "konto_skr03": "1570", "konto_skr04": "1570", "eks_kategorie": "A5_3",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # ── Tabelle B Teil 1: Betriebsausgaben ───────────────────────────────
+    {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+    {"name": "Löhne & Gehälter",              "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_1",  "euer_zeile": 44,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Minijob / geringfügige Beschäftigung", "kontenart": "Aufwand", "konto_skr03": "4130", "konto_skr04": "6030", "eks_kategorie": "B2_3", "euer_zeile": 44, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
+    {"name": "Fremdleistungen",               "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B14_5", "euer_zeile": 45,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Miete Büro",                    "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Nebenkosten Büro",              "kontenart": "Aufwand", "konto_skr03": "4230", "konto_skr04": "6320", "eks_kategorie": "B3",    "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Arbeitszimmer (anteilig)",      "kontenart": "Aufwand", "konto_skr03": "4215", "konto_skr04": "6315", "eks_kategorie": "B3",    "euer_zeile": 46,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Betriebsversicherungen",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6430", "eks_kategorie": "B4",    "euer_zeile": 47,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Berufsgenossenschaft",          "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6450", "eks_kategorie": "B4",    "euer_zeile": 47,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Werbung & Marketing",           "kontenart": "Aufwand", "konto_skr03": "4600", "konto_skr04": "6600", "eks_kategorie": "B5",    "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    # ── Tabelle B Teil 2 ─────────────────────────────────────────────────
+    {"name": "KFZ-Steuer",                    "kontenart": "Aufwand", "konto_skr03": "4510", "konto_skr04": "6500", "eks_kategorie": "B6_1",  "euer_zeile": 48,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "KFZ-Versicherung",              "kontenart": "Aufwand", "konto_skr03": "4520", "konto_skr04": "6510", "eks_kategorie": "B6_2",  "euer_zeile": 48,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "KFZ-Kosten",                    "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6520", "eks_kategorie": "B6_3",  "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Reisekosten",                   "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B7_1",  "euer_zeile": 49,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Anlagevermögen (Kauf)",         "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Büromaterial",                  "kontenart": "Aufwand", "konto_skr03": "4910", "konto_skr04": "6815", "eks_kategorie": "B10",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Büroausstattung",               "kontenart": "Aufwand", "konto_skr03": "4920", "konto_skr04": "6820", "eks_kategorie": "B10",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Porto & Versand",               "kontenart": "Aufwand", "konto_skr03": "4930", "konto_skr04": "6825", "eks_kategorie": "B10",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Geringwertige Wirtschaftsgüter (GWG)", "kontenart": "Aufwand", "konto_skr03": "0480", "konto_skr04": "0680", "eks_kategorie": "B10", "euer_zeile": 50, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    # ── Tabelle B Teil 3 ─────────────────────────────────────────────────
+    {"name": "Telefon & Internet",            "kontenart": "Aufwand", "konto_skr03": "4900", "konto_skr04": "6800", "eks_kategorie": "B11",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Steuerberatung",                "kontenart": "Aufwand", "konto_skr03": "4960", "konto_skr04": "6835", "eks_kategorie": "B12",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Rechts- & Beratungskosten",    "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6840", "eks_kategorie": "B12",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Buchführungskosten",            "kontenart": "Aufwand", "konto_skr03": "4975", "konto_skr04": "6845", "eks_kategorie": "B12",   "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Fortbildung & Fachliteratur",   "kontenart": "Aufwand", "konto_skr03": "4945", "konto_skr04": "6832", "eks_kategorie": "B13",   "euer_zeile": 40,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Bankgebühren",                  "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6855", "eks_kategorie": "B14_3", "euer_zeile": 50,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Software & Abonnements",        "kontenart": "Aufwand", "konto_skr03": "4940", "konto_skr04": "6831", "eks_kategorie": "B14_5", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Bewirtungskosten",              "kontenart": "Aufwand", "konto_skr03": "4650", "konto_skr04": "6620", "eks_kategorie": "B14_5", "euer_zeile": 50,   "vorsteuer_prozent": 70,  "ust_satz_standard": 19},
+    {"name": "Sonstige Betriebsausgaben",     "kontenart": "Aufwand", "konto_skr03": "4980", "konto_skr04": "6880", "eks_kategorie": "B14_5", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Zinsen & Darlehenskosten",      "kontenart": "Aufwand", "konto_skr03": "4315", "konto_skr04": "7310", "eks_kategorie": "B15",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Kredittilgung",                 "kontenart": "Aufwand", "konto_skr03": "2100", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Umsatzsteuer-Zahlung FA",       "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "1780", "eks_kategorie": "B18",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # ── Tabelle C: Absetzungen vom Einkommen ─────────────────────────────
+    {"name": "Einkommensteuer-Vorauszahlung", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Gewerbesteuer",                 "kontenart": "Aufwand", "konto_skr03": "7600", "konto_skr04": "7610", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Krankenversicherung (Pflicht)", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Pflegeversicherung fließt in C2 (offizielles Formular fasst KV/PV/RV-Pflicht zusammen)
+    {"name": "Pflegeversicherung (Pflicht)",  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Rentenversicherung (freiwillig)","kontenart": "Privat", "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Riester-Beiträge",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C9",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Sonstige Absetzungen",          "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
 ]
 
 EU_LAENDER = [
@@ -112,53 +120,17 @@ def seed_nummernkreise(db: Session) -> None:
     typen = {nk.typ for nk in db.query(Nummernkreis).all()}
     neue = []
     if "journal" not in typen and "kassenbuch" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Journal",
-            typ="journal",
-            format="YY####",
-            naechste_nr=1,
-            reset_jaehrlich=True,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Journal", typ="journal", format="YY####", naechste_nr=1, reset_jaehrlich=True))
     if "rechnung_ausgang" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Ausgangsrechnungen",
-            typ="rechnung_ausgang",
-            format="YY####",
-            naechste_nr=1,
-            reset_jaehrlich=True,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Ausgangsrechnungen", typ="rechnung_ausgang", format="YY####", naechste_nr=1, reset_jaehrlich=True))
     if "rechnung_eingang" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Eingangsrechnungen",
-            typ="rechnung_eingang",
-            format="YY####",
-            naechste_nr=1,
-            reset_jaehrlich=True,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Eingangsrechnungen", typ="rechnung_eingang", format="YY####", naechste_nr=1, reset_jaehrlich=True))
     if "kunde" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Kundennummern",
-            typ="kunde",
-            format="KD-####",
-            naechste_nr=1,
-            reset_jaehrlich=False,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Kundennummern", typ="kunde", format="KD-####", naechste_nr=1, reset_jaehrlich=False))
     if "lieferant" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Lieferantennummern",
-            typ="lieferant",
-            format="LI-####",
-            naechste_nr=1,
-            reset_jaehrlich=False,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Lieferantennummern", typ="lieferant", format="LI-####", naechste_nr=1, reset_jaehrlich=False))
     if "artikel" not in typen:
-        neue.append(Nummernkreis(
-            bezeichnung="Artikelnummern",
-            typ="artikel",
-            format="ART-####",
-            naechste_nr=1,
-            reset_jaehrlich=False,
-        ))
+        neue.append(Nummernkreis(bezeichnung="Artikelnummern", typ="artikel", format="ART-####", naechste_nr=1, reset_jaehrlich=False))
     if neue:
         for nk in neue:
             db.add(nk)

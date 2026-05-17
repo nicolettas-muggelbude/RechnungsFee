@@ -462,42 +462,35 @@ export type EksFeld = {
   code: string
   label: string
   auto: boolean
-  wert: string
 }
 
 export type EksQuelle = {
   zeitraum_von: string
   zeitraum_bis: string
   anzahl_exporte: number
-  n_monate: number
 }
 
-export type EksBerechnenResult = {
-  zeitraum_von: string
-  zeitraum_bis: string
-  art: string
+export type EksHalbjahr = {
+  monate: string[]                                    // ['2025-01', '2025-02', ...]
+  werte: Record<string, Record<string, string>>       // monat → code → betrag
+  zeilensummen: Record<string, string>                // code → 6-Monats-Summe
+  spaltensummen_a: Record<string, string>             // monat → Summe Tabelle A
+  spaltensummen_b: Record<string, string>             // monat → Summe Tabelle B
+  spaltensummen_c: Record<string, string>             // monat → Summe Tabelle C
   felder: EksFeld[]
-  quelle: EksQuelle | null
-}
-
-export async function eksBerechnen(von: string, bis: string, art: string): Promise<EksBerechnenResult> {
-  return request<EksBerechnenResult>(`/eks/berechnen?von=${von}&bis=${bis}&art=${art}`)
-}
-
-export async function eksPdfExport(params: {
-  zeitraum_von: string
-  zeitraum_bis: string
   art: string
-  felder: Record<string, string>
-}): Promise<void> {
+  quelle: EksQuelle | null
+  bewilligungszeitraum_von: string
+  bewilligungszeitraum_bis: string
+}
+
+export async function eksHalbjahr(start: string, art: string): Promise<EksHalbjahr> {
+  return request<EksHalbjahr>(`/eks/halbjahr?start=${start}&art=${art}`)
+}
+
+export async function eksHalbjahresPdf(start: string, art: string): Promise<void> {
   const base = await getBaseUrl()
-  const q = new URLSearchParams({
-    zeitraum_von: params.zeitraum_von,
-    zeitraum_bis: params.zeitraum_bis,
-    art: params.art,
-    felder: JSON.stringify(params.felder),
-  })
-  await openUrl(`${base}/eks/pdf?${q}`)
+  await openUrl(`${base}/eks/halbjahr/pdf?start=${start}&art=${art}`)
 }
 
 // --- Export ---
