@@ -410,29 +410,58 @@ def _run_migrations() -> None:
 
 
 def _migrate_kategorien() -> None:
-    """Fehlende Kategorien in bestehende Datenbanken eintragen."""
+    """Fehlende Kategorien eintragen und fehlerhafte EKS-Zuordnungen korrigieren."""
     from database.models import Kategorie
 
-    neue = [
-        {
-            "name": "Wareneinkauf",
-            "kontenart": "Aufwand",
-            "konto_skr03": "3000", "konto_skr04": "5000",
-            "eks_kategorie": "B1", "euer_zeile": 26,
-            "vorsteuer_prozent": 100, "ust_satz_standard": 19,
-            "ist_system": True,
-        },
-        {
-            "name": "Wareneinkauf (7%)",
-            "kontenart": "Aufwand",
-            "konto_skr03": "3000", "konto_skr04": "5000",
-            "eks_kategorie": "B1", "euer_zeile": 26,
-            "vorsteuer_prozent": 100, "ust_satz_standard": 7,
-            "ist_system": True,
-        },
-    ]
     db = SessionLocal()
     try:
+        # ── Korrekturen falscher eks_kategorie-Zuordnungen ────────────────────
+        korrekturen = [
+            ("Privatentnahme",              "A2"),   # war NULL
+            ("Privateinlage",               "A4"),   # war NULL
+            ("Steuerberatung",              "B11"),  # war B9
+            ("Rechts- & Beratungskosten",   "B11"),  # war B9
+            ("Buchführungskosten",          "B11"),  # war B9
+            ("Fortbildung & Fachliteratur", "B12"),  # war B9
+        ]
+        for name, eks in korrekturen:
+            kat = db.query(Kategorie).filter(Kategorie.name == name).first()
+            if kat and kat.eks_kategorie != eks:
+                kat.eks_kategorie = eks
+
+        # Anlagevermögen-Kategorien: C1 → B18 (C1 ist Steuern, nicht Investitionen)
+        for kat in db.query(Kategorie).filter(
+            Kategorie.eks_kategorie == "C1",
+            Kategorie.kontenart == "Anlage",
+        ).all():
+            kat.eks_kategorie = "B18"
+
+        # ── Fehlende Kategorien eintragen ────────────────────────────────────
+        neue = [
+            # Wareneinkauf
+            {"name": "Wareneinkauf",                  "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",   "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",   "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+            # Tabelle A – Einnahmen
+            {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Umsatzsteuer (vereinnahmt)",     "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "1776", "eks_kategorie": "A5_1", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Umsatzsteuer-Erstattung FA",     "kontenart": "Erlös",   "konto_skr03": "1779", "konto_skr04": "1779", "eks_kategorie": "A5_2", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Tabelle B – Betriebsausgaben
+            {"name": "Rechts- & Beratungskosten",      "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6840", "eks_kategorie": "B11",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Buchführungskosten",              "kontenart": "Aufwand", "konto_skr03": "4975", "konto_skr04": "6845", "eks_kategorie": "B11",  "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Zinsen & Darlehenskosten",        "kontenart": "Aufwand", "konto_skr03": "4315", "konto_skr04": "7310", "eks_kategorie": "B14",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Kredittilgung",                   "kontenart": "Aufwand", "konto_skr03": "2100", "konto_skr04": "3150", "eks_kategorie": "B15",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Umsatzsteuer-Zahlung FA",         "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "1780", "eks_kategorie": "B16",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Vorsteuererstattung FA",          "kontenart": "Erlös",   "konto_skr03": "1570", "konto_skr04": "1570", "eks_kategorie": "B17",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Anlagevermögen (Kauf)",           "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "B18",  "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # Tabelle C – Absetzungsbeträge (persönliche Abzüge)
+            {"name": "Einkommensteuer-Vorauszahlung",  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Gewerbesteuer",                   "kontenart": "Aufwand", "konto_skr03": "7600", "konto_skr04": "7610", "eks_kategorie": "C1",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Krankenversicherung (Pflicht)",   "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Pflegeversicherung (Pflicht)",    "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C3",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Rentenversicherung (freiwillig)", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Riester-Beiträge",                "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C5",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Sonstige Absetzungen",            "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C6",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+        ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
                 db.add(Kategorie(**data))
