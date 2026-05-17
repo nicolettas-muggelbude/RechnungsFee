@@ -21,12 +21,12 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: src/backend/requirements.txt
+          cache-dependency-path: src/backend/requirements-dev.txt
 
       - name: Abhängigkeiten installieren
         run: |
           cd src/backend
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: pytest ausführen
         run: |
