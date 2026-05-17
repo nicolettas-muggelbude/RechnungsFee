@@ -73,6 +73,38 @@ Steuerliche Auswertungen für Finanzamt und Steuerberater.
 
 ---
 
+## v0.4 – Eingangsrechnungen digitalisieren *(Ziel: offen)*
+
+OCR-gestützte Erkennung und automatische Erfassung von Eingangsrechnungen per PDF- oder Foto-Upload.
+
+**Upload**
+- [ ] PDF-Upload per Drag & Drop oder Datei-Dialog
+- [ ] Foto-Upload (JPG/PNG) als Alternative zu PDF
+- [ ] Vorschau der hochgeladenen Datei im Erfassungs-Dialog
+
+**Automatische Felderkennung (OCR)**
+- [ ] Lieferantenname und Adresse
+- [ ] Rechnungsnummer (externe Belegnr.)
+- [ ] Rechnungsdatum und Fälligkeitsdatum
+- [ ] Rechnungsbetrag (Brutto, Netto, USt)
+- [ ] IBAN des Lieferanten (für Zahlungshinweis)
+- [ ] Abgleich erkannter Lieferant mit Lieferantenstamm
+
+**Erfassungs-Workflow**
+- [ ] Erkannte Felder werden im Formular vorausgefüllt (editierbar)
+- [ ] Niedrige Konfidenz wird visuell markiert (gelbe Hervorhebung)
+- [ ] Original-Beleg wird gespeichert und mit der Rechnung verknüpft
+- [ ] Gespeicherter Beleg abrufbar im Detail-Panel
+
+**Technische Umsetzung**
+- [ ] `pdfplumber` für maschinenlesbare PDFs, `pytesseract` als Fallback für Scans/Fotos
+- [ ] Regex-/Heuristik-basierte Feldextraktion für DE/AT/CH-Rechnungsformate
+- [ ] Optional: lokales LLM (ollama) für bessere Feldzuordnung als Opt-in
+- [ ] `POST /api/rechnungen/digitalisieren` → gibt erkannte Felder + Dateipfad zurück
+- [ ] `GET /api/rechnungen/{id}/beleg` → gibt gespeicherte PDF/Bild-Datei zurück
+
+---
+
 ## v1.0 – Release *(Ziel: Oktober 2026)*
 
 Produktionsreife Desktop-App für Windows, Linux und macOS.
