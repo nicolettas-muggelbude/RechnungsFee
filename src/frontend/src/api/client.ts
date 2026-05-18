@@ -192,10 +192,16 @@ export type Konto = {
   kontotyp: 'geschaeftlich' | 'mischkonto' | 'privat'
   ist_standard: boolean
   aktiv?: boolean
+  erstellt_am?: string
 }
 export const getKonten = () => request<Konto[]>('/konten')
-export const createKonto = (data: Omit<Konto, 'id' | 'aktiv'>) =>
+export const getKontenAlle = () => request<Konto[]>('/konten?nur_aktive=false')
+export const createKonto = (data: Omit<Konto, 'id' | 'aktiv' | 'erstellt_am'>) =>
   request<Konto>('/konten', { method: 'POST', body: JSON.stringify(data) })
+export const updateKonto = (id: number, data: Partial<Omit<Konto, 'id' | 'erstellt_am'>>) =>
+  request<Konto>(`/konten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const deleteKonto = (id: number) =>
+  request<void>(`/konten/${id}`, { method: 'DELETE' })
 
 // --- Kategorien ---
 export type Kategorie = {
