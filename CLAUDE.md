@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 19` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 21` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -85,6 +85,8 @@ def _run_migrations():
 | 17 | kassenbuch → journal (Tabellenumbenennung + Trigger-Rename auf protect_journal_*) |
 | 18 | nummernkreise: typ='kassenbuch' → 'journal', bezeichnung='Journal' |
 | 19 | Unique-Indizes uix_kunden_kundennummer + uix_lieferanten_lieferantennummer (WHERE NOT NULL) |
+| 20 | unternehmen (geburtsdatum DATE, bg_nummer VARCHAR(50), jobcenter_name VARCHAR(200)) – Pflichtfelder für Anlage EKS bei Transferleistungen |
+| 21 | eks_einstellungen-Tabelle (Singleton id=1): persistente Formularfelder Abschnitt D / F 23–41 / Seite 9 52–58 |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
