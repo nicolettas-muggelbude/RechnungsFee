@@ -106,25 +106,40 @@ class UnternehmenResponse(UnternehmenBase):
 
 class KontoBase(BaseModel):
     name: str
-    bank: str
-    iban: str
+    anbieter: str
+    kontoart: str = "bank"          # bank|zahlungsdienstleister
+    iban: Optional[str] = None
     bic: Optional[str] = None
-    kontotyp: str = "geschaeftlich"
+    kennung: Optional[str] = None   # PayPal-E-Mail, Stripe-ID etc.
+    kontotyp: str = "geschaeftlich" # geschaeftlich|mischkonto
     ist_standard: bool = False
 
-    @field_validator("iban")
+    @model_validator(mode="after")
+    def check_felder(self) -> "KontoBase":
+        if self.kontoart == "bank":
+            if not self.iban:
+                raise ValueError("IBAN ist für Bankkonten erforderlich")
+            iban = self.iban.replace(" ", "").upper()
+            if len(iban) < 15 or len(iban) > 34:
+                raise ValueError("IBAN muss zwischen 15 und 34 Zeichen lang sein")
+            self.iban = iban
+        elif self.kontoart == "zahlungsdienstleister":
+            if not self.kennung:
+                raise ValueError("Kennung (z.B. E-Mail-Adresse) ist für Zahlungsdienstleister erforderlich")
+        return self
+
+    @field_validator("kontoart")
     @classmethod
-    def check_iban(cls, v: str) -> str:
-        iban = v.replace(" ", "").upper()
-        if len(iban) < 15 or len(iban) > 34:
-            raise ValueError("IBAN muss zwischen 15 und 34 Zeichen lang sein")
-        return iban
+    def check_kontoart(cls, v: str) -> str:
+        if v not in ("bank", "zahlungsdienstleister"):
+            raise ValueError("kontoart muss 'bank' oder 'zahlungsdienstleister' sein")
+        return v
 
     @field_validator("kontotyp")
     @classmethod
     def check_kontotyp(cls, v: str) -> str:
-        if v not in ("geschaeftlich", "mischkonto", "privat"):
-            raise ValueError("kontotyp muss 'geschaeftlich', 'mischkonto' oder 'privat' sein")
+        if v not in ("geschaeftlich", "mischkonto"):
+            raise ValueError("kontotyp muss 'geschaeftlich' oder 'mischkonto' sein")
         return v
 
 
@@ -134,8 +149,11 @@ class KontoCreate(KontoBase):
 
 class KontoUpdate(BaseModel):
     name: Optional[str] = None
-    bank: Optional[str] = None
+    anbieter: Optional[str] = None
+    kontoart: Optional[str] = None
+    iban: Optional[str] = None
     bic: Optional[str] = None
+    kennung: Optional[str] = None
     kontotyp: Optional[str] = None
     ist_standard: Optional[bool] = None
     aktiv: Optional[bool] = None

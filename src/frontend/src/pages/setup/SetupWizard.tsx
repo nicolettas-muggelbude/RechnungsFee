@@ -36,7 +36,7 @@ export function SetupWizard() {
         // Bankdaten aus StepKonto übernehmen damit IBAN auf Rechnungen erscheint
         iban: kontoData?.iban ?? '',
         bic: kontoData?.bic ?? '',
-        bank_name: kontoData?.bank ?? '',
+        bank_name: kontoData?.anbieter ?? '',
       } as Unternehmen)
       await createKonto({ ...kontoData!, ist_standard: true })
       const b = parseFloat(betrag)

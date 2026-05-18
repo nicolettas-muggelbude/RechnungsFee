@@ -1,28 +1,59 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { getKontenAlle, createKonto, updateKonto, deleteKonto, type Konto } from '../../api/client'
 
-const TYPEN: Record<Konto['kontotyp'], { label: string; cls: string }> = {
-  geschaeftlich: { label: 'Geschäftlich', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
-  mischkonto:    { label: 'Mischkonto',   cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
-  privat:        { label: 'Privat',        cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+const KONTOARTEN: Record<Konto['kontoart'], { label: string; cls: string }> = {
+  bank:                  { label: 'Bankkonto',             cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  zahlungsdienstleister: { label: 'Zahlungsdienstleister', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300' },
 }
 
-const schema = z.object({
-  name:         z.string().min(1, 'Name erforderlich'),
-  bank:         z.string().min(1, 'Bank erforderlich'),
-  iban:         z.string().min(15, 'IBAN zu kurz').max(34, 'IBAN zu lang'),
-  bic:          z.string().optional().or(z.literal('')),
-  kontotyp:     z.enum(['geschaeftlich', 'mischkonto', 'privat']),
-  ist_standard: z.boolean(),
-})
+const KONTOTYPEN: Record<Konto['kontotyp'], string> = {
+  geschaeftlich: 'Geschäftlich',
+  mischkonto:    'Mischkonto',
+}
+
+const schema = z.discriminatedUnion('kontoart', [
+  z.object({
+    kontoart:     z.literal('bank'),
+    name:         z.string().min(1, 'Name erforderlich'),
+    anbieter:     z.string().min(1, 'Bank erforderlich'),
+    iban:         z.string().min(15, 'IBAN zu kurz').max(34, 'IBAN zu lang'),
+    bic:          z.string().optional().or(z.literal('')),
+    kennung:      z.string().optional(),
+    kontotyp:     z.enum(['geschaeftlich', 'mischkonto']),
+    ist_standard: z.boolean(),
+  }),
+  z.object({
+    kontoart:     z.literal('zahlungsdienstleister'),
+    name:         z.string().min(1, 'Name erforderlich'),
+    anbieter:     z.string().min(1, 'Anbieter erforderlich'),
+    iban:         z.string().optional(),
+    bic:          z.string().optional(),
+    kennung:      z.string().min(1, 'Kennung erforderlich (z.B. E-Mail-Adresse)'),
+    kontotyp:     z.enum(['geschaeftlich', 'mischkonto']),
+    ist_standard: z.boolean(),
+  }),
+])
 type FormValues = z.infer<typeof schema>
 
-const LEER: FormValues = {
-  name: '', bank: '', iban: '', bic: '', kontotyp: 'geschaeftlich', ist_standard: false,
+function defaultValues(konto: Konto | null): FormValues {
+  if (konto) return {
+    kontoart:     konto.kontoart,
+    name:         konto.name,
+    anbieter:     konto.anbieter,
+    iban:         konto.iban ?? '',
+    bic:          konto.bic ?? '',
+    kennung:      konto.kennung ?? '',
+    kontotyp:     konto.kontotyp,
+    ist_standard: konto.ist_standard,
+  }
+  return {
+    kontoart: 'bank', name: '', anbieter: '', iban: '', bic: '',
+    kennung: '', kontotyp: 'geschaeftlich', ist_standard: false,
+  }
 }
 
 function formatIban(iban: string) {
@@ -35,17 +66,11 @@ function formatIban(iban: string) {
 
 function KontoModal({ konto, onClose }: { konto: Konto | null; onClose: () => void }) {
   const qc = useQueryClient()
-  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: konto ? {
-      name: konto.name,
-      bank: konto.bank,
-      iban: konto.iban,
-      bic: konto.bic ?? '',
-      kontotyp: konto.kontotyp,
-      ist_standard: konto.ist_standard,
-    } : LEER,
+    defaultValues: defaultValues(konto),
   })
+  const kontoart = useWatch({ control, name: 'kontoart' })
 
   const create = useMutation({
     mutationFn: createKonto,
@@ -60,12 +85,18 @@ function KontoModal({ konto, onClose }: { konto: Konto | null; onClose: () => vo
   const serverFehler = (mutation.error as any)?.message ?? null
 
   function onSubmit(data: FormValues) {
-    const payload = { ...data, bic: data.bic || undefined }
-    if (konto) update.mutate(payload)
-    else create.mutate(payload)
+    const payload = {
+      ...data,
+      bic:     data.bic     || undefined,
+      kennung: data.kennung || undefined,
+      iban:    data.iban    || undefined,
+    }
+    if (konto) update.mutate(payload as FormValues)
+    else create.mutate(payload as FormValues)
   }
 
   const inp = 'w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const err = (msg?: string) => msg ? <p className="text-xs text-red-500 mt-0.5">{msg}</p> : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
@@ -78,35 +109,81 @@ function KontoModal({ konto, onClose }: { konto: Konto | null; onClose: () => vo
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
+
+          {/* Kontoart */}
+          <div>
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Kontoart</label>
+            <div className="flex gap-2">
+              {(['bank', 'zahlungsdienstleister'] as const).map(art => (
+                <label key={art} className="flex-1 cursor-pointer">
+                  <input type="radio" value={art} {...register('kontoart')} className="sr-only" />
+                  <span className={`block text-center text-sm py-2 rounded-lg border transition-colors ${
+                    kontoart === art
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}>
+                    {art === 'bank' ? '🏦 Bankkonto' : '💳 Zahlungsdienstleister'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
           <div>
             <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Bezeichnung</label>
             <input {...register('name')} placeholder="z.B. Geschäftskonto Sparkasse" className={inp} />
-            {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name.message}</p>}
+            {err(errors.name?.message)}
           </div>
+
+          {/* Anbieter */}
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Bank</label>
-            <input {...register('bank')} placeholder="z.B. Sparkasse München" className={inp} />
-            {errors.bank && <p className="text-xs text-red-500 mt-0.5">{errors.bank.message}</p>}
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+              {kontoart === 'bank' ? 'Bank' : 'Anbieter'}
+            </label>
+            <input
+              {...register('anbieter')}
+              placeholder={kontoart === 'bank' ? 'z.B. Sparkasse München' : 'z.B. PayPal, Stripe'}
+              className={inp}
+            />
+            {err(errors.anbieter?.message)}
           </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">IBAN</label>
-              <input {...register('iban')} placeholder="DE89 3704 0044 …" className={inp} />
-              {errors.iban && <p className="text-xs text-red-500 mt-0.5">{errors.iban.message}</p>}
+
+          {/* Bankfelder */}
+          {kontoart === 'bank' && (
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">IBAN</label>
+                <input {...register('iban')} placeholder="DE89 3704 0044 …" className={inp} />
+                {err((errors as any).iban?.message)}
+              </div>
+              <div className="w-36">
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">BIC (optional)</label>
+                <input {...register('bic')} placeholder="COBADEFF" className={inp} />
+              </div>
             </div>
-            <div className="w-36">
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">BIC (optional)</label>
-              <input {...register('bic')} placeholder="COBADEFF" className={inp} />
+          )}
+
+          {/* Kennung für Zahlungsdienstleister */}
+          {kontoart === 'zahlungsdienstleister' && (
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+                Kennung (E-Mail, Account-ID o.ä.)
+              </label>
+              <input {...register('kennung')} placeholder="z.B. meine@email.de" className={inp} />
+              {err((errors as any).kennung?.message)}
             </div>
-          </div>
+          )}
+
+          {/* Kontotyp */}
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Kontotyp</label>
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Verwendung</label>
             <select {...register('kontotyp')} className={inp}>
               <option value="geschaeftlich">Geschäftlich</option>
               <option value="mischkonto">Mischkonto (privat &amp; geschäftlich)</option>
-              <option value="privat">Privat</option>
             </select>
           </div>
+
           <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
             <input type="checkbox" {...register('ist_standard')} className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 accent-blue-600" />
             Als Standard-Konto verwenden
@@ -165,7 +242,7 @@ export function KontenPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Bankkonten</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Konten für den Bank-Import und automatische Buchungszuordnung
+            Bankkonten und Zahlungsdienstleister für den Bank-Import
           </p>
         </div>
         <button
@@ -176,21 +253,18 @@ export function KontenPage() {
         </button>
       </div>
 
-      {/* Ladelzustand */}
       {isLoading && <p className="text-slate-400 text-sm">Lade…</p>}
 
-      {/* Leer-Zustand */}
       {!isLoading && konten.length === 0 && (
         <div className="text-center py-16 text-slate-400 dark:text-slate-500">
           <p className="text-4xl mb-3">🏦</p>
           <p className="font-medium">Noch keine Konten hinterlegt</p>
           <p className="text-xs mt-1 opacity-70">
-            Füge dein Geschäftskonto hinzu – es wird für den Bank-Import benötigt.
+            Füge dein Geschäftskonto oder einen Zahlungsdienstleister hinzu.
           </p>
         </div>
       )}
 
-      {/* Karten */}
       <div className="space-y-3">
         {konten.map(k => (
           <div
@@ -209,8 +283,11 @@ export function KontenPage() {
                     Standard
                   </span>
                 )}
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPEN[k.kontotyp].cls}`}>
-                  {TYPEN[k.kontotyp].label}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${KONTOARTEN[k.kontoart].cls}`}>
+                  {KONTOARTEN[k.kontoart].label}
+                </span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  {KONTOTYPEN[k.kontotyp]}
                 </span>
                 {!k.aktiv && (
                   <span className="text-xs bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full">
@@ -218,9 +295,14 @@ export function KontenPage() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{k.bank}</p>
-              <p className="font-mono text-sm text-slate-700 dark:text-slate-300 mt-1">{formatIban(k.iban)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{k.anbieter}</p>
+              {k.iban && (
+                <p className="font-mono text-sm text-slate-700 dark:text-slate-300 mt-1">{formatIban(k.iban)}</p>
+              )}
               {k.bic && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">BIC: {k.bic}</p>}
+              {k.kennung && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-mono">{k.kennung}</p>
+              )}
             </div>
             <div className="flex items-center gap-1 shrink-0 pt-0.5">
               <button
@@ -257,17 +339,16 @@ export function KontenPage() {
           <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6">
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Konto löschen?</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-              <strong>{zuLoeschen.name}</strong> ({formatIban(zuLoeschen.iban)}) wird unwiderruflich gelöscht.
+              <strong>{zuLoeschen.name}</strong> wird unwiderruflich gelöscht.
             </p>
             <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
               Konten mit verknüpften Transaktionen können nicht gelöscht werden – deaktiviere sie stattdessen.
             </p>
             {loeschFehler && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{loeschFehler}</p>}
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setZuLoeschen(null)}
-                className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >Abbrechen</button>
+              <button onClick={() => setZuLoeschen(null)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                Abbrechen
+              </button>
               <button
                 onClick={() => loeschen.mutate(zuLoeschen.id!)}
                 disabled={loeschen.isPending}

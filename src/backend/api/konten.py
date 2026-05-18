@@ -24,7 +24,7 @@ def list_konten(nur_aktive: bool = True, db: Session = Depends(get_db)):
 @router.post("", response_model=KontoResponse, status_code=201)
 def create_konto(data: KontoCreate, db: Session = Depends(get_db)):
     """Legt ein neues Bankkonto an."""
-    if db.query(Konto).filter(Konto.iban == data.iban).first():
+    if data.iban and db.query(Konto).filter(Konto.iban == data.iban).first():
         raise HTTPException(status_code=409, detail=f"IBAN {data.iban} bereits vorhanden.")
     # Erstes Konto wird automatisch Standard
     ist_erstes = db.query(Konto).count() == 0

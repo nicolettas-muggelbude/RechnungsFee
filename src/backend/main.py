@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -461,6 +461,40 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 21"))
             conn.commit()
             print("[Migration] Schema auf Version 21 gebracht (eks_einstellungen)")
+
+        if version < 22:
+            # konten-Tabelle neu aufbauen: kontoart + kennung ergänzen, IBAN nullable,
+            # Spalte bank → anbieter umbenennen, privat aus kontotyp entfernen
+            conn.execute(text("""
+                CREATE TABLE konten_new (
+                    id          INTEGER PRIMARY KEY,
+                    name        VARCHAR(100) NOT NULL,
+                    anbieter    VARCHAR(100) NOT NULL,
+                    kontoart    VARCHAR(30)  NOT NULL DEFAULT 'bank',
+                    iban        VARCHAR(34),
+                    bic         VARCHAR(11),
+                    kennung     VARCHAR(200),
+                    kontotyp    VARCHAR(20)  NOT NULL DEFAULT 'geschaeftlich',
+                    ist_standard BOOLEAN     NOT NULL DEFAULT 0,
+                    aktiv       BOOLEAN      NOT NULL DEFAULT 1,
+                    erstellt_am DATETIME     DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+                )
+            """))
+            conn.execute(text("""
+                INSERT INTO konten_new (id, name, anbieter, kontoart, iban, bic, kontotyp, ist_standard, aktiv, erstellt_am)
+                SELECT id, name, bank, 'bank', iban, bic,
+                    CASE WHEN kontotyp = 'privat' THEN 'mischkonto' ELSE kontotyp END,
+                    ist_standard, aktiv, erstellt_am
+                FROM konten
+            """))
+            conn.execute(text("DROP TABLE konten"))
+            conn.execute(text("ALTER TABLE konten_new RENAME TO konten"))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uix_konten_iban ON konten(iban) WHERE iban IS NOT NULL"
+            ))
+            conn.execute(text("PRAGMA user_version = 22"))
+            conn.commit()
+            print("[Migration] Schema auf Version 22 gebracht (konten: kontoart, kennung, IBAN nullable)")
 
 
 def _migrate_kategorien() -> None:

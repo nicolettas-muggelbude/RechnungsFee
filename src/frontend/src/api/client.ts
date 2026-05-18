@@ -186,10 +186,12 @@ export async function getLogoUrl(): Promise<string> {
 export type Konto = {
   id?: number
   name: string
-  bank: string
-  iban: string
+  anbieter: string
+  kontoart: 'bank' | 'zahlungsdienstleister'
+  iban?: string
   bic?: string
-  kontotyp: 'geschaeftlich' | 'mischkonto' | 'privat'
+  kennung?: string
+  kontotyp: 'geschaeftlich' | 'mischkonto'
   ist_standard: boolean
   aktiv?: boolean
   erstellt_am?: string

@@ -97,15 +97,17 @@ class Unternehmen(Base):
 
 
 class Konto(Base):
-    """Bankkonten des Unternehmens."""
+    """Bankkonten und Zahlungsdienstleister des Unternehmens."""
     __tablename__ = "konten"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    bank: Mapped[str] = mapped_column(String(100), nullable=False)
-    iban: Mapped[str] = mapped_column(String(34), unique=True, nullable=False)
+    anbieter: Mapped[str] = mapped_column(String(100), nullable=False)       # Bank- oder Dienstleistername
+    kontoart: Mapped[str] = mapped_column(String(30), default="bank", nullable=False)   # bank|zahlungsdienstleister
+    iban: Mapped[str | None] = mapped_column(String(34))                     # nur für kontoart=bank
     bic: Mapped[str | None] = mapped_column(String(11))
-    kontotyp: Mapped[str] = mapped_column(String(20), default="geschaeftlich", nullable=False)  # geschaeftlich|mischkonto|privat
+    kennung: Mapped[str | None] = mapped_column(String(200))                 # PayPal-E-Mail, Stripe-ID etc.
+    kontotyp: Mapped[str] = mapped_column(String(20), default="geschaeftlich", nullable=False)  # geschaeftlich|mischkonto
     ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
