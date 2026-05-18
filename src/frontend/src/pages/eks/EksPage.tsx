@@ -206,7 +206,6 @@ function MatrixTabelle({
           </tfoot>
         </table>
       </div>
-      {showEinstellungen && <EksEinstellungenModal onClose={() => setShowEinstellungen(false)} />}
     </div>
   )
 }
@@ -519,6 +518,7 @@ export function EksPage() {
           <p className="text-xs mt-2 opacity-70">Der Bewilligungszeitraum umfasst immer 6 aufeinanderfolgende Monate.</p>
         </div>
       )}
+      {showEinstellungen && <EksEinstellungenModal onClose={() => setShowEinstellungen(false)} />}
     </div>
   )
 }
