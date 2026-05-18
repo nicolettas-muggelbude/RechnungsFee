@@ -61,9 +61,9 @@ W_L  = 273.0
 
 # Querformat-Spalten
 W_L_CODE  = 14.0
-W_L_MONAT = 34.0   # 6 × 34 = 204 mm
-W_L_SUMME = 31.0
-# W_L_LABEL = W_L − W_L_CODE − 6×W_L_MONAT − W_L_SUMME = 24 mm  (dynamisch)
+W_L_MONAT = 26.0   # 6 × 26 = 156 mm  (kleiner → mehr Platz für Label-Spalte)
+W_L_SUMME = 27.0
+# W_L_LABEL = W_L − W_L_CODE − 6×W_L_MONAT − W_L_SUMME = 273-14-156-27 = 76 mm (dynamisch)
 
 
 # ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
@@ -194,29 +194,38 @@ class EksPDF(FPDF):
 
     def feld_zeile(self, *felder: tuple):
         """Mehrere (nr, label, wert, breite) Felder nebeneinander, dann Zeilenvorschub."""
+        lh = 4.5
+
+        max_lh = lh
+        for (nr, label, wert, breite) in felder:
+            nr_str = f"{nr} " if nr is not None else ""
+            self.set_font("DejaVu", "", 8.5)
+            n = len(self.multi_cell(breite, lh, nr_str + label, split_only=True))
+            h = n * lh
+            if h > max_lh:
+                max_lh = h
+
         y0  = self.get_y()
         xc  = self.l_margin
         gap = 4.0
-        for i, (nr, label, wert, breite) in enumerate(felder):
+        for (nr, label, wert, breite) in felder:
             nr_str = f"{nr} " if nr is not None else ""
-            # Label
             self.set_xy(xc, y0)
             self.set_font("DejaVu", "", 8.5)
             self.set_text_color(*DUNKELGRAU)
-            self.cell(breite, 4.5, nr_str + label)
-            # Wert oder Unterstrich
-            y_val = y0 + 4.5
+            self.multi_cell(breite, lh, nr_str + label, align="L")
+            y_val = y0 + max_lh
             if wert:
                 self.set_xy(xc, y_val)
                 self.set_font("DejaVu", "B", 9.5)
                 self.set_text_color(*BLAU)
-                self.cell(breite, 6, str(wert))
+                self.multi_cell(breite, 6, str(wert), align="L")
             else:
                 self.set_draw_color(*GRAU_LINIE)
                 self.set_line_width(0.4)
                 self.line(xc, y_val + 5, xc + breite - 2, y_val + 5)
             xc += breite + gap
-        self.set_y(y0 + 13)
+        self.set_y(y0 + max_lh + 8)
 
     def feld(self, nr: int | None, label: str, wert: str = "",
              breite: float | None = None, einzug: float = 0.0):
@@ -318,24 +327,44 @@ class EksPDF(FPDF):
         wl   = self._wl(len(monate))
         zsum = zeilensummen.get(code, "0")
         ok   = not _ist_leer(zsum)
-        if self.get_y() > self.h - self.b_margin - 8:
+
+        self.set_font("DejaVu", "B" if fett else "", 7.5)
+        n_lines = len(self.multi_cell(wl - 2, 5.0, label, split_only=True))
+        row_h   = max(5.5, n_lines * 5.0)
+
+        y0 = self.get_y()
+        if y0 + row_h > self.h - self.b_margin:
             return
-        self.set_x(self.l_margin)
+
+        self.set_xy(self.l_margin, y0)
         self.set_font("DejaVu", "B" if (ok or fett) else "", 7.5)
-        self.set_text_color(*DUNKELGRAU if not ok else SCHWARZ)
-        self.cell(W_L_CODE, 5.5, _code_display(code), border=1)
+        self.set_text_color(*(SCHWARZ if ok else DUNKELGRAU))
+        self.cell(W_L_CODE, row_h, _code_display(code), border=1, align="C")
+
+        lx = self.l_margin + W_L_CODE
+        self.set_draw_color(*GRAU_RAND)
+        self.set_line_width(0.2)
+        self.rect(lx, y0, wl, row_h)
+        self.set_xy(lx + 1, y0 + 0.5)
         self.set_font("DejaVu", "B" if fett else "", 7.5)
         self.set_text_color(*SCHWARZ)
-        self.cell(wl, 5.5, label[:62], border=1)
+        self.multi_cell(wl - 1.5, 5.0, label, border=0, align="L")
+
+        mx = lx + wl
         for m in monate:
             v = werte.get(m, {}).get(code, "0")
+            self.set_xy(mx, y0)
             self.set_font("DejaVu", "", 7.5)
-            self.set_text_color(*DUNKELGRAU if _ist_leer(v) else SCHWARZ)
-            self.cell(W_L_MONAT, 5.5, _fmt_euro(v), border=1, align="R")
+            self.set_text_color(*(SCHWARZ if not _ist_leer(v) else DUNKELGRAU))
+            self.cell(W_L_MONAT, row_h, _fmt_euro(v), border=1, align="R")
+            mx += W_L_MONAT
+
+        self.set_xy(mx, y0)
         self.set_font("DejaVu", "B" if ok else "", 7.5)
-        self.set_text_color(*BLAU if ok else DUNKELGRAU)
-        self.cell(W_L_SUMME, 5.5, _fmt_euro(zsum), border=1, align="R",
-                  new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(*(BLAU if ok else DUNKELGRAU))
+        self.cell(W_L_SUMME, row_h, _fmt_euro(zsum), border=1, align="R")
+
+        self.set_xy(self.l_margin, y0 + row_h)
         self.set_text_color(*SCHWARZ)
 
     def q_uebertrag(self, label: str, monat_werte: dict[str, str], monate: list[str]):
@@ -645,12 +674,17 @@ def _s4_tabelle_a(pdf: EksPDF, felder_a: list[dict], monate: list[str],
     pdf.q_anmerkung(44)
 
 
-def _s5_tabelle_b1(pdf: EksPDF, felder_b1: list[dict], monate: list[str],
-                   werte: dict, zeilensummen: dict):
+def _s5_tabelle_b1(pdf: EksPDF, felder_b1: list[dict], felder_a: list[dict],
+                   monate: list[str], werte: dict, zeilensummen: dict,
+                   spaltensummen_a: dict):
     """Seite 5: Tabelle B – Teil 1"""
     pdf.quer()
     pdf.q_abschnitt(45, "Tabelle B – Teil 1: Angaben zu den Betriebsausgaben")
     pdf.q_kopf(monate)
+
+    zw_a = {m: str(spaltensummen_a.get(m, "0")) for m in monate}
+    pdf.q_uebertrag("Übertrag Summe Betriebseinnahmen (Tabelle A)", zw_a, monate)
+
     for f in felder_b1:
         pdf.q_zeile(f["code"], f["label"], monate, werte, zeilensummen)
     pdf.q_zwischensumme("Zwischensumme Tabelle B – Teil 1", felder_b1,
@@ -813,22 +847,34 @@ def _s8_tabelle_c(pdf: EksPDF, felder_c: list[dict], zeilensummen: dict):
         except (ValueError, TypeError):
             pass
 
-        pdf.set_x(pdf.l_margin)
+        pdf.set_font("DejaVu", "", 7.5)
+        n_lines_c = len(pdf.multi_cell(w_art - 1, 5.0, f["label"], split_only=True))
+        row_h_c = max(5.5, n_lines_c * 5.0)
+
+        y0_c = pdf.get_y()
+        pdf.set_xy(pdf.l_margin, y0_c)
         pdf.set_font("DejaVu", "B" if hat else "", 7.5)
-        if hat:
-            pdf.set_text_color(*DUNKELGRAU)
-        else:
-            pdf.set_text_color(*DUNKELGRAU)
-        pdf.cell(w_code, 5.5, _code_display(f["code"]), border=1)
+        pdf.set_text_color(*DUNKELGRAU)
+        pdf.cell(w_code, row_h_c, _code_display(f["code"]), border=1)
+
+        lx_c = pdf.l_margin + w_code
+        pdf.set_draw_color(*GRAU_RAND)
+        pdf.set_line_width(0.2)
+        pdf.rect(lx_c, y0_c, w_art, row_h_c)
+        pdf.set_xy(lx_c + 1, y0_c + 0.5)
         pdf.set_font("DejaVu", "", 7.5)
         pdf.set_text_color(*SCHWARZ)
-        pdf.cell(w_art, 5.5, f["label"][:75], border=1)
+        pdf.multi_cell(w_art - 1.5, 5.0, f["label"], border=0, align="L")
+
+        pdf.set_xy(lx_c + w_art, y0_c)
         pdf.set_font("DejaVu", "B" if hat else "", 7.5)
         pdf.set_text_color(*LILA if hat else DUNKELGRAU)
-        pdf.cell(w_betrag, 5.5, _fmt_euro(v), border=1, align="R")
+        pdf.cell(w_betrag, row_h_c, _fmt_euro(v), border=1, align="R")
+
+        pdf.set_xy(lx_c + w_art + w_betrag, y0_c)
         pdf.set_text_color(*SCHWARZ)
         pdf.set_font("DejaVu", "", 7.5)
-        pdf.cell(w_rhyth, 5.5, "", border=1,
+        pdf.cell(w_rhyth, row_h_c, "", border=1,
                  new_x="LMARGIN", new_y="NEXT")
 
     # Summe C
@@ -995,7 +1041,8 @@ def generate_eks_pdf(
     _s2_allgemein(pdf, unternehmen)
     _s3_weitere(pdf)
     _s4_tabelle_a(pdf, felder_a, monate, werte, zeilensummen, spaltensummen_a)
-    _s5_tabelle_b1(pdf, felder_b1, monate, werte, zeilensummen)
+    _s5_tabelle_b1(pdf, felder_b1, felder_a, monate, werte, zeilensummen,
+                   spaltensummen_a)
     _s6_tabelle_b2(pdf, felder_b2, felder_b1, monate, werte, zeilensummen)
     _s7_tabelle_b3(pdf, felder_b, felder_b1, felder_b2, felder_b3, felder_a,
                    monate, werte, zeilensummen, spaltensummen_b)
