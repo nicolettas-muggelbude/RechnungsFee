@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -420,6 +420,47 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 20"))
             conn.commit()
             print("[Migration] Schema auf Version 20 gebracht (unternehmen: geburtsdatum, bg_nummer, jobcenter_name)")
+
+        if version < 21:
+            tables = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+            if "eks_einstellungen" not in tables:
+                conn.execute(text(
+                    "CREATE TABLE eks_einstellungen ("
+                    "id INTEGER PRIMARY KEY,"
+                    "taetigkeitsart_text VARCHAR(200),"
+                    "taetigkeitsbeginn VARCHAR(7),"
+                    "taetigkeitsende VARCHAR(7),"
+                    "wohnung_gewerblich BOOLEAN NOT NULL DEFAULT 0,"
+                    "gewerbliche_raeume VARCHAR(10),"
+                    "gewerbliche_flaeche VARCHAR(20),"
+                    "produkte_kostenfrei BOOLEAN NOT NULL DEFAULT 0,"
+                    "personal_beschaeftigt BOOLEAN NOT NULL DEFAULT 0,"
+                    "anzahl_beschaeftigte VARCHAR(10),"
+                    "weiteres_personal BOOLEAN NOT NULL DEFAULT 0,"
+                    "anzahl_weiteres_personal VARCHAR(10),"
+                    "personal_ab VARCHAR(10),"
+                    "umsatzsteuerpflichtig BOOLEAN NOT NULL DEFAULT 0,"
+                    "zuschuss_erhalten BOOLEAN NOT NULL DEFAULT 0,"
+                    "zuschuss_beantragt BOOLEAN NOT NULL DEFAULT 0,"
+                    "darlehen BOOLEAN NOT NULL DEFAULT 0,"
+                    "darlehen_hoehe VARCHAR(20),"
+                    "darlehen_eingang VARCHAR(10),"
+                    "darlehen_rueckzahlung_ab VARCHAR(10),"
+                    "darlehen_tilgung VARCHAR(20),"
+                    "darlehen_ausgaben_art VARCHAR(200),"
+                    "darlehen_ausgaben_hoehe VARCHAR(20),"
+                    "kind_ausserhalb BOOLEAN NOT NULL DEFAULT 0,"
+                    "unterhalt BOOLEAN NOT NULL DEFAULT 0,"
+                    "fahrten_betriebsstaette BOOLEAN NOT NULL DEFAULT 0,"
+                    "km_einfach VARCHAR(10),"
+                    "arbeitstage_pro_woche VARCHAR(5),"
+                    "mehraufwand_verpflegung BOOLEAN NOT NULL DEFAULT 0,"
+                    "arbeitstage_verpflegung VARCHAR(5),"
+                    "aktualisiert_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+                ))
+            conn.execute(text("PRAGMA user_version = 21"))
+            conn.commit()
+            print("[Migration] Schema auf Version 21 gebracht (eks_einstellungen)")
 
 
 def _migrate_kategorien() -> None:

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { eksHalbjahr, eksHalbjahresPdf, type EksHalbjahr, type EksFeld } from '../../api/client'
+import { EksEinstellungenModal } from './EksEinstellungenModal'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,6 +206,7 @@ function MatrixTabelle({
           </tfoot>
         </table>
       </div>
+      {showEinstellungen && <EksEinstellungenModal onClose={() => setShowEinstellungen(false)} />}
     </div>
   )
 }
@@ -275,6 +277,7 @@ export function EksPage() {
   const [laedt, setLaedt] = useState(false)
   const [exportiert, setExportiert] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
+  const [showEinstellungen, setShowEinstellungen] = useState(false)
 
   async function handleBerechnen() {
     setLaedt(true)
@@ -474,6 +477,12 @@ export function EksPage() {
 
           {/* Aktionen */}
           <div className="flex flex-wrap gap-3 items-center">
+            <button
+              onClick={() => setShowEinstellungen(true)}
+              className="flex items-center gap-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              ⚙️ Einstellungen
+            </button>
             <button
               onClick={handlePdf}
               disabled={laedt}

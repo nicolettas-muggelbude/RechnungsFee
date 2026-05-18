@@ -19,7 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import EksExport, Journaleintrag, Kategorie, Unternehmen
+from database.models import EksEinstellungen, EksExport, Journaleintrag, Kategorie, Unternehmen
 from utils.pdf_eks import generate_eks_pdf
 
 router = APIRouter(prefix="/api/eks", tags=["EKS"])
@@ -260,11 +260,20 @@ def eks_halbjahr_pdf(
             "firmenname": unt.firmenname or "",
             "vorname": unt.vorname or "",
             "nachname": unt.nachname or "",
-            "strasse": (unt.strasse or "") + " " + (unt.hausnummer or ""),
+            "strasse": unt.strasse or "",
+            "hausnummer": unt.hausnummer or "",
             "plz": unt.plz or "",
             "ort": unt.ort or "",
             "steuernummer": unt.steuernummer or "",
+            "rechtsform": unt.rechtsform or "",
+            "geburtsdatum": unt.geburtsdatum,
+            "bg_nummer": unt.bg_nummer or "",
+            "jobcenter_name": unt.jobcenter_name or "",
+            "unterschrift_bild": unt.unterschrift_bild or "",
         }
+
+    einst = db.query(EksEinstellungen).filter_by(id=1).first()
+    einst_dict = _einst_to_dict(einst)
 
     pdf_bytes = generate_eks_pdf(
         bewilligungszeitraum_von=date.fromisoformat(data["bewilligungszeitraum_von"]),
@@ -278,6 +287,7 @@ def eks_halbjahr_pdf(
         spaltensummen_c=data["spaltensummen_c"],
         felder=data["felder"],
         unternehmen=unt_dict,
+        einstellungen=einst_dict,
     )
 
     eks_export = EksExport(
@@ -383,3 +393,61 @@ def eks_pdf_get(
 @router.post("/pdf")
 def eks_pdf(req: EksPdfRequest, db: Session = Depends(get_db)):
     return _eks_pdf_generieren_legacy(req.zeitraum_von, req.zeitraum_bis, req.art, req.felder, db)
+
+
+# ---------------------------------------------------------------------------
+# EKS-Einstellungen (GET / PUT)
+# ---------------------------------------------------------------------------
+
+_EINST_BOOL_FELDER = [
+    "wohnung_gewerblich", "produkte_kostenfrei", "personal_beschaeftigt",
+    "weiteres_personal", "umsatzsteuerpflichtig", "zuschuss_erhalten",
+    "zuschuss_beantragt", "darlehen", "kind_ausserhalb", "unterhalt",
+    "fahrten_betriebsstaette", "mehraufwand_verpflegung",
+]
+
+_EINST_STR_FELDER = [
+    "taetigkeitsart_text", "taetigkeitsbeginn", "taetigkeitsende",
+    "gewerbliche_raeume", "gewerbliche_flaeche", "anzahl_beschaeftigte",
+    "anzahl_weiteres_personal", "personal_ab", "darlehen_hoehe",
+    "darlehen_eingang", "darlehen_rueckzahlung_ab", "darlehen_tilgung",
+    "darlehen_ausgaben_art", "darlehen_ausgaben_hoehe", "km_einfach",
+    "arbeitstage_pro_woche", "arbeitstage_verpflegung",
+]
+
+
+def _einst_to_dict(einst: "EksEinstellungen | None") -> dict:
+    if einst is None:
+        return {f: False for f in _EINST_BOOL_FELDER} | {f: "" for f in _EINST_STR_FELDER}
+    return {
+        **{f: bool(getattr(einst, f, False)) for f in _EINST_BOOL_FELDER},
+        **{f: getattr(einst, f) or "" for f in _EINST_STR_FELDER},
+    }
+
+
+@router.get("/einstellungen")
+def eks_einstellungen_get(db: Session = Depends(get_db)):
+    """Laedt die gespeicherten EKS-Formularfelder (Singleton id=1)."""
+    e = db.query(EksEinstellungen).filter_by(id=1).first()
+    if e is None:
+        return _einst_to_dict(None)
+    from api.schemas import EksEinstellungenResponse
+    return EksEinstellungenResponse.model_validate(e)
+
+
+@router.put("/einstellungen")
+def eks_einstellungen_put(data: dict, db: Session = Depends(get_db)):
+    """Speichert / aktualisiert die EKS-Formularfelder."""
+    e = db.query(EksEinstellungen).filter_by(id=1).first()
+    allowed = set(_EINST_BOOL_FELDER + _EINST_STR_FELDER)
+    if e is None:
+        kwargs = {k: v for k, v in data.items() if k in allowed}
+        e = EksEinstellungen(id=1, **kwargs)
+        db.add(e)
+    else:
+        for k, v in data.items():
+            if k in allowed:
+                setattr(e, k, v)
+    db.commit()
+    db.refresh(e)
+    return _einst_to_dict(e)

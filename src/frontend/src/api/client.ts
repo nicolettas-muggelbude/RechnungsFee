@@ -821,3 +821,46 @@ export async function openDemoPdf(vorlage: number): Promise<void> {
   const base = await getApiBase()
   await openUrl(`${base}/pdf-vorlagen/demo?vorlage=${vorlage}`)
 }
+
+// --- EKS-Einstellungen ---
+export type EksEinstellungen = {
+  id?: number
+  taetigkeitsart_text?: string | null
+  taetigkeitsbeginn?: string | null
+  taetigkeitsende?: string | null
+  wohnung_gewerblich: boolean
+  gewerbliche_raeume?: string | null
+  gewerbliche_flaeche?: string | null
+  produkte_kostenfrei: boolean
+  personal_beschaeftigt: boolean
+  anzahl_beschaeftigte?: string | null
+  weiteres_personal: boolean
+  anzahl_weiteres_personal?: string | null
+  personal_ab?: string | null
+  umsatzsteuerpflichtig: boolean
+  zuschuss_erhalten: boolean
+  zuschuss_beantragt: boolean
+  darlehen: boolean
+  darlehen_hoehe?: string | null
+  darlehen_eingang?: string | null
+  darlehen_rueckzahlung_ab?: string | null
+  darlehen_tilgung?: string | null
+  darlehen_ausgaben_art?: string | null
+  darlehen_ausgaben_hoehe?: string | null
+  kind_ausserhalb: boolean
+  unterhalt: boolean
+  fahrten_betriebsstaette: boolean
+  km_einfach?: string | null
+  arbeitstage_pro_woche?: string | null
+  mehraufwand_verpflegung: boolean
+  arbeitstage_verpflegung?: string | null
+}
+
+export const getEksEinstellungen = () =>
+  request<EksEinstellungen>('/eks/einstellungen')
+
+export const saveEksEinstellungen = (data: EksEinstellungen) =>
+  request<EksEinstellungen>('/eks/einstellungen', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })

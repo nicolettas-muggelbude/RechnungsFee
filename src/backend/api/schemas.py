@@ -473,3 +473,50 @@ class NummernkreisResponse(BaseModel):
     vorschau: Optional[str] = None  # wird im Router befüllt
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# EKS-Einstellungen
+# ---------------------------------------------------------------------------
+
+class EksEinstellungenBase(BaseModel):
+    taetigkeitsart_text: Optional[str] = None
+    taetigkeitsbeginn: Optional[str] = None
+    taetigkeitsende: Optional[str] = None
+    wohnung_gewerblich: bool = False
+    gewerbliche_raeume: Optional[str] = None
+    gewerbliche_flaeche: Optional[str] = None
+    produkte_kostenfrei: bool = False
+    personal_beschaeftigt: bool = False
+    anzahl_beschaeftigte: Optional[str] = None
+    weiteres_personal: bool = False
+    anzahl_weiteres_personal: Optional[str] = None
+    personal_ab: Optional[str] = None
+    umsatzsteuerpflichtig: bool = False
+    zuschuss_erhalten: bool = False
+    zuschuss_beantragt: bool = False
+    darlehen: bool = False
+    darlehen_hoehe: Optional[str] = None
+    darlehen_eingang: Optional[str] = None
+    darlehen_rueckzahlung_ab: Optional[str] = None
+    darlehen_tilgung: Optional[str] = None
+    darlehen_ausgaben_art: Optional[str] = None
+    darlehen_ausgaben_hoehe: Optional[str] = None
+    kind_ausserhalb: bool = False
+    unterhalt: bool = False
+    fahrten_betriebsstaette: bool = False
+    km_einfach: Optional[str] = None
+    arbeitstage_pro_woche: Optional[str] = None
+    mehraufwand_verpflegung: bool = False
+    arbeitstage_verpflegung: Optional[str] = None
+
+
+class EksEinstellungenCreate(EksEinstellungenBase):
+    pass
+
+
+class EksEinstellungenResponse(EksEinstellungenBase):
+    id: int
+    aktualisiert_am: datetime
+
+    model_config = {"from_attributes": True}

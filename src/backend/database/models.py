@@ -610,3 +610,44 @@ class EuLand(Base):
     mwst_satz_standard: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     mwst_satz_reduziert: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     ust_idnr_format: Mapped[str | None] = mapped_column(String(50))  # Regex-Muster
+
+
+# ---------------------------------------------------------------------------
+# EKS-Einstellungen (Singleton)
+# ---------------------------------------------------------------------------
+
+class EksEinstellungen(Base):
+    """Persistente EKS-Formularfelder Abschnitte D / F / Seite 9 (Singleton id=1)."""
+    __tablename__ = "eks_einstellungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    taetigkeitsart_text: Mapped[str | None] = mapped_column(String(200))
+    taetigkeitsbeginn: Mapped[str | None] = mapped_column(String(7))
+    taetigkeitsende: Mapped[str | None] = mapped_column(String(7))
+    wohnung_gewerblich: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    gewerbliche_raeume: Mapped[str | None] = mapped_column(String(10))
+    gewerbliche_flaeche: Mapped[str | None] = mapped_column(String(20))
+    produkte_kostenfrei: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    personal_beschaeftigt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anzahl_beschaeftigte: Mapped[str | None] = mapped_column(String(10))
+    weiteres_personal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anzahl_weiteres_personal: Mapped[str | None] = mapped_column(String(10))
+    personal_ab: Mapped[str | None] = mapped_column(String(10))
+    umsatzsteuerpflichtig: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    zuschuss_erhalten: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    zuschuss_beantragt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    darlehen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    darlehen_hoehe: Mapped[str | None] = mapped_column(String(20))
+    darlehen_eingang: Mapped[str | None] = mapped_column(String(10))
+    darlehen_rueckzahlung_ab: Mapped[str | None] = mapped_column(String(10))
+    darlehen_tilgung: Mapped[str | None] = mapped_column(String(20))
+    darlehen_ausgaben_art: Mapped[str | None] = mapped_column(String(200))
+    darlehen_ausgaben_hoehe: Mapped[str | None] = mapped_column(String(20))
+    kind_ausserhalb: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    unterhalt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fahrten_betriebsstaette: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    km_einfach: Mapped[str | None] = mapped_column(String(10))
+    arbeitstage_pro_woche: Mapped[str | None] = mapped_column(String(5))
+    mehraufwand_verpflegung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    arbeitstage_verpflegung: Mapped[str | None] = mapped_column(String(5))
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

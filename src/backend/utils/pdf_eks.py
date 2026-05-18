@@ -526,7 +526,7 @@ def _s1_deckblatt(pdf: EksPDF, art: str, bz_von: Any, bz_bis: Any,
     )
 
 
-def _s2_allgemein(pdf: EksPDF, unternehmen: dict):
+def _s2_allgemein(pdf: EksPDF, unternehmen: dict, e: dict):
     """Seite 2: Abschnitt D + E"""
     pdf.hoch()
 
@@ -543,11 +543,11 @@ def _s2_allgemein(pdf: EksPDF, unternehmen: dict):
         (13, "Postleitzahl", unternehmen.get("plz") or "",       w4[2]),
         (14, "Ort",          unternehmen.get("ort") or "",       w4[3]),
     )
-    pdf.feld(15, "Gewerbe oder Tätigkeit", "")
+    pdf.feld(15, "Gewerbe oder Tätigkeit", e.get("taetigkeitsart_text") or "")
     w2 = (W_P - 4) / 2
     pdf.feld_zeile(
-        (16, "Beginn/Aufnahme der Tätigkeit (MM.JJJJ)", "", w2),
-        (17, "gegebenenfalls Ende der Tätigkeit (MM.JJJJ)", "", w2),
+        (16, "Beginn/Aufnahme der Tätigkeit (MM.JJJJ)", e.get("taetigkeitsbeginn") or "", w2),
+        (17, "gegebenenfalls Ende der Tätigkeit (MM.JJJJ)", e.get("taetigkeitsende") or "", w2),
     )
     pdf.feld(18, "Rechtsform des Unternehmens (zum Beispiel GmbH, GbR, e.K.)",
              unternehmen.get("rechtsform") or "")
@@ -570,7 +570,7 @@ def _s2_allgemein(pdf: EksPDF, unternehmen: dict):
     pdf.unterschrift(21, 22, "Unterschrift Betreuerin/Betreuer/Vormund")
 
 
-def _s3_weitere(pdf: EksPDF):
+def _s3_weitere(pdf: EksPDF, e: dict):
     """Seite 3: Abschnitt F – Weitere Angaben"""
     pdf.hoch()
     pdf.abschnitt("F", "Weitere Angaben zur selbständigen/freiberuflichen Tätigkeit")
@@ -584,65 +584,65 @@ def _s3_weitere(pdf: EksPDF):
 
     frage(23, "Wird oder wurde die Miet-/Eigentumswohnung oder das Eigenheim – teilweise – "
               "für die selbständige/freiberufliche Tätigkeit gewerblich genutzt?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja", checked=e.get("wohnung_gewerblich", False))
+    pdf.checkbox("Nein", checked=not e.get("wohnung_gewerblich", False))
     w2 = (W_P - 4) / 2
     pdf.feld_zeile(
-        (24, "Anzahl der gewerblich genutzten Räume",              "", w2),
-        (25, "Gewerblich genutzte Fläche in Quadratmetern (m²)",   "", w2),
+        (24, "Anzahl der gewerblich genutzten Räume",              e.get("gewerbliche_raeume") or "", w2),
+        (25, "Gewerblich genutzte Fläche in Quadratmetern (m²)",   e.get("gewerbliche_flaeche") or "", w2),
     )
 
     frage(26, "Werden oder wurden in Verbindung mit der selbständigen/freiberuflichen Tätigkeit "
               "Produkte kostenfrei und auf Dauer überlassen, zum Beispiel zur Produktplatzierung?")
-    pdf.checkbox("Ja (bitte Auflistung und Nachweise über Art und Wert beifügen)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte Auflistung und Nachweise über Art und Wert beifügen)", checked=e.get("produkte_kostenfrei", False))
+    pdf.checkbox("Nein", checked=not e.get("produkte_kostenfrei", False))
 
     frage(27, "Wird oder wurde Personal im Zusammenhang mit der selbständigen/"
               "freiberuflichen Tätigkeit beschäftigt?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja", checked=e.get("personal_beschaeftigt", False))
+    pdf.checkbox("Nein", checked=not e.get("personal_beschaeftigt", False))
     pdf.feld_zeile(
-        (28, "Anzahl der Gesamtbeschäftigten", "", w2),
+        (28, "Anzahl der Gesamtbeschäftigten", e.get("anzahl_beschaeftigte") or "", w2),
         (None, "", "", w2),
     )
 
     frage(29, "Ist beabsichtigt, weiteres Personal zu beschäftigen?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja", checked=e.get("weiteres_personal", False))
+    pdf.checkbox("Nein", checked=not e.get("weiteres_personal", False))
     pdf.feld_zeile(
-        (30, "Anzahl des weiteren Personals", "", w2),
-        (31, "Eine Einstellung erfolgt voraussichtlich ab (TT.MM.JJJJ)", "", w2),
+        (30, "Anzahl des weiteren Personals", e.get("anzahl_weiteres_personal") or "", w2),
+        (31, "Eine Einstellung erfolgt voraussichtlich ab (TT.MM.JJJJ)", e.get("personal_ab") or "", w2),
     )
 
     frage(32, "Unterliegt die selbständige/freiberufliche Tätigkeit der Umsatzsteuerpflicht?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein (im Abschnitt G entfallen die Angaben zur Umsatzsteuer und zur Vorsteuer)")
+    pdf.checkbox("Ja", checked=e.get("umsatzsteuerpflichtig", False))
+    pdf.checkbox("Nein (im Abschnitt G entfallen die Angaben zur Umsatzsteuer und zur Vorsteuer)", checked=not e.get("umsatzsteuerpflichtig", False))
 
     frage(33, "Erhält oder erhielt die selbständige/freiberufliche Person "
               "Zuschüsse/Beihilfen zu ihrer Tätigkeit?")
-    pdf.checkbox("Ja (bitte Nachweise zu Leistungsträger, Art, Dauer und Höhe beifügen)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte Nachweise zu Leistungsträger, Art, Dauer und Höhe beifügen)", checked=e.get("zuschuss_erhalten", False))
+    pdf.checkbox("Nein", checked=not e.get("zuschuss_erhalten", False))
 
     frage(34, "Hat die selbständige/freiberufliche Person Zuschüsse/Beihilfen beantragt "
               "oder hat sie vor, diese zu beantragen?")
-    pdf.checkbox("Ja (bitte soweit möglich Nachweise über die Antragstellung beifügen)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte soweit möglich Nachweise über die Antragstellung beifügen)", checked=e.get("zuschuss_beantragt", False))
+    pdf.checkbox("Nein", checked=not e.get("zuschuss_beantragt", False))
 
     frage(35, "Hat die selbständige/freiberufliche Person für den Betrieb/das Gewerbe "
               "ein Darlehen aufgenommen?")
-    pdf.checkbox("Ja (bitte Nachweise beifügen, z.B. Darlehensbescheid, Kontoauszug)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte Nachweise beifügen, z.B. Darlehensbescheid, Kontoauszug)", checked=e.get("darlehen", False))
+    pdf.checkbox("Nein", checked=not e.get("darlehen", False))
     pdf.feld_zeile(
-        (36, "Höhe des Darlehens in Euro",                         "", w2),
-        (37, "Datum des Geldeingangs auf dem Konto (TT.MM.JJJJ)", "", w2),
+        (36, "Höhe des Darlehens in Euro",                         e.get("darlehen_hoehe") or "", w2),
+        (37, "Datum des Geldeingangs auf dem Konto (TT.MM.JJJJ)", e.get("darlehen_eingang") or "", w2),
     )
     pdf.feld_zeile(
-        (38, "Beginn der Rückzahlung (TT.MM.JJJJ)",  "", w2),
-        (39, "Monatliche Tilgungsrate in Euro",        "", w2),
+        (38, "Beginn der Rückzahlung (TT.MM.JJJJ)",  e.get("darlehen_rueckzahlung_ab") or "", w2),
+        (39, "Monatliche Tilgungsrate in Euro",        e.get("darlehen_tilgung") or "", w2),
     )
     pdf.feld_zeile(
-        (40, "Mit dem Darlehen finanzierte Betriebsausgaben (Art)",          "", w2),
-        (41, "Mit dem Darlehen finanzierte Betriebsausgaben (Höhe in Euro)", "", w2),
+        (40, "Mit dem Darlehen finanzierte Betriebsausgaben (Art)",          e.get("darlehen_ausgaben_art") or "", w2),
+        (41, "Mit dem Darlehen finanzierte Betriebsausgaben (Höhe in Euro)", e.get("darlehen_ausgaben_hoehe") or "", w2),
     )
 
 
@@ -891,9 +891,11 @@ def _s8_tabelle_c(pdf: EksPDF, felder_c: list[dict], zeilensummen: dict):
 
 
 def _s9_persoenlich(pdf: EksPDF, felder_a: list[dict], felder_b: list[dict],
-                    felder_c: list[dict], zeilensummen: dict, unternehmen: dict):
+                    felder_c: list[dict], zeilensummen: dict, unternehmen: dict,
+                    e: dict = None):
     """Seite 9: Personenbezogene Ausgaben + Abschnitt H + Ergebnis-Box"""
     pdf.hoch()
+    e = e or {}
 
     pdf.txt("Angaben zu den personenbezogenen Ausgaben", bold=True, size=11)
     pdf.ln(2)
@@ -909,30 +911,30 @@ def _s9_persoenlich(pdf: EksPDF, felder_a: list[dict], felder_b: list[dict],
 
     frage(52, "Hat die selbständige/freiberufliche Person mindestens ein Kind unter "
               "18 Jahren, welches nicht bei ihr wohnt?")
-    pdf.checkbox("Ja (bitte Nachweis beifügen, z.B. Geburtsurkunde oder Unterhaltstitel)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte Nachweis beifügen, z.B. Geburtsurkunde oder Unterhaltstitel)", checked=e.get("kind_ausserhalb", False))
+    pdf.checkbox("Nein", checked=not e.get("kind_ausserhalb", False))
 
     frage(53, "Zahlt die selbständige/freiberufliche Person Unterhalt?")
-    pdf.checkbox("Ja (bitte Nachweise zur Höhe der Unterhaltsverpflichtung und Zahlungsnachweis beifügen)")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja (bitte Nachweise zur Höhe der Unterhaltsverpflichtung und Zahlungsnachweis beifügen)", checked=e.get("unterhalt", False))
+    pdf.checkbox("Nein", checked=not e.get("unterhalt", False))
 
     frage(54, "Hat die selbständige/freiberufliche Person Ausgaben für die Fahrten "
               "zur Betriebsstätte mit dem privaten Kraftfahrzeug?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein (weiter mit 57)")
+    pdf.checkbox("Ja", checked=e.get("fahrten_betriebsstaette", False))
+    pdf.checkbox("Nein (weiter mit 57)", checked=not e.get("fahrten_betriebsstaette", False))
 
     pdf.feld(55, "Bitte geben Sie die einfache Strecke zwischen Wohnung und "
-                 "Betriebsstätte in Kilometern an.", "", breite=w2)
+                 "Betriebsstätte in Kilometern an.", e.get("km_einfach") or "", breite=w2)
     pdf.feld(56, "An wie vielen Arbeitstagen je Woche fährt die selbständige/"
-                 "freiberufliche Person regelmäßig die Strecke?", "", breite=w2)
+                 "freiberufliche Person regelmäßig die Strecke?", e.get("arbeitstage_pro_woche") or "", breite=w2)
 
     frage(57, "Entstehen der selbständigen/freiberuflichen Person Mehraufwendungen "
               "für Verpflegung wegen einer täglichen Abwesenheit von mindestens "
               "12 Stunden von der Wohnung oder dem üblichen Beschäftigungsort?")
-    pdf.checkbox("Ja")
-    pdf.checkbox("Nein")
+    pdf.checkbox("Ja", checked=e.get("mehraufwand_verpflegung", False))
+    pdf.checkbox("Nein", checked=not e.get("mehraufwand_verpflegung", False))
     pdf.feld(58, "Bitte geben Sie die Anzahl der Arbeitstage im Monat an, bei denen "
-                 "Mehraufwendungen für Verpflegung entstehen.", "", breite=w2)
+                 "Mehraufwendungen für Verpflegung entstehen.", e.get("arbeitstage_verpflegung") or "", breite=w2)
 
     # ── Ergebnis-Box ─────────────────────────────────────────────────────────
     sum_a = sum(float(zeilensummen.get(f["code"], "0") or "0") for f in felder_a)
@@ -1014,8 +1016,10 @@ def generate_eks_pdf(
     spaltensummen_c: dict,
     felder: list[dict],
     unternehmen: dict,
+    einstellungen: dict | None = None,
 ) -> bytes:
     """Erzeugt den vollständigen EKS-Nachbau als 9-seitiges PDF."""
+    e = einstellungen or {}
     pdf = EksPDF(
         bz_von=bewilligungszeitraum_von,
         bz_bis=bewilligungszeitraum_bis,
@@ -1038,8 +1042,8 @@ def generate_eks_pdf(
 
     _s1_deckblatt(pdf, art, bewilligungszeitraum_von, bewilligungszeitraum_bis,
                   unternehmen)
-    _s2_allgemein(pdf, unternehmen)
-    _s3_weitere(pdf)
+    _s2_allgemein(pdf, unternehmen, e)
+    _s3_weitere(pdf, e)
     _s4_tabelle_a(pdf, felder_a, monate, werte, zeilensummen, spaltensummen_a)
     _s5_tabelle_b1(pdf, felder_b1, felder_a, monate, werte, zeilensummen,
                    spaltensummen_a)
@@ -1047,7 +1051,7 @@ def generate_eks_pdf(
     _s7_tabelle_b3(pdf, felder_b, felder_b1, felder_b2, felder_b3, felder_a,
                    monate, werte, zeilensummen, spaltensummen_b)
     _s8_tabelle_c(pdf, felder_c, zeilensummen)
-    _s9_persoenlich(pdf, felder_a, felder_b, felder_c, zeilensummen, unternehmen)
+    _s9_persoenlich(pdf, felder_a, felder_b, felder_c, zeilensummen, unternehmen, e)
 
     buf = BytesIO()
     pdf.output(buf)
