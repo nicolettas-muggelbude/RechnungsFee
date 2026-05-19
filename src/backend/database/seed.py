@@ -25,6 +25,8 @@ STANDARD_KATEGORIEN = [
     # ── Tabelle B Teil 1: Betriebsausgaben ───────────────────────────────
     {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+    {"name": "Wareneinkauf EU",                "kontenart": "Aufwand", "konto_skr03": "3400", "konto_skr04": "5400", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Wareneinkauf Nicht-EU",          "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Löhne & Gehälter",              "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_1",  "euer_zeile": 44,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Minijob / geringfügige Beschäftigung", "kontenart": "Aufwand", "konto_skr03": "4130", "konto_skr04": "6030", "eks_kategorie": "B2_3", "euer_zeile": 44, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
     {"name": "Fremdleistungen",               "kontenart": "Aufwand", "konto_skr03": "3100", "konto_skr04": "5900", "eks_kategorie": "B14_5", "euer_zeile": 45,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
