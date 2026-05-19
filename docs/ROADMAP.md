@@ -102,9 +102,10 @@ Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 
 Monatliche Fixkosten (Miete, Leasing, Abonnements) einmalig als Vorlage anlegen.
 
-- [ ] Vorlagen-Tabelle: Betrag, Kategorie, Intervall (monatlich/quartalsweise/jährlich), nächstes Fälligkeitsdatum
+- [ ] Vorlagen-Tabelle: Betrag, Kategorie, Intervall (monatlich/quartalsweise/jährlich), nächstes Fälligkeitsdatum, Modus
 - [ ] Beim App-Start: Hinweis auf fällige Buchungen („3 Buchungen bereit")
-- [ ] Ein-Klick-Bestätigung → Buchung wird als **unbezahlt** angelegt (Zahlungsstatus offen); Bank-Import (v0.3) matcht und schließt sie ab
+- [ ] **Modus „Direkt"** (kein Beleg-Import): Eingangsrechnung wird als Entwurf angelegt; Ein-Klick-Bestätigung → unbezahlt; Bank-Import (v0.3) schließt ab
+- [ ] **Modus „Warte auf Beleg"**: Vorlage legt nur Platzhalter an; PDF-Import (v0.2 Stufe 2) matcht Lieferant + Betrag + Zeitraum → ersetzt Platzhalter durch echte Rechnung mit Beleg; verhindert Duplikate
 - [ ] Vorlagen verwalten (anlegen, pausieren, löschen)
 
 ---
