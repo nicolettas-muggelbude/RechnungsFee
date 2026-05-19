@@ -13,7 +13,6 @@ STANDARD_KATEGORIEN = [
     {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",    "euer_zeile": 11,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
     {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",    "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
     {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Kleinunternehmer-Einnahmen",     "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 14,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Privatentnahme",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Zuwendungen von Dritten",        "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4910", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

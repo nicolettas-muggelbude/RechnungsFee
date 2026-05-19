@@ -601,6 +601,18 @@ def _migrate_kategorien() -> None:
             if kat and kat.eks_kategorie != eks:
                 kat.eks_kategorie = eks
 
+        # ── Duplikat "Kleinunternehmer-Einnahmen" entfernen ───────────────────
+        ku = db.query(Kategorie).filter(Kategorie.name == "Kleinunternehmer-Einnahmen").first()
+        if ku:
+            from database.models import Journaleintrag, Rechnungsposition
+            in_use = (
+                db.query(Journaleintrag).filter(Journaleintrag.kategorie_id == ku.id).first() or
+                db.query(Rechnungsposition).filter(Rechnungsposition.kategorie_id == ku.id).first()
+            )
+            if not in_use:
+                db.delete(ku)
+                print("[Kategorien] 'Kleinunternehmer-Einnahmen' entfernt (Duplikat von 'Betriebseinnahmen (0%)')")
+
         # ── Fehlende Kategorien eintragen ─────────────────────────────────────
         neue = [
             {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 26,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
