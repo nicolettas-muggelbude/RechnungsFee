@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.2',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Buchungskategorie „Reparatur Anlagevermögen" (B14.1) – Reparatur- und Instandhaltungskosten für Betriebsanlagen und Maschinen (außer KFZ); SKR03 4855 / SKR04 6805' },
+      { typ: 'neu', text: 'Buchungskategorie „Miete Einrichtung" (B14.2) – Mietkosten für bewegliche Wirtschaftsgüter und Einrichtungsgegenstände; SKR03 4240 / SKR04 6830' },
+      { typ: 'neu', text: 'Buchungskategorie „Betriebliche Abfallbeseitigung" (B14.4) – Entsorgungskosten; SKR03 4830 / SKR04 6810' },
+    ],
+  },
+  {
     version: 'v0.2.1',
     datum: 'Mai 2026',
     eintraege: [
