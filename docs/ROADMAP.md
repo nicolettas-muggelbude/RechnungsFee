@@ -195,6 +195,14 @@ Rechnungs-PDF ausgeben und elektronische Rechnungsformate importieren.
 
 ---
 
+## Ideen & Companion-Apps *(unbewertet)*
+
+Lose Ideen ohne festen Versionsplan.
+
+- [ ] **Fahrtenbuch-App (Android/iOS)** – Fahrten erfassen (Start/Ziel/km/Zweck), GoBD-konformes Fahrtenbuch führen, Export an RechnungsFee (Kategorie KFZ-Kosten, direkt als Buchung oder Eingangsrechnung)
+
+---
+
 ## Bereits erledigt
 
 - [x] Projektvision und Dokumentation (`docs/`)
