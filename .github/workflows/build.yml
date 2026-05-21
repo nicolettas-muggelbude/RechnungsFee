@@ -360,7 +360,7 @@ jobs:
 
           gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
 
-  # ── latest.json generieren + Release-Notes aktualisieren ──────────────────
+  # ── latest.json generieren ────────────────────────────────────────────────
   updater-json:
     needs: build
     if: ${{ !cancelled() }}
@@ -381,18 +381,15 @@ jobs:
           gh release download "$TAG" --pattern "*.sig" --dir sigs --repo "$REPO"
 
           python3 << 'PYEOF'
-          import json, os, re, datetime, base64
+          import json, os, datetime, base64
 
           v    = os.environ['TAG'].lstrip('v')
-          tag  = os.environ['TAG']
           repo = os.environ['REPO']
-          base = f'https://github.com/{repo}/releases/download/{tag}'
+          base = f'https://github.com/{repo}/releases/download/{os.environ["TAG"]}'
 
           def sig_b64(path):
-              # tauri-plugin-updater erwartet den .sig-Datei-Inhalt base64-kodiert
               return base64.b64encode(open(path, 'rb').read()).decode('ascii')
 
-          # ── latest.json ────────────────────────────────────────────────────
           platforms = {
             'windows-x86_64': {
               'signature': sig_b64(f'sigs/RechnungsFee_{v}_x64-setup.nsis.zip.sig'),
@@ -403,7 +400,6 @@ jobs:
               'url': f'{base}/RechnungsFee_{v}_amd64.AppImage.tar.gz',
             },
           }
-          # macOS Apple Silicon – optional, nur wenn Signatur vorhanden
           sig_path = f'sigs/RechnungsFee_{v}_aarch64.app.tar.gz.sig'
           if os.path.exists(sig_path):
             platforms['darwin-aarch64'] = {
@@ -422,54 +418,6 @@ jobs:
           }
           json.dump(data, open('latest.json', 'w'), indent=2)
           print('latest.json generiert')
-
-          # ── Release-Notes aus changelog.ts extrahieren ─────────────────────
-          ts = open('src/frontend/src/data/changelog.ts').read()
-          block = re.search(
-            rf"version:\s*['\"]({re.escape(tag)})['\"].*?eintraege:\s*\[(.*?)\]",
-            ts, re.DOTALL
-          )
-          typ_emoji = {'neu': '✨', 'verbesserung': '⚡', 'fix': '🐛'}
-          changelog_lines = []
-          if block:
-            for typ, text in re.findall(r"typ:\s*['\"](\w+)['\"],\s*text:\s*'([^']+)'", block.group(2)):
-              changelog_lines.append(f'- {typ_emoji.get(typ, "•")} {text}')
-          changelog_md = '\n'.join(changelog_lines) if changelog_lines else '_Keine Einträge gefunden._'
-
-          # ── Release-Body zusammenbauen (Downloadtabelle zuerst, dann Changelog) ──
-          win_exe      = f'RechnungsFee_{v}_x64-setup.exe'
-          lin_img_ver  = f'RechnungsFee_{v}_amd64.AppImage'
-          lin_img      = 'RechnungsFee_amd64.AppImage'
-          mac_arm_ver  = f'RechnungsFee_{v}_aarch64.dmg'
-          mac_arm      = 'RechnungsFee_aarch64.dmg'
-          install_sh   = 'install-linux.sh'
-
-          body = f"""## 💾 Downloads
-
-| Plattform | Download |
-|-----------|----------|
-| 🪟 **Windows** (x64) | [⬇ {win_exe}]({base}/{win_exe}) |
-| 🐧 **Linux** (x86_64, versioniert) | [⬇ {lin_img_ver}]({base}/{lin_img_ver}) |
-| 🐧 **Linux** (x86_64, via install.sh) | [⬇ {lin_img}]({base}/{lin_img}) |
-| 🐧 **Linux** Installer | [⬇ {install_sh}]({base}/{install_sh}) |
-| 🍎 **macOS** (Apple Silicon, versioniert) | [⬇ {mac_arm_ver}]({base}/{mac_arm_ver}) |
-| 🍎 **macOS** (Apple Silicon) | [⬇ {mac_arm}]({base}/{mac_arm}) |
-
-> 🍎 macOS ist nicht signiert → beim ersten Start: Rechtsklick → Öffnen, oder `xattr -cr RechnungsFee_{v}_aarch64.dmg`
-
-> ℹ️ Dateien mit `.tar.gz`, `.nsis.zip`, `.app.tar.gz` und `.sig` sind für den eingebauten Auto-Updater – nicht manuell herunterladen.
-
----
-
-## ✨ Was ist neu in {tag}
-
-{changelog_md}
-"""
-          body = '\n'.join(line.lstrip() for line in body.splitlines())
-
-          open('release_body.md', 'w').write(body)
-          print('Release-Body generiert')
           PYEOF
 
           gh release upload "$TAG" latest.json --clobber --repo "$REPO"
-          gh release edit "$TAG" --notes-file release_body.md --repo "$REPO"
