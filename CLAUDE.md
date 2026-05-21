@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 25` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 26` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -91,6 +91,7 @@ def _run_migrations():
 | 23 | belege-Tabelle (id, dateiname, original_name, mime_type, dateigroesse, sha256, hochgeladen_am); beleg_id FK in rechnungen + journal |
 | 24 | kategorien.aktiv BOOLEAN DEFAULT 1 – Kategorien ein-/ausblenden in Buchungsformularen |
 | 25 | Kontonummern SKR03/SKR04 auf DATEV-Kontenrahmen 2026 korrigiert (39 Korrekturen) |
+| 26 | EÜR-Zeilennummern auf Anlage EÜR 2025 korrigiert (44 Korrekturen) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
