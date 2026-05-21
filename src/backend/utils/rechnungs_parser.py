@@ -296,7 +296,9 @@ def analysiere_datei(dateiname: str, inhalt: bytes) -> AnalyseErgebnis:
     if lower.endswith(".pdf") or inhalt[:4] == b"%PDF":
         try:
             from facturx import get_facturx_xml_from_pdf
-            xml_bytes = get_facturx_xml_from_pdf(inhalt)
+            result = get_facturx_xml_from_pdf(inhalt)
+            # factur-x gibt (dateiname, xml_bytes) zurück
+            xml_bytes = result[1] if isinstance(result, tuple) else result
             if xml_bytes:
                 ergebnis = _analysiere_xml(xml_bytes)
                 if ergebnis.format == "xrechnung":
