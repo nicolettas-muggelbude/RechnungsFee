@@ -77,10 +77,12 @@ Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 - [x] Beleg löschen
 - [x] SHA256-Hash in DB (GoBD-Vorbereitung)
 
-**Stufe 2 – ZUGFeRD/XRechnung-Parsing** *(offen)*
-- [ ] `POST /api/rechnungen/analysieren` – liest strukturierte Felder aus E-Rechnung
-- [ ] `factur-x` + `lxml` als Backend-Abhängigkeiten
-- [ ] Frontend: „Rechnung importieren"-Workflow mit Vorschau
+**Stufe 2 – ZUGFeRD/XRechnung-Parsing** ✅ *v0.2.4*
+- [x] `POST /api/rechnungen/analysieren` – liest strukturierte Felder aus E-Rechnung
+- [x] `factur-x` + `lxml` als Backend-Abhängigkeiten
+- [x] Frontend: „Rechnung importieren"-Workflow mit Vorschau und Vorausfüllung
+- [x] Plain PDF: öffnet sich automatisch im Viewer beim Klick auf „Rechnung erstellen"
+- [x] Originaldatei wird automatisch als Beleganhang gespeichert
 
 **Stufe 3 – Validierung & Feld-Mapping** *(offen)*
 - [ ] Erkannte Felder in Erfassungsformular vorausfüllen
@@ -218,3 +220,6 @@ Lose Ideen ohne festen Versionsplan.
 - [x] **Post-v0.1**: Split-Buchung, GoBD-Export, Rechnungen (Eingang/Ausgang) mit Kassenbuch-Verknüpfung
 - [x] **Anlage EKS** (Mai 2026): Einkommenserklärung für Selbstständige – abschließend (monatlich aus Journal) und vorläufig (Halbjahres-Prognose aus Vorjahr)
 - [x] **v0.2 Stufe 1** (Mai 2026): Beleganhang für Eingangsrechnungen – Upload, Inline-Viewer, Löschen, SHA256 ([v0.2.1](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v0.2.1))
+- [x] **v0.2 Stufe 2** (Mai 2026): ZUGFeRD/XRechnung-Import – Auto-Fill, plain PDF mit Viewer, Beleganhang automatisch ([v0.2.4](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/v0.2.4))
+- [x] **EÜR 2025** (Mai 2026): 44 Zeilennummern auf Anlage EÜR 2025 korrigiert, SKR03/04 auf DATEV-Kontenrahmen 2026 (39 Korrekturen)
+- [x] **Kategorien editierbar** (Mai 2026): SKR03/04-Konten pro Kategorie anpassbar, Reset, eigene Kategorien anlegen/löschen
