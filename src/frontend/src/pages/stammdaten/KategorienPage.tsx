@@ -450,7 +450,7 @@ export function KategorienPage() {
                             {editModus && !k.ist_system && (
                               loeschenId === k.id ? (
                                 <div className="flex items-center gap-1">
-                                  <span className="text-xs text-red-500 dark:text-red-400">Sicher?</span>
+                                  <span className="text-xs text-red-500 dark:text-red-400">Kategorie „{k.name}" löschen?</span>
                                   <button
                                     type="button"
                                     onClick={() => { deleteMutation.mutate(k.id); setLoeschenId(null) }}
