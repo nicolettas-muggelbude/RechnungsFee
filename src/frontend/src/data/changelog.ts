@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.5',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Journal: Netto- und USt-Betrag werden als separate Zeilen angezeigt – vollautomatisch anhand des USt-Satzes aufgeteilt' },
+      { typ: 'neu', text: 'Benutzerkategorien können jetzt vollständig bearbeitet werden (Name, Konten, alle Felder)' },
+      { typ: 'fix', text: 'XRechnung-Import: Lieferantenname und Fälligkeitsdatum wurden bei UBL-Format nicht erkannt (Issue #98)' },
+      { typ: 'fix', text: 'PDF-Import öffnet jetzt den systemseitig eingestellten PDF-Viewer statt des eingebetteten Viewers (Issue #99)' },
+      { typ: 'fix', text: 'Kategorie löschen: Bestätigungs-Dialog zeigte fälschlich "tauri.localhost" (Issue #96)' },
+      { typ: 'fix', text: 'Mausrad-Scrollen im Setup-Wizard unter Linux Cinnamon/Muffin funktioniert jetzt' },
+    ],
+  },
+  {
     version: 'v0.2.4',
     datum: 'Mai 2026',
     eintraege: [
