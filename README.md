@@ -47,6 +47,7 @@ Installierte Apps aktualisieren sich automatisch – beim nächsten Start ersche
 - **Unveränderliche Einträge** nach §146 AO – Storno erzeugt Gegenbuchung, kein Löschen
 - **SHA-256-Signaturen** für jeden Eintrag und Tagesabschluss
 - Split-Buchungen für gemischte Zahlungen
+- **Automatische USt-Aufteilung** – Netto und Umsatz-/Vorsteuer werden als separate Zeilen angezeigt und auf die richtigen Konten gebucht (SKR03/SKR04)
 - Automatische **Belegnummern** (Nummernkreise frei konfigurierbar)
 
 ### 🧾 Rechnungen
@@ -98,7 +99,7 @@ Installierte Apps aktualisieren sich automatisch – beim nächsten Start ersche
 | Version | Inhalt | Status |
 |---------|--------|--------|
 | **v0.1.x** | Kassenbuch, Rechnungen, GoBD, GiroCode, Dark Mode, ZUGFeRD/E-Rechnung (B2B), Tauri-App, Auto-Updater | ✅ Released |
-| **v0.2** | Beleganhang, E-Rechnungs-Import (ZUGFeRD/XRechnung), Kategorien editierbar, EÜR 2025 | 🔄 In Arbeit |
+| **v0.2** | Beleganhang, E-Rechnungs-Import (ZUGFeRD/XRechnung), Kategorien editierbar, EÜR 2025, USt/Netto-Aufteilung im Journal | ✅ v0.2.5 |
 | **v0.3** | Bank-CSV-Import (Postbank, Sparkasse, Volksbank …), Auto-Filter-Regeln, Duplikat-Erkennung | 🔲 Ziel: Juni 2026 |
 | **v0.4** | EÜR, UStVA-Voranmeldung, DATEV-Export, Jahresübersicht | 🔲 Ziel: August 2026 |
 | **v1.0** | Produktionsreife – Mehrsprachigkeit, SMTP-Direktversand, Einstellungen, Flatpak/Flathub | 🔲 Ziel: Oktober 2026 |

@@ -67,7 +67,7 @@ Einkommenserklärung für Selbstständige (Jobcenter / Bürgergeld).
 
 ---
 
-## v0.2 – Beleganhang & E-Rechnungs-Import *(In Arbeit)*
+## v0.2 – Beleganhang & E-Rechnungs-Import ✅ *v0.2.5*
 
 Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 
@@ -77,12 +77,13 @@ Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 - [x] Beleg löschen
 - [x] SHA256-Hash in DB (GoBD-Vorbereitung)
 
-**Stufe 2 – ZUGFeRD/XRechnung-Parsing** ✅ *v0.2.4*
+**Stufe 2 – ZUGFeRD/XRechnung-Parsing** ✅ *v0.2.4/v0.2.5*
 - [x] `POST /api/rechnungen/analysieren` – liest strukturierte Felder aus E-Rechnung
 - [x] `factur-x` + `lxml` als Backend-Abhängigkeiten
 - [x] Frontend: „Rechnung importieren"-Workflow mit Vorschau und Vorausfüllung
-- [x] Plain PDF: öffnet sich automatisch im Viewer beim Klick auf „Rechnung erstellen"
+- [x] Plain PDF: öffnet sich automatisch im systemseitig eingestellten PDF-Viewer
 - [x] Originaldatei wird automatisch als Beleganhang gespeichert
+- [x] UBL-Format: Lieferantenname aus `PartyLegalEntity/RegistrationName` (Fix v0.2.5)
 
 **Stufe 3 – Validierung & Feld-Mapping** *(offen)*
 - [ ] Erkannte Felder in Erfassungsformular vorausfüllen
@@ -124,17 +125,17 @@ CSV-Import von Kontoauszügen, automatisches Matching.
 
 ---
 
-## v0.3.x – Automatische USt-Zuordnung *(Ziel: offen)*
+## v0.3.x – Automatische USt-Zuordnung *(teilweise erledigt)*
 
-Jeder Journal-Eintrag speichert bereits `ust_betrag`. Dieses Feld soll systemweit
-automatisch den richtigen USt-Kategorien zugeordnet werden – ohne manuelle Zusatzbuchungen.
+Jeder Journal-Eintrag speichert `ust_betrag` und `konto_ust_skr03/04` (USt-Gegenkonto).
+Die Aufteilung in Netto + USt passiert vollautomatisch beim Buchen.
 
-**Prinzip:**
-- Einnahmen (A1, A2, …): `ust_betrag` → A5_1 (vereinnahmte USt) bzw. A5_2 (USt auf Eigenverbrauch)
-- Ausgaben: `ust_betrag` → Vorsteuer-Auswertung
-- Basis ist immer das gebuchte `ust_betrag`-Feld, nicht eine separate Buchung
+**Grundlage** ✅ *v0.2.5*
+- [x] Journal zeigt Netto- und USt-Zeile getrennt
+- [x] USt-Gegenkonto wird automatisch gesetzt (SKR03: 1776/1771/1575/1570; SKR04: 3806/3801/1406/1401)
+- [x] Gilt für Rechnungszahlungen und manuelle Buchungen
 
-**Betroffene Auswertungen:**
+**Noch offen:**
 - [ ] EKS: A5_1 / A5_2 automatisch aus `ust_betrag` der A1/A2-Einträge ableiten
 - [ ] GoBD-Export CSV: USt-Spalte korrekt je Einnahmen-/Ausgaben-Typ befüllen
 - [ ] EÜR: USt-Beträge in die richtigen Zeilen der Anlage EÜR einordnen
