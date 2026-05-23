@@ -218,13 +218,18 @@ def _parse_ubl_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     if datum:
         felder["datum"] = datum
 
-    faellig = _x(root, "//cac:PaymentMeans/cbc:PaymentDueDate", ns)
+    faellig = (
+        _x(root, "//cbc:DueDate", ns)
+        or _x(root, "//cac:PaymentMeans/cbc:PaymentDueDate", ns)
+        or _x(root, "//cac:PaymentTerms/cbc:PaymentDueDate", ns)
+    )
     if faellig:
         felder["faellig_am"] = faellig
-    else:
-        warnungen.append("BT-9: Fälligkeitsdatum fehlt")
 
-    lieferant_name = _x(root, "//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name", ns)
+    lieferant_name = (
+        _x(root, "//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name", ns)
+        or _x(root, "//cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName", ns)
+    )
     if lieferant_name:
         felder["lieferant_name"] = lieferant_name
     else:
