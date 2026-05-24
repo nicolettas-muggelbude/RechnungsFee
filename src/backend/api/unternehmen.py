@@ -3,7 +3,6 @@ API-Endpunkte für Unternehmensstammdaten.
 Es gibt immer genau einen Datensatz (id=1).
 """
 
-import imghdr
 import os
 from pathlib import Path
 
@@ -77,8 +76,17 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     if len(inhalt) > MAX_LOGO_BYTES:
         raise HTTPException(status_code=400, detail="Logo darf maximal 2 MB groß sein.")
 
-    # Content-Type aus Dateiinhalt ermitteln (Fallback wenn Browser keinen/falschen Typ sendet)
-    erkannt = imghdr.what(None, h=inhalt)
+    # Content-Type aus Magic-Bytes ermitteln (imghdr wurde in Python 3.13 entfernt)
+    def _detect_image_type(data: bytes) -> str | None:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return "png"
+        if data[:3] == b"\xff\xd8\xff":
+            return "jpeg"
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            return "webp"
+        return None
+
+    erkannt = _detect_image_type(inhalt)
     typ_map = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
     content_type = typ_map.get(erkannt or "", file.content_type or "")
     if content_type not in ERLAUBTE_TYPEN:
