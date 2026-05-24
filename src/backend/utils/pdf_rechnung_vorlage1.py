@@ -323,9 +323,9 @@ class RechnungPDFVorlage1(FPDF):
             headers = ["Pos.", "Datum", "Beschreibung", "Einzelpreis", "USt %", "Netto"]
             aligns  = ["R",   "L",     "L",             "R",           "R",     "R"]
         else:
-            col_w   = [12, 30, 105, 28]
-            headers = ["Pos.", "Datum", "Beschreibung", "Saldo"]
-            aligns  = ["R",   "L",     "L",             "R"]
+            col_w   = [12, 30, 91, 14, 28]
+            headers = ["Pos.", "Datum", "Beschreibung", "USt %", "Saldo"]
+            aligns  = ["R",   "L",     "L",             "R",     "R"]
         tbl_x   = L_MARGIN
         tbl_top = self.get_y()
 
@@ -351,8 +351,9 @@ class RechnungPDFVorlage1(FPDF):
                 self.cell(col_w[5], 6.5, _fmt_euro(pos.netto),     align="R",
                           new_x="LMARGIN", new_y="NEXT")
             else:
-                self.cell(col_w[2], 6.5, pos.beschreibung[:85])
-                self.cell(col_w[3], 6.5, _fmt_euro(pos.brutto), align="R",
+                self.cell(col_w[2], 6.5, pos.beschreibung[:70])
+                self.cell(col_w[3], 6.5, f"{int(pos.ust_satz)} %", align="R")
+                self.cell(col_w[4], 6.5, _fmt_euro(pos.brutto), align="R",
                           new_x="LMARGIN", new_y="NEXT")
 
         tbl_bottom = self.get_y()
@@ -366,9 +367,9 @@ class RechnungPDFVorlage1(FPDF):
         self.line(x, tbl_top, x, tbl_bottom)
         x += col_w[2]
         self.line(x, tbl_top, x, tbl_bottom)
+        x += col_w[3]
+        self.line(x, tbl_top, x, tbl_bottom)
         if self._ist_netto:
-            x += col_w[3]
-            self.line(x, tbl_top, x, tbl_bottom)
             x += col_w[4]
             self.line(x, tbl_top, x, tbl_bottom)
 
