@@ -64,7 +64,7 @@ GRAU_RAND  = (210, 213, 220)   # Standard-Grau für Header/Footer-Linien
 class RechnungPDFVorlage1(FPDF):
     """Vorlage 1: Kleinunternehmer mit Zahlungsziel – Tabelle Datum/Beschreibung/Saldo."""
 
-    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False):
+    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False, ist_netto: bool = False):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.set_margins(L_MARGIN, 10, R_MARGIN)
         self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
@@ -75,6 +75,7 @@ class RechnungPDFVorlage1(FPDF):
         self._r           = rechnung
         self._ist_kopie   = ist_kopie
         self._ist_entwurf = ist_entwurf
+        self._ist_netto   = ist_netto
         self._druckdatum  = datetime.now().strftime("%d.%m.%Y")
 
     # -------------------------------------------------------------------------
@@ -317,9 +318,14 @@ class RechnungPDFVorlage1(FPDF):
         # da Rechnungsposition kein eigenes Datum-Feld hat)
         pos_datum_str = _iso_zu_de(str(r.leistungsdatum or r.datum))
 
-        col_w   = [12, 30, 105, 28]
-        headers = ["Pos.", "Datum", "Beschreibung", "Saldo"]
-        aligns  = ["R",   "L",     "L",             "R"]
+        if self._ist_netto:
+            col_w   = [12, 30, 77, 22, 14, 20]
+            headers = ["Pos.", "Datum", "Beschreibung", "Einzelpreis", "USt %", "Netto"]
+            aligns  = ["R",   "L",     "L",             "R",           "R",     "R"]
+        else:
+            col_w   = [12, 30, 105, 28]
+            headers = ["Pos.", "Datum", "Beschreibung", "Saldo"]
+            aligns  = ["R",   "L",     "L",             "R"]
         tbl_x   = L_MARGIN
         tbl_top = self.get_y()
 
@@ -334,11 +340,20 @@ class RechnungPDFVorlage1(FPDF):
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
+            menge = float(str(pos.menge))
             self.cell(col_w[0], 6.5, str(pos.position_nr), align="R")
             self.cell(col_w[1], 6.5, pos_datum_str, align="L")
-            self.cell(col_w[2], 6.5, pos.beschreibung[:85])
-            self.cell(col_w[3], 6.5, _fmt_euro(pos.brutto), align="R",
-                      new_x="LMARGIN", new_y="NEXT")
+            if self._ist_netto:
+                einzelpreis = float(str(pos.netto)) / menge if menge else 0.0
+                self.cell(col_w[2], 6.5, pos.beschreibung[:60])
+                self.cell(col_w[3], 6.5, _fmt_euro(einzelpreis),   align="R")
+                self.cell(col_w[4], 6.5, f"{int(pos.ust_satz)} %", align="R")
+                self.cell(col_w[5], 6.5, _fmt_euro(pos.netto),     align="R",
+                          new_x="LMARGIN", new_y="NEXT")
+            else:
+                self.cell(col_w[2], 6.5, pos.beschreibung[:85])
+                self.cell(col_w[3], 6.5, _fmt_euro(pos.brutto), align="R",
+                          new_x="LMARGIN", new_y="NEXT")
 
         tbl_bottom = self.get_y()
         tbl_total_w = sum(col_w)
@@ -351,6 +366,11 @@ class RechnungPDFVorlage1(FPDF):
         self.line(x, tbl_top, x, tbl_bottom)
         x += col_w[2]
         self.line(x, tbl_top, x, tbl_bottom)
+        if self._ist_netto:
+            x += col_w[3]
+            self.line(x, tbl_top, x, tbl_bottom)
+            x += col_w[4]
+            self.line(x, tbl_top, x, tbl_bottom)
 
         self.ln(6)
 
@@ -370,12 +390,21 @@ class RechnungPDFVorlage1(FPDF):
             self.set_text_color(*TEXT_GRAU if grau else TEXT_DUNKEL)
             self.cell(val_w, 5.5, wert, align="R", new_x="LMARGIN", new_y="NEXT")
 
-        _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
-
-        if not unt.get("ist_kleinunternehmer"):
-            for satz, _netto, ust_sum in _ust_aufschluesselung(r.positionen):
-                if satz > 0:
-                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(ust_sum), grau=True)
+        aufschluesselung = _ust_aufschluesselung(r.positionen)
+        if self._ist_netto:
+            _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt))
+            if len(aufschluesselung) > 1:
+                for satz, _netto, ust_sum in aufschluesselung:
+                    _sum_row(f"zzgl. USt {satz} %", _fmt_euro(ust_sum))
+            else:
+                _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt))
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+        else:
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+            if not unt.get("ist_kleinunternehmer"):
+                for satz, _netto, ust_sum in aufschluesselung:
+                    if satz > 0:
+                        _sum_row(f"enthaltene USt {satz} %", _fmt_euro(ust_sum), grau=True)
 
         self.ln(4)
 
@@ -543,14 +572,14 @@ class RechnungPDFVorlage1(FPDF):
 # Öffentliche Funktion
 # ---------------------------------------------------------------------------
 
-def generate_rechnung_pdf_vorlage1(rechnung, unternehmen: dict, ist_kopie: bool = False, ist_entwurf: bool = False) -> bytes:
+def generate_rechnung_pdf_vorlage1(rechnung, unternehmen: dict, ist_kopie: bool = False, ist_entwurf: bool = False, ist_netto: bool = False) -> bytes:
     """
-    Erzeugt ein PDF für die übergebene Rechnung nach Vorlage 1
-    (Kleinunternehmer mit Zahlungsziel, Issue #33).
+    Erzeugt ein PDF für die übergebene Rechnung nach Vorlage 1.
 
     :param rechnung:    SQLAlchemy-Rechnung-Objekt (mit .positionen, .kunde, .lieferant)
     :param unternehmen: dict mit allen Firmendaten
     :param ist_kopie:   True → dezenter „– Kopie –"-Hinweis unter dem Titel
+    :param ist_netto:   True → Nettorechnung (B2B); False → Bruttorechnung (B2C)
     """
-    pdf = RechnungPDFVorlage1(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+    pdf = RechnungPDFVorlage1(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
     return pdf.render()

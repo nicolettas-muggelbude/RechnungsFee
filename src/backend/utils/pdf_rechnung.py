@@ -183,7 +183,7 @@ def _adresszeilen(obj) -> list[str]:
 
 class RechnungPDF(FPDF):
 
-    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False):
+    def __init__(self, unternehmen: dict, rechnung, ist_kopie: bool = False, ist_entwurf: bool = False, ist_netto: bool = True):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.set_margins(L_MARGIN, 10, R_MARGIN)
         self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
@@ -194,6 +194,7 @@ class RechnungPDF(FPDF):
         self._r          = rechnung
         self._ist_kopie  = ist_kopie
         self._ist_entwurf = ist_entwurf
+        self._ist_netto  = ist_netto
         self._druckdatum = datetime.now().strftime("%d.%m.%Y")
 
     # -------------------------------------------------------------------------
@@ -437,9 +438,14 @@ class RechnungPDF(FPDF):
         self.ln(4)
 
         # --- Positionstabelle ---
-        col_w   = [82, 16, 17, 27, 14, 24]
-        headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Netto"]
-        aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
+        if self._ist_netto:
+            col_w   = [82, 16, 17, 27, 14, 24]
+            headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Netto"]
+            aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
+        else:
+            col_w   = [82, 16, 17, 65]
+            headers = ["Beschreibung", "Menge", "Einheit", "Brutto"]
+            aligns  = ["L",            "R",     "L",       "R"]
 
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRAU_HELL)
@@ -454,16 +460,17 @@ class RechnungPDF(FPDF):
         for pos in r.positionen:
             menge     = float(str(pos.menge))
             menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
-            einzelpreis = float(str(pos.netto)) / menge if menge else 0.0
             row_y = self.get_y()
-            # Rechte Zellen zuerst – einzeilig, an row_y ausgerichtet
             self.set_x(L_MARGIN + col_w[0])
-            self.cell(col_w[1], 6, menge_str,                  align="R")
+            self.cell(col_w[1], 6, menge_str, align="R")
             self.cell(col_w[2], 6, pos.einheit[:12])
-            self.cell(col_w[3], 6, _fmt_euro(einzelpreis),     align="R")
-            self.cell(col_w[4], 6, f"{int(pos.ust_satz)} %",   align="R")
-            self.cell(col_w[5], 6, _fmt_euro(pos.netto),       align="R")
-            # Beschreibung als multi_cell – unterstützt Zeilenumbrüche und \n
+            if self._ist_netto:
+                einzelpreis = float(str(pos.netto)) / menge if menge else 0.0
+                self.cell(col_w[3], 6, _fmt_euro(einzelpreis),   align="R")
+                self.cell(col_w[4], 6, f"{int(pos.ust_satz)} %", align="R")
+                self.cell(col_w[5], 6, _fmt_euro(pos.netto),     align="R")
+            else:
+                self.cell(col_w[3], 6, _fmt_euro(pos.brutto),    align="R")
             self.set_xy(L_MARGIN, row_y)
             self.multi_cell(col_w[0], 6, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")
@@ -471,8 +478,8 @@ class RechnungPDF(FPDF):
         # --- Summenblock ---
         self.ln(3)
         sum_x = L_MARGIN + col_w[0] + col_w[1] + col_w[2]
-        lbl_w = col_w[3] + col_w[4]
-        val_w = col_w[5]
+        lbl_w = 41
+        val_w = 24
 
         def _sum_row(lbl: str, wert: str, bold: bool = False, trenn: bool = False):
             if trenn:
@@ -486,13 +493,20 @@ class RechnungPDF(FPDF):
             self.cell(val_w, 5.5, wert, align="R", new_x="LMARGIN", new_y="NEXT")
 
         aufschluesselung = _ust_aufschluesselung(r.positionen)
-        _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt))
-        if len(aufschluesselung) > 1:
-            for satz, _netto, ust_sum in aufschluesselung:
-                _sum_row(f"zzgl. USt {satz} %", _fmt_euro(ust_sum))
+        if self._ist_netto:
+            _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt))
+            if len(aufschluesselung) > 1:
+                for satz, _netto, ust_sum in aufschluesselung:
+                    _sum_row(f"zzgl. USt {satz} %", _fmt_euro(ust_sum))
+            else:
+                _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt))
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
         else:
-            _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt))
-        _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+            if not unt.get("ist_kleinunternehmer"):
+                for satz, _netto, ust_sum in aufschluesselung:
+                    if satz > 0:
+                        _sum_row(f"enthaltene USt {satz} %", _fmt_euro(ust_sum))
 
         self.ln(6)
 
@@ -599,6 +613,7 @@ def generate_rechnung_pdf(
     ist_kopie: bool = False,
     ist_entwurf: bool = False,
     mit_output_intent: bool = False,
+    ist_netto: bool = True,
 ) -> bytes:
     """
     Erzeugt ein PDF für die übergebene Rechnung.
@@ -609,7 +624,7 @@ def generate_rechnung_pdf(
     :param ist_entwurf:         True → „– Entwurf –"-Hinweis, kein ausgegeben-Flag
     :param mit_output_intent:   True → sRGB-OutputIntent für PDF/A-3 (ZUGFeRD)
     """
-    pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+    pdf = RechnungPDF(unternehmen, rechnung, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
     if mit_output_intent:
         from fpdf.enums import OutputIntentSubType
         from fpdf.output import PDFICCProfile

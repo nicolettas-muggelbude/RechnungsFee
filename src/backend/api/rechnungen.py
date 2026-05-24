@@ -504,12 +504,17 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     # Entwürfe bekommen kein ausgegeben-Flag und keinen Kopie-Hinweis
     ist_kopie = (not ist_entwurf) and rechnung.ausgegeben
 
+    # Netto- oder Bruttorechnung: B2B-Kunden (zugferd_aktiv) → Nettorechnung
+    ist_netto = (
+        rechnung.typ == "ausgang"
+        and rechnung.kunde is not None
+        and rechnung.kunde.zugferd_aktiv
+    )
+
     # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv gesetzt hat
     kunde_zugferd = (
         not ist_entwurf
-        and rechnung.typ == "ausgang"
-        and rechnung.kunde is not None
-        and rechnung.kunde.zugferd_aktiv
+        and ist_netto
         and (unternehmen.steuernummer or unternehmen.ust_idnr)
     )
     if kunde_zugferd:
@@ -518,15 +523,14 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
-            # Fallback auf normales PDF – kunde_zugferd auf False setzen damit Dateiname stimmt
             kunde_zugferd = False
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
     else:
         vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
         if vorlage_nr == 1:
-            pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+            pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
         else:
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf)
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
 
     if not ist_entwurf and not rechnung.ausgegeben:
         rechnung.ausgegeben = True
