@@ -443,9 +443,9 @@ class RechnungPDF(FPDF):
             headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Netto"]
             aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
         else:
-            col_w   = [82, 16, 17, 65]
-            headers = ["Beschreibung", "Menge", "Einheit", "Brutto"]
-            aligns  = ["L",            "R",     "L",       "R"]
+            col_w   = [82, 16, 17, 16, 49]
+            headers = ["Beschreibung", "Menge", "Einheit", "USt %", "Brutto"]
+            aligns  = ["L",            "R",     "L",       "R",     "R"]
 
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRAU_HELL)
@@ -470,7 +470,8 @@ class RechnungPDF(FPDF):
                 self.cell(col_w[4], 6, f"{int(pos.ust_satz)} %", align="R")
                 self.cell(col_w[5], 6, _fmt_euro(pos.netto),     align="R")
             else:
-                self.cell(col_w[3], 6, _fmt_euro(pos.brutto),    align="R")
+                self.cell(col_w[3], 6, f"{int(pos.ust_satz)} %", align="R")
+                self.cell(col_w[4], 6, _fmt_euro(pos.brutto),    align="R")
             self.set_xy(L_MARGIN, row_y)
             self.multi_cell(col_w[0], 6, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")
