@@ -650,15 +650,15 @@ def _parse_cii_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     if datum_raw and len(datum_raw) == 8:
         felder["datum"] = f"{datum_raw[:4]}-{datum_raw[4:6]}-{datum_raw[6:8]}"
 
-    # Fälligkeitsdatum (BT-9) – explizit oder aus Zahlungsbedingungstext
-    faellig_raw = _x(root, "//ram:SpecifiedTradePaymentTerms/ram:DueDateDateTime/udt:DateTimeString", ns)
-    if faellig_raw and len(faellig_raw) == 8:
-        felder["faellig_am"] = f"{faellig_raw[:4]}-{faellig_raw[4:6]}-{faellig_raw[6:8]}"
+    # Fälligkeitsdatum (BT-9) – Zahlungsbedingungstext hat Vorrang vor DueDateDateTime
+    ziel_text = _x(root, "//ram:SpecifiedTradePaymentTerms/ram:Description", ns) or ""
+    iso = _faellig_aus_zahlungsziel(felder.get("datum"), ziel_text)
+    if iso:
+        felder["faellig_am"] = iso
     else:
-        ziel_text = _x(root, "//ram:SpecifiedTradePaymentTerms/ram:Description", ns) or ""
-        iso = _faellig_aus_zahlungsziel(felder.get("datum"), ziel_text)
-        if iso:
-            felder["faellig_am"] = iso
+        faellig_raw = _x(root, "//ram:SpecifiedTradePaymentTerms/ram:DueDateDateTime/udt:DateTimeString", ns)
+        if faellig_raw and len(faellig_raw) == 8:
+            felder["faellig_am"] = f"{faellig_raw[:4]}-{faellig_raw[4:6]}-{faellig_raw[6:8]}"
         else:
             warnungen.append("BT-9: Fälligkeitsdatum fehlt")
 
@@ -761,18 +761,19 @@ def _parse_ubl_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     if datum:
         felder["datum"] = datum
 
-    faellig = (
-        _x(root, "//cbc:DueDate", ns)
-        or _x(root, "//cac:PaymentMeans/cbc:PaymentDueDate", ns)
-        or _x(root, "//cac:PaymentTerms/cbc:PaymentDueDate", ns)
-    )
-    if faellig:
-        felder["faellig_am"] = faellig
+    # Zahlungsbedingungstext hat Vorrang vor explizitem DueDate
+    ziel_text = _x(root, "//cac:PaymentTerms/cbc:Note", ns) or ""
+    iso = _faellig_aus_zahlungsziel(felder.get("datum"), ziel_text)
+    if iso:
+        felder["faellig_am"] = iso
     else:
-        ziel_text = _x(root, "//cac:PaymentTerms/cbc:Note", ns) or ""
-        iso = _faellig_aus_zahlungsziel(felder.get("datum"), ziel_text)
-        if iso:
-            felder["faellig_am"] = iso
+        faellig = (
+            _x(root, "//cbc:DueDate", ns)
+            or _x(root, "//cac:PaymentMeans/cbc:PaymentDueDate", ns)
+            or _x(root, "//cac:PaymentTerms/cbc:PaymentDueDate", ns)
+        )
+        if faellig:
+            felder["faellig_am"] = faellig
 
     lieferant_name = (
         _x(root, "//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name", ns)
