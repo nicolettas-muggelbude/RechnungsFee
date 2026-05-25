@@ -1346,7 +1346,10 @@ function RechnungForm({
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       ist_entwurf: istEntwurf,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen
-      ...(prefillFromAnalyse?.felder?.gesamt_netto
+      // Nur wenn alle drei Werte vorliegen (aus XML oder via _berechne_fehlende_summen abgeleitet)
+      ...(prefillFromAnalyse?.felder?.gesamt_netto &&
+        prefillFromAnalyse?.felder?.gesamt_ust &&
+        prefillFromAnalyse?.felder?.gesamt_brutto
         ? {
             netto_gesamt_override: prefillFromAnalyse.felder.gesamt_netto,
             ust_gesamt_override: prefillFromAnalyse.felder.gesamt_ust,
