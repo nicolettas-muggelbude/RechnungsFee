@@ -115,6 +115,15 @@ Bevor Tag gesetzt und gepusht wird:
 3. **`CLAUDE.md`** – `SCHEMA_VERSION` und Versionstabelle aktuell?
 4. Commit dieser Dateien → dann Tag setzen
 
+### Setup-Wizard testen (PFLICHT bei Änderungen an diesen Bereichen)
+
+Wurde in diesem Release etwas an **`konten`**, **`unternehmen`** oder **`kassenbestand`** geändert  
+(Schema, API-Endpoint, Pydantic-Schema, Frontend-Formular)?  
+→ Setup-Wizard einmal komplett mit **leerer Datenbank** durchlaufen und prüfen, ob Schritt 4 („Einrichtung abschließen") fehlerfrei durchläuft.
+
+Hintergrund: Der Wizard ist der einzige Weg, wie diese drei Tabellen beim Erststart befüllt werden.  
+Fehler dort fallen in Tests nicht auf und treffen nur Neu-Installationen (Issue #102).
+
 ### Neues Release erstellen
 ```bash
 git tag v0.x.y
