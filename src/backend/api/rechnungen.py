@@ -443,9 +443,15 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         netto_sum += netto * pos_data.menge
         ust_sum += ust_betrag * pos_data.menge
 
-    rechnung.netto_gesamt = netto_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
-    rechnung.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
-    rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    Q = Decimal("0.01")
+    if data.netto_gesamt_override is not None:
+        rechnung.netto_gesamt  = data.netto_gesamt_override.quantize(Q, ROUND_HALF_UP)
+        rechnung.ust_gesamt    = (data.ust_gesamt_override or Decimal("0")).quantize(Q, ROUND_HALF_UP)
+        rechnung.brutto_gesamt = (data.brutto_gesamt_override or rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+    else:
+        rechnung.netto_gesamt  = netto_sum.quantize(Q, ROUND_HALF_UP)
+        rechnung.ust_gesamt    = ust_sum.quantize(Q, ROUND_HALF_UP)
+        rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
 
     db.commit()
     db.refresh(rechnung)

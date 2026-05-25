@@ -1272,9 +1272,7 @@ function RechnungForm({
         ustBetrag = brutto - netto
       } else {
         netto = eingabe * menge
-        // kaufmännische Rundung: erst Zähler ausrechnen, dann durch 100 teilen
-        // vermeidet float64-Artefakt (z. B. 253.50×19/100 = 48.16499… → 48.16 statt 48.17)
-        ustBetrag = Math.round(netto * ust) / 100
+        ustBetrag = (netto * ust) / 100
         brutto = netto + ustBetrag
       }
       return { netto: acc.netto + netto, ust: acc.ust + ustBetrag, brutto: acc.brutto + brutto }
@@ -1347,6 +1345,14 @@ function RechnungForm({
       notizen: notizen || undefined,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       ist_entwurf: istEntwurf,
+      // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen
+      ...(prefillFromAnalyse?.felder?.gesamt_netto
+        ? {
+            netto_gesamt_override: prefillFromAnalyse.felder.gesamt_netto,
+            ust_gesamt_override: prefillFromAnalyse.felder.gesamt_ust,
+            brutto_gesamt_override: prefillFromAnalyse.felder.gesamt_brutto,
+          }
+        : {}),
       positionen: positionen.map((p) => {
         const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
         const ust = parseFloat(p.ust_satz) || 0

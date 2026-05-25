@@ -95,6 +95,10 @@ class RechnungCreate(BaseModel):
     externe_belegnr: Optional[str] = None
     ist_entwurf: bool = True
     positionen: List[RechnungspositionCreate]
+    # Direkt-Übernahme aus XML-Import – überschreibt die berechneten Gesamtbeträge
+    netto_gesamt_override: Optional[Decimal] = None
+    ust_gesamt_override: Optional[Decimal] = None
+    brutto_gesamt_override: Optional[Decimal] = None
 
     @field_validator("typ")
     @classmethod

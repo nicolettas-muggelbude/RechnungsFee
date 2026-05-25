@@ -775,6 +775,9 @@ export type RechnungCreate = {
   externe_belegnr?: string
   ist_entwurf?: boolean
   positionen: RechnungspositionCreate[]
+  netto_gesamt_override?: string
+  ust_gesamt_override?: string
+  brutto_gesamt_override?: string
 }
 
 export type RechnungUpdate = Partial<RechnungCreate>
