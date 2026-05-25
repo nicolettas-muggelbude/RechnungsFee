@@ -110,7 +110,7 @@ def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
     netto = pos_data.netto.quantize(Decimal("0.01"), ROUND_HALF_UP)
     if pos_data.ust_satz == 0:
         return Decimal("0.00"), netto, netto
-    ust_betrag = (netto * pos_data.ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    ust_betrag = (netto * pos_data.ust_satz / 100).quantize(Decimal("0.01"))
     brutto = netto + ust_betrag
     return ust_betrag, brutto, netto
 
