@@ -87,7 +87,7 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     dom_satz = max(satz_summen, key=lambda s: satz_summen[s])
     namen = {19: "Betriebseinnahmen", 7: "Betriebseinnahmen (7%)", 0: "Betriebseinnahmen (0%)"}
     name = namen.get(dom_satz, "Betriebseinnahmen")
-    kat = db.query(Kategorie).filter(Kategorie.bezeichnung == name, Kategorie.aktiv == True).first()
+    kat = db.query(Kategorie).filter(Kategorie.name == name, Kategorie.aktiv == True).first()
     return (kat.id if kat else None, kat)
 
 
