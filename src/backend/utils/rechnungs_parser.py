@@ -717,18 +717,22 @@ def _parse_cii_xml(xml_bytes: bytes) -> AnalyseErgebnis:
         if menge_elems:
             einheit_code = menge_elems[0].get("unitCode")
 
-        # EP (Einzelpreis) bevorzugen; Fallback: LineTotalAmount ÷ Menge
-        ep_raw = _d(_x(item, "ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount", ns))
+        # LineTotalAmount (= EP × Menge, vom Rechnungsaussteller berechnet) direkt als
+        # Positions-Netto übernehmen; menge=1 damit das Formular nicht nochmal multipliziert.
+        # Fallback: EP aus NetPriceProductTradePrice wenn kein LineTotalAmount vorhanden.
         line_total = _d(_x(item, "ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount", ns))
-        if ep_raw:
-            netto_pos = ep_raw
-        elif line_total and menge_raw:
-            try:
-                netto_pos = str((Decimal(line_total) / Decimal(menge_raw)).quantize(Decimal("0.01")))
-            except (InvalidOperation, ZeroDivisionError):
-                netto_pos = line_total
-        else:
-            netto_pos = line_total
+        ep_raw = _d(_x(item, "ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount", ns))
+        netto_pos = line_total or ep_raw
+
+        # Menge in Beschreibung aufnehmen wenn > 1 (damit die Info nicht verloren geht)
+        try:
+            menge_val = Decimal(menge_raw or "1")
+            if menge_val != 1 and line_total:
+                einheit_label = _einheit(einheit_code)
+                beschr = f"{menge_val.normalize()} {einheit_label} × {beschr}"
+        except (InvalidOperation, ValueError):
+            pass
+
         ust_pos = _normalize_ust_satz(
             _x(item, "ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:RateApplicablePercent", ns)
             or _x(item, ".//ram:RateApplicablePercent", ns)
@@ -736,7 +740,7 @@ def _parse_cii_xml(xml_bytes: bytes) -> AnalyseErgebnis:
 
         positionen.append(AnalysePosition(
             beschreibung=beschr,
-            menge=_menge(menge_raw),
+            menge="1.000",
             einheit=_einheit(einheit_code),
             netto=netto_pos or "0.00",
             ust_satz=ust_pos or ust_satz or "0",
@@ -837,18 +841,23 @@ def _parse_ubl_xml(xml_bytes: bytes) -> AnalyseErgebnis:
         menge_elems = item.xpath("cbc:InvoicedQuantity", namespaces=ns)
         if menge_elems:
             einheit_code = menge_elems[0].get("unitCode")
-        # EP (Einzelpreis) bevorzugen; Fallback: LineExtensionAmount ÷ Menge
-        ep_raw = _d(_x(item, "cac:Price/cbc:PriceAmount", ns))
+
+        # LineExtensionAmount (= EP × Menge, vom Rechnungsaussteller berechnet) direkt als
+        # Positions-Netto übernehmen; menge=1 damit das Formular nicht nochmal multipliziert.
+        # Fallback: PriceAmount (EP) wenn kein LineExtensionAmount vorhanden.
         line_total_ubl = _d(_x(item, "cbc:LineExtensionAmount", ns))
-        if ep_raw:
-            netto_pos = ep_raw
-        elif line_total_ubl and menge_raw:
-            try:
-                netto_pos = str((Decimal(line_total_ubl) / Decimal(menge_raw)).quantize(Decimal("0.01")))
-            except (InvalidOperation, ZeroDivisionError):
-                netto_pos = line_total_ubl
-        else:
-            netto_pos = line_total_ubl
+        ep_raw = _d(_x(item, "cac:Price/cbc:PriceAmount", ns))
+        netto_pos = line_total_ubl or ep_raw
+
+        # Menge in Beschreibung aufnehmen wenn > 1 (damit die Info nicht verloren geht)
+        try:
+            menge_val = Decimal(menge_raw or "1")
+            if menge_val != 1 and line_total_ubl:
+                einheit_label = _einheit(einheit_code)
+                beschr = f"{menge_val.normalize()} {einheit_label} × {beschr}"
+        except (InvalidOperation, ValueError):
+            pass
+
         ust_pos = _normalize_ust_satz(
             _x(item, "cac:Item/cac:ClassifiedTaxCategory/cbc:Percent", ns)
             or _x(item, "cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cbc:Percent", ns)
@@ -857,7 +866,7 @@ def _parse_ubl_xml(xml_bytes: bytes) -> AnalyseErgebnis:
 
         positionen.append(AnalysePosition(
             beschreibung=beschr,
-            menge=_menge(menge_raw),
+            menge="1.000",
             einheit=_einheit(einheit_code),
             netto=netto_pos or "0.00",
             ust_satz=ust_pos or ust_satz or "0",

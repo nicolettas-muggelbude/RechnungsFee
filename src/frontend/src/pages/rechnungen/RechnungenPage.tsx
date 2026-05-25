@@ -1272,7 +1272,9 @@ function RechnungForm({
         ustBetrag = brutto - netto
       } else {
         netto = eingabe * menge
-        ustBetrag = (netto * ust) / 100
+        // kaufmännische Rundung: erst Zähler ausrechnen, dann durch 100 teilen
+        // vermeidet float64-Artefakt (z. B. 253.50×19/100 = 48.16499… → 48.16 statt 48.17)
+        ustBetrag = Math.round(netto * ust) / 100
         brutto = netto + ustBetrag
       }
       return { netto: acc.netto + netto, ust: acc.ust + ustBetrag, brutto: acc.brutto + brutto }
