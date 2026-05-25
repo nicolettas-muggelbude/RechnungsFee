@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -716,6 +716,39 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 28"))
             conn.commit()
             print("[Migration] Schema auf Version 28 gebracht (journal: USt-Gegenkonto-Snapshot)")
+
+        if version < 29:
+            # konten: stray 'bank'-Spalte entfernen falls Migration 22 sie nicht bereinigt hat
+            konten_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(konten)")).fetchall()}
+            if "bank" in konten_cols:
+                conn.execute(text("""
+                    CREATE TABLE konten_new (
+                        id           INTEGER PRIMARY KEY,
+                        name         VARCHAR(100) NOT NULL,
+                        anbieter     VARCHAR(100) NOT NULL,
+                        kontoart     VARCHAR(30)  NOT NULL DEFAULT 'bank',
+                        iban         VARCHAR(34),
+                        bic          VARCHAR(11),
+                        kennung      VARCHAR(200),
+                        kontotyp     VARCHAR(20)  NOT NULL DEFAULT 'geschaeftlich',
+                        ist_standard BOOLEAN      NOT NULL DEFAULT 0,
+                        aktiv        BOOLEAN      NOT NULL DEFAULT 1,
+                        erstellt_am  DATETIME     DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+                    )
+                """))
+                anbieter_src = "anbieter" if "anbieter" in konten_cols else "bank"
+                conn.execute(text(f"""
+                    INSERT INTO konten_new (id, name, anbieter, kontoart, iban, bic, kennung, kontotyp, ist_standard, aktiv, erstellt_am)
+                    SELECT id, name, {anbieter_src}, kontoart, iban, bic, kennung, kontotyp, ist_standard, aktiv, erstellt_am
+                    FROM konten
+                """))
+                conn.execute(text("DROP TABLE konten"))
+                conn.execute(text("ALTER TABLE konten_new RENAME TO konten"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uix_konten_iban ON konten(iban) WHERE iban IS NOT NULL"))
+                print("[Migration] konten: stray 'bank'-Spalte entfernt")
+            conn.execute(text("PRAGMA user_version = 29"))
+            conn.commit()
+            print("[Migration] Schema auf Version 29 gebracht (konten: bank-Spalte bereinigt)")
 
 
 def _migrate_kategorien() -> None:
