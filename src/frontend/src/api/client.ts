@@ -782,11 +782,19 @@ export type RechnungCreate = {
 
 export type RechnungUpdate = Partial<RechnungCreate>
 
+export type ZahlungSplitPosition = {
+  kategorie_id: number
+  betrag: string
+  beschreibung: string
+}
+
 export type BarZahlungCreate = {
   betrag?: string
   datum: string
   zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank'
   beschreibung?: string
+  kategorie_id?: number
+  split?: ZahlungSplitPosition[]
 }
 
 export type BarZahlungResult = {

@@ -8,7 +8,7 @@ import {
   sucheArtikel, getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
-  type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag,
+  type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
@@ -63,6 +63,8 @@ function StatusBadge({ status }: { status: 'offen' | 'teilweise' | 'bezahlt' }) 
 // Zahlungs-Dialog
 // ---------------------------------------------------------------------------
 
+type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string }
+
 function ZahlungsDialog({
   rechnung,
   onClose,
@@ -80,9 +82,24 @@ function ZahlungsDialog({
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
+  // Eingangsrechnung: Kategorie bei Zahlung (Schritt 6+7)
+  // rechnung.kategorie_id ist nach erster Teilzahlung gesetzt → Vorausfüllung (Schritt 7)
+  const [kategorieId, setKategorieId] = useState<string>(String(rechnung.kategorie_id ?? ''))
+  const [splitModus, setSplitModus] = useState(false)
+  const [splitZeilen, setSplitZeilen] = useState<SplitZeile[]>(() =>
+    rechnung.positionen.map((pos) => ({
+      beschreibung: pos.beschreibung,
+      betrag: (parseFloat(pos.brutto) * parseFloat(pos.menge)).toFixed(2).replace('.', ','),
+      kategorie_id: String(pos.kategorie_id ?? ''),
+    }))
+  )
+
+  const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
   const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
   const kassenstand = parseFloat(kassenstandData?.kassenstand ?? '0')
   const istBarAusgabe = rechnung.typ === 'eingang' && zahlungsart === 'Bar'
+  const aufwandKat = (kategorien ?? []).filter((k) => k.kontenart === 'Aufwand')
+  const anlageKat  = (kategorien ?? []).filter((k) => k.kontenart === 'Anlage')
 
   const mutation = useMutation({
     mutationFn: (data: BarZahlungCreate) => barZahlungErstellen(rechnung.id, data),
@@ -97,6 +114,12 @@ function ZahlungsDialog({
   const betragDecimal = parseFloat(betrag.replace(',', '.'))
   const kassenstandUeberschritten = istBarAusgabe && !isNaN(betragDecimal) && betragDecimal > kassenstand
   const artLabel = rechnung.typ === 'ausgang' ? 'Einnahme' : 'Ausgabe'
+  const splitSumme = splitZeilen.reduce((s, z) => s + (parseFloat(z.betrag.replace(',', '.')) || 0), 0)
+  const splitSummeOK = !isNaN(betragDecimal) && Math.abs(splitSumme - betragDecimal) < 0.005
+
+  function updateSplitZeile(i: number, field: keyof SplitZeile, val: string) {
+    setSplitZeilen((prev) => prev.map((z, idx) => idx === i ? { ...z, [field]: val } : z))
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -108,12 +131,39 @@ function ZahlungsDialog({
       setFehler('Das Zahlungsdatum darf nicht in der Zukunft liegen.')
       return
     }
-    mutation.mutate({
+
+    const payload: BarZahlungCreate = {
       betrag: betragDecimal.toFixed(2),
       datum,
       zahlungsart,
       beschreibung: beschreibung || undefined,
-    })
+    }
+
+    if (rechnung.typ === 'eingang') {
+      if (splitModus) {
+        if (!splitSummeOK) {
+          setFehler(`Split-Summe (${splitSumme.toFixed(2)} €) stimmt nicht mit Zahlungsbetrag (${betragDecimal.toFixed(2)} €) überein.`)
+          return
+        }
+        if (splitZeilen.some((z) => !z.kategorie_id)) {
+          setFehler('Bitte für jede Position eine Kategorie wählen.')
+          return
+        }
+        payload.split = splitZeilen.map((z): ZahlungSplitPosition => ({
+          kategorie_id: parseInt(z.kategorie_id),
+          betrag: parseFloat(z.betrag.replace(',', '.')).toFixed(2),
+          beschreibung: z.beschreibung,
+        }))
+      } else {
+        if (!kategorieId) {
+          setFehler('Bitte eine Kategorie wählen.')
+          return
+        }
+        payload.kategorie_id = parseInt(kategorieId)
+      }
+    }
+
+    mutation.mutate(payload)
   }
 
   return (
@@ -207,6 +257,99 @@ function ZahlungsDialog({
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             />
           </div>
+
+          {/* Kategorie / Split – nur Eingangsrechnungen */}
+          {rechnung.typ === 'eingang' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Kategorie *
+                </label>
+                {rechnung.positionen.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSplitModus((v) => !v)}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {splitModus ? '← Einfach buchen' : 'Splitbuchung →'}
+                  </button>
+                )}
+              </div>
+
+              {splitModus ? (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-900">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Position</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500 dark:text-slate-400 w-24">Betrag (€)</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500 dark:text-slate-400 w-36">Kategorie</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {splitZeilen.map((z, i) => (
+                        <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+                          <td className="px-3 py-1.5 text-slate-700 dark:text-slate-200">{z.beschreibung}</td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={z.betrag}
+                              onChange={(e) => updateSplitZeile(i, 'betrag', e.target.value)}
+                              className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={z.kategorie_id}
+                              onChange={(e) => updateSplitZeile(i, 'kategorie_id', e.target.value)}
+                              className="w-full border-0 outline-none bg-transparent text-xs text-slate-700 dark:text-slate-200"
+                            >
+                              <option value="">— wählen —</option>
+                              <optgroup label="Betriebsausgaben">
+                                {aufwandKat.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+                              </optgroup>
+                              {anlageKat.length > 0 && (
+                                <optgroup label="Investitionen">
+                                  {anlageKat.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+                                </optgroup>
+                              )}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                      <tr>
+                        <td className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">Summe</td>
+                        <td className={`px-3 py-1.5 text-right text-xs font-semibold ${splitSummeOK ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {formatEuro(splitSumme)}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-slate-400 dark:text-slate-500">
+                          {splitSummeOK ? '✓ passt' : `≠ ${formatEuro(betragDecimal)}`}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <select
+                  value={kategorieId}
+                  onChange={(e) => setKategorieId(e.target.value)}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="">— Kategorie wählen —</option>
+                  <optgroup label="Betriebsausgaben">
+                    {aufwandKat.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+                  </optgroup>
+                  {anlageKat.length > 0 && (
+                    <optgroup label="Investitionen">
+                      {anlageKat.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* Vorschau */}
           {!isNaN(betragDecimal) && betragDecimal > 0 && (

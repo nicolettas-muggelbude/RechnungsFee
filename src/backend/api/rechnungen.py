@@ -29,7 +29,7 @@ from utils.zugferd import generate_zugferd_pdf
 from utils.rechnungs_parser import analysiere_datei
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
-    BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse,
+    BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
 )
 
 BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
@@ -778,51 +778,91 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         dom_satz = max(satz_summen, key=lambda s: satz_summen[s])
         ust_satz = Decimal(str(dom_satz))
 
-    # Kategorie: Ausgangsrechnung → Erlös-Kategorie aus USt-Satz; Eingangsrechnung → Kategorie der Rechnung
+    konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
+
+    def _netto_ust(brutto: Decimal) -> tuple[Decimal, Decimal]:
+        if ust_satz > 0:
+            n = (brutto * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            return n, (brutto - n).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        return brutto, Decimal("0.00")
+
+    def _erstelle_eintrag(kat_id: int | None, kat: "Kategorie | None", brutto: Decimal, beschr: str) -> Journaleintrag:
+        n, u = _netto_ust(brutto)
+        e = Journaleintrag(
+            datum=data.datum,
+            belegnr=_naechste_belegnr_journal(db, data.datum),
+            beschreibung=beschr,
+            kategorie_id=kat_id,
+            konto_skr03=kat.konto_skr03 if kat else None,
+            konto_skr04=kat.konto_skr04 if kat else None,
+            konto_ust_skr03=konto_ust_skr03,
+            konto_ust_skr04=konto_ust_skr04,
+            zahlungsart=data.zahlungsart,
+            art=art,
+            netto_betrag=n,
+            ust_satz=ust_satz,
+            ust_betrag=u,
+            brutto_betrag=brutto,
+            vorsteuerabzug=(art == "Ausgabe" and ust_satz > 0),
+            steuerbefreiung_grund=steuerbefreiung_grund,
+            rechnung_id=rechnung_id,
+            immutable=True,
+        )
+        e.signatur = signatur_journaleintrag(e)
+        return e
+
+    if data.split:
+        # Split-Zahlung: Summe der Split-Beträge muss dem Zahlungsbetrag entsprechen
+        split_summe = sum(p.betrag for p in data.split).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        if split_summe != betrag.quantize(Decimal("0.01"), ROUND_HALF_UP):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Split-Summe ({split_summe} €) stimmt nicht mit Zahlungsbetrag ({betrag} €) überein.",
+            )
+        erster_eintrag = None
+        for i, sp in enumerate(data.split):
+            sp_kat = db.query(Kategorie).filter(Kategorie.id == sp.kategorie_id).first()
+            if not sp_kat:
+                raise HTTPException(status_code=404, detail=f"Kategorie {sp.kategorie_id} nicht gefunden.")
+            e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung)
+            db.add(e)
+            if i == 0:
+                erster_eintrag = e
+                # Erste Split-Kategorie an Rechnung zurückschreiben
+                if rechnung.kategorie_id is None:
+                    rechnung.kategorie_id = sp.kategorie_id
+        db.flush()
+        _aktualisiere_zahlungsstatus(rechnung)
+        db.commit()
+        db.refresh(rechnung)
+        db.refresh(erster_eintrag)
+        return BarZahlungResult(
+            journaleintrag_id=erster_eintrag.id,
+            journaleintrag_belegnr=erster_eintrag.belegnr,
+            rechnung=RechnungResponse.from_orm_extended(rechnung),
+        )
+
+    # Einfache Zahlung (kein Split)
     if rechnung.typ == "ausgang":
         kategorie_id, kat_obj = _erloes_kategorie(db, rechnung)
     else:
-        kategorie_id = rechnung.kategorie_id
-        kat_obj = rechnung.kategorie
+        if data.kategorie_id is None and rechnung.kategorie_id is None:
+            raise HTTPException(status_code=422, detail="Bitte eine Kategorie für die Buchung auswählen.")
+        if data.kategorie_id is not None:
+            kat_obj = db.query(Kategorie).filter(Kategorie.id == data.kategorie_id).first()
+            if not kat_obj:
+                raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+            kategorie_id = data.kategorie_id
+            if rechnung.kategorie_id is None:
+                rechnung.kategorie_id = kategorie_id
+        else:
+            kategorie_id = rechnung.kategorie_id
+            kat_obj = rechnung.kategorie
 
-    # Netto aus Brutto berechnen
-    if ust_satz > 0:
-        netto = (betrag * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        ust_betrag = (betrag - netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    else:
-        netto = betrag
-        ust_betrag = Decimal("0.00")
-
-    belegnr = _naechste_belegnr_journal(db, data.datum)
-    konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
-
-    eintrag = Journaleintrag(
-        datum=data.datum,
-        belegnr=belegnr,
-        beschreibung=beschreibung,
-        kategorie_id=kategorie_id,
-        konto_skr03=kat_obj.konto_skr03 if kat_obj else None,
-        konto_skr04=kat_obj.konto_skr04 if kat_obj else None,
-        konto_ust_skr03=konto_ust_skr03,
-        konto_ust_skr04=konto_ust_skr04,
-        zahlungsart=data.zahlungsart,
-        art=art,
-        netto_betrag=netto,
-        ust_satz=ust_satz,
-        ust_betrag=ust_betrag,
-        brutto_betrag=betrag,
-        vorsteuerabzug=(art == "Ausgabe" and ust_satz > 0),
-        steuerbefreiung_grund=steuerbefreiung_grund,
-        rechnung_id=rechnung_id,
-        immutable=True,
-    )
-    eintrag.signatur = signatur_journaleintrag(eintrag)
+    eintrag = _erstelle_eintrag(kategorie_id, kat_obj, betrag, beschreibung)
     db.add(eintrag)
     db.flush()
-
-    # Zahlungsstatus der Rechnung aktualisieren
     _aktualisiere_zahlungsstatus(rechnung)
-
     db.commit()
     db.refresh(rechnung)
     db.refresh(eintrag)

@@ -267,11 +267,26 @@ class AnalyseResponse(BaseModel):
 # Bar-Zahlung
 # ---------------------------------------------------------------------------
 
+class ZahlungSplitPosition(BaseModel):
+    kategorie_id: int
+    betrag: Decimal  # Brutto-Anteil dieser Split-Position
+    beschreibung: str  # Positionsbeschreibung aus der Rechnungsposition
+
+    @field_validator("betrag")
+    @classmethod
+    def check_betrag(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("betrag muss positiv sein")
+        return v
+
+
 class BarZahlungCreate(BaseModel):
     betrag: Optional[Decimal] = None  # None = Restbetrag
     datum: date
     zahlungsart: str = "Bar"  # Bar|Karte|PayPal|Bank
     beschreibung: Optional[str] = None
+    kategorie_id: Optional[int] = None  # Pflicht für Eingangsrechnungen (ohne Split), wird beim Endpoint geprüft
+    split: Optional[List["ZahlungSplitPosition"]] = None  # Split: ersetzt kategorie_id, Summe muss betrag ergeben
 
     @field_validator("zahlungsart")
     @classmethod
