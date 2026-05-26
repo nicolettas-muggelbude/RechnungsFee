@@ -23,6 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.7',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'fix', text: 'PDF: Negative Mengen (Gutschriften) korrekt dargestellt – Einzelpreis bleibt positiv, Nettospalte zeigt Positionssumme, USt-Aufschlüsselung und Vorzeichen stimmen' },
+      { typ: 'fix', text: 'Kategorien: Löschen schlug still fehl wenn Kategorie in Rechnung, Banktransaktion oder Automatikregel verwendet – Fehlermeldung wird jetzt angezeigt (Issue #96)' },
+      { typ: 'fix', text: 'Linux Mint Cinnamon: Mausrad-Scrollen in der Hauptapp funktioniert jetzt (WebKitGTK-Workaround)' },
+      { typ: 'verbesserung', text: 'PDF-Vorlagen: Gemeinsame Logik in Basisklasse extrahiert – einfachere Pflege bei neuen Vorlagen' },
+      { typ: 'fix', text: 'Kategorien: 5 fehlende Einträge ergänzt (AfA, Fahrtkosten Privat-PKW, Verpflegungsmehraufwand, Mitgliedsbeiträge, Spenden betrieblich) mit korrekter EKS- und EÜR-Zuordnung (Issue #106)' },
+    ],
+  },
+  {
     version: 'v0.2.6',
     datum: 'Mai 2026',
     eintraege: [
