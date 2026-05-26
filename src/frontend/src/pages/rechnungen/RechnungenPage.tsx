@@ -699,8 +699,14 @@ function RechnungDetail({
             <span className="dark:text-slate-200">{formatDatum(rechnung.datum)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500 dark:text-slate-400">Leistungsdatum</span>
-            <span className="dark:text-slate-200">{rechnung.leistungsdatum ? formatDatum(rechnung.leistungsdatum) : formatDatum(rechnung.datum)}</span>
+            <span className="text-slate-500 dark:text-slate-400">
+              {rechnung.leistung_bis ? 'Leistungszeitraum' : 'Leistungsdatum'}
+            </span>
+            <span className="dark:text-slate-200">
+              {rechnung.leistung_bis
+                ? `${formatDatum(rechnung.leistung_von ?? rechnung.datum)} – ${formatDatum(rechnung.leistung_bis)}`
+                : formatDatum(rechnung.leistung_von ?? rechnung.datum)}
+            </span>
           </div>
           {rechnung.faellig_am && (
             <div className="flex justify-between">
@@ -1266,10 +1272,12 @@ function RechnungForm({
 
   const [rechnungsnummer, setRechnungsnummer] = useState(initial?.rechnungsnummer ?? '')
   const [datum, setDatum] = useState(pf?.datum ?? initial?.datum ?? heuteIso())
-  const [leistungsdatum, setLeistungsdatum] = useState(initial?.leistungsdatum ?? initial?.datum ?? pf?.datum ?? heuteIso())
-  const [leistungsdatumManuell, setLeistungsdatumManuell] = useState(
-    !!(initial?.leistungsdatum && initial.leistungsdatum !== initial.datum)
+  const [leistungVon, setLeistungVon] = useState(initial?.leistung_von ?? initial?.datum ?? pf?.datum ?? heuteIso())
+  const [leistungBis, setLeistungBis] = useState(initial?.leistung_bis ?? '')
+  const [leistungManuell, setLeistungManuell] = useState(
+    !!(initial?.leistung_von && initial.leistung_von !== initial.datum)
   )
+  const [leistungZeitraum, setLeistungZeitraum] = useState(!!(initial?.leistung_bis))
   const zahlungsziel = unternehmen?.standard_zahlungsziel ?? 14
   const [faelligAm, setFaelligAm] = useState(() => {
     if (pf?.faellig_am) return pf.faellig_am
@@ -1358,8 +1366,8 @@ function RechnungForm({
 
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
-    if (!leistungsdatumManuell) setLeistungsdatum(datum)
-  }, [datum, leistungsdatumManuell])
+    if (!leistungManuell) setLeistungVon(datum)
+  }, [datum, leistungManuell])
 
   // Fälligkeitsdatum = Rechnungsdatum + Zahlungsziel (nur neue Rechnungen, nicht bei Prefill aus Analyse)
   useEffect(() => {
@@ -1462,7 +1470,8 @@ function RechnungForm({
       typ,
       rechnungsnummer: rechnungsnummer || undefined,
       datum,
-      leistungsdatum: leistungsdatum !== datum ? leistungsdatum : undefined,
+      leistung_von: leistungVon !== datum ? leistungVon : undefined,
+      leistung_bis: leistungBis || undefined,
       faellig_am: faelligAm || undefined,
       ...(typ === 'ausgang' ? { kunde_id: partnerId ? parseInt(partnerId) : undefined } : { lieferant_id: partnerId ? parseInt(partnerId) : undefined }),
       partner_freitext: partnerFreitext || undefined,
@@ -1554,21 +1563,66 @@ function RechnungForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-            Leistungsdatum
-            {!leistungsdatumManuell && <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(= Rechnungsdatum)</span>}
-          </label>
-          <input
-            type="date"
-            value={leistungsdatum}
-            onChange={(e) => {
-              setLeistungsdatum(e.target.value)
-              setLeistungsdatumManuell(e.target.value !== datum)
-            }}
-            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-          />
+        <div className={leistungZeitraum ? 'col-span-2' : ''}>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+              {leistungZeitraum ? 'Leistungszeitraum' : 'Leistungsdatum'}
+              {!leistungManuell && !leistungZeitraum && <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(= Rechnungsdatum)</span>}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setLeistungZeitraum((v) => !v)
+                if (leistungZeitraum) setLeistungBis('')
+              }}
+              className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400"
+            >
+              {leistungZeitraum ? '← Einzeldatum' : 'Zeitraum →'}
+            </button>
+          </div>
+          {leistungZeitraum ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={leistungVon}
+                onChange={(e) => { setLeistungVon(e.target.value); setLeistungManuell(true) }}
+                className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+              <span className="text-slate-400 dark:text-slate-500 text-sm">–</span>
+              <input
+                type="date"
+                value={leistungBis}
+                min={leistungVon}
+                onChange={(e) => setLeistungBis(e.target.value)}
+                className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+            </div>
+          ) : (
+            <input
+              type="date"
+              value={leistungVon}
+              onChange={(e) => {
+                setLeistungVon(e.target.value)
+                setLeistungManuell(e.target.value !== datum)
+              }}
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            />
+          )}
         </div>
+        {!leistungZeitraum && <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig am</label>
+          <div className={pfRing('faellig_am')}>
+            <input
+              type="date"
+              value={faelligAm}
+              min={datum}
+              onChange={(e) => setFaelligAm(e.target.value)}
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            />
+          </div>
+        </div>}
+      </div>
+      {leistungZeitraum && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig am</label>
           <div className={pfRing('faellig_am')}>
@@ -1581,7 +1635,7 @@ function RechnungForm({
             />
           </div>
         </div>
-      </div>
+      )}
 
 
       <div>

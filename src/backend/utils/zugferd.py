@@ -148,7 +148,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)
 
     # ── Lieferdatum (XRechnung BR-13: Pflicht – Fallback auf Rechnungsdatum) ───
-    doc.trade.delivery.event.occurrence._value = rechnung.leistungsdatum or rechnung.datum
+    doc.trade.delivery.event.occurrence._value = rechnung.leistung_von or rechnung.datum
 
     # ── Fälligkeitsdatum + Zahlungshinweis ───────────────────────────────────
     iban = unternehmen.get("iban") or ""

@@ -85,7 +85,8 @@ class RechnungCreate(BaseModel):
     typ: str  # eingang|ausgang
     rechnungsnummer: Optional[str] = None
     datum: date
-    leistungsdatum: Optional[date] = None
+    leistung_von: Optional[date] = None
+    leistung_bis: Optional[date] = None
     faellig_am: Optional[date] = None
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
@@ -95,6 +96,12 @@ class RechnungCreate(BaseModel):
     externe_belegnr: Optional[str] = None
     ist_entwurf: bool = True
     positionen: List[RechnungspositionCreate]
+
+    @model_validator(mode="after")
+    def check_leistungszeitraum(self) -> "RechnungCreate":
+        if self.leistung_bis and self.leistung_von and self.leistung_bis < self.leistung_von:
+            raise ValueError("leistung_bis darf nicht vor leistung_von liegen")
+        return self
     # Direkt-Übernahme aus XML-Import – überschreibt die berechneten Gesamtbeträge
     netto_gesamt_override: Optional[Decimal] = None
     ust_gesamt_override: Optional[Decimal] = None
@@ -126,7 +133,8 @@ class RechnungCreate(BaseModel):
 class RechnungUpdate(BaseModel):
     rechnungsnummer: Optional[str] = None
     datum: Optional[date] = None
-    leistungsdatum: Optional[date] = None
+    leistung_von: Optional[date] = None
+    leistung_bis: Optional[date] = None
     faellig_am: Optional[date] = None
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
@@ -173,7 +181,8 @@ class RechnungResponse(BaseModel):
     zahlungsdatum: Optional[date]
     notizen: Optional[str]
     externe_belegnr: Optional[str]
-    leistungsdatum: Optional[date]
+    leistung_von: Optional[date]
+    leistung_bis: Optional[date]
     ist_entwurf: bool
     ausgegeben: bool
     positionen: List[RechnungspositionResponse] = []

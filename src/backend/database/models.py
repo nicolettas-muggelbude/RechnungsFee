@@ -402,7 +402,8 @@ class Rechnung(Base):
     beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id"))
     notizen: Mapped[str | None] = mapped_column(Text)
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
-    leistungsdatum: Mapped[date | None] = mapped_column(Date)
+    leistung_von: Mapped[date | None] = mapped_column(Date)
+    leistung_bis: Mapped[date | None] = mapped_column(Date)
     # GoBD
     ist_entwurf: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -731,7 +731,8 @@ export type Rechnung = {
   typ: 'eingang' | 'ausgang'
   rechnungsnummer: string | null
   datum: string
-  leistungsdatum: string | null
+  leistung_von: string | null
+  leistung_bis: string | null
   faellig_am: string | null
   kunde_id: number | null
   kunde_name: string | null

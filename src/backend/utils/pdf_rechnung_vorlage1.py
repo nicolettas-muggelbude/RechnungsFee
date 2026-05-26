@@ -66,7 +66,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
 
     def _render_positionen(self):
         r = self._r
-        pos_datum_str = _iso_zu_de(str(r.leistungsdatum or r.datum))
+        pos_datum_str = _iso_zu_de(str(r.leistung_von or r.datum))
 
         if self._ist_netto:
             col_w   = [12, 30, 77, 22, 14, 20]

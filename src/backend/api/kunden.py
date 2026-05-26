@@ -118,7 +118,7 @@ def dsgvo_export(kunde_id: int, db: Session = Depends(get_db)):
                 "id": r.id,
                 "rechnungsnummer": r.rechnungsnummer,
                 "datum": str(r.datum),
-                "leistungsdatum": str(r.leistungsdatum) if r.leistungsdatum else None,
+                "leistung_von": str(r.leistung_von) if r.leistung_von else None, "leistung_bis": str(r.leistung_bis) if r.leistung_bis else None,
                 "brutto_gesamt": str(r.brutto_gesamt),
                 "zahlungsstatus": r.zahlungsstatus,
                 "storniert": r.storniert,
@@ -182,7 +182,7 @@ def dsgvo_export_pdf(kunde_id: int, db: Session = Depends(get_db)):
     rechnungen_dicts = [
         {
             "rechnungsnummer": r.rechnungsnummer, "datum": str(r.datum),
-            "leistungsdatum": str(r.leistungsdatum) if r.leistungsdatum else None,
+            "leistung_von": str(r.leistung_von) if r.leistung_von else None, "leistung_bis": str(r.leistung_bis) if r.leistung_bis else None,
             "brutto_gesamt": str(r.brutto_gesamt), "zahlungsstatus": r.zahlungsstatus,
             "storniert": r.storniert,
             "positionen": [

@@ -66,7 +66,7 @@ def _demo_rechnung(unt: dict) -> Any:
         typ="ausgang",
         rechnungsnummer="RE-2024-0042",
         datum=date(2024, 3, 15),
-        leistungsdatum=date(2024, 3, 10),
+        leistung_von=date(2024, 3, 1), leistung_bis=date(2024, 3, 31),
         faellig_am=date(2024, 4, 14),
         netto_gesamt=netto,
         ust_gesamt=ust,

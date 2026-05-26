@@ -368,8 +368,10 @@ class RechnungPDFBase(FPDF):
         else:
             _meta("Eingangsrechn.-Nr.", r.rechnungsnummer or "—")
         _meta("Rechnungsdatum", _iso_zu_de(str(r.datum)))
-        if r.leistungsdatum and str(r.leistungsdatum) != str(r.datum):
-            _meta("Leistungsdatum", _iso_zu_de(str(r.leistungsdatum)))
+        if r.leistung_von and r.leistung_bis:
+            _meta("Leistungszeitraum", f"{_iso_zu_de(str(r.leistung_von))} – {_iso_zu_de(str(r.leistung_bis))}")
+        elif r.leistung_von and str(r.leistung_von) != str(r.datum):
+            _meta("Leistungsdatum", _iso_zu_de(str(r.leistung_von)))
         if r.faellig_am:
             _meta(self._faellig_label, _iso_zu_de(str(r.faellig_am)))
 

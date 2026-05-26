@@ -397,7 +397,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         typ=data.typ,
         rechnungsnummer=rechnungsnummer,
         datum=data.datum,
-        leistungsdatum=data.leistungsdatum,
+        leistung_von=data.leistung_von, leistung_bis=data.leistung_bis,
         faellig_am=data.faellig_am,
         kunde_id=data.kunde_id,
         lieferant_id=data.lieferant_id,
@@ -469,7 +469,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     unternehmen = db.query(Unternehmen).first()
     ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
 
-    for field in ("rechnungsnummer", "datum", "leistungsdatum", "faellig_am", "kunde_id",
+    for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "kategorie_id", "notizen", "externe_belegnr"):
         val = getattr(data, field, None)
         if val is not None:
