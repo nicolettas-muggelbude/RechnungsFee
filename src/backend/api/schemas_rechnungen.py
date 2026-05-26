@@ -55,8 +55,8 @@ class RechnungspositionCreate(BaseModel):
     @field_validator("menge")
     @classmethod
     def check_menge(cls, v: Decimal) -> Decimal:
-        if v <= Decimal("0"):
-            raise ValueError("menge muss größer als 0 sein")
+        if v == 0:
+            raise ValueError("menge darf nicht 0 sein")
         return v
 
 
