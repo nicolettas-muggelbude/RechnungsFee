@@ -23,6 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.8',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Leistungszeitraum: statt einem Datum kann jetzt ein Von–Bis-Zeitraum angegeben werden – ideal für Monats- oder Projektabrechnungen (Issue #107)' },
+      { typ: 'neu', text: 'Kategorie-Zuweisung bei Eingangsrechnungen jetzt beim Bezahlen statt beim Anlegen – Split-Zahlung mit mehreren Kategorien möglich' },
+      { typ: 'fix', text: 'PDF-Import: Rechnungen im Amazon-/bilingualen Format (DE/EN-Spaltenüberschriften) werden korrekt erkannt' },
+      { typ: 'fix', text: 'PDF-Import: Beträge ohne Leerzeichen vor EUR (z. B. „37,73 EUR44,90") werden jetzt korrekt geparst' },
+      { typ: 'fix', text: 'Linux Mint Cinnamon: Mausrad-Scrollen im Setup-Wizard funktioniert jetzt (React-onWheel-Handler durch globalen WebKitGTK-Workaround ersetzt)' },
+    ],
+  },
+  {
     version: 'v0.2.7',
     datum: 'Mai 2026',
     eintraege: [
