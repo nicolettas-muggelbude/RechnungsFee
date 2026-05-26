@@ -415,11 +415,16 @@ def _extrahiere_positionen_multi_amt(lines: list[str], ust_satz_default: Optiona
     Erkennt Positionen bei denen Beschreibung und Beträge auf getrennten Zeilen stehen.
     Muster: 'qty net EUR brut EUR total EUR' als eigene Zeile, Beschreibung davor.
     """
+    # EUR kann direkt an der nächsten Zahl kleben: "37,73 EUR44,90" → \s*EUR\s*
     _AMT3 = re.compile(
         r"^(\d+(?:[,.]\d+)?)\s+"
-        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s+EUR\s+"
-        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s+EUR\s+"
-        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s+EUR\s*$",
+        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR\s*"
+        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR\s*"
+        r"(\d{1,3}(?:\.\d{3})*,\d{2})\s*EUR\s*$",
+        re.IGNORECASE,
+    )
+    _ARTNR = re.compile(
+        r"^(\d{4,}|[A-Z]{1,5}[-./]\d{2,}|[A-Z]{2,}\d{2,})\s+(?=[A-Za-zÀ-ž])",
         re.IGNORECASE,
     )
     positionen: list[AnalysePosition] = []
@@ -436,9 +441,15 @@ def _extrahiere_positionen_multi_amt(lines: list[str], ust_satz_default: Optiona
                 break
             desc_parts.insert(0, prev)
         desc = " ".join(desc_parts).strip()
-        desc = re.sub(r"^\d+\s+", "", desc, count=1)
+        desc = re.sub(r"^\d+\s+", "", desc, count=1)  # führende Pos-Nr entfernen
         if len(desc) < 2:
             continue
+        # Artikelnummer am Anfang extrahieren
+        artikel_nr: Optional[str] = None
+        m_artnr = _ARTNR.match(desc)
+        if m_artnr and len(desc) - len(m_artnr.group(0)) >= 3:
+            artikel_nr = m_artnr.group(1)
+            desc = desc[m_artnr.end():].strip()
         try:
             qty_dec = Decimal(m.group(1).replace(",", "."))
             ep_net_dec = Decimal(m.group(2).replace(",", "."))
@@ -453,6 +464,7 @@ def _extrahiere_positionen_multi_amt(lines: list[str], ust_satz_default: Optiona
             einheit="Stück",
             netto=netto_pos,
             ust_satz=ust_satz_default or "0",
+            artikel_nr=artikel_nr,
         ))
     return positionen
 
@@ -470,6 +482,7 @@ def _extrahiere_pdf_text(pdf_bytes: bytes) -> "AnalyseErgebnis":
             format="pdf",
             warnungen=["Kein eingebettetes XML – Textextraktion fehlgeschlagen.", str(exc)],
         )
+
 
     if not text.strip():
         return AnalyseErgebnis(
