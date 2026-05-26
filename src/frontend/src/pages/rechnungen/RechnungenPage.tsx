@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung,
-  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, invoke,
+  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
   sucheArtikel, getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
@@ -1240,25 +1240,6 @@ function RechnungForm({
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
 
-  const kategorieOptionen = typ === 'ausgang' ? (
-    <>
-      <optgroup label="Erlöse">
-        {erloeseKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-      </optgroup>
-    </>
-  ) : (
-    <>
-      <optgroup label="Betriebsausgaben">
-        {aufwandKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-      </optgroup>
-      {anlageKat.length > 0 && (
-        <optgroup label="Investitionen">
-          {anlageKat.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-        </optgroup>
-      )}
-    </>
-  )
-
   // Summenberechnung — reagiert auf eingabeModus
   const summen = positionen.reduce(
     (acc, p) => {
@@ -1891,7 +1872,7 @@ function ImportDialog({
         const res = await analysiereRechnungPfad(pfad)
         // Datei für Beleganhang: temp-Datei vom Backend holen
         if (res.temp_url) {
-          const base = await import('../../api/client').then(m => m.getBaseUrl())
+          const base = await getApiBase()
           const blob = await fetch(`${base}${res.temp_url}`).then(r => r.blob())
           setDatei(new File([blob], name, { type: 'application/pdf' }))
         }
