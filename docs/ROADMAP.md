@@ -85,10 +85,10 @@ Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 - [x] Originaldatei wird automatisch als Beleganhang gespeichert
 - [x] UBL-Format: Lieferantenname aus `PartyLegalEntity/RegistrationName` (Fix v0.2.5)
 
-**Stufe 3 – Validierung & Feld-Mapping** *(offen)*
-- [ ] Erkannte Felder in Erfassungsformular vorausfüllen
-- [ ] Niedrige Konfidenz visuell markieren
-- [ ] Abgleich Lieferantenname mit Lieferantenstamm
+**Stufe 3 – Validierung & Feld-Mapping** ✅ *v0.2.x*
+- [x] Erkannte Felder in Erfassungsformular vorausfüllen
+- [x] Niedrige Konfidenz visuell markieren (Konfidenz-Dots, Amber-Ring)
+- [x] Abgleich Lieferantenname mit Lieferantenstamm (Fuzzy-Matching, LieferantVorschlagBox)
 
 **Stufe 4 – OCR-Fallback** *(offen)*
 - [ ] `pdfplumber` für maschinenlesbare PDFs
