@@ -278,6 +278,8 @@ class JournalEintragResponse(BaseModel):
     vorsteuerabzug: bool
     steuerbefreiung_grund: Optional[str]
     externe_belegnr: Optional[str] = None
+    rechnung_id: Optional[int] = None
+    rechnung_nr: Optional[str] = None
     konto_skr03: Optional[str] = None
     konto_skr04: Optional[str] = None
     konto_ust_skr03: Optional[str] = None
@@ -296,6 +298,8 @@ class JournalEintragResponse(BaseModel):
             data.kunde_email = obj.kunde.email
         if obj.kategorie:
             data.kategorie_kontenart = obj.kategorie.kontenart
+        if obj.rechnung:
+            data.rechnung_nr = obj.rechnung.rechnungsnummer
         return data
 
 

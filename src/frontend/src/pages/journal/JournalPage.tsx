@@ -260,6 +260,9 @@ export function JournalPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
                         {e.beschreibung}
+                        {e.rechnung_nr && (
+                          <span className="ml-2 text-xs bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5">🧾 {e.rechnung_nr}</span>
+                        )}
                         {e.steuerbefreiung_grund && (
                           <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({e.steuerbefreiung_grund})</span>
                         )}

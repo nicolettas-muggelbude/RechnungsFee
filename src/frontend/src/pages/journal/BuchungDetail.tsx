@@ -221,6 +221,12 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500 pt-1 flex items-center gap-1 flex-wrap">
               {e.externe_belegnr && <span>Ext. Belegnr.: {e.externe_belegnr} &nbsp;·&nbsp;</span>}
+              {e.rechnung_nr && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-medium">
+                  🧾 {e.rechnung_nr}
+                </span>
+              )}
+              {e.rechnung_nr && <span>&nbsp;·&nbsp;</span>}
               {e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
               &nbsp;·&nbsp;
               <BelegnrKopieren belegnr={e.belegnr} />
