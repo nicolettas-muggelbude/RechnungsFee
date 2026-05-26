@@ -63,7 +63,8 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
   })
 
   const istStorno = e.beschreibung.startsWith('STORNO ')
-  const kannStorniert = !istStorno && !bereitsStorniert
+  const istRechnungsBuchung = !!e.rechnung_id
+  const kannStorniert = !istStorno && !bereitsStorniert && !istRechnungsBuchung
   const datum = e.datum.split('-').reverse().join('.')
 
   async function handleMail() {
@@ -99,42 +100,52 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
       <td colSpan={6} className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-4">
 
         {/* Aktionsleiste – waagerecht als erste Zeile */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => oeffneBelegFenster(e.id, true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            🖨️ Drucken
-          </button>
-          <button
-            onClick={() => oeffneBelegFenster(e.id, false)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            📄 PDF öffnen
-          </button>
-          {!istStorno && (
+        {istRechnungsBuchung ? (
+          <div className="mb-4 flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+            <span className="shrink-0 mt-0.5">🧾</span>
+            <span>
+              Diese Buchung gehört zu Rechnung <strong>{e.rechnung_nr ?? `#${e.rechnung_id}`}</strong> und kann nur über die Rechnung verwaltet werden.
+              Drucken, Mail und Storno sind hier gesperrt.
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2 mb-4">
             <button
-              onClick={handleMail}
+              onClick={() => oeffneBelegFenster(e.id, true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
             >
-              ✉️ Mail senden{!e.kunde_email ? ' …' : ''}
+              🖨️ Drucken
             </button>
-          )}
-          {kannStorniert && !zeigStornoEingabe && (
-            <div className="flex items-center gap-1">
+            <button
+              onClick={() => oeffneBelegFenster(e.id, false)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              📄 PDF öffnen
+            </button>
+            {!istStorno && (
               <button
-                onClick={() => setZeigStornoEingabe(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+                onClick={handleMail}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               >
-                ✕ Stornieren
+                ✉️ Mail senden{!e.kunde_email ? ' …' : ''}
               </button>
-              <InfoTooltip text="Journaleinträge sind nach GoBD §146 unveränderbar – löschen ist nicht erlaubt. Eine Stornierung erzeugt einen Gegeneintrag mit negativem Betrag. Beide Buchungen bleiben sichtbar und bilden gemeinsam die korrekte Buchungshistorie." side="bottom" />
-            </div>
-          )}
-          {bereitsStorniert && (
-            <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits storniert</span>
-          )}
-        </div>
+            )}
+            {kannStorniert && !zeigStornoEingabe && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setZeigStornoEingabe(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+                >
+                  ✕ Stornieren
+                </button>
+                <InfoTooltip text="Journaleinträge sind nach GoBD §146 unveränderbar – löschen ist nicht erlaubt. Eine Stornierung erzeugt einen Gegeneintrag mit negativem Betrag. Beide Buchungen bleiben sichtbar und bilden gemeinsam die korrekte Buchungshistorie." side="bottom" />
+              </div>
+            )}
+            {bereitsStorniert && (
+              <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits storniert</span>
+            )}
+          </div>
+        )}
 
         {belegHinweis && (
           <div className="mb-3 flex items-start gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
