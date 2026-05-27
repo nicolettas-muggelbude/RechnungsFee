@@ -410,14 +410,14 @@ export function KategorienPage() {
           </button>
           <button
             type="button"
-            onClick={() => setEditModus(v => !v)}
+            onClick={() => { setEditModus(v => !v); setExpandedId(null) }}
             className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
               editModus
                 ? 'bg-amber-50 border-amber-400 text-amber-700 dark:bg-amber-900/30 dark:border-amber-500 dark:text-amber-300'
                 : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
-            {editModus ? '✏️ Konten bearbeiten – aktiv' : 'Konten bearbeiten'}
+            {editModus ? '✏️ Bearbeiten – aktiv' : 'Bearbeiten'}
           </button>
           <button
             type="button"
@@ -431,8 +431,8 @@ export function KategorienPage() {
 
       {editModus && (
         <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-          Bearbeitungsmodus aktiv – SKR03/SKR04-Kontonummern können direkt bearbeitet werden.
-          Geänderte Werte sind <span className="font-semibold">orange</span> markiert. Mit ↩ zurück auf den Standardwert.
+          Bearbeitungsmodus aktiv – SKR03/SKR04-Kontonummern und Verwendungsbeispiele können bearbeitet werden.
+          Geänderte Konten sind <span className="font-semibold">orange</span> markiert. Mit ↩ zurück auf den Standardwert.
         </div>
       )}
 
@@ -477,20 +477,22 @@ export function KategorienPage() {
                         >
                           <td className="px-4 py-2 sticky left-0 bg-white dark:bg-slate-800 z-10">
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                title={k.beschreibung ? 'Verwendungsbeispiel bearbeiten' : 'Verwendungsbeispiel hinzufügen'}
-                                onClick={() => setExpandedId(expandedId === k.id ? null : k.id)}
-                                className={`shrink-0 text-sm leading-none transition-colors ${
-                                  expandedId === k.id
-                                    ? 'text-sky-500 dark:text-sky-400'
-                                    : k.beschreibung
-                                      ? 'text-sky-400 dark:text-sky-500 hover:text-sky-600'
-                                      : 'text-slate-300 dark:text-slate-600 hover:text-slate-400 dark:hover:text-slate-400'
-                                }`}
-                              >
-                                💬
-                              </button>
+                              {editModus && (
+                                <button
+                                  type="button"
+                                  title={k.beschreibung ? 'Verwendungsbeispiel bearbeiten' : 'Verwendungsbeispiel hinzufügen'}
+                                  onClick={() => setExpandedId(expandedId === k.id ? null : k.id)}
+                                  className={`shrink-0 text-sm leading-none transition-colors ${
+                                    expandedId === k.id
+                                      ? 'text-sky-500 dark:text-sky-400'
+                                      : k.beschreibung
+                                        ? 'text-sky-400 dark:text-sky-500 hover:text-sky-600'
+                                        : 'text-slate-300 dark:text-slate-600 hover:text-slate-400 dark:hover:text-slate-400'
+                                  }`}
+                                >
+                                  💬
+                                </button>
+                              )}
                               <span className="text-slate-800 dark:text-slate-100">{k.name}</span>
                               {!k.ist_system && (
                                 <span className="text-xs bg-violet-100 text-violet-600 dark:bg-violet-900 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">
@@ -659,8 +661,8 @@ export function KategorienPage() {
       {!isLoading && kategorien.length > 0 && (
         <div className="mt-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-5 py-4 text-xs text-slate-500 dark:text-slate-400 space-y-1">
           <p className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legende</p>
-          <p><span className="font-mono">💬</span> – Verwendungsbeispiele anzeigen / bearbeiten. Blaues Symbol = Beschreibung vorhanden.</p>
-          <p><span className="font-mono">📄 PDF</span> – Alle Kategorien mit Beschreibungen als druckfähiges PDF exportieren (ohne Kontonummern).</p>
+          <p><span className="font-mono">💬</span> – Im Bearbeitungsmodus: Verwendungsbeispiele anpassen. Blaues Symbol = Beschreibung vorhanden (wird im Buchungsformular als Hinweis angezeigt).</p>
+          <p><span className="font-mono">📄 PDF</span> – Alle Kategorien mit Beschreibungen als Nachschlageblatt exportieren (ohne Kontonummern).</p>
           <p><span className="font-mono">SKR03/04</span> – DATEV-Kontonummern (Standardkontenrahmen). Geänderte Werte erscheinen orange.</p>
           <p><span className="font-mono">EÜR-Zeile</span> – Zeile in der Einnahmen-Überschuss-Rechnung (Anlage EÜR)</p>
           <p><span className="font-mono">EKS</span> – Tabellenfeld in der Anlage EKS (Jobcenter-Einkommenserklärung)</p>
