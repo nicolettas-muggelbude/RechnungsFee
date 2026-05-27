@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 35` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 36` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -101,6 +101,7 @@ def _run_migrations():
 | 33 | artikel_gruppen-Tabelle (id, typ, name, aktiv); artikel.gruppe TEXT → artikel.gruppe_id FK; bestehende Text-Werte automatisch migriert |
 | 34 | rechnungen.storno_grund VARCHAR(500) – Pflichtbegründung beim Storno |
 | 35 | kategorien.beschreibung TEXT – ~65 vorbefüllte Verwendungsbeispiele; inline editierbar; Hinweis im Buchungsformular |
+| 36 | fehlende Beschreibungen für Kategorien mit abweichendem Namen nachrüsten (z. B. „Betriebseinnahmen", „Fahrtkosten (km-Pauschale)") |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

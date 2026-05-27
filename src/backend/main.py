@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -931,6 +931,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 35"))
             conn.commit()
             print(f"[Migration] Schema auf Version 35 gebracht (kategorien.beschreibung + {len(defaults)} Default-Beschreibungen)")
+
+        if version < 36:
+            # Fehlende Beschreibungen für Kategorien mit abweichendem Namen nachrüsten
+            name_fixes = {
+                "Betriebseinnahmen":        "z. B. Honorare, Rechnungen an Kunden (Regelbesteuerung)",
+                "Fahrtkosten (km-Pauschale)": "z. B. betriebliche Fahrten mit privatem PKW – 0,30 €/km Pauschale (Fahrtenbuch oder Aufzeichnung nötig)",
+            }
+            for name, beschreibung in name_fixes.items():
+                conn.execute(text(
+                    "UPDATE kategorien SET beschreibung = :b WHERE name = :n AND (beschreibung IS NULL OR beschreibung = '')"
+                ), {"n": name, "b": beschreibung})
+            conn.execute(text("PRAGMA user_version = 36"))
+            conn.commit()
+            print("[Migration] Schema auf Version 36 gebracht (fehlende Kategorie-Beschreibungen ergänzt)")
 
 
 def _migrate_kategorien() -> None:
