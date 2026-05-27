@@ -750,7 +750,9 @@ def _erstelle_skonto_eintrag(
     sk_netto = (skonto_betrag * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else skonto_betrag
     sk_ust = (skonto_betrag - sk_netto).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else Decimal("0.00")
     sk_konto_skr03, sk_konto_skr04 = _skonto_konto(rechnung.typ, ust_satz)
-    sk_ust_skr03, sk_ust_skr04 = _ust_konto(skonto_art, ust_satz) if ust_satz > 0 else (None, None)
+    # Ausgangsrechnung-Skonto mindert Umsatzsteuer (1776/3806), nicht Vorsteuer (1575/1406)
+    ust_art_konto = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    sk_ust_skr03, sk_ust_skr04 = _ust_konto(ust_art_konto, ust_satz) if ust_satz > 0 else (None, None)
     sk = Journaleintrag(
         datum=data.datum,
         belegnr=_naechste_belegnr_journal(db, data.datum),
@@ -766,7 +768,7 @@ def _erstelle_skonto_eintrag(
         ust_satz=ust_satz,
         ust_betrag=sk_ust,
         brutto_betrag=skonto_betrag,
-        vorsteuerabzug=(skonto_art == "Ausgabe" and ust_satz > 0),
+        vorsteuerabzug=(rechnung.typ == "eingang" and ust_satz > 0),
         steuerbefreiung_grund=steuerbefreiung_grund,
         rechnung_id=rechnung_id,
         immutable=True,
