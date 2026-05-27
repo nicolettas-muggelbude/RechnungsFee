@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.9',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Skonto: Standard im Unternehmensprofil, Kunden-spezifisch und je Rechnung konfigurierbar; ZahlungsDialog zeigt grüne Hinweis-Box wenn Skonto-Frist noch offen (Issue #73)' },
+      { typ: 'neu', text: 'Giro-Code mit Skonto: zwei QR-Codes nebeneinander auf der Rechnung – links Skonto-Betrag mit Frist-Label, rechts Vollbetrag (Vorlage 0 + 1)' },
+      { typ: 'verbesserung', text: 'Journal: Rechnungsnummer in Buchungseinträgen sichtbar; Rechnungszahlungen können nicht mehr storniert, gedruckt oder per Mail versendet werden' },
+      { typ: 'fix', text: 'POS-Kassenbelege (Thermaldrucker-Format): Belegnr., Lieferant, Positionen und USt-Tabelle werden jetzt korrekt erkannt und importiert' },
+      { typ: 'fix', text: 'PDF-Import: Fälligkeitsdatum wird beim Import nicht mehr automatisch berechnet (verhindert falsche Werte bei unbekanntem Zahlungsziel)' },
+      { typ: 'fix', text: 'PDF-Import: Rechnungen mit mehreren Positionen öffnen automatisch den aufgeschlüsselten Eingabemodus (XML + PDF)' },
+    ],
+  },
+  {
     version: 'v0.2.8',
     datum: 'Mai 2026',
     eintraege: [
