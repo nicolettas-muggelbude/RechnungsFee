@@ -431,6 +431,7 @@ class Rechnung(Base):
     ist_entwurf: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     storniert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    storno_grund: Mapped[str | None] = mapped_column(String(500))
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

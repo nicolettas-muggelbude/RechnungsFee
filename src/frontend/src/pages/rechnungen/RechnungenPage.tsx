@@ -474,6 +474,8 @@ function RechnungDetail({
 }) {
   const [zahlungsDialog, setZahlungsDialog] = useState(false)
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
+  const [stornoGrund, setStornoGrund] = useState<string | null>(null)
+  const [stornoSonstiges, setStornoSonstiges] = useState('')
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
@@ -513,13 +515,23 @@ function RechnungDetail({
     ? rechnung.kunde_email
     : rechnung.lieferant_email
 
+  const STORNO_GRUENDE = ['Doppelt ausgestellt', 'Falsche Adresse', 'Kundenwiderspruch', 'Sonstiges…']
+
   const stornoMutation = useMutation({
-    mutationFn: () => stornoRechnung(rechnung.id),
+    mutationFn: (grund: string) => stornoRechnung(rechnung.id, grund),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setZeigStornoEingabe(false)
+      setStornoGrund(null)
+      setStornoSonstiges('')
     },
   })
+
+  function handleStornoSubmit() {
+    const grund = stornoGrund === 'Sonstiges…' ? stornoSonstiges.trim() : stornoGrund
+    if (!grund) return
+    stornoMutation.mutate(grund)
+  }
 
   const finalisiereMutation = useMutation({
     mutationFn: () => finalisiereRechnung(rechnung.id),
@@ -695,30 +707,58 @@ function RechnungDetail({
           </div>
         )}
 
-        {/* Storno-Bestätigung */}
+        {/* Storno-Dialog */}
         {zeigStornoEingabe && (
-          <div className="flex gap-2 items-center bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2">
-            <span className="text-sm text-red-700 dark:text-red-300 flex-1">
-              Rechnung wirklich stornieren? Dies ist nicht rückgängig zu machen.
-              {rechnung.zahlungen.length > 0 && (
-                <span className="block mt-0.5 text-xs text-red-600 dark:text-red-400">
-                  Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Journal erstellt.
-                </span>
-              )}
-            </span>
-            <button
-              onClick={() => stornoMutation.mutate()}
-              disabled={stornoMutation.isPending}
-              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
-            >
-              {stornoMutation.isPending ? '…' : 'Bestätigen'}
-            </button>
-            <button
-              onClick={() => setZeigStornoEingabe(false)}
-              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-            >
-              Abbrechen
-            </button>
+          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-3 py-3 space-y-2">
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              Warum wird diese Rechnung storniert?
+            </p>
+            {rechnung.zahlungen.length > 0 && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                Es werden {rechnung.zahlungen.length} Gegenbuchung{rechnung.zahlungen.length !== 1 ? 'en' : ''} im Journal erstellt.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-1.5">
+              {STORNO_GRUENDE.map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => { setStornoGrund(g); setStornoSonstiges('') }}
+                  className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                    stornoGrund === g
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+            {stornoGrund === 'Sonstiges…' && (
+              <input
+                type="text"
+                autoFocus
+                placeholder="Begründung eingeben…"
+                value={stornoSonstiges}
+                onChange={e => setStornoSonstiges(e.target.value)}
+                className="w-full text-sm border border-red-300 dark:border-red-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-red-400"
+              />
+            )}
+            <div className="flex gap-2 pt-0.5">
+              <button
+                onClick={handleStornoSubmit}
+                disabled={stornoMutation.isPending || !stornoGrund || (stornoGrund === 'Sonstiges…' && !stornoSonstiges.trim())}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {stornoMutation.isPending ? '…' : 'Stornieren'}
+              </button>
+              <button
+                onClick={() => { setZeigStornoEingabe(false); setStornoGrund(null); setStornoSonstiges('') }}
+                className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Abbrechen
+              </button>
+            </div>
           </div>
         )}
         {stornoMutation.isError && (
@@ -784,6 +824,12 @@ function RechnungDetail({
                 ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
                 : <StatusBadge status={rechnung.zahlungsstatus} />}
           </div>
+          {rechnung.storniert && rechnung.storno_grund && (
+            <div className="flex justify-between gap-2">
+              <span className="text-slate-500 dark:text-slate-400 shrink-0">Storno-Grund</span>
+              <span className="text-slate-600 dark:text-slate-300 text-right text-xs">{rechnung.storno_grund}</span>
+            </div>
+          )}
         </div>
 
         {/* Positionen */}

@@ -196,6 +196,7 @@ class RechnungResponse(BaseModel):
     beleg: Optional[BelegResponse] = None
     immutable: bool
     storniert: bool
+    storno_grund: Optional[str] = None
     erstellt_am: datetime
     aktualisiert_am: datetime
 

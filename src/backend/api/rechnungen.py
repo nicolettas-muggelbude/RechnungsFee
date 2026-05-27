@@ -31,6 +31,7 @@ from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
 )
+from .schemas import StornoRequest
 
 BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 TEMP_DIR = APP_DATA_DIR / "uploads" / "tmp"
@@ -976,7 +977,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
 
 @router.post("/{rechnung_id}/storno", response_model=RechnungResponse)
-def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
+def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends(get_db)):
     """Rechnung stornieren (irreversibel). Hat die Rechnung verknüpfte Journal-
     Zahlungen, werden automatisch GoBD-konforme Gegenbuchungen erstellt."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
@@ -986,6 +987,8 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Entwürfe können nicht storniert werden. Bitte den Entwurf löschen.")
     if rechnung.storniert:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits storniert.")
+    if not data.grund or not data.grund.strip():
+        raise HTTPException(status_code=422, detail="Storno-Begründung darf nicht leer sein.")
 
     re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
     heute = date.today()
@@ -1003,7 +1006,7 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         gegenbuchung = Journaleintrag(
             datum=heute,
             belegnr=belegnr,
-            beschreibung=f"STORNO {eintrag.belegnr}: Rechnung {re_nr} storniert",
+            beschreibung=f"STORNO {eintrag.belegnr}: {re_nr} – {data.grund.strip()}",
             kategorie_id=eintrag.kategorie_id,
             konto_skr03=eintrag.konto_skr03,
             konto_skr04=eintrag.konto_skr04,
@@ -1021,6 +1024,7 @@ def storno_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         db.add(gegenbuchung)
 
     rechnung.storniert = True
+    rechnung.storno_grund = data.grund.strip()
     rechnung.immutable = True
     db.commit()
     db.refresh(rechnung)

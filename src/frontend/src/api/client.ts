@@ -772,6 +772,7 @@ export type Rechnung = {
   ausgegeben: boolean
   immutable: boolean
   storniert: boolean
+  storno_grund: string | null
   erstellt_am: string
   aktualisiert_am: string
 }
@@ -855,8 +856,8 @@ export const barZahlungErstellen = (id: number, data: BarZahlungCreate) =>
 export const getRechnungZahlungen = (id: number) =>
   request<ZahlungKompakt[]>(`/rechnungen/${id}/zahlungen`)
 
-export const stornoRechnung = (id: number) =>
-  request<Rechnung>(`/rechnungen/${id}/storno`, { method: 'POST' })
+export const stornoRechnung = (id: number, grund: string) =>
+  request<Rechnung>(`/rechnungen/${id}/storno`, { method: 'POST', body: JSON.stringify({ grund }) })
 
 export const finalisiereRechnung = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/finalisieren`, { method: 'POST' })
