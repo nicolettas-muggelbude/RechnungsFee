@@ -57,8 +57,9 @@ function BeschreibungEditor({
             autoFocus
             value={text}
             onChange={e => setText(e.target.value)}
+            onFocus={e => { const l = e.currentTarget.value.length; e.currentTarget.setSelectionRange(l, l) }}
             placeholder="z. B. Büromaterial – Stifte, Papier, Druckerpatronen, Ordner …"
-            className="w-full text-sm border border-sky-300 dark:border-sky-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-400 resize-none"
+            className="w-full text-sm border border-sky-300 dark:border-sky-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-400 resize-y"
           />
           <div className="flex gap-2">
             <button
