@@ -645,7 +645,7 @@ function RechnungDetail({
 
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
-          {rechnung.ist_entwurf ? (
+          {rechnung.ist_entwurf || (rechnung.dokument_typ === 'Gutschrift' && rechnung.zahlungsstatus !== 'bezahlt') ? (
             <button
               onClick={handlePdfOeffnen}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
