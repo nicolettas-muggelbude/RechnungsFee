@@ -208,17 +208,30 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 "Bar": "Barzahlung", "Karte": "Kartenzahlung",
                 "PayPal": "PayPal", "Bank": "Überweisung",
             }
+            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
             for z in zahlungen:
                 art_label = art_labels.get(
                     str(getattr(z, "zahlungsart", "")),
                     str(getattr(z, "zahlungsart", ""))
                 )
-                prefix = (
-                    "Dankend erhalten am"
-                    if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
-                    else "Teilbetrag erhalten am"
-                )
-                _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(z.brutto_betrag), bold_val=True)
+                betrag_anzeige = abs(z.brutto_betrag)
+                if ist_gutschrift:
+                    prefix = (
+                        "Betrag zurückerstattet am"
+                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        else "Teilbetrag zurückerstattet am"
+                    )
+                    _row(f"{prefix} {_iso_zu_de(str(z.datum))} per {art_label}", _fmt_euro(betrag_anzeige), bold_val=True)
+                else:
+                    prefix = (
+                        "Dankend erhalten am"
+                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        else "Teilbetrag erhalten am"
+                    )
+                    _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(betrag_anzeige), bold_val=True)
+        elif getattr(r, "dokument_typ", "Rechnung") == "Gutschrift":
+            # Gutschrift (offen/Entwurf): nur Betrag, kein Zahlungsweg (noch unbekannt)
+            _row("Gutschriftsbetrag", _fmt_euro(abs(r.brutto_gesamt)), bold_val=True)
         else:
             if empfaenger:
                 _row("Empfänger", empfaenger, bold_val=True)

@@ -75,8 +75,9 @@ function ZahlungsDialog({
   onSuccess: () => void
 }) {
   const qc = useQueryClient()
+  const istGutschrift = rechnung.dokument_typ === 'Gutschrift'
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
-  const [betrag, setBetrag] = useState(restbetrag.toFixed(2).replace('.', ','))
+  const [betrag, setBetrag] = useState(Math.abs(restbetrag).toFixed(2).replace('.', ','))
   const [datum, setDatum] = useState(heuteIso())
   const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bar')
   const [beschreibung, setBeschreibung] = useState('')
@@ -90,7 +91,7 @@ function ZahlungsDialog({
         return d.toISOString().slice(0, 10)
       })()
     : null
-  const skontoVerfuegbar = rechnung.typ === 'ausgang' && skontoFrist !== null && datum <= skontoFrist
+  const skontoVerfuegbar = !istGutschrift && rechnung.typ === 'ausgang' && skontoFrist !== null && datum <= skontoFrist
   const berechneterSkontoBetrag = skontoVerfuegbar
     ? Math.round(parseFloat(rechnung.brutto_gesamt) * rechnung.skonto_prozent! / 100 * 100) / 100
     : 0
@@ -141,6 +142,8 @@ function ZahlungsDialog({
       setFehler('Bitte einen gültigen Betrag eingeben.')
       return
     }
+    // Gutschrift: Frontend schickt positiven Betrag, Backend negiert intern
+
     if (datum > new Date().toISOString().slice(0, 10)) {
       setFehler('Das Zahlungsdatum darf nicht in der Zukunft liegen.')
       return
@@ -186,7 +189,7 @@ function ZahlungsDialog({
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-            {rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
+            {istGutschrift ? 'Rückerstattung buchen' : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
         </div>
@@ -466,11 +469,13 @@ function RechnungDetail({
   onClose,
   onEdit,
   onDelete,
+  onGutschriftCreated,
 }: {
   rechnung: Rechnung
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
+  onGutschriftCreated?: (gs: Rechnung) => void
 }) {
   const [zahlungsDialog, setZahlungsDialog] = useState(false)
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
@@ -505,11 +510,11 @@ function RechnungDetail({
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
-  const fortschritt = parseFloat(rechnung.brutto_gesamt) > 0
-    ? Math.min((parseFloat(rechnung.bezahlt_betrag) / parseFloat(rechnung.brutto_gesamt)) * 100, 100)
+  const fortschritt = Math.abs(parseFloat(rechnung.brutto_gesamt)) > 0.004
+    ? Math.min((Math.abs(parseFloat(rechnung.bezahlt_betrag)) / Math.abs(parseFloat(rechnung.brutto_gesamt))) * 100, 100)
     : 0
 
-  const hatZahlungsoption = restbetrag > 0.004 && !rechnung.storniert && !rechnung.ist_entwurf
+  const hatZahlungsoption = Math.abs(restbetrag) > 0.004 && !rechnung.storniert && !rechnung.ist_entwurf
 
   const partnerEmail = rechnung.typ === 'ausgang'
     ? rechnung.kunde_email
@@ -542,7 +547,7 @@ function RechnungDetail({
     mutationFn: () => createGutschrift(rechnung.id),
     onSuccess: (gs) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
-      setSelected(gs.id)
+      onGutschriftCreated?.(gs)
     },
     onError: (e: Error) => alert(e.message),
   })
@@ -640,29 +645,40 @@ function RechnungDetail({
 
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleDrucken}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            🖨️ {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie drucken' : 'Drucken'}
-          </button>
-          <button
-            onClick={handlePdfOeffnen}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            📄 {!rechnung.ist_entwurf && rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
-          </button>
-          {!rechnung.ist_entwurf && rechnung.ausgegeben && (
-            <InfoTooltip text="Diese Rechnung wurde bereits ausgegeben (gedruckt, als PDF geöffnet oder per Mail versandt). Alle weiteren Ausgaben werden automatisch als Kopie markiert, damit Doppelsendungen erkennbar sind." side="bottom" align="right" />
-          )}
-          {!rechnung.storniert && (
+          {rechnung.ist_entwurf ? (
             <button
-              onClick={handleMail}
-              disabled={pdfLaeuft}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50"
+              onClick={handlePdfOeffnen}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
             >
-              {pdfLaeuft ? '⏳ PDF…' : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
+              📄 Vorschau
             </button>
+          ) : (
+            <>
+              <button
+                onClick={handleDrucken}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                🖨️ {rechnung.ausgegeben ? 'Kopie drucken' : 'Drucken'}
+              </button>
+              <button
+                onClick={handlePdfOeffnen}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                📄 {rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
+              </button>
+              {rechnung.ausgegeben && (
+                <InfoTooltip text="Diese Rechnung wurde bereits ausgegeben (gedruckt, als PDF geöffnet oder per Mail versandt). Alle weiteren Ausgaben werden automatisch als Kopie markiert, damit Doppelsendungen erkennbar sind." side="bottom" align="right" />
+              )}
+              {!rechnung.storniert && (
+                <button
+                  onClick={handleMail}
+                  disabled={pdfLaeuft}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50"
+                >
+                  {pdfLaeuft ? '⏳ PDF…' : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
+                </button>
+              )}
+            </>
           )}
           {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ !== 'Gutschrift' && !zeigStornoEingabe && (
             <button
@@ -850,7 +866,7 @@ function RechnungDetail({
           )}
           {rechnung.gutschrift_zu_rechnung_nr && (
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500 dark:text-slate-400 shrink-0">Gutschrift zu</span>
+              <span className="text-slate-500 dark:text-slate-400 shrink-0">Gutschrift zur Rechnung</span>
               <span className="text-amber-700 dark:text-amber-400 text-xs font-medium">{rechnung.gutschrift_zu_rechnung_nr}</span>
             </div>
           )}
@@ -1020,8 +1036,8 @@ function RechnungDetail({
             onClick={() => setZahlungsDialog(true)}
             className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
           >
-            {rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
-            {rechnung.zahlungsstatus === 'teilweise' && ` (Restbetrag ${formatEuro(restbetrag)})`}
+            {rechnung.dokument_typ === 'Gutschrift' ? 'Rückerstattung buchen' : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
+            {rechnung.zahlungsstatus === 'teilweise' && ` (Restbetrag ${formatEuro(Math.abs(restbetrag))})`}
           </button>
         )}
         {rechnung.ist_entwurf && (
@@ -1448,7 +1464,7 @@ function RechnungForm({
         beschreibung: p.beschreibung,
         menge: String(parseFloat(p.menge)),
         einheit: p.einheit,
-        netto: p.brutto,  // eingabeModus startet als 'brutto' → Bruttowert vorbefüllen
+        netto: (parseFloat(p.brutto) / parseFloat(p.menge)).toFixed(2).replace('.', ','),  // Per-Unit-Brutto (menge≠1 und negative Mengen bei Gutschriften)
         ust_satz: String(parseFloat(p.ust_satz)),
         artikel_id: p.artikel_id ?? undefined,
         kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
@@ -2467,6 +2483,7 @@ export function RechnungenPage() {
   const [datumVon, setDatumVon] = useState(heuteIso())
   const [datumBis, setDatumBis] = useState(heuteIso())
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [pendingEditRechnung, setPendingEditRechnung] = useState<Rechnung | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
   const [sortFaellig, setSortFaellig] = useState<'asc' | 'desc' | null>(null)
@@ -2490,7 +2507,10 @@ export function RechnungenPage() {
     queryFn: () => getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
   })
 
-  const selectedRechnung = rechnungen?.find((r) => r.id === selectedId) ?? null
+  const selectedRechnung =
+    (pendingEditRechnung?.id === selectedId ? pendingEditRechnung : null) ??
+    rechnungen?.find((r) => r.id === selectedId) ??
+    null
 
   const createMutation = useMutation({
     mutationFn: createRechnung,
@@ -2804,7 +2824,9 @@ export function RechnungenPage() {
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">
               {formModus === 'neu'
                 ? `Neue ${typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}`
-                : 'Rechnung bearbeiten'}
+                : selectedRechnung?.dokument_typ === 'Gutschrift'
+                  ? 'Gutschrift bearbeiten'
+                  : 'Rechnung bearbeiten'}
             </h3>
             <button onClick={() => setFormModus(null)} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
           </div>
@@ -2815,13 +2837,14 @@ export function RechnungenPage() {
               initial={formModus === 'bearbeiten' ? selectedRechnung ?? undefined : undefined}
               prefillFromAnalyse={formModus === 'neu' ? importPrefill ?? undefined : undefined}
               onSave={(data) => {
+                setPendingEditRechnung(null)
                 if (formModus === 'bearbeiten' && selectedId) {
                   updateMutation.mutate({ id: selectedId, data })
                 } else {
                   createMutation.mutate(data)
                 }
               }}
-              onCancel={() => setFormModus(null)}
+              onCancel={() => { setPendingEditRechnung(null); setFormModus(null) }}
             />
           </div>
         </div>
@@ -2839,6 +2862,7 @@ export function RechnungenPage() {
                   deleteMutation.mutate(selectedRechnung.id)
                 }
               }}
+              onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">

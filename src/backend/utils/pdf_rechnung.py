@@ -86,22 +86,41 @@ class RechnungPDF(RechnungPDFBase):
                 "Bar": "Barzahlung", "Karte": "Kartenzahlung",
                 "PayPal": "PayPal", "Bank": "Überweisung",
             }
+            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
             for z in zahlungen:
                 art_label = art_labels.get(
                     str(getattr(z, "zahlungsart", "")),
                     str(getattr(z, "zahlungsart", ""))
                 )
-                prefix = (
-                    "Rechnungsbetrag bereits dankend erhalten"
-                    if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
-                    else "Teilbetrag dankend erhalten"
-                )
+                betrag_anzeige = abs(z.brutto_betrag)
+                if ist_gutschrift:
+                    prefix = (
+                        "Betrag wurde zurückerstattet"
+                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        else "Teilbetrag zurückerstattet"
+                    )
+                else:
+                    prefix = (
+                        "Rechnungsbetrag bereits dankend erhalten"
+                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        else "Teilbetrag dankend erhalten"
+                    )
                 zeile = (
                     f"{prefix} am {_iso_zu_de(str(z.datum))} "
-                    f"per {art_label}: {_fmt_euro(z.brutto_betrag)}"
+                    f"per {art_label}: {_fmt_euro(betrag_anzeige)}"
                 )
                 self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
         else:
+            ist_gutschrift_offen = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
+
+            # Gutschrift (offen/Entwurf): Rückerstattungshinweis statt Zahlungsaufforderung
+            if ist_gutschrift_offen:
+                betrag_gs = abs(r.brutto_gesamt)
+                self.set_font("DejaVu", "", 8)
+                self.set_text_color(*TEXT_GRAU)
+                self.cell(0, 5, f"Wir erstatten Ihnen den Betrag von {_fmt_euro(betrag_gs)}.", new_x="LMARGIN", new_y="NEXT")
+                return
+
             # Skonto-Hinweis (nur bei offener Ausgangsrechnung mit Skonto-Bedingungen)
             if (r.typ == "ausgang"
                     and getattr(r, "skonto_prozent", None)

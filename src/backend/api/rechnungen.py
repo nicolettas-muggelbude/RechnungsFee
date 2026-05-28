@@ -131,15 +131,19 @@ def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
 
 
 def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
-    """Berechnet bezahlt_betrag aus verknüpften Journaleinträgen und setzt zahlungsstatus."""
+    """Berechnet bezahlt_betrag aus verknüpften Journaleinträgen und setzt zahlungsstatus.
+    Unterstützt negative Beträge (Gutschriften): Vergleich über abs()."""
     bezahlt = sum(e.brutto_betrag for e in rechnung.journaleintraege)
     rechnung.bezahlt_betrag = bezahlt.quantize(Decimal("0.01"), ROUND_HALF_UP) if bezahlt else Decimal("0.00")
 
-    if rechnung.bezahlt_betrag >= rechnung.brutto_gesamt:
+    abs_bezahlt = abs(rechnung.bezahlt_betrag)
+    abs_gesamt  = abs(rechnung.brutto_gesamt)
+
+    if abs_bezahlt >= abs_gesamt:
         rechnung.zahlungsstatus = "bezahlt"
         rechnung.bezahlt = True
         rechnung.zahlungsdatum = date.today()
-    elif rechnung.bezahlt_betrag > 0:
+    elif abs_bezahlt > Decimal("0.004"):
         rechnung.zahlungsstatus = "teilweise"
         rechnung.bezahlt = False
     else:
@@ -644,7 +648,9 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         else:
             pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
 
-    if not ist_entwurf and not rechnung.ausgegeben:
+    # Gutschriften gelten erst mit der Rückerstattungsbuchung als ausgegeben
+    ist_gutschrift_pdf = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
+    if not ist_entwurf and not rechnung.ausgegeben and not ist_gutschrift_pdf:
         rechnung.ausgegeben = True
         db.commit()
 
@@ -797,81 +803,97 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Entwürfe können nicht kassiert werden. Bitte zuerst finalisieren.")
 
+    ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
     restbetrag = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
-    if restbetrag <= 0:
-        raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt.")
 
-    betrag = data.betrag if data.betrag is not None else (
-        restbetrag - data.skonto_betrag if data.skonto_betrag else restbetrag
-    )
-    if betrag > restbetrag:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Betrag ({betrag}) übersteigt den Restbetrag ({restbetrag}).",
+    if abs(restbetrag) <= Decimal("0.004"):
+        raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt/verbucht.")
+
+    # -----------------------------------------------------------------------
+    # Betrag-Validierung (getrennt je Pfad)
+    # -----------------------------------------------------------------------
+    betrag_neg: Decimal = Decimal("0")  # nur für Gutschrift-Pfad
+    betrag: Decimal = Decimal("0")      # nur für Normal-Pfad
+
+    if ist_gutschrift:
+        # Frontend schickt positiven Betrag → Backend negiert für EÜR-korrekte Erlösminderung
+        betrag_abs = (data.betrag if data.betrag is not None else abs(restbetrag)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        if betrag_abs > abs(restbetrag) + Decimal("0.01"):
+            raise HTTPException(status_code=422,
+                detail=f"Betrag ({betrag_abs}) übersteigt den Restbetrag ({abs(restbetrag)}).")
+        betrag_neg = -betrag_abs
+
+        # Barkassen-Prüfung: Gutschrift per Bar reduziert Kassenstand
+        if data.zahlungsart == "Bar":
+            ein_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            aus_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            ks_bar = Decimal(str(ein_bar)) - Decimal(str(aus_bar))
+            if betrag_abs > ks_bar:
+                raise HTTPException(status_code=409,
+                    detail=f"Kassenstand nicht ausreichend ({ks_bar:.2f} €) für Rückerstattung ({betrag_abs:.2f} €).")
+    else:
+        betrag = data.betrag if data.betrag is not None else (
+            restbetrag - data.skonto_betrag if data.skonto_betrag else restbetrag
         )
-    if data.skonto_betrag and data.skonto_betrag > 0:
-        total = (betrag + data.skonto_betrag).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        if total > restbetrag.quantize(Decimal("0.01"), ROUND_HALF_UP) + Decimal("0.01"):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Betrag + Skonto ({total}) übersteigt den Restbetrag ({restbetrag}).",
-            )
+        if betrag > restbetrag:
+            raise HTTPException(status_code=422,
+                detail=f"Betrag ({betrag}) übersteigt den Restbetrag ({restbetrag}).")
+        if data.skonto_betrag and data.skonto_betrag > 0:
+            total = (betrag + data.skonto_betrag).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            if total > restbetrag.quantize(Decimal("0.01"), ROUND_HALF_UP) + Decimal("0.01"):
+                raise HTTPException(status_code=422,
+                    detail=f"Betrag + Skonto ({total}) übersteigt den Restbetrag ({restbetrag}).")
 
+    # art: Gutschrift = "Einnahme" mit negativem Betrag (Erlösminderung in EÜR)
     art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
 
-    # Barkassen-Prüfung: Eingangsrechnung per Bar darf Kassenstand nicht übersteigen
-    if art == "Ausgabe" and data.zahlungsart == "Bar":
+    # Barkassen-Prüfung Normal-Pfad (Eingangsrechnung per Bar)
+    if not ist_gutschrift and art == "Ausgabe" and data.zahlungsart == "Bar":
         einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-            Journaleintrag.art == "Einnahme",
-            Journaleintrag.zahlungsart == "Bar",
-        ).scalar() or Decimal("0")
+            Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
         ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-            Journaleintrag.art == "Ausgabe",
-            Journaleintrag.zahlungsart == "Bar",
-        ).scalar() or Decimal("0")
+            Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
         kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
         if betrag > kassenstand:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {betrag:.2f} €.",
-            )
+            raise HTTPException(status_code=409,
+                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {betrag:.2f} €.")
 
     partner = _partner_name(rechnung)
     beschreibung = data.beschreibung or f"Zahlung {rechnung.rechnungsnummer}: {partner}"
 
     unternehmen = db.query(Unternehmen).first()
+    steuerbefreiung_grund = "§19 UStG" if (unternehmen and unternehmen.ist_kleinunternehmer) else None
     ust_satz = Decimal("0")
-    steuerbefreiung_grund = None
-    # Tupel-Liste (satz, brutto_anteil, ust_skr03, ust_skr04) – je ein Eintrag pro USt-Gruppe
     ust_gruppen: list[tuple[Decimal, Decimal, str | None, str | None]] = []
+    konto_ust_skr03: str | None = None
+    konto_ust_skr04: str | None = None
 
-    if unternehmen and unternehmen.ist_kleinunternehmer:
-        steuerbefreiung_grund = "§19 UStG"
-        ust_gruppen = [(Decimal("0"), betrag, None, None)]
-    elif rechnung.positionen:
-        gruppen_brutto: dict[int, Decimal] = {}
-        for pos in rechnung.positionen:
-            s = int(pos.ust_satz)
-            gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
-        # Dominanter Satz bleibt für Skonto-Berechnung erhalten
-        dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
-        ust_satz = Decimal(str(dom_satz))
-        # Anteil je Gruppe proportional zum Brutto-Anteil der Rechnung
-        gesamt_pos_brutto = sum(gruppen_brutto.values())
-        rest_g = betrag
-        for i, satz in enumerate(sorted(gruppen_brutto.keys())):
-            satz_d = Decimal(str(satz))
-            g_ust_skr03, g_ust_skr04 = _ust_konto(art, satz_d) if satz > 0 else (None, None)
-            if i == len(gruppen_brutto) - 1:
-                g_betrag = rest_g
-            else:
-                g_betrag = (betrag * gruppen_brutto[satz] / gesamt_pos_brutto).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                rest_g -= g_betrag
-            ust_gruppen.append((satz_d, g_betrag, g_ust_skr03, g_ust_skr04))
-    else:
-        ust_gruppen = [(Decimal("0"), betrag, None, None)]
-
-    konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
+    if not ist_gutschrift:
+        if unternehmen and unternehmen.ist_kleinunternehmer:
+            ust_gruppen = [(Decimal("0"), betrag, None, None)]
+        elif rechnung.positionen:
+            gruppen_brutto: dict[int, Decimal] = {}
+            for pos in rechnung.positionen:
+                s = int(pos.ust_satz)
+                gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
+            dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
+            ust_satz = Decimal(str(dom_satz))
+            gesamt_pos_brutto = sum(gruppen_brutto.values())
+            rest_g = betrag
+            for i, satz in enumerate(sorted(gruppen_brutto.keys())):
+                satz_d = Decimal(str(satz))
+                g_ust_skr03, g_ust_skr04 = _ust_konto(art, satz_d) if satz > 0 else (None, None)
+                if i == len(gruppen_brutto) - 1:
+                    g_betrag = rest_g
+                else:
+                    g_betrag = (betrag * gruppen_brutto[satz] / gesamt_pos_brutto).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                    rest_g -= g_betrag
+                ust_gruppen.append((satz_d, g_betrag, g_ust_skr03, g_ust_skr04))
+        else:
+            ust_gruppen = [(Decimal("0"), betrag, None, None)]
+        konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
     def _erstelle_eintrag(
         kat_id: int | None, kat: "Kategorie | None", brutto: Decimal, beschr: str,
@@ -909,6 +931,56 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         )
         e.signatur = signatur_journaleintrag(e)
         return e
+
+    # -----------------------------------------------------------------------
+    # Gutschrift-Buchung: positionsweise, gleiche Kategorien + USt, negative Einnahme
+    # Artikel-IDs bleiben in den Positionen erhalten → Warenbestand-Hook für spätere Warenwirtschaft
+    # -----------------------------------------------------------------------
+    if ist_gutschrift:
+        from collections import defaultdict
+        beschreibung_gs = data.beschreibung or f"Gutschrift {rechnung.rechnungsnummer}: {partner}"
+        pos_gruppen: dict[tuple, Decimal] = defaultdict(Decimal)
+        for pos in rechnung.positionen:
+            key = (pos.kategorie_id, int(pos.ust_satz))
+            pos_gruppen[key] += pos.brutto  # Gutschrift-Positionen haben bereits negative brutto-Beträge
+        gesamt_pos = sum(pos_gruppen.values()) or Decimal("1")  # Division-by-zero Guard
+
+        erster_eintrag_gs = None
+        rest_neg = betrag_neg
+        gruppen_liste = list(pos_gruppen.items())
+        for i, ((kat_id, satz_int), g_brutto_pos) in enumerate(gruppen_liste):
+            if i < len(gruppen_liste) - 1:
+                anteil = (betrag_neg * g_brutto_pos / gesamt_pos).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                rest_neg -= anteil
+            else:
+                anteil = rest_neg  # letzter Eintrag = Rundungsausgleich
+
+            satz_d = Decimal(str(satz_int)) if not steuerbefreiung_grund else Decimal("0")
+            g_ust03, g_ust04 = (_ust_konto(art, satz_d) if satz_int > 0 and not steuerbefreiung_grund else (None, None))
+            kat_obj_g = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
+            e = _erstelle_eintrag(kat_id, kat_obj_g, anteil, beschreibung_gs, satz_d, g_ust03, g_ust04)
+            db.add(e)
+            if i == 0:
+                erster_eintrag_gs = e
+
+        if erster_eintrag_gs is None:
+            # Fallback: keine Positionen vorhanden
+            e = _erstelle_eintrag(None, None, betrag_neg, beschreibung_gs)
+            db.add(e)
+            erster_eintrag_gs = e
+
+        db.flush()
+        _aktualisiere_zahlungsstatus(rechnung)
+        # Gutschrift gilt mit der Rückerstattungsbuchung als ausgegeben → nächstes PDF = Kopie
+        rechnung.ausgegeben = True
+        db.commit()
+        db.refresh(rechnung)
+        db.refresh(erster_eintrag_gs)
+        return BarZahlungResult(
+            journaleintrag_id=erster_eintrag_gs.id,
+            journaleintrag_belegnr=erster_eintrag_gs.belegnr,
+            rechnung=RechnungResponse.from_orm_extended(rechnung),
+        )
 
     if data.split:
         # Split-Zahlung: Summe der Split-Beträge muss dem Zahlungsbetrag entsprechen
@@ -1062,10 +1134,10 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         nk.letztes_jahr = heute.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
-        rechnungsnummer = f"RE-{_belegnr_aus_format(nk.format, heute, nr)}"
+        rechnungsnummer = f"GS-{_belegnr_aus_format(nk.format, heute, nr)}"
     else:
         count = db.query(Rechnung).filter(Rechnung.typ == "ausgang").count()
-        rechnungsnummer = f"RE-{str(heute.year)[-2:]}{count + 1:04d}"
+        rechnungsnummer = f"GS-{str(heute.year)[-2:]}{count + 1:04d}"
 
     orig_nr = original.rechnungsnummer or f"#{original.id}"
 
@@ -1079,7 +1151,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         kunde_id=original.kunde_id,
         partner_freitext=original.partner_freitext,
         kategorie_id=original.kategorie_id,
-        notizen=f"Gutschrift zu {orig_nr}",
+        notizen=None,
         skonto_prozent=None,
         skonto_tage=None,
         ist_entwurf=True,

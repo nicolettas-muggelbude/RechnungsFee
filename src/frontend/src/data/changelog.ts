@@ -26,8 +26,11 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.2.12',
     datum: 'Mai 2026',
     eintraege: [
-      { typ: 'neu', text: 'Gutschriften: Aus jeder abgeschlossenen Ausgangsrechnung lässt sich per Klick eine Gutschrift erstellen – mit Bezugsnummer auf die Originalrechnung, eigener RE-Nummer und negierten Positionen' },
-      { typ: 'verbesserung', text: 'Gutschrift-Badge in der Rechnungsliste, Referenz auf die Originalrechnung im Detailbereich, PDF-Ausgabe mit korrektem Titel und Bezugszeile' },
+      { typ: 'neu', text: 'Gutschriften: Aus jeder abgeschlossenen Ausgangsrechnung lässt sich per Klick eine Gutschrift erstellen – mit GS-Nummer, Bezug auf Originalrechnung und negierten Positionen' },
+      { typ: 'neu', text: 'Gutschrift-Buchung: Rückerstattung buchen erzeugt negative Einnahme-Buchungen mit denselben Kategorien und USt-Konten wie die Originalrechnung (EÜR-korrekte Aufhebung)' },
+      { typ: 'verbesserung', text: 'Gutschrift-Badge in der Rechnungsliste; Gutschrift-Formular öffnet sich direkt nach Erstellung; PDF zeigt korrekten Rückerstattungstext statt Zahlungshinweis' },
+      { typ: 'verbesserung', text: 'Entwürfe zeigen nur noch „Vorschau" – Drucken, PDF öffnen und Mail senden sind für nicht finalisierte Dokumente ausgeblendet' },
+      { typ: 'fix', text: 'Gutschrift-Positionen: Betrag wurde beim Bearbeiten doppelt negiert; Gesamt-Betrag in der Positionsspalte zeigte den richtigen Wert' },
     ],
   },
   {

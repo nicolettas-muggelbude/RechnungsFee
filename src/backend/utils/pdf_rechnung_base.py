@@ -390,6 +390,7 @@ class RechnungPDFBase(FPDF):
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
 
+
         # Bezugszeile bei Gutschriften
         if dokument_typ == "Gutschrift":
             gutschrift_nr = getattr(r, "_gutschrift_original_nr", None)
@@ -471,10 +472,14 @@ class RechnungPDFBase(FPDF):
 
     def _render_notizen(self):
         r = self._r
-        if r.notizen:
+        notizen = r.notizen or ""
+        # Alten Autotext "Gutschrift zu ..." herausfiltern (wird im Titel bereits angezeigt)
+        if getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" and notizen.startswith("Gutschrift zu "):
+            notizen = ""
+        if notizen:
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
-            self.multi_cell(0, 5, r.notizen)
+            self.multi_cell(0, 5, notizen)
 
     def render(self) -> bytes:
         self.add_page()
