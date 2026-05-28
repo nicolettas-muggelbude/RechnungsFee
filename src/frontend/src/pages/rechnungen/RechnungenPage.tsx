@@ -486,6 +486,9 @@ function RechnungDetail({
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
   const [pdfHinweis, setPdfHinweis] = useState(false)
   const [belegFehler, setBelegFehler] = useState<string | null>(null)
+  // Lokaler Flag: nach erstem PDF-Öffnen sofort auf true setzen,
+  // ohne auf den async Query-Refetch warten zu müssen.
+  const [lokalAusgegeben, setLokalAusgegeben] = useState(rechnung.ausgegeben)
   const qc = useQueryClient()
 
   const belegUploadMutation = useMutation({
@@ -552,15 +555,25 @@ function RechnungDetail({
     onError: (e: Error) => alert(e.message),
   })
 
-  /** Lädt das PDF als Blob (wartet auf echte HTTP-Antwort → setzt ausgegeben im Backend).
-   *  Wenn rechnung.ausgegeben bereits True ist, wird kopie=true übergeben –
-   *  so entscheidet das Frontend eindeutig ob Original oder Kopie. */
+  /** Lädt das PDF als Blob. Nutzt lokalAusgegeben (sofort gesetzt, kein Query-Refetch nötig)
+   *  um sicher kopie=true zu senden wenn das Dokument bereits ausgegeben wurde. */
   async function _fetchPdfBlob(): Promise<string> {
     const base = await getApiBase()
-    const params = rechnung.ausgegeben ? '?kopie=true' : ''
+    const params = lokalAusgegeben ? '?kopie=true' : ''
     const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf${params}`)
     const blob = await resp.blob()
+    // Sofort lokal merken – unabhängig vom async Query-Refetch
+    if (!lokalAusgegeben) setLokalAusgegeben(true)
     return URL.createObjectURL(blob)
+  }
+
+  function _zeigeBlob(blobUrl: string) {
+    if (isTauri()) {
+      window.dispatchEvent(new CustomEvent('rechnungsfee:inline-viewer', { detail: { url: blobUrl } }))
+    } else {
+      window.open(blobUrl, '_blank')
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
   }
 
   async function handleDrucken() {
@@ -571,19 +584,14 @@ function RechnungDetail({
     } else {
       const win = window.open(blobUrl, '_blank')
       if (win) win.addEventListener('load', () => win.print())
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
     }
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
   }
 
   async function handlePdfOeffnen() {
     const blobUrl = await _fetchPdfBlob()
     qc.invalidateQueries({ queryKey: ['rechnungen'] })
-    if (isTauri()) {
-      window.dispatchEvent(new CustomEvent('rechnungsfee:inline-viewer', { detail: { url: blobUrl } }))
-    } else {
-      window.open(blobUrl, '_blank')
-    }
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
+    _zeigeBlob(blobUrl)
   }
 
   async function handleMail() {
@@ -671,15 +679,15 @@ function RechnungDetail({
                 onClick={handleDrucken}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               >
-                🖨️ {rechnung.ausgegeben ? 'Kopie drucken' : 'Drucken'}
+                🖨️ {lokalAusgegeben ? 'Kopie drucken' : 'Drucken'}
               </button>
               <button
                 onClick={handlePdfOeffnen}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
               >
-                📄 {rechnung.ausgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
+                📄 {lokalAusgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
               </button>
-              {rechnung.ausgegeben && (
+              {lokalAusgegeben && (
                 <InfoTooltip text="Diese Rechnung wurde bereits ausgegeben (gedruckt, als PDF geöffnet oder per Mail versandt). Alle weiteren Ausgaben werden automatisch als Kopie markiert, damit Doppelsendungen erkennbar sind." side="bottom" align="right" />
               )}
               {!rechnung.storniert && (
