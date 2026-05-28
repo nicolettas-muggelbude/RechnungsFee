@@ -552,25 +552,36 @@ function RechnungDetail({
     onError: (e: Error) => alert(e.message),
   })
 
-  async function _openPdf() {
+  /** Lädt das PDF als Blob (wartet auf echte HTTP-Antwort → setzt ausgegeben im Backend),
+   *  gibt eine Blob-URL zurück und invalidiert danach den Rechnungs-Cache. */
+  async function _fetchPdfBlob(): Promise<string> {
     const base = await getApiBase()
-    await openUrl(`${base}/rechnungen/${rechnung.id}/pdf`)
+    const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf`)
+    const blob = await resp.blob()
+    return URL.createObjectURL(blob)
   }
 
   async function handleDrucken() {
+    const blobUrl = await _fetchPdfBlob()
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
     if (isTauri()) {
-      await _openPdf()
+      window.dispatchEvent(new CustomEvent('rechnungsfee:inline-viewer', { detail: { url: blobUrl } }))
     } else {
-      const base = await getApiBase()
-      const win = window.open(`${base}/rechnungen/${rechnung.id}/pdf`, '_blank')
+      const win = window.open(blobUrl, '_blank')
       if (win) win.addEventListener('load', () => win.print())
     }
-    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
   }
 
   async function handlePdfOeffnen() {
-    await _openPdf()
+    const blobUrl = await _fetchPdfBlob()
     qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    if (isTauri()) {
+      window.dispatchEvent(new CustomEvent('rechnungsfee:inline-viewer', { detail: { url: blobUrl } }))
+    } else {
+      window.open(blobUrl, '_blank')
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
   }
 
   async function handleMail() {

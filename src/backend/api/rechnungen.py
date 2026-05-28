@@ -669,7 +669,10 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'{disposition}; filename="{dateiname}"'},
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{dateiname}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
