@@ -540,6 +540,31 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     return RechnungResponse.from_orm_extended(rechnung)
 
 
+def _gutschrift_restbetrag(original: "Rechnung", db: Session, ausgenommen_id: int | None = None) -> Decimal:
+    """Gibt zurück wie viel vom Original noch gutgeschrieben werden darf (positiver Betrag).
+
+    original.brutto_gesamt ist positiv (Ausgangsrechnung).
+    Gutschriften haben negatives brutto_gesamt.
+    Stornierte und Entwurf-Gutschriften zählen nicht mit.
+    ausgenommen_id: ID der aktuellen Gutschrift, die nicht mitgezählt werden soll (beim Finalisieren).
+    """
+    existing = (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.gutschrift_zu_rechnung_id == original.id,
+            Rechnung.dokument_typ == "Gutschrift",
+            Rechnung.storniert == False,        # noqa: E712
+            Rechnung.ist_entwurf == False,      # noqa: E712
+        )
+        .all()
+    )
+    bereits = sum(
+        (abs(g.brutto_gesamt) for g in existing if ausgenommen_id is None or g.id != ausgenommen_id),
+        Decimal("0.00"),
+    )
+    return abs(original.brutto_gesamt) - bereits
+
+
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
 def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     """Entwurf finalisieren – danach nicht mehr bearbeitbar."""
@@ -548,6 +573,25 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if not rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+
+    # Gutschrift: Summen-Check – darf den Original-Bruttobetrag nicht überschreiten
+    if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
+        original = db.query(Rechnung).filter(Rechnung.id == rechnung.gutschrift_zu_rechnung_id).first()
+        if original:
+            restbetrag = _gutschrift_restbetrag(original, db, ausgenommen_id=rechnung.id)
+            diese_gs = abs(rechnung.brutto_gesamt)
+            if diese_gs > restbetrag + Decimal("0.01"):   # 1 Cent Toleranz für Rundung
+                def _euro(v: Decimal) -> str:
+                    return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Gutschrift überschreitet den zulässigen Betrag. "
+                        f"Noch gutschreibbar: {_euro(restbetrag)} – "
+                        f"diese Gutschrift: {_euro(diese_gs)}."
+                    ),
+                )
+
     rechnung.ist_entwurf = False
     db.commit()
     db.refresh(rechnung)
@@ -1131,6 +1175,19 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus einer Gutschrift kann keine weitere Gutschrift erstellt werden.")
     if original.storniert:
         raise HTTPException(status_code=409, detail="Stornierte Rechnungen können nicht als Vorlage für eine Gutschrift dienen.")
+
+    # Prüfen ob bereits der volle Betrag durch finalisierte Gutschriften abgedeckt ist
+    restbetrag = _gutschrift_restbetrag(original, db)
+    if restbetrag <= Decimal("0.01"):   # 1 Cent Toleranz
+        def _euro(v: Decimal) -> str:
+            return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Der Rechnungsbetrag ({_euro(abs(original.brutto_gesamt))}) ist bereits vollständig "
+                f"durch bestehende Gutschriften abgedeckt. Storniere eine Gutschrift, um eine neue erstellen zu können."
+            ),
+        )
 
     heute = date.today()
 

@@ -546,6 +546,7 @@ function RechnungDetail({
   const finalisiereMutation = useMutation({
     mutationFn: () => finalisiereRechnung(rechnung.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
+    onError: (e: Error) => alert(e.message),
   })
 
   const gutschriftMutation = useMutation({
