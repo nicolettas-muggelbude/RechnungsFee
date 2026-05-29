@@ -234,10 +234,6 @@ Lose Ideen ohne festen Versionsplan.
 - [x] **Storno-Begründung** (Mai 2026): Pflichtfeld mit Schnellauswahl; Begründung in `rechnungen.storno_grund` und Journaleintrag; Schema 34
 - [x] **Backend-Start nach Update** (Mai 2026): `_backendReady` Promise korrekt abgewartet, Timeout 10 s → 60 s (Defender-Scan / PyInstaller-Extraktion nach Windows-Update)
 - [x] **Kategorie-Beschreibungen** (Mai 2026): `kategorien.beschreibung` – ~65 vorbefüllte Verwendungsbeispiele (migriert), inline editierbar auf KategorienPage, Hinweis im Buchungsformular, PDF-Export als Nachschlageblatt; Schema 35
-
-## 🚧 v0.2.12 – Gutschriften (Issue #103)
-
-- [ ] Schema 37: `rechnungen.dokument_typ` (`Rechnung` / `Gutschrift`) + `gutschrift_zu_rechnung_id` FK
-- [ ] Backend: `POST /rechnungen/{id}/gutschrift` – kopiert Positionen (Mengen negiert), eigene RE-Nummer, Entwurf
-- [ ] PDF: Titel „Gutschrift", Bezugszeile „Gutschrift zu Rechnung RE-XXXX"
-- [ ] Frontend: Button „Gutschrift erstellen" an Ausgangsrechnungen, „Gutschrift"-Badge in der Liste, Bezug im Detailbereich
+- [x] **v0.2.11** (Mai 2026): Storno-Begründung (Pflichtfeld, Schnellauswahl, `storno_grund` in DB + Journal, Schema 34); Backend-Start-Timeout 10 s → 60 s (Defender-Scan / PyInstaller nach Windows-Update)
+- [x] **v0.2.12 – Gutschriften** (Mai 2026, Issue #103): Schema 37 (`dokument_typ`, `gutschrift_zu_rechnung_id`); `POST /rechnungen/{id}/gutschrift` (Positionen negiert, eigene GS-Nummer, Entwurf); Betragslimit (Summe aller Gutschriften ≤ Originalbrutto); Rückerstattung als negative Einnahme im Journal; PDF-Deckblatt „Gutschrift" + Bezugszeile; Storno einer Gutschrift mit GoBD-Gegenbuchung; Frontend: Button, Badge, Detail-Bereich
+- [x] **v0.2.13 – §25a UStG** (Mai 2026): Schema 38 (`artikel.differenzbesteuerung`, `rechnungspositionen.differenzbesteuerung`); Margenberechnung live im Artikelformular (Ankaufspreis, Marge, USt auf Marge); §25a-Badge in Artikelliste + Autocomplete-Dropdown; gemischte Rechnungen (§25a + Regelbesteuerung); PDF-Pflichthinweis nach § 25a UStG (multi_cell, kein Überlauf); Scroll-Layout-Fix (Header + Detailspalte fest, Liste scrollt); Storno-Buchungen: Betrag immer positiv, Art korrekt für Gutschriften

@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.13',
+    datum: 'Mai 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Differenzbesteuerung §25a UStG: Artikel als §25a kennzeichnen – kein USt-Ausweis auf der Rechnung, Ankaufspreis hinterlegen, Margenberechnung (VK − EK) live im Formular und Detailpanel' },
+      { typ: 'neu', text: '§25a auf Rechnungen: gemischte Positionen möglich (Regelbesteuerung + §25a); USt-Spalte zeigt „§25a"; Pflichthinweis wird automatisch unter den Summenblock gedruckt' },
+      { typ: 'verbesserung', text: 'Artikelsuche in Rechnungen: §25a-Artikel tragen orangenen Badge; VK-Brutto wird als Positionspreis übernommen (kein Netto/Brutto-Umrechnen)' },
+      { typ: 'verbesserung', text: 'Scroll-Layout: Seitenheader und rechte Detailspalte bleiben beim Scrollen stehen – gilt für Rechnungen, Journal, Kunden, Lieferanten und Artikel' },
+      { typ: 'fix', text: 'Storno-Buchungen: Betrag ist jetzt immer positiv; Art (Einnahme/Ausgabe) richtet sich nach dem Originalbeleg – Gutschrift-Storno erscheint korrekt als Einnahme' },
+      { typ: 'fix', text: 'Gutschrift: Betragslimit wird auch beim Speichern eines Entwurfs geprüft – nicht erst beim Finalisieren' },
+    ],
+  },
+  {
     version: 'v0.2.12',
     datum: 'Mai 2026',
     eintraege: [
