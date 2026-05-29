@@ -266,6 +266,7 @@ const schema = z.object({
   artikelcode: z.string().optional(),
   beschreibung: z.string().optional(),
   gruppe_id: z.string().optional(),
+  differenzbesteuerung: z.boolean().default(false),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -310,15 +311,18 @@ function ArtikelFormModal({
       artikelcode: initial.artikelcode ?? '',
       beschreibung: initial.beschreibung ?? '',
       gruppe_id: initial.gruppe_id ? String(initial.gruppe_id) : '',
+      differenzbesteuerung: initial.differenzbesteuerung ?? false,
     } : {
       typ: 'artikel',
       steuersatz: defaultSatz,
       einheit: 'Stück',
+      differenzbesteuerung: false,
     },
   })
 
   const typ = watch('typ') as ArtikelTyp
-  const steuersatz = parseFloat(watch('steuersatz') || '0')
+  const differenzbesteuerung = watch('differenzbesteuerung')
+  const steuersatz = differenzbesteuerung ? 0 : parseFloat(watch('steuersatz') || '0')
 
   const { data: gruppen = [] } = useQuery({
     queryKey: ['artikel-gruppen', typ],
@@ -343,9 +347,11 @@ function ArtikelFormModal({
   }, [typ, setValue])
 
   function bruttoAusNetto(netto: number) {
+    if (differenzbesteuerung) return netto  // §25a: Brutto = Netto (kein USt-Aufschlag)
     return Math.round(netto * (1 + steuersatz / 100) * 100) / 100
   }
   function nettoAusBrutto(brutto: number) {
+    if (differenzbesteuerung) return brutto  // §25a: Netto = Brutto
     return Math.round(brutto / (1 + steuersatz / 100) * 100) / 100
   }
 
@@ -379,7 +385,8 @@ function ArtikelFormModal({
         typ: v.typ,
         bezeichnung: v.bezeichnung,
         einheit: v.einheit,
-        steuersatz: v.steuersatz,
+        // §25a: Steuersatz 0 senden, da keine USt ausgewiesen wird
+        steuersatz: v.differenzbesteuerung ? '0' : v.steuersatz,
         vk_brutto: v.vk_brutto,
         ek_netto: hatEK(v.typ) && v.ek_netto ? v.ek_netto : undefined,
         lieferant_id: hatLieferant(v.typ) && v.lieferant_id ? Number(v.lieferant_id) : undefined,
@@ -388,6 +395,7 @@ function ArtikelFormModal({
         artikelcode: hatHersteller(v.typ) ? v.artikelcode || undefined : undefined,
         beschreibung: v.beschreibung || undefined,
         gruppe_id: v.gruppe_id ? Number(v.gruppe_id) : undefined,
+        differenzbesteuerung: v.differenzbesteuerung,
       }
       return initial ? updateArtikel(initial.id, payload) : createArtikel(payload)
     },
@@ -423,6 +431,21 @@ function ArtikelFormModal({
             {errors.bezeichnung && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.bezeichnung.message}</p>}
           </div>
 
+          {/* Differenzbesteuerung §25a UStG */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              {...register('differenzbesteuerung')}
+              className="mt-0.5 w-4 h-4 rounded accent-amber-500"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Differenzbesteuerung §25a UStG</span>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Gebrauchtgegenstände – USt auf Marge (VK − EK), kein gesonderter USt-Ausweis
+              </p>
+            </div>
+          </label>
+
           {/* Einheit + Steuersatz */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -430,36 +453,55 @@ function ArtikelFormModal({
               <EinheitAuswahl value={watch('einheit') ?? ''} onChange={(v) => setValue('einheit', v, { shouldValidate: true })} />
               {errors.einheit && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.einheit.message}</p>}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Steuersatz *</label>
-              <select {...register('steuersatz')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
-                {aktiveSaetze.map((s) => {
-                  const val = String(parseFloat(s.satz))
-                  return (
-                    <option key={s.id} value={val}>
-                      {val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}
-                    </option>
-                  )
-                })}
-              </select>
-            </div>
+            {!differenzbesteuerung && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Steuersatz *</label>
+                <select {...register('steuersatz')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
+                  {aktiveSaetze.map((s) => {
+                    const val = String(parseFloat(s.satz))
+                    return (
+                      <option key={s.id} value={val}>
+                        {val} %{s.bezeichnung ? ` – ${s.bezeichnung}` : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
+            {differenzbesteuerung && (
+              <div>
+                <label className="block text-sm font-medium text-slate-400 dark:text-slate-500 mb-1">Steuersatz</label>
+                <div className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800">
+                  §25a – kein Ausweis
+                </div>
+              </div>
+            )}
           </div>
 
           {/* VK */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Verkaufspreis *</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+              Verkaufspreis *
+              {differenzbesteuerung && (
+                <span className="ms-2 text-xs font-normal text-amber-600 dark:text-amber-400">Rechnungspreis (Brutto = Netto)</span>
+              )}
+            </label>
+            <div className={`grid gap-2 ${differenzbesteuerung ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {!differenzbesteuerung && (
+                <div>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
+                  <input
+                    type="number" step="0.01" min="0.01" placeholder="0,00"
+                    value={vkNetto}
+                    onChange={(e) => onVkNettoChange(e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                  />
+                </div>
+              )}
               <div>
-                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
-                <input
-                  type="number" step="0.01" min="0.01" placeholder="0,00"
-                  value={vkNetto}
-                  onChange={(e) => onVkNettoChange(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-                />
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">
+                  {differenzbesteuerung ? 'Verkaufspreis (inkl. Margensteuer)' : 'Brutto'}
+                </span>
                 <input
                   type="number" step="0.01" min="0.01" placeholder="0,00"
                   value={watch('vk_brutto') ?? ''}
@@ -474,10 +516,17 @@ function ArtikelFormModal({
           {/* EK (nur bei Artikel + Fremdleistung) */}
           {hatEK(typ) && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einkaufspreis</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                Einkaufspreis
+                {differenzbesteuerung && (
+                  <span className="ms-2 text-xs font-normal text-amber-600 dark:text-amber-400">Ankaufspreis (von Privatperson, ohne USt)</span>
+                )}
+              </label>
+              <div className={`grid gap-2 ${differenzbesteuerung ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 <div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">
+                    {differenzbesteuerung ? 'Ankaufspreis' : 'Netto'}
+                  </span>
                   <input
                     type="number" step="0.01" min="0" placeholder="0,00"
                     value={watch('ek_netto') ?? ''}
@@ -485,16 +534,36 @@ function ArtikelFormModal({
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
                   />
                 </div>
-                <div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
-                  <input
-                    type="number" step="0.01" min="0" placeholder="0,00"
-                    value={ekBrutto}
-                    onChange={(e) => onEkBruttoChange(e.target.value)}
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-                  />
-                </div>
+                {!differenzbesteuerung && (
+                  <div>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
+                    <input
+                      type="number" step="0.01" min="0" placeholder="0,00"
+                      value={ekBrutto}
+                      onChange={(e) => onEkBruttoChange(e.target.value)}
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+                    />
+                  </div>
+                )}
               </div>
+              {/* Margenberechnung bei §25a */}
+              {differenzbesteuerung && (() => {
+                const vk = parseFloat(watch('vk_brutto') || '0')
+                const ek = parseFloat(watch('ek_netto') || '0')
+                if (vk > 0 && ek >= 0 && vk > ek) {
+                  const marge = vk - ek
+                  const ust = Math.round(marge * 19 / 119 * 100) / 100
+                  const nettoMarge = Math.round((marge - ust) * 100) / 100
+                  return (
+                    <div className="mt-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-0.5">
+                      <div className="flex justify-between"><span>Marge (VK − EK):</span><span className="font-medium">{marge.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                      <div className="flex justify-between"><span>USt auf Marge (19/119):</span><span>{ust.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                      <div className="flex justify-between border-t border-amber-200 dark:border-amber-700 pt-0.5 font-medium"><span>Netto-Marge:</span><span>{nettoMarge.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
             </div>
           )}
 
@@ -604,10 +673,13 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
       {/* Header */}
       <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0 flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYP_FARBEN[artikel.typ]}`}>
               {TYP_LABELS[artikel.typ]}
             </span>
+            {artikel.differenzbesteuerung && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">§25a UStG</span>
+            )}
             {!artikel.aktiv && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">Inaktiv</span>
             )}
@@ -624,22 +696,58 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
         {/* Preise */}
         <div>
           <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Preise</p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK brutto</p>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatEuro(artikel.vk_brutto)}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK netto</p>
-              <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.vk_netto)}</p>
-            </div>
-            {artikel.ek_netto && (
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">EK netto</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.ek_netto)}</p>
+          {artikel.differenzbesteuerung ? (
+            // §25a: Marge + Steuerberechnung anzeigen
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Verkaufspreis</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatEuro(artikel.vk_brutto)}</p>
+                </div>
+                {artikel.ek_netto && (
+                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Ankaufspreis</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.ek_netto)}</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+              {artikel.ek_netto && (() => {
+                const vk = parseFloat(artikel.vk_brutto)
+                const ek = parseFloat(artikel.ek_netto!)
+                if (vk > ek) {
+                  const marge = vk - ek
+                  const ust = Math.round(marge * 19 / 119 * 100) / 100
+                  const nettoMarge = Math.round((marge - ust) * 100) / 100
+                  return (
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-0.5">
+                      <p className="font-medium mb-1">Margenberechnung §25a</p>
+                      <div className="flex justify-between"><span>Marge (VK − EK):</span><span className="font-medium">{marge.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                      <div className="flex justify-between"><span>USt auf Marge (19/119):</span><span>{ust.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                      <div className="flex justify-between border-t border-amber-200 dark:border-amber-700 pt-0.5 font-medium"><span>Netto-Marge:</span><span>{nettoMarge.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span></div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK brutto</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatEuro(artikel.vk_brutto)}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">VK netto</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.vk_netto)}</p>
+              </div>
+              {artikel.ek_netto && (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">EK netto</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200">{formatEuro(artikel.ek_netto)}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Details */}
@@ -854,6 +962,9 @@ export function ArtikelPage() {
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${TYP_FARBEN[a.typ]}`}>
                     {TYP_LABELS[a.typ]}
                   </span>
+                  {a.differenzbesteuerung && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">§25a</span>
+                  )}
                   {a.gruppe_obj && (
                     <span className="text-xs text-slate-400 dark:text-slate-500">· {a.gruppe_obj.name}</span>
                   )}

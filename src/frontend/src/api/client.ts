@@ -725,6 +725,7 @@ export type Rechnungsposition = {
   ust_satz: string
   ust_betrag: string
   brutto: string
+  differenzbesteuerung: boolean
 }
 
 export type RechnungspositionCreate = {
@@ -735,6 +736,7 @@ export type RechnungspositionCreate = {
   ust_satz: string
   artikel_id?: number
   kategorie_id?: number
+  differenzbesteuerung?: boolean
 }
 
 export type ZahlungKompakt = {
@@ -929,6 +931,7 @@ export type Artikel = {
   beschreibung: string | null
   gruppe_id: number | null
   gruppe_obj: { id: number; name: string } | null
+  differenzbesteuerung: boolean
   aktiv: boolean
   erstellt_am: string
   aktualisiert_am: string
@@ -943,6 +946,8 @@ export type ArtikelSuche = {
   steuersatz: string
   vk_brutto: string
   vk_netto: string
+  ek_brutto: string | null
+  differenzbesteuerung: boolean
   lieferant_name: string | null
 }
 
@@ -970,6 +975,7 @@ export type ArtikelCreate = {
   artikelcode?: string
   beschreibung?: string
   gruppe_id?: number
+  differenzbesteuerung?: boolean
 }
 
 export type ArtikelUpdate = Partial<ArtikelCreate> & { aktiv?: boolean }

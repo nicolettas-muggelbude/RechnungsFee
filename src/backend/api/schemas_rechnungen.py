@@ -37,6 +37,7 @@ class RechnungspositionCreate(BaseModel):
     ust_satz: Decimal = Decimal("0")
     artikel_id: Optional[int] = None
     kategorie_id: Optional[int] = None
+    differenzbesteuerung: bool = False
 
     @field_validator("netto")
     @classmethod
@@ -73,6 +74,7 @@ class RechnungspositionResponse(BaseModel):
     ust_satz: Decimal
     ust_betrag: Decimal
     brutto: Decimal
+    differenzbesteuerung: bool = False
 
     model_config = {"from_attributes": True}
 

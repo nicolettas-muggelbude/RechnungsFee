@@ -92,17 +92,19 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
             menge = float(str(pos.menge))
+            ist_diff = getattr(pos, "differenzbesteuerung", False)
+            ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
             self.cell(col_w[0], 6.5, str(pos.position_nr), align="R")
             self.cell(col_w[1], 6.5, pos_datum_str, align="L")
             if self._ist_netto:
                 self.cell(col_w[2], 6.5, pos.beschreibung[:60])
                 self.cell(col_w[3], 6.5, _fmt_euro(pos.netto),                   align="R")
-                self.cell(col_w[4], 6.5, f"{int(pos.ust_satz)} %",               align="R")
+                self.cell(col_w[4], 6.5, ust_label,                              align="R")
                 self.cell(col_w[5], 6.5, _fmt_euro(float(str(pos.netto)) * menge), align="R",
                           new_x="LMARGIN", new_y="NEXT")
             else:
                 self.cell(col_w[2], 6.5, pos.beschreibung[:70])
-                self.cell(col_w[3], 6.5, f"{int(pos.ust_satz)} %", align="R")
+                self.cell(col_w[3], 6.5, ust_label, align="R")
                 self.cell(col_w[4], 6.5, _fmt_euro(pos.brutto), align="R",
                           new_x="LMARGIN", new_y="NEXT")
 

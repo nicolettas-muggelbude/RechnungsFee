@@ -13,8 +13,24 @@ from .schemas_artikel import ArtikelCreate, ArtikelUpdate, ArtikelResponse, Arti
 router = APIRouter(prefix="/api/artikel", tags=["Artikel"])
 
 
-def _berechne_preise(vk_brutto: Decimal, ek_netto: Optional[Decimal], steuersatz: Decimal):
-    """Berechnet vk_netto und ek_brutto aus den Eingabewerten."""
+def _berechne_preise(
+    vk_brutto: Decimal,
+    ek_netto: Optional[Decimal],
+    steuersatz: Decimal,
+    differenzbesteuerung: bool = False,
+):
+    """Berechnet vk_netto und ek_brutto aus den Eingabewerten.
+
+    Bei Differenzbesteuerung (§25a UStG) wird keine USt separat ausgewiesen –
+    VK-Brutto ist gleichzeitig der Rechnungspreis (ohne USt-Aufschlag).
+    ek_brutto = ek_netto (Ankauf von Privatperson, kein USt-Abzug).
+    """
+    if differenzbesteuerung:
+        # §25a: kein USt-Aufschlag auf den Rechnungspreis
+        vk_netto = vk_brutto
+        ek_brutto = ek_netto  # Ankauf typischerweise ohne USt
+        return vk_netto, ek_brutto
+
     faktor = 1 + steuersatz / 100
     vk_netto = (vk_brutto / faktor).quantize(Decimal("0.01"), ROUND_HALF_UP)
     ek_brutto = None
@@ -72,6 +88,8 @@ def suche_artikel(
             steuersatz=a.steuersatz,
             vk_brutto=a.vk_brutto,
             vk_netto=a.vk_netto,
+            ek_brutto=a.ek_brutto,
+            differenzbesteuerung=a.differenzbesteuerung,
             lieferant_name=a.lieferant.firmenname if a.lieferant else None,
         ))
     return result
@@ -102,8 +120,11 @@ def _prüfe_steuersatz(satz: Decimal, db: Session) -> None:
 
 @router.post("", response_model=ArtikelResponse, status_code=201)
 def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
-    _prüfe_steuersatz(data.steuersatz, db)
-    vk_netto, ek_brutto = _berechne_preise(data.vk_brutto, data.ek_netto, data.steuersatz)
+    if not data.differenzbesteuerung:
+        _prüfe_steuersatz(data.steuersatz, db)
+    vk_netto, ek_brutto = _berechne_preise(
+        data.vk_brutto, data.ek_netto, data.steuersatz, data.differenzbesteuerung
+    )
     artikelnummer = _naechste_artikelnummer(db)
     artikel = Artikel(
         artikelnummer=artikelnummer,
@@ -121,6 +142,7 @@ def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
         artikelcode=data.artikelcode,
         beschreibung=data.beschreibung,
         gruppe_id=data.gruppe_id,
+        differenzbesteuerung=data.differenzbesteuerung,
     )
     db.add(artikel)
     db.commit()
@@ -144,14 +166,16 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
 
     update = data.model_dump(exclude_none=True)
 
-    if "steuersatz" in update:
+    differenzbesteuerung = update.get("differenzbesteuerung", artikel.differenzbesteuerung)
+
+    if "steuersatz" in update and not differenzbesteuerung:
         _prüfe_steuersatz(update["steuersatz"], db)
 
-    # Preise neu berechnen wenn vk_brutto oder steuersatz geändert wurde
+    # Preise neu berechnen wenn vk_brutto, steuersatz oder differenzbesteuerung geändert wurde
     vk_brutto = update.get("vk_brutto", artikel.vk_brutto)
     steuersatz = update.get("steuersatz", artikel.steuersatz)
     ek_netto = update.get("ek_netto", artikel.ek_netto)
-    vk_netto, ek_brutto = _berechne_preise(vk_brutto, ek_netto, steuersatz)
+    vk_netto, ek_brutto = _berechne_preise(vk_brutto, ek_netto, steuersatz, differenzbesteuerung)
     update["vk_netto"] = vk_netto
     if ek_brutto is not None or "ek_netto" in update:
         update["ek_brutto"] = ek_brutto

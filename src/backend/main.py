@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 38
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -960,6 +960,22 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 37"))
             conn.commit()
             print("[Migration] Schema auf Version 37 gebracht (rechnungen: dokument_typ + gutschrift_zu_rechnung_id)")
+
+        if version < 38:
+            # Differenzbesteuerung §25a UStG: Flag auf Artikel und Rechnungspositionen
+            cols_a = {r[1] for r in conn.execute(text("PRAGMA table_info(artikel)")).fetchall()}
+            if "differenzbesteuerung" not in cols_a:
+                conn.execute(text(
+                    "ALTER TABLE artikel ADD COLUMN differenzbesteuerung BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            cols_p = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungspositionen)")).fetchall()}
+            if "differenzbesteuerung" not in cols_p:
+                conn.execute(text(
+                    "ALTER TABLE rechnungspositionen ADD COLUMN differenzbesteuerung BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            conn.execute(text("PRAGMA user_version = 38"))
+            conn.commit()
+            print("[Migration] Schema auf Version 38 gebracht (differenzbesteuerung §25a UStG)")
 
 
 def _migrate_kategorien() -> None:

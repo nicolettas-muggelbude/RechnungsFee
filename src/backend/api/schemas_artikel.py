@@ -22,6 +22,7 @@ class ArtikelCreate(BaseModel):
     artikelcode: Optional[str] = None
     beschreibung: Optional[str] = None
     gruppe_id: Optional[int] = None
+    differenzbesteuerung: bool = False
 
     @field_validator("typ")
     @classmethod
@@ -58,6 +59,7 @@ class ArtikelUpdate(BaseModel):
     beschreibung: Optional[str] = None
     gruppe_id: Optional[int] = None
     aktiv: Optional[bool] = None
+    differenzbesteuerung: Optional[bool] = None
 
     @field_validator("typ")
     @classmethod
@@ -99,6 +101,7 @@ class ArtikelResponse(BaseModel):
     beschreibung: Optional[str] = None
     gruppe_id: Optional[int] = None
     gruppe_obj: Optional[ArtikelGruppeKurz] = None
+    differenzbesteuerung: bool = False
     aktiv: bool
     erstellt_am: datetime
     aktualisiert_am: datetime
@@ -115,6 +118,8 @@ class ArtikelSucheResponse(BaseModel):
     steuersatz: Decimal
     vk_brutto: Decimal
     vk_netto: Decimal
+    ek_brutto: Optional[Decimal] = None
+    differenzbesteuerung: bool = False
     lieferant_name: Optional[str] = None
     model_config = {"from_attributes": True}
 

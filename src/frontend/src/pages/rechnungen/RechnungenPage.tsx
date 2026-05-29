@@ -922,7 +922,12 @@ function RechnungDetail({
                         )}
                       </td>
                       <td className="px-3 py-2 text-right dark:text-slate-200">{formatEuro(pos.netto)}</td>
-                      <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500">{pos.ust_satz}%</td>
+                      <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500">
+                        {pos.differenzbesteuerung
+                          ? <span className="text-xs font-medium text-amber-600 dark:text-amber-400">§25a</span>
+                          : `${pos.ust_satz}%`
+                        }
+                      </td>
                       <td className="px-3 py-2 text-right font-medium dark:text-slate-200">{formatEuro(pos.brutto)}</td>
                     </tr>
                   ))}
@@ -1373,7 +1378,12 @@ function BeschreibungAutocomplete({
               onClick={() => { onArtikelWahl(a); setOffen(false) }}
               className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 dark:hover:bg-blue-950 border-b border-slate-100 dark:border-slate-700 last:border-0"
             >
-              <div className="font-medium text-slate-800 dark:text-slate-100">{a.bezeichnung}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-800 dark:text-slate-100">{a.bezeichnung}</span>
+                {a.differenzbesteuerung && (
+                  <span className="text-xs px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-medium">§25a</span>
+                )}
+              </div>
               <div className="text-slate-400 dark:text-slate-500">{a.artikelnummer} · {a.einheit} · {formatEuro(a.vk_brutto)}</div>
             </button>
           ))}
@@ -1396,6 +1406,7 @@ type Positionszeile = {
   ust_satz: string
   artikel_id?: number
   kategorie_id?: string  // nur Eingang, per-Position-Kategorie
+  differenzbesteuerung?: boolean
 }
 
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
@@ -1406,6 +1417,7 @@ const leerPosition = (defaultUst = '19'): Positionszeile => ({
   ust_satz: defaultUst,
   artikel_id: undefined,
   kategorie_id: undefined,
+  differenzbesteuerung: false,
 })
 
 function RechnungForm({
@@ -1494,6 +1506,7 @@ function RechnungForm({
         ust_satz: String(parseFloat(p.ust_satz)),
         artikel_id: p.artikel_id ?? undefined,
         kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
+        differenzbesteuerung: p.differenzbesteuerung ?? false,
       }))
     }
     // Plain-PDF-Prefill: Brutto/Netto-Betrag und USt-Satz aus Texterkennung vorfüllen
@@ -1656,11 +1669,13 @@ function RechnungForm({
   }
 
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
-    const ust_satz = istKleinunternehmer ? '0' : String(parseInt(a.steuersatz))
-    const preis = eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto
+    // §25a: kein USt-Ausweis, VK brutto = VK netto
+    const istDiff = a.differenzbesteuerung
+    const ust_satz = (istKleinunternehmer || istDiff) ? '0' : String(parseInt(a.steuersatz))
+    const preis = istDiff ? a.vk_brutto : (eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto)
     setPositionen((prev) => prev.map((p, idx) =>
       idx === i
-        ? { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, ust_satz, netto: preis.replace('.', ','), artikel_id: a.id }
+        ? { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, ust_satz, netto: preis.replace('.', ','), artikel_id: a.id, differenzbesteuerung: istDiff }
         : p
     ))
   }
@@ -1696,8 +1711,10 @@ function RechnungForm({
       positionen: positionen.map((p) => {
         const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
         const ust = parseFloat(p.ust_satz) || 0
-        const ust_satz = istKleinunternehmer ? '0' : (p.ust_satz || '0')
-        const netto = eingabeModus === 'brutto' && ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
+        const istDiff = p.differenzbesteuerung ?? false
+        // §25a: kein USt-Ausweis; Eingabewert = Rechnungspreis → direkt als netto senden
+        const ust_satz = (istKleinunternehmer || istDiff) ? '0' : (p.ust_satz || '0')
+        const netto = (!istDiff && eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
         return {
           beschreibung: p.beschreibung,
           menge: p.menge || '1',
@@ -1706,6 +1723,7 @@ function RechnungForm({
           ust_satz,
           artikel_id: p.artikel_id,
           kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
+          differenzbesteuerung: istDiff,
         } as RechnungspositionCreate
       }),
     }
@@ -2089,23 +2107,27 @@ function RechnungForm({
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <select
-                      value={pos.ust_satz}
-                      onChange={(e) => updatePosition(i, 'ust_satz', e.target.value)}
-                      disabled={istKleinunternehmer}
-                      className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
-                    >
-                      {istKleinunternehmer ? (
-                        <option value="0">0 (§19)</option>
-                      ) : (
-                        aktiveSaetze.map((s) => {
-                          const val = String(parseFloat(s.satz))
-                          return (
-                            <option key={s.id} value={val}>{val} %</option>
-                          )
-                        })
-                      )}
-                    </select>
+                    {pos.differenzbesteuerung ? (
+                      <div className="text-right text-xs font-medium text-amber-600 dark:text-amber-400 px-1">§25a</div>
+                    ) : (
+                      <select
+                        value={pos.ust_satz}
+                        onChange={(e) => updatePosition(i, 'ust_satz', e.target.value)}
+                        disabled={istKleinunternehmer}
+                        className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
+                      >
+                        {istKleinunternehmer ? (
+                          <option value="0">0 (§19)</option>
+                        ) : (
+                          aktiveSaetze.map((s) => {
+                            const val = String(parseFloat(s.satz))
+                            return (
+                              <option key={s.id} value={val}>{val} %</option>
+                            )
+                          })
+                        )}
+                      </select>
+                    )}
                   </td>
                   {typ === 'eingang' && (
                     <td className="px-2 py-1.5">

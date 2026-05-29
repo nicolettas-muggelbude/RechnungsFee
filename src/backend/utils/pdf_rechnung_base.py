@@ -460,11 +460,20 @@ class RechnungPDFBase(FPDF):
 
     def _render_19_hinweis(self):
         unt = self._unt
+        r = self._r
+        self.set_font("DejaVu", "", 7.5)
+        self.set_text_color(*TEXT_GRAU)
         if unt.get("ist_kleinunternehmer"):
-            self.set_font("DejaVu", "", 7.5)
-            self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5, "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.",
                       new_x="LMARGIN", new_y="NEXT")
+        # §25a-Hinweis: positionsweise, wenn mindestens eine Differenzbesteuerungs-Position vorhanden
+        hat_diff = any(getattr(pos, "differenzbesteuerung", False) for pos in (r.positionen or []))
+        if hat_diff:
+            self.cell(0, 5,
+                      "Sonderregelung nach § 25a UStG: Für gekennzeichnete Positionen gilt die Differenzbesteuerung "
+                      "(Gebrauchtgegenstände). Der Umsatzsteuerbetrag wird nicht gesondert ausgewiesen.",
+                      new_x="LMARGIN", new_y="NEXT")
+        if unt.get("ist_kleinunternehmer") or hat_diff:
             self.ln(self._ln_nach_19)
 
     def _render_zahlungsblock(self):

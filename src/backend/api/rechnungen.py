@@ -121,9 +121,12 @@ def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str
 
 
 def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
-    """Gibt (ust_betrag, brutto, netto_rund) zurück."""
+    """Gibt (ust_betrag, brutto, netto_rund) zurück.
+    Bei Differenzbesteuerung (§25a) wird keine USt separat ausgewiesen –
+    brutto = netto = netto-Eingabe (Preis ist der Rechnungspreis).
+    """
     netto = pos_data.netto.quantize(Decimal("0.01"), ROUND_HALF_UP)
-    if pos_data.ust_satz == 0:
+    if getattr(pos_data, "differenzbesteuerung", False) or pos_data.ust_satz == 0:
         return Decimal("0.00"), netto, netto
     ust_betrag = (netto * pos_data.ust_satz / 100).quantize(Decimal("0.01"))
     brutto = netto + ust_betrag
@@ -441,7 +444,9 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     ust_sum = Decimal("0.00")
 
     for i, pos_data in enumerate(data.positionen, start=1):
-        ust_satz = Decimal("0") if ist_kleinunternehmer else pos_data.ust_satz
+        ist_diff = getattr(pos_data, "differenzbesteuerung", False)
+        # §25a: kein USt-Ausweis (ust_satz = 0 auf der Rechnung)
+        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff) else pos_data.ust_satz
         ust_betrag, brutto, netto = _berechne_position(pos_data)
         if ist_kleinunternehmer:
             ust_betrag = Decimal("0.00")
@@ -459,6 +464,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             ust_satz=ust_satz,
             ust_betrag=ust_betrag,
             brutto=brutto,
+            differenzbesteuerung=ist_diff,
         )
         db.add(pos)
         netto_sum += netto * pos_data.menge
@@ -506,7 +512,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         netto_sum = Decimal("0.00")
         ust_sum = Decimal("0.00")
         for i, pos_data in enumerate(data.positionen, start=1):
-            ust_satz = Decimal("0") if ist_kleinunternehmer else pos_data.ust_satz
+            ist_diff = getattr(pos_data, "differenzbesteuerung", False)
+            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff) else pos_data.ust_satz
             ust_betrag, brutto, netto = _berechne_position(pos_data)
             if ist_kleinunternehmer:
                 ust_betrag = Decimal("0.00")
@@ -523,6 +530,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 ust_satz=ust_satz,
                 ust_betrag=ust_betrag,
                 brutto=brutto,
+                differenzbesteuerung=ist_diff,
             )
             db.add(pos)
             netto_sum += netto * pos_data.menge
@@ -1281,6 +1289,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
             ust_betrag=ust_betrag,
             brutto=brutto_pos,
             kategorie_id=pos.kategorie_id,
+            differenzbesteuerung=pos.differenzbesteuerung,
         )
         db.add(neue_pos)
         netto_sum += netto_pos

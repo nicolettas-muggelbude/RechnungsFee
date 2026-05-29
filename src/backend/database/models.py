@@ -349,6 +349,7 @@ class Artikel(Base):
     artikelcode: Mapped[str | None] = mapped_column(String(100))
     beschreibung: Mapped[str | None] = mapped_column(Text)
     gruppe_id: Mapped[int | None] = mapped_column(ForeignKey("artikel_gruppen.id"))
+    differenzbesteuerung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -464,6 +465,7 @@ class Rechnungsposition(Base):
     ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     ust_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    differenzbesteuerung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
 

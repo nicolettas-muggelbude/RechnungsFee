@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 36` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 38` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -102,6 +102,8 @@ def _run_migrations():
 | 34 | rechnungen.storno_grund VARCHAR(500) – Pflichtbegründung beim Storno |
 | 35 | kategorien.beschreibung TEXT – ~65 vorbefüllte Verwendungsbeispiele; inline editierbar; Hinweis im Buchungsformular |
 | 36 | fehlende Beschreibungen für Kategorien mit abweichendem Namen nachrüsten (z. B. „Betriebseinnahmen", „Fahrtkosten (km-Pauschale)") |
+| 37 | rechnungen.dokument_typ VARCHAR(20) DEFAULT 'Rechnung'; rechnungen.gutschrift_zu_rechnung_id FK (Gutschrift-Feature) |
+| 38 | artikel.differenzbesteuerung BOOLEAN DEFAULT 0; rechnungspositionen.differenzbesteuerung BOOLEAN DEFAULT 0 (§25a UStG) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
