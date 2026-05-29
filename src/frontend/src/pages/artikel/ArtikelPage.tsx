@@ -266,7 +266,7 @@ const schema = z.object({
   artikelcode: z.string().optional(),
   beschreibung: z.string().optional(),
   gruppe_id: z.string().optional(),
-  differenzbesteuerung: z.boolean().default(false),
+  differenzbesteuerung: z.boolean(),
 })
 
 type FormValues = z.infer<typeof schema>
