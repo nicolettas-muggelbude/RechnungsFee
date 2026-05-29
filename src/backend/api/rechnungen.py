@@ -532,6 +532,24 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
         rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Decimal("0.01"), ROUND_HALF_UP)
 
+        # Gutschrift: Betrag darf den noch verbleibenden Restbetrag nicht überschreiten
+        if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
+            original = db.query(Rechnung).filter(Rechnung.id == rechnung.gutschrift_zu_rechnung_id).first()
+            if original:
+                restbetrag = _gutschrift_restbetrag(original, db, ausgenommen_id=rechnung.id)
+                diese_gs = abs(rechnung.brutto_gesamt)
+                if diese_gs > restbetrag + Decimal("0.01"):   # 1 Cent Toleranz für Rundung
+                    def _euro(v: Decimal) -> str:
+                        return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Gutschrift überschreitet den zulässigen Betrag. "
+                            f"Noch gutschreibbar: {_euro(restbetrag)} – "
+                            f"diese Gutschrift: {_euro(diese_gs)}."
+                        ),
+                    )
+
     if data.ist_entwurf is not None:
         rechnung.ist_entwurf = data.ist_entwurf
 
