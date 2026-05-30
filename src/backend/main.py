@@ -983,16 +983,46 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 38 gebracht (differenzbesteuerung §25a UStG)")
 
-        if version < 43:
-            # journal.km_anzahl: Kilometeranzahl für km-Pauschale-Buchungen (Fahrtkosten Privat-PKW).
-            # Optional – nur bei Fahrtkosten relevant. EÜR rechnet km × 0,30 €, EKS km × 0,10 €.
-            # Ohne Eintrag: EKS-Berechnung fällt auf brutto_betrag zurück (Rückwärtskompatibilität).
-            cols_j = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
-            if "km_anzahl" not in cols_j:
-                conn.execute(text("ALTER TABLE journal ADD COLUMN km_anzahl NUMERIC(10,1)"))
-            conn.execute(text("PRAGMA user_version = 43"))
+        if version < 39:
+            # 'Bewirtungskosten (nicht abzugsfähig)': eks_kategorie war fälschlicherweise 'B14_5'.
+            # Der steuerlich nicht abziehbare Anteil ist beim Jobcenter keine notwendige Betriebsausgabe
+            # und darf die EKS-Einkommensberechnung nicht mindern.
+            conn.execute(text("""
+                UPDATE kategorien
+                SET eks_kategorie = NULL
+                WHERE name = 'Bewirtungskosten (nicht abzugsfähig)'
+                  AND eks_kategorie = 'B14_5'
+            """))
+            conn.execute(text("PRAGMA user_version = 39"))
             conn.commit()
-            print("[Migration] Schema auf Version 43 (journal.km_anzahl fuer Fahrtkosten/EKS B6_5)")
+            print("[Migration] Schema auf Version 39 gebracht (Bewirtungskosten nicht abzugsfähig: eks_kategorie → NULL)")
+
+        if version < 40:
+            # journal.vorsteuer_betrag: tatsächlich abziehbarer Vorsteuer-Anteil
+            # Berücksichtigt vorsteuer_prozent der Kategorie (z.B. 70% bei Bewirtungskosten).
+            # Für ältere Einträge bleibt der Wert 0 – korrekte Werte ab diesem Release.
+            cols_j = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
+            if "vorsteuer_betrag" not in cols_j:
+                conn.execute(text(
+                    "ALTER TABLE journal ADD COLUMN vorsteuer_betrag NUMERIC(12,2) NOT NULL DEFAULT 0"
+                ))
+            conn.execute(text("PRAGMA user_version = 40"))
+            conn.commit()
+            print("[Migration] Schema auf Version 40 gebracht (journal.vorsteuer_betrag)")
+
+        if version < 41:
+            # Privatentnahme / Privateinlage: euer_zeile war None, muss 106/107 sein.
+            # Anlage EÜR 2025 Zeile 106 = Entnahmen, Zeile 107 = Einlagen (Hinweiszeilen,
+            # fließen nicht in den Gewinn ein, müssen aber ausgewiesen werden).
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile = 106 WHERE name = 'Privatentnahme' AND euer_zeile IS NULL"
+            ))
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile = 107 WHERE name = 'Privateinlage' AND euer_zeile IS NULL"
+            ))
+            conn.execute(text("PRAGMA user_version = 41"))
+            conn.commit()
+            print("[Migration] Schema auf Version 41 (Privatentnahme Z106 / Privateinlage Z107)")
 
         if version < 42:
             # EDV / Software (Sofortabschreibung): war fälschlicherweise kontenart=Aufwand.
@@ -1015,46 +1045,16 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 42 (EDV/Software: Aufwand→Anlage, B10→B8)")
 
-        if version < 41:
-            # Privatentnahme / Privateinlage: euer_zeile war None, muss 106/107 sein.
-            # Anlage EÜR 2025 Zeile 106 = Entnahmen, Zeile 107 = Einlagen (Hinweiszeilen,
-            # fließen nicht in den Gewinn ein, müssen aber ausgewiesen werden).
-            conn.execute(text(
-                "UPDATE kategorien SET euer_zeile = 106 WHERE name = 'Privatentnahme' AND euer_zeile IS NULL"
-            ))
-            conn.execute(text(
-                "UPDATE kategorien SET euer_zeile = 107 WHERE name = 'Privateinlage' AND euer_zeile IS NULL"
-            ))
-            conn.execute(text("PRAGMA user_version = 41"))
-            conn.commit()
-            print("[Migration] Schema auf Version 41 (Privatentnahme Z106 / Privateinlage Z107)")
-
-        if version < 40:
-            # journal.vorsteuer_betrag: tatsächlich abziehbarer Vorsteuer-Anteil
-            # Berücksichtigt vorsteuer_prozent der Kategorie (z.B. 70% bei Bewirtungskosten).
-            # Für ältere Einträge bleibt der Wert 0 – korrekte Werte ab diesem Release.
+        if version < 43:
+            # journal.km_anzahl: Kilometeranzahl für km-Pauschale-Buchungen (Fahrtkosten Privat-PKW).
+            # Optional – nur bei Fahrtkosten relevant. EÜR rechnet km × 0,30 €, EKS km × 0,10 €.
+            # Ohne Eintrag: EKS-Berechnung fällt auf brutto_betrag zurück (Rückwärtskompatibilität).
             cols_j = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
-            if "vorsteuer_betrag" not in cols_j:
-                conn.execute(text(
-                    "ALTER TABLE journal ADD COLUMN vorsteuer_betrag NUMERIC(12,2) NOT NULL DEFAULT 0"
-                ))
-            conn.execute(text("PRAGMA user_version = 40"))
+            if "km_anzahl" not in cols_j:
+                conn.execute(text("ALTER TABLE journal ADD COLUMN km_anzahl NUMERIC(10,1)"))
+            conn.execute(text("PRAGMA user_version = 43"))
             conn.commit()
-            print("[Migration] Schema auf Version 40 gebracht (journal.vorsteuer_betrag)")
-
-        if version < 39:
-            # 'Bewirtungskosten (nicht abzugsfähig)': eks_kategorie war fälschlicherweise 'B14_5'.
-            # Der steuerlich nicht abziehbare Anteil ist beim Jobcenter keine notwendige Betriebsausgabe
-            # und darf die EKS-Einkommensberechnung nicht mindern.
-            conn.execute(text("""
-                UPDATE kategorien
-                SET eks_kategorie = NULL
-                WHERE name = 'Bewirtungskosten (nicht abzugsfähig)'
-                  AND eks_kategorie = 'B14_5'
-            """))
-            conn.execute(text("PRAGMA user_version = 39"))
-            conn.commit()
-            print("[Migration] Schema auf Version 39 gebracht (Bewirtungskosten nicht abzugsfähig: eks_kategorie → NULL)")
+            print("[Migration] Schema auf Version 43 (journal.km_anzahl fuer Fahrtkosten/EKS B6_5)")
 
 
 def _migrate_kategorien() -> None:
