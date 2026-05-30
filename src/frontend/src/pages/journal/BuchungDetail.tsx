@@ -238,7 +238,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose }: Props) 
                 </span>
               )}
               {e.rechnung_nr && <span>&nbsp;·&nbsp;</span>}
-              {e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
+              {e.zahlungsart === 'Keine' ? '—' : e.zahlungsart} &nbsp;·&nbsp; {new Date(e.erstellt_am).toLocaleString('de-DE')}
               &nbsp;·&nbsp;
               <BelegnrKopieren belegnr={e.belegnr} />
             </div>

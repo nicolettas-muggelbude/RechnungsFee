@@ -26,7 +26,7 @@ const singleSchema = z.object({
     .string()
     .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, 'Betrag muss positiv sein'),
   ust_satz: z.string(),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
   kategorie_id: z.string().optional(),
   kunde_id: z.string().optional(),
   vorsteuerabzug: z.boolean().optional(),
@@ -46,7 +46,7 @@ const positionSchema = z.object({
 const splitSchema = z.object({
   datum: z.string().min(1, 'Datum erforderlich'),
   art: z.enum(['Einnahme', 'Ausgabe']),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
   externe_belegnr: z.string().optional(),
   kunde_id: z.string().optional(),
   positionen: z.array(positionSchema).min(2, 'Mindestens 2 Positionen erforderlich'),
@@ -76,6 +76,7 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const qc = useQueryClient()
   const [isSplit, setIsSplit] = useState(false)
   const [eingabeModus, setEingabeModus] = useState<'brutto' | 'netto'>('brutto')
+  const [keineGeldbewegung, setKeineGeldbewegung] = useState(false)
 
   const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
@@ -436,12 +437,31 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Zahlungsart</label>
-                <select
-                  {...register('zahlungsart')}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                >
-                  {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
-                </select>
+                <label className="flex items-center gap-1.5 mb-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={keineGeldbewegung}
+                    onChange={(ev) => {
+                      const checked = ev.target.checked
+                      setKeineGeldbewegung(checked)
+                      setValue('zahlungsart', checked ? 'Keine' : 'Bar')
+                      setValueS('zahlungsart', checked ? 'Keine' : 'Bar')
+                    }}
+                    className="rounded"
+                  />
+                  <span className="flex items-center gap-1">
+                    Kein Geldfluss
+                    <InfoTooltip text="Für buchhalterische Vorgänge ohne tatsächlichen Geldfluss: AfA, Sachentnahmen, Eigenverbrauch. Es wird kein Kasseneintrag und kein Kontoauszug erzeugt." />
+                  </span>
+                </label>
+                {!keineGeldbewegung && (
+                  <select
+                    {...register('zahlungsart')}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -696,12 +716,31 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Zahlungsart</label>
-                <select
-                  {...registerS('zahlungsart')}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                >
-                  {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
-                </select>
+                <label className="flex items-center gap-1.5 mb-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={keineGeldbewegung}
+                    onChange={(ev) => {
+                      const checked = ev.target.checked
+                      setKeineGeldbewegung(checked)
+                      setValue('zahlungsart', checked ? 'Keine' : 'Bar')
+                      setValueS('zahlungsart', checked ? 'Keine' : 'Bar')
+                    }}
+                    className="rounded"
+                  />
+                  <span className="flex items-center gap-1">
+                    Kein Geldfluss
+                    <InfoTooltip text="Für buchhalterische Vorgänge ohne tatsächlichen Geldfluss: AfA, Sachentnahmen, Eigenverbrauch. Es wird kein Kasseneintrag und kein Kontoauszug erzeugt." />
+                  </span>
+                </label>
+                {!keineGeldbewegung && (
+                  <select
+                    {...registerS('zahlungsart')}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                  </select>
+                )}
               </div>
             </div>
 
