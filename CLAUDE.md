@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 43` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 44` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -109,6 +109,7 @@ def _run_migrations():
 | 41 | kategorien: Privatentnahme euer_zeile → 106, Privateinlage → 107 (Anlage EÜR 2025 Hinweiszeilen); neue Kategorie „KFZ (Kauf)" SKR03 0320/SKR04 0540 (Anlage AVEUR) |
 | 42 | kategorien: „EDV / Software (Sofortabschreibung)" Aufwand→Anlage (SKR03 0650/SKR04 0490), eks_kategorie B10→B8, euer_zeile NULL; BMF 2021 ist Nutzungsdauer-Wahlrecht (§7 Abs. 1 EStG), KEIN GWG |
 | 43 | journal.km_anzahl NUMERIC(10,1) – km-Anzahl für Fahrtkosten Privat-PKW; EÜR: km×0,30 in brutto_betrag, EKS B6_5: km×0,10; EKS_FELDER_META 5. Element negativ; B6_4_priv (Abzug privat gefahrene km Betriebs-KFZ) neu |
+| 44 | EDV / Software (Sofortabschreibung): SKR03 0650→0490 (Sonstige BGA), SKR04 0490→0650 (Büroeinrichtung) – SKR03 0650 war Verbindlichkeitenkonto (Issue #111) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

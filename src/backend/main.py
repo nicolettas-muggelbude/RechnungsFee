@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 43
+SCHEMA_VERSION = 44
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -913,7 +913,7 @@ def _run_migrations() -> None:
                 "Gewerbesteuer":               "z. B. vierteljährliche Gewerbesteuer-Vorauszahlungen oder Jahresausgleich",
                 "Anlagevermögen (Kauf)":       "z. B. Computer, Maschinen, Geräte über 800 € netto – für Fahrzeuge bitte 'KFZ (Kauf)' verwenden (Anlage AVEUR)",
                 "KFZ (Kauf)":                  "Kauf eines Kraftfahrzeugs über 800 € netto (Anlage AVEUR: Kategorie Kraftfahrzeuge) – laufende KFZ-Kosten separat unter KFZ-Kosten / KFZ-Versicherung etc. buchen",
-                "EDV / Software (Sofortabschreibung)": "Hardware (PC, Laptop, Tablet, Smartphone, Drucker) und Software. Zweistufig buchen: 1. Kauf hier als Anlage (SKR03 0650), 2. im selben Jahr volle AfA über 'Abschreibungen (AfA)'. Wahlrecht auf Nutzungsdauer 1 Jahr nach BMF 26.02.2021 (§ 7 Abs. 1 EStG) – muss ins Bestandsverzeichnis, KEIN GWG!",
+                "EDV / Software (Sofortabschreibung)": "Hardware (PC, Laptop, Tablet, Smartphone, Drucker) und Software. Zweistufig buchen: 1. Kauf hier als Anlage (SKR03 0490), 2. im selben Jahr volle AfA über 'Abschreibungen (AfA)'. Wahlrecht auf Nutzungsdauer 1 Jahr nach BMF 26.02.2021 (§ 7 Abs. 1 EStG) – muss ins Bestandsverzeichnis, KEIN GWG!",
                 "Forderungsausfall":           "Uneinbringliche Forderungen (Kundeninsolvenz, endgültige Zahlungsverweigerung). Nur für USt-Pflichtige: Korrekturbuchung nach §17 UStG wird automatisch erstellt.",
                 "Abschreibungen (AfA)":        "z. B. Jahres-AfA für Wirtschaftsgüter des Anlagevermögens (vom Steuerberater berechnet)",
                 "Investition aus Zuwendung Dritter": "z. B. Anschaffungen die aus Fördergeldern oder Zuschüssen finanziert wurden",
@@ -1029,7 +1029,7 @@ def _run_migrations() -> None:
             # BMF-Schreiben 26.02.2021 gewährt Wahlrecht auf Nutzungsdauer 1 Jahr (§ 7 Abs. 1 EStG),
             # ist aber KEIN GWG (§ 6 Abs. 2 EStG). Wirtschaftsgut muss ins Bestandsverzeichnis,
             # Buchung läuft über Anlagekonto + separate AfA im selben Jahr.
-            # → kontenart Anlage, SKR03 0650 (BGA), SKR04 0490, eks_kategorie B8, euer_zeile NULL.
+            # → kontenart Anlage, SKR03 0650 (fehlerhaft, v44 korrigiert auf 0490), SKR04 0490 (fehlerhaft, v44 korrigiert auf 0650).
             conn.execute(text("""
                 UPDATE kategorien
                 SET kontenart = 'Anlage',
@@ -1055,6 +1055,24 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 43"))
             conn.commit()
             print("[Migration] Schema auf Version 43 (journal.km_anzahl fuer Fahrtkosten/EKS B6_5)")
+
+        if version < 44:
+            # EDV / Software (Sofortabschreibung): SKR03 war fälschlicherweise 0650
+            # (= Verbindlichkeiten gegenüber Kreditinstituten, Passivkonto!), SKR04 war 0490
+            # (existiert im SKR04 als Anlagenkonto nicht).
+            # Korrekt: SKR03 0490 (Sonstige Betriebs- und Geschäftsausstattung),
+            #          SKR04 0650 (Büroeinrichtung).
+            conn.execute(text("""
+                UPDATE kategorien
+                SET konto_skr03_default = '0490',
+                    konto_skr04_default = '0650',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '0490' ELSE konto_skr03 END,
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '0650' ELSE konto_skr04 END
+                WHERE name = 'EDV / Software (Sofortabschreibung)' AND ist_system = 1
+            """))
+            conn.execute(text("PRAGMA user_version = 44"))
+            conn.commit()
+            print("[Migration] Schema auf Version 44 (EDV/Software: SKR03 0490, SKR04 0650 korrigiert)")
 
 
 def _migrate_kategorien() -> None:
@@ -1204,7 +1222,7 @@ def _migrate_kategorien() -> None:
             {"name": "KFZ (Kauf)",                           "kontenart": "Anlage",  "konto_skr03": "0320", "konto_skr04": "0540", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # Digitale Wirtschaftsgüter: Wahlrecht Nutzungsdauer 1 Jahr (BMF 26.02.2021, § 7 Abs. 1 EStG)
             # KEIN GWG – muss ins Bestandsverzeichnis! Buchung: 1. Kauf hier (Anlage 0650), 2. volle AfA
-            {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0650", "konto_skr04": "0490", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0490", "konto_skr04": "0650", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
         ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
