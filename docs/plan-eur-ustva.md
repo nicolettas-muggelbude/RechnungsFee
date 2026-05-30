@@ -61,11 +61,15 @@ Berechnung beim Buchen: `vorsteuer_betrag = ust_betrag × vorsteuer_prozent / 10
 ```python
 {"name": "Forderungsausfall", "kontenart": "Aufwand",
  "konto_skr03": "4803", "konto_skr04": "6403",
- "eks_kategorie": "B14_5", "euer_zeile": 60,
+ "eks_kategorie": None, "euer_zeile": 60,
  "vorsteuer_prozent": 0, "ust_satz_standard": 0}
 ```
 
 Beschreibung: *„Uneinbringliche Forderungen (Kundeninsolvenz, endgültige Zahlungsverweigerung) – nur für USt-Pflichtige erzeugt dies eine §17-UStG-Korrekturbuchung"*
+
+> **EKS: `eks_kategorie=None`** – Zuflussprinzip: unbezahlte Rechnungen waren nie in der EKS-Einnahme,
+> es gibt nichts zu korrigieren. Die §17-UStG-Korrekturbuchung betrifft nur USt-Pflichtige,
+> die in der Regel keine EKS stellen.
 
 **Neuer `zahlungsstatus`-Wert:** `'uneinbringlich'` (String – kein ALTER TABLE nötig)
 
@@ -257,6 +261,18 @@ Phase 3 – UStVA
 
 ---
 
+## EKS-Auswirkungen
+
+| Bereich | Verhalten | Begründung |
+|---------|-----------|------------|
+| AfA-Buchungen (Phase 1) | fließen **nicht** in EKS | EKS-Formular hat kein AfA-Feld; Anlagevermögen geht vollständig in B8 „Investitionen" im Kaufjahr |
+| Eigenverbrauch/Sachentnahmen (Phase 1) | fließen **automatisch** in EKS | Nutzen bestehende Kategorien mit korrekten `eks_kategorie`-Werten (z. B. B6_3, B11) |
+| Forderungsausfall (Phase 1b) | `eks_kategorie=None` | Zuflussprinzip: unbezahlte Rechnungen waren nie EKS-Einnahme; nichts zu korrigieren |
+| `vorsteuer_betrag` (Schema v39) | **Bonus: B17 auto-berechnen** | EKS-Zeile B17 „Gezahlte Vorsteuer" könnte aus `SUM(vorsteuer_betrag)` der Ausgaben befüllt werden – B17 ist aktuell deaktiviert, optional nach Phase 2 aktivierbar |
+| A5_1 / A5_2 (Roadmap-Punkt) | bereits implementiert ✅ | Wird automatisch aus `ust_betrag` der A1/A3/A4-Einnahmen berechnet; Roadmap-Eintrag ist veraltet |
+
+---
+
 ## Bewusste Vereinfachungen / offene Punkte
 
 | Thema | Entscheidung |
@@ -265,5 +281,6 @@ Phase 3 – UStVA
 | AfA-Assistent | Kein AfA-Modul – manuelle Buchung über Phase 1; Steuerberater liefert AfA-Betrag |
 | §25a in EÜR | Korrekt automatisch: Umsatz als normale Einnahme, kein separater USt-Ausweis, `euer_zeile` der Kategorie greift |
 | Bewirtungskosten 70/30 | Zwei Kategorien → zwei EÜR-Zeilen; keine Extra-Logik nötig |
+| EKS B17 Vorsteuer | Optional nach Schema v39: `SUM(vorsteuer_betrag)` → B17; erst aktivieren wenn Bedarf besteht |
 | CSV-Import Kontenplan | Separates Feature (aus Issue #111), unabhängig von EÜR/UStVA |
 | Wiederholende Buchungen | Eigenes Feature (Roadmap v0.2.x), kein Blocker für EÜR |

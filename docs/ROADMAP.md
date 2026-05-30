@@ -136,7 +136,7 @@ Die Aufteilung in Netto + USt passiert vollautomatisch beim Buchen.
 - [x] Gilt für Rechnungszahlungen und manuelle Buchungen
 
 **Noch offen:**
-- [ ] EKS: A5_1 / A5_2 automatisch aus `ust_betrag` der A1/A2-Einträge ableiten
+- [x] EKS: A5_1 / A5_2 automatisch aus `ust_betrag` der A1/A2-Einträge ableiten
 - [ ] GoBD-Export CSV: USt-Spalte korrekt je Einnahmen-/Ausgaben-Typ befüllen
 - [ ] EÜR: USt-Beträge in die richtigen Zeilen der Anlage EÜR einordnen
 - [ ] UStVA (v0.4): Voranmeldungs-Kennziffern direkt aus `ust_betrag` + Kategorie befüllen
