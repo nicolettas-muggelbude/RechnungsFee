@@ -197,6 +197,7 @@ class Journaleintrag(Base):
     netto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     ust_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    vorsteuer_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)  # abziehbarer Anteil (berücksichtigt vorsteuer_prozent der Kategorie, z.B. 70% Bewirtungskosten)
     brutto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     vorsteuerabzug: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     steuerbefreiung_grund: Mapped[str | None] = mapped_column(String(100))  # z.B. "§19 UStG"

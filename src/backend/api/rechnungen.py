@@ -106,6 +106,15 @@ def _ust_konto(art: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     return skr03, skr04
 
 
+def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat) -> Decimal:
+    """Tatsächlich abziehbarer Vorsteuer-Betrag (berücksichtigt kat.vorsteuer_prozent)."""
+    if not vorsteuerabzug or ust_betrag == 0:
+        return Decimal("0.00")
+    if kat is not None and int(kat.vorsteuer_prozent) < 100:
+        return (ust_betrag * kat.vorsteuer_prozent / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    return ust_betrag
+
+
 def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     """Gibt (konto_skr03, konto_skr04) für die Skonto-Gegenbuchung zurück."""
     satz = int(ust_satz)
@@ -849,6 +858,7 @@ def _erstelle_skonto_eintrag(
     sk_ust_skr03, sk_ust_skr04 = _ust_konto(ust_art_konto, ust_satz) if ust_satz > 0 else (None, None)
     kat_name = "Gewährte Skonti" if rechnung.typ == "ausgang" else "Erhaltene Skonti"
     kat = db.query(_Kategorie).filter(_Kategorie.name == kat_name).first()
+    sk_vorsteuerabzug = (rechnung.typ == "eingang" and ust_satz > 0)
     sk = Journaleintrag(
         datum=data.datum,
         belegnr=_naechste_belegnr_journal(db, data.datum),
@@ -863,8 +873,9 @@ def _erstelle_skonto_eintrag(
         netto_betrag=sk_netto,
         ust_satz=ust_satz,
         ust_betrag=sk_ust,
+        vorsteuer_betrag=_berechne_vorsteuer(sk_ust, sk_vorsteuerabzug, kat),
         brutto_betrag=skonto_betrag,
-        vorsteuerabzug=(rechnung.typ == "eingang" and ust_satz > 0),
+        vorsteuerabzug=sk_vorsteuerabzug,
         steuerbefreiung_grund=steuerbefreiung_grund,
         rechnung_id=rechnung_id,
         immutable=True,
@@ -991,6 +1002,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             u = (brutto - n).quantize(Decimal("0.01"), ROUND_HALF_UP)
         else:
             n, u = brutto, Decimal("0.00")
+        vst_abzug = (art == "Ausgabe" and satz > 0)
         e = Journaleintrag(
             datum=data.datum,
             belegnr=_naechste_belegnr_journal(db, data.datum),
@@ -1005,8 +1017,9 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             netto_betrag=n,
             ust_satz=satz,
             ust_betrag=u,
+            vorsteuer_betrag=_berechne_vorsteuer(u, vst_abzug, kat),
             brutto_betrag=brutto,
-            vorsteuerabzug=(art == "Ausgabe" and satz > 0),
+            vorsteuerabzug=vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung_id,
             immutable=True,
@@ -1185,6 +1198,7 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             netto_betrag=s_netto,
             ust_satz=eintrag.ust_satz,
             ust_betrag=s_ust,
+            vorsteuer_betrag=-eintrag.vorsteuer_betrag,
             brutto_betrag=s_brutto,
             vorsteuerabzug=False,
             steuerbefreiung_grund=None,

@@ -76,6 +76,17 @@ def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]
     return netto, ust_betrag
 
 
+def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat) -> Decimal:
+    """Tatsächlich abziehbarer Vorsteuer-Betrag.
+    Berücksichtigt kat.vorsteuer_prozent (z.B. 70 bei Bewirtungskosten → 70% von ust_betrag).
+    Storno-Einträge übergeben -ust_betrag damit sich Originalwert und Storno aufheben."""
+    if not vorsteuerabzug or ust_betrag == 0:
+        return Decimal("0.00")
+    if kat is not None and int(kat.vorsteuer_prozent) < 100:
+        return (ust_betrag * kat.vorsteuer_prozent / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    return ust_betrag
+
+
 def _ust_konto(art: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     """Gibt (konto_skr03, konto_skr04) für den USt-Anteil zurück."""
     satz = int(ust_satz)
@@ -261,6 +272,7 @@ def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
         netto_betrag=netto,
         ust_satz=ust_satz,
         ust_betrag=ust_betrag,
+        vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, kat),
         brutto_betrag=data.brutto_betrag,
         vorsteuerabzug=vorsteuerabzug,
         steuerbefreiung_grund=steuerbefreiung_grund,
@@ -323,6 +335,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             netto_betrag=netto,
             ust_satz=ust_satz,
             ust_betrag=ust_betrag,
+            vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, split_kat),
             brutto_betrag=pos.brutto_betrag,
             vorsteuerabzug=vorsteuerabzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
@@ -440,6 +453,9 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         netto_betrag=s_netto,
         ust_satz=original.ust_satz,
         ust_betrag=s_ust,
+        # Storno kehrt den Vorsteuer-Betrag um, damit sich Original und Storno in der EÜR aufheben.
+        # Negativer Wert ist korrekt: EÜR summiert SUM(vorsteuer_betrag) ohne art-Filter.
+        vorsteuer_betrag=-original.vorsteuer_betrag,
         brutto_betrag=s_brutto,
         vorsteuerabzug=False,
         steuerbefreiung_grund=None,

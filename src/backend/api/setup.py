@@ -73,6 +73,7 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
         netto_betrag=data.betrag,
         ust_satz=Decimal("0"),
         ust_betrag=Decimal("0"),
+        vorsteuer_betrag=Decimal("0"),
         brutto_betrag=data.betrag,
         vorsteuerabzug=False,
         immutable=True,

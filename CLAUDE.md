@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 39` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 40` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -105,6 +105,7 @@ def _run_migrations():
 | 37 | rechnungen.dokument_typ VARCHAR(20) DEFAULT 'Rechnung'; rechnungen.gutschrift_zu_rechnung_id FK (Gutschrift-Feature) |
 | 38 | artikel.differenzbesteuerung BOOLEAN DEFAULT 0; rechnungspositionen.differenzbesteuerung BOOLEAN DEFAULT 0 (§25a UStG) |
 | 39 | kategorien: „Bewirtungskosten (nicht abzugsfähig)" eks_kategorie B14_5 → NULL (kein anerkannter Aufwand beim Jobcenter) |
+| 40 | journal.vorsteuer_betrag NUMERIC(12,2) DEFAULT 0 – tatsächlich abziehbarer Vorsteuer-Anteil (berücksichtigt vorsteuer_prozent der Kategorie, z.B. 70% Bewirtungskosten); Storno-Einträge erhalten negativen Wert |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

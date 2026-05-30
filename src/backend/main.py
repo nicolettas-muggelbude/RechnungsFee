@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -979,6 +979,19 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 38"))
             conn.commit()
             print("[Migration] Schema auf Version 38 gebracht (differenzbesteuerung §25a UStG)")
+
+        if version < 40:
+            # journal.vorsteuer_betrag: tatsächlich abziehbarer Vorsteuer-Anteil
+            # Berücksichtigt vorsteuer_prozent der Kategorie (z.B. 70% bei Bewirtungskosten).
+            # Für ältere Einträge bleibt der Wert 0 – korrekte Werte ab diesem Release.
+            cols_j = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
+            if "vorsteuer_betrag" not in cols_j:
+                conn.execute(text(
+                    "ALTER TABLE journal ADD COLUMN vorsteuer_betrag NUMERIC(12,2) NOT NULL DEFAULT 0"
+                ))
+            conn.execute(text("PRAGMA user_version = 40"))
+            conn.commit()
+            print("[Migration] Schema auf Version 40 gebracht (journal.vorsteuer_betrag)")
 
         if version < 39:
             # 'Bewirtungskosten (nicht abzugsfähig)': eks_kategorie war fälschlicherweise 'B14_5'.
