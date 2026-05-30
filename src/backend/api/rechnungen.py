@@ -1215,6 +1215,77 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     return RechnungResponse.from_orm_extended(rechnung)
 
 
+@router.post("/{rechnung_id}/forderungsausfall", response_model=RechnungResponse)
+def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
+    """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich.
+    Für USt-Pflichtige (nicht §19) wird automatisch eine §17-UStG-Korrekturbuchung erstellt."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwürfe können nicht ausgebucht werden.")
+    if rechnung.storniert:
+        raise HTTPException(status_code=409, detail="Stornierte Rechnungen können nicht ausgebucht werden.")
+    if rechnung.zahlungsstatus == "bezahlt":
+        raise HTTPException(status_code=409, detail="Vollständig bezahlte Rechnungen können nicht ausgebucht werden.")
+    if rechnung.zahlungsstatus == "uneinbringlich":
+        raise HTTPException(status_code=409, detail="Forderung ist bereits ausgebucht.")
+
+    unternehmen = db.query(Unternehmen).first()
+    ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
+
+    re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
+    heute = date.today()
+    restbetrag = abs(rechnung.brutto_gesamt - rechnung.bezahlt_betrag)
+
+    if not ist_kleinunternehmer and restbetrag > Decimal("0.004"):
+        # USt-Anteil des Restbetrags proportional ermitteln
+        Q = Decimal("0.01")
+        if rechnung.brutto_gesamt > 0 and rechnung.ust_gesamt > 0:
+            ust_anteil = (rechnung.ust_gesamt * restbetrag / rechnung.brutto_gesamt).quantize(Q, ROUND_HALF_UP)
+        else:
+            ust_anteil = Decimal("0.00")
+        netto_anteil = (restbetrag - ust_anteil).quantize(Q, ROUND_HALF_UP)
+
+        # Durchschnittlicher USt-Satz für Kontenzuordnung
+        ust_satz_avg = Decimal("0")
+        if netto_anteil > 0 and ust_anteil > 0:
+            ust_satz_avg = (ust_anteil / netto_anteil * 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+        kat_fa = db.query(Kategorie).filter(Kategorie.name == "Forderungsausfall").first()
+        konto_ust_skr03, konto_ust_skr04 = _ust_konto("Einnahme", ust_satz_avg) if ust_satz_avg > 0 else (None, None)
+
+        belegnr = _naechste_belegnr_journal(db, heute)
+        eintrag = Journaleintrag(
+            datum=heute,
+            belegnr=belegnr,
+            beschreibung=f"Forderungsausfall {re_nr} (§17 UStG)",
+            kategorie_id=kat_fa.id if kat_fa else None,
+            konto_skr03=kat_fa.konto_skr03 if kat_fa else None,
+            konto_skr04=kat_fa.konto_skr04 if kat_fa else None,
+            konto_ust_skr03=konto_ust_skr03,
+            konto_ust_skr04=konto_ust_skr04,
+            zahlungsart="Keine",
+            art="Ausgabe",
+            netto_betrag=netto_anteil,
+            ust_satz=ust_satz_avg,
+            ust_betrag=ust_anteil,
+            brutto_betrag=restbetrag,
+            vorsteuerabzug=False,
+            vorsteuer_betrag=Decimal("0.00"),
+            steuerbefreiung_grund=None,
+            rechnung_id=rechnung.id,
+            immutable=True,
+        )
+        eintrag.signatur = signatur_journaleintrag(eintrag)
+        db.add(eintrag)
+
+    rechnung.zahlungsstatus = "uneinbringlich"
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
 @router.post("/{rechnung_id}/gutschrift", response_model=RechnungResponse, status_code=201)
 def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Gutschrift aus einer bestehenden Ausgangsrechnung.

@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, createGutschrift,
+  stornoRechnung, finalisiereRechnung, createGutschrift, forderungsausbuchenRechnung,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl,
   sucheArtikel, getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
@@ -46,12 +46,13 @@ function aktuellerMonat(): string {
 // Status-Badge
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: 'offen' | 'teilweise' | 'bezahlt' }) {
+function StatusBadge({ status }: { status: 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich' }) {
   const cfg = {
-    offen:     { cls: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',    label: 'Offen' },
-    teilweise: { cls: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800', label: 'Teilweise' },
-    bezahlt:   { cls: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800', label: 'Bezahlt' },
-  }[status]
+    offen:           { cls: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',             label: 'Offen' },
+    teilweise:       { cls: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800', label: 'Teilweise' },
+    bezahlt:         { cls: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800', label: 'Bezahlt' },
+    uneinbringlich:  { cls: 'bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600', label: 'Uneinbringlich' },
+  }[status] ?? { cls: 'bg-slate-100 text-slate-500 border-slate-300', label: status }
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.cls}`}>
       {cfg.label}
@@ -481,6 +482,7 @@ function RechnungDetail({
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
   const [stornoGrund, setStornoGrund] = useState<string | null>(null)
   const [stornoSonstiges, setStornoSonstiges] = useState('')
+  const [zeigForderungsausfall, setZeigForderungsausfall] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
@@ -520,6 +522,7 @@ function RechnungDetail({
     : 0
 
   const hatZahlungsoption = Math.abs(restbetrag) > 0.004 && !rechnung.storniert && !rechnung.ist_entwurf
+    && rechnung.zahlungsstatus !== 'uneinbringlich'
 
   const partnerEmail = rechnung.typ === 'ausgang'
     ? rechnung.kunde_email
@@ -554,6 +557,15 @@ function RechnungDetail({
     onSuccess: (gs) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       onGutschriftCreated?.(gs)
+    },
+    onError: (e: Error) => alert(e.message),
+  })
+
+  const forderungsausfallMutation = useMutation({
+    mutationFn: () => forderungsausbuchenRechnung(rechnung.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      setZeigForderungsausfall(false)
     },
     onError: (e: Error) => alert(e.message),
   })
@@ -715,13 +727,25 @@ function RechnungDetail({
               {gutschriftMutation.isPending ? '…' : '↩ Gutschrift'}
             </button>
           )}
-          {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && (
+          {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && !zeigForderungsausfall && (
             <button
               onClick={() => setZeigStornoEingabe(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400"
             >
               ✕ Stornieren
             </button>
+          )}
+          {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && !zeigForderungsausfall
+            && (rechnung.zahlungsstatus === 'offen' || rechnung.zahlungsstatus === 'teilweise') && (
+            <button
+              onClick={() => setZeigForderungsausfall(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+            >
+              ⚠ Uneinbringlich
+            </button>
+          )}
+          {rechnung.zahlungsstatus === 'uneinbringlich' && (
+            <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Uneinbringlich ausgebucht</span>
           )}
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
@@ -825,6 +849,37 @@ function RechnungDetail({
           <p className="text-red-600 text-xs">{(stornoMutation.error as Error).message}</p>
         )}
 
+        {/* Forderungsausfall-Dialog */}
+        {zeigForderungsausfall && (
+          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 space-y-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Forderung als uneinbringlich ausbuchen?
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Restbetrag: <strong>{formatEuro(Math.abs(parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)))}</strong>
+              {!(unternehmen?.ist_kleinunternehmer) && ' · USt-Korrekturbuchung nach §17 UStG wird automatisch erstellt (zahlungsart=Keine)'}
+            </p>
+            <div className="flex gap-2 pt-0.5">
+              <button
+                onClick={() => forderungsausfallMutation.mutate()}
+                disabled={forderungsausfallMutation.isPending}
+                className="px-3 py-1.5 bg-slate-600 dark:bg-slate-500 text-white rounded-lg text-sm hover:bg-slate-700 dark:hover:bg-slate-400 disabled:opacity-40"
+              >
+                {forderungsausfallMutation.isPending ? '…' : 'Ausbuchen bestätigen'}
+              </button>
+              <button
+                onClick={() => setZeigForderungsausfall(false)}
+                className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
+        {forderungsausfallMutation.isError && (
+          <p className="text-slate-600 text-xs">{(forderungsausfallMutation.error as Error).message}</p>
+        )}
+
         {/* Entwurf-Banner */}
         {rechnung.ist_entwurf && (
           <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
@@ -882,7 +937,7 @@ function RechnungDetail({
               ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
               : rechnung.ist_entwurf
                 ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
-                : <StatusBadge status={rechnung.zahlungsstatus} />}
+                : <StatusBadge status={rechnung.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
           </div>
           {rechnung.storniert && rechnung.storno_grund && (
             <div className="flex justify-between gap-2">
@@ -2620,7 +2675,7 @@ export function RechnungenPage() {
   const gesamt = liste.reduce(
     (acc, r) => ({
       brutto: acc.brutto + (r.ist_entwurf || r.storniert ? 0 : parseFloat(r.brutto_gesamt)),
-      offen: acc.offen + (r.ist_entwurf || r.storniert
+      offen: acc.offen + (r.ist_entwurf || r.storniert || r.zahlungsstatus === 'uneinbringlich'
         ? 0
         : Math.max(0, parseFloat(r.brutto_gesamt) - parseFloat(r.bezahlt_betrag))),
     }),
@@ -2755,6 +2810,7 @@ export function RechnungenPage() {
               <option value="offen">Offen</option>
               <option value="teilweise">Teilweise bezahlt</option>
               <option value="bezahlt">Bezahlt</option>
+              <option value="uneinbringlich">Uneinbringlich</option>
               <option value="entwurf">Entwurf</option>
               <option value="storniert">Storniert</option>
             </select>
@@ -2854,7 +2910,7 @@ export function RechnungenPage() {
                           ? <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">Storniert</span>
                           : r.ist_entwurf
                             ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
-                            : <StatusBadge status={r.zahlungsstatus} />}
+                            : <StatusBadge status={r.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
                       </td>
                     </tr>
                   ))}

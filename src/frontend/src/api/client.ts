@@ -872,6 +872,9 @@ export const getRechnungZahlungen = (id: number) =>
 export const stornoRechnung = (id: number, grund: string) =>
   request<Rechnung>(`/rechnungen/${id}/storno`, { method: 'POST', body: JSON.stringify({ grund }) })
 
+export const forderungsausbuchenRechnung = (id: number) =>
+  request<Rechnung>(`/rechnungen/${id}/forderungsausfall`, { method: 'POST' })
+
 export const createGutschrift = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/gutschrift`, { method: 'POST' })
 
