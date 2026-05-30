@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks
 
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -909,18 +909,18 @@ def _run_migrations() -> None:
                 "Miete Einrichtung":           "z. B. Miete oder Leasing von Büroausstattung, Maschinen oder Geräten",
                 "Betriebliche Abfallbeseitigung": "z. B. Entsorgungskosten, Containerdienst, Sonderabfall-Entsorgung",
                 "Mitgliedsbeiträge":           "z. B. IHK-Beitrag, Berufsverbände, Wirtschaftsvereinigungen, Fachverbände",
-                "Spenden (betrieblich)":       "z. B. Geld- oder Sachspenden an gemeinnützige Organisationen (Spendenquittung aufheben)",
+                "Spenden (betrieblich)":       "Betrieblich veranlasste Spenden (z. B. über Berufsverband). Achtung: Private Spenden sind keine Betriebsausgaben und gehören nicht hierher – sie werden in der Einkommensteuererklärung als Sonderausgaben abgesetzt.",
                 "Gewerbesteuer":               "z. B. vierteljährliche Gewerbesteuer-Vorauszahlungen oder Jahresausgleich",
                 "Anlagevermögen (Kauf)":       "z. B. Computer, Maschinen, Geräte über 800 € netto – für Fahrzeuge bitte „KFZ (Kauf)" verwenden (Anlage AVEUR)",
                 "KFZ (Kauf)":                  "Kauf eines Kraftfahrzeugs über 800 € netto (Anlage AVEUR: Kategorie Kraftfahrzeuge) – laufende KFZ-Kosten separat unter KFZ-Kosten / KFZ-Versicherung etc. buchen",
-                "EDV / Software (Sofortabschreibung)": "Hardware (PC, Laptop, Tablet, Smartphone, Drucker) und Software jeder Preishöhe – nach BMF-Schreiben 26.02.2021 gilt Nutzungsdauer 1 Jahr → volle Abschreibung im Kaufjahr ohne 800 €-Limit",
+                "EDV / Software (Sofortabschreibung)": "Hardware (PC, Laptop, Tablet, Smartphone, Drucker) und Software. Zweistufig buchen: 1. Kauf hier als Anlage (SKR03 0650), 2. im selben Jahr volle AfA über „Abschreibungen (AfA)". Wahlrecht auf Nutzungsdauer 1 Jahr nach BMF 26.02.2021 (§ 7 Abs. 1 EStG) – muss ins Bestandsverzeichnis, KEIN GWG!",
                 "Abschreibungen (AfA)":        "z. B. Jahres-AfA für Wirtschaftsgüter des Anlagevermögens (vom Steuerberater berechnet)",
                 "Investition aus Zuwendung Dritter": "z. B. Anschaffungen die aus Fördergeldern oder Zuschüssen finanziert wurden",
                 "Gewährte Skonti":             "Skonto den du Kunden gewährst – wird automatisch beim Buchen einer Zahlung mit Skonto zugewiesen (Erlösschmälerung)",
                 "Erhaltene Skonti":            "Skonto den du von Lieferanten erhältst – wird automatisch beim Buchen einer Eingangsrechnung mit Skonto zugewiesen (Aufwandsminderung)",
                 "Privatentnahme":              "z. B. Bargeld-Entnahme für private Zwecke – kein Betriebsaufwand",
                 "Privateinlage":               "z. B. Einzahlung eigener privater Mittel ins Unternehmen",
-                "Einkommensteuer-Vorauszahlung": "z. B. vierteljährliche Vorauszahlungen ans Finanzamt (Jan/Apr/Jul/Okt)",
+                "Einkommensteuer-Vorauszahlung": "vierteljährliche Vorauszahlungen ans Finanzamt (fällig: 10. März, 10. Juni, 10. September, 10. Dezember)",
                 "Krankenversicherung (Pflicht)": "z. B. Beiträge zur gesetzlichen oder privaten Krankenversicherung",
                 "Pflegeversicherung (Pflicht)": "z. B. Beiträge zur gesetzlichen oder privaten Pflegeversicherung",
                 "Rentenversicherung (freiwillig)": "z. B. freiwillige Beiträge zur gesetzlichen Rentenversicherung",
@@ -981,6 +981,27 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 38"))
             conn.commit()
             print("[Migration] Schema auf Version 38 gebracht (differenzbesteuerung §25a UStG)")
+
+        if version < 42:
+            # EDV / Software (Sofortabschreibung): war fälschlicherweise kontenart=Aufwand.
+            # BMF-Schreiben 26.02.2021 gewährt Wahlrecht auf Nutzungsdauer 1 Jahr (§ 7 Abs. 1 EStG),
+            # ist aber KEIN GWG (§ 6 Abs. 2 EStG). Wirtschaftsgut muss ins Bestandsverzeichnis,
+            # Buchung läuft über Anlagekonto + separate AfA im selben Jahr.
+            # → kontenart Anlage, SKR03 0650 (BGA), SKR04 0490, eks_kategorie B8, euer_zeile NULL.
+            conn.execute(text("""
+                UPDATE kategorien
+                SET kontenart = 'Anlage',
+                    konto_skr03_default = '0650',
+                    konto_skr04_default = '0490',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '0650' ELSE konto_skr03 END,
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '0490' ELSE konto_skr04 END,
+                    eks_kategorie = 'B8',
+                    euer_zeile = NULL
+                WHERE name = 'EDV / Software (Sofortabschreibung)' AND ist_system = 1
+            """))
+            conn.execute(text("PRAGMA user_version = 42"))
+            conn.commit()
+            print("[Migration] Schema auf Version 42 (EDV/Software: Aufwand→Anlage, B10→B8)")
 
         if version < 41:
             # Privatentnahme / Privateinlage: euer_zeile war None, muss 106/107 sein.
@@ -1167,8 +1188,9 @@ def _migrate_kategorien() -> None:
             {"name": "Bewirtungskosten (nicht abzugsfähig)", "kontenart": "Aufwand", "konto_skr03": "4654", "konto_skr04": "6644", "eks_kategorie": None,    "euer_zeile": 63, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             # Anlagevermögen KFZ (Anlage AVEUR: eigene Kategorie „Kraftfahrzeuge")
             {"name": "KFZ (Kauf)",                           "kontenart": "Anlage",  "konto_skr03": "0320", "konto_skr04": "0540", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            # Digitale Wirtschaftsgüter: Sofortabschreibung beliebiger Höhe (BMF 26.02.2021, Nutzungsdauer 1 Jahr)
-            {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Aufwand", "konto_skr03": "4985", "konto_skr04": "6845", "eks_kategorie": "B10",   "euer_zeile": 36,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # Digitale Wirtschaftsgüter: Wahlrecht Nutzungsdauer 1 Jahr (BMF 26.02.2021, § 7 Abs. 1 EStG)
+            # KEIN GWG – muss ins Bestandsverzeichnis! Buchung: 1. Kauf hier (Anlage 0650), 2. volle AfA
+            {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0650", "konto_skr04": "0490", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
         ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
