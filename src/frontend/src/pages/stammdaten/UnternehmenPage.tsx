@@ -5,6 +5,7 @@ import {
   type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { guardedDateChange } from '../../utils/dateInput'
 
 // ---------------------------------------------------------------------------
 // Hilfskomponenten
@@ -326,7 +327,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
                 <input
                   type="date"
                   value={form.geburtsdatum ?? ''}
-                  onChange={ev => set('geburtsdatum', ev.target.value)}
+                  onChange={guardedDateChange((v) => set('geburtsdatum', v))}
                   className={inputCls}
                 />
               </Field>

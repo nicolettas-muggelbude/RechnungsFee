@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, type Rechnung } from '../../api/client'
+import { guardedDateChange } from '../../utils/dateInput'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -365,7 +366,7 @@ export function Dashboard() {
             <input
               type="date"
               value={datum}
-              onChange={(e) => setDatum(e.target.value)}
+              onChange={guardedDateChange(setDatum)}
               className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
           )}
@@ -374,7 +375,7 @@ export function Dashboard() {
               <input
                 type="date"
                 value={datumVon}
-                onChange={(e) => setDatumVon(e.target.value)}
+                onChange={guardedDateChange(setDatumVon)}
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
               <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
@@ -382,7 +383,7 @@ export function Dashboard() {
                 type="date"
                 value={datumBis}
                 min={datumVon}
-                onChange={(e) => setDatumBis(e.target.value)}
+                onChange={guardedDateChange(setDatumBis)}
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
             </div>

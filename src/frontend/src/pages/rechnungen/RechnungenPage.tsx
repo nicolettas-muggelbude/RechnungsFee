@@ -11,6 +11,7 @@ import {
   type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { guardedDateChange } from '../../utils/dateInput'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -280,7 +281,7 @@ function ZahlungsDialog({
               type="date"
               value={datum}
               max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setDatum(e.target.value)}
+              onChange={guardedDateChange(setDatum)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
@@ -1831,7 +1832,7 @@ function RechnungForm({
               type="date"
               required
               value={datum}
-              onChange={(e) => setDatum(e.target.value)}
+              onChange={guardedDateChange(setDatum)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
@@ -1861,7 +1862,9 @@ function RechnungForm({
               <input
                 type="date"
                 value={leistungVon}
-                onChange={(e) => { setLeistungVon(e.target.value); setLeistungManuell(true) }}
+                onChange={(e) => {
+                  if (e.target.value) { setLeistungVon(e.target.value); setLeistungManuell(true) }
+                }}
                 className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
               <span className="text-slate-400 dark:text-slate-500 text-sm">–</span>
@@ -1869,7 +1872,7 @@ function RechnungForm({
                 type="date"
                 value={leistungBis}
                 min={leistungVon}
-                onChange={(e) => setLeistungBis(e.target.value)}
+                onChange={guardedDateChange(setLeistungBis)}
                 className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
@@ -1878,8 +1881,10 @@ function RechnungForm({
               type="date"
               value={leistungVon}
               onChange={(e) => {
-                setLeistungVon(e.target.value)
-                setLeistungManuell(e.target.value !== datum)
+                if (e.target.value) {
+                  setLeistungVon(e.target.value)
+                  setLeistungManuell(e.target.value !== datum)
+                }
               }}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
@@ -1892,7 +1897,7 @@ function RechnungForm({
               type="date"
               value={faelligAm}
               min={datum}
-              onChange={(e) => setFaelligAm(e.target.value)}
+              onChange={guardedDateChange(setFaelligAm)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
@@ -1906,7 +1911,7 @@ function RechnungForm({
               type="date"
               value={faelligAm}
               min={datum}
-              onChange={(e) => setFaelligAm(e.target.value)}
+              onChange={guardedDateChange(setFaelligAm)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
@@ -2768,7 +2773,7 @@ export function RechnungenPage() {
               <input
                 type="date"
                 value={datum}
-                onChange={(e) => setDatum(e.target.value)}
+                onChange={guardedDateChange(setDatum)}
                 className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             )}
@@ -2777,7 +2782,7 @@ export function RechnungenPage() {
                 <input
                   type="date"
                   value={datumVon}
-                  onChange={(e) => setDatumVon(e.target.value)}
+                  onChange={guardedDateChange(setDatumVon)}
                   className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
                 <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
@@ -2785,7 +2790,7 @@ export function RechnungenPage() {
                   type="date"
                   value={datumBis}
                   min={datumVon}
-                  onChange={(e) => setDatumBis(e.target.value)}
+                  onChange={guardedDateChange(setDatumBis)}
                   className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
