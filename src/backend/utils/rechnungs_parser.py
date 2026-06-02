@@ -255,19 +255,25 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
     Versucht Einzelpositionen aus PDF-Freitext zu extrahieren.
     Gibt leere Liste zurück wenn kein verwertbares Ergebnis erkennbar ist.
     """
-    # Betrag am Zeilenende, optional gefolgt von "19 %" (trailing USt)
-    # Akzeptiert deutsches Kommaformat (10,00) und englisches Punktformat (10.00),
-    # das pypdf aus manchen POS-PDFs extrahiert.
+    # Betrag am Zeilenende.
+    # Erlaubt nach dem Betrag: Währung, Steuerklassen-Kürzel (A/B/C),
+    # dezimalen USt-Satz (19%, 19,0%, 7,0%) in beliebiger Reihenfolge.
+    # Typisches Tankquittungs-Format: "57,48  B  19,0%"  oder  "57,48  19,0%  B"
     _BETRAG_END = re.compile(
-        r"\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2})\s*(?:€|EUR)?\s*(?:(\d+)\s*%)?\s*$",
+        r"\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2})"  # Betrag
+        r"\s*(?:€|EUR|CHF)?"                                        # optionale Währung
+        r"\s*(?:[A-C]\s*)?"                                         # optionaler Steuerkürzel vorn (A, B, C)
+        r"(?:(\d+)[,.]?\d*\s*%)?"                                  # opt. USt-Satz (19%, 19,0%, 7,0%)
+        r"\s*(?:[A-C]\s*)?"                                         # optionaler Steuerkürzel hinten
+        r"\s*$",
         re.IGNORECASE,
     )
     _SUMMENLABEL = re.compile(
         r"^(?:netto(?:betrag|summe|preis)?|brutto(?:betrag|summe)?|"
         r"gesamt(?:betrag|summe)?|zwischensumme|rechnungsbetrag|total|"
         r"zu\s+zahlen(?:\w+)?|summe(?:betrag)?(?:\s+netto)?|"
-        r"(?:ust|mwst|umsatzsteuer)\.?\s*\d*\s*%?|"
-        r"\d+\s*%\s*(?:ust|mwst|umsatzsteuer)|"
+        r"(?:ust|mwst|umsatzsteuer)\.?\s*(?:\d+[,.]?\d*)?\s*%?|"  # auch 19,0% / 7,0%
+        r"\d+[,.]?\d*\s*%\s*(?:ust|mwst|umsatzsteuer)|"
         r"rabatt|skonto|aufschlag|mindermenge)"
         r"\s*(?:[:\s]|$)"                       # Label-Ende (Doppelpunkt, Leerzeichen …)
         r"(?:€|EUR|CHF|USD|GBP)?\s*",           # optionales Währungssymbol nach Label
@@ -342,17 +348,19 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
             continue
 
         # USt aus trailing-% (Gruppe 2) oder aus Inline-% in vor bestimmen
+        # Dezimale Sätze wie "19,0%" / "7,0%" werden auf den Ganzzahlteil reduziert.
         ust_pos = ust_satz_default or "0"
         if m.group(2) and int(m.group(2)) in _GUELTIGE_UST:
             ust_pos = m.group(2)
         else:
-            m_ust = re.search(r"(\d+)\s*%\s*$", vor)
+            # Am Zeilenende von vor: "19,0 %" / "7 %" / "19 %"
+            m_ust = re.search(r"(\d+)[,.]?\d*\s*%\s*$", vor)
             if m_ust and int(m_ust.group(1)) in _GUELTIGE_UST:
                 ust_pos = m_ust.group(1)
                 vor = vor[:m_ust.start()].strip()
             else:
-                # % irgendwo in der Zeile vor dem Betrag (z.B. "19 % MwSt")
-                m_ust2 = re.search(r"\b(\d+)\s*%", vor)
+                # % irgendwo in der Zeile (z.B. "19,0 % MwSt", "B 19,0% Produktname")
+                m_ust2 = re.search(r"\b(\d+)[,.]?\d*\s*%", vor)
                 if m_ust2 and int(m_ust2.group(1)) in _GUELTIGE_UST:
                     ust_pos = m_ust2.group(1)
 
@@ -367,6 +375,18 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
             if ust_pos == (ust_satz_default or "0"):
                 ust_pos = m_naked.group(1)
             vor = vor[:m_naked.start()].strip()
+
+        # Steuerklassen-Präfix entfernen: "B 19,0%" / "A 7%" / "B" am Zeilenanfang
+        # Typisch auf Tankquittungen: Steuerklasse + Satz steht vor dem Produktnamen
+        m_stklasse = re.match(r"^[A-C]\s+\d+[,.]?\d*\s*%\s*", vor, re.IGNORECASE)
+        if m_stklasse:
+            rest = vor[m_stklasse.end():].strip()
+            if len(rest) >= 2:          # Produktname muss noch übrig bleiben
+                vor = rest
+                if ust_pos == (ust_satz_default or "0"):
+                    m_stk_ust = re.search(r"(\d+)[,.]?\d*", m_stklasse.group(0))
+                    if m_stk_ust and int(m_stk_ust.group(1)) in _GUELTIGE_UST:
+                        ust_pos = m_stk_ust.group(1)
 
         # Artikelnummer am Anfang: Ziffernfolge (≥4) oder alphanumerischer Code mit Trennzeichen
         artikel_nr: Optional[str] = None
