@@ -203,10 +203,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
     lieferant_vorschlaege: list[LieferantVorschlag] = []
     erkannter_name = ergebnis.felder.get("lieferant_name", "")
     erkannte_ust_id = ergebnis.felder.get("lieferant_ust_id", "")
-    import logging as _logging
-    _logging.getLogger("rechnungen").info(
-        "Lieferant-Match: erkannt=%r ust_id=%r", erkannter_name, erkannte_ust_id
-    )
     if erkannter_name or erkannte_ust_id:
         alle_lieferanten = db.query(Lieferant).filter(Lieferant.aktiv == True).all()
         scored: list[tuple[float, Lieferant]] = []
@@ -222,8 +218,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
             return re.sub(r"\s+", " ", n).strip().lower()
 
         norm_erkannt = _norm(erkannter_name)
-        _log = _logging.getLogger("rechnungen")
-        _log.info("norm_erkannt=%r", norm_erkannt)
         for lief in alle_lieferanten:
             score = 0.0
             if erkannte_ust_id and lief.ust_idnr and erkannte_ust_id.replace(" ", "") == lief.ust_idnr.replace(" ", ""):
@@ -235,7 +229,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
                     score = 0.8
                 else:
                     score = difflib.SequenceMatcher(None, norm_erkannt, norm_lief).ratio()
-                _log.info("  lief=%r norm=%r score=%.2f", lief.firmenname, norm_lief, score)
             if score > 0.4:
                 scored.append((score, lief))
         scored.sort(key=lambda x: x[0], reverse=True)
