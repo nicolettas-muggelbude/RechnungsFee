@@ -23,6 +23,21 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.16',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu',          text: 'OCR für gescannte Eingangsrechnungen & Kassenbons – pdfplumber für maschinenlesbare PDFs, pytesseract + pymupdf für Scans/Fotos; graceful fallback mit Installationshinweis wenn Tesseract nicht vorhanden (Stufe 4)' },
+      { typ: 'neu',          text: 'Tesseract OCR-Installation: Windows-Installer richtet es automatisch per winget ein; Linux-Installationsskript (install-linux.sh) bietet es interaktiv an; macOS-Hinweis im Import-Dialog' },
+      { typ: 'neu',          text: 'PDFs öffnen in eigenem OS-Fenster (Tauri): Rechnung, Beleganhang, Exporte öffnen sich in einem eigenen Fenster statt im App-internen Viewer' },
+      { typ: 'neu',          text: 'Journal: Rechnungsnummer-Badge ist jetzt ein Link – Klick springt direkt zur zugehörigen Rechnung in der Rechnungsübersicht' },
+      { typ: 'verbesserung', text: 'Belegnummer kopieren im Journal: Clipboard-Icon zeigt an dass der Button kopiert' },
+      { typ: 'verbesserung', text: 'Journal: redundantes Rechnungsnummer-Badge im Detailbereich entfernt (steht bereits im Tabellenkopf als Link)' },
+      { typ: 'fix',          text: 'EDV / Software (Sofortabschreibung): SKR03-Konto korrigiert auf 0490 (SKR03 0650 ist ein Verbindlichkeitenkonto, Issue #111)' },
+      { typ: 'fix',          text: 'Forderungsausfall: USt-Zeile im Journal zeigte „Vorsteuer" statt „Umsatzsteuer" – Erkennung jetzt per Kontonummer (1776/1771 = Umsatzsteuer, Issue #113)' },
+      { typ: 'fix',          text: 'Windows / WebView2: Datumsfelder mit leerem Wert verursachten schwarzes Fenster – leere onChange-Events werden jetzt abgefangen (Issue #114)' },
+    ],
+  },
+  {
     version: 'v0.2.15',
     datum: 'Mai 2026',
     eintraege: [
