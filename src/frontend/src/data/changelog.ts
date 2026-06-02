@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'neu',          text: 'Tesseract-Assistent: benutzerfreundlicher Einrichtungsdialog für OCR – Ein-Klick-Installation ohne Terminal, plattformspezifisch (Windows: winget, Linux: pkexec + apt/dnf/pacman, macOS: Anleitung)' },
       { typ: 'fix',          text: 'Windows-Installer: Tesseract-Installation wird jetzt per Dialog angeboten statt still im Hintergrund zu laufen (Issue #115)' },
+      { typ: 'fix',          text: 'Tesseract nach Installation nicht erkannt: zusätzlich bekannte Installationspfade prüfen wenn PATH noch nicht aktualisiert wurde (Windows: Program Files/Tesseract-OCR, macOS: /opt/homebrew, Linux: /usr/bin)' },
     ],
   },
   {
