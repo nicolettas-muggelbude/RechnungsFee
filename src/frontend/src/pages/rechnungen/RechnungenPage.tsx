@@ -2741,7 +2741,6 @@ function ImportDialog({
   }
 
   const felder = ergebnis?.felder
-  const istPlainPdf = ergebnis?.format === 'pdf' || ergebnis?.format === 'unbekannt'
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -2886,7 +2885,7 @@ function ImportDialog({
                 </button>
                 <button
                   onClick={() => {
-                    if (istPlainPdf) handlePdfOeffnen()
+                    handlePdfOeffnen()   // öffnet PDF zur Kontrolle – kein-op wenn kein temp_url
                     if (datei) onWeiter(ergebnis, datei)
                   }}
                   className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
