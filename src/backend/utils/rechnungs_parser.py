@@ -555,6 +555,44 @@ def _extrahiere_positionen_pos_kassenbeleg(text: str) -> list["AnalysePosition"]
     return positionen
 
 
+def _finde_tesseract_binary() -> str | None:
+    """
+    Gibt den Pfad zur tesseract-Binärdatei zurück oder None.
+    Prüft zuerst PATH, dann bekannte Installationsverzeichnisse.
+    Hintergrund: Paketmanager (winget, apt, brew) aktualisieren den Benutzer-PATH
+    im System, aber der laufende Prozess erbt den alten PATH – selbst nach App-
+    Neustart kann das auf Windows passieren, weil Explorer die Umgebungsvariablen
+    erst nach Abmeldung neu einliest.
+    """
+    import shutil as _shutil
+    import platform as _platform
+    import os as _os
+
+    pfad = _shutil.which("tesseract")
+    if pfad:
+        return pfad
+
+    bekannte: dict[str, list[str]] = {
+        "Windows": [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            _os.path.join(_os.environ.get("LOCALAPPDATA", ""), r"Programs\Tesseract-OCR\tesseract.exe"),
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ],
+        "Darwin": [
+            "/opt/homebrew/bin/tesseract",   # Apple Silicon
+            "/usr/local/bin/tesseract",       # Intel
+        ],
+        "Linux": [
+            "/usr/bin/tesseract",
+            "/usr/local/bin/tesseract",
+        ],
+    }
+    for p in bekannte.get(_platform.system(), []):
+        if p and _os.path.isfile(p):
+            return p
+    return None
+
+
 def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
     """
     OCR-Fallback für gescannte PDFs / Foto-Scans.
@@ -577,6 +615,12 @@ def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
         import io as _io
     except ImportError:
         return "", "OCR nicht verfügbar: 'pytesseract' fehlt (pip install pytesseract)."
+
+    # Tesseract-Binary explizit setzen (PATH wird nicht immer aktualisiert)
+    tess_bin = _finde_tesseract_binary()
+    if not tess_bin:
+        return "", "TESSERACT_FEHLT"
+    pytesseract.pytesseract.tesseract_cmd = tess_bin
 
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")

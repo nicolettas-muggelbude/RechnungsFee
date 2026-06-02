@@ -3,12 +3,52 @@ Systemverwaltungs-Endpunkte: Tesseract OCR prüfen und installieren.
 """
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+
+
+# ---------------------------------------------------------------------------
+# Bekannte Installations-Pfade (falls Tesseract nicht im Prozess-PATH landet)
+# Hintergrund: winget / apt / brew aktualisieren den Benutzer-PATH im Registry,
+# aber laufende Prozesse und deren Kinder erben den alten PATH. Selbst nach
+# App-Neustart kann der neue PATH noch fehlen, wenn der Windows-Explorer die
+# Umgebungsvariablen noch nicht neu eingelesen hat.
+# ---------------------------------------------------------------------------
+_BEKANNTE_PFADE: dict[str, list[str]] = {
+    "Windows": [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Programs\Tesseract-OCR\tesseract.exe"),
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    ],
+    "Darwin": [
+        "/opt/homebrew/bin/tesseract",   # Apple Silicon
+        "/usr/local/bin/tesseract",       # Intel
+    ],
+    "Linux": [
+        "/usr/bin/tesseract",
+        "/usr/local/bin/tesseract",
+    ],
+}
+
+
+def finde_tesseract() -> str | None:
+    """
+    Gibt den Pfad zur tesseract-Binärdatei zurück oder None.
+    Prüft zuerst PATH, dann bekannte Installationsverzeichnisse.
+    Öffentliche Funktion – kann von anderen Modulen importiert werden.
+    """
+    pfad = shutil.which("tesseract")
+    if pfad:
+        return pfad
+    for p in _BEKANNTE_PFADE.get(platform.system(), []):
+        if p and os.path.isfile(p):
+            return p
+    return None
 
 
 def _no_window() -> dict:
@@ -20,8 +60,8 @@ def _no_window() -> dict:
 
 @router.get("/tesseract")
 def tesseract_status():
-    """Prüft ob tesseract-ocr installiert und im PATH verfügbar ist."""
-    return {"installiert": shutil.which("tesseract") is not None}
+    """Prüft ob tesseract-ocr installiert und erreichbar ist."""
+    return {"installiert": finde_tesseract() is not None}
 
 
 @router.get("/tesseract/voraussetzungen")
