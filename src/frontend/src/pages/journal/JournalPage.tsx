@@ -250,20 +250,6 @@ export function JournalPage() {
           </button>
         )}
 
-        {/* Summen */}
-        {!!eintraege?.length && (
-          <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="text-green-600 dark:text-green-400 font-medium">
-              ↑ {formatEuro(sumEinnahmen)}
-            </span>
-            <span className="text-red-600 dark:text-red-400 font-medium">
-              ↓ {formatEuro(sumAusgaben)}
-            </span>
-            <span className={`font-semibold border-l border-slate-200 dark:border-slate-600 pl-3 ${saldo >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              = {formatEuro(saldo)}
-            </span>
-          </div>
-        )}
       </div>
       </div>{/* Ende Kopf+Filter */}
 
@@ -275,6 +261,26 @@ export function JournalPage() {
         ) : !eintraege?.length ? (
           <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen gefunden.</p>
         ) : (
+          <>
+          {/* Summen-Leiste – ausgerichtet auf Einnahme/Ausgabe-Spalten */}
+          <div className="flex items-center px-4 py-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm">
+            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mr-2">Saldo</span>
+            <span className={`font-bold ${saldo >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {formatEuro(saldo)}
+            </span>
+            <div className="ml-auto flex">
+              {/* w-24 = Zahlung-Spalte überspringen */}
+              <div className="w-24" />
+              {/* w-28 px-4 = Zugänge über Einnahme-Spalte */}
+              <div className="w-28 px-4 text-right font-semibold text-green-600 dark:text-green-400">
+                {formatEuro(sumEinnahmen)}
+              </div>
+              {/* w-28 px-4 = Abgänge über Ausgabe-Spalte */}
+              <div className="w-28 px-4 text-right font-semibold text-red-600 dark:text-red-400">
+                {formatEuro(sumAusgaben)}
+              </div>
+            </div>
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
@@ -366,6 +372,7 @@ export function JournalPage() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
       </div>{/* Ende Tabellen-Wrapper */}
