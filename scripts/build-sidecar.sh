@@ -82,6 +82,7 @@ pyinstaller \
     --collect-all fitz \
     --hidden-import pytesseract \
     --hidden-import utils.rechnungs_parser \
+    --hidden-import utils.pdfa_konverter \
     --add-data "$BACKEND_DIR/fonts:fonts" \
     main.py
 

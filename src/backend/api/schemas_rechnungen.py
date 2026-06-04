@@ -21,8 +21,22 @@ class BelegResponse(BaseModel):
     dateigroesse: Optional[int]
     sha256: Optional[str]
     hochgeladen_am: datetime
+    pdfa_verfuegbar: bool = False
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_beleg(cls, beleg) -> "BelegResponse":
+        return cls(
+            id=beleg.id,
+            dateiname=beleg.dateiname,
+            original_name=beleg.original_name,
+            mime_type=beleg.mime_type,
+            dateigroesse=beleg.dateigroesse,
+            sha256=beleg.sha256,
+            hochgeladen_am=beleg.hochgeladen_am,
+            pdfa_verfuegbar=bool(beleg.beleg_pdfa_pfad),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +247,7 @@ class RechnungResponse(BaseModel):
             for e in obj.journaleintraege
         ]
         if obj.beleg_id and hasattr(obj, "beleg") and obj.beleg:
-            data.beleg = BelegResponse.model_validate(obj.beleg)
+            data.beleg = BelegResponse.from_beleg(obj.beleg)
         if obj.gutschrift_zu_rechnung_id and hasattr(obj, "_gutschrift_original_nr"):
             data.gutschrift_zu_rechnung_nr = obj._gutschrift_original_nr
         return data

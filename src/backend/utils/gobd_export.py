@@ -22,11 +22,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from database.connection import APP_DATA_DIR
 from database.models import (
+    Beleg,
     Journaleintrag,
     Kategorie,
     Kunde,
     Lieferant,
+    Rechnung,
     Tagesabschluss,
     Unternehmen,
 )
@@ -397,6 +400,62 @@ def export_integritaet_csv(db: Session, jahr: int) -> tuple[bytes, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Belege
+# ---------------------------------------------------------------------------
+
+def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
+    """
+    Belege-Index als CSV (alle Belege zu immutablen Journal-Einträgen des Jahres).
+    Gibt (bytes, liste_von_beleg_infos) zurück.
+    Jedes beleg_info-Dict: {"beleg": Beleg, "journal_belegnr": str}
+    """
+    eintraege = (
+        db.query(Journaleintrag)
+        .filter(
+            Journaleintrag.immutable == True,
+            Journaleintrag.beleg_id.isnot(None),
+        )
+        .all()
+    )
+    eintraege = [e for e in eintraege if e.datum.year == jahr]
+
+    header = [
+        "Beleg-ID", "Originaldateiname", "MIME-Typ", "Dateigröße (Bytes)", "SHA256",
+        "Journal-Belegnr.", "Rechnung-ID", "Hochgeladen am", "PDF/A verfügbar",
+    ]
+    rows = []
+    beleg_infos: list[dict] = []
+    seen: set[int] = set()
+
+    for e in eintraege:
+        if e.beleg_id in seen:
+            continue
+        seen.add(e.beleg_id)
+
+        beleg = db.query(Beleg).filter(Beleg.id == e.beleg_id).first()
+        if not beleg:
+            continue
+
+        rechnung = db.query(Rechnung).filter(Rechnung.beleg_id == beleg.id).first()
+        rechnung_id = str(rechnung.id) if rechnung else ""
+
+        rows.append([
+            str(beleg.id),
+            beleg.original_name,
+            beleg.mime_type or "",
+            str(beleg.dateigroesse or ""),
+            beleg.sha256 or "",
+            e.belegnr,
+            rechnung_id,
+            _fmt_datetime(beleg.hochgeladen_am),
+            _fmt_bool(bool(beleg.beleg_pdfa_pfad)),
+        ])
+        beleg_infos.append({"beleg": beleg, "journal_belegnr": e.belegnr})
+
+    return _make_csv(header, rows), beleg_infos
+
+
+# ---------------------------------------------------------------------------
 # Statistiken sammeln
 # ---------------------------------------------------------------------------
 
@@ -580,6 +639,7 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
     kd_csv, kd_anzahl = export_kunden_csv(db)
     lf_csv, lf_anzahl = export_lieferanten_csv(db)
     integ_csv, integ_stats = export_integritaet_csv(db, jahr)
+    belege_csv, beleg_infos = export_belege_csv(db, jahr)
 
     # Statistiken
     stats = _sammle_statistiken(db, jahr)
@@ -592,6 +652,7 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
         {"name": "kunden.csv",               "beschreibung": "Kunden-Stammdaten",                            "anzahl": kd_anzahl},
         {"name": "lieferanten.csv",          "beschreibung": "Lieferanten-Stammdaten",                       "anzahl": lf_anzahl},
         {"name": "integritaetspruefung.csv", "beschreibung": "SHA-256-Signaturprüfung aller Datensätze",     "anzahl": integ_stats["gesamt"]},
+        {"name": "belege.csv",               "beschreibung": "Belegindex (SHA256, Rechnung-Verknüpfung)",    "anzahl": len(beleg_infos)},
     ]
 
     index_xml = _generate_index_xml(unt_dict, jahr, stats, datei_infos)
@@ -610,6 +671,24 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
         zf.writestr("kunden.csv",                 kd_csv)
         zf.writestr("lieferanten.csv",            lf_csv)
         zf.writestr("integritaetspruefung.csv",   integ_csv)
+        zf.writestr("belege.csv",                 belege_csv)
         zf.writestr("gobd_pruefbericht.pdf",      pdf_bytes)
+
+        # Beleg-Dateien in belege/-Unterordner (PDF/A bevorzugt, Fallback Original)
+        for info in beleg_infos:
+            beleg: Beleg = info["beleg"]
+            zip_name = f"belege/{beleg.id}_{beleg.original_name}"
+
+            # PDF/A-Version bevorzugen
+            if beleg.beleg_pdfa_pfad:
+                pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
+                if pdfa_pfad.exists():
+                    zf.write(str(pdfa_pfad), zip_name.rsplit(".", 1)[0] + "_pdfa.pdf")
+                    continue
+
+            # Original als Fallback
+            orig_pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+            if orig_pfad.exists():
+                zf.write(str(orig_pfad), zip_name)
 
     return zip_buffer.getvalue()

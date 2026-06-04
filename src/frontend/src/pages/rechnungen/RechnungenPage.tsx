@@ -7,7 +7,7 @@ import {
   stornoRechnung, finalisiereRechnung, createGutschrift, forderungsausbuchenRechnung,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow,
   sucheArtikel, getUstSaetze, getKassenstand,
-  uploadBeleg, getBelegUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
+  uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate,
   type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition,
 } from '../../api/client'
@@ -820,6 +820,10 @@ function RechnungDetail({
     const url = await getBelegUrl(rechnung.id)
     await openUrl(url)
   }
+  async function _openBelegPdfa() {
+    const url = await getBelegPdfaUrl(rechnung.id)
+    await openUrl(url)
+  }
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
@@ -1376,28 +1380,39 @@ function RechnungDetail({
         <div>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Beleg</p>
           {rechnung.beleg ? (
-            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
-              <div className="min-w-0">
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <button
+                    onClick={_openBeleg}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate block text-left"
+                    title={rechnung.beleg.original_name}
+                  >
+                    📄 {rechnung.beleg.original_name}
+                  </button>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    {rechnung.beleg.dateigroesse ? `${Math.round(rechnung.beleg.dateigroesse / 1024)} KB · ` : ''}
+                    {rechnung.beleg.hochgeladen_am.slice(0, 10)}
+                  </span>
+                </div>
                 <button
-                  onClick={_openBeleg}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate block text-left"
-                  title={rechnung.beleg.original_name}
+                  onClick={() => belegDeleteMutation.mutate()}
+                  disabled={belegDeleteMutation.isPending}
+                  className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                  title="Beleg entfernen"
                 >
-                  📄 {rechnung.beleg.original_name}
+                  🗑
                 </button>
-                <span className="text-xs text-slate-400 dark:text-slate-500">
-                  {rechnung.beleg.dateigroesse ? `${Math.round(rechnung.beleg.dateigroesse / 1024)} KB · ` : ''}
-                  {rechnung.beleg.hochgeladen_am.slice(0, 10)}
-                </span>
               </div>
-              <button
-                onClick={() => belegDeleteMutation.mutate()}
-                disabled={belegDeleteMutation.isPending}
-                className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                title="Beleg entfernen"
-              >
-                🗑
-              </button>
+              {rechnung.beleg.pdfa_verfuegbar && (
+                <button
+                  onClick={_openBelegPdfa}
+                  className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                  title="GoBD-konforme PDF/A-3-Version öffnen"
+                >
+                  ✓ PDF/A-3 (GoBD-Archiv)
+                </button>
+              )}
             </div>
           ) : (
             <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">

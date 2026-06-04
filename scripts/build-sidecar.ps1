@@ -88,6 +88,7 @@ try {
         --collect-all fitz `
         --hidden-import pytesseract `
         --hidden-import utils.rechnungs_parser `
+        --hidden-import utils.pdfa_konverter `
         "--add-data=$BackendDir\fonts;fonts" `
         main.py
 } finally {

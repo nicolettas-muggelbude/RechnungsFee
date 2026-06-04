@@ -83,6 +83,57 @@ _check_and_install_tesseract() {
   echo "────────────────────────────────────────────────────────────────────────"
 }
 
+_check_and_install_ghostscript() {
+  local pkg_manager="${1:-}"
+
+  echo "── Optionale Komponente: Ghostscript ───────────────────────────────────"
+  echo "  Wird benötigt um Belege als PDF/A-3 zu archivieren (GoBD-Langzeitarchiv)."
+  echo ""
+
+  if command -v gs &>/dev/null; then
+    echo "  ✓ ghostscript bereits installiert ($(gs --version 2>&1 | head -1))"
+    echo "────────────────────────────────────────────────────────────────────────"
+    return 0
+  fi
+
+  echo "  ○ ghostscript ist nicht installiert."
+  echo ""
+
+  local gs_pkg="ghostscript"
+  case "$pkg_manager" in
+    apt|dnf|zypper) gs_pkg="ghostscript" ;;
+    pacman)         gs_pkg="ghostscript" ;;
+    *)
+      echo "  Für PDF/A-Archivierung bitte manuell installieren: ghostscript"
+      echo "────────────────────────────────────────────────────────────────────────"
+      return 0
+      ;;
+  esac
+
+  printf "  Jetzt installieren? [J/n] "
+  read -r answer
+  answer="${answer:-j}"
+
+  if [[ "$answer" =~ ^[jJyY]$ ]]; then
+    case "$pkg_manager" in
+      apt)    sudo apt install -y "$gs_pkg" ;;
+      dnf)    sudo dnf install -y "$gs_pkg" ;;
+      zypper) sudo zypper install -y "$gs_pkg" ;;
+      pacman) sudo pacman -S --noconfirm "$gs_pkg" ;;
+    esac
+    echo ""
+    if command -v gs &>/dev/null; then
+      echo "  ✓ Ghostscript installiert. PDF/A-Archivierung ist aktiv."
+    else
+      echo "  ✗ Installation fehlgeschlagen. PDF/A-Archivierung wird übersprungen."
+    fi
+  else
+    echo "  Übersprungen. PDF/A-Archivierung ist nicht verfügbar."
+    echo "  Manuell nachinstallieren: sudo $pkg_manager install $gs_pkg"
+  fi
+  echo "────────────────────────────────────────────────────────────────────────"
+}
+
 check_and_fix_deps() {
   local pkg_manager="" webkit_pkg="" egl_pkg="" fuse_pkg="" extra_pkgs=""
 
@@ -168,6 +219,7 @@ check_and_fix_deps() {
     echo "  Reparatur-Option: $0 --repair $APPIMAGE"
     echo ""
     _check_and_install_tesseract "$pkg_manager"
+    _check_and_install_ghostscript "$pkg_manager"
     return 0
   fi
 
@@ -192,6 +244,7 @@ check_and_fix_deps() {
   _install_deps "$pkg_manager" "$webkit_pkg" "$egl_pkg" "$fuse_pkg" "$extra_pkgs"
   echo ""
   _check_and_install_tesseract "$pkg_manager"
+  _check_and_install_ghostscript "$pkg_manager"
 }
 
 # ── Reparatur-Modus: Pakete neu installieren (auch wenn vorhanden) ─────────────

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from utils.pdfa_konverter import konvertiere_zu_pdfa
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import extract, func
@@ -1484,30 +1485,85 @@ async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Sess
                 alter_pfad.unlink()
             db.delete(alter_beleg)
 
+    # PDF/A-Konvertierung: ZUGFeRD/XRechnung ist bereits PDF/A-3
+    pdfa_pfad_rel: str | None = None
+    if mime == "application/pdf":
+        try:
+            ergebnis = analysiere_datei(datei.filename or "", inhalt)
+            if ergebnis.format in ("zugferd", "xrechnung"):
+                # Eingebettetes XML → bereits normiertes PDF/A-3
+                pdfa_pfad_rel = rel_pfad
+        except Exception:
+            pass
+
     beleg = Beleg(
         dateiname=rel_pfad,
         original_name=datei.filename or "beleg",
         mime_type=mime,
         dateigroesse=len(inhalt),
         sha256=sha256,
+        beleg_pdfa_pfad=pdfa_pfad_rel,
     )
     db.add(beleg)
     db.flush()
     rechnung.beleg_id = beleg.id
     db.commit()
     db.refresh(beleg)
-    return beleg
+
+    # Konvertierung zu PDF/A (asynchron im Hintergrundthread, blockiert Antwort nicht)
+    if pdfa_pfad_rel is None:
+        import threading
+        beleg_id = beleg.id
+        src_pfad = ziel_dir / dateiname_lokal
+        beleg_mime = mime
+
+        def _konvertiere_hintergrund():
+            from database.connection import SessionLocal as _Session
+            pdfa_path = konvertiere_zu_pdfa(src_pfad, beleg_mime)
+            if pdfa_path and pdfa_path.exists():
+                pfad_relativ = f"belege/{jetzt.year}/{jetzt.strftime('%m')}/{pdfa_path.name}"
+                _db = _Session()
+                try:
+                    b = _db.query(Beleg).filter(Beleg.id == beleg_id).first()
+                    if b:
+                        b.beleg_pdfa_pfad = pfad_relativ
+                        _db.commit()
+                finally:
+                    _db.close()
+
+        threading.Thread(target=_konvertiere_hintergrund, daemon=True).start()
+
+    return BelegResponse.from_beleg(beleg)
 
 
 @router.get("/{rechnung_id}/beleg")
-def download_beleg(rechnung_id: int, db: Session = Depends(get_db)):
-    """Angehängte Datei einer Rechnung herunterladen."""
+def download_beleg(
+    rechnung_id: int,
+    version: str = Query("original", description="'original' oder 'pdfa'"),
+    db: Session = Depends(get_db),
+):
+    """Angehängte Datei einer Rechnung herunterladen. Mit ?version=pdfa die PDF/A-Version."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung or not rechnung.beleg_id:
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
     beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
     if not beleg:
         raise HTTPException(status_code=404, detail="Beleg-Datensatz nicht gefunden.")
+
+    if version == "pdfa":
+        if not beleg.beleg_pdfa_pfad:
+            raise HTTPException(status_code=404, detail="Keine PDF/A-Version verfügbar.")
+        pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
+        if not pfad.exists():
+            raise HTTPException(status_code=404, detail="PDF/A-Datei nicht gefunden.")
+        stem = Path(beleg.original_name).stem
+        return FileResponse(
+            path=str(pfad),
+            media_type="application/pdf",
+            filename=f"{stem}_pdfa.pdf",
+            content_disposition_type="inline",
+        )
+
     pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
     if not pfad.exists():
         raise HTTPException(status_code=404, detail="Beleg-Datei nicht gefunden.")

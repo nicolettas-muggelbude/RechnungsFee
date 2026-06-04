@@ -638,6 +638,7 @@ export type Beleg = {
   dateigroesse: number | null
   sha256: string | null
   hochgeladen_am: string
+  pdfa_verfuegbar: boolean
 }
 
 export async function uploadBeleg(rechnungId: number, datei: File): Promise<Beleg> {
@@ -655,6 +656,11 @@ export async function uploadBeleg(rechnungId: number, datei: File): Promise<Bele
 export async function getBelegUrl(rechnungId: number): Promise<string> {
   const base = await getBaseUrl()
   return `${base}/rechnungen/${rechnungId}/beleg`
+}
+
+export async function getBelegPdfaUrl(rechnungId: number): Promise<string> {
+  const base = await getBaseUrl()
+  return `${base}/rechnungen/${rechnungId}/beleg?version=pdfa`
 }
 
 export const deleteBeleg = (rechnungId: number) =>

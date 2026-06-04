@@ -377,6 +377,7 @@ class Beleg(Base):
     dateigroesse: Mapped[int | None] = mapped_column(Integer)                   # Bytes
     sha256: Mapped[str | None] = mapped_column(String(64))                      # GoBD: Unveränderlichkeit prüfbar
     hochgeladen_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    beleg_pdfa_pfad: Mapped[str | None] = mapped_column(String(500))            # rel. Pfad PDF/A-3-Version (GoBD-Archiv)
 
 
 # ---------------------------------------------------------------------------
