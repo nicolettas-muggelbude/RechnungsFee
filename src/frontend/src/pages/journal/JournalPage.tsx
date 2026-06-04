@@ -23,7 +23,7 @@ function aktuellerMonat(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr'
+type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'alle' | 'jahr'
 
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
