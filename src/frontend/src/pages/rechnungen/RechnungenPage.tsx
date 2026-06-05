@@ -1398,8 +1398,8 @@ function RechnungDetail({
           </div>
         )}
 
-        {/* Beleg-Anhang */}
-        <div>
+        {/* Beleg-Anhang – nur für Eingangsrechnungen */}
+        {rechnung.typ === 'eingang' && <div>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Beleg</p>
           {rechnung.beleg ? (
             <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 space-y-1.5">
@@ -1456,7 +1456,7 @@ function RechnungDetail({
           {belegFehler && (
             <p className="text-xs text-red-600 dark:text-red-400 mt-1">{belegFehler}</p>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Aktionen */}
@@ -3362,7 +3362,7 @@ export function RechnungenPage() {
         )}
 
         {/* Tabelle */}
-        <div ref={listContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto min-h-0 px-6 pb-6 focus:outline-none">
+        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto min-h-0 px-6 pb-6 focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600 rounded-sm">
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {isLoading ? (
               <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Lade Rechnungen…</p>
@@ -3383,6 +3383,13 @@ export function RechnungenPage() {
                     </th>
                     <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                     <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                    {typ !== 'ausgang' && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide w-8" title="Beleg angehängt">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 mx-auto">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -3390,8 +3397,9 @@ export function RechnungenPage() {
                     <tr
                       key={r.id}
                       data-rechnung-id={r.id}
+                      tabIndex={0}
                       onClick={() => { setSelectedId(r.id); setFormModus(null) }}
-                      className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
+                      className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600 ${
                         selectedId === r.id ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''
                       } ${r.storniert ? 'opacity-50' : ''}`}
                     >
@@ -3431,6 +3439,15 @@ export function RechnungenPage() {
                             ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
                             : <StatusBadge status={r.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
                       </td>
+                      {typ !== 'ausgang' && (
+                        <td className="px-3 py-3 text-center">
+                          {r.typ === 'eingang' && r.beleg && (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 mx-auto text-slate-400 dark:text-slate-500" title={r.beleg.original_name}>
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
