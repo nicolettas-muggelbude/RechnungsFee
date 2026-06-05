@@ -3159,23 +3159,32 @@ export function RechnungenPage() {
       })
     : liste
 
-  function handleListeKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    if (!listeSortiert.length) return
-    e.preventDefault()
-    const idx = selectedId != null ? listeSortiert.findIndex(r => r.id === selectedId) : -1
-    const nextIdx = e.key === 'ArrowDown'
-      ? Math.min(idx + 1, listeSortiert.length - 1)
-      : Math.max(idx - 1, 0)
-    const next = listeSortiert[nextIdx]
-    if (!next) return
-    setSelectedId(next.id)
-    setFormModus(null)
-    requestAnimationFrame(() => {
-      const row = listContainerRef.current?.querySelector(`[data-rechnung-id="${next.id}"]`)
-      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    })
-  }
+  // Keyboard-Navigation: globaler Listener damit der Focus-Zustand
+  // des Detail-Panels oder anderer Elemente nicht stört.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      // Nicht aktiv wenn der Nutzer in ein Feld tippt oder ein Formular offen ist
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (formModus) return
+      if (!listeSortiert.length) return
+      e.preventDefault()
+      const idx = selectedId != null ? listeSortiert.findIndex(r => r.id === selectedId) : -1
+      const nextIdx = e.key === 'ArrowDown'
+        ? Math.min(idx + 1, listeSortiert.length - 1)
+        : Math.max(idx - 1, 0)
+      const next = listeSortiert[nextIdx]
+      if (!next) return
+      setSelectedId(next.id)
+      requestAnimationFrame(() => {
+        const row = listContainerRef.current?.querySelector(`[data-rechnung-id="${next.id}"]`)
+        row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [listeSortiert, selectedId, formModus])
 
   // Summen (Entwürfe + Stornierte werden aus dem offenen Saldo ausgeschlossen)
   const gesamt = liste.reduce(
@@ -3350,12 +3359,7 @@ export function RechnungenPage() {
         )}
 
         {/* Tabelle */}
-        <div
-          ref={listContainerRef}
-          className="flex-1 overflow-y-auto min-h-0 px-6 pb-6 outline-none"
-          tabIndex={0}
-          onKeyDown={handleListeKeyDown}
-        >
+        <div ref={listContainerRef} className="flex-1 overflow-y-auto min-h-0 px-6 pb-6">
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {isLoading ? (
               <p className="p-5 text-slate-400 dark:text-slate-500 text-sm">Lade Rechnungen…</p>
@@ -3383,7 +3387,7 @@ export function RechnungenPage() {
                     <tr
                       key={r.id}
                       data-rechnung-id={r.id}
-                      onClick={() => { setSelectedId(r.id); setFormModus(null); listContainerRef.current?.focus() }}
+                      onClick={() => { setSelectedId(r.id); setFormModus(null) }}
                       className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
                         selectedId === r.id ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''
                       } ${r.storniert ? 'opacity-50' : ''}`}
