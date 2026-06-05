@@ -112,6 +112,18 @@ Eingangsrechnungen mit Beleg belegen, ZUGFeRD/XRechnung automatisch einlesen.
 
 ---
 
+## v0.2.21 – UX-Verbesserungen ✅ *v0.2.21*
+
+- [x] Rechnungsliste: Büroklammer-Icon wenn Eingangsrechnung einen Beleg hat (#123)
+- [x] Rechnungsliste: Keyboard-Navigation – Pfeiltasten + Tab mit focus-visible Ring (#125)
+- [x] Journal: Summenzeile (Einnahmen / Ausgaben / Saldo) (#122)
+- [x] Formulare: Kategorie, Lieferant, Kunde, Artikel direkt anlegen ohne Seitenwechsel (#120)
+- [x] Beleg-Anhang nur für Eingangsrechnungen (Ausgangsrechnungen: App generiert PDF selbst)
+- [x] OCR: Vodafone/Telekommunikationsrechnungen (#119)
+- [x] GoBD-Export: Belege-Fallback via rechnung.beleg_id (#124)
+
+---
+
 ## v0.2.x – Wiederkehrende Buchungen *(Ziel: offen)*
 
 Monatliche Fixkosten (Miete, Leasing, Abonnements) einmalig als Vorlage anlegen.

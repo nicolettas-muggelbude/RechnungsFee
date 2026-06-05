@@ -23,6 +23,21 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.2.21',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Rechnungsliste: Büroklammer-Icon zeigt auf einen Blick ob eine Eingangsrechnung einen Beleg hat (#123)' },
+      { typ: 'neu', text: 'Rechnungsliste: Keyboard-Navigation vollständig – Pfeiltasten scrollen durch die Liste, Tab springt direkt zu einer Zeile (fokus-visible Ring nur beim Tabben) (#125)' },
+      { typ: 'neu', text: 'Journal: Summenzeile unterhalb der Liste – Einnahmen, Ausgaben und Saldo des aktuellen Filters auf einen Blick (#122)' },
+      { typ: 'neu', text: 'Formulare: Kategorie, Lieferant, Kunde und Artikel lassen sich direkt im Erfassungsformular neu anlegen – ohne Seitenwechsel (#120)' },
+      { typ: 'verbesserung', text: 'Beleg-Anhang und -Spalte werden nur noch bei Eingangsrechnungen angezeigt – bei Ausgangsrechnungen generiert die App das PDF selbst' },
+      { typ: 'verbesserung', text: 'Zahlungsart „Überweisung" heißt jetzt überall „Bank"' },
+      { typ: 'fix', text: 'OCR-Import: Vodafone- und Telekommunikationsrechnungen – Lieferantenname, Adressteil-Trimming und Positionen werden jetzt korrekt erkannt (#119)' },
+      { typ: 'fix', text: 'GoBD-Export: Belege-Ordner war leer wenn Beleg nur an der Rechnung (nicht am Journal-Eintrag) hing – Fallback via rechnung.beleg_id ergänzt (#124)' },
+      { typ: 'fix', text: 'Storno-Buchung einer Eingangsrechnung: Vorsteuer-Betrag wird jetzt korrekt angezeigt (#113)' },
+    ],
+  },
+  {
     version: 'v0.2.20',
     datum: 'Juni 2026',
     eintraege: [
