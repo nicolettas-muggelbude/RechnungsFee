@@ -275,19 +275,32 @@ def _ust_satz_aus_betraegen(netto_str: Optional[str], ust_str: Optional[str]) ->
 
 
 def _berechne_fehlende_summen(felder: dict) -> None:
-    """Berechnet fehlendes Brutto/Netto/USt wenn zwei der drei Werte bekannt sind."""
+    """Berechnet fehlendes Brutto/Netto/USt und leitet ust_satz ab wenn möglich."""
     try:
         n = Decimal(felder["gesamt_netto"]) if felder.get("gesamt_netto") else None
         u = Decimal(felder["gesamt_ust"]) if felder.get("gesamt_ust") else None
         b = Decimal(felder["gesamt_brutto"]) if felder.get("gesamt_brutto") else None
         q = Decimal("0.01")
         if n and u and not b:
-            felder["gesamt_brutto"] = str((n + u).quantize(q))
+            b = (n + u).quantize(q)
+            felder["gesamt_brutto"] = str(b)
         elif n and b and not u:
-            felder["gesamt_ust"] = str((b - n).quantize(q))
+            u = (b - n).quantize(q)
+            felder["gesamt_ust"] = str(u)
         elif u and b and not n:
-            felder["gesamt_netto"] = str((b - u).quantize(q))
-    except (InvalidOperation, KeyError):
+            n = (b - u).quantize(q)
+            felder["gesamt_netto"] = str(n)
+
+        # ust_satz aus USt/Netto-Verhältnis ableiten wenn er fehlt
+        if not felder.get("ust_satz") and n and n > 0:
+            ust_val = u if u else (b - n if b and b > n else None)
+            if ust_val and ust_val > 0:
+                ratio = (ust_val / n) * 100
+                for satz in (19, 7, 5, 20, 10, 16):
+                    if abs(ratio - satz) < Decimal("0.6"):
+                        felder["ust_satz"] = str(satz)
+                        break
+    except (InvalidOperation, KeyError, ZeroDivisionError):
         pass
 
 
