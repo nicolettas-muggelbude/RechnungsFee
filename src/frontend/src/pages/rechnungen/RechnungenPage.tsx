@@ -3399,7 +3399,7 @@ export function RechnungenPage() {
                       data-rechnung-id={r.id}
                       tabIndex={0}
                       onClick={() => { setSelectedId(r.id); setFormModus(null) }}
-                      className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${
+                      className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 dark:focus-visible:outline-blue-400 focus-visible:bg-blue-50 dark:focus-visible:bg-blue-950/40 ${
                         selectedId === r.id ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''
                       } ${r.storniert ? 'opacity-50' : ''}`}
                     >
