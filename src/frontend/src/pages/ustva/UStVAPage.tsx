@@ -76,6 +76,9 @@ export function UStVAPage() {
   const [monat, setMonat] = useState(now.getMonth() + 1)
   const [quartal, setQuartal] = useState(Math.ceil((now.getMonth() + 1) / 3))
   const [gespeichertMeldung, setGespeichertMeldung] = useState(false)
+  const [pdfLaedt, setPdfLaedt] = useState(false)
+  const [pdfFehler, setPdfFehler] = useState<string | null>(null)
+  const [pdfExportiert, setPdfExportiert] = useState(false)
 
   const zeitraum = modus === 'quartal'
     ? `${jahr}-Q${quartal}`
@@ -105,6 +108,20 @@ export function UStVAPage() {
 
   const rhythmus = (unt as any)?.voranmeldungsrhythmus ?? 'quartal'
 
+  async function handlePdf() {
+    setPdfLaedt(true)
+    setPdfFehler(null)
+    setPdfExportiert(false)
+    try {
+      await openUrl(getUStVAPdfUrl(zeitraum))
+      setPdfExportiert(true)
+    } catch (e: any) {
+      setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
+    } finally {
+      setPdfLaedt(false)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">
@@ -114,6 +131,7 @@ export function UStVAPage() {
         Berechnet Kennziffern aus deinen Journalbuchungen (Ist-Versteuerung).
         Trage die Beträge manuell in{' '}
         <button
+          type="button"
           onClick={() => openUrl('https://www.elster.de')}
           className="text-blue-600 dark:text-blue-400 hover:underline"
         >
@@ -212,12 +230,16 @@ export function UStVAPage() {
             </h2>
             <div className="flex gap-2">
               <button
-                onClick={async () => { const url = getUStVAPdfUrl(zeitraum); await openUrl(url) }}
-                className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                onClick={handlePdf}
+                disabled={pdfLaedt}
+                className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
               >
-                📄 PDF
+                {pdfLaedt ? '…' : '📄 PDF'}
               </button>
+              {pdfExportiert && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
+              {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
               <button
+                type="button"
                 onClick={() => speichernMut.mutate({
                   zeitraum,
                   kz_81: ergebnis.kz_81,
