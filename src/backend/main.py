@@ -1287,6 +1287,9 @@ def _migrate_kategorien() -> None:
             # §13b Abs. 2 – Bauleistungen, Gebäudereinigung, Sicherheit, Metallieferungen aus Inland/EU
             # Reverse Charge: Empfänger schuldet USt (KZ 84/85); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3610", "konto_skr04": "5600", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # §25a Differenzbesteuerung – Ankauf von Privatpersonen oder anderen ohne USt-Ausweis
+            # Keine Vorsteuer abziehbar; EK-Preis ist Basis für Margenberechnung (VK − EK)
+            {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
         ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
