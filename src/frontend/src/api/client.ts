@@ -1143,12 +1143,18 @@ export type UStVAErgebnis = {
   zeitraum_typ: string
   von: string
   bis: string
-  kz_81: string
-  kz_83: string
-  kz_86: string
-  kz_88: string
-  kz_66: string
-  kz_41: string
+  // A – Ausgangsumsätze
+  kz_81: string; kz_83: string
+  kz_86: string; kz_88: string
+  // B – steuerfreie Umsätze (manuell)
+  kz_41: string; kz_87: string
+  // C – ig. Erwerb
+  kz_89: string; kz_93: string
+  // D – §13b
+  kz_46: string; kz_47: string
+  kz_84: string; kz_85: string
+  // F – Vorsteuer
+  kz_66: string; kz_61: string; kz_67: string
   zahllast: string
   ist_kleinunternehmer: boolean
   hinweis?: string | null

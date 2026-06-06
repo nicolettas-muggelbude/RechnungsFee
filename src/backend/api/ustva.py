@@ -6,10 +6,18 @@ Zeitraum-Formate:
   Monatlich:       zeitraum=2026-01 … 2026-12
   Vierteljährlich: zeitraum=2026-Q1 … 2026-Q4
 
-KZ-Mapping (SKR03/SKR04 → Kennziffer):
-  1776 / 3806 → KZ 81 (Netto-Umsätze 19%) + KZ 83 (USt 19%)
-  1771 / 3801 → KZ 86 (Netto-Umsätze 7%)  + KZ 88 (USt 7%)
-  vorsteuer_betrag > 0, art='Ausgabe' → KZ 66 (Vorsteuer Inland)
+KZ-Mapping (konto_ust_skr03/04 → Kennziffer):
+  1776 / 3806 → KZ 81/83  (19% Ausgangsumsatz)
+  1771 / 3801 → KZ 86/88  (7%  Ausgangsumsatz)
+  1780        → KZ 89/93  (ig. Erwerb 19%)
+  1781        → KZ 96/97  (ig. Erwerb 7% – selten)
+  1583 / 1402 → KZ 61     (Vorsteuer ig. Erwerb)
+  1787        → KZ 84/85  (§13b Abs. 2, Empfänger schuldet)
+  1789        → KZ 46/47  (§13b Abs. 1, EU-Dienstleistungen)
+  vorsteuer_betrag, art=Ausgabe, andere Konten → KZ 66 (Vorsteuer Inland)
+
+KZ 41 (EU-Lieferungen steuerfreie Einnahmen) und KZ 87 (Ausfuhr etc.)
+können nicht sicher aus dem Journal abgeleitet werden – manuelle Eingabe.
 """
 
 import calendar
@@ -32,11 +40,59 @@ router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
 
 ZERO = Decimal("0.00")
 
-# USt-Konten → Kennziffer-Name
-_UST_KONTO_KZ = {
-    "1776": "kz_81", "3806": "kz_81",   # 19% Ausgangsumsatz SKR03/04
-    "1771": "kz_86", "3801": "kz_86",   # 7%  Ausgangsumsatz SKR03/04
+# ---------------------------------------------------------------------------
+# KZ-Definitionen: Reihenfolge wie im amtlichen Formular USt 1 A 2026
+# (abschnitt, kz_nr, bezeichnung, ist_steuer_zeile, auto_berechenbar)
+# ist_steuer_zeile: rechte Spalte = USt-Betrag (nicht Bemessungsgrundlage)
+# auto_berechenbar: True = aus Journal ableitbar
+# ---------------------------------------------------------------------------
+KZ_META = [
+    ("A. Steuerpflichtige Ausgangsumsätze", "81",
+     "Umsätze 19 % – Bemessungsgrundlage", False, True),
+    ("", "83", "Umsatzsteuer 19 %", True, True),
+    ("", "86", "Umsätze 7 % – Bemessungsgrundlage", False, True),
+    ("", "88", "Umsatzsteuer 7 %", True, True),
+
+    ("B. Steuerfreie Umsätze mit Vorsteuerabzug", "41",
+     "Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.", False, False),
+    ("", "87",
+     "Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)", False, False),
+
+    ("C. Innergemeinschaftliche Erwerbe", "89",
+     "Steuerpflichtige Erwerbe 19 %", False, True),
+    ("", "93", "Umsatzsteuer ig. Erwerb 19 %", True, True),
+
+    ("D. Leistungsempfänger als Steuerschuldner (§13b UStG)", "46",
+     "Sonstige Leistungen EU-Unternehmer (§13b Abs. 1 UStG)", False, True),
+    ("", "47", "Umsatzsteuer §13b Abs. 1", True, True),
+    ("", "84",
+     "Andere §13b-Leistungen (Abs. 2 Nr. 1, 2, 4–12 UStG)", False, True),
+    ("", "85", "Umsatzsteuer §13b Abs. 2", True, True),
+
+    ("F. Abziehbare Vorsteuerbeträge", "66",
+     "Vorsteuer aus Rechnungen (§15 Abs. 1 Satz 1 Nr. 1 UStG)", False, True),
+    ("", "61",
+     "Vorsteuer ig. Erwerb (§15 Abs. 1 Satz 1 Nr. 3 UStG)", False, True),
+    ("", "67",
+     "Vorsteuer aus §13b-Leistungen (§15 Abs. 1 Satz 1 Nr. 4 UStG)", False, True),
+]
+
+# USt-Konto → (Bemessungsgrundlage-KZ, Steuer-KZ) für Einnahmen
+_KONTO_EINNAHME: dict[str, tuple[str, str]] = {
+    "1776": ("kz_81", "kz_83"), "3806": ("kz_81", "kz_83"),  # 19%
+    "1771": ("kz_86", "kz_88"), "3801": ("kz_86", "kz_88"),  # 7%
+    "1780": ("kz_89", "kz_93"),                               # ig. Erwerb 19%
+    "1787": ("kz_84", "kz_85"),                               # §13b Abs. 2
+    "1789": ("kz_46", "kz_47"),                               # §13b Abs. 1 (EU-DL)
 }
+
+# USt-Konto → Vorsteuer-KZ für Ausgaben
+_KONTO_AUSGABE_VST: dict[str, str] = {
+    "1583": "kz_61", "1402": "kz_61",   # Vorsteuer ig. Erwerb
+    "1787": "kz_67", "1789": "kz_67",   # Vorsteuer §13b
+}
+
+ALL_KZ_KEYS = [f"kz_{m[1]}" for m in KZ_META] + ["zahllast"]
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +100,6 @@ _UST_KONTO_KZ = {
 # ---------------------------------------------------------------------------
 
 def _zeitraum_grenzen(zeitraum: str) -> tuple[date, date, str]:
-    """Parst 'YYYY-MM' oder 'YYYY-QN', gibt (von, bis, typ) zurück."""
     if "-Q" in zeitraum:
         try:
             jahr_s, q_s = zeitraum.split("-Q")
@@ -57,7 +112,7 @@ def _zeitraum_grenzen(zeitraum: str) -> tuple[date, date, str]:
             bis = date(jahr, bis_monat, calendar.monthrange(jahr, bis_monat)[1])
             return von, bis, "quartalsweise"
         except (ValueError, AttributeError):
-            raise HTTPException(422, f"Ungültiges Quartal: '{zeitraum}' – erwartet z.B. '2026-Q1'")
+            raise HTTPException(422, f"Ungültiges Quartal: '{zeitraum}'")
     else:
         try:
             jahr_s, mon_s = zeitraum.split("-")
@@ -68,43 +123,39 @@ def _zeitraum_grenzen(zeitraum: str) -> tuple[date, date, str]:
             bis = date(jahr, monat, calendar.monthrange(jahr, monat)[1])
             return von, bis, "monatlich"
         except (ValueError, AttributeError):
-            raise HTTPException(422, f"Ungültiges Zeitraum-Format: '{zeitraum}' – erwartet z.B. '2026-01'")
+            raise HTTPException(422, f"Ungültiges Zeitraum-Format: '{zeitraum}'")
 
 
-def _berechne_kz(von: date, bis: date, db: Session) -> dict:
-    """Aggregiert Journaleinträge im Zeitraum zu UStVA-Kennziffern."""
+def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
     eintraege = (
         db.query(Journaleintrag)
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
         .all()
     )
 
-    kz: dict[str, Decimal] = {
-        "kz_81": ZERO, "kz_83": ZERO,
-        "kz_86": ZERO, "kz_88": ZERO,
-        "kz_66": ZERO,
-        "kz_41": ZERO,
-    }
+    kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
 
     for e in eintraege:
         ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
-        kz_name = _UST_KONTO_KZ.get(ust_konto)
 
-        # Ausgangsumsätze (Einnahmen mit USt-Buchung)
-        if kz_name and e.art == "Einnahme" and e.ust_betrag != 0:
-            kz[kz_name] += e.netto_betrag
-            kz["kz_83" if kz_name == "kz_81" else "kz_88"] += e.ust_betrag
+        if e.art == "Einnahme" and e.ust_betrag and e.ust_betrag != 0:
+            mapping = _KONTO_EINNAHME.get(ust_konto)
+            if mapping:
+                kz[mapping[0]] += e.netto_betrag
+                kz[mapping[1]] += e.ust_betrag
 
-        # Vorsteuer Inland (Ausgaben mit abziehbarem Vorsteueranteil)
         if e.art == "Ausgabe" and e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
-            kz["kz_66"] += e.vorsteuer_betrag
+            vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
+            kz[vst_kz] += e.vorsteuer_betrag
 
     q = Decimal("0.01")
     for k in kz:
-        kz[k] = kz[k].quantize(q, ROUND_HALF_UP)
+        if k != "zahllast":
+            kz[k] = kz[k].quantize(q, ROUND_HALF_UP)
 
-    ust_gesamt = kz["kz_83"] + kz["kz_88"]
-    kz["zahllast"] = (ust_gesamt - kz["kz_66"]).quantize(q, ROUND_HALF_UP)
+    ust = kz["kz_83"] + kz["kz_88"] + kz["kz_93"] + kz["kz_47"] + kz["kz_85"]
+    vst = kz["kz_66"] + kz["kz_61"] + kz["kz_67"]
+    kz["zahllast"] = (ust - vst).quantize(q, ROUND_HALF_UP)
     return kz
 
 
@@ -146,14 +197,14 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
                 return p
         raise FileNotFoundError("DejaVu-Fonts nicht gefunden.")
 
-    BLAU = (37, 99, 235)
-    GRAU = (245, 246, 248)
+    BLAU   = (37, 99, 235)
+    GRAU   = (245, 246, 248)
     DUNKEL = (30, 41, 59)
     MITTEL = (100, 116, 139)
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     fonts = _find_dejavu_dir()
-    pdf.add_font("DejaVu", "", str(fonts / "DejaVuSans.ttf"))
+    pdf.add_font("DejaVu", "",  str(fonts / "DejaVuSans.ttf"))
     pdf.add_font("DejaVu", "B", str(fonts / "DejaVuSans-Bold.ttf"))
     pdf.add_page()
     pdf.set_margins(20, 20, 20)
@@ -172,11 +223,12 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
     pdf.set_font("DejaVu", "B", 14)
     pdf.cell(0, 8, _zeitraum_label(zeitraum), ln=True, align="L")
 
-    # Unternehmensdaten
     pdf.set_font("DejaVu", "", 9)
     pdf.set_text_color(*MITTEL)
     name = unt.firmenname or f"{unt.vorname or ''} {unt.nachname or ''}".strip()
-    pdf.cell(0, 5, f"{name}  ·  Steuernummer: {unt.steuernummer or '—'}  ·  Finanzamt: {unt.finanzamt or '—'}", ln=True, align="L")
+    pdf.cell(0, 5,
+        f"{name}  ·  Steuernummer: {unt.steuernummer or '—'}  ·  Finanzamt: {unt.finanzamt or '—'}",
+        ln=True, align="L")
     if unt.w_idnr:
         pdf.cell(0, 5, f"Wirtschafts-IdNr. (Zeile 1): {unt.w_idnr}", ln=True, align="L")
     pdf.ln(4)
@@ -186,29 +238,21 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         s = f"{abs(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
         return f"− {s}" if neg else s
 
-    def kz_row(kz_nr: str, bezeichnung: str, wert: Decimal, *, sub: bool = False, bold: bool = False):
-        pdf.set_fill_color(*GRAU)
-        x = pdf.get_x()
+    def kz_row(kz_nr: str, bezeichnung: str, wert: Decimal, ist_steuer: bool = False, bold: bool = False):
         y = pdf.get_y()
         h = 7
-
-        # KZ-Chip
         pdf.set_fill_color(*BLAU)
         pdf.set_font("DejaVu", "B", 8)
         pdf.set_text_color(255, 255, 255)
-        chip_w = 12
         pdf.set_xy(20, y)
-        pdf.cell(chip_w, h, kz_nr, border=0, fill=True, align="C")
+        pdf.cell(12, h, kz_nr, border=0, fill=True, align="C")
 
-        # Bezeichnung
-        pdf.set_fill_color(*GRAU)
-        font_size = 8 if sub else 9
+        font_size = 8 if ist_steuer else 9
         pdf.set_font("DejaVu", "B" if bold else "", font_size)
-        pdf.set_text_color(MITTEL if sub else DUNKEL)
-        pdf.set_xy(20 + chip_w + 2, y)
-        pdf.cell(122, h, bezeichnung, border=0, align="L")
+        pdf.set_text_color(MITTEL if ist_steuer else DUNKEL)
+        pdf.set_xy(34, y)
+        pdf.cell(120, h, bezeichnung, border=0, align="L")
 
-        # Betrag
         color = (220, 38, 38) if wert < 0 else DUNKEL
         pdf.set_text_color(*color)
         pdf.set_font("DejaVu", "B" if bold else "", 9)
@@ -224,26 +268,28 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         pdf.cell(170, 6, f"  {titel}", fill=True, ln=True, align="L")
         pdf.ln(1)
 
-    # A – Ausgangsumsätze
-    section("A. Steuerpflichtige Ausgangsumsätze")
-    kz_row("81", "Umsätze zum Steuersatz 19 % – Bemessungsgrundlage", kz["kz_81"])
-    kz_row("83", "Umsatzsteuer 19 %", kz["kz_83"], sub=True)
-    pdf.ln(1)
-    kz_row("86", "Umsätze zum Steuersatz 7 % – Bemessungsgrundlage", kz["kz_86"])
-    kz_row("88", "Umsatzsteuer 7 %", kz["kz_88"], sub=True)
-    pdf.ln(3)
+    # Nur Zeilen mit Wert ≠ 0 rendern, Abschnitte bei Bedarf
+    letzter_abschnitt = None
+    for (abschnitt, kz_nr, bezeichnung, ist_steuer, _auto) in KZ_META:
+        key = f"kz_{kz_nr}"
+        wert = kz.get(key, ZERO)
+        if wert == ZERO:
+            continue
+        eff_abschnitt = abschnitt if abschnitt else letzter_abschnitt
+        if eff_abschnitt != letzter_abschnitt:
+            if letzter_abschnitt is not None:
+                pdf.ln(2)
+            section(eff_abschnitt)
+            letzter_abschnitt = eff_abschnitt
+        kz_row(kz_nr, bezeichnung, wert, ist_steuer=ist_steuer)
 
-    # F – Vorsteuer
-    section("F. Abziehbare Vorsteuerbeträge")
-    kz_row("66", "Vorsteuer aus Eingangsrechnungen (§ 15 Abs. 1 Nr. 1 UStG)", kz["kz_66"])
-    pdf.ln(3)
-
-    # H – Zahllast
+    # Zahllast immer anzeigen
+    pdf.ln(2)
     section("H. Vorauszahlung / Überschuss")
-    zahllast = kz["zahllast"]
-    label = "Verbleibender Überschuss (negativ)" if zahllast < 0 else "Umsatzsteuer-Vorauszahlung"
+    zahllast = kz.get("zahllast", ZERO)
+    label = "Verbleibender Überschuss (Erstattung)" if zahllast < 0 else "Umsatzsteuer-Vorauszahlung"
     kz_row("—", label, zahllast, bold=True)
-    pdf.ln(5)
+    pdf.ln(4)
 
     # Hinweis
     pdf.set_fill_color(254, 243, 199)
@@ -254,7 +300,9 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         "Hinweis: Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
         "Bitte übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie "
         "deinem Steuerberater. Grundlage: Journalbuchungen nach Ist-Versteuerung "
-        "(Zahlungsdatum). Bei Soll-Versteuerung ggf. abweichend.",
+        "(Zahlungsdatum). Bei Soll-Versteuerung ggf. abweichend. "
+        "Nicht automatisch berechnete Felder (z.B. EU-Lieferungen KZ 41) müssen "
+        "manuell eingetragen werden.",
         fill=True, align="L"
     )
 
@@ -262,7 +310,9 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
     pdf.set_y(-15)
     pdf.set_font("DejaVu", "", 7)
     pdf.set_text_color(*MITTEL)
-    pdf.cell(0, 5, f"Erstellt mit RechnungsFee  ·  {_zeitraum_label(zeitraum)}", align="C")
+    name_kurz = (unt.firmenname or f"{unt.vorname or ''} {unt.nachname or ''}".strip())[:40]
+    pdf.cell(85, 5, f"Erstellt mit RechnungsFee  ·  {name_kurz}", align="L")
+    pdf.cell(85, 5, _zeitraum_label(zeitraum), align="R")
 
     buf = BytesIO()
     pdf.output(buf)
@@ -278,14 +328,28 @@ class UStVAErgebnis(BaseModel):
     zeitraum_typ: str
     von: date
     bis: date
-    kz_81: Decimal
-    kz_83: Decimal
-    kz_86: Decimal
-    kz_88: Decimal
-    kz_66: Decimal
-    kz_41: Decimal
-    zahllast: Decimal
-    ist_kleinunternehmer: bool
+    # A – Ausgangsumsätze
+    kz_81: Decimal = ZERO
+    kz_83: Decimal = ZERO
+    kz_86: Decimal = ZERO
+    kz_88: Decimal = ZERO
+    # B – Steuerfreie Umsätze (manuell)
+    kz_41: Decimal = ZERO
+    kz_87: Decimal = ZERO
+    # C – ig. Erwerb
+    kz_89: Decimal = ZERO
+    kz_93: Decimal = ZERO
+    # D – §13b
+    kz_46: Decimal = ZERO
+    kz_47: Decimal = ZERO
+    kz_84: Decimal = ZERO
+    kz_85: Decimal = ZERO
+    # F – Vorsteuer
+    kz_66: Decimal = ZERO
+    kz_61: Decimal = ZERO
+    kz_67: Decimal = ZERO
+    zahllast: Decimal = ZERO
+    ist_kleinunternehmer: bool = False
     hinweis: Optional[str] = None
 
 
@@ -295,8 +359,17 @@ class UStVASpeichernRequest(BaseModel):
     kz_83: Decimal = ZERO
     kz_86: Decimal = ZERO
     kz_88: Decimal = ZERO
-    kz_66: Decimal = ZERO
     kz_41: Decimal = ZERO
+    kz_87: Decimal = ZERO
+    kz_89: Decimal = ZERO
+    kz_93: Decimal = ZERO
+    kz_46: Decimal = ZERO
+    kz_47: Decimal = ZERO
+    kz_84: Decimal = ZERO
+    kz_85: Decimal = ZERO
+    kz_66: Decimal = ZERO
+    kz_61: Decimal = ZERO
+    kz_67: Decimal = ZERO
     zahllast: Decimal = ZERO
 
 
@@ -306,10 +379,9 @@ class UStVASpeichernRequest(BaseModel):
 
 @router.get("/berechnen", response_model=UStVAErgebnis)
 def ustva_berechnen(
-    zeitraum: str = Query(..., description="YYYY-MM oder YYYY-QN, z.B. '2026-01' oder '2026-Q1'"),
+    zeitraum: str = Query(..., description="YYYY-MM oder YYYY-QN"),
     db: Session = Depends(get_db),
 ):
-    """Berechnet UStVA-Kennziffern aus dem Journal (ohne zu speichern)."""
     unt = db.query(Unternehmen).first()
     if not unt:
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
@@ -318,41 +390,34 @@ def ustva_berechnen(
     ist_ku = bool(unt.ist_kleinunternehmer)
 
     if ist_ku:
-        # §19-Kleinunternehmer: keine Steuerpflicht, Kennziffern sind 0
-        kz = {k: ZERO for k in ("kz_81", "kz_83", "kz_86", "kz_88", "kz_66", "kz_41", "zahllast")}
+        kz: dict = {k: ZERO for k in ALL_KZ_KEYS}
         hinweis = ("Als Kleinunternehmer nach §19 UStG bist du von der UStVA befreit. "
-                   "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne Vorsteuerabzug eingetragen – "
-                   "dies geschieht jedoch nur einmal jährlich in der Jahressteuererklärung.")
+                   "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne "
+                   "Vorsteuerabzug eingetragen – nur einmal jährlich in der Jahressteuererklärung.")
     else:
         kz = _berechne_kz(von, bis, db)
         hinweis = None
 
     return UStVAErgebnis(
-        zeitraum=zeitraum,
-        zeitraum_typ=typ,
-        von=von,
-        bis=bis,
-        **kz,
-        ist_kleinunternehmer=ist_ku,
-        hinweis=hinweis,
+        zeitraum=zeitraum, zeitraum_typ=typ, von=von, bis=bis,
+        ist_kleinunternehmer=ist_ku, hinweis=hinweis,
+        **{k: v for k, v in kz.items() if k != "zahllast"},
+        zahllast=kz["zahllast"],
     )
 
 
 @router.post("/speichern")
 def ustva_speichern(req: UStVASpeichernRequest, db: Session = Depends(get_db)):
-    """Speichert berechnete UStVA-Daten (überschreibt bestehenden Eintrag)."""
-    von, bis, typ = _zeitraum_grenzen(req.zeitraum)
+    _zeitraum_grenzen(req.zeitraum)
     eintrag = db.query(UstvaExport).filter(UstvaExport.zeitraum == req.zeitraum).first()
     if not eintrag:
         eintrag = UstvaExport(zeitraum=req.zeitraum)
         db.add(eintrag)
+    _, _, typ = _zeitraum_grenzen(req.zeitraum)
     eintrag.zeitraum_typ = typ
-    eintrag.kz_81 = req.kz_81
-    eintrag.kz_83 = req.kz_83
-    eintrag.kz_86 = req.kz_86
-    eintrag.kz_88 = req.kz_88
-    eintrag.kz_66 = req.kz_66
-    eintrag.kz_41 = req.kz_41
+    eintrag.kz_81 = req.kz_81; eintrag.kz_83 = req.kz_83
+    eintrag.kz_86 = req.kz_86; eintrag.kz_88 = req.kz_88
+    eintrag.kz_66 = req.kz_66; eintrag.kz_41 = req.kz_41
     eintrag.zahllast = req.zahllast
     eintrag.daten_json = json.dumps({k: str(v) for k, v in req.model_dump().items()})
     db.commit()
@@ -361,34 +426,27 @@ def ustva_speichern(req: UStVASpeichernRequest, db: Session = Depends(get_db)):
 
 @router.get("/historie")
 def ustva_historie(db: Session = Depends(get_db)):
-    """Liste aller gespeicherten UStVA-Zeiträume."""
     eintraege = db.query(UstvaExport).order_by(UstvaExport.zeitraum.desc()).all()
     return [
-        {
-            "zeitraum": e.zeitraum,
-            "zeitraum_typ": e.zeitraum_typ,
-            "zahllast": float(e.zahllast),
-            "erstellt_am": e.erstellt_am.isoformat(),
-        }
+        {"zeitraum": e.zeitraum, "zeitraum_typ": e.zeitraum_typ,
+         "zahllast": float(e.zahllast), "erstellt_am": e.erstellt_am.isoformat()}
         for e in eintraege
     ]
 
 
 @router.get("/pdf")
 def ustva_pdf(
-    zeitraum: str = Query(..., description="YYYY-MM oder YYYY-QN"),
+    zeitraum: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    """PDF-Anzeigehilfe zur manuellen Übertragung in ELSTER."""
     unt = db.query(Unternehmen).first()
     if not unt:
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
     von, bis, _ = _zeitraum_grenzen(zeitraum)
     kz = _berechne_kz(von, bis, db)
     pdf_bytes = _generate_pdf(zeitraum, kz, unt)
-    filename = f"UStVA_{zeitraum}.pdf"
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="UStVA_{zeitraum}.pdf"'},
     )
