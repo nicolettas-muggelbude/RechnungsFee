@@ -197,16 +197,16 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         pdf.set_font("DejaVu", "B", 8)
         pdf.set_text_color(255, 255, 255)
         chip_w = 12
-        indent = 5 if sub else 0
-        pdf.set_xy(20 + indent, y)
+        pdf.set_xy(20, y)
         pdf.cell(chip_w, h, kz_nr, border=0, fill=True, align="C")
 
         # Bezeichnung
         pdf.set_fill_color(*GRAU)
-        pdf.set_font("DejaVu", "B" if bold else "", 9)
-        pdf.set_text_color(*DUNKEL)
-        pdf.set_xy(20 + indent + chip_w + 2, y)
-        pdf.cell(120 - indent, h, bezeichnung, border=0, align="L")
+        font_size = 8 if sub else 9
+        pdf.set_font("DejaVu", "B" if bold else "", font_size)
+        pdf.set_text_color(MITTEL if sub else DUNKEL)
+        pdf.set_xy(20 + chip_w + 2, y)
+        pdf.cell(122, h, bezeichnung, border=0, align="L")
 
         # Betrag
         color = (220, 38, 38) if wert < 0 else DUNKEL
