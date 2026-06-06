@@ -196,6 +196,10 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
   const gewaehlteKat = (kategorien ?? []).find((k) => String(k.id) === kategorie_id)
   const istPrivatKategorie = gewaehlteKat?.kontenart === 'Privat'
   const istFahrtkostenKat = gewaehlteKat?.eks_kategorie === 'B6_5'
+  const istIgLieferung = gewaehlteKat?.konto_skr03 === '8125' || gewaehlteKat?.konto_skr04 === '3125'
+  const kunde_id = watch('kunde_id')
+  const gewaehlterKunde = (kunden ?? []).find((k) => String(k.id) === kunde_id)
+  const igLieferungOhneUstIdNr = istIgLieferung && gewaehlterKunde && !gewaehlterKunde.ust_idnr
 
   // km-Eingabe: brutto_betrag auto-berechnen (EÜR: 0,30 €/km)
   useEffect(() => {
@@ -530,6 +534,11 @@ export function BuchungForm({ onClose, onSuccess }: Props) {
               {gewaehlteKat?.beschreibung && (
                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 pl-1">
                   💬 {gewaehlteKat.beschreibung}
+                </p>
+              )}
+              {igLieferungOhneUstIdNr && (
+                <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
+                  ⚠️ <strong>{gewaehlterKunde?.name}</strong> hat keine USt-IdNr. hinterlegt – für ig. Lieferungen (§4 Nr. 1b UStG) ist eine gültige USt-IdNr. des Käufers Pflicht.
                 </p>
               )}
             </div>

@@ -242,6 +242,8 @@ def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
             vorsteuerabzug = False
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
+        if kat and kat.konto_skr03 in ("8125", "3125") and not steuerbefreiung_grund:
+            steuerbefreiung_grund = "§4 Nr. 1b UStG"
 
     # Barkassen-Prüfung: Bar-Ausgabe darf den Kassenstand nicht übersteigen
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
@@ -316,6 +318,8 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
                 vorsteuerabzug = False
                 if not steuerbefreiung_grund:
                     steuerbefreiung_grund = "Privatbuchung"
+            if kat and kat.konto_skr03 in ("8125", "3125") and not steuerbefreiung_grund:
+                steuerbefreiung_grund = "§4 Nr. 1b UStG"
         netto, ust_betrag = _berechne_ust(pos.brutto_betrag, ust_satz)
         belegnr = _naechste_belegnr(db, data.datum)
         split_kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first() if pos.kategorie_id else None

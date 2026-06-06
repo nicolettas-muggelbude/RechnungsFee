@@ -144,6 +144,12 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                 kz[mapping[0]] += e.netto_betrag
                 kz[mapping[1]] += e.ust_betrag
 
+        # KZ 41 – ig. Lieferungen: 0% USt, Erkennung via konto_skr03 8125/3125
+        if (e.art == "Einnahme"
+                and (e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
+                and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
+            kz["kz_41"] += e.netto_betrag
+
         if e.art == "Ausgabe" and e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
             vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
             kz[vst_kz] += e.vorsteuer_betrag

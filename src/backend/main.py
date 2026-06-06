@@ -865,7 +865,8 @@ def _run_migrations() -> None:
                 "Eigenverbrauch von Waren (7%)":  "Entnahme von Waren für private Zwecke (7 % USt auf Einkaufspreis)",
                 "Wareneinkauf":                   "z. B. Waren für den Wiederverkauf (19 % USt)",
                 "Wareneinkauf (7%)":              "z. B. Waren für den Wiederverkauf mit 7 % USt",
-                "Wareneinkauf EU":                "z. B. Waren von EU-Lieferanten (innergemeinschaftlicher Erwerb)",
+                "Wareneinkauf EU":                "z. B. Waren von EU-Lieferanten (innergemeinschaftlicher Erwerb); Käufer muss gültige USt-IdNr haben",
+                "Innergemeinschaftliche Lieferungen": "Lieferung an Unternehmen mit USt-IdNr in einem anderen EU-Mitgliedstaat (§4 Nr. 1b UStG); 0 % USt; UStVA KZ 41; Zusammenfassende Meldung erforderlich",
                 "Wareneinkauf Nicht-EU":          "z. B. Importe aus Drittländern (Einfuhrumsatzsteuer beachten)",
                 "Löhne & Gehälter":              "z. B. Bruttogehalt Vollzeitkräfte inkl. Sozialversicherungsabgaben",
                 "Löhne & Gehälter Teilzeit":     "z. B. Bruttogehalt Teilzeitkräfte inkl. Sozialversicherungsabgaben",
@@ -1243,6 +1244,9 @@ def _migrate_kategorien() -> None:
             # Digitale Wirtschaftsgüter: Wahlrecht Nutzungsdauer 1 Jahr (BMF 26.02.2021, § 7 Abs. 1 EStG)
             # KEIN GWG – muss ins Bestandsverzeichnis! Buchung: 1. Kauf hier (Anlage 0650), 2. volle AfA
             {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0490", "konto_skr04": "0650", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # EU-Handel – innergemeinschaftliche Lieferungen (§4 Nr. 1b UStG)
+            # Käufer muss gültige USt-IdNr haben; UStVA KZ 41; Zusammenfassende Meldung (ZM) nötig
+            {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
         ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
