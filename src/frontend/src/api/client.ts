@@ -1172,5 +1172,5 @@ export const getUStVAHistorie = () =>
 
 export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/api/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
+  return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
 }
