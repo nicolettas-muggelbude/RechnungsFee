@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 45` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 46` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -111,6 +111,7 @@ def _run_migrations():
 | 43 | journal.km_anzahl NUMERIC(10,1) – km-Anzahl für Fahrtkosten Privat-PKW; EÜR: km×0,30 in brutto_betrag, EKS B6_5: km×0,10; EKS_FELDER_META 5. Element negativ; B6_4_priv (Abzug privat gefahrene km Betriebs-KFZ) neu |
 | 44 | EDV / Software (Sofortabschreibung): SKR03 0650→0490 (Sonstige BGA), SKR04 0490→0650 (Büroeinrichtung) – SKR03 0650 war Verbindlichkeitenkonto (Issue #111) |
 | 45 | belege.beleg_pdfa_pfad VARCHAR(500) – rel. Pfad zur PDF/A-3-Version (GoBD-Langzeitarchivierung, Stufe 5) |
+| 46 | unternehmen: w_idnr VARCHAR(20) (Wirtschafts-IdNr., seit Nov 2024 vom BZSt zugeteilt), voranmeldungsrhythmus VARCHAR(12) DEFAULT 'quartal' (monat|quartal – für UStVA) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

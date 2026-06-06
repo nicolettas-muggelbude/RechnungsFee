@@ -138,7 +138,9 @@ export type Unternehmen = {
   land: string
   steuernummer?: string
   ust_idnr?: string
+  w_idnr?: string
   finanzamt?: string
+  voranmeldungsrhythmus: 'monat' | 'quartal'
   ist_kleinunternehmer: boolean
   bezieht_transferleistungen: boolean
   geburtsdatum?: string | null

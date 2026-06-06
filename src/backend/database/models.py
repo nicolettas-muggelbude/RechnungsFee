@@ -51,7 +51,9 @@ class Unternehmen(Base):
     # Steuerliche Angaben
     steuernummer: Mapped[str | None] = mapped_column(String(30))
     ust_idnr: Mapped[str | None] = mapped_column(String(20))
+    w_idnr: Mapped[str | None] = mapped_column(String(20))
     finanzamt: Mapped[str | None] = mapped_column(String(200))
+    voranmeldungsrhythmus: Mapped[str] = mapped_column(String(12), default="quartal", nullable=False)  # monat|quartal
     # Status
     ist_kleinunternehmer: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     bezieht_transferleistungen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

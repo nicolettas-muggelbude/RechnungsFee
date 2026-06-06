@@ -24,7 +24,9 @@ class UnternehmenBase(BaseModel):
     land: str = "DE"
     steuernummer: Optional[str] = None
     ust_idnr: Optional[str] = None
+    w_idnr: Optional[str] = None
     finanzamt: Optional[str] = None
+    voranmeldungsrhythmus: str = "quartal"
     ist_kleinunternehmer: bool = False
     bezieht_transferleistungen: bool = False
     geburtsdatum: Optional[date] = None
@@ -64,6 +66,13 @@ class UnternehmenBase(BaseModel):
     def check_versteuerungsart(cls, v: str) -> str:
         if v not in ("ist", "soll"):
             raise ValueError("versteuerungsart muss 'ist' oder 'soll' sein")
+        return v
+
+    @field_validator("voranmeldungsrhythmus")
+    @classmethod
+    def check_voranmeldungsrhythmus(cls, v: str) -> str:
+        if v not in ("monat", "quartal"):
+            raise ValueError("voranmeldungsrhythmus muss 'monat' oder 'quartal' sein")
         return v
 
     @field_validator("kontenrahmen")

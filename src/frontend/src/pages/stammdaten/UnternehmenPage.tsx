@@ -284,6 +284,7 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
           <Field label="Finanzamt">{inp('finanzamt', 'Finanzamt Berlin-Mitte')}</Field>
         </div>
         <Field label={<>USt-IdNr. <InfoTooltip text="Umsatzsteuer-Identifikationsnummer (z.B. DE123456789) – benötigt für EU-Geschäfte (innergemeinschaftliche Lieferungen und Leistungen). Bei rein inländischen Geschäften genügt die Steuernummer." /></>}>{inp('ust_idnr', 'DE123456789')}</Field>
+        <Field label={<>W-IdNr. <InfoTooltip text="Wirtschafts-Identifikationsnummer (z.B. DE123456789) – seit November 2024 vom Bundeszentralamt für Steuern automatisch zugeteilt; Mitteilung per ELSTER-Postfach oder öffentlicher Bekanntmachung. Wird auf der UStVA in Zeile 1 eingetragen. Nicht zu verwechseln mit der USt-IdNr." /></>}>{inp('w_idnr', 'DE123456789')}</Field>
 
         <label className="flex items-start gap-3 cursor-pointer">
           <input
@@ -352,6 +353,18 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
               <option value="soll">Soll-Versteuerung</option>
             </select>
           </Field>
+          <Field label={<>Voranmeldungsrhythmus <InfoTooltip text="Monatlich: wenn deine Jahres-USt-Zahllast im Vorjahr über 7.500 € lag. Vierteljährlich: bei Zahllast ≤ 7.500 €. Kleinunternehmer §19 sind von der UStVA befreit." /></>}>
+            <select
+              value={form.voranmeldungsrhythmus ?? 'quartal'}
+              onChange={ev => set('voranmeldungsrhythmus', ev.target.value)}
+              className={selectCls}
+            >
+              <option value="quartal">Vierteljährlich</option>
+              <option value="monat">Monatlich</option>
+            </select>
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <Field label={<>Kontenrahmen <InfoTooltip text="SKR03: Standard für Dienstleister und Freiberufler. SKR04: Standard für Handel und produzierende Betriebe. SKR49: Für Vereine und Non-Profits. Beeinflusst Kontenzuordnung im GoBD-Export." /></>}>
             <select
               value={form.kontenrahmen ?? 'SKR03'}
