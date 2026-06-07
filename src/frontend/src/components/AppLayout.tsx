@@ -22,11 +22,10 @@ const buchhaltungNav = [
 ]
 
 const auswertungNav = [
-  { to: '/euer',    label: 'EÜR',                   icon: '📊' },
-  { to: '/ustva',   label: 'UStVA',                  icon: '🏛️' },
-  { to: '/zm',      label: 'Zusammenf. Meldung',     icon: '🌍' },
-  { to: '/eks',     label: 'EKS',                    icon: '📋' },
-  { to: '/exporte', label: 'Exporte',                icon: '📦' },
+  { to: '/euer',  label: 'EÜR',                icon: '📊' },
+  { to: '/ustva', label: 'UStVA',               icon: '🏛️' },
+  { to: '/zm',    label: 'Zusammenf. Meldung', icon: '🌍' },
+  { to: '/eks',   label: 'EKS',                icon: '📋' },
 ]
 
 const stammdatenNav = [
@@ -221,6 +220,9 @@ export function AppLayout() {
           {/* Trennlinie */}
           <div className="border-t border-slate-100 dark:border-slate-800 mt-3 mb-1" />
 
+          <NavLink to="/exporte" className={navLinkClass}>
+            <span>📦</span><span>Exporte</span>
+          </NavLink>
           <NavLink to="/backup" className={navLinkClass}>
             <span>💾</span><span>Backup</span>
           </NavLink>
