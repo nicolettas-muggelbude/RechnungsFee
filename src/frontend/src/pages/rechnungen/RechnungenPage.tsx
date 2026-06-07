@@ -3532,7 +3532,14 @@ export function RechnungenPage() {
                 Auswahl aufheben
               </button>
               <button type="button"
-                onClick={() => { setSrDatum(heuteIso()); setSrLeistungVon(''); setSrLeistungBis(''); setZeigSammelrechnung(true) }}
+                onClick={() => {
+                  const selectedLs = (rechnungen ?? []).filter(r => selectedLsIds.has(r.id))
+                  const dates = selectedLs.map(r => r.datum).sort()
+                  setSrDatum(heuteIso())
+                  setSrLeistungVon(dates[0] ?? '')
+                  setSrLeistungBis(dates[dates.length - 1] ?? '')
+                  setZeigSammelrechnung(true)
+                }}
                 className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium">
                 Sammelrechnung erstellen →
               </button>
