@@ -36,7 +36,11 @@ Laufend aktualisiertes Protokoll umgesetzter Features und technischer Entscheidu
 
 ### Frontend
 - Setup-Wizard (4 Steps + Kassenbestand), Auto-Redirect zu /setup
-- AppLayout + Sidebar mit ausklappbarer Stammdaten-Gruppe
+- AppLayout + Sidebar: gruppierte Sektionen (Verkauf / Einkauf / Auswertung / Stammdaten)
+  - Verkauf: Rechnungen, Lieferscheine (`/lieferscheine`), Angebote/Aufträge (Platzhalter)
+  - Einkauf: Journal, Tagesabschlüsse
+  - Auswertung: EÜR, UStVA, ZM, EKS, Exporte (ausklappbar)
+  - Stammdaten: Dokumentenpakete + alle bestehenden Items (ausklappbar)
 - Dashboard: 3 Kacheln + letzte 5 Buchungen + Zeitfilter
 - KassenbuchPage: Filter, BuchungForm (Einzel + Split, Brutto/Netto-Umschalter)
 - TagesabschlussDialog + TagesabschlussPage (PDF-Export, Differenz-Statistik)
@@ -47,6 +51,9 @@ Laufend aktualisiertes Protokoll umgesetzter Features und technischer Entscheidu
   - Entwürfe können nicht kassiert werden
   - Mail: Template-Ersetzung (`{rechnungsnummer}`, `{datum}`, `{betrag}`, `{faellig_am}`, `{kunde}`, `{firmenname}`) + Signatur, E-Mail aus Kundenstamm
 - BuchungDetail: Mail-Signatur aus Unternehmen
+- DokumentenpaketePage: CRUD für Anhang-Pakete (AGB, DSE, LV); Upload PDF/Bild; Bezeichnung editierbar
+- LieferscheineUebersicht (`/lieferscheine`): Standalone-Route, öffnet RechnungenPage im Lieferschein-Modus
+- UnternehmenPage: 5 Tabs (Firma / Steuer & Recht / Rechnungen / E-Mail / Unterschrift)
 
 ---
 

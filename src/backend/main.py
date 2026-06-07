@@ -30,9 +30,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete
 
-SCHEMA_VERSION = 53
+SCHEMA_VERSION = 54
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -64,6 +64,7 @@ app.include_router(ustva.router)
 app.include_router(zm.router)
 app.include_router(euer.router)
 app.include_router(system.router)
+app.include_router(dokumentenpakete.router)
 
 
 @app.post("/api/shutdown")
@@ -1172,6 +1173,30 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 53"))
             conn.commit()
             print("[Migration] Schema auf Version 53 (rechnungen.lieferadresse_id: Lieferadresse auf Lieferschein)")
+
+        if version < 54:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS dokumentenpakete (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(200) NOT NULL,
+                    beschreibung TEXT,
+                    aktiv BOOLEAN NOT NULL DEFAULT 1,
+                    erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS dokumentenpaket_belege (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    paket_id INTEGER NOT NULL REFERENCES dokumentenpakete(id) ON DELETE CASCADE,
+                    beleg_id INTEGER NOT NULL REFERENCES belege(id) ON DELETE CASCADE,
+                    bezeichnung VARCHAR(200),
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(paket_id, beleg_id)
+                )
+            """))
+            conn.execute(text("PRAGMA user_version = 54"))
+            conn.commit()
+            print("[Migration] Schema auf Version 54 (dokumentenpakete + dokumentenpaket_belege)")
 
 
 def _migrate_kategorien() -> None:

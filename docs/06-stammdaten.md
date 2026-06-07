@@ -24,7 +24,12 @@ Stammdaten sind **grundlegende Informationen**, die wiederholt verwendet werden:
    - IBAN, BIC, Bankname
    - CSV-Format-Zuordnung
 
-5. **Kundenstamm** (📋 **OFFEN** - Community-Entscheidung)
+5. **Dokumentenpakete** (für Angebote & Auftragsbestätigungen)
+   - Wiederverwendbare Anhang-Gruppen (AGB, DSE, Leistungsverzeichnis)
+   - Pro Paket beliebig viele PDF/Bild-Dateien
+   - Wird bei Angebot/AB automatisch angehängt
+
+6. **Kundenstamm** (📋 **OFFEN** - Community-Entscheidung)
    - Siehe `discussion-kundenstamm.md`
    - Option A: Mit Kundenstamm (v1.0)
    - Option B: Ohne Kundenstamm (v1.0)

@@ -3190,11 +3190,11 @@ function ImportDialog({
 
 type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr' | 'alle'
 
-export function RechnungenPage() {
+export function RechnungenPage({ initialLieferscheinModus = false }: { initialLieferscheinModus?: boolean } = {}) {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
-  const [lieferscheinModus, setLieferscheinModus] = useState(false)
+  const [lieferscheinModus, setLieferscheinModus] = useState(initialLieferscheinModus)
   const [zahlungsstatus, setZahlungsstatus] = useState('')
   const [suche, setSuche] = useState('')
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')

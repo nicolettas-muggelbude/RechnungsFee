@@ -413,6 +413,40 @@ class Beleg(Base):
 
 
 # ---------------------------------------------------------------------------
+# Dokumentenpakete (Anhang-Gruppen für Angebote / Auftragsbestätigungen)
+# ---------------------------------------------------------------------------
+
+class DokumentenPaket(Base):
+    """Wiederverwendbares Paket aus Dokumenten (AGB, DSE, Leistungsverzeichnis …)."""
+    __tablename__ = "dokumentenpakete"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    beschreibung: Mapped[str | None] = mapped_column(Text)
+    aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    dateien: Mapped[list["DokumentenPaketBeleg"]] = relationship(
+        "DokumentenPaketBeleg", back_populates="paket",
+        cascade="all, delete-orphan", order_by="DokumentenPaketBeleg.sort_order"
+    )
+
+
+class DokumentenPaketBeleg(Base):
+    """Eintrag eines Belegs in einem Dokumentenpaket."""
+    __tablename__ = "dokumentenpaket_belege"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    paket_id: Mapped[int] = mapped_column(Integer, ForeignKey("dokumentenpakete.id", ondelete="CASCADE"), nullable=False)
+    beleg_id: Mapped[int] = mapped_column(Integer, ForeignKey("belege.id", ondelete="CASCADE"), nullable=False)
+    bezeichnung: Mapped[str | None] = mapped_column(String(200))
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    paket: Mapped["DokumentenPaket"] = relationship("DokumentenPaket", back_populates="dateien")
+    beleg: Mapped["Beleg"] = relationship("Beleg")
+
+
+# ---------------------------------------------------------------------------
 # Rechnungen
 # ---------------------------------------------------------------------------
 

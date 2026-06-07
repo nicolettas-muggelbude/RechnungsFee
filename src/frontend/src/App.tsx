@@ -16,6 +16,8 @@ import { VorlagenPage } from './pages/einstellungen/VorlagenPage'
 import { KontenPage } from './pages/stammdaten/KontenPage'
 import { KategorienPage } from './pages/stammdaten/KategorienPage'
 import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
+import { DokumentenpaketePage } from './pages/stammdaten/DokumentenpaketePage'
+import { LieferscheineUebersicht } from './pages/lieferscheine/LieferscheineUebersicht'
 import { ExportPage } from './pages/ExportPage'
 import { EksPage } from './pages/eks/EksPage'
 import { UStVAPage } from './pages/ustva/UStVAPage'
@@ -93,7 +95,9 @@ function AppRoutes() {
           <Route path="/ust-saetze" element={<UstSaetzePage />} />
           <Route path="/vorlagen" element={<VorlagenPage />} />
           <Route path="/unternehmen" element={<UnternehmenPage />} />
+          <Route path="/dokumentenpakete" element={<DokumentenpaketePage />} />
           <Route path="/rechnungen" element={<RechnungenPage />} />
+          <Route path="/lieferscheine" element={<LieferscheineUebersicht />} />
           <Route path="/exporte" element={<ExportPage />} />
           <Route path="/eks" element={<EksPage />} />
           <Route path="/ustva" element={<UStVAPage />} />

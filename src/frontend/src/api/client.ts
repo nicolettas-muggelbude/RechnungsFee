@@ -935,6 +935,62 @@ export const lieferscheinAusRechnung = (rechnungId: number) =>
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
 export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)
 
+// ---------------------------------------------------------------------------
+// Dokumentenpakete
+// ---------------------------------------------------------------------------
+
+export interface PaketDatei {
+  id: number
+  beleg_id: number
+  bezeichnung: string | null
+  sort_order: number
+  original_name: string
+  mime_type: string | null
+  dateigroesse: number | null
+}
+
+export interface DokumentenPaket {
+  id: number
+  name: string
+  beschreibung: string | null
+  aktiv: boolean
+  erstellt_am: string
+  dateien: PaketDatei[]
+}
+
+export const getDokumentenPakete = () =>
+  request<DokumentenPaket[]>('/dokumentenpakete')
+
+export const getDokumentenPaket = (id: number) =>
+  request<DokumentenPaket>(`/dokumentenpakete/${id}`)
+
+export const createDokumentenPaket = (data: { name: string; beschreibung?: string }) =>
+  request<DokumentenPaket>('/dokumentenpakete', { method: 'POST', body: JSON.stringify(data) })
+
+export const updateDokumentenPaket = (id: number, data: { name?: string; beschreibung?: string; aktiv?: boolean }) =>
+  request<DokumentenPaket>(`/dokumentenpakete/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const deleteDokumentenPaket = (id: number) =>
+  request<void>(`/dokumentenpakete/${id}`, { method: 'DELETE' })
+
+export const uploadPaketDatei = (paketId: number, datei: File, bezeichnung?: string) => {
+  const fd = new FormData()
+  fd.append('datei', datei)
+  if (bezeichnung) fd.append('bezeichnung', bezeichnung)
+  return request<DokumentenPaket>(`/dokumentenpakete/${paketId}/dateien`, { method: 'POST', body: fd })
+}
+
+export const updatePaketDatei = (paketId: number, eintragId: number, data: { bezeichnung?: string; sort_order?: number }) =>
+  request<DokumentenPaket>(`/dokumentenpakete/${paketId}/dateien/${eintragId}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const deletePaketDatei = (paketId: number, eintragId: number) =>
+  request<DokumentenPaket>(`/dokumentenpakete/${paketId}/dateien/${eintragId}`, { method: 'DELETE' })
+
+export const getPaketDateiUrl = async (paketId: number, eintragId: number): Promise<string> => {
+  const base = await getApiBase()
+  return `${base}/dokumentenpakete/${paketId}/dateien/${eintragId}/download`
+}
+
 export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
 
 export const createRechnung = (data: RechnungCreate) =>

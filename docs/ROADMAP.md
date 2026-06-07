@@ -136,6 +136,38 @@ Monatliche Fixkosten (Miete, Leasing, Abonnements) einmalig als Vorlage anlegen.
 
 ---
 
+## v0.4 – Angebot & Auftrag (geplant)
+
+Vollständiger B2B-Workflow: Angebot → Auftragsbestätigung → Lieferschein → Rechnung.
+Details: [docs/plan-angebot-auftrag.md](plan-angebot-auftrag.md)
+
+### Stufe 1 – Navigation + Dokumentenpakete ✅ *Juni 2026*
+
+- [x] Navigation umgebaut: Sektionen Verkauf / Einkauf / Auswertung / Stammdaten
+- [x] Lieferscheine als eigener Sidebar-Menüpunkt (`/lieferscheine`)
+- [x] Platzhalter für Angebote & Aufträge (ausgegraut, „bald")
+- [x] Auswertung (EÜR, UStVA, ZM, EKS, Exporte) als ausklappbare Sektion sichtbar
+- [x] Dokumentenpakete (Schema 54): wiederverwendbare Anhang-Gruppen für Angebote/AB
+  - Tabellen `dokumentenpakete` + `dokumentenpaket_belege`
+  - CRUD-API + Stammdaten-Seite
+  - Upload PDF/Bild direkt ins Paket
+
+### Stufe 2 – Angebote *(geplant)*
+
+- [ ] `dokument_typ = 'Angebot'`, Nummernkreis `ANG-JJJJ####`
+- [ ] Angebot → Rechnung oder Auftrag umwandeln
+- [ ] E-Mail-Versand mit Dokumentenpaket-Anhängen
+- [ ] Status: offen / akzeptiert / abgelehnt / abgelaufen
+
+### Stufe 3 – Aufträge + Auftragsbestätigung *(geplant)*
+
+- [ ] `dokument_typ = 'Auftrag'`, Nummernkreis `AUF-JJJJ####`
+- [ ] Auftragsbestätigung-PDF mit Anhängen aus Dokumentenpaket
+- [ ] Auftrag → Lieferschein oder Rechnung
+- [ ] Status-Tracking + optionaler Onlineshop-Webhook
+
+---
+
 ## v0.3.3 – Lieferadressen & Lieferscheine ✅ *v0.3.3 – Juni 2026*
 
 - [x] Lieferadressen im Kundenstamm (Schema 51): eigene Tabelle `kunden_lieferadressen`; Tab im Kunden-Detail; Standard-Adresse-Flag; Dropdown beim Lieferschein

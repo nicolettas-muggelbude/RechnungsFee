@@ -5,40 +5,79 @@ import { getTagesabschlussFehltGestern } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
-const hauptNav = [
-  { to: '/', label: 'Dashboard', icon: '📊', end: true },
-  { to: '/journal', label: 'Journal', icon: '📒' },
-  { to: '/rechnungen', label: 'Rechnungen', icon: '🧾' },
+// ---------------------------------------------------------------------------
+// Navigationsstruktur
+// ---------------------------------------------------------------------------
+
+const verkaufNav = [
+  { to: '/rechnungen',    label: 'Rechnungen',    icon: '🧾' },
+  { to: '/lieferscheine', label: 'Lieferscheine',  icon: '🚚' },
+]
+
+const verkaufDemnachst = [
+  { label: 'Angebote' },
+  { label: 'Aufträge' },
+]
+
+const einkaufNav = [
+  { to: '/journal',         label: 'Journal',         icon: '📒' },
   { to: '/tagesabschluesse', label: 'Tagesabschlüsse', icon: '📋' },
-  { to: '/exporte', label: 'Exporte', icon: '📦' },
-  { to: '/backup', label: 'Backup', icon: '💾' },
-  { to: '/info', label: 'Info & Updates', icon: 'ℹ️' },
+]
+
+const auswertungNav = [
+  { to: '/euer',    label: 'EÜR',            icon: '📊' },
+  { to: '/ustva',   label: 'UStVA',           icon: '🏛️' },
+  { to: '/zm',      label: 'Zusammenf. Meldung', icon: '🌍' },
+  { to: '/eks',     label: 'EKS',             icon: '📋' },
+  { to: '/exporte', label: 'Exporte',          icon: '📦' },
 ]
 
 const stammdatenNav = [
-  { to: '/kunden', label: 'Kunden', icon: '👤' },
-  { to: '/lieferanten', label: 'Lieferanten', icon: '🏭' },
-  { to: '/artikel', label: 'Artikelstamm', icon: '📦' },
-  { to: '/konten', label: 'Konten', icon: '🏦' },
-  { to: '/kategorien', label: 'Kategorien', icon: '🏷️' },
-  { to: '/nummernkreise', label: 'Nummernkreise', icon: '🔢' },
-  { to: '/ust-saetze', label: 'Steuersätze', icon: '%' },
-  { to: '/vorlagen', label: 'Rechnungsvorlagen', icon: '📄' },
-  { to: '/unternehmen', label: 'Unternehmen', icon: '🏢' },
+  { to: '/dokumentenpakete', label: 'Dokumentenpakete', icon: '📎' },
+  { to: '/kunden',           label: 'Kunden',           icon: '👤' },
+  { to: '/lieferanten',      label: 'Lieferanten',      icon: '🏭' },
+  { to: '/artikel',          label: 'Artikelstamm',     icon: '📦' },
+  { to: '/konten',           label: 'Konten',            icon: '🏦' },
+  { to: '/kategorien',       label: 'Kategorien',        icon: '🏷️' },
+  { to: '/nummernkreise',    label: 'Nummernkreise',     icon: '🔢' },
+  { to: '/ust-saetze',       label: 'Steuersätze',       icon: '%' },
+  { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: '📄' },
+  { to: '/unternehmen',      label: 'Unternehmen',       icon: '🏢' },
 ]
 
-const stammdatenPfade = stammdatenNav.map((n) => n.to)
+const stammdatenPfade = stammdatenNav.map(n => n.to)
+const auswertungPfade = auswertungNav.map(n => n.to)
 
 function formatDatum(iso: string): string {
   const [y, m, d] = iso.split('-')
   return `${d}.${m}.${y}`
 }
 
+// ---------------------------------------------------------------------------
+// Hilfskomponenten
+// ---------------------------------------------------------------------------
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 select-none">
+      {label}
+    </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AppLayout
+// ---------------------------------------------------------------------------
+
 export function AppLayout() {
   const location = useLocation()
   const qc = useQueryClient()
-  const stammdatenAktiv = stammdatenPfade.some((p) => location.pathname.startsWith(p))
+
+  const stammdatenAktiv = stammdatenPfade.some(p => location.pathname.startsWith(p))
+  const auswertungAktiv = auswertungPfade.some(p => location.pathname.startsWith(p))
+
   const [stammdatenOffen, setStammdatenOffen] = useState(stammdatenAktiv)
+  const [auswertungOffen, setAuswertungOffen] = useState(auswertungAktiv)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
@@ -61,6 +100,13 @@ export function AppLayout() {
         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
     }`
 
+  const collapsibleHeaderClass = (aktiv: boolean) =>
+    `w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors ${
+      aktiv
+        ? 'text-blue-700 dark:text-blue-300'
+        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+    }`
+
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
       {/* Sidebar */}
@@ -73,24 +119,64 @@ export function AppLayout() {
           </div>
         </div>
 
-        <nav className="flex-1 py-3 overflow-y-auto">
-          {/* Hauptnavigation */}
-          {hauptNav.map(({ to, label, icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={navLinkClass}>
-              <span>{icon}</span>
+        <nav className="flex-1 py-2 overflow-y-auto">
+
+          {/* Dashboard */}
+          <NavLink to="/" end className={navLinkClass}>
+            <span>📊</span><span>Dashboard</span>
+          </NavLink>
+
+          {/* Verkauf */}
+          <SectionLabel label="Verkauf" />
+          {verkaufNav.map(({ to, label, icon }) => (
+            <NavLink key={to} to={to} className={navLinkClass}>
+              <span>{icon}</span><span>{label}</span>
+            </NavLink>
+          ))}
+          {verkaufDemnachst.map(({ label }) => (
+            <div key={label} className="flex items-center gap-3 px-4 py-2 text-sm text-slate-300 dark:text-slate-600 cursor-not-allowed select-none">
+              <span className="opacity-40">📝</span>
               <span>{label}</span>
+              <span className="ml-auto text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded px-1.5 py-0.5">bald</span>
+            </div>
+          ))}
+
+          {/* Einkauf */}
+          <SectionLabel label="Einkauf" />
+          {einkaufNav.map(({ to, label, icon }) => (
+            <NavLink key={to} to={to} className={navLinkClass}>
+              <span>{icon}</span><span>{label}</span>
             </NavLink>
           ))}
 
-          {/* Stammdaten – ausklappbar */}
-          <div className="mt-2">
+          {/* Auswertung – ausklappbar */}
+          <div className="mt-1">
             <button
-              onClick={() => setStammdatenOffen((o) => !o)}
-              className={`w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors ${
-                stammdatenAktiv
-                  ? 'text-blue-700 dark:text-blue-300'
-                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
-              }`}
+              onClick={() => setAuswertungOffen(o => !o)}
+              className={collapsibleHeaderClass(auswertungAktiv)}
+            >
+              <span className="flex items-center gap-3">
+                <span>📈</span>
+                <span>Auswertung</span>
+              </span>
+              <span className="text-xs">{auswertungOffen ? '▲' : '▼'}</span>
+            </button>
+            {auswertungOffen && (
+              <div className="border-l-2 border-slate-100 dark:border-slate-800 ml-6">
+                {auswertungNav.map(({ to, label, icon }) => (
+                  <NavLink key={to} to={to} className={navLinkClass}>
+                    <span>{icon}</span><span>{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Stammdaten – ausklappbar */}
+          <div className="mt-1">
+            <button
+              onClick={() => setStammdatenOffen(o => !o)}
+              className={collapsibleHeaderClass(stammdatenAktiv)}
             >
               <span className="flex items-center gap-3">
                 <span>🗂️</span>
@@ -98,20 +184,29 @@ export function AppLayout() {
               </span>
               <span className="text-xs">{stammdatenOffen ? '▲' : '▼'}</span>
             </button>
-
             {stammdatenOffen && (
               <div className="border-l-2 border-slate-100 dark:border-slate-800 ml-6">
                 {stammdatenNav.map(({ to, label, icon }) => (
                   <NavLink key={to} to={to} className={navLinkClass}>
-                    <span>{icon}</span>
-                    <span>{label}</span>
+                    <span>{icon}</span><span>{label}</span>
                   </NavLink>
                 ))}
               </div>
             )}
           </div>
-        </nav>
 
+          {/* Trennlinie */}
+          <div className="border-t border-slate-100 dark:border-slate-800 mt-3 mb-1" />
+
+          {/* Backup + Info */}
+          <NavLink to="/backup" className={navLinkClass}>
+            <span>💾</span><span>Backup</span>
+          </NavLink>
+          <NavLink to="/info" className={navLinkClass}>
+            <span>ℹ️</span><span>Info & Updates</span>
+          </NavLink>
+
+        </nav>
       </aside>
 
       {/* Hauptinhalt */}
@@ -137,7 +232,6 @@ export function AppLayout() {
             }`}>
               {readyToRestart ? (
                 <><span className="font-semibold">Update installiert!</span> Die App startet gleich automatisch neu.</>
-
               ) : updateError ? (
                 <><span className="font-semibold">Update fehlgeschlagen:</span> {updateError}</>
               ) : (
@@ -206,7 +300,7 @@ export function AppLayout() {
         </div>
       </main>
 
-      {/* Tagesabschluss-Dialog (aus Banner heraus) */}
+      {/* Tagesabschluss-Dialog */}
       {abschlussDialog && (
         <TagesabschlussDialog
           datum={abschlussDialog}
