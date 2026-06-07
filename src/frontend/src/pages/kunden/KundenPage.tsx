@@ -58,7 +58,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
       hausnummer: la.hausnummer ?? '', plz: la.plz ?? '', ort: la.ort ?? '', land: la.land, ist_standard: la.ist_standard })
   }
 
-  const inp = 'w-full border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100'
+  const inp = 'border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
     <div className="space-y-2">
@@ -72,15 +72,15 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
         <div key={la.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm">
           {editId === la.id ? (
             <div className="space-y-2">
-              <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={inp} />
-              <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={inp} />
-              <div className="flex gap-2">
-                <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} flex-1`} />
-                <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={`${inp} w-16`} />
+              <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+              <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
+              <div className="grid grid-cols-3 gap-2">
+                <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} col-span-2`} />
+                <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={inp} />
               </div>
-              <div className="flex gap-2">
-                <input placeholder="PLZ" value={form.plz ?? ''} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className={`${inp} w-24`} />
-                <input placeholder="Ort" value={form.ort ?? ''} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className={`${inp} flex-1`} />
+              <div className="grid grid-cols-3 gap-2">
+                <input placeholder="PLZ" value={form.plz ?? ''} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className={inp} />
+                <input placeholder="Ort" value={form.ort ?? ''} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className={`${inp} col-span-2`} />
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" checked={form.ist_standard} onChange={e => setForm(f => ({ ...f, ist_standard: e.target.checked }))} />
@@ -112,15 +112,15 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
 
       {editId === 'neu' && (
         <div className="border border-blue-300 dark:border-blue-700 rounded-lg p-3 space-y-2">
-          <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={inp} />
-          <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={inp} />
-          <div className="flex gap-2">
-            <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} flex-1`} />
-            <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={`${inp} w-16`} />
+          <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+          <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
+          <div className="grid grid-cols-3 gap-2">
+            <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} col-span-2`} />
+            <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={inp} />
           </div>
-          <div className="flex gap-2">
-            <input placeholder="PLZ" value={form.plz ?? ''} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className={`${inp} w-24`} />
-            <input placeholder="Ort" value={form.ort ?? ''} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className={`${inp} flex-1`} />
+          <div className="grid grid-cols-3 gap-2">
+            <input placeholder="PLZ" value={form.plz ?? ''} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className={inp} />
+            <input placeholder="Ort" value={form.ort ?? ''} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className={`${inp} col-span-2`} />
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
             <input type="checkbox" checked={form.ist_standard} onChange={e => setForm(f => ({ ...f, ist_standard: e.target.checked }))} />

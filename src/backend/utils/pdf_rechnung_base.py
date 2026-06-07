@@ -382,6 +382,8 @@ class RechnungPDFBase(FPDF):
         dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
         if dokument_typ == "Gutschrift":
             titel = f"Gutschrift {r.rechnungsnummer or ''}".strip()
+        elif dokument_typ == "Lieferschein":
+            titel = f"Lieferschein {r.rechnungsnummer or ''}".strip()
         elif r.typ == "ausgang":
             titel = f"Rechnung {r.rechnungsnummer or ''}".strip()
         else:
@@ -389,7 +391,6 @@ class RechnungPDFBase(FPDF):
         self.set_font("DejaVu", "B", 16)
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
-
 
         # Bezugszeile bei Gutschriften
         if dokument_typ == "Gutschrift":
@@ -500,10 +501,12 @@ class RechnungPDFBase(FPDF):
         self._render_nach_titel()
         self._render_positionen()
         self.ln(self._ln_nach_positionen)
-        self._render_summenblock()
-        self.ln(self._ln_nach_summen)
-        self._render_19_hinweis()
-        self._render_zahlungsblock()
+        ist_lieferschein = getattr(self._r, "dokument_typ", "Rechnung") == "Lieferschein"
+        if not ist_lieferschein:
+            self._render_summenblock()
+            self.ln(self._ln_nach_summen)
+            self._render_19_hinweis()
+            self._render_zahlungsblock()
         self._render_notizen()
         embed_unterschrift(self, self._unt, L_MARGIN)
         self.set_text_color(0, 0, 0)

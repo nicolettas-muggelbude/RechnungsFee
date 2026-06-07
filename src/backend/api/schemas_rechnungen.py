@@ -113,7 +113,15 @@ class RechnungCreate(BaseModel):
     ist_entwurf: bool = True
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
+    dokument_typ: str = "Rechnung"
     positionen: List[RechnungspositionCreate]
+
+    @field_validator("dokument_typ")
+    @classmethod
+    def check_dokument_typ(cls, v: str) -> str:
+        if v not in ("Rechnung", "Gutschrift", "Lieferschein"):
+            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift' oder 'Lieferschein' sein")
+        return v
 
     @model_validator(mode="after")
     def check_leistungszeitraum(self) -> "RechnungCreate":
@@ -216,6 +224,7 @@ class RechnungResponse(BaseModel):
     dokument_typ: str = "Rechnung"
     gutschrift_zu_rechnung_id: Optional[int] = None
     gutschrift_zu_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
+    lieferschein_zu_rechnung_id: Optional[int] = None
     erstellt_am: datetime
     aktualisiert_am: datetime
 

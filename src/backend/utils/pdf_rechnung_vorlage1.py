@@ -67,8 +67,13 @@ class RechnungPDFVorlage1(RechnungPDFBase):
     def _render_positionen(self):
         r = self._r
         pos_datum_str = _iso_zu_de(str(r.leistung_von or r.datum))
+        ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
 
-        if self._ist_netto:
+        if ist_lieferschein:
+            col_w   = [12, 30, 103, 20, 10]
+            headers = ["Pos.", "Datum", "Beschreibung", "Menge", "Einheit"]
+            aligns  = ["R",   "L",     "L",             "R",     "L"]
+        elif self._ist_netto:
             col_w   = [12, 30, 77, 22, 14, 20]
             headers = ["Pos.", "Datum", "Beschreibung", "Einzelpreis", "USt %", "Netto"]
             aligns  = ["R",   "L",     "L",             "R",           "R",     "R"]
@@ -96,7 +101,12 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
             self.cell(col_w[0], 6.5, str(pos.position_nr), align="R")
             self.cell(col_w[1], 6.5, pos_datum_str, align="L")
-            if self._ist_netto:
+            if ist_lieferschein:
+                einheit = (pos.einheit or "").strip()
+                self.cell(col_w[2], 6.5, pos.beschreibung[:80])
+                self.cell(col_w[3], 6.5, f"{menge:g}", align="R")
+                self.cell(col_w[4], 6.5, einheit, new_x="LMARGIN", new_y="NEXT")
+            elif self._ist_netto:
                 self.cell(col_w[2], 6.5, pos.beschreibung[:60])
                 self.cell(col_w[3], 6.5, _fmt_euro(pos.netto),                   align="R")
                 self.cell(col_w[4], 6.5, ust_label,                              align="R")
@@ -117,7 +127,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         self.line(x, tbl_top, x, tbl_bottom); x += col_w[2]
         self.line(x, tbl_top, x, tbl_bottom); x += col_w[3]
         self.line(x, tbl_top, x, tbl_bottom)
-        if self._ist_netto:
+        if self._ist_netto and not ist_lieferschein:
             x += col_w[4]
             self.line(x, tbl_top, x, tbl_bottom)
 

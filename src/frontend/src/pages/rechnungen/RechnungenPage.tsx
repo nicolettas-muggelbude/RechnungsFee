@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, getRechnung, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, createGutschrift, forderungsausbuchenRechnung,
+  getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow,
   sucheArtikel, getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
@@ -799,12 +800,14 @@ function RechnungDetail({
   onEdit,
   onDelete,
   onGutschriftCreated,
+  onRechnungAusLs,
 }: {
   rechnung: Rechnung
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
   onGutschriftCreated?: (gs: Rechnung) => void
+  onRechnungAusLs?: (id: number) => void
 }) {
   const [zahlungsDialog, setZahlungsDialog] = useState(false)
   const [zeigStornoEingabe, setZeigStornoEingabe] = useState(false)
@@ -1051,7 +1054,18 @@ function RechnungDetail({
               )}
             </>
           )}
-          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ !== 'Gutschrift' && !zeigStornoEingabe && (
+          {rechnung.dokument_typ === 'Lieferschein' && !rechnung.lieferschein_zu_rechnung_id && onRechnungAusLs && (
+            <button
+              onClick={() => onRechnungAusLs(rechnung.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-950 text-green-700 dark:text-green-400 font-medium"
+            >
+              → Rechnung erstellen
+            </button>
+          )}
+          {rechnung.dokument_typ === 'Lieferschein' && rechnung.lieferschein_zu_rechnung_id && (
+            <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits abgerechnet</span>
+          )}
+          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ !== 'Gutschrift' && rechnung.dokument_typ !== 'Lieferschein' && !zeigStornoEingabe && (
             <button
               onClick={() => gutschriftMutation.mutate()}
               disabled={gutschriftMutation.isPending}
@@ -1823,12 +1837,14 @@ function RechnungForm({
   typ,
   initial,
   prefillFromAnalyse,
+  initialDokumentTyp,
   onSave,
   onCancel,
 }: {
   typ: 'eingang' | 'ausgang'
   initial?: Rechnung
   prefillFromAnalyse?: AnalyseErgebnis
+  initialDokumentTyp?: 'Rechnung' | 'Lieferschein'
   onSave: (data: RechnungCreate) => void
   onCancel: () => void
 }) {
@@ -1925,6 +1941,11 @@ function RechnungForm({
         ? 'netto'
         : pf?.gesamt_netto && !pf?.gesamt_brutto ? 'netto' : 'brutto'
   )
+  const [dokumentTyp, setDokumentTyp] = useState<'Rechnung' | 'Lieferschein'>(
+    (initial?.dokument_typ === 'Lieferschein' ? 'Lieferschein' : initialDokumentTyp) ?? 'Rechnung'
+  )
+  const lieferscheinAktivForm = !!unternehmen?.lieferschein_aktiv
+
   // Schnellmodus: einfache Betragseingabe für Eingangsrechnungen (default für neue + 1-Positions-Rechnungen)
   // Bei Import (XML/PDF) mit mehreren Positionen immer aufgeschlüsselten Modus zeigen
   const [schnellmodus, setSchnellmodus] = useState(
@@ -2128,7 +2149,7 @@ function RechnungForm({
       datum,
       leistung_von: leistungVon !== datum ? leistungVon : undefined,
       leistung_bis: leistungBis || undefined,
-      faellig_am: faelligAm || undefined,
+      faellig_am: dokumentTyp === 'Lieferschein' ? undefined : (faelligAm || undefined),
       kunde_id: typ === 'ausgang' ? (partnerId ? parseInt(partnerId) : undefined) : undefined,
       lieferant_id: typ === 'eingang' ? (partnerId ? parseInt(partnerId) : undefined) : undefined,
       partner_freitext: partnerFreitext || undefined,
@@ -2136,8 +2157,9 @@ function RechnungForm({
       notizen: notizen || undefined,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       ist_entwurf: istEntwurf,
-      skonto_prozent: skontoProzent ? parseFloat(skontoProzent) : undefined,
-      skonto_tage: skontoTage ? parseInt(skontoTage) : undefined,
+      skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
+      skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
+      dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen
       // Nur wenn alle drei Werte vorliegen (aus XML oder via _berechne_fehlende_summen abgeleitet)
       ...(prefillFromAnalyse?.felder?.gesamt_netto &&
@@ -2200,10 +2222,23 @@ function RechnungForm({
         </div>
       )}
 
+      {typ === 'ausgang' && lieferscheinAktivForm && !initial?.gutschrift_zu_rechnung_id && (
+        <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm w-fit">
+          {(['Rechnung', 'Lieferschein'] as const).map((dt) => (
+            <button key={dt} type="button"
+              onClick={() => setDokumentTyp(dt)}
+              className={`px-4 py-1.5 transition-colors ${dokumentTyp === dt ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              {dt}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-            Rechnungsnummer <span className="text-slate-400 dark:text-slate-500 font-normal">(leer = auto)</span>
+            {dokumentTyp === 'Lieferschein' ? 'Lieferscheinnummer' : 'Rechnungsnummer'} <span className="text-slate-400 dark:text-slate-500 font-normal">(leer = auto)</span>
           </label>
           <input
             type="text"
@@ -3074,6 +3109,7 @@ export function RechnungenPage() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
+  const [lieferscheinModus, setLieferscheinModus] = useState(false)
   const [zahlungsstatus, setZahlungsstatus] = useState('')
   const [suche, setSuche] = useState('')
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')
@@ -3124,9 +3160,14 @@ export function RechnungenPage() {
             ? {}  // kein Datumsfilter – alle Rechnungen
             : { datum_von: `${aktivesJahr}-01-01`, datum_bis: `${aktivesJahr}-12-31` }
 
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+  const lieferscheinAktiv = !!unternehmen?.lieferschein_aktiv
+
   const { data: rechnungen, isLoading } = useQuery({
-    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis],
-    queryFn: () => getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
+    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus],
+    queryFn: () => lieferscheinModus
+      ? getLieferscheine()
+      : getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
   })
 
   const selectedRechnung =
@@ -3164,6 +3205,30 @@ export function RechnungenPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setSelectedId(null)
+      setFehler(null)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
+  const rechnungAusLsMutation = useMutation({
+    mutationFn: rechnungAusLieferschein,
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      setLieferscheinModus(false)
+      setTyp('ausgang')
+      setSelectedId(r.id)
+      setFehler(null)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
+  const sammelrechnungMutation = useMutation({
+    mutationFn: sammelrechnungErstellen,
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      setLieferscheinModus(false)
+      setTyp('ausgang')
+      setSelectedId(r.id)
       setFehler(null)
     },
     onError: (e: Error) => setFehler(e.message),
@@ -3265,26 +3330,36 @@ export function RechnungenPage() {
                 onClick={() => { setFormModus('neu'); setSelectedId(null); setImportPrefill(null) }}
                 className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
               >
-                + Neue Rechnung
+                {lieferscheinModus ? '+ Neuer Lieferschein' : '+ Neue Rechnung'}
               </button>
             </div>
           </div>
 
           {/* Tabs + Filter */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Eingang/Ausgang */}
+            {/* Eingang/Ausgang/Lieferschein */}
             <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
               {(['ausgang', 'eingang'] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => { setTyp(t); setSelectedId(null) }}
+                  onClick={() => { setTyp(t); setLieferscheinModus(false); setSelectedId(null) }}
                   className={`px-4 py-1.5 transition-colors ${
-                    typ === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    !lieferscheinModus && typ === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {t === 'ausgang' ? 'Ausgang' : 'Eingang'}
                 </button>
               ))}
+              {lieferscheinAktiv && (
+                <button
+                  onClick={() => { setLieferscheinModus(true); setSelectedId(null) }}
+                  className={`px-4 py-1.5 transition-colors ${
+                    lieferscheinModus ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  Lieferscheine
+                </button>
+              )}
             </div>
 
             {/* Zeitraum-Modus */}
@@ -3438,6 +3513,7 @@ export function RechnungenPage() {
                       <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
                         {r.rechnungsnummer ?? '—'}
                         {r.dokument_typ === 'Gutschrift' && <span className="ml-1.5 text-[10px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded px-1">Gutschrift</span>}
+                        {r.dokument_typ === 'Lieferschein' && <span className="ml-1.5 text-[10px] text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded px-1">{r.lieferschein_zu_rechnung_id ? '✓ abgerechnet' : 'Lieferschein'}</span>}
                         {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1">Entwurf</span>}
                         {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1">Storniert</span>}
                       </td>
@@ -3508,6 +3584,7 @@ export function RechnungenPage() {
               typ={formModus === 'bearbeiten' && selectedRechnung ? selectedRechnung.typ : typ}
               initial={formModus === 'bearbeiten' ? selectedRechnung ?? undefined : undefined}
               prefillFromAnalyse={formModus === 'neu' ? importPrefill ?? undefined : undefined}
+              initialDokumentTyp={lieferscheinModus && formModus === 'neu' ? 'Lieferschein' : undefined}
               onSave={(data) => {
                 setPendingEditRechnung(null)
                 if (formModus === 'bearbeiten' && selectedId) {
@@ -3535,6 +3612,7 @@ export function RechnungenPage() {
                 }
               }}
               onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
+              onRechnungAusLs={(id) => rechnungAusLsMutation.mutate(id)}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">

@@ -172,6 +172,7 @@ export type Unternehmen = {
   qr_zahlung_aktiv?: boolean
   standard_skonto_prozent?: number | null
   standard_skonto_tage?: number | null
+  lieferschein_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -838,6 +839,7 @@ export type Rechnung = {
   dokument_typ: string
   gutschrift_zu_rechnung_id: number | null
   gutschrift_zu_rechnung_nr: string | null
+  lieferschein_zu_rechnung_id: number | null
   erstellt_am: string
   aktualisiert_am: string
 }
@@ -858,10 +860,20 @@ export type RechnungCreate = {
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null
+  dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein'
   positionen: RechnungspositionCreate[]
   netto_gesamt_override?: string
   ust_gesamt_override?: string
   brutto_gesamt_override?: string
+}
+
+export type SammelrechnungCreate = {
+  lieferschein_ids: number[]
+  datum: string
+  leistung_von?: string
+  leistung_bis?: string
+  faellig_am?: string
+  notizen?: string
 }
 
 export type RechnungUpdate = Partial<RechnungCreate>
@@ -896,7 +908,17 @@ export const getRechnungen = (filter?: {
   datum_bis?: string
   kunde_id?: number
   lieferant_id?: number
+  dokument_typ?: string
 }) => request<Rechnung[]>(`/rechnungen${toQuery(filter ?? {})}`)
+
+export const getLieferscheine = (filter?: { kunde_id?: number }) =>
+  request<Rechnung[]>(`/rechnungen${toQuery({ dokument_typ: 'Lieferschein', ...filter })}`)
+
+export const rechnungAusLieferschein = (lsId: number) =>
+  request<Rechnung>(`/rechnungen/${lsId}/rechnung-erstellen`, { method: 'POST' })
+
+export const sammelrechnungErstellen = (data: SammelrechnungCreate) =>
+  request<Rechnung>('/rechnungen/sammelrechnung', { method: 'POST', body: JSON.stringify(data) })
 
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
 export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)

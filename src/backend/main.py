@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer
 
-SCHEMA_VERSION = 51
+SCHEMA_VERSION = 52
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1159,6 +1159,13 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 51"))
             conn.commit()
             print("[Migration] Schema auf Version 51 (kunden_lieferadressen: separate Lieferadressen pro Kunde)")
+
+        if version < 52:
+            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN lieferschein_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("ALTER TABLE rechnungen ADD COLUMN lieferschein_zu_rechnung_id INTEGER REFERENCES rechnungen(id)"))
+            conn.execute(text("PRAGMA user_version = 52"))
+            conn.commit()
+            print("[Migration] Schema auf Version 52 (Lieferschein: lieferschein_aktiv + lieferschein_zu_rechnung_id)")
 
 
 def _migrate_kategorien() -> None:

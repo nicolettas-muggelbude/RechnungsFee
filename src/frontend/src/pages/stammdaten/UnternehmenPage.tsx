@@ -527,6 +527,23 @@ function FirmendatenSektion({ data }: { data: Unternehmen }) {
             <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen – der QR-Code benötigt die Kontonummer für den EPC-Standard." align="right" />
           )}
         </label>
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.lieferschein_aktiv}
+            onChange={ev => set('lieferschein_aktiv', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Lieferscheine aktivieren
+            </span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Lieferscheine können direkt in Rechnungen oder Sammelrechnungen umgewandelt werden.
+            </p>
+          </div>
+        </label>
       </div>
 
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}

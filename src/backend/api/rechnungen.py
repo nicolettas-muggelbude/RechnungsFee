@@ -10,7 +10,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
@@ -389,9 +389,15 @@ def list_rechnungen(
     datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
     kunde_id: Optional[int] = Query(None),
     lieferant_id: Optional[int] = Query(None),
+    dokument_typ: Optional[str] = Query(None, description="Rechnung|Gutschrift|Lieferschein"),
     db: Session = Depends(get_db),
 ):
     q = db.query(Rechnung)
+    if dokument_typ:
+        q = q.filter(Rechnung.dokument_typ == dokument_typ)
+    else:
+        # Lieferscheine nur auf explizite Anfrage – nicht im normalen Rechnungs-Feed
+        q = q.filter(Rechnung.dokument_typ != "Lieferschein")
     if typ:
         if typ not in ("eingang", "ausgang"):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
@@ -442,20 +448,33 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     # Rechnungsnummer: aus Nummernkreis wenn nicht angegeben
     rechnungsnummer = data.rechnungsnummer
     if not rechnungsnummer:
-        nk_typ = "rechnung_ausgang" if data.typ == "ausgang" else "rechnung_eingang"
-        nk = db.query(Nummernkreis).filter(Nummernkreis.typ == nk_typ).first()
-        if nk:
-            if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != data.datum.year:
-                nk.naechste_nr = 1
-            nk.letztes_jahr = data.datum.year
-            nr = nk.naechste_nr
-            nk.naechste_nr += 1
-            prefix = "RE" if data.typ == "ausgang" else "ER"
-            rechnungsnummer = f"{prefix}-{_belegnr_aus_format(nk.format, data.datum, nr)}"
+        if data.dokument_typ == "Lieferschein":
+            nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
+            if nk:
+                if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != data.datum.year:
+                    nk.naechste_nr = 1
+                nk.letztes_jahr = data.datum.year
+                nr = nk.naechste_nr
+                nk.naechste_nr += 1
+                rechnungsnummer = _belegnr_aus_format(nk.format, data.datum, nr)
+            else:
+                count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Lieferschein").count()
+                rechnungsnummer = f"LS-{str(data.datum.year)[-2:]}{count + 1:04d}"
         else:
-            count = db.query(Rechnung).filter(Rechnung.typ == data.typ).count()
-            prefix = "RE" if data.typ == "ausgang" else "ER"
-            rechnungsnummer = f"{prefix}-{str(data.datum.year)[-2:]}{count + 1:04d}"
+            nk_typ = "rechnung_ausgang" if data.typ == "ausgang" else "rechnung_eingang"
+            nk = db.query(Nummernkreis).filter(Nummernkreis.typ == nk_typ).first()
+            if nk:
+                if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != data.datum.year:
+                    nk.naechste_nr = 1
+                nk.letztes_jahr = data.datum.year
+                nr = nk.naechste_nr
+                nk.naechste_nr += 1
+                prefix = "RE" if data.typ == "ausgang" else "ER"
+                rechnungsnummer = f"{prefix}-{_belegnr_aus_format(nk.format, data.datum, nr)}"
+            else:
+                count = db.query(Rechnung).filter(Rechnung.typ == data.typ).count()
+                prefix = "RE" if data.typ == "ausgang" else "ER"
+                rechnungsnummer = f"{prefix}-{str(data.datum.year)[-2:]}{count + 1:04d}"
 
     rechnung = Rechnung(
         typ=data.typ,
@@ -472,6 +491,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         ist_entwurf=data.ist_entwurf,
         skonto_prozent=data.skonto_prozent,
         skonto_tage=data.skonto_tage,
+        dokument_typ=data.dokument_typ,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -1641,3 +1661,157 @@ def delete_beleg(rechnung_id: int, db: Session = Depends(get_db)):
             pfad.unlink()
         db.delete(beleg)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Lieferschein → Rechnung
+# ---------------------------------------------------------------------------
+
+class SammelrechnungCreate(BaseModel):
+    lieferschein_ids: List[int]
+    datum: date
+    leistung_von: Optional[date] = None
+    leistung_bis: Optional[date] = None
+    faellig_am: Optional[date] = None
+    notizen: Optional[str] = None
+
+
+def _lieferschein_zu_rechnung_konvertieren(
+    lieferscheine: list,
+    datum: date,
+    rechnungsnummer: str,
+    leistung_von: Optional[date],
+    leistung_bis: Optional[date],
+    faellig_am: Optional[date],
+    notizen: Optional[str],
+    db: Session,
+) -> Rechnung:
+    """Erstellt eine Rechnung aus einem oder mehreren Lieferscheinen (Positionen kopieren)."""
+    ls_nummern = ", ".join(ls.rechnungsnummer for ls in lieferscheine if ls.rechnungsnummer)
+    merged_notizen = notizen or f"Lieferscheine: {ls_nummern}"
+
+    rechnung = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=rechnungsnummer,
+        datum=datum,
+        leistung_von=leistung_von,
+        leistung_bis=leistung_bis,
+        faellig_am=faellig_am,
+        kunde_id=lieferscheine[0].kunde_id,
+        partner_freitext=lieferscheine[0].partner_freitext,
+        notizen=merged_notizen,
+        dokument_typ="Rechnung",
+        ist_entwurf=True,
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        netto_gesamt=Decimal("0.00"),
+        ust_gesamt=Decimal("0.00"),
+        brutto_gesamt=Decimal("0.00"),
+    )
+    db.add(rechnung)
+    db.flush()
+
+    netto_sum = Decimal("0.00")
+    ust_sum = Decimal("0.00")
+    pos_nr = 1
+    for ls in lieferscheine:
+        for pos in ls.positionen:
+            neue_pos = Rechnungsposition(
+                rechnung_id=rechnung.id,
+                artikel_id=pos.artikel_id,
+                kategorie_id=pos.kategorie_id,
+                position_nr=pos_nr,
+                beschreibung=pos.beschreibung,
+                menge=pos.menge,
+                einheit=pos.einheit,
+                netto=pos.netto,
+                ust_satz=pos.ust_satz,
+                ust_betrag=pos.ust_betrag,
+                brutto=pos.brutto,
+                differenzbesteuerung=pos.differenzbesteuerung,
+                ek_netto_25a=pos.ek_netto_25a,
+                ust_satz_25a=pos.ust_satz_25a,
+            )
+            db.add(neue_pos)
+            netto_sum += pos.netto * pos.menge
+            ust_sum += pos.ust_betrag * pos.menge
+            pos_nr += 1
+
+    Q = Decimal("0.01")
+    rechnung.netto_gesamt = netto_sum.quantize(Q, ROUND_HALF_UP)
+    rechnung.ust_gesamt = ust_sum.quantize(Q, ROUND_HALF_UP)
+    rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+
+    for ls in lieferscheine:
+        ls.lieferschein_zu_rechnung_id = rechnung.id
+
+    db.commit()
+    db.refresh(rechnung)
+    return rechnung
+
+
+def _naechste_rechnungsnummer(datum: date, db: Session) -> str:
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "rechnung_ausgang").first()
+    if nk:
+        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+            nk.naechste_nr = 1
+        nk.letztes_jahr = datum.year
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        return f"RE-{_belegnr_aus_format(nk.format, datum, nr)}"
+    count = db.query(Rechnung).filter(Rechnung.typ == "ausgang", Rechnung.dokument_typ == "Rechnung").count()
+    return f"RE-{str(datum.year)[-2:]}{count + 1:04d}"
+
+
+@router.post("/{ls_id}/rechnung-erstellen", response_model=RechnungResponse, status_code=201)
+def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
+    """Erstellt eine Rechnung aus einem einzelnen Lieferschein."""
+    ls = db.query(Rechnung).filter(Rechnung.id == ls_id, Rechnung.dokument_typ == "Lieferschein").first()
+    if not ls:
+        raise HTTPException(status_code=404, detail="Lieferschein nicht gefunden.")
+    if ls.lieferschein_zu_rechnung_id:
+        raise HTTPException(status_code=409, detail="Lieferschein wurde bereits abgerechnet.")
+    rechnungsnummer = _naechste_rechnungsnummer(date.today(), db)
+    rechnung = _lieferschein_zu_rechnung_konvertieren(
+        lieferscheine=[ls],
+        datum=date.today(),
+        rechnungsnummer=rechnungsnummer,
+        leistung_von=ls.leistung_von,
+        leistung_bis=ls.leistung_bis,
+        faellig_am=None,
+        notizen=None,
+        db=db,
+    )
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.post("/sammelrechnung", response_model=RechnungResponse, status_code=201)
+def sammelrechnung_erstellen(data: SammelrechnungCreate, db: Session = Depends(get_db)):
+    """Erstellt eine Sammelrechnung aus mehreren Lieferscheinen."""
+    if not data.lieferschein_ids:
+        raise HTTPException(status_code=422, detail="Mindestens ein Lieferschein erforderlich.")
+    lieferscheine = db.query(Rechnung).filter(
+        Rechnung.id.in_(data.lieferschein_ids),
+        Rechnung.dokument_typ == "Lieferschein",
+    ).all()
+    if len(lieferscheine) != len(data.lieferschein_ids):
+        raise HTTPException(status_code=404, detail="Mindestens ein Lieferschein nicht gefunden.")
+    bereits_abgerechnet = [ls.rechnungsnummer for ls in lieferscheine if ls.lieferschein_zu_rechnung_id]
+    if bereits_abgerechnet:
+        raise HTTPException(status_code=409, detail=f"Bereits abgerechnet: {', '.join(str(x) for x in bereits_abgerechnet)}")
+    kunden = {ls.kunde_id for ls in lieferscheine}
+    if len(kunden) > 1:
+        raise HTTPException(status_code=422, detail="Sammelrechnung nur für Lieferscheine desselben Kunden möglich.")
+    rechnungsnummer = _naechste_rechnungsnummer(data.datum, db)
+    rechnung = _lieferschein_zu_rechnung_konvertieren(
+        lieferscheine=lieferscheine,
+        datum=data.datum,
+        rechnungsnummer=rechnungsnummer,
+        leistung_von=data.leistung_von,
+        leistung_bis=data.leistung_bis,
+        faellig_am=data.faellig_am,
+        notizen=data.notizen,
+        db=db,
+    )
+    return RechnungResponse.from_orm_extended(rechnung)
