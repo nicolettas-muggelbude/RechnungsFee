@@ -86,6 +86,28 @@ export function ExportPage() {
         </button>
       )}
 
+      {/* ZM – nur für Regelbesteuerte */}
+      {!unternehmen?.ist_kleinunternehmer && (
+        <button
+          onClick={() => navigate('/zm')}
+          className="w-full text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden hover:border-blue-400 dark:hover:border-blue-600 transition-colors group"
+        >
+          <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-white font-bold text-lg">ZM – Zusammenfassende Meldung</h2>
+              <p className="text-blue-100 text-sm mt-0.5">
+                §18a UStG – Meldepflicht für innergemeinschaftliche Lieferungen &amp; Dienstleistungen
+              </p>
+            </div>
+            <span className="text-white text-2xl opacity-70 group-hover:opacity-100 transition-opacity">→</span>
+          </div>
+          <div className="px-6 py-4 flex gap-6 text-sm text-slate-600 dark:text-slate-300">
+            <span>🇪🇺 ig. Lieferungen (L) · §13b Dienstleistungen (D)</span>
+            <span>📋 Quartal / Monat · Frist 25. Folgemonat</span>
+          </div>
+        </button>
+      )}
+
       {/* GoBD-Export-Card */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
         <div className="bg-blue-600 px-6 py-4">

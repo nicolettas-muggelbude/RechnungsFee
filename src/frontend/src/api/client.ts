@@ -1184,3 +1184,38 @@ export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   const base = await getBaseUrl()
   return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
 }
+
+// --- Zusammenfassende Meldung (ZM) ---
+
+export type ZMPosition = {
+  ust_idnr: string
+  land: string
+  kennzeichen: string
+  betrag: string
+}
+
+export type ZMErgebnis = {
+  zeitraum: string
+  zeitraum_label: string
+  von: string
+  bis: string
+  deadline: string
+  positionen: ZMPosition[]
+  gesamt: string
+  ueber_50k: boolean
+}
+
+export type ZMPruefung = {
+  faellig: boolean
+  zeitraum: string
+  zeitraum_label: string
+  deadline: string
+  grund: string
+}
+
+export const pruefZM = () =>
+  request<ZMPruefung>('/zm/pruefen')
+
+export const berechneZM = (zeitraum: string) =>
+  request<ZMErgebnis>(`/zm/berechnen?zeitraum=${encodeURIComponent(zeitraum)}`)
+

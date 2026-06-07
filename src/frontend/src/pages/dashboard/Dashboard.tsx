@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, type Rechnung } from '../../api/client'
+import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, type Rechnung } from '../../api/client'
 import { guardedDateChange } from '../../utils/dateInput'
 import { dashboardFilter } from '../../store/filterStore'
 
@@ -262,6 +263,7 @@ function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
 }
 
 export function Dashboard() {
+  const navigate = useNavigate()
   // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende
   const [filterModus, _setFilterModus] = useState<FilterModus>(() => (dashboardFilter.modus as FilterModus) ?? 'monat')
   const setFilterModus = (m: FilterModus) => { dashboardFilter.modus = m; _setFilterModus(m) }
@@ -311,6 +313,13 @@ export function Dashboard() {
     queryKey: ['rechnungen-faellig'],
     queryFn: () => getFaelligeRechnungen(7),
     staleTime: 1000 * 60 * 5,
+  })
+
+  const { data: zmPruefung } = useQuery({
+    queryKey: ['zm-pruefen'],
+    queryFn: pruefZM,
+    staleTime: 1000 * 60 * 60,
+    enabled: !unternehmen?.ist_kleinunternehmer,
   })
 
   const alle = eintraege ?? []
@@ -440,6 +449,25 @@ export function Dashboard() {
         </p>
       )}
       {!hatPrivatbuchungen && <div className="mb-6" />}
+
+      {/* ZM-Hinweis */}
+      {zmPruefung?.faellig && (
+        <div
+          onClick={() => navigate('/zm')}
+          className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-3 mb-4 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors"
+        >
+          <span className="text-2xl">🇪🇺</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              Zusammenfassende Meldung fällig – {zmPruefung.zeitraum_label}
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Frist: {zmPruefung.deadline.split('-').reverse().join('.')} · Einzureichen beim BZSt über ELSTER
+            </p>
+          </div>
+          <span className="text-amber-600 dark:text-amber-400 text-sm">→</span>
+        </div>
+      )}
 
       {/* Fällige Rechnungen */}
       {faellige && faellige.length > 0 && (
