@@ -978,10 +978,19 @@ function UnterschriftSektion({ data }: { data: Unternehmen }) {
           {vorschau ? 'Unterschrift ändern' : 'Unterschrift zeichnen'}
         </button>
         {vorschau && (
-          <button type="button" onClick={handleEntfernen}
-            className="px-3 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600">
-            Entfernen
-          </button>
+          <>
+            <a
+              href={vorschau}
+              download="unterschrift.png"
+              className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              ⬇ Speichern
+            </a>
+            <button type="button" onClick={handleEntfernen}
+              className="px-3 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600">
+              Entfernen
+            </button>
+          </>
         )}
         {gespeichert && <span className="text-sm text-green-600">✓ Gespeichert</span>}
         {fehler && <p className="text-sm text-red-600">{fehler}</p>}
