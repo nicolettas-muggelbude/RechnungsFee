@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getNummernkreise, updateNummernkreis, getNummernkreisVorschau, type Nummernkreis } from '../../api/client'
+import { getNummernkreise, updateNummernkreis, getNummernkreisVorschau, getUnternehmen, type Nummernkreis } from '../../api/client'
 
 const FORMAT_BEISPIELE = [
   { label: 'YY#### (z.B. 260001)', value: 'YY####' },
@@ -28,6 +28,12 @@ export function NummernkreisePage() {
     queryKey: ['nummernkreise'],
     queryFn: getNummernkreise,
   })
+
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+
+  const sichtbar = (nummernkreise ?? []).filter(nk =>
+    nk.typ !== 'lieferschein' || !!unternehmen?.lieferschein_aktiv
+  )
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Nummernkreis> }) =>
@@ -78,7 +84,7 @@ export function NummernkreisePage() {
         <p className="text-slate-400 text-sm">Lade…</p>
       ) : (
         <div className="space-y-4">
-          {(nummernkreise ?? []).map((nk) => (
+          {sichtbar.map((nk) => (
             <div key={nk.id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
               {editId === nk.id && editState ? (
                 /* Bearbeitungs-Modus */
