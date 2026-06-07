@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   berechneUStVA, speichereUStVA, getUStVAHistorie, getUStVAPdfUrl,
@@ -110,6 +110,9 @@ export function UStVAPage() {
     queryFn: () => berechneUStVA(zeitraum),
     enabled: false,
   })
+
+  // Beim ersten Laden automatisch berechnen
+  useEffect(() => { refetch() }, [])
 
   const speichernMut = useMutation({
     mutationFn: speichereUStVA,
@@ -228,7 +231,7 @@ export function UStVAPage() {
           )}
           <button onClick={() => { setManuell({}); refetch() }} disabled={isLoading}
             className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {isLoading ? 'Berechne…' : 'Berechnen'}
+            {isLoading ? 'Berechne…' : ergebnis ? 'Neu berechnen' : 'Berechnen'}
           </button>
         </div>
         {rhythmus !== modus && (
