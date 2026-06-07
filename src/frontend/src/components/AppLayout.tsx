@@ -11,7 +11,7 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
 const fakturierungAlleItems = [
   { to: '/angebote',      label: 'Angebote',     icon: '📝', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.angebote_aktiv },
-  { to: '/auftraege',     label: 'Aufträge',      icon: '📋', bald: true,  zeigen: (_u: Unternehmen | undefined) => true },
+  { to: '/auftraege',     label: 'Aufträge',      icon: '📋', bald: true,  zeigen: (_u: Unternehmen | undefined) => false },
   { to: '/lieferscheine', label: 'Lieferscheine', icon: '🚚', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.lieferschein_aktiv },
   { to: '/rechnungen',    label: 'Rechnungen',    icon: '🧾', bald: false, zeigen: (_u: Unternehmen | undefined) => true },
 ]

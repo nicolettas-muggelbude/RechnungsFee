@@ -106,3 +106,4 @@
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
 - **hellocash-Anbindung** – REST-API (Issue #13)
 - **Dashboard konfigurierbar** – Kacheln ein-/ausblenden, Reihenfolge, externer Link Online-Banking
+- **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
