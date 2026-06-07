@@ -1751,60 +1751,6 @@ function StammdatenCombobox({
         </div>
       )}
     </div>
-
-    {zeigSammelrechnung && (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setZeigSammelrechnung(false)}>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">Sammelrechnung erstellen</h3>
-            <button onClick={() => setZeigSammelrechnung(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xl">×</button>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Aus {selectedLsIds.size} Lieferschein{selectedLsIds.size !== 1 ? 'en' : ''} wird eine Sammelrechnung (Entwurf) erstellt.
-          </p>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Rechnungsdatum *</label>
-              <input type="date" value={srDatum} onChange={e => setSrDatum(e.target.value)} required
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Leistung von</label>
-                <input type="date" value={srLeistungVon} onChange={e => setSrLeistungVon(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Leistung bis</label>
-                <input type="date" value={srLeistungBis} onChange={e => setSrLeistungBis(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-              </div>
-            </div>
-          </div>
-          {sammelrechnungMutation.isError && (
-            <p className="text-sm text-red-600 dark:text-red-400">{(sammelrechnungMutation.error as Error).message}</p>
-          )}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => sammelrechnungMutation.mutate({
-                lieferschein_ids: Array.from(selectedLsIds),
-                datum: srDatum,
-                leistung_von: srLeistungVon || undefined,
-                leistung_bis: srLeistungBis || undefined,
-              })}
-              disabled={!srDatum || sammelrechnungMutation.isPending}
-              className="flex-1 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50"
-            >
-              {sammelrechnungMutation.isPending ? '…' : 'Sammelrechnung erstellen'}
-            </button>
-            <button onClick={() => setZeigSammelrechnung(false)}
-              className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-              Abbrechen
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
   )
 }
 
@@ -3774,6 +3720,61 @@ export function RechnungenPage() {
               Rechnung auswählen
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sammelrechnung-Dialog – fixed, daher position innerhalb des flex-Containers kein Problem */}
+      {zeigSammelrechnung && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setZeigSammelrechnung(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Sammelrechnung erstellen</h3>
+              <button onClick={() => setZeigSammelrechnung(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xl">×</button>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Aus {selectedLsIds.size} Lieferschein{selectedLsIds.size !== 1 ? 'en' : ''} wird eine Sammelrechnung (Entwurf) erstellt.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Rechnungsdatum *</label>
+                <input type="date" value={srDatum} onChange={e => setSrDatum(e.target.value)} required
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Leistung von</label>
+                  <input type="date" value={srLeistungVon} onChange={e => setSrLeistungVon(e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Leistung bis</label>
+                  <input type="date" value={srLeistungBis} onChange={e => setSrLeistungBis(e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                </div>
+              </div>
+            </div>
+            {sammelrechnungMutation.isError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{(sammelrechnungMutation.error as Error).message}</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => sammelrechnungMutation.mutate({
+                  lieferschein_ids: Array.from(selectedLsIds),
+                  datum: srDatum,
+                  leistung_von: srLeistungVon || undefined,
+                  leistung_bis: srLeistungBis || undefined,
+                })}
+                disabled={!srDatum || sammelrechnungMutation.isPending}
+                className="flex-1 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sammelrechnungMutation.isPending ? '…' : 'Sammelrechnung erstellen'}
+              </button>
+              <button onClick={() => setZeigSammelrechnung(false)}
+                className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                Abbrechen
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
