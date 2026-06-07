@@ -64,7 +64,7 @@ export function UstSaetzePage() {
   return (
     <div className="max-w-xl mx-auto py-8 px-4 space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">MwSt.-Sätze</h2>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Steuersätze</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           Aktive Sätze erscheinen im Rechnungsformular und Artikelstamm. Der Standard-Satz wird automatisch vorausgefüllt.
         </p>

@@ -167,7 +167,24 @@ def seed_nummernkreise(db: Session) -> None:
         db.commit()
 
 
+def seed_ust_saetze(db: Session) -> None:
+    from database.models import UstSatz
+    standard = [
+        ("0.00",  "Steuerfrei", False),
+        ("7.00",  "Ermäßigt",   False),
+        ("19.00", "Standard",   True),
+    ]
+    for satz_str, bezeichnung, ist_default in standard:
+        from decimal import Decimal
+        satz = Decimal(satz_str)
+        if not db.query(UstSatz).filter(UstSatz.satz == satz).first():
+            db.add(UstSatz(satz=satz, bezeichnung=bezeichnung,
+                           ist_aktiv=True, ist_default=ist_default, ist_standard=True))
+    db.commit()
+
+
 def run_all_seeds(db: Session) -> None:
     seed_kategorien(db)
     seed_eu_laender(db)
     seed_nummernkreise(db)
+    seed_ust_saetze(db)
