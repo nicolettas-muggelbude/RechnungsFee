@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { downloadGobdExport, getUnternehmen, pruefZM, berechneEUER } from '../api/client'
+import { downloadGobdExport, getUnternehmen, pruefZM } from '../api/client'
 
 const AKTUELLES_JAHR = new Date().getFullYear()
 const JAHRE = Array.from({ length: 5 }, (_, i) => AKTUELLES_JAHR - i)

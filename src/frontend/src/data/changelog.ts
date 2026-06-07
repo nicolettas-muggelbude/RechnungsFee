@@ -23,6 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.2',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'EÜR – Einnahmen-Überschuss-Rechnung: Berechnung nach Anlage EÜR 2025 aus Journalbuchungen (Ist-Versteuerung); Zeilen A (Einnahmen), B (Ausgaben), Gewinn/Verlust; PDF-Anzeigehilfe für ELSTER oder Steuerberater' },
+      { typ: 'neu', text: 'EÜR: Zeile 15 (vereinnahmte USt) und Zeile 48 (abziehbare Vorsteuer) werden automatisch aus den Journal-USt-Feldern berechnet – kein manueller Eintrag nötig' },
+      { typ: 'neu', text: 'EÜR: Hinweis auf Anlage AVEUR wenn Anlagezugänge (KFZ, EDV etc.) im Journal vorhanden sind' },
+      { typ: 'neu', text: 'UStVA-Anzeigehilfe: Berechnung startet automatisch beim Öffnen der Seite und bei jedem Zeitraumwechsel – kein separater „Berechnen"-Klick mehr nötig' },
+      { typ: 'neu', text: 'Rechnungsimport (#119): Button „∑ Nach Steuersatz zusammenfassen" – reduziert OCR-erkannte Einzelpositionen auf eine Zeile je Steuersatz (z.B. alle 7%-Positionen → „Waren (7%)")' },
+    ],
+  },
+  {
     version: 'v0.3.1',
     datum: 'Juni 2026',
     eintraege: [

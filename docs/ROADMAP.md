@@ -158,12 +158,14 @@ Monatliche Fixkosten (Miete, Leasing, Abonnements) einmalig als Vorlage anlegen.
 - [x] EDV/Software (Sofortabschreibung): Kontenart Aufwand → Anlage (SKR03 0650), korrekte Buchungslogik (zweistufig: Kauf + AfA) nach BMF 2021 (Issue #111)
 - [x] Einkommensteuer-Vorauszahlung: Fälligkeitsmonate korrigiert (März/Jun/Sep/Dez)
 
-### Phase 2 – EÜR *(Ziel: nach Abschluss Issue #111)*
+### Phase 2 – EÜR ✅ *v0.3.2*
 
-- [ ] EÜR-Berechnung aus Journalbuchungen nach Anlage EÜR 2025 (Zuflussprinzip)
-- [ ] EÜR-Summen je Zeilennummer, Netto + USt getrennt
-- [ ] PDF-Export Anlage EÜR (druckfertiges Formular oder strukturierter Bericht)
-- [ ] Jahresübersicht: Kategorien-Summen mit EÜR-Zuordnung
+- [x] EÜR-Berechnung aus Journalbuchungen nach Anlage EÜR 2025 (Zuflussprinzip)
+- [x] EÜR-Summen je Zeilennummer: netto_betrag je euer_zeile, Zeile 15 aus ust_betrag, Zeile 48 aus vorsteuer_betrag
+- [x] PDF-Export Anlage EÜR (strukturierter Bericht mit Zeilennummern, Anzeigehilfe)
+- [x] Hinweis auf Anlage AVEUR wenn Anlagezugänge vorhanden
+- [ ] Jahresübersicht: Kategorien-Summen mit EÜR-Zuordnung (noch offen)
+- [ ] Anlage AVEUR – Abschreibungsplan für Anlagegüter (spätere Version)
 
 ---
 
