@@ -74,6 +74,47 @@ Alle Status-Farben folgen demselben Muster: `bg-{farbe}-50 text-{farbe}-700 bord
   [<panel>]     w-1/3 min-w-[260px] shrink-0 — Formular/Detail rechts
 ```
 
+### Sidebar-Navigationsstruktur
+```
+Logo + Versionsnummer
+─────────────────────
+Dashboard
+
+FAKTURIERUNG          ← immer sichtbar, kein Toggle
+  Angebote            ← Platzhalter (bald)
+  Aufträge            ← Platzhalter (bald)
+  Lieferscheine       ← eigenständige Seite /lieferscheine
+  Rechnungen
+
+BUCHHALTUNG ▼         ← einklappbar
+  Journal
+  Tagesabschlüsse
+
+AUSWERTUNG ▼          ← einklappbar; Einträge bedingt sichtbar
+  EÜR                 ← immer
+  UStVA               ← nur wenn !Kleinunternehmer
+  ZM                  ← nur wenn ig-Buchungen existieren
+  EKS                 ← nur wenn bezieht_transferleistungen
+  GoBD-Export
+
+STAMMDATEN ▼          ← einklappbar
+  Kunden
+  Lieferanten
+  Artikelstamm
+
+EINSTELLUNGEN ▼       ← einklappbar
+  Dokumentenpakete
+  Konten
+  Kategorien
+  Nummernkreise
+  Steuersätze
+  Rechnungsvorlagen
+  Unternehmen
+─────────────────────
+Backup
+Info & Updates
+```
+
 ### Header-Muster (jede Seite)
 ```tsx
 <div className="p-6 pb-4 shrink-0">

@@ -36,11 +36,13 @@ Laufend aktualisiertes Protokoll umgesetzter Features und technischer Entscheidu
 
 ### Frontend
 - Setup-Wizard (4 Steps + Kassenbestand), Auto-Redirect zu /setup
-- AppLayout + Sidebar: gruppierte Sektionen (Verkauf / Einkauf / Auswertung / Stammdaten)
-  - Verkauf: Rechnungen, Lieferscheine (`/lieferscheine`), Angebote/Aufträge (Platzhalter)
-  - Einkauf: Journal, Tagesabschlüsse
-  - Auswertung: EÜR, UStVA, ZM, EKS, Exporte (ausklappbar)
-  - Stammdaten: Dokumentenpakete + alle bestehenden Items (ausklappbar)
+- AppLayout + Sidebar mit Logo + Versionsnummer; 6 Bereiche:
+  - **Fakturierung** (immer sichtbar): Angebote · Aufträge (Platzhalter „bald") · Lieferscheine · Rechnungen
+  - **Buchhaltung** (einklappbar): Journal · Tagesabschlüsse
+  - **Auswertung** (einklappbar, bedingt): EÜR immer · UStVA + ZM nur bei Regelbesteuerung · ZM nur wenn ig-Buchungen existieren · EKS nur bei Transferleistungen · GoBD-Export
+  - **Stammdaten** (einklappbar): Kunden · Lieferanten · Artikelstamm
+  - **Einstellungen** (einklappbar): Dokumentenpakete · Konten · Kategorien · Nummernkreise · Steuersätze · Rechnungsvorlagen · Unternehmen
+  - Standalone (unter Trennlinie): Backup · Info & Updates
 - Dashboard: 3 Kacheln + letzte 5 Buchungen + Zeitfilter
 - KassenbuchPage: Filter, BuchungForm (Einzel + Split, Brutto/Netto-Umschalter)
 - TagesabschlussDialog + TagesabschlussPage (PDF-Export, Differenz-Statistik)
@@ -52,7 +54,7 @@ Laufend aktualisiertes Protokoll umgesetzter Features und technischer Entscheidu
   - Mail: Template-Ersetzung (`{rechnungsnummer}`, `{datum}`, `{betrag}`, `{faellig_am}`, `{kunde}`, `{firmenname}`) + Signatur, E-Mail aus Kundenstamm
 - BuchungDetail: Mail-Signatur aus Unternehmen
 - DokumentenpaketePage: CRUD für Anhang-Pakete (AGB, DSE, LV); Upload PDF/Bild; Bezeichnung editierbar
-- LieferscheineUebersicht (`/lieferscheine`): Standalone-Route, öffnet RechnungenPage im Lieferschein-Modus
+- LieferscheineUebersicht (`/lieferscheine`): eigenständige Seite (gesperrter LS-Modus, kein Eingang/Ausgang-Tab); seitenübergreifende Navigation per URL-Parameter `?id=` und `?filterRechnungId=`
 - UnternehmenPage: 5 Tabs (Firma / Steuer & Recht / Rechnungen / E-Mail / Unterschrift)
 
 ---

@@ -143,14 +143,16 @@ Details: [docs/plan-angebot-auftrag.md](plan-angebot-auftrag.md)
 
 ### Stufe 1 – Navigation + Dokumentenpakete ✅ *Juni 2026*
 
-- [x] Navigation umgebaut: Sektionen Verkauf / Einkauf / Auswertung / Stammdaten
-- [x] Lieferscheine als eigener Sidebar-Menüpunkt (`/lieferscheine`)
+- [x] Navigation umgebaut: Fakturierung (fest) / Buchhaltung / Auswertung / Stammdaten / Einstellungen (alle außer Fakturierung einklappbar)
+- [x] Lieferscheine als eigenständige Seite (`/lieferscheine`), getrennt von Rechnungen
 - [x] Platzhalter für Angebote & Aufträge (ausgegraut, „bald")
-- [x] Auswertung (EÜR, UStVA, ZM, EKS, Exporte) als ausklappbare Sektion sichtbar
-- [x] Dokumentenpakete (Schema 54): wiederverwendbare Anhang-Gruppen für Angebote/AB
+- [x] UStVA/ZM/EKS/GoBD-Export in Auswertung; bedingte Sichtbarkeit: UStVA+ZM nur bei Regelbesteuerung, ZM nur wenn ig-Buchungen existieren, EKS nur bei Transferleistungen
+- [x] ExportPage bereinigt: nur noch GoBD-Export (Sprungkarten zu anderen Auswertungen entfernt)
+- [x] Rechnungen und Lieferscheine vollständig getrennte Seiten mit eigenem Modus; seitenübergreifende Navigation per URL-Parameter
+- [x] Dokumentenpakete (Schema 54): Gruppen-Konzept für Anhänge (AGB, DSE, LV)
   - Tabellen `dokumentenpakete` + `dokumentenpaket_belege`
-  - CRUD-API + Stammdaten-Seite
-  - Upload PDF/Bild direkt ins Paket
+  - CRUD-API + Stammdaten-Seite mit klarer Gruppen-Struktur
+  - Upload PDF/Bild direkt in eine Gruppe
 
 ### Stufe 2 – Angebote *(geplant)*
 
