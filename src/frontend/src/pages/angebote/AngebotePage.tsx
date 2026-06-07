@@ -553,10 +553,6 @@ function AngebotDetail({
               {lsLaedt ? '⏳ Erstelle…' : '→ Lieferschein'}
             </button>
           )}
-          <button disabled title="Aufträge – kommt in Stufe 3"
-            className={`${btnBase} border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed`}>
-            → Auftrag <span className="text-[10px] ml-1 opacity-60">bald</span>
-          </button>
           <button onClick={onDelete} className={btnRed}>
             🗑 Löschen
           </button>
