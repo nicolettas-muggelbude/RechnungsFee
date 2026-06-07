@@ -3279,6 +3279,8 @@ export function RechnungenPage() {
     mutationFn: sammelrechnungErstellen,
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      setZeigSammelrechnung(false)
+      setSelectedLsIds(new Set())
       setLieferscheinModus(false)
       setTyp('ausgang')
       setSelectedId(r.id)
