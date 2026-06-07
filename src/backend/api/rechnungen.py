@@ -582,7 +582,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if not rechnung.ist_entwurf:
+    if not rechnung.ist_entwurf and rechnung.dokument_typ != "Angebot":
         raise HTTPException(status_code=409, detail="Nur Entwürfe können bearbeitet werden.")
 
     unternehmen = db.query(Unternehmen).first()
@@ -590,7 +590,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "kategorie_id", "notizen", "externe_belegnr",
-                  "skonto_prozent", "skonto_tage"):
+                  "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)

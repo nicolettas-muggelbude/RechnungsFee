@@ -176,6 +176,8 @@ class RechnungUpdate(BaseModel):
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
+    gueltig_bis: Optional[date] = None
+    dokumentenpaket_id: Optional[int] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
