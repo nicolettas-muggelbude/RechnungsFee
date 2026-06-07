@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.4',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Angebote: Lieferschein direkt aus dem Angebot erstellen (nur bei Status „Bestätigt"); Angebot-Zeile zeigt danach einen Link zum erstellten Lieferschein' },
+      { typ: 'neu', text: 'Angebote: Rechnung aus Angebot ebenfalls nur bei Status „Bestätigt" möglich; Button ausgegraut solange ein Lieferschein zu diesem Angebot existiert' },
+      { typ: 'neu', text: 'Angebote: Rückverlinkung Angebot → Lieferschein (Schema 56); bestehende Links werden beim Update automatisch aus den Notizen rekonstruiert' },
+      { typ: 'verbesserung', text: 'Navigation zu verlinktem Dokument (Rechnung, Lieferschein) aus Angebot filtert die Übersicht automatisch auf genau dieses Dokument' },
+      { typ: 'verbesserung', text: 'Bestätigungsabfragen beim Erstellen von Rechnung oder Lieferschein aus Angebot entfernt – kein überflüssiger Klick mehr' },
+      { typ: 'fix', text: 'Buttons mit disabled-Attribut (ausgegraut) waren optisch nicht als deaktiviert erkennbar; disabled:opacity-50 + cursor-not-allowed jetzt einheitlich in allen Aktionsleisten' },
+    ],
+  },
+  {
     version: 'v0.3.3',
     datum: 'Juni 2026',
     eintraege: [
