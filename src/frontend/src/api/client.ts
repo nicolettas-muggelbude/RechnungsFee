@@ -291,7 +291,6 @@ export type JournalEintrag = {
   beschreibung: string
   kategorie_id: number | null
   kategorie_kontenart: string | null
-  kategorie_eks_kategorie: string | null
   kunde_id: number | null
   kunde_name: string | null
   kunde_email: string | null

@@ -288,8 +288,7 @@ class JournalEintragResponse(BaseModel):
     belegnr: str
     beschreibung: str
     kategorie_id: Optional[int]
-    kategorie_kontenart: Optional[str] = None    # Erlös|Aufwand|Privat|Anlage
-    kategorie_eks_kategorie: Optional[str] = None  # A1|A3|B1|… – für §11b Zufluss-Monitor
+    kategorie_kontenart: Optional[str] = None  # Erlös|Aufwand|Privat|Anlage
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None   # aus Relationship befüllt
     kunde_email: Optional[str] = None
@@ -325,7 +324,6 @@ class JournalEintragResponse(BaseModel):
             data.kunde_email = obj.kunde.email
         if obj.kategorie:
             data.kategorie_kontenart = obj.kategorie.kontenart
-            data.kategorie_eks_kategorie = obj.kategorie.eks_kategorie
         if obj.rechnung:
             data.rechnung_nr = obj.rechnung.rechnungsnummer
         return data

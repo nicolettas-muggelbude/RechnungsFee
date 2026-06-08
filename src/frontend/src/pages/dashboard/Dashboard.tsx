@@ -414,26 +414,16 @@ export function Dashboard() {
   const saldo = einnahmen - ausgaben
   const letzteEintraege = alle
 
-  // §11b SGB II – spiegelt exakt die EKS-Berechnungslogik:
-  // A-Codes (Betriebseinnahmen): netto_betrag (Ein) − netto_betrag (Storni/Aus)
-  // B/C-Codes (Betriebsausgaben): brutto_betrag (Aus) − brutto_betrag (Storni/Ein)
-  // Einträge ohne EKS-Kategorie (Anlage, unkategorisiert) werden ignoriert – wie in EKS
-  // Verlust = 0 (§11b kennt kein negatives Einkommen)
+  // §11b SGB II Zuflussprinzip: Einnahmen und Ausgaben brutto (tatsächlich geflossene Beträge)
+  // Stornos heben sich korrekt auf (brutto +X − brutto X = 0)
+  // Verlust = 0 (negatives Einkommen gibt es bei §11b nicht)
   function calcZufluss(entries: typeof aktuelleEintraege) {
     const list = (entries ?? []).filter(
-      (e) => e.kategorie_eks_kategorie != null && e.beschreibung !== 'Kassenanfangsbestand'
+      (e) => e.kategorie_kontenart !== 'Privat' && e.beschreibung !== 'Kassenanfangsbestand'
     )
-    // A-Codes: Betriebseinnahmen (netto), Storni werden netto abgezogen
-    const aEin = list.filter((e) => e.art === 'Einnahme' && e.kategorie_eks_kategorie!.startsWith('A'))
-      .reduce((s, e) => s + parseFloat(e.netto_betrag), 0)
-    const aAus = list.filter((e) => e.art === 'Ausgabe' && e.kategorie_eks_kategorie!.startsWith('A'))
-      .reduce((s, e) => s + parseFloat(e.netto_betrag), 0)
-    // B/C-Codes: Betriebsausgaben (brutto), Storni werden brutto abgezogen
-    const bAus = list.filter((e) => e.art === 'Ausgabe' && !e.kategorie_eks_kategorie!.startsWith('A'))
-      .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
-    const bEin = list.filter((e) => e.art === 'Einnahme' && !e.kategorie_eks_kategorie!.startsWith('A'))
-      .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
-    return Math.max(0, (aEin - aAus) - (bAus - bEin))
+    const ein = list.filter((e) => e.art === 'Einnahme').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    const aus = list.filter((e) => e.art === 'Ausgabe').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    return Math.max(0, ein - aus)
   }
 
   const hatZeitraum = !!zeitraum
