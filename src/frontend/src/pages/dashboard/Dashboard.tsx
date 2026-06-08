@@ -413,26 +413,28 @@ export function Dashboard() {
   const saldo = einnahmen - ausgaben
   const letzteEintraege = alle
 
+  // §11b SGB II: Einnahmen netto (USt = Durchlaufposten), Ausgaben brutto (wie EKS A/B-Codes)
+  // Verlust = 0 (kein negatives Einkommen bei §11b-Berechnung)
   function calcZufluss(entries: typeof aktuelleEintraege) {
     const list = (entries ?? []).filter(
       (e) => e.kategorie_kontenart !== 'Privat' && e.beschreibung !== 'Kassenanfangsbestand'
     )
-    const ein = list.filter((e) => e.art === 'Einnahme').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    const ein = list.filter((e) => e.art === 'Einnahme').reduce((s, e) => s + parseFloat(e.netto_betrag), 0)
     const aus = list.filter((e) => e.art === 'Ausgabe').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
-    return ein - aus
+    return Math.max(0, ein - aus)
   }
 
   const hatZeitraum = !!zeitraum
-  const zeitraumDatenVorhanden = zuflussAnsicht === 'zeitraum' && hatZeitraum && zeitraumEintraege !== undefined
-  const zufluss = zeitraumDatenVorhanden
+  const zeitraumAktiv = zuflussAnsicht === 'zeitraum' && hatZeitraum
+  // Zeige Periodendaten wenn vorhanden, sonst Monatsdaten als Fallback während des Ladens
+  const zufluss = zeitraumAktiv && zeitraumEintraege !== undefined
     ? calcZufluss(zeitraumEintraege)
     : calcZufluss(aktuelleEintraege)
 
   const jetzt = new Date()
   const monatLabel = `${DE_MONATE[jetzt.getMonth()]} ${jetzt.getFullYear()}`
-  const zuflussLabel = zeitraumDatenVorhanden
-    ? zeitraum!.label
-    : monatLabel
+  // Label wechselt sofort beim Toggle – auch während die Daten noch laden
+  const zuflussLabel = zeitraumAktiv ? zeitraum!.label : monatLabel
 
   const loaded = eintraege !== undefined
   const hatPrivatbuchungen = privat.length > 0
