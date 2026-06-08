@@ -47,7 +47,47 @@ function berechneEks(zufluss: number): { freibetrag: number; anrechenbar: number
   return { freibetrag, anrechenbar: Math.max(0, zufluss - freibetrag) }
 }
 
-function ZuflussMonitor({ zufluss }: { zufluss: number }) {
+const DE_MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+function getAbrechnungszeitraum(startMonat: string): { von: string; bis: string; label: string } {
+  const [sy, sm] = startMonat.split('-').map(Number)
+  const now = new Date()
+  const totalMonths = (now.getFullYear() - sy) * 12 + (now.getMonth() + 1 - sm)
+  const idx = Math.max(0, Math.floor(totalMonths / 6))
+
+  const vonMonatsIdx = sm - 1 + idx * 6  // 0-indexed, may exceed 11
+  const vonJahr = sy + Math.floor(vonMonatsIdx / 12)
+  const vonMonat = (vonMonatsIdx % 12) + 1
+
+  const bisMonatsIdx = vonMonatsIdx + 5
+  const bisJahr = sy + Math.floor(bisMonatsIdx / 12)
+  const bisMonat = (bisMonatsIdx % 12) + 1
+  const bisTag = new Date(bisJahr, bisMonat, 0).getDate()
+
+  const von = `${vonJahr}-${String(vonMonat).padStart(2, '0')}-01`
+  const bis = `${bisJahr}-${String(bisMonat).padStart(2, '0')}-${String(bisTag).padStart(2, '0')}`
+  const label = vonJahr === bisJahr
+    ? `${DE_MONATE[vonMonat - 1]}–${DE_MONATE[bisMonat - 1]} ${vonJahr}`
+    : `${DE_MONATE[vonMonat - 1]} ${vonJahr} – ${DE_MONATE[bisMonat - 1]} ${bisJahr}`
+
+  return { von, bis, label }
+}
+
+type ZuflussAnsicht = 'monat' | 'zeitraum'
+
+function ZuflussMonitor({
+  zufluss,
+  zeitraumLabel,
+  ansicht,
+  onAnsichtWechsel,
+  hatZeitraum,
+}: {
+  zufluss: number
+  zeitraumLabel: string
+  ansicht: ZuflussAnsicht
+  onAnsichtWechsel: (a: ZuflussAnsicht) => void
+  hatZeitraum: boolean
+}) {
   const prozent = Math.min((zufluss / OBERE_GRENZE) * 100, 100)
   const { freibetrag, anrechenbar } = berechneEks(zufluss)
 
@@ -74,9 +114,29 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Stufenfreibetrag (§ 11b SGB II)</p>
         </div>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${farben.bg} ${farben.text} border ${farben.border}`}>
-          {stufe === 'ok' ? 'Im Freibetrag' : stufe === 'warn' ? 'Achtung' : 'Grenze überschritten'}
-        </span>
+        <div className="flex items-center gap-2">
+          {hatZeitraum && (
+            <div className="flex rounded-md border border-slate-300 dark:border-slate-600 overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => onAnsichtWechsel('monat')}
+                className={`px-2 py-1 transition-colors ${ansicht === 'monat' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                Monat
+              </button>
+              <button
+                type="button"
+                onClick={() => onAnsichtWechsel('zeitraum')}
+                className={`px-2 py-1 transition-colors ${ansicht === 'zeitraum' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                Leistungszeitraum
+              </button>
+            </div>
+          )}
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${farben.bg} ${farben.text} border ${farben.border}`}>
+            {stufe === 'ok' ? 'Im Freibetrag' : stufe === 'warn' ? 'Achtung' : 'Grenze überschritten'}
+          </span>
+        </div>
       </div>
 
       {/* Fortschrittsbalken */}
@@ -91,7 +151,6 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
             className={`h-full rounded-full transition-all ${farben.balken}`}
             style={{ width: `${prozent}%` }}
           />
-          {/* Stufenmarkierungen */}
           <div className="absolute top-0 bottom-0 w-px bg-slate-400/60" style={{ left: `${pct100}%` }} />
           <div className="absolute top-0 bottom-0 w-px bg-slate-400/60" style={{ left: `${pct1000}%` }} />
         </div>
@@ -104,7 +163,7 @@ function ZuflussMonitor({ zufluss }: { zufluss: number }) {
       {/* Kennzahlen */}
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div>
-          <span className="block text-slate-400 dark:text-slate-500">Monatlicher Zufluss</span>
+          <span className="block text-slate-400 dark:text-slate-500">{zeitraumLabel}</span>
           <span className="font-semibold text-slate-800 dark:text-slate-100">{formatEuro(zufluss)}</span>
         </div>
         <div>
@@ -301,11 +360,25 @@ export function Dashboard() {
     staleTime: 1000 * 60 * 10,
   })
 
-  // Aktuellen Monat immer laden für Zufluss-Monitor
+  const [zuflussAnsicht, setZuflussAnsicht] = useState<ZuflussAnsicht>('monat')
+
+  const zeitraum = unternehmen?.leistungsbescheid_monat
+    ? getAbrechnungszeitraum(unternehmen.leistungsbescheid_monat)
+    : null
+
+  // Aktuellen Monat für Zufluss-Monitor (Monat-Ansicht)
   const { data: aktuelleEintraege } = useQuery({
     queryKey: ['journal-aktuell', aktuellerMonat()],
     queryFn: () => getJournal({ monat: aktuellerMonat() }),
     enabled: unternehmen?.bezieht_transferleistungen === true,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  // Abrechnungszeitraum (6 Monate) für Zufluss-Monitor
+  const { data: zeitraumEintraege } = useQuery({
+    queryKey: ['journal-zeitraum', zeitraum?.von, zeitraum?.bis],
+    queryFn: () => getJournal({ datum_von: zeitraum!.von, datum_bis: zeitraum!.bis }),
+    enabled: unternehmen?.bezieht_transferleistungen === true && !!zeitraum && zuflussAnsicht === 'zeitraum',
     staleTime: 1000 * 60 * 5,
   })
 
@@ -337,14 +410,25 @@ export function Dashboard() {
   const saldo = einnahmen - ausgaben
   const letzteEintraege = alle
 
-  // Zufluss für Monitor (Einnahmen excl. Privateinlagen + Kassenanfangsbestand, aktueller Monat)
-  const zuflussMonat = (aktuelleEintraege ?? [])
-    .filter((e) =>
-      e.art === 'Einnahme' &&
-      e.kategorie_kontenart !== 'Privat' &&
-      e.beschreibung !== 'Kassenanfangsbestand'
+  function calcZufluss(entries: typeof aktuelleEintraege) {
+    const list = (entries ?? []).filter(
+      (e) => e.kategorie_kontenart !== 'Privat' && e.beschreibung !== 'Kassenanfangsbestand'
     )
-    .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    const ein = list.filter((e) => e.art === 'Einnahme').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    const aus = list.filter((e) => e.art === 'Ausgabe').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+    return ein - aus
+  }
+
+  const hatZeitraum = !!zeitraum
+  const zufluss = zuflussAnsicht === 'zeitraum' && hatZeitraum
+    ? calcZufluss(zeitraumEintraege)
+    : calcZufluss(aktuelleEintraege)
+
+  const jetzt = new Date()
+  const monatLabel = `${DE_MONATE[jetzt.getMonth()]} ${jetzt.getFullYear()}`
+  const zuflussLabel = zuflussAnsicht === 'zeitraum' && hatZeitraum
+    ? zeitraum!.label
+    : monatLabel
 
   const loaded = eintraege !== undefined
   const hatPrivatbuchungen = privat.length > 0
@@ -414,7 +498,13 @@ export function Dashboard() {
       {/* Zufluss-Monitor */}
       {zeigeZuflussMonitor && (
         <div className="mb-6">
-          <ZuflussMonitor zufluss={zuflussMonat} />
+          <ZuflussMonitor
+            zufluss={zufluss}
+            zeitraumLabel={zuflussLabel}
+            ansicht={zuflussAnsicht}
+            onAnsichtWechsel={setZuflussAnsicht}
+            hatZeitraum={hatZeitraum}
+          />
         </div>
       )}
 

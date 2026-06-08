@@ -61,6 +61,7 @@ class Unternehmen(Base):
     geburtsdatum: Mapped[date | None] = mapped_column(Date)
     bg_nummer: Mapped[str | None] = mapped_column(String(50))       # Bedarfsgemeinschaftsnummer
     jobcenter_name: Mapped[str | None] = mapped_column(String(200)) # z.B. "Jobcenter Berlin-Mitte"
+    leistungsbescheid_monat: Mapped[str | None] = mapped_column(String(7))  # YYYY-MM – Beginn 6-Monats-Abrechnungszeitraum
     # Lieferschein / Angebote
     lieferschein_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     angebote_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)

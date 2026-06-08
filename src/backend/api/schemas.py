@@ -32,6 +32,7 @@ class UnternehmenBase(BaseModel):
     geburtsdatum: Optional[date] = None
     bg_nummer: Optional[str] = None
     jobcenter_name: Optional[str] = None
+    leistungsbescheid_monat: Optional[str] = None
     versteuerungsart: str = "ist"
     kontenrahmen: str = "SKR03"
     taetigkeitsart: str = "freiberuflich"

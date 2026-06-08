@@ -146,6 +146,7 @@ export type Unternehmen = {
   geburtsdatum?: string | null
   bg_nummer?: string | null
   jobcenter_name?: string | null
+  leistungsbescheid_monat?: string | null
   versteuerungsart: 'ist' | 'soll'
   kontenrahmen: 'SKR03' | 'SKR04' | 'SKR49'
   taetigkeitsart: string

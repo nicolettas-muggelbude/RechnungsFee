@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 56` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 57` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -122,6 +122,7 @@ def _run_migrations():
 | 54 | dokumentenpakete + dokumentenpaket_belege-Tabellen |
 | 55 | unternehmen.angebote_aktiv; rechnungen.angebot_status, gueltig_bis, dokumentenpaket_id, rechnung_zu_angebot_id; Nummernkreis ANG-JJNNNN |
 | 56 | rechnungen.lieferschein_zu_angebot_id – Rückverlinkung: Angebot weiß welcher Lieferschein aus ihm erstellt wurde |
+| 57 | unternehmen.leistungsbescheid_monat VARCHAR(7) – Beginn des 6-Monats-Abrechnungszeitraums (YYYY-MM); Zufluss-Monitor Toggle Monat/Leistungszeitraum |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

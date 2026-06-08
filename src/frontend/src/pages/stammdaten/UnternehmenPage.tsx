@@ -399,6 +399,14 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <Field label="Jobcenter">
               {inp('jobcenter_name', 'z.B. Jobcenter Berlin-Mitte')}
             </Field>
+            <Field label={<>Abrechnungszeitraum Beginn <InfoTooltip text="Startmonat deines aktuellen 6-Monats-Abrechnungszeitraums (aus dem Leistungsbescheid). RechnungsFee berechnet daraus den Zeitraum automatisch weiter." /></>}>
+              <input
+                type="month"
+                value={form.leistungsbescheid_monat ?? ''}
+                onChange={e => set('leistungsbescheid_monat', e.target.value || null)}
+                className={inputCls}
+              />
+            </Field>
           </div>
         )}
 
