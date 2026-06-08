@@ -41,6 +41,10 @@
 - OCR-Fallback (pdfplumber + Tesseract) für Scans, Fotos, Kassenbons, Tankquittungen
 - PDF/A-3-Archivierung (GoBD-Stufe 5), GoBD-ZIP mit Belegordner
 
+**Exporte**
+- ZUGFeRD-Export für Ausgangsrechnungen (EN 16931, PDF/A-3 mit XML-Einbettung, XRechnung 3.0)
+- Kassenbuch-Export (PDF mit Unterschrift + CSV) für Bar-Kasse
+
 **Auswertungen & Exporte**
 - UStVA-Anzeigehilfe (KZ 81/83/86/88/41/89/93/61/35/36, monatl./quartalsweise)
 - Zusammenfassende Meldung ZM §18a (ig. Lieferungen + §13b)
@@ -74,7 +78,6 @@
 - [ ] Status-Tracking (offen / bestätigt / abgeschlossen)
 
 ### Exporte & Auswertungen
-- [ ] ZUGFeRD-Export für Ausgangsrechnungen (EN 16931, PDF/A-3 mit XML-Einbettung)
 - [ ] DATEV-Export (CSV nach DATEV-Format für Steuerberater)
 - [ ] Jahresübersicht: Kategoriensummen mit EÜR-Zuordnung
 - [ ] Anlage AVEUR – Abschreibungsplan für Anlagegüter (KFZ, EDV)
