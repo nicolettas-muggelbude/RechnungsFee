@@ -4,8 +4,8 @@ EÜR – Einnahmen-Überschuss-Rechnung (Anlage EÜR 2025)
 Berechnet EÜR-Zeilen aus Journalbuchungen nach Ist-Versteuerung (Zuflussprinzip).
 
 Besonderheiten:
-  - Zeile 15: vereinnahmte USt = Summe ust_betrag aller Einnahmen
-  - Zeile 48: abziehbare Vorsteuer = Summe vorsteuer_betrag aller Ausgaben
+  - Zeile 17: vereinnahmte USt = Summe ust_betrag aller Einnahmen
+  - Zeile 57: abziehbare Vorsteuer = Summe vorsteuer_betrag aller Ausgaben
   - Alle anderen Zeilen: netto_betrag aus kategorie.euer_zeile
   - Anlage-Buchungen (kontenart=Anlage, euer_zeile=None) → AVEUR-Hinweis
   - km-Pauschale: brutto_betrag enthält bereits km×0,30 €
@@ -38,8 +38,8 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     12:  ("Betriebseinnahmen als Betriebseinnahmen",                            "A"),
     13:  ("Betriebseinnahmen als Betriebseinnahmen (steuerfrei)",               "A"),
     14:  ("Sonstige steuerfreie Einnahmen",                                     "A"),
-    15:  ("Vereinnahmte Umsatzsteuer",                                          "A"),
-    16:  ("Vom FA erstattete / verrechnete Umsatzsteuer",                       "A"),
+    17:  ("Vereinnahmte Umsatzsteuer",                                          "A"),
+    18:  ("Vom FA erstattete / verrechnete Umsatzsteuer",                       "A"),
     27:  ("Waren, Rohstoffe, Hilfsstoffe (ohne USt)",                           "B"),
     28:  ("Bezogene Leistungen (ohne USt)",                                     "B"),
     29:  ("Fremdleistungen (ohne USt)",                                         "B"),
@@ -51,7 +51,7 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     44:  ("Reisekosten (Übernachtung, Nebenkosten)",                            "B"),
     46:  ("Kosten für Buchführung, Steuerberatung, Rechtsberatung",             "B"),
     47:  ("Miet- und Leasingkosten für Wirtschaftsgüter",                       "B"),
-    48:  ("Abziehbare Vorsteuerbeträge",                                        "B"),
+    57:  ("Abziehbare Vorsteuerbeträge",                                        "B"),
     49:  ("Versicherungen (betrieblich)",                                        "B"),
     51:  ("Aufwendungen für Bürobedarf, Porto, Fachliteratur",                  "B"),
     52:  ("Aufwendungen für Abfallbeseitigung, Reinigung",                      "B"),
@@ -107,13 +107,13 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         if euer_zeile is not None:
             zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + (e.netto_betrag or ZERO)
 
-        # Zeile 15: vereinnahmte USt aus Einnahmen
+        # Zeile 17: vereinnahmte USt aus Einnahmen (Anlage EÜR 2025)
         if e.art == "Einnahme" and e.ust_betrag and e.ust_betrag > 0:
-            zeilen[15] = zeilen.get(15, ZERO) + e.ust_betrag
+            zeilen[17] = zeilen.get(17, ZERO) + e.ust_betrag
 
-        # Zeile 48: abziehbare Vorsteuer aus Ausgaben
+        # Zeile 57: abziehbare Vorsteuer aus Ausgaben (Anlage EÜR 2025)
         if e.art == "Ausgabe" and e.vorsteuer_betrag and e.vorsteuer_betrag > 0:
-            zeilen[48] = zeilen.get(48, ZERO) + e.vorsteuer_betrag
+            zeilen[57] = zeilen.get(57, ZERO) + e.vorsteuer_betrag
 
     # Runden
     q = Decimal("0.01")
@@ -232,14 +232,14 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
         if ab != aktueller_abschnitt:
             if aktueller_abschnitt == "A":
                 pdf.ln(1)
-                summen_row("Summe Betriebseinnahmen (Zeile 22)", daten["summe_einnahmen"])
+                summen_row("Summe Betriebseinnahmen (Zeile 23)", daten["summe_einnahmen"])
             aktueller_abschnitt = ab
             section_header(ABSCHNITT_LABEL.get(ab, ab))
         zeile_row(z, bez, zeilen[z])
 
     if aktueller_abschnitt == "B":
         pdf.ln(1)
-        summen_row("Summe Betriebsausgaben (Zeile 74)", daten["summe_ausgaben"])
+        summen_row("Summe Betriebsausgaben (Zeile 75)", daten["summe_ausgaben"])
 
     pdf.ln(3)
     pdf.set_fill_color(30, 41, 59)

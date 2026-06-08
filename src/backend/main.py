@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete
 
-SCHEMA_VERSION = 57
+SCHEMA_VERSION = 58
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1256,6 +1256,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 57"))
             conn.commit()
             print("[Migration] Schema auf Version 57 (unternehmen.leistungsbescheid_monat: Beginn Abrechnungszeitraum Jobcenter)")
+
+        if version < 58:
+            # EÜR-Zeilennummern auf Anlage EÜR 2025 (Issue #132):
+            # Vereinnahmte USt: 15 → 17, FA-erstattete USt: 16 → 18
+            # Abziehbare Vorsteuer: 48 → 57 (hardcoded in euer.py)
+            # Gewährte Skonti: 15 → 12 (Erlösminderung, nicht Vereinnahmte USt)
+            # Reparatur Anlagevermögen + Bauleistungen §13b: 48 → 60 (Sonstige BA, nicht Vorsteuer)
+            conn.execute(text("UPDATE kategorien SET euer_zeile = 17 WHERE euer_zeile = 15 AND name != 'Gewährte Skonti'"))
+            conn.execute(text("UPDATE kategorien SET euer_zeile = 18 WHERE euer_zeile = 16"))
+            conn.execute(text("UPDATE kategorien SET euer_zeile = 12 WHERE name = 'Gewährte Skonti'"))
+            conn.execute(text("UPDATE kategorien SET euer_zeile = 60 WHERE euer_zeile = 48"))
+            conn.execute(text("PRAGMA user_version = 58"))
+            conn.commit()
+            print("[Migration] Schema auf Version 58 (EÜR-Zeilennummern Anlage EÜR 2025: 15→17, 16→18, 48→57/60, Skonti→12)")
 
 
 def _migrate_kategorien() -> None:
