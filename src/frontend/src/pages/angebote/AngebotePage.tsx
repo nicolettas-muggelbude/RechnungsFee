@@ -129,6 +129,7 @@ function PositionenTabelle({
                   onChange={v => update(i, 'beschreibung', v)}
                   onArtikelWahl={a => onArtikelWahl(i, a)}
                   placeholder="Beschreibung oder Artikel suchen"
+                  inputClassName="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs placeholder-slate-400 dark:placeholder-slate-500"
                 />
               </td>
               <td className="px-2 py-1.5">
@@ -169,14 +170,12 @@ function PositionenTabelle({
               {gesamt.netto.toFixed(2).replace('.', ',')} €
             </td>
           </tr>
-          {gesamt.ust !== 0 && (
-            <tr className="border-t border-slate-100 dark:border-slate-700">
-              <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">USt</td>
-              <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
-                {gesamt.ust.toFixed(2).replace('.', ',')} €
-              </td>
-            </tr>
-          )}
+          <tr className="border-t border-slate-100 dark:border-slate-700">
+            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+            <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
+              {gesamt.ust.toFixed(2).replace('.', ',')} €
+            </td>
+          </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">

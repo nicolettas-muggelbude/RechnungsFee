@@ -8,9 +8,10 @@ interface Props {
   onArtikelWahl: (a: ArtikelSuche) => void
   placeholder?: string
   className?: string
+  inputClassName?: string
 }
 
-export function ArtikelAutocomplete({ value, onChange, onArtikelWahl, placeholder = 'Beschreibung', className = '' }: Props) {
+export function ArtikelAutocomplete({ value, onChange, onArtikelWahl, placeholder = 'Beschreibung', className = '', inputClassName }: Props) {
   const [offen, setOffen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -39,7 +40,7 @@ export function ArtikelAutocomplete({ value, onChange, onArtikelWahl, placeholde
         onChange={e => { onChange(e.target.value); setOffen(true) }}
         onFocus={() => value.length >= 2 && setOffen(true)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
+        className={inputClassName ?? "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"}
       />
       {zeigeDropdown && (
         <div className="absolute top-full left-0 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg min-w-64 max-h-52 overflow-y-auto mt-0.5">
