@@ -132,7 +132,8 @@ def _journal_summen_pro_monat(von: date, bis: date, db: Session) -> dict[str, st
         return (
             db.query(
                 Kategorie.eks_kategorie,
-                func.sum(Journaleintrag.brutto_betrag).label("summe"),
+                func.sum(Journaleintrag.netto_betrag).label("netto_summe"),
+                func.sum(Journaleintrag.brutto_betrag).label("brutto_summe"),
                 func.sum(Journaleintrag.ust_betrag).label("ust_summe"),
             )
             .join(Journaleintrag.kategorie)
@@ -149,23 +150,24 @@ def _journal_summen_pro_monat(von: date, bis: date, db: Session) -> dict[str, st
     ein_rows = _abfrage("Einnahme")
     aus_rows = _abfrage("Ausgabe")
 
-    ein = {r.eks_kategorie: (Decimal(str(r.summe or 0)), Decimal(str(r.ust_summe or 0))) for r in ein_rows}
-    aus = {r.eks_kategorie: (Decimal(str(r.summe or 0)), Decimal(str(r.ust_summe or 0))) for r in aus_rows}
+    # (netto, brutto, ust) pro Kategorie
+    ein = {r.eks_kategorie: (Decimal(str(r.netto_summe or 0)), Decimal(str(r.brutto_summe or 0)), Decimal(str(r.ust_summe or 0))) for r in ein_rows}
+    aus = {r.eks_kategorie: (Decimal(str(r.netto_summe or 0)), Decimal(str(r.brutto_summe or 0)), Decimal(str(r.ust_summe or 0))) for r in aus_rows}
 
     result: dict[str, str] = {}
 
-    # A-Codes: Einnahmen − Ausgaben (Storni mindern die Einnahmen)
+    # A-Codes: Netto-Einnahmen − Netto-Storni (A5_1 addiert USt separat → zusammen = brutto)
     for code in A_CODES:
-        e_b, _ = ein.get(code, (Decimal("0"), Decimal("0")))
-        a_b, _ = aus.get(code, (Decimal("0"), Decimal("0")))
-        net = (e_b - a_b).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        e_n = ein.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[0]
+        a_n = aus.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[0]
+        net = (e_n - a_n).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         if net:
             result[code] = str(net)
 
-    # B/C-Codes: Ausgaben − Einnahmen (Storni mindern die Ausgaben)
+    # B/C-Codes: Brutto-Ausgaben − Brutto-Storni
     for code in B_CODES + C_CODES:
-        a_b, _ = aus.get(code, (Decimal("0"), Decimal("0")))
-        e_b, _ = ein.get(code, (Decimal("0"), Decimal("0")))
+        a_b = aus.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[1]
+        e_b = ein.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[1]
         net = (a_b - e_b).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         if net:
             result[code] = str(net)
@@ -193,12 +195,12 @@ def _journal_summen_pro_monat(von: date, bis: date, db: Session) -> dict[str, st
     # A5_1: vereinnahmte USt netto (Einnahmen-USt − Storni-USt) automatisch ableiten
     # A5_2: USt auf Eigenverbrauch von Waren (A2) automatisch ableiten
     ust_a1 = sum(
-        ein.get(code, (Decimal("0"), Decimal("0")))[1] - aus.get(code, (Decimal("0"), Decimal("0")))[1]
+        ein.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[2] - aus.get(code, (Decimal("0"), Decimal("0"), Decimal("0")))[2]
         for code in ("A1", "A3", "A4")
     )
     ust_a2 = (
-        ein.get("A2", (Decimal("0"), Decimal("0")))[1]
-        - aus.get("A2", (Decimal("0"), Decimal("0")))[1]
+        ein.get("A2", (Decimal("0"), Decimal("0"), Decimal("0")))[2]
+        - aus.get("A2", (Decimal("0"), Decimal("0"), Decimal("0")))[2]
     )
     if ust_a1:
         existing = Decimal(result.get("A5_1", "0"))
