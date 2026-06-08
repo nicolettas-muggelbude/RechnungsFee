@@ -167,14 +167,17 @@ def erstelle_journal_pdf(
             "brutto":       brutto_str,
         }, fill=fill, fill_color=fill_col)
 
-    # Summenzeile
+    # Summenzeile – drei gleichbreite Zellen über die volle Tabellenbreite
     pdf.set_draw_color(200, 200, 200)
     pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
     saldo = sum_ein - sum_aus
     saldo_str = _fmt_euro(saldo) if saldo >= 0 else f"−{_fmt_euro(-saldo)}"
-    _row(pdf, {
-        "beschreibung": f"Einnahmen: {_fmt_euro(sum_ein)}   Ausgaben: {_fmt_euro(sum_aus)}",
-        "brutto": f"Saldo: {saldo_str}",
-    }, bold=True, fill=True, fill_color=(235, 245, 255))
+    total_w = sum(COL.values())
+    third = total_w / 3
+    pdf.set_font("DejaVu", "B", 8)
+    pdf.set_fill_color(235, 245, 255)
+    pdf.cell(third, ROW_H, f"  Einnahmen: {_fmt_euro(sum_ein)}", border=0, fill=True)
+    pdf.cell(third, ROW_H, f"Ausgaben: {_fmt_euro(sum_aus)}", border=0, fill=True)
+    pdf.cell(third, ROW_H, f"Saldo: {saldo_str}", border=0, align="R", fill=True, ln=True)
 
     return bytes(pdf.output())
