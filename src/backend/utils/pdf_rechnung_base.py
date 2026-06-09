@@ -389,6 +389,9 @@ class RechnungPDFBase(FPDF):
         quell_angebot_nr = getattr(r, "_quell_angebot_nr", None)
         if quell_angebot_nr:
             _meta("Angebot", quell_angebot_nr, dim=True)
+        quell_auftrag_nr = getattr(r, "_quell_auftrag_nr", None)
+        if quell_auftrag_nr:
+            _meta("Auftrag", quell_auftrag_nr, dim=True)
 
         return emp_bottom, meta_y
 

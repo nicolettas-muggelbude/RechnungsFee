@@ -32,7 +32,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 59` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 60` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -125,6 +125,7 @@ def _run_migrations():
 | 57 | unternehmen.leistungsbescheid_monat VARCHAR(7) – Beginn des 6-Monats-Abrechnungszeitraums (YYYY-MM); Zufluss-Monitor Toggle Monat/Leistungszeitraum |
 | 58 | EÜR-Zeilennummern Anlage EÜR 2025 (Issue #132): 15→17 (Vereinnahmte USt), 16→18 (FA-erstattete USt), 48→60 (Reparatur/Bauleistungen → Sonstige BA); Gewährte Skonti 15→12; hardcoded 15→17 + 48→57 in euer.py |
 | 59 | unternehmen.proforma_aktiv; rechnungen.proforma_zu_angebot_id + rechnung_zu_proforma_id; Nummernkreis PRF-JJNNNN; Proforma-Dokument-Typ (eigene Seite, aus Angebot erstellbar, → Rechnung konvertierbar) |
+| 60 | unternehmen.auftraege_aktiv; rechnungen.auftrag_status + auftrag_zu_angebot_id + rechnung/lieferschein/proforma_zu_auftrag_id; Nummernkreis AU-JJNNNN; Auftrag-Dokument-Typ (aus Angebot oder standalone, → Rechnung/LS/Proforma) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

@@ -37,12 +37,15 @@
 - Dokumentenpakete (Anhänge wie AGB, DSE, LV) als Angebot-Beilage
 
 **Proforma-Rechnungen**
-- Proforma-Rechnung (Vorkasse-Aufforderung) – direkt oder aus Angebot
-- Entwurf-Modus, Finalisieren-Button
-- Zahlungsblock mit IBAN und Zahlungsziel im PDF (kein Skonto, keine Unterschrift, kein ZUGFeRD)
-- Übersicht: Alterswarnung bei >14 Tage offenen Proformas (amber-Markierung)
-- „Zahlung eingegangen": Zahlungsart + Datum wählen → Journaleintrag wird gebucht, Rechnung als Entwurf + bezahlt angelegt
-- Bidirektionale Verlinkung Angebot ↔ Proforma ↔ Rechnung
+- Proforma-Rechnung (Vorkasse-Aufforderung) – direkt erstellen oder aus einem akzeptierten Angebot
+- Entwurf-Modus: Entwurf speichern (ohne Nummer), Finalisieren-Button vergibt Nummer
+- Zahlungsblock im PDF mit IBAN und Zahlungsziel (aus Unternehmenseinstellungen)
+- Kein Skonto, keine Unterschrift (Vorkasse: Zahlung kommt vor Leistung)
+- Alterswarnung in der Übersicht: Proformas >14 Tage offen werden amber markiert
+- **Zahlung eingegangen:** Zahlungsart + Datum wählen → Journaleintrag wird gebucht, Rechnung automatisch als bezahlt angelegt
+- Bidirektionale Verlinkung: Angebot ↔ Proforma ↔ Rechnung
+- Proforma-Übersicht aus Angebot heraus automatisch auf das neue Dokument gefiltert
+- Angebot sperrt „→ Rechnung" und „→ Lieferschein" sobald eine Proforma existiert
 
 **Belege & Import**
 - Beleganhang an Eingangsrechnungen (PDF/JPG/PNG, SHA256, Inline-Viewer)

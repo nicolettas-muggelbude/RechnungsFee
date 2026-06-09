@@ -256,6 +256,18 @@ class RechnungResponse(BaseModel):
     rechnung_zu_proforma_nr: Optional[str] = None  # wird in from_orm_extended befüllt
     angebot_zu_proforma_id: Optional[int] = None   # wird in from_orm_extended befüllt
     angebot_zu_proforma_nr: Optional[str] = None   # wird in from_orm_extended befüllt
+    # Aufträge
+    auftrag_status: Optional[str] = None
+    auftrag_zu_angebot_id: Optional[int] = None     # auf Angebot: welcher Auftrag entstand
+    auftrag_zu_angebot_nr: Optional[str] = None     # wird in from_orm_extended befüllt
+    rechnung_zu_auftrag_id: Optional[int] = None    # auf Auftrag: welche Rechnung entstand
+    rechnung_zu_auftrag_nr: Optional[str] = None
+    lieferschein_zu_auftrag_id: Optional[int] = None
+    lieferschein_zu_auftrag_nr: Optional[str] = None
+    proforma_zu_auftrag_id: Optional[int] = None
+    proforma_zu_auftrag_nr: Optional[str] = None
+    angebot_zu_auftrag_id: Optional[int] = None     # auf Auftrag: aus welchem Angebot
+    angebot_zu_auftrag_nr: Optional[str] = None
     erstellt_am: datetime
     aktualisiert_am: datetime
 
@@ -380,6 +392,39 @@ class RechnungResponse(BaseModel):
                     if eltern_ang:
                         data.angebot_zu_proforma_id = eltern_ang.id
                         data.angebot_zu_proforma_nr = eltern_ang.rechnungsnummer
+            except Exception:
+                pass
+        # Auftrag-Links auflösen
+        def _resolve(field_id, target_attr):
+            val = getattr(obj, field_id, None)
+            if not val:
+                return
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    linked = session.get(obj.__class__, val)
+                    if linked:
+                        setattr(data, target_attr, linked.rechnungsnummer)
+            except Exception:
+                pass
+        _resolve("auftrag_zu_angebot_id",    "auftrag_zu_angebot_nr")
+        _resolve("rechnung_zu_auftrag_id",   "rechnung_zu_auftrag_nr")
+        _resolve("lieferschein_zu_auftrag_id","lieferschein_zu_auftrag_nr")
+        _resolve("proforma_zu_auftrag_id",   "proforma_zu_auftrag_nr")
+        # Bei Auftrag: Eltern-Angebot ermitteln
+        if getattr(obj, "dokument_typ", None) == "Auftrag":
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    eltern_ang = session.query(obj.__class__).filter(
+                        obj.__class__.auftrag_zu_angebot_id == obj.id,
+                        obj.__class__.dokument_typ == "Angebot",
+                    ).first()
+                    if eltern_ang:
+                        data.angebot_zu_auftrag_id = eltern_ang.id
+                        data.angebot_zu_auftrag_nr = eltern_ang.rechnungsnummer
             except Exception:
                 pass
         return data

@@ -188,6 +188,7 @@ export type Unternehmen = {
   lieferschein_aktiv?: boolean
   angebote_aktiv?: boolean
   proforma_aktiv?: boolean
+  auftraege_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -920,6 +921,18 @@ export type Rechnung = {
   rechnung_zu_proforma_nr: string | null
   angebot_zu_proforma_id: number | null
   angebot_zu_proforma_nr: string | null
+  // Aufträge
+  auftrag_status: string | null
+  auftrag_zu_angebot_id: number | null
+  auftrag_zu_angebot_nr: string | null
+  rechnung_zu_auftrag_id: number | null
+  rechnung_zu_auftrag_nr: string | null
+  lieferschein_zu_auftrag_id: number | null
+  lieferschein_zu_auftrag_nr: string | null
+  proforma_zu_auftrag_id: number | null
+  proforma_zu_auftrag_nr: string | null
+  angebot_zu_auftrag_id: number | null
+  angebot_zu_auftrag_nr: string | null
   erstellt_am: string
   aktualisiert_am: string
 }
@@ -1009,6 +1022,31 @@ export const lieferscheinAusAngebot = (angebotId: number) =>
 export const angebotStatusSetzen = (angebotId: number, status: string) =>
   request<Rechnung>(`/rechnungen/${angebotId}/angebot-status`, {
     method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+
+// --- Aufträge ---
+export const getAuftraege = () =>
+  request<Rechnung[]>('/rechnungen/auftraege')
+
+export const auftragErstellen = (data: RechnungCreate) =>
+  request<Rechnung>('/rechnungen/auftraege', { method: 'POST', body: JSON.stringify(data) })
+
+export const auftragAusAngebot = (angebotId: number) =>
+  request<Rechnung>(`/rechnungen/${angebotId}/auftrag-aus-angebot`, { method: 'POST' })
+
+export const rechnungAusAuftrag = (auftragId: number) =>
+  request<Rechnung>(`/rechnungen/${auftragId}/rechnung-aus-auftrag`, { method: 'POST' })
+
+export const lieferscheinAusAuftrag = (auftragId: number) =>
+  request<Rechnung>(`/rechnungen/${auftragId}/lieferschein-aus-auftrag`, { method: 'POST' })
+
+export const proformaAusAuftrag = (auftragId: number) =>
+  request<Rechnung>(`/rechnungen/${auftragId}/proforma-aus-auftrag`, { method: 'POST' })
+
+export const auftragStatusSetzen = (auftragId: number, status: string) =>
+  request<Rechnung>(`/rechnungen/${auftragId}/auftrag-status`, {
+    method: 'POST',
     body: JSON.stringify({ status }),
   })
 

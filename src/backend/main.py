@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete
 
-SCHEMA_VERSION = 59
+SCHEMA_VERSION = 60
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1287,6 +1287,29 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 59"))
             conn.commit()
             print("[Migration] Schema auf Version 59 (Proforma-Rechnungen: proforma_aktiv + FK-Felder + Nummernkreis)")
+
+        if version < 60:
+            unt60 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            re60  = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "auftraege_aktiv" not in unt60:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN auftraege_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            if "auftrag_status" not in re60:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN auftrag_status VARCHAR(20)"))
+            if "auftrag_zu_angebot_id" not in re60:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN auftrag_zu_angebot_id INTEGER REFERENCES rechnungen(id)"))
+            if "rechnung_zu_auftrag_id" not in re60:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN rechnung_zu_auftrag_id INTEGER REFERENCES rechnungen(id)"))
+            if "lieferschein_zu_auftrag_id" not in re60:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN lieferschein_zu_auftrag_id INTEGER REFERENCES rechnungen(id)"))
+            if "proforma_zu_auftrag_id" not in re60:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN proforma_zu_auftrag_id INTEGER REFERENCES rechnungen(id)"))
+            conn.execute(text("""
+                INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
+                VALUES ('auftrag', 'Aufträge', 'AU-JJNNNN', 1, 1, NULL)
+            """))
+            conn.execute(text("PRAGMA user_version = 60"))
+            conn.commit()
+            print("[Migration] Schema auf Version 60 (Aufträge: auftraege_aktiv + FK-Felder + Nummernkreis AU-JJNNNN)")
 
 
 def _migrate_kategorien() -> None:

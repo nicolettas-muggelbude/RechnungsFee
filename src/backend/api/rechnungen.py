@@ -400,10 +400,11 @@ def list_rechnungen(
     if dokument_typ:
         q = q.filter(Rechnung.dokument_typ == dokument_typ)
     else:
-        # Lieferscheine, Angebote und Proformas nur auf explizite Anfrage
+        # Lieferscheine, Angebote, Proformas und Aufträge nur auf explizite Anfrage
         q = q.filter(Rechnung.dokument_typ != "Lieferschein")
         q = q.filter(Rechnung.dokument_typ != "Angebot")
         q = q.filter(Rechnung.dokument_typ != "Proforma")
+        q = q.filter(Rechnung.dokument_typ != "Auftrag")
     if typ:
         if typ not in ("eingang", "ausgang"):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
@@ -808,6 +809,14 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         }[_dok]
         _quell_angebot = db.query(Rechnung).filter(_angebot_col == rechnung_id).first()
         rechnung._quell_angebot_nr = _quell_angebot.rechnungsnummer if _quell_angebot else None
+        # Quell-Auftrag
+        _auftrag_col = {
+            "Rechnung":    Rechnung.rechnung_zu_auftrag_id,
+            "Lieferschein": Rechnung.lieferschein_zu_auftrag_id,
+            "Proforma":    Rechnung.proforma_zu_auftrag_id,
+        }[_dok]
+        _quell_auftrag = db.query(Rechnung).filter(_auftrag_col == rechnung_id).first()
+        rechnung._quell_auftrag_nr = _quell_auftrag.rechnungsnummer if _quell_auftrag else None
 
 
     # Lieferschein: Lieferadresse am Objekt hinterlegen (für PDF + Response)
@@ -965,14 +974,25 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         rechnung.rechnung_zu_angebot_id
         or rechnung.lieferschein_zu_angebot_id
         or rechnung.proforma_zu_angebot_id
+        or rechnung.auftrag_zu_angebot_id
     ):
-        raise HTTPException(status_code=409, detail="Angebot kann nicht gelöscht werden, da bereits Dokumente (Rechnung, Lieferschein oder Proforma) daraus erstellt wurden.")
+        raise HTTPException(status_code=409, detail="Angebot kann nicht gelöscht werden, da bereits Dokumente daraus erstellt wurden.")
+    ist_auftrag = rechnung.dokument_typ == "Auftrag"
+    if ist_auftrag and (
+        rechnung.rechnung_zu_auftrag_id
+        or rechnung.lieferschein_zu_auftrag_id
+        or rechnung.proforma_zu_auftrag_id
+    ):
+        raise HTTPException(status_code=409, detail="Auftrag kann nicht gelöscht werden, da bereits Dokumente daraus erstellt wurden.")
     # FK-Rückverweise zurücksetzen
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_rechnung_id == rechnung_id).update(
         {"lieferschein_zu_rechnung_id": None}
     )
     db.query(Rechnung).filter(Rechnung.proforma_zu_angebot_id == rechnung_id).update(
         {"proforma_zu_angebot_id": None}
+    )
+    db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
+        {"auftrag_zu_angebot_id": None}
     )
     db.delete(rechnung)
     db.commit()
@@ -2291,6 +2311,322 @@ def angebot_status_setzen(angebot_id: int, data: AngebotStatusUpdate, db: Sessio
     db.commit()
     db.refresh(angebot)
     return RechnungResponse.from_orm_extended(angebot)
+
+
+# ---------------------------------------------------------------------------
+# Aufträge
+# ---------------------------------------------------------------------------
+
+def _naechste_auftragsnummer(datum: date, db: Session) -> str:
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "auftrag").first()
+    if nk:
+        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+            nk.naechste_nr = 1
+        nk.letztes_jahr = datum.year
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        return _belegnr_aus_format(nk.format, datum, nr)
+    count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Auftrag").count()
+    return f"AU-{str(datum.year)[-2:]}{count + 1:04d}"
+
+
+def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> None:
+    """Kopiert Positionen von einem Dokument zum anderen."""
+    for pos in quell.positionen:
+        neue_pos = Rechnungsposition(
+            rechnung_id=ziel.id,
+            position_nr=pos.position_nr,
+            beschreibung=pos.beschreibung,
+            menge=pos.menge,
+            einheit=pos.einheit,
+            netto=pos.netto,
+            ust_satz=pos.ust_satz,
+            ust_betrag=pos.ust_betrag,
+            brutto=pos.brutto,
+            artikel_id=pos.artikel_id,
+            kategorie_id=pos.kategorie_id,
+            differenzbesteuerung=pos.differenzbesteuerung,
+            ek_netto_25a=pos.ek_netto_25a,
+            ust_satz_25a=pos.ust_satz_25a,
+        )
+        db.add(neue_pos)
+
+
+@router.post("/{angebot_id}/auftrag-aus-angebot", response_model=RechnungResponse, status_code=201)
+def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
+    """Erstellt einen Auftrag aus einem Angebot (Positionen werden übernommen)."""
+    angebot = db.query(Rechnung).filter(
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+    ).first()
+    if not angebot:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
+    if angebot.auftrag_zu_angebot_id:
+        raise HTTPException(status_code=409, detail="Aus diesem Angebot wurde bereits ein Auftrag erstellt.")
+
+    heute = date.today()
+    auftragsnummer = _naechste_auftragsnummer(heute, db)
+
+    auftrag = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=auftragsnummer,
+        datum=heute,
+        leistung_von=angebot.leistung_von,
+        leistung_bis=angebot.leistung_bis,
+        kunde_id=angebot.kunde_id,
+        partner_freitext=angebot.partner_freitext,
+        notizen=angebot.notizen,
+        ist_entwurf=False,
+        dokument_typ="Auftrag",
+        auftrag_status="offen",
+        netto_gesamt=angebot.netto_gesamt,
+        ust_gesamt=angebot.ust_gesamt,
+        brutto_gesamt=angebot.brutto_gesamt,
+        skonto_prozent=angebot.skonto_prozent,
+        skonto_tage=angebot.skonto_tage,
+        dokumentenpaket_id=angebot.dokumentenpaket_id,
+    )
+    db.add(auftrag)
+    db.flush()
+    _kopiere_positionen(angebot, auftrag, db)
+    angebot.auftrag_zu_angebot_id = auftrag.id
+    angebot.angebot_status = "akzeptiert"
+    db.commit()
+    db.refresh(auftrag)
+    return RechnungResponse.from_orm_extended(auftrag)
+
+
+@router.post("/{auftrag_id}/rechnung-aus-auftrag", response_model=RechnungResponse, status_code=201)
+def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
+    """Erstellt eine Ausgangsrechnung aus einem Auftrag."""
+    auftrag = db.query(Rechnung).filter(
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+    ).first()
+    if not auftrag:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+    if auftrag.rechnung_zu_auftrag_id:
+        raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Rechnung erstellt.")
+
+    heute = date.today()
+    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    unternehmen = db.query(Unternehmen).first()
+    zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
+    from datetime import timedelta
+    faellig_am = heute + timedelta(days=int(zahlungsziel))
+
+    rechnung = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=rechnungsnummer,
+        datum=heute,
+        faellig_am=faellig_am,
+        leistung_von=auftrag.leistung_von,
+        leistung_bis=auftrag.leistung_bis,
+        kunde_id=auftrag.kunde_id,
+        partner_freitext=auftrag.partner_freitext,
+        notizen=auftrag.notizen,
+        ist_entwurf=True,
+        dokument_typ="Rechnung",
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        netto_gesamt=auftrag.netto_gesamt,
+        ust_gesamt=auftrag.ust_gesamt,
+        brutto_gesamt=auftrag.brutto_gesamt,
+        skonto_prozent=auftrag.skonto_prozent,
+        skonto_tage=auftrag.skonto_tage,
+    )
+    db.add(rechnung)
+    db.flush()
+    _kopiere_positionen(auftrag, rechnung, db)
+    auftrag.rechnung_zu_auftrag_id = rechnung.id
+    auftrag.auftrag_status = "abgeschlossen"
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.post("/{auftrag_id}/lieferschein-aus-auftrag", response_model=RechnungResponse, status_code=201)
+def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
+    """Erstellt einen Lieferschein aus einem Auftrag."""
+    auftrag = db.query(Rechnung).filter(
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+    ).first()
+    if not auftrag:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+    if auftrag.lieferschein_zu_auftrag_id:
+        raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits ein Lieferschein erstellt.")
+
+    heute = date.today()
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
+    if nk:
+        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+            nk.naechste_nr = 1
+        nk.letztes_jahr = heute.year
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        ls_nr = _belegnr_aus_format(nk.format, heute, nr)
+    else:
+        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Lieferschein").count()
+        ls_nr = f"LS-{str(heute.year)[-2:]}{count + 1:04d}"
+
+    lieferschein = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=ls_nr,
+        datum=heute,
+        leistung_von=auftrag.leistung_von,
+        leistung_bis=auftrag.leistung_bis,
+        kunde_id=auftrag.kunde_id,
+        partner_freitext=auftrag.partner_freitext,
+        notizen=auftrag.notizen,
+        ist_entwurf=False,
+        dokument_typ="Lieferschein",
+        netto_gesamt=auftrag.netto_gesamt,
+        ust_gesamt=auftrag.ust_gesamt,
+        brutto_gesamt=auftrag.brutto_gesamt,
+    )
+    db.add(lieferschein)
+    db.flush()
+    _kopiere_positionen(auftrag, lieferschein, db)
+    auftrag.lieferschein_zu_auftrag_id = lieferschein.id
+    db.commit()
+    db.refresh(lieferschein)
+    return RechnungResponse.from_orm_extended(lieferschein)
+
+
+@router.post("/{auftrag_id}/proforma-aus-auftrag", response_model=RechnungResponse, status_code=201)
+def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
+    """Erstellt eine Proforma-Rechnung aus einem Auftrag."""
+    auftrag = db.query(Rechnung).filter(
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+    ).first()
+    if not auftrag:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+    if auftrag.proforma_zu_auftrag_id:
+        raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Proforma erstellt.")
+
+    heute = date.today()
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "proforma").first()
+    if nk:
+        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+            nk.naechste_nr = 1
+        nk.letztes_jahr = heute.year
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        prf_nr = _belegnr_aus_format(nk.format, heute, nr)
+    else:
+        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Proforma").count()
+        prf_nr = f"PRF-{str(heute.year)[-2:]}{count + 1:04d}"
+
+    proforma = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=prf_nr,
+        datum=heute,
+        leistung_von=auftrag.leistung_von,
+        leistung_bis=auftrag.leistung_bis,
+        kunde_id=auftrag.kunde_id,
+        partner_freitext=auftrag.partner_freitext,
+        notizen=auftrag.notizen,
+        ist_entwurf=False,
+        dokument_typ="Proforma",
+        netto_gesamt=auftrag.netto_gesamt,
+        ust_gesamt=auftrag.ust_gesamt,
+        brutto_gesamt=auftrag.brutto_gesamt,
+    )
+    db.add(proforma)
+    db.flush()
+    _kopiere_positionen(auftrag, proforma, db)
+    auftrag.proforma_zu_auftrag_id = proforma.id
+    db.commit()
+    db.refresh(proforma)
+    return RechnungResponse.from_orm_extended(proforma)
+
+
+class AuftragStatusUpdate(BaseModel):
+    status: str  # offen | in_bearbeitung | abgeschlossen | storniert
+
+
+@router.post("/{auftrag_id}/auftrag-status", response_model=RechnungResponse)
+def auftrag_status_setzen(auftrag_id: int, data: AuftragStatusUpdate, db: Session = Depends(get_db)):
+    erlaubt = {"offen", "in_bearbeitung", "abgeschlossen", "storniert"}
+    if data.status not in erlaubt:
+        raise HTTPException(status_code=422, detail=f"Status muss einer von {erlaubt} sein.")
+    auftrag = db.query(Rechnung).filter(
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+    ).first()
+    if not auftrag:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+    auftrag.auftrag_status = data.status
+    db.commit()
+    db.refresh(auftrag)
+    return RechnungResponse.from_orm_extended(auftrag)
+
+
+@router.post("/auftraege", response_model=RechnungResponse, status_code=201)
+def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
+    """Erstellt einen neuen Auftrag ohne Angebot-Quelle."""
+    heute = date.today()
+    auftragsnummer = _naechste_auftragsnummer(heute, db)
+    auftrag = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=auftragsnummer,
+        datum=data.datum or heute,
+        leistung_von=data.leistung_von,
+        leistung_bis=data.leistung_bis,
+        kunde_id=data.kunde_id,
+        partner_freitext=data.partner_freitext,
+        notizen=data.notizen,
+        ist_entwurf=False,
+        dokument_typ="Auftrag",
+        auftrag_status="offen",
+        netto_gesamt=Decimal("0.00"),
+        ust_gesamt=Decimal("0.00"),
+        brutto_gesamt=Decimal("0.00"),
+        skonto_prozent=data.skonto_prozent,
+        skonto_tage=data.skonto_tage,
+        dokumentenpaket_id=data.dokumentenpaket_id,
+    )
+    db.add(auftrag)
+    db.flush()
+    # Positionen
+    netto_sum = Decimal("0.00")
+    ust_sum = Decimal("0.00")
+    for i, pos_data in enumerate(data.positionen or [], start=1):
+        netto_ep = Decimal(str(pos_data.netto)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        ust_satz = Decimal(str(pos_data.ust_satz))
+        ust_ep = (netto_ep * ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        brutto_ep = (netto_ep + ust_ep).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        menge = Decimal(str(pos_data.menge))
+        pos = Rechnungsposition(
+            rechnung_id=auftrag.id,
+            position_nr=i,
+            beschreibung=pos_data.beschreibung,
+            menge=menge,
+            einheit=pos_data.einheit or "Stk.",
+            netto=netto_ep,
+            ust_satz=ust_satz,
+            ust_betrag=ust_ep,
+            brutto=brutto_ep,
+            artikel_id=pos_data.artikel_id,
+            kategorie_id=pos_data.kategorie_id,
+        )
+        db.add(pos)
+        netto_sum += netto_ep * menge
+        ust_sum += ust_ep * menge
+    Q = Decimal("0.01")
+    auftrag.netto_gesamt = netto_sum.quantize(Q, ROUND_HALF_UP)
+    auftrag.ust_gesamt = ust_sum.quantize(Q, ROUND_HALF_UP)
+    auftrag.brutto_gesamt = (auftrag.netto_gesamt + auftrag.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+    db.commit()
+    db.refresh(auftrag)
+    return RechnungResponse.from_orm_extended(auftrag)
+
+
+@router.get("/auftraege", response_model=list[RechnungResponse])
+def liste_auftraege(db: Session = Depends(get_db)):
+    """Alle Aufträge zurückgeben."""
+    auftraege = db.query(Rechnung).filter(
+        Rechnung.dokument_typ == "Auftrag"
+    ).order_by(Rechnung.datum.desc(), Rechnung.id.desc()).all()
+    return [RechnungResponse.from_orm_extended(a) for a in auftraege]
 
 
 @router.post("/sammelrechnung", response_model=RechnungResponse, status_code=201)

@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
-  rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, angebotStatusSetzen,
+  rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
   getApiBase, openUrl, getRechnungPdf, isTauri, openInPdfWindow,
   type Rechnung, type ArtikelSuche,
 } from '../../api/client'
@@ -420,6 +420,7 @@ function AngebotDetail({
   const navigate = useNavigate()
   const [statusLaedt, setStatusLaedt] = useState(false)
   const [konvLaedt, setKonvLaedt] = useState(false)
+  const [auftragLaedt, setAuftragLaedt] = useState(false)
   const [lsLaedt, setLsLaedt] = useState(false)
   const [pfLaedt, setPfLaedt] = useState(false)
   const [pdfLaedt, setPdfLaedt] = useState(false)
@@ -512,6 +513,16 @@ function AngebotDetail({
     finally { setStatusLaedt(false) }
   }
 
+  async function handleAuftragErstellen() {
+    setAuftragLaedt(true)
+    try {
+      const au = await auftragAusAngebot(angebot.id)
+      qc.invalidateQueries({ queryKey: ['angebote'] })
+      navigate(`/auftraege?id=${au.id}`)
+    } catch (e: any) { setFehler(e?.message) }
+    finally { setAuftragLaedt(false) }
+  }
+
   async function handleRechnungErstellen() {
     setKonvLaedt(true)
     try {
@@ -590,6 +601,26 @@ function AngebotDetail({
           <button onClick={onEdit} className={btnNeutral}>
             ✏️ Bearbeiten
           </button>
+          {unternehmen?.auftraege_aktiv && (
+            !angebot.angebot_zu_auftrag_id ? (
+              <button
+                onClick={handleAuftragErstellen}
+                disabled={auftragLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'akzeptiert'}
+                title={
+                  angebot.ist_entwurf ? 'Erst Entwurf finalisieren'
+                  : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Akzeptiert" möglich'
+                  : undefined
+                }
+                className={btnGreen}
+              >
+                {auftragLaedt ? '⏳ Erstelle…' : '→ Auftrag'}
+              </button>
+            ) : (
+              <button onClick={() => navigate(`/auftraege?id=${angebot.angebot_zu_auftrag_id}`)} className={btnGreen}>
+                → {angebot.angebot_zu_auftrag_nr ?? `AU #${angebot.angebot_zu_auftrag_id}`}
+              </button>
+            )
+          )}
           {!angebot.rechnung_zu_angebot_id ? (
             <button
               onClick={handleRechnungErstellen}
@@ -649,8 +680,8 @@ function AngebotDetail({
           )}
           <button
             onClick={onDelete}
-            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id)}
-            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
+            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.angebot_zu_auftrag_id)}
+            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.angebot_zu_auftrag_id ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
             className={btnRed}
           >
             🗑 Löschen

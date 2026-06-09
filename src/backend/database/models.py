@@ -62,10 +62,11 @@ class Unternehmen(Base):
     bg_nummer: Mapped[str | None] = mapped_column(String(50))       # Bedarfsgemeinschaftsnummer
     jobcenter_name: Mapped[str | None] = mapped_column(String(200)) # z.B. "Jobcenter Berlin-Mitte"
     leistungsbescheid_monat: Mapped[str | None] = mapped_column(String(7))  # YYYY-MM – Beginn 6-Monats-Abrechnungszeitraum
-    # Lieferschein / Angebote / Proforma
+    # Lieferschein / Angebote / Proforma / Aufträge
     lieferschein_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     angebote_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     proforma_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    auftraege_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # Buchführung
     versteuerungsart: Mapped[str] = mapped_column(String(4), default="ist", nullable=False)  # ist|soll
     kontenrahmen: Mapped[str] = mapped_column(String(10), default="SKR03", nullable=False)  # SKR03|SKR04|SKR49
@@ -522,6 +523,12 @@ class Rechnung(Base):
     # Proforma: gespeichert auf dem Angebot (welche Proforma daraus entstand) und auf der Proforma (welche Rechnung)
     proforma_zu_angebot_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     rechnung_zu_proforma_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+    # Aufträge
+    auftrag_status: Mapped[str | None] = mapped_column(String(20))  # offen|in_bearbeitung|abgeschlossen|storniert
+    auftrag_zu_angebot_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)   # auf Angebot: welcher Auftrag entstand
+    rechnung_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)  # auf Auftrag: welche Rechnung entstand
+    lieferschein_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+    proforma_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
