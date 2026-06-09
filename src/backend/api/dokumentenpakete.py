@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Beleg, DokumentenPaket, DokumentenPaketBeleg
+from database.models import Beleg, DokumentenPaket, DokumentenPaketBeleg, Rechnung
 
 router = APIRouter(prefix="/api/dokumentenpakete", tags=["Stammdaten"])
 
@@ -142,6 +142,10 @@ def delete_paket(paket_id: int, db: Session = Depends(get_db)):
     p = db.query(DokumentenPaket).filter(DokumentenPaket.id == paket_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Dokumentenpaket nicht gefunden.")
+    # FK-Referenzen in Angeboten/Rechnungen auf NULL setzen
+    db.query(Rechnung).filter(Rechnung.dokumentenpaket_id == paket_id).update(
+        {Rechnung.dokumentenpaket_id: None}
+    )
     # Belege physisch löschen
     for eintrag in p.dateien:
         pfad = APP_DATA_DIR / "uploads" / eintrag.beleg.dateiname

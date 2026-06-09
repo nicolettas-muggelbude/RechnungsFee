@@ -55,8 +55,9 @@ if (isTauri() && !import.meta.env.DEV) {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   await _backendReady  // Wartet bis Backend bereit ist (nach Update kann das 30–60 s dauern)
   const base = await getBaseUrl()
+  const isFormData = options?.body instanceof FormData
   const res = await fetch(`${base}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     ...options,
   })
   if (!res.ok) {

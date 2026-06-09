@@ -191,9 +191,11 @@ function GruppenKarte({ paket }: { paket: DokumentenPaket }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dokumentenpakete'] }),
   })
 
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const deleteMut = useMutation({
     mutationFn: () => deleteDokumentenPaket(paket.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dokumentenpakete'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['dokumentenpakete'] }); setDeleteError(null) },
+    onError: (e: Error) => setDeleteError(e.message),
   })
 
   return (
@@ -261,6 +263,12 @@ function GruppenKarte({ paket }: { paket: DokumentenPaket }) {
           </div>
         )}
       </div>
+
+      {deleteError && (
+        <div className="px-5 py-2 bg-red-50 dark:bg-red-950 border-b border-red-100 dark:border-red-900 text-sm text-red-600 dark:text-red-400">
+          {deleteError}
+        </div>
+      )}
 
       {/* Dokumente innerhalb der Gruppe */}
       <div className="px-5 py-3">
