@@ -1115,6 +1115,23 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
         {"auftrag_zu_angebot_id": None}
     )
+    # Auftrag-Rückverweis bereinigen und Status zurücksetzen wenn keine Dokumente mehr
+    _auftrag_ref = db.query(Rechnung).filter(
+        Rechnung.proforma_zu_auftrag_id == rechnung_id,
+        Rechnung.dokument_typ == "Auftrag",
+    ).first()
+    if _auftrag_ref:
+        _auftrag_ref.proforma_zu_auftrag_id = None
+        if not _auftrag_ref.rechnung_zu_auftrag_id and not _auftrag_ref.lieferschein_zu_auftrag_id:
+            _auftrag_ref.auftrag_status = "offen"
+    _auftrag_ref2 = db.query(Rechnung).filter(
+        Rechnung.rechnung_zu_auftrag_id == rechnung_id,
+        Rechnung.dokument_typ == "Auftrag",
+    ).first()
+    if _auftrag_ref2:
+        _auftrag_ref2.rechnung_zu_auftrag_id = None
+        if not _auftrag_ref2.proforma_zu_auftrag_id and not _auftrag_ref2.lieferschein_zu_auftrag_id:
+            _auftrag_ref2.auftrag_status = "offen"
     db.delete(rechnung)
     db.commit()
 
