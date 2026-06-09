@@ -78,9 +78,20 @@ export async function getApiBase(): Promise<string> {
   return getBaseUrl()
 }
 
-/** Öffnet eine URL in Tauri per Shell-Plugin (Systembrowser), im Browser per window.open. */
-/** Öffnet eine URL (PDF, Export) in einem neuen Tauri-Fenster bzw. Browser-Tab. */
+/** Öffnet eine URL (PDF, Export) in einem neuen Tauri-Fenster bzw. Browser-Tab.
+ *  CSV/ZIP-URLs werden immer als Datei-Download behandelt (kein WebviewWindow). */
 export async function openUrl(url: string) {
+  const isDownload = url.includes('format=csv') || /\.(csv|zip)(\?|$)/i.test(url)
+  if (isDownload) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Download fehlgeschlagen: ${res.status}`)
+    const blob = await res.blob()
+    const cd = res.headers.get('Content-Disposition') ?? ''
+    const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
+    const ext = url.includes('format=csv') ? '.csv' : '.zip'
+    _triggerBlobDownload(blob, match?.[1]?.trim() ?? `export${ext}`)
+    return
+  }
   if (isTauri()) {
     const isLocal = url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')
       || url.startsWith('blob:')
