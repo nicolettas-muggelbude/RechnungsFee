@@ -786,37 +786,37 @@ export function AuftraegePage() {
           )}
           {auftraege && auftraege.length > 0 && (
             <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kunde</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                </tr>
+              </thead>
               <tbody>
-                {auftraege.map(a => {
-                  const brutto = parseFloat(a.brutto_gesamt as any) || 0
-                  const isSelected = a.id === selId
-                  return (
-                    <tr
-                      key={a.id}
-                      onClick={() => { setSelId(a.id); setZeigFormular(false) }}
-                      className={`cursor-pointer border-b border-slate-100 dark:border-slate-700 transition-colors ${
-                        isSelected ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800 dark:text-slate-100 truncate">
-                          {a.rechnungsnummer ?? '—'}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                          {a.kunde_name ?? a.partner_freitext ?? '—'} · {formatDatum(a.datum)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                          {brutto.toFixed(2).replace('.', ',')} €
-                        </div>
-                        <div className="mt-0.5 flex justify-end">
-                          <StatusBadge status={a.auftrag_status} />
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {auftraege.map(a => (
+                  <tr
+                    key={a.id}
+                    onClick={() => { setSelId(a.id); setZeigFormular(false) }}
+                    className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
+                      selId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
+                    }`}
+                  >
+                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{a.rechnungsnummer}</td>
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(a.datum)}</td>
+                    <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{a.kunde_name ?? a.partner_freitext ?? '—'}</td>
+                    <td className="px-5 py-3 text-right text-slate-700 dark:text-slate-200">
+                      {(parseFloat(a.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')} €
+                    </td>
+                    <td className="px-5 py-3 text-center">
+                      {a.ist_entwurf
+                        ? <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
+                        : <StatusBadge status={a.auftrag_status} />}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
