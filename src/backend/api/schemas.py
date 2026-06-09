@@ -64,6 +64,7 @@ class UnternehmenBase(BaseModel):
     lieferschein_aktiv: bool = False
     angebote_aktiv: bool = False
     proforma_aktiv: bool = False
+    auftraege_aktiv: bool = False
 
     @field_validator("versteuerungsart")
     @classmethod
