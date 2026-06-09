@@ -733,13 +733,13 @@ export function AuftraegePage() {
 
   return (
     <div className="flex h-full">
-      {/* Liste */}
-      <div className={`flex flex-col ${selAuftrag || zeigFormular ? 'hidden md:flex md:w-96 shrink-0' : 'flex-1'} border-r border-slate-200 dark:border-slate-700`}>
+      {/* Liste – schrumpft auf 1/3 wenn Formular aktiv */}
+      <div className={`${zeigFormular ? 'w-1/3 min-w-[260px] shrink-0' : selAuftrag ? 'hidden md:flex md:w-1/3 md:min-w-[260px] md:shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <h1 className="font-semibold text-slate-800 dark:text-slate-100">Aufträge</h1>
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Aufträge</h1>
           <button onClick={handleNeu}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
             + Neuer Auftrag
           </button>
         </div>
@@ -747,64 +747,83 @@ export function AuftraegePage() {
         {/* Einträge */}
         <div className="flex-1 overflow-y-auto">
           {isLoading && (
-            <div className="p-6 text-center text-slate-400 text-sm">Lade…</div>
+            <div className="p-6 animate-pulse space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
+            </div>
           )}
           {!isLoading && (!auftraege || auftraege.length === 0) && (
-            <div className="p-6 text-center text-slate-400 text-sm">Noch keine Aufträge</div>
+            <div className="p-10 text-center">
+              <p className="text-slate-500 dark:text-slate-400">Noch keine Aufträge vorhanden.</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Klicke auf „+ Neuer Auftrag" um zu starten.</p>
+            </div>
           )}
-          {auftraege?.map(a => {
-            const brutto = parseFloat(a.brutto_gesamt as any) || 0
-            const isSelected = a.id === selId
-            return (
-              <button
-                key={a.id}
-                onClick={() => { setSelId(a.id); setZeigFormular(false) }}
-                className={`w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-700 transition-colors ${
-                  isSelected ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-sm text-slate-800 dark:text-slate-100 truncate">
-                    {a.rechnungsnummer ?? '—'}
-                  </span>
-                  <StatusBadge status={a.auftrag_status} />
-                </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {a.kunde_name ?? a.partner_freitext ?? '—'} · {formatDatum(a.datum)}
-                  </span>
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200 shrink-0">
-                    {brutto.toFixed(2).replace('.', ',')} €
-                  </span>
-                </div>
-              </button>
-            )
-          })}
+          {auftraege && auftraege.length > 0 && (
+            <table className="w-full text-sm">
+              <tbody>
+                {auftraege.map(a => {
+                  const brutto = parseFloat(a.brutto_gesamt as any) || 0
+                  const isSelected = a.id === selId
+                  return (
+                    <tr
+                      key={a.id}
+                      onClick={() => { setSelId(a.id); setZeigFormular(false) }}
+                      className={`cursor-pointer border-b border-slate-100 dark:border-slate-700 transition-colors ${
+                        isSelected ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-800 dark:text-slate-100 truncate">
+                          {a.rechnungsnummer ?? '—'}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                          {a.kunde_name ?? a.partner_freitext ?? '—'} · {formatDatum(a.datum)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                          {brutto.toFixed(2).replace('.', ',')} €
+                        </div>
+                        <div className="mt-0.5 flex justify-end">
+                          <StatusBadge status={a.auftrag_status} />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* Detail / Formular */}
-      {(zeigFormular || selAuftrag) && (
-        <div className="flex-1 overflow-y-auto">
-          {zeigFormular ? (
-            <div className="p-6 max-w-2xl mx-auto">
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-5">
-                {editAuftrag ? 'Auftrag bearbeiten' : 'Neuer Auftrag'}
-              </h2>
-              <AuftragFormular
-                initial={editAuftrag}
-                onSpeichern={handleSpeichern}
-                onAbbrechen={() => { setZeigFormular(false); setEditAuftrag(undefined) }}
-              />
-            </div>
-          ) : selAuftrag ? (
-            <AuftragDetail
-              auftrag={selAuftrag}
-              onEdit={() => handleEdit(selAuftrag)}
-              onClose={() => setSelId(null)}
-              onDelete={() => handleDelete(selAuftrag.id)}
+      {/* Rechter Panel: Formular oder Detail */}
+      {zeigFormular && (
+        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-auto">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+              {editAuftrag ? 'Auftrag bearbeiten' : 'Neuer Auftrag'}
+            </h3>
+            <button type="button" onClick={() => { setZeigFormular(false); setEditAuftrag(undefined) }}
+              className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
+          </div>
+          <div className="p-6">
+            <AuftragFormular
+              initial={editAuftrag}
+              onSpeichern={handleSpeichern}
+              onAbbrechen={() => { setZeigFormular(false); setEditAuftrag(undefined) }}
             />
-          ) : null}
+          </div>
+        </div>
+      )}
+
+      {selAuftrag && !zeigFormular && (
+        <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+          <AuftragDetail
+            auftrag={selAuftrag}
+            onEdit={() => handleEdit(selAuftrag)}
+            onClose={() => setSelId(null)}
+            onDelete={() => handleDelete(selAuftrag.id)}
+          />
         </div>
       )}
     </div>
