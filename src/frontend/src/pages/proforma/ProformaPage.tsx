@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
-  getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
+  getProformas, getKunden, getUstSaetze, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
-  rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, angebotStatusSetzen,
+  rechnungAusProforma,
   getApiBase, openUrl, getRechnungPdf, isTauri, openInPdfWindow,
   type Rechnung, type ArtikelSuche,
 } from '../../api/client'
@@ -24,34 +24,11 @@ function heuteIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function inXTagen(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-
 const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
 const selectCls = `${inputCls} bg-white dark:bg-slate-700`
 
-const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  offen:      { label: 'Offen',      cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
-  akzeptiert: { label: 'Akzeptiert', cls: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border-green-200 dark:border-green-700' },
-  abgelehnt:  { label: 'Abgelehnt', cls: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 border-red-200 dark:border-red-700' },
-  abgelaufen: { label: 'Abgelaufen', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700' },
-}
-
-function StatusBadge({ status }: { status: string | null }) {
-  const s = status ?? 'offen'
-  const info = STATUS_LABEL[s] ?? STATUS_LABEL.offen
-  return (
-    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded border ${info.cls}`}>
-      {info.label}
-    </span>
-  )
-}
-
 // ---------------------------------------------------------------------------
-// Positions-Tabelle
+// Positions-Tabelle (identisch zu Angebote)
 // ---------------------------------------------------------------------------
 
 interface Pos {
@@ -101,87 +78,60 @@ function PositionenTabelle({
     return { netto: acc.netto + netto, ust: acc.ust + ustBet, brutto: acc.brutto + brutto }
   }, { netto: 0, ust: 0, brutto: 0 })
 
-  const cellInput = "w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
-
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50 dark:bg-slate-900">
-          <tr>
-            <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
-            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
-            <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
-            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
-              {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
-            </th>
-            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
-            <th className="px-3 py-2 w-8" />
-          </tr>
-        </thead>
-        <tbody>
-          {positionen.map((pos, i) => (
-            <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-              <td className="px-2 py-1.5">
-                <ArtikelAutocomplete
-                  value={pos.beschreibung}
-                  onChange={v => update(i, 'beschreibung', v)}
-                  onArtikelWahl={a => onArtikelWahl(i, a)}
-                  placeholder="Beschreibung oder Artikel suchen"
-                  inputClassName="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs placeholder-slate-400 dark:placeholder-slate-500"
-                />
-              </td>
-              <td className="px-2 py-1.5">
-                <input value={pos.menge} onChange={e => update(i, 'menge', e.target.value)}
-                  type="text" className={`${cellInput} text-right`} />
-              </td>
-              <td className="px-2 py-1.5">
-                <input value={pos.einheit} onChange={e => update(i, 'einheit', e.target.value)}
-                  placeholder="Stk." className={cellInput} />
-              </td>
-              <td className="px-2 py-1.5">
-                <input value={pos.einzelpreis} onChange={e => update(i, 'einzelpreis', e.target.value)}
-                  type="text" placeholder="0,00" className={`${cellInput} text-right`} />
-              </td>
-              <td className="px-2 py-1.5">
-                <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
-                  className={`${cellInput} text-right`}>
-                  {ustSaetze.map(u => (
-                    <option key={u.satz} value={u.satz}>{u.satz} %</option>
-                  ))}
-                </select>
-              </td>
-              <td className="px-2 py-1.5 text-center">
-                {positionen.length > 1 && (
-                  <button type="button" onClick={() => onChange(positionen.filter((_, idx) => idx !== i))}
-                    className="text-slate-300 hover:text-red-500 text-base leading-none">×</button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-          <tr>
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
-              Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
-            </td>
-            <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
-              {gesamt.netto.toFixed(2).replace('.', ',')} €
-            </td>
-          </tr>
-          <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
-              {gesamt.ust.toFixed(2).replace('.', ',')} €
-            </td>
-          </tr>
-          <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
-            <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
-              {gesamt.brutto.toFixed(2).replace('.', ',')} €
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+    <div className="space-y-2">
+      {positionen.map((pos, i) => (
+        <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2">
+          <div className="flex gap-2 items-start">
+            <div className="flex-1">
+              <ArtikelAutocomplete
+                value={pos.beschreibung}
+                onChange={v => update(i, 'beschreibung', v)}
+                onSelect={a => onArtikelWahl(i, a)}
+                placeholder="Beschreibung"
+                className={inputCls}
+              />
+            </div>
+            {positionen.length > 1 && (
+              <button type="button"
+                onClick={() => onChange(positionen.filter((_, idx) => idx !== i))}
+                className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 text-lg leading-none mt-2">×</button>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400">Menge</label>
+              <input type="number" value={pos.menge} onChange={e => update(i, 'menge', e.target.value)}
+                className={inputCls} min="0.001" step="any" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400">Einheit</label>
+              <input type="text" value={pos.einheit} onChange={e => update(i, 'einheit', e.target.value)}
+                className={inputCls} placeholder="Stk." />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400">
+                {eingabeModus === 'netto' ? 'Einzelpreis (Netto)' : 'Einzelpreis (Brutto)'}
+              </label>
+              <input type="number" value={pos.einzelpreis} onChange={e => update(i, 'einzelpreis', e.target.value)}
+                className={inputCls} min="0" step="0.01" placeholder="0.00" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400">USt %</label>
+              <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)} className={selectCls}>
+                {ustSaetze.map(u => <option key={u.satz} value={u.satz}>{u.satz} %</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      ))}
+      <div className="text-right text-sm text-slate-600 dark:text-slate-300 pr-1">
+        <span className="text-slate-400 dark:text-slate-500 mr-2">Gesamt:</span>
+        <strong>{gesamt.brutto.toFixed(2).replace('.', ',')} €</strong>
+        <span className="text-slate-400 dark:text-slate-500 ml-2 text-xs">
+          ({gesamt.netto.toFixed(2).replace('.', ',')} € + {gesamt.ust.toFixed(2).replace('.', ',')} € USt)
+        </span>
+      </div>
     </div>
   )
 }
@@ -190,7 +140,7 @@ function PositionenTabelle({
 // Formular
 // ---------------------------------------------------------------------------
 
-function AngebotFormular({
+function ProformaFormular({
   initial,
   vorKundeId,
   onSpeichern,
@@ -207,21 +157,12 @@ function AngebotFormular({
 
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: ustSaetze } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze })
-  const { data: pakete } = useQuery({ queryKey: ['dokumentenpakete'], queryFn: getDokumentenPakete })
 
   const [kundeId, setKundeId] = useState(initial?.kunde_id?.toString() ?? vorKundeId ?? '')
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
-  const [gueltigBis, setGueltigBis] = useState(initial?.gueltig_bis ?? inXTagen(30))
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
-  const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>('brutto')
 
-  // Automatisch auf Netto wechseln wenn eine Firma (B2B) gewählt wird
-  useEffect(() => {
-    if (!kundeId || !kunden) return
-    const k = kunden.find(k => String(k.id) === kundeId)
-    if (k) setEingabeModus(k.firmenname?.trim() ? 'netto' : 'brutto')
-  }, [kundeId, kunden])
   const ustSaetzeListe = ustSaetze?.filter(u => u.ist_aktiv) ?? []
   const defaultSatz = ustSaetze?.find(u => u.ist_default)?.satz
     ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
@@ -240,15 +181,6 @@ function AngebotFormular({
     return [leerePos()]
   })
 
-  // Sobald UstSätze geladen sind, default-Satz der leeren Positionen korrigieren
-  useEffect(() => {
-    if (!ustSaetze?.length || initial) return
-    setPositionen(prev => prev.map(p =>
-      p.einzelpreis === '' ? { ...p, ust_satz: defaultSatz } : p
-    ))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ustSaetze])
-
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     const ust_satz = a.differenzbesteuerung ? '0'
       : (ustSaetze?.find(u => parseFloat(u.satz) === parseFloat(a.steuersatz))?.satz ?? a.steuersatz)
@@ -256,21 +188,13 @@ function AngebotFormular({
       ? parseFloat(a.vk_netto).toFixed(2)
       : parseFloat(a.vk_brutto).toFixed(2)
     setPositionen(prev => prev.map((p, idx) =>
-      idx !== i ? p : {
-        ...p,
-        beschreibung: a.bezeichnung,
-        einheit: a.einheit,
-        einzelpreis: preis,
-        ust_satz,
-        artikel_id: a.id,
-      }
+      idx !== i ? p : { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, einzelpreis: preis, ust_satz, artikel_id: a.id }
     ))
   }
 
-  async function submit(e: React.FormEvent, istEntwurf: boolean) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!kundeId) { setFehler('Bitte einen Kunden wählen.'); return }
-    if (!gueltigBis) { setFehler('Gültig-bis-Datum ist erforderlich.'); return }
     if (positionen.some(p => !p.beschreibung.trim())) { setFehler('Alle Positionen benötigen eine Beschreibung.'); return }
 
     setLaedt(true)
@@ -291,12 +215,10 @@ function AngebotFormular({
       const payload = {
         typ: 'ausgang' as const,
         datum,
-        gueltig_bis: gueltigBis,
         kunde_id: parseInt(kundeId),
         notizen: notizen || undefined,
-        dokument_typ: 'Angebot' as const,
-        dokumentenpaket_id: paketId ? parseInt(paketId) : undefined,
-        ist_entwurf: istEntwurf,
+        dokument_typ: 'Proforma' as const,
+        ist_entwurf: false,
         positionen: posPayload,
       }
 
@@ -306,7 +228,7 @@ function AngebotFormular({
       } else {
         result = await createRechnung(payload)
       }
-      qc.invalidateQueries({ queryKey: ['angebote'] })
+      qc.invalidateQueries({ queryKey: ['proformas'] })
       onSpeichern(result.id)
     } catch (e: any) {
       setFehler(e?.message ?? 'Fehler beim Speichern.')
@@ -329,25 +251,9 @@ function AngebotFormular({
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Angebotsdatum</label>
-          <input type="date" value={datum} onChange={e => setDatum(e.target.value)} className={inputCls} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Gültig bis *</label>
-          <input type="date" value={gueltigBis} onChange={e => setGueltigBis(e.target.value)} className={inputCls} required />
-        </div>
-      </div>
-
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Dokumentenpaket</label>
-        <select value={paketId} onChange={e => setPaketId(e.target.value)} className={selectCls}>
-          <option value="">— Kein Paket —</option>
-          {pakete?.filter(p => p.aktiv).map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Datum</label>
+        <input type="date" value={datum} onChange={e => setDatum(e.target.value)} className={inputCls} />
       </div>
 
       <div>
@@ -388,13 +294,9 @@ function AngebotFormular({
           className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 dark:text-slate-300 transition-colors">
           Abbrechen
         </button>
-        <button type="button" disabled={laedt} onClick={(e) => submit(e, true)}
-          className="flex-1 px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-          📝 Entwurf speichern
-        </button>
-        <button type="button" disabled={laedt} onClick={(e) => submit(e, false)}
+        <button type="button" disabled={laedt} onClick={submit}
           className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {laedt ? 'Speichern…' : initial ? '✓ Speichern' : '✓ Angebot erstellen'}
+          {laedt ? 'Speichern…' : initial ? '✓ Speichern' : '✓ Proforma erstellen'}
         </button>
       </div>
     </form>
@@ -405,42 +307,29 @@ function AngebotFormular({
 // Detail-Panel
 // ---------------------------------------------------------------------------
 
-function AngebotDetail({
-  angebot,
+function ProformaDetail({
+  proforma,
   onEdit,
   onClose,
   onDelete,
 }: {
-  angebot: Rechnung
+  proforma: Rechnung
   onEdit: () => void
   onClose: () => void
   onDelete: () => void
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const [statusLaedt, setStatusLaedt] = useState(false)
   const [konvLaedt, setKonvLaedt] = useState(false)
-  const [lsLaedt, setLsLaedt] = useState(false)
-  const [pfLaedt, setPfLaedt] = useState(false)
   const [pdfLaedt, setPdfLaedt] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
-  const [finLaedt, setFinLaedt] = useState(false)
 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
 
-  async function handleFinalisieren() {
-    setFinLaedt(true)
-    try {
-      await updateRechnung(angebot.id, { ist_entwurf: false })
-      qc.invalidateQueries({ queryKey: ['angebote'] })
-    } catch (e: any) { setFehler(e?.message) }
-    finally { setFinLaedt(false) }
-  }
-
   async function fetchPdfBlob(): Promise<string> {
-    const blob = await getRechnungPdf(angebot.id)
+    const blob = await getRechnungPdf(proforma.id)
     return URL.createObjectURL(blob)
   }
 
@@ -449,7 +338,7 @@ function AngebotDetail({
     try {
       const blobUrl = await fetchPdfBlob()
       if (isTauri()) {
-        openInPdfWindow(blobUrl, `Angebot ${angebot.rechnungsnummer ?? ''}`)
+        openInPdfWindow(blobUrl, `Proforma ${proforma.rechnungsnummer ?? ''}`)
       } else {
         window.open(blobUrl, '_blank')
       }
@@ -462,7 +351,7 @@ function AngebotDetail({
     try {
       const blobUrl = await fetchPdfBlob()
       if (isTauri()) {
-        openInPdfWindow(blobUrl, 'Angebot drucken')
+        openInPdfWindow(blobUrl, 'Proforma drucken')
         setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
       } else {
         const win = window.open(blobUrl, '_blank')
@@ -476,22 +365,20 @@ function AngebotDetail({
     const email = mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
 
-    // PDF als Download bereitstellen
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      await openUrl(`${base}/rechnungen/${angebot.id}/pdf?download=1`)
+      await openUrl(`${base}/rechnungen/${proforma.id}/pdf?download=1`)
     } finally { setPdfLaedt(false) }
 
-    const datumDe = angebot.datum.split('-').reverse().join('.')
-    const gueltigDe = angebot.gueltig_bis ? angebot.gueltig_bis.split('-').reverse().join('.') : '—'
-    const kundeName = angebot.kunde_name ?? angebot.partner_freitext ?? ''
+    const datumDe = proforma.datum.split('-').reverse().join('.')
+    const kundeName = proforma.kunde_name ?? proforma.partner_freitext ?? ''
     const firmenname = unternehmen?.firmenname ?? [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ') ?? 'RechnungsFee'
-    const brutto = (parseFloat(angebot.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
+    const brutto = (parseFloat(proforma.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
 
-    const subject = encodeURIComponent(`Angebot ${angebot.rechnungsnummer ?? ''} – ${firmenname}`)
+    const subject = encodeURIComponent(`Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} – ${firmenname}`)
     const body = encodeURIComponent(
-      `Guten Tag ${kundeName},\n\nanbei finden Sie unser Angebot ${angebot.rechnungsnummer ?? ''} vom ${datumDe}.\n\nAngebotsbetrag: ${brutto} €\nGültig bis: ${gueltigDe}\n\nBitte fügen Sie die heruntergeladene PDF-Datei als Anhang hinzu.\n\nMit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`
+      `Guten Tag ${kundeName},\n\nanbei findest du unsere Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} vom ${datumDe}.\n\nBetrag: ${brutto} €\n\nBitte füge die heruntergeladene PDF-Datei als Anhang hinzu.\n\nMit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`
     )
     const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
     if (isTauri()) {
@@ -503,46 +390,17 @@ function AngebotDetail({
     setMailAdresse('')
   }
 
-  async function handleStatusChange(s: string) {
-    setStatusLaedt(true)
-    try {
-      await angebotStatusSetzen(angebot.id, s)
-      qc.invalidateQueries({ queryKey: ['angebote'] })
-    } catch (e: any) { setFehler(e?.message) }
-    finally { setStatusLaedt(false) }
-  }
-
   async function handleRechnungErstellen() {
     setKonvLaedt(true)
     try {
-      const re = await rechnungAusAngebot(angebot.id)
-      qc.invalidateQueries({ queryKey: ['angebote'] })
+      const re = await rechnungAusProforma(proforma.id)
+      qc.invalidateQueries({ queryKey: ['proformas'] })
       navigate(`/rechnungen?id=${re.id}`)
     } catch (e: any) { setFehler(e?.message) }
     finally { setKonvLaedt(false) }
   }
 
-  async function handleLieferscheinErstellen() {
-    setLsLaedt(true)
-    try {
-      const ls = await lieferscheinAusAngebot(angebot.id)
-      qc.invalidateQueries({ queryKey: ['angebote'] })
-      navigate(`/lieferscheine?id=${ls.id}`)
-    } catch (e: any) { setFehler(e?.message) }
-    finally { setLsLaedt(false) }
-  }
-
-  async function handleProformaErstellen() {
-    setPfLaedt(true)
-    try {
-      const pf = await proformaAusAngebot(angebot.id)
-      qc.invalidateQueries({ queryKey: ['angebote'] })
-      navigate(`/proformas?id=${pf.id}`)
-    } catch (e: any) { setFehler(e?.message) }
-    finally { setPfLaedt(false) }
-  }
-
-  const brutto = parseFloat(angebot.brutto_gesamt as any) || 0
+  const brutto = parseFloat(proforma.brutto_gesamt as any) || 0
 
   const btnBase = 'flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
   const btnNeutral = `${btnBase} border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300`
@@ -551,11 +409,11 @@ function AngebotDetail({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header – wie RechnungenPage */}
+      {/* Header */}
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
         <div>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">{angebot.rechnungsnummer ?? '(keine Nummer)'}</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Angebot</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">{proforma.rechnungsnummer ?? '(keine Nummer)'}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Proforma-Rechnung</p>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
       </div>
@@ -563,78 +421,32 @@ function AngebotDetail({
       {/* Inhalt */}
       <div className="p-5 space-y-5 flex-1 overflow-y-auto">
 
-        {/* Entwurf-Banner */}
-        {angebot.ist_entwurf && (
-          <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
-            <span className="text-sm text-amber-800 dark:text-amber-300">
-              📝 <strong>Entwurf</strong> – noch nicht versendbar
-            </span>
-            <button onClick={handleFinalisieren} disabled={finLaedt}
-              className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 shrink-0">
-              {finLaedt ? '…' : 'Finalisieren'}
-            </button>
-          </div>
-        )}
-
-        {/* Aktionsleiste – direkt oben wie bei Rechnungen */}
+        {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
-          <button onClick={handleDrucken} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
+          <button onClick={handleDrucken} disabled={pdfLaedt} className={btnNeutral}>
             🖨️ Drucken
           </button>
-          <button onClick={handlePdf} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
+          <button onClick={handlePdf} disabled={pdfLaedt} className={btnNeutral}>
             📄 {pdfLaedt ? 'Lädt…' : 'PDF öffnen'}
           </button>
-          <button onClick={() => handleMail()} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
+          <button onClick={() => handleMail()} disabled={pdfLaedt} className={btnNeutral}>
             ✉️ Mail senden
           </button>
           <button onClick={onEdit} className={btnNeutral}>
             ✏️ Bearbeiten
           </button>
-          {!angebot.rechnung_zu_angebot_id ? (
+          {!proforma.rechnung_zu_proforma_id ? (
             <button
               onClick={handleRechnungErstellen}
-              disabled={konvLaedt || !!angebot.ist_entwurf || !!angebot.lieferschein_zu_angebot_id || angebot.angebot_status !== 'bestaetigt'}
-              title={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : angebot.lieferschein_zu_angebot_id ? 'Zuerst Lieferschein → Rechnung umwandeln' : angebot.angebot_status !== 'bestaetigt' ? 'Nur bei Status „Bestätigt" möglich' : undefined}
+              disabled={konvLaedt}
               className={btnGreen}
             >
               {konvLaedt ? '⏳ Erstelle…' : '→ Rechnung'}
             </button>
           ) : (
-            <button onClick={() => navigate(`/rechnungen?id=${angebot.rechnung_zu_angebot_id}`)} className={btnGreen}>
-              → {angebot.rechnung_zu_angebot_nr ?? `RE #${angebot.rechnung_zu_angebot_id}`}
+            <button onClick={() => navigate(`/rechnungen?id=${proforma.rechnung_zu_proforma_id}`)} className={btnGreen}>
+              → {proforma.rechnung_zu_proforma_nr ?? `RE #${proforma.rechnung_zu_proforma_id}`}
             </button>
-          )}
-          {unternehmen?.lieferschein_aktiv && (
-            !angebot.lieferschein_zu_angebot_id ? (
-              <button
-                onClick={handleLieferscheinErstellen}
-                disabled={lsLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'bestaetigt'}
-                title={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : angebot.angebot_status !== 'bestaetigt' ? 'Nur bei Status „Bestätigt" möglich' : undefined}
-                className={btnGreen}
-              >
-                {lsLaedt ? '⏳ Erstelle…' : '→ Lieferschein'}
-              </button>
-            ) : (
-              <button onClick={() => navigate(`/lieferscheine?id=${angebot.lieferschein_zu_angebot_id}`)} className={btnGreen}>
-                → {angebot.lieferschein_zu_angebot_nr ?? `LS #${angebot.lieferschein_zu_angebot_id}`}
-              </button>
-            )
-          )}
-          {unternehmen?.proforma_aktiv && (
-            !angebot.proforma_zu_angebot_id ? (
-              <button
-                onClick={handleProformaErstellen}
-                disabled={pfLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'bestaetigt'}
-                title={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : angebot.angebot_status !== 'bestaetigt' ? 'Nur bei Status „Bestätigt" möglich' : undefined}
-                className={btnNeutral}
-              >
-                {pfLaedt ? '⏳ Erstelle…' : '→ Proforma'}
-              </button>
-            ) : (
-              <button onClick={() => navigate(`/proformas?id=${angebot.proforma_zu_angebot_id}`)} className={btnNeutral}>
-                → {angebot.proforma_zu_angebot_nr ?? `PRF #${angebot.proforma_zu_angebot_id}`}
-              </button>
-            )
           )}
           <button onClick={onDelete} className={btnRed}>
             🗑 Löschen
@@ -664,23 +476,31 @@ function AngebotDetail({
           </div>
         )}
 
-        {/* Status-Umschalter */}
-        {!angebot.rechnung_zu_angebot_id && (
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
-            <div className="flex gap-1 flex-wrap">
-              {(['offen', 'akzeptiert', 'abgelehnt', 'abgelaufen'] as const).map(s => (
-                <button key={s} disabled={angebot.angebot_status === s || statusLaedt}
-                  onClick={() => handleStatusChange(s)}
-                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors disabled:opacity-50 ${
-                    angebot.angebot_status === s
-                      ? `${STATUS_LABEL[s].cls} font-medium`
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}>
-                  {STATUS_LABEL[s].label}
+        {/* Verlinkungen */}
+        {(proforma.angebot_zu_proforma_id || proforma.rechnung_zu_proforma_id) && (
+          <div className="space-y-1">
+            {proforma.angebot_zu_proforma_id && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Aus Angebot:</span>
+                <button
+                  onClick={() => navigate(`/angebote?id=${proforma.angebot_zu_proforma_id}`)}
+                  className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  {proforma.angebot_zu_proforma_nr ?? `ANG #${proforma.angebot_zu_proforma_id}`}
                 </button>
-              ))}
-            </div>
+              </div>
+            )}
+            {proforma.rechnung_zu_proforma_id && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Rechnung erstellt:</span>
+                <button
+                  onClick={() => navigate(`/rechnungen?id=${proforma.rechnung_zu_proforma_id}`)}
+                  className="text-green-600 dark:text-green-400 hover:underline font-medium"
+                >
+                  {proforma.rechnung_zu_proforma_nr ?? `RE #${proforma.rechnung_zu_proforma_id}`}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -688,22 +508,22 @@ function AngebotDetail({
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Kunde</span>
-            <span className="font-medium text-slate-800 dark:text-slate-100 text-right">{angebot.kunde_name ?? angebot.partner_freitext ?? '—'}</span>
+            <span className="font-medium text-slate-800 dark:text-slate-100 text-right">{proforma.kunde_name ?? proforma.partner_freitext ?? '—'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500 dark:text-slate-400">Datum</span>
-            <span className="text-slate-700 dark:text-slate-200">{formatDatum(angebot.datum)}</span>
+            <span className="text-slate-700 dark:text-slate-200">{formatDatum(proforma.datum)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500 dark:text-slate-400">Gültig bis</span>
-            <span className={`font-medium ${angebot.gueltig_bis && angebot.gueltig_bis < heuteIso() && angebot.angebot_status === 'offen' ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
-              {formatDatum(angebot.gueltig_bis)}
+            <span className="text-slate-500 dark:text-slate-400">Betrag</span>
+            <span className="font-bold text-slate-800 dark:text-slate-100">
+              {brutto.toFixed(2).replace('.', ',')} €
             </span>
           </div>
         </div>
 
         {/* Positionen */}
-        {angebot.positionen && angebot.positionen.length > 0 && (
+        {proforma.positionen && proforma.positionen.length > 0 && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Positionen</p>
             <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
@@ -717,7 +537,7 @@ function AngebotDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {angebot.positionen.map((pos, i) => (
+                  {proforma.positionen.map((pos, i) => (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {pos.menge !== '1' && <span className="text-slate-400 dark:text-slate-500 mr-1">{pos.menge}×</span>}
@@ -748,10 +568,10 @@ function AngebotDetail({
           </div>
         )}
 
-        {angebot.notizen && (
+        {proforma.notizen && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Notizen</p>
-            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{angebot.notizen}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{proforma.notizen}</p>
           </div>
         )}
 
@@ -765,67 +585,52 @@ function AngebotDetail({
 // Haupt-Seite
 // ---------------------------------------------------------------------------
 
-export function AngebotePage() {
+export function ProformaPage() {
   const qc = useQueryClient()
-  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
-  const [vorKundeId, setVorKundeId] = useState<string | null>(null)
 
-  // ?kunde_id=X aus KundenPage → Formular direkt öffnen
-  useEffect(() => {
-    const kid = searchParams.get('kunde_id')
-    if (kid) {
-      setVorKundeId(kid)
-      setFormModus('neu')
-      setSearchParams({}, { replace: true })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const { data: angebote, isLoading } = useQuery({
-    queryKey: ['angebote'],
-    queryFn: getAngebote,
+  const { data: proformas, isLoading } = useQuery({
+    queryKey: ['proformas'],
+    queryFn: getProformas,
   })
 
   const deleteMut = useMutation({
     mutationFn: deleteRechnung,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['angebote'] }); setSelectedId(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['proformas'] }); setSelectedId(null) },
   })
 
-  const selected = angebote?.find(a => a.id === selectedId) ?? null
+  const selected = proformas?.find(p => p.id === selectedId) ?? null
 
   function handleDelete() {
     if (!selected) return
-    if (!confirm(`Angebot ${selected.rechnungsnummer} wirklich löschen?`)) return
+    if (!confirm(`Proforma ${selected.rechnungsnummer} wirklich löschen?`)) return
     deleteMut.mutate(selected.id)
   }
 
   return (
     <div className="flex h-full">
-      {/* Liste – schrumpft auf 1/3 wenn Formular aktiv */}
+      {/* Liste */}
       <div className={`${formModus ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Angebote</h1>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Proforma</h1>
           <button
             onClick={() => { setFormModus('neu'); setSelectedId(null) }}
             className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
           >
-            + Neues Angebot
+            + Neue Proforma
           </button>
         </div>
 
-          {/* Tabelle */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
             </div>
-          ) : !angebote?.length ? (
+          ) : !proformas?.length ? (
             <div className="p-10 text-center">
-              <p className="text-slate-500 dark:text-slate-400">Noch keine Angebote vorhanden.</p>
-              <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Klicke auf „+ Neues Angebot" um zu starten.</p>
+              <p className="text-slate-500 dark:text-slate-400">Noch keine Proforma-Rechnungen vorhanden.</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Klicke auf „+ Neue Proforma" oder erstelle eine aus einem Angebot.</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -833,34 +638,31 @@ export function AngebotePage() {
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gültig bis</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kunde</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {angebote.map(a => (
+                {proformas.map(p => (
                   <tr
-                    key={a.id}
-                    onClick={() => { setSelectedId(a.id); setFormModus(null) }}
+                    key={p.id}
+                    onClick={() => { setSelectedId(p.id); setFormModus(null) }}
                     className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
-                      selectedId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
+                      selectedId === p.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
                     }`}
                   >
-                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{a.rechnungsnummer}</td>
-                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(a.datum)}</td>
-                    <td className={`px-5 py-3 font-medium ${a.gueltig_bis && a.gueltig_bis < heuteIso() && a.angebot_status === 'offen' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {formatDatum(a.gueltig_bis)}
-                    </td>
-                    <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{a.kunde_name ?? a.partner_freitext ?? '—'}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{p.rechnungsnummer}</td>
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(p.datum)}</td>
+                    <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{p.kunde_name ?? p.partner_freitext ?? '—'}</td>
                     <td className="px-5 py-3 text-right text-slate-700 dark:text-slate-200">
-                      {(parseFloat(a.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')} €
+                      {(parseFloat(p.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')} €
                     </td>
                     <td className="px-5 py-3 text-center">
-                      {a.ist_entwurf
-                        ? <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
-                        : <StatusBadge status={a.angebot_status} />}
+                      {p.rechnung_zu_proforma_id
+                        ? <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">Abgerechnet</span>
+                        : <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Offen</span>
+                      }
                     </td>
                   </tr>
                 ))}
@@ -875,25 +677,26 @@ export function AngebotePage() {
         <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-              {formModus === 'bearbeiten' ? 'Angebot bearbeiten' : 'Neues Angebot'}
+              {formModus === 'bearbeiten' ? 'Proforma bearbeiten' : 'Neue Proforma-Rechnung'}
             </h3>
-            <button type="button" onClick={() => { setFormModus(null); setVorKundeId(null) }}
+            <button type="button" onClick={() => setFormModus(null)}
               className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
           </div>
           <div className="p-6">
-            <AngebotFormular
+            <ProformaFormular
               initial={formModus === 'bearbeiten' && selected ? selected : undefined}
-              vorKundeId={formModus === 'neu' ? (vorKundeId ?? undefined) : undefined}
-              onSpeichern={(id) => { setFormModus(null); setSelectedId(id); setVorKundeId(null) }}
-              onAbbrechen={() => { setFormModus(null); setVorKundeId(null) }}
+              onSpeichern={(id) => { setSelectedId(id); setFormModus(null) }}
+              onAbbrechen={() => setFormModus(null)}
             />
           </div>
         </div>
       )}
-      {selected && !formModus && (
-        <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-          <AngebotDetail
-            angebot={selected}
+
+      {/* Detail-Panel */}
+      {!formModus && selected && (
+        <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
+          <ProformaDetail
+            proforma={selected}
             onEdit={() => setFormModus('bearbeiten')}
             onClose={() => setSelectedId(null)}
             onDelete={handleDelete}

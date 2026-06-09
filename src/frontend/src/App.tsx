@@ -19,6 +19,7 @@ import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
 import { DokumentenpaketePage } from './pages/stammdaten/DokumentenpaketePage'
 import { LieferscheineUebersicht } from './pages/lieferscheine/LieferscheineUebersicht'
 import { AngebotePage } from './pages/angebote/AngebotePage'
+import { ProformaPage } from './pages/proforma/ProformaPage'
 import { ExportPage } from './pages/ExportPage'
 import { EksPage } from './pages/eks/EksPage'
 import { UStVAPage } from './pages/ustva/UStVAPage'
@@ -100,6 +101,7 @@ function AppRoutes() {
           <Route path="/rechnungen" element={<RechnungenPage />} />
           <Route path="/lieferscheine" element={<LieferscheineUebersicht />} />
           <Route path="/angebote" element={<AngebotePage />} />
+          <Route path="/proformas" element={<ProformaPage />} />
           <Route path="/exporte" element={<ExportPage />} />
           <Route path="/eks" element={<EksPage />} />
           <Route path="/ustva" element={<UStVAPage />} />

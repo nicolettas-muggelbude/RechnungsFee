@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete
 
-SCHEMA_VERSION = 58
+SCHEMA_VERSION = 59
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1270,6 +1270,23 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 58"))
             conn.commit()
             print("[Migration] Schema auf Version 58 (EÜR-Zeilennummern Anlage EÜR 2025: 15→17, 16→18, 48→57/60, Skonti→12)")
+
+        if version < 59:
+            unt59 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            re59  = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "proforma_aktiv" not in unt59:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN proforma_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            if "proforma_zu_angebot_id" not in re59:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN proforma_zu_angebot_id INTEGER REFERENCES rechnungen(id)"))
+            if "rechnung_zu_proforma_id" not in re59:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN rechnung_zu_proforma_id INTEGER REFERENCES rechnungen(id)"))
+            conn.execute(text("""
+                INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
+                VALUES ('proforma', 'Proforma-Rechnungen', 'PRF-JJNNNN', 1, 1, NULL)
+            """))
+            conn.execute(text("PRAGMA user_version = 59"))
+            conn.commit()
+            print("[Migration] Schema auf Version 59 (Proforma-Rechnungen: proforma_aktiv + FK-Felder + Nummernkreis)")
 
 
 def _migrate_kategorien() -> None:

@@ -115,8 +115,8 @@ class RechnungCreate(BaseModel):
     @field_validator("dokument_typ")
     @classmethod
     def check_dokument_typ(cls, v: str) -> str:
-        if v not in ("Rechnung", "Gutschrift", "Lieferschein", "Angebot"):
-            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift', 'Lieferschein' oder 'Angebot' sein")
+        if v not in ("Rechnung", "Gutschrift", "Lieferschein", "Angebot", "Proforma"):
+            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift', 'Lieferschein', 'Angebot' oder 'Proforma' sein")
         return v
 
     @model_validator(mode="after")
@@ -127,7 +127,7 @@ class RechnungCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_netto_positionen(self) -> "RechnungCreate":
-        if self.dokument_typ not in ("Lieferschein", "Angebot"):
+        if self.dokument_typ not in ("Lieferschein", "Angebot", "Proforma"):
             for pos in self.positionen:
                 if pos.netto == 0:
                     raise ValueError("Position netto darf nicht 0 sein")
@@ -248,6 +248,14 @@ class RechnungResponse(BaseModel):
     rechnung_zu_angebot_nr: Optional[str] = None  # wird in from_orm_extended befüllt
     lieferschein_zu_angebot_id: Optional[int] = None
     lieferschein_zu_angebot_nr: Optional[str] = None  # wird in from_orm_extended befüllt
+    # Proforma: auf Angebot → welche Proforma daraus entstand
+    proforma_zu_angebot_id: Optional[int] = None
+    proforma_zu_angebot_nr: Optional[str] = None  # wird in from_orm_extended befüllt
+    # Proforma: auf Proforma → welche Rechnung daraus entstand + aus welchem Angebot
+    rechnung_zu_proforma_id: Optional[int] = None
+    rechnung_zu_proforma_nr: Optional[str] = None  # wird in from_orm_extended befüllt
+    angebot_zu_proforma_id: Optional[int] = None   # wird in from_orm_extended befüllt
+    angebot_zu_proforma_nr: Optional[str] = None   # wird in from_orm_extended befüllt
     erstellt_am: datetime
     aktualisiert_am: datetime
 
@@ -336,6 +344,42 @@ class RechnungResponse(BaseModel):
                     linked_ls = session.get(obj.__class__, obj.lieferschein_zu_angebot_id)
                     if linked_ls:
                         data.lieferschein_zu_angebot_nr = linked_ls.rechnungsnummer
+            except Exception:
+                pass
+        # Proforma-Links auflösen
+        if obj.proforma_zu_angebot_id:
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    linked_pf = session.get(obj.__class__, obj.proforma_zu_angebot_id)
+                    if linked_pf:
+                        data.proforma_zu_angebot_nr = linked_pf.rechnungsnummer
+            except Exception:
+                pass
+        if obj.rechnung_zu_proforma_id:
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    linked_re = session.get(obj.__class__, obj.rechnung_zu_proforma_id)
+                    if linked_re:
+                        data.rechnung_zu_proforma_nr = linked_re.rechnungsnummer
+            except Exception:
+                pass
+        # Bei Proforma: Eltern-Angebot ermitteln (Angebot, das proforma_zu_angebot_id == this.id hat)
+        if getattr(obj, "dokument_typ", None) == "Proforma":
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    eltern_ang = session.query(obj.__class__).filter(
+                        obj.__class__.proforma_zu_angebot_id == obj.id,
+                        obj.__class__.dokument_typ == "Angebot",
+                    ).first()
+                    if eltern_ang:
+                        data.angebot_zu_proforma_id = eltern_ang.id
+                        data.angebot_zu_proforma_nr = eltern_ang.rechnungsnummer
             except Exception:
                 pass
         return data

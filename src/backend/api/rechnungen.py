@@ -473,6 +473,10 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             else:
                 count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Angebot").count()
                 rechnungsnummer = f"ANG-{str(data.datum.year)[-2:]}{count + 1:04d}"
+        elif data.dokument_typ == "Proforma":
+            if not data.ist_entwurf:
+                rechnungsnummer = _naechste_proformanummer(data.datum, db)
+            # else: Entwurf-Proforma ohne Nummer (wie Angebot-Entwurf)
         else:
             nk_typ = "rechnung_ausgang" if data.typ == "ausgang" else "rechnung_eingang"
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == nk_typ).first()
@@ -1786,6 +1790,19 @@ def _lieferschein_zu_rechnung_konvertieren(
     return rechnung
 
 
+def _naechste_proformanummer(datum: date, db: Session) -> str:
+    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "proforma").first()
+    if nk:
+        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+            nk.naechste_nr = 1
+        nk.letztes_jahr = datum.year
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        return _belegnr_aus_format(nk.format, datum, nr)
+    count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Proforma").count()
+    return f"PRF-{str(datum.year)[-2:]}{count + 1:04d}"
+
+
 def _naechste_lieferscheinnummer(datum: date, db: Session) -> str:
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
     if nk:
@@ -2013,6 +2030,133 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
 
     angebot.rechnung_zu_angebot_id = rechnung.id
     angebot.angebot_status = "akzeptiert"
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+# ---------------------------------------------------------------------------
+# Angebot → Proforma
+# ---------------------------------------------------------------------------
+
+@router.post("/{angebot_id}/proforma-aus-angebot", response_model=RechnungResponse, status_code=201)
+def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
+    """Erstellt eine Proforma-Rechnung aus einem Angebot (Positionen werden übernommen)."""
+    angebot = db.query(Rechnung).filter(
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+    ).first()
+    if not angebot:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
+    if angebot.proforma_zu_angebot_id:
+        raise HTTPException(status_code=409, detail="Aus diesem Angebot wurde bereits eine Proforma-Rechnung erstellt.")
+
+    heute = date.today()
+    proforma_nr = _naechste_proformanummer(heute, db)
+
+    proforma = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=proforma_nr,
+        datum=heute,
+        leistung_von=angebot.leistung_von,
+        leistung_bis=angebot.leistung_bis,
+        kunde_id=angebot.kunde_id,
+        partner_freitext=angebot.partner_freitext,
+        notizen=angebot.notizen,
+        ist_entwurf=False,
+        dokument_typ="Proforma",
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        netto_gesamt=angebot.netto_gesamt,
+        ust_gesamt=angebot.ust_gesamt,
+        brutto_gesamt=angebot.brutto_gesamt,
+    )
+    db.add(proforma)
+    db.flush()
+
+    for pos in angebot.positionen:
+        db.add(Rechnungsposition(
+            rechnung_id=proforma.id,
+            beschreibung=pos.beschreibung,
+            menge=pos.menge,
+            einheit=pos.einheit,
+            einzelpreis=pos.einzelpreis,
+            ust_satz=pos.ust_satz,
+            netto_gesamt=pos.netto_gesamt,
+            ust_betrag=pos.ust_betrag,
+            brutto_gesamt=pos.brutto_gesamt,
+            position=pos.position,
+            artikel_id=pos.artikel_id,
+            kategorie_id=pos.kategorie_id,
+        ))
+
+    angebot.proforma_zu_angebot_id = proforma.id
+    db.commit()
+    db.refresh(proforma)
+    return RechnungResponse.from_orm_extended(proforma)
+
+
+# ---------------------------------------------------------------------------
+# Proforma → Rechnung
+# ---------------------------------------------------------------------------
+
+@router.post("/{proforma_id}/rechnung-aus-proforma", response_model=RechnungResponse, status_code=201)
+def rechnung_aus_proforma(proforma_id: int, db: Session = Depends(get_db)):
+    """Konvertiert eine Proforma-Rechnung in eine echte Ausgangsrechnung."""
+    proforma = db.query(Rechnung).filter(
+        Rechnung.id == proforma_id, Rechnung.dokument_typ == "Proforma"
+    ).first()
+    if not proforma:
+        raise HTTPException(status_code=404, detail="Proforma-Rechnung nicht gefunden.")
+    if proforma.rechnung_zu_proforma_id:
+        raise HTTPException(status_code=409, detail="Aus dieser Proforma wurde bereits eine Rechnung erstellt.")
+
+    heute = date.today()
+    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    unternehmen = db.query(Unternehmen).first()
+    zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
+    from datetime import timedelta
+    faellig_am = heute + timedelta(days=int(zahlungsziel))
+
+    rechnung = Rechnung(
+        typ="ausgang",
+        rechnungsnummer=rechnungsnummer,
+        datum=heute,
+        faellig_am=faellig_am,
+        leistung_von=proforma.leistung_von,
+        leistung_bis=proforma.leistung_bis,
+        kunde_id=proforma.kunde_id,
+        partner_freitext=proforma.partner_freitext,
+        notizen=proforma.notizen,
+        ist_entwurf=True,
+        dokument_typ="Rechnung",
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        netto_gesamt=proforma.netto_gesamt,
+        ust_gesamt=proforma.ust_gesamt,
+        brutto_gesamt=proforma.brutto_gesamt,
+    )
+    db.add(rechnung)
+    db.flush()
+
+    for pos in proforma.positionen:
+        db.add(Rechnungsposition(
+            rechnung_id=rechnung.id,
+            beschreibung=pos.beschreibung,
+            menge=pos.menge,
+            einheit=pos.einheit,
+            einzelpreis=pos.einzelpreis,
+            ust_satz=pos.ust_satz,
+            netto_gesamt=pos.netto_gesamt,
+            ust_betrag=pos.ust_betrag,
+            brutto_gesamt=pos.brutto_gesamt,
+            position=pos.position,
+            artikel_id=pos.artikel_id,
+            kategorie_id=pos.kategorie_id,
+        ))
+
+    proforma.rechnung_zu_proforma_id = rechnung.id
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)

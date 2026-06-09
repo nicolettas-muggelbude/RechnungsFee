@@ -175,6 +175,7 @@ export type Unternehmen = {
   standard_skonto_tage?: number | null
   lieferschein_aktiv?: boolean
   angebote_aktiv?: boolean
+  proforma_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -887,6 +888,12 @@ export type Rechnung = {
   rechnung_zu_angebot_nr: string | null
   lieferschein_zu_angebot_id: number | null
   lieferschein_zu_angebot_nr: string | null
+  proforma_zu_angebot_id: number | null
+  proforma_zu_angebot_nr: string | null
+  rechnung_zu_proforma_id: number | null
+  rechnung_zu_proforma_nr: string | null
+  angebot_zu_proforma_id: number | null
+  angebot_zu_proforma_nr: string | null
   erstellt_am: string
   aktualisiert_am: string
 }
@@ -907,7 +914,7 @@ export type RechnungCreate = {
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null
-  dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein' | 'Angebot'
+  dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein' | 'Angebot' | 'Proforma'
   gueltig_bis?: string
   dokumentenpaket_id?: number
   lieferadresse_id?: number | null
@@ -978,6 +985,15 @@ export const angebotStatusSetzen = (angebotId: number, status: string) =>
     method: 'PATCH',
     body: JSON.stringify({ status }),
   })
+
+export const getProformas = () =>
+  request<Rechnung[]>('/rechnungen' + toQuery({ dokument_typ: 'Proforma' }))
+
+export const proformaAusAngebot = (angebotId: number) =>
+  request<Rechnung>(`/rechnungen/${angebotId}/proforma-aus-angebot`, { method: 'POST' })
+
+export const rechnungAusProforma = (proformaId: number) =>
+  request<Rechnung>(`/rechnungen/${proformaId}/rechnung-aus-proforma`, { method: 'POST' })
 
 export const rechnungAusLieferschein = (lsId: number) =>
   request<Rechnung>(`/rechnungen/${lsId}/rechnung-erstellen`, { method: 'POST' })

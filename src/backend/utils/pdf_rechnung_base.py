@@ -398,6 +398,8 @@ class RechnungPDFBase(FPDF):
             titel = f"Lieferschein {r.rechnungsnummer or ''}".strip()
         elif dokument_typ == "Angebot":
             titel = f"Angebot {r.rechnungsnummer or ''}".strip()
+        elif dokument_typ == "Proforma":
+            titel = f"Proforma-Rechnung {r.rechnungsnummer or ''}".strip()
         elif r.typ == "ausgang":
             titel = f"Rechnung {r.rechnungsnummer or ''}".strip()
         else:
@@ -517,16 +519,17 @@ class RechnungPDFBase(FPDF):
         self.ln(self._ln_nach_positionen)
         ist_lieferschein = getattr(self._r, "dokument_typ", "Rechnung") == "Lieferschein"
         ist_angebot      = getattr(self._r, "dokument_typ", "Rechnung") == "Angebot"
+        ist_proforma     = getattr(self._r, "dokument_typ", "Rechnung") == "Proforma"
         if not ist_lieferschein:
             self._render_summenblock()
             self.ln(self._ln_nach_summen)
             self._render_19_hinweis()
-            if not ist_angebot:
+            if not ist_angebot and not ist_proforma:
                 self._render_zahlungsblock()
         self._render_notizen()
         if ist_lieferschein:
             self._render_empfangsbestaetigung()
-        elif not ist_angebot:
+        elif not ist_angebot and not ist_proforma:
             embed_unterschrift(self, self._unt, L_MARGIN)
         self.set_text_color(0, 0, 0)
         return bytes(self.output())
