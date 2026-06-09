@@ -352,14 +352,14 @@ class RechnungPDFBase(FPDF):
         meta_val = PAGE_W - R_MARGIN - meta_x - meta_lbl
         meta_y   = ADRESS_Y
 
-        def _meta(lbl: str, val: str):
+        def _meta(lbl: str, val: str, dim: bool = False):
             nonlocal meta_y
             self.set_xy(meta_x, meta_y)
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
             self.cell(meta_lbl, 5.5, lbl)
-            self.set_font("DejaVu", "B", 8)
-            self.set_text_color(*TEXT_DUNKEL)
+            self.set_font("DejaVu", "" if dim else "B", 8)
+            self.set_text_color(*TEXT_GRAU if dim else TEXT_DUNKEL)
             self.cell(meta_val, 5.5, val)
             meta_y += 5.5
 
@@ -386,6 +386,9 @@ class RechnungPDFBase(FPDF):
             la_label = la.bezeichnung or "Lieferadresse"
             la_zeile = ", ".join(filter(None, [strasse_nr, plz_ort]))
             _meta(la_label, la_zeile)
+        quell_angebot_nr = getattr(r, "_quell_angebot_nr", None)
+        if quell_angebot_nr:
+            _meta("Angebot", quell_angebot_nr, dim=True)
 
         return emp_bottom, meta_y
 
@@ -415,14 +418,6 @@ class RechnungPDFBase(FPDF):
                 self.set_font("DejaVu", "", 9)
                 self.set_text_color(*TEXT_GRAU)
                 self.cell(0, 5, f"Gutschrift zu Rechnung {gutschrift_nr}", new_x="LMARGIN", new_y="NEXT")
-
-        # Bezugszeilen: Angebot (später: Auftrag)
-        # Lieferscheine stehen bereits in notizen (Sammelrechnung-Autotext)
-        quell_angebot_nr = getattr(r, "_quell_angebot_nr", None)
-        if quell_angebot_nr:
-            self.set_font("DejaVu", "", 9)
-            self.set_text_color(*TEXT_GRAU)
-            self.cell(0, 5, f"Bezug: Angebot {quell_angebot_nr}", new_x="LMARGIN", new_y="NEXT")
 
         if self._ist_entwurf:
             self.set_font("DejaVu", "", 8)
