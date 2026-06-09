@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  getAuftraege, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
+  getAuftraege, getRechnung, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   auftragErstellen, updateRechnung, deleteRechnung,
   rechnungAusAuftrag, lieferscheinAusAuftrag, proformaAusAuftrag, auftragStatusSetzen,
   getApiBase, openUrl, getRechnungPdf, isTauri, openInPdfWindow,
@@ -746,19 +746,29 @@ export function AuftraegePage() {
   const { data: auftraege, isLoading } = useQuery({ queryKey: ['auftraege'], queryFn: getAuftraege })
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
 
-  const [selId, setSelId] = useState<number | null>(() => {
-    const p = searchParams.get('id')
-    return p ? parseInt(p) : null
-  })
+  const [selId, setSelId] = useState<number | null>(null)
   const [zeigFormular, setZeigFormular] = useState(false)
   const [editAuftrag, setEditAuftrag] = useState<Rechnung | undefined>()
 
   const selAuftrag = auftraege?.find(a => a.id === selId) ?? null
 
+  // ?id=X beim ersten Mount: Auftrag direkt vom Server laden (wie RechnungenPage)
   useEffect(() => {
-    if (selId) setSearchParams({ id: String(selId) }, { replace: true })
-    else setSearchParams({}, { replace: true })
-  }, [selId])
+    const openId = searchParams.get('id')
+    if (openId) {
+      const id = parseInt(openId, 10)
+      if (!isNaN(id)) {
+        getRechnung(id)
+          .then((r) => {
+            setSelId(r.id)
+            qc.invalidateQueries({ queryKey: ['auftraege'] })
+            setSearchParams({}, { replace: true })
+          })
+          .catch(() => setSearchParams({}, { replace: true }))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteRechnung(id),
