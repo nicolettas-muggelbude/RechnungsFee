@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
+  getAngebote, getAuftraege, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
   getApiBase, openUrl, getRechnungPdf, isTauri, openInPdfWindow,
@@ -517,13 +517,11 @@ function AngebotDetail({
     setAuftragLaedt(true)
     try {
       const au = await auftragAusAngebot(angebot.id)
-      // Neuen Auftrag sofort in den Cache schreiben damit AuftraegePage ihn
-      // direkt findet – invalidateQueries hat keine aktiven Observer hier
-      qc.setQueryData(['auftraege'], (old: Rechnung[] | undefined) =>
-        old ? [...old, au] : [au]
-      )
+      // Frische Liste holen und in Cache schreiben bevor wir navigieren,
+      // damit AuftraegePage den neuen Auftrag beim ersten Render findet
+      const freshAuftraege = await getAuftraege()
+      qc.setQueryData(['auftraege'], freshAuftraege)
       qc.invalidateQueries({ queryKey: ['angebote'] })
-      qc.invalidateQueries({ queryKey: ['auftraege'] })
       navigate(`/auftraege?id=${au.id}`)
     } catch (e: any) { setFehler(e?.message) }
     finally { setAuftragLaedt(false) }
