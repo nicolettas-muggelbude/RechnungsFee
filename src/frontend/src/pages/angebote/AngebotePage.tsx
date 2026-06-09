@@ -517,7 +517,8 @@ function AngebotDetail({
     setAuftragLaedt(true)
     try {
       const au = await auftragAusAngebot(angebot.id)
-      qc.invalidateQueries({ queryKey: ['angebote'] })
+      await qc.invalidateQueries({ queryKey: ['angebote'] })
+      await qc.invalidateQueries({ queryKey: ['auftraege'] })
       navigate(`/auftraege?id=${au.id}`)
     } catch (e: any) { setFehler(e?.message) }
     finally { setAuftragLaedt(false) }
