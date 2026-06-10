@@ -837,6 +837,7 @@ function RechnungDetail({
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const [zeigMailDialog, setZeigMailDialog] = useState(false)
+  const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
   const [pdfHinweis, setPdfHinweis] = useState(false)
   const [belegFehler, setBelegFehler] = useState<string | null>(null)
@@ -1028,6 +1029,8 @@ function RechnungDetail({
     }
     setZeigMailEingabe(false)
     setMailAdresse('')
+    setZeigSmtpHinweis(true)
+    setTimeout(() => setZeigSmtpHinweis(false), 6000)
   }
 
   return (
@@ -1154,6 +1157,21 @@ function RechnungDetail({
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
           )}
         </div>
+
+        {zeigSmtpHinweis && (
+          <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 shadow-lg flex gap-3 items-start">
+            <span className="text-lg">💡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
+              <button onClick={() => { setZeigSmtpHinweis(false); navigate('/stammdaten/unternehmen') }}
+                className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
+                Jetzt einrichten →
+              </button>
+            </div>
+            <button onClick={() => setZeigSmtpHinweis(false)} className="text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 text-sm leading-none">✕</button>
+          </div>
+        )}
 
         {zeigMailDialog && (
           <MailDialog
