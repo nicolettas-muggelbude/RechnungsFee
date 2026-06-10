@@ -872,7 +872,8 @@ export function ProformaPage() {
           </div>
         )}
 
-        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
+        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto min-h-0 px-6 pb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
@@ -945,6 +946,7 @@ export function ProformaPage() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       </div>
 
