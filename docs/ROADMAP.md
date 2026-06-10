@@ -38,7 +38,7 @@
 
 **Aufträge**
 - Auftragsbestätigung-PDF (Nummernkreis `AU-JJNNNN`, kein Kopie-Banner)
-- Status-Workflow: offen → in Bearbeitung → abgeschlossen (automatisch bei bezahlter Rechnung, alle 3 Pfade: direkt / via Proforma / via Lieferschein)
+- Status-Workflow: offen → in Bearbeitung → Rechnung → abgeschlossen (automatisch: Rechnung finalisiert → „Rechnung"; Rechnung bezahlt → „Abgeschlossen", alle 3 Pfade: direkt / via Proforma / via Lieferschein)
 - Auftrag direkt erstellen oder aus akzeptiertem Angebot
 - Auftrag → Rechnung / Lieferschein / Proforma
 - Bearbeiten ab Status „in Bearbeitung" gesperrt; neue Dokumente bei abgeschlossen/storniert gesperrt
