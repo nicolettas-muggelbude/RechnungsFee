@@ -1204,6 +1204,8 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         _auftrag_ref2.rechnung_zu_auftrag_id = None
         if not _auftrag_ref2.proforma_zu_auftrag_id and not _auftrag_ref2.lieferschein_zu_auftrag_id:
             _auftrag_ref2.auftrag_status = "offen"
+        elif _auftrag_ref2.auftrag_status == "rechnung_gestellt":
+            _auftrag_ref2.auftrag_status = "in_bearbeitung"
     db.delete(rechnung)
     db.commit()
 
@@ -2616,7 +2618,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
-    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "abgeschlossen"):
+    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "rechnung_gestellt", "abgeschlossen"):
         raise HTTPException(status_code=409, detail="Dokumente können nur für Aufträge mit Status 'offen' erstellt werden.")
     if auftrag.rechnung_zu_auftrag_id:
         raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Rechnung erstellt.")
@@ -2653,8 +2655,8 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     db.flush()
     _kopiere_positionen(auftrag, rechnung, db)
     auftrag.rechnung_zu_auftrag_id = rechnung.id
-    if auftrag.auftrag_status == "offen":
-        auftrag.auftrag_status = "in_bearbeitung"
+    if auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
+        auftrag.auftrag_status = "rechnung_gestellt"
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -2668,7 +2670,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
-    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "abgeschlossen"):
+    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "rechnung_gestellt", "abgeschlossen"):
         raise HTTPException(status_code=409, detail="Dokumente können nur für Aufträge mit Status 'offen' erstellt werden.")
     if auftrag.lieferschein_zu_auftrag_id:
         raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits ein Lieferschein erstellt.")
@@ -2720,7 +2722,7 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
-    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "abgeschlossen"):
+    if auftrag.auftrag_status in ("storniert", "in_bearbeitung", "rechnung_gestellt", "abgeschlossen"):
         raise HTTPException(status_code=409, detail="Dokumente können nur für Aufträge mit Status 'offen' erstellt werden.")
     if auftrag.proforma_zu_auftrag_id:
         raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Proforma erstellt.")
@@ -2770,7 +2772,7 @@ class AuftragStatusUpdate(BaseModel):
 
 @router.post("/{auftrag_id}/auftrag-status", response_model=RechnungResponse)
 def auftrag_status_setzen(auftrag_id: int, data: AuftragStatusUpdate, db: Session = Depends(get_db)):
-    erlaubt = {"offen", "in_bearbeitung", "abgeschlossen", "storniert"}
+    erlaubt = {"offen", "in_bearbeitung", "rechnung_gestellt", "abgeschlossen", "storniert"}
     if data.status not in erlaubt:
         raise HTTPException(status_code=422, detail=f"Status muss einer von {erlaubt} sein.")
     auftrag = db.query(Rechnung).filter(

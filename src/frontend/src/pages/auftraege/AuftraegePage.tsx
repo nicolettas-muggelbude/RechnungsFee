@@ -28,10 +28,11 @@ const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm fo
 const selectCls = `${inputCls} bg-white dark:bg-slate-700`
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  offen:          { label: 'Offen',          cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
-  in_bearbeitung: { label: 'In Bearbeitung', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
-  abgeschlossen:  { label: 'Abgeschlossen',  cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700' },
-  storniert:      { label: 'Storniert',      cls: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400 border-red-200 dark:border-red-700' },
+  offen:              { label: 'Offen',           cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
+  in_bearbeitung:     { label: 'In Bearbeitung',  cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
+  rechnung_gestellt:  { label: 'Rechnung',        cls: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300 border-violet-200 dark:border-violet-700' },
+  abgeschlossen:      { label: 'Abgeschlossen',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700' },
+  storniert:          { label: 'Storniert',       cls: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400 border-red-200 dark:border-red-700' },
 }
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -565,7 +566,7 @@ function AuftragDetail({
           <button onClick={handleMail} disabled={pdfLaedt || !!auftrag.ist_entwurf} className={btnNeutral}>✉️ Mail senden</button>
           <button
             onClick={onEdit}
-            disabled={hatBezug || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
+            disabled={hatBezug || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
             title={hatBezug ? 'Bereits ein Folgedokument vorhanden' : auftrag.auftrag_status !== 'offen' ? 'Nur offene Aufträge können bearbeitet werden' : undefined}
             className={btnNeutral}
           >✏️ Bearbeiten</button>
@@ -574,8 +575,8 @@ function AuftragDetail({
           {!auftrag.rechnung_zu_auftrag_id ? (
             <button
               onClick={handleRechnungErstellen}
-              disabled={reLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen'}
-              title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
+              disabled={reLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen'}
+              title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
               className={btnGreen}
             >
               {reLaedt ? '⏳ Erstelle…' : '→ Rechnung'}
@@ -591,8 +592,8 @@ function AuftragDetail({
             !auftrag.lieferschein_zu_auftrag_id ? (
               <button
                 onClick={handleLieferscheinErstellen}
-                disabled={lsLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen'}
-                title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
+                disabled={lsLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen'}
+                title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
                 className={btnGreen}
               >
                 {lsLaedt ? '⏳ Erstelle…' : '→ Lieferschein'}
@@ -609,8 +610,8 @@ function AuftragDetail({
             !auftrag.proforma_zu_auftrag_id ? (
               <button
                 onClick={handleProformaErstellen}
-                disabled={pfLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen'}
-                title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
+                disabled={pfLaedt || !!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen'}
+                title={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' ? 'Auftrag ist bereits in Bearbeitung' : undefined}
                 className={btnGreen}
               >
                 {pfLaedt ? '⏳ Erstelle…' : '→ Proforma'}
@@ -884,6 +885,7 @@ export function AuftraegePage() {
               <option value="">Alle Status</option>
               <option value="offen">Offen</option>
               <option value="in_bearbeitung">In Bearbeitung</option>
+              <option value="rechnung_gestellt">Rechnung</option>
               <option value="abgeschlossen">Abgeschlossen</option>
               <option value="storniert">Storniert</option>
               <option value="entwurf">Entwurf</option>
@@ -893,7 +895,7 @@ export function AuftraegePage() {
 
         {/* Kennzahlen – bleibt beim Scrollen stehen */}
         {(auftraege?.length ?? 0) > 0 && (
-          <div className="px-6 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="px-6 py-3 grid grid-cols-4 gap-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Aufträge</p>
               <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{auftraege!.length}</p>
@@ -908,6 +910,12 @@ export function AuftraegePage() {
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">In Bearbeitung</p>
               <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                 {auftraege!.filter(a => !a.ist_entwurf && a.auftrag_status === 'in_bearbeitung').length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Rechnung</p>
+              <p className="text-lg font-bold text-violet-600 dark:text-violet-400">
+                {auftraege!.filter(a => !a.ist_entwurf && a.auftrag_status === 'rechnung_gestellt').length}
               </p>
             </div>
           </div>
