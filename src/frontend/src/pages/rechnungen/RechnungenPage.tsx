@@ -3225,10 +3225,17 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
       : getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
   })
 
-  const selectedRechnung =
-    (pendingEditRechnung?.id === selectedId ? pendingEditRechnung : null) ??
-    rechnungen?.find((r) => r.id === selectedId) ??
-    null
+  const _fromQuery = rechnungen?.find((r) => r.id === selectedId) ?? null
+  const _fromPending = (pendingEditRechnung?.id === selectedId ? pendingEditRechnung : null)
+  // Query-Version bevorzugen wenn bezahlt_betrag höher (Zahlung wurde gebucht)
+  const selectedRechnung = (() => {
+    if (!_fromQuery && !_fromPending) return null
+    if (!_fromQuery) return _fromPending
+    if (!_fromPending) return _fromQuery
+    const qBez = parseFloat(_fromQuery.bezahlt_betrag ?? '0')
+    const pBez = parseFloat(_fromPending.bezahlt_betrag ?? '0')
+    return qBez >= pBez ? _fromQuery : _fromPending
+  })()
 
   const createMutation = useMutation({
     mutationFn: createRechnung,
