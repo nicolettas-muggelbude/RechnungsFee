@@ -423,6 +423,7 @@ function AngebotDetail({
   const [auftragLaedt, setAuftragLaedt] = useState(false)
   const [lsLaedt, setLsLaedt] = useState(false)
   const [pfLaedt, setPfLaedt] = useState(false)
+  const hatBezug = !!(angebot.auftrag_zu_angebot_id || angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id)
   const [pdfLaedt, setPdfLaedt] = useState(false)
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
@@ -598,17 +599,20 @@ function AngebotDetail({
           <button onClick={() => handleMail()} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
             ✉️ Mail senden
           </button>
-          <button onClick={onEdit} className={btnNeutral}>
+          <button onClick={onEdit} disabled={hatBezug}
+            title={hatBezug ? 'Bereits ein Folgedokument vorhanden' : undefined}
+            className={btnNeutral}>
             ✏️ Bearbeiten
           </button>
           {unternehmen?.auftraege_aktiv && (
             !angebot.auftrag_zu_angebot_id ? (
               <button
                 onClick={handleAuftragErstellen}
-                disabled={auftragLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'akzeptiert'}
+                disabled={auftragLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'akzeptiert' || hatBezug}
                 title={
                   angebot.ist_entwurf ? 'Erst Entwurf finalisieren'
                   : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Akzeptiert" möglich'
+                  : hatBezug ? 'Bereits ein Folgedokument vorhanden'
                   : undefined
                 }
                 className={btnGreen}
@@ -624,12 +628,11 @@ function AngebotDetail({
           {!angebot.rechnung_zu_angebot_id ? (
             <button
               onClick={handleRechnungErstellen}
-              disabled={konvLaedt || !!angebot.ist_entwurf || !!angebot.lieferschein_zu_angebot_id || !!angebot.proforma_zu_angebot_id || angebot.angebot_status !== 'akzeptiert'}
+              disabled={konvLaedt || !!angebot.ist_entwurf || hatBezug || angebot.angebot_status !== 'akzeptiert'}
               title={
                 angebot.ist_entwurf ? 'Erst Entwurf finalisieren'
-                : angebot.lieferschein_zu_angebot_id ? 'Zuerst Lieferschein → Rechnung umwandeln'
-                : angebot.proforma_zu_angebot_id ? 'Proforma vorhanden – über Proforma abrechnen'
                 : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Akzeptiert" möglich'
+                : hatBezug ? 'Bereits ein Folgedokument vorhanden'
                 : undefined
               }
               className={btnGreen}
@@ -645,11 +648,11 @@ function AngebotDetail({
             !angebot.lieferschein_zu_angebot_id ? (
               <button
                 onClick={handleLieferscheinErstellen}
-                disabled={lsLaedt || !!angebot.ist_entwurf || !!angebot.proforma_zu_angebot_id || angebot.angebot_status !== 'akzeptiert'}
+                disabled={lsLaedt || !!angebot.ist_entwurf || hatBezug || angebot.angebot_status !== 'akzeptiert'}
                 title={
                   angebot.ist_entwurf ? 'Erst Entwurf finalisieren'
-                  : angebot.proforma_zu_angebot_id ? 'Proforma vorhanden – über Proforma abrechnen'
                   : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Akzeptiert" möglich'
+                  : hatBezug ? 'Bereits ein Folgedokument vorhanden'
                   : undefined
                 }
                 className={btnGreen}
@@ -666,8 +669,13 @@ function AngebotDetail({
             !angebot.proforma_zu_angebot_id ? (
               <button
                 onClick={handleProformaErstellen}
-                disabled={pfLaedt || !!angebot.ist_entwurf || angebot.angebot_status !== 'akzeptiert'}
-                title={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Bestätigt" möglich' : undefined}
+                disabled={pfLaedt || !!angebot.ist_entwurf || hatBezug || angebot.angebot_status !== 'akzeptiert'}
+                title={
+                  angebot.ist_entwurf ? 'Erst Entwurf finalisieren'
+                  : angebot.angebot_status !== 'akzeptiert' ? 'Nur bei Status „Akzeptiert" möglich'
+                  : hatBezug ? 'Bereits ein Folgedokument vorhanden'
+                  : undefined
+                }
                 className={btnNeutral}
               >
                 {pfLaedt ? '⏳ Erstelle…' : '→ Proforma'}
@@ -818,6 +826,8 @@ export function AngebotePage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [vorKundeId, setVorKundeId] = useState<string | null>(null)
+  const [suche, setSuche] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   // ?kunde_id=X aus KundenPage → Formular direkt öffnen
   useEffect(() => {
@@ -842,6 +852,21 @@ export function AngebotePage() {
 
   const selected = angebote?.find(a => a.id === selectedId) ?? null
 
+  const angeboteGefiltert = (angebote ?? []).filter(a => {
+    if (statusFilter) {
+      if (statusFilter === 'entwurf' && !a.ist_entwurf) return false
+      if (statusFilter !== 'entwurf' && (a.ist_entwurf || a.angebot_status !== statusFilter)) return false
+    }
+    if (suche) {
+      const q = suche.toLowerCase()
+      return (
+        (a.rechnungsnummer ?? '').toLowerCase().includes(q) ||
+        (a.kunde_name ?? a.partner_freitext ?? '').toLowerCase().includes(q)
+      )
+    }
+    return true
+  })
+
   function handleDelete() {
     if (!selected) return
     if (!confirm(`Angebot ${selected.rechnungsnummer} wirklich löschen?`)) return
@@ -852,18 +877,63 @@ export function AngebotePage() {
     <div className="flex h-full">
       {/* Liste – schrumpft auf 1/3 wenn Formular aktiv */}
       <div className={`${formModus ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Angebote</h1>
-          <button
-            onClick={() => { setFormModus('neu'); setSelectedId(null) }}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-          >
-            + Neues Angebot
-          </button>
+        {/* Header – bleibt beim Scrollen stehen */}
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Angebote</h1>
+            <button
+              onClick={() => { setFormModus('neu'); setSelectedId(null) }}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+            >
+              + Neues Angebot
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="search"
+              placeholder="Nummer oder Kunde suchen…"
+              value={suche}
+              onChange={e => setSuche(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 flex-1 min-w-[160px]"
+            />
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            >
+              <option value="">Alle Status</option>
+              <option value="offen">Offen</option>
+              <option value="akzeptiert">Akzeptiert</option>
+              <option value="abgelehnt">Abgelehnt</option>
+              <option value="abgelaufen">Abgelaufen</option>
+              <option value="entwurf">Entwurf</option>
+            </select>
+          </div>
         </div>
 
-          {/* Tabelle */}
+        {/* Kennzahlen – bleibt beim Scrollen stehen */}
+        {(angebote?.length ?? 0) > 0 && (
+          <div className="px-6 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Angebote</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{angebote!.length}</p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
+              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {angebote!.filter(a => !a.ist_entwurf && a.angebot_status === 'offen').length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Akzeptiert</p>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                {angebote!.filter(a => !a.ist_entwurf && a.angebot_status === 'akzeptiert').length}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Tabelle */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
@@ -874,12 +944,17 @@ export function AngebotePage() {
               <p className="text-slate-500 dark:text-slate-400">Noch keine Angebote vorhanden.</p>
               <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Klicke auf „+ Neues Angebot" um zu starten.</p>
             </div>
+          ) : angeboteGefiltert.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-slate-500 dark:text-slate-400">Keine Angebote für diese Filter.</p>
+              <button onClick={() => { setSuche(''); setStatusFilter('') }} className="mt-2 text-sm text-blue-600 hover:underline">Filter zurücksetzen</button>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gültig bis</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kunde</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
@@ -887,7 +962,7 @@ export function AngebotePage() {
                 </tr>
               </thead>
               <tbody>
-                {angebote.map(a => (
+                {angeboteGefiltert.map(a => (
                   <tr
                     key={a.id}
                     onClick={() => { setSelectedId(a.id); setFormModus(null) }}
@@ -895,8 +970,8 @@ export function AngebotePage() {
                       selectedId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
                     }`}
                   >
-                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{a.rechnungsnummer}</td>
                     <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(a.datum)}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{a.rechnungsnummer}</td>
                     <td className={`px-5 py-3 font-medium ${a.gueltig_bis && a.gueltig_bis < heuteIso() && a.angebot_status === 'offen' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
                       {formatDatum(a.gueltig_bis)}
                     </td>

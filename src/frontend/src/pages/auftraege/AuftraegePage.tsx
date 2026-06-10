@@ -518,6 +518,7 @@ function AuftragDetail({
   }
 
   const brutto = parseFloat(auftrag.brutto_gesamt as any) || 0
+  const hatBezug = !!(auftrag.rechnung_zu_auftrag_id || auftrag.lieferschein_zu_auftrag_id || auftrag.proforma_zu_auftrag_id)
 
   const btnBase = 'flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
   const btnNeutral = `${btnBase} border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300`
@@ -564,8 +565,8 @@ function AuftragDetail({
           <button onClick={handleMail} disabled={pdfLaedt || !!auftrag.ist_entwurf} className={btnNeutral}>✉️ Mail senden</button>
           <button
             onClick={onEdit}
-            disabled={auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
-            title={auftrag.auftrag_status !== 'offen' ? 'Nur offene Aufträge können bearbeitet werden' : undefined}
+            disabled={hatBezug || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
+            title={hatBezug ? 'Bereits ein Folgedokument vorhanden' : auftrag.auftrag_status !== 'offen' ? 'Nur offene Aufträge können bearbeitet werden' : undefined}
             className={btnNeutral}
           >✏️ Bearbeiten</button>
 
@@ -621,13 +622,9 @@ function AuftragDetail({
             )
           )}
 
-          <button onClick={onDelete} disabled={
-            !!(auftrag.rechnung_zu_auftrag_id || auftrag.lieferschein_zu_auftrag_id || auftrag.proforma_zu_auftrag_id)
-          } title={
-            auftrag.rechnung_zu_auftrag_id || auftrag.lieferschein_zu_auftrag_id || auftrag.proforma_zu_auftrag_id
-              ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt'
-              : undefined
-          } className={btnRed}>🗑️ Löschen</button>
+          <button onClick={onDelete} disabled={hatBezug}
+            title={hatBezug ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt' : undefined}
+            className={btnRed}>🗑️ Löschen</button>
         </div>
 
         {/* Rückverlinkung zum Angebot */}
@@ -751,6 +748,7 @@ export function AuftraegePage() {
   const [zeigFormular, setZeigFormular] = useState(false)
   const [editAuftrag, setEditAuftrag] = useState<Rechnung | undefined>()
   const [suche, setSuche] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const selAuftrag =
     (pendingAuftrag?.id === selId ? pendingAuftrag : null) ??
@@ -758,12 +756,18 @@ export function AuftraegePage() {
     null
 
   const auftraegeListe = (auftraege ?? []).filter(a => {
-    if (!suche) return true
-    const q = suche.toLowerCase()
-    return (
-      (a.rechnungsnummer ?? '').toLowerCase().includes(q) ||
-      (a.kunde_name ?? a.partner_freitext ?? '').toLowerCase().includes(q)
-    )
+    if (statusFilter) {
+      if (statusFilter === 'entwurf' && !a.ist_entwurf) return false
+      if (statusFilter !== 'entwurf' && (a.ist_entwurf || a.auftrag_status !== statusFilter)) return false
+    }
+    if (suche) {
+      const q = suche.toLowerCase()
+      return (
+        (a.rechnungsnummer ?? '').toLowerCase().includes(q) ||
+        (a.kunde_name ?? a.partner_freitext ?? '').toLowerCase().includes(q)
+      )
+    }
+    return true
   })
 
   // ?id=X beim ersten Mount: Auftrag direkt vom Server laden (wie RechnungenPage)
@@ -832,25 +836,59 @@ export function AuftraegePage() {
     <div className="flex h-full">
       {/* Liste – schrumpft auf 1/3 wenn Formular aktiv */}
       <div className={`${zeigFormular ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Aufträge</h1>
-          <button onClick={handleNeu}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
-            + Neuer Auftrag
-          </button>
+        {/* Header – bleibt beim Scrollen stehen */}
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Aufträge</h1>
+            <button onClick={handleNeu}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+              + Neuer Auftrag
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="search"
+              value={suche}
+              onChange={e => setSuche(e.target.value)}
+              placeholder="Nummer oder Kunde suchen…"
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 flex-1 min-w-[160px]"
+            />
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            >
+              <option value="">Alle Status</option>
+              <option value="offen">Offen</option>
+              <option value="in_bearbeitung">In Bearbeitung</option>
+              <option value="abgeschlossen">Abgeschlossen</option>
+              <option value="storniert">Storniert</option>
+              <option value="entwurf">Entwurf</option>
+            </select>
+          </div>
         </div>
 
-        {/* Suche */}
-        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <input
-            type="text"
-            value={suche}
-            onChange={e => setSuche(e.target.value)}
-            placeholder="Suche nach Nummer oder Kunde…"
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        {/* Kennzahlen – bleibt beim Scrollen stehen */}
+        {(auftraege?.length ?? 0) > 0 && (
+          <div className="px-6 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Aufträge</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{auftraege!.length}</p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
+              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {auftraege!.filter(a => !a.ist_entwurf && a.auftrag_status === 'offen').length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">In Bearbeitung</p>
+              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                {auftraege!.filter(a => !a.ist_entwurf && a.auftrag_status === 'in_bearbeitung').length}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Einträge */}
         <div className="flex-1 overflow-y-auto">
@@ -867,16 +905,16 @@ export function AuftraegePage() {
           )}
           {!isLoading && auftraege && auftraege.length > 0 && auftraegeListe.length === 0 && (
             <div className="p-10 text-center">
-              <p className="text-slate-500 dark:text-slate-400">Keine Aufträge für „{suche}".</p>
-              <button onClick={() => setSuche('')} className="mt-2 text-sm text-blue-600 hover:underline">Suche zurücksetzen</button>
+              <p className="text-slate-500 dark:text-slate-400">Keine Aufträge für diese Filter.</p>
+              <button onClick={() => { setSuche(''); setStatusFilter('') }} className="mt-2 text-sm text-blue-600 hover:underline">Filter zurücksetzen</button>
             </div>
           )}
           {auftraegeListe.length > 0 && (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kunde</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
@@ -891,8 +929,15 @@ export function AuftraegePage() {
                       selId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
                     }`}
                   >
-                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{a.rechnungsnummer}</td>
                     <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(a.datum)}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
+                      {a.rechnungsnummer}
+                      {a.angebot_zu_auftrag_nr && (
+                        <span className="ml-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">
+                          aus {a.angebot_zu_auftrag_nr}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{a.kunde_name ?? a.partner_freitext ?? '—'}</td>
                     <td className="px-5 py-3 text-right text-slate-700 dark:text-slate-200">
                       {(parseFloat(a.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')} €

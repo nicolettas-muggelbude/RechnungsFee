@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
@@ -129,8 +129,21 @@ function CollapsibleSection({
 
 export function AppLayout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  // Ctrl+Super+E (Strg+Win+E) → Eingangsrechnungen
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.metaKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        navigate('/rechnungen?typ=eingang')
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [navigate])
   const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
 

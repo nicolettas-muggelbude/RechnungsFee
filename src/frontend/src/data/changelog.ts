@@ -23,6 +23,19 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.8',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Tastaturkürzel Strg+Super+E springt direkt zur Eingangsrechnungen-Ansicht – funktioniert von jeder Seite aus' },
+      { typ: 'verbesserung', text: 'Alle Dokumentlisten (Angebote, Aufträge, Proforma, Lieferscheine) haben jetzt einen einheitlichen Filterkopf mit Suche, Statusfilter und Kennzahlen; bleibt beim Scrollen stehen' },
+      { typ: 'verbesserung', text: 'Spaltenreihenfolge vereinheitlicht: Datum steht jetzt überall vor der Nummer (wie bei Rechnungen und Lieferscheinen)' },
+      { typ: 'verbesserung', text: 'Herkunftsbezug in der Liste: Lieferscheine, Proformas, Aufträge und Rechnungen zeigen hinter der Nummer ein kleines Badge mit dem Vordokument (z. B. „aus ANG-260001")' },
+      { typ: 'verbesserung', text: 'Angebote: Bearbeiten und alle Folgedokument-Erstellen-Buttons werden gesperrt sobald ein Folgedokument (Auftrag, Rechnung, Lieferschein oder Proforma) existiert' },
+      { typ: 'verbesserung', text: 'Aufträge: Bearbeiten und Löschen werden gesperrt sobald ein Folgedokument (Rechnung, Lieferschein oder Proforma) existiert' },
+      { typ: 'verbesserung', text: 'Proforma: Bearbeiten und Löschen werden gesperrt sobald eine Rechnung aus der Proforma erstellt wurde' },
+    ],
+  },
+  {
     version: 'v0.3.7',
     datum: 'Juni 2026',
     eintraege: [

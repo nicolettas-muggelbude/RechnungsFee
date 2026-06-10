@@ -3147,6 +3147,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const istLieferscheinSeite = modus === 'lieferscheine'
   const lieferscheinModus = istLieferscheinSeite
   const [zahlungsstatus, setZahlungsstatus] = useState('')
+  const [lsAbrechnungFilter, setLsAbrechnungFilter] = useState<'' | 'offen' | 'entwurf' | 'abgerechnet'>('')
   const [suche, setSuche] = useState('')
   const [filterModus, setFilterModus] = useState<FilterModus>('monat')
   const [monat, setMonat] = useState(aktuellerMonat())
@@ -3175,6 +3176,13 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
           .catch(() => setSearchParams({}, { replace: true }))
         return
       }
+    }
+    // ?typ=eingang|ausgang: direkt zum Typ springen (z.B. per Tastaturkürzel)
+    const typParam = searchParams.get('typ')
+    if (typParam === 'eingang' || typParam === 'ausgang') {
+      setTyp(typParam)
+      setSearchParams({}, { replace: true })
+      return
     }
     // ?filterRechnungId=ID: Lieferscheine einer bestimmten Rechnung anzeigen
     const filterRId = searchParams.get('filterRechnungId')
@@ -3323,9 +3331,20 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
       })
     : alleRechnungen
 
-  const listeGefiltert = lsFilterRechnungId != null && lieferscheinModus
-    ? liste.filter(r => r.lieferschein_zu_rechnung_id === lsFilterRechnungId)
-    : liste
+  const listeGefiltert = (() => {
+    let result = lsFilterRechnungId != null && lieferscheinModus
+      ? liste.filter(r => r.lieferschein_zu_rechnung_id === lsFilterRechnungId)
+      : liste
+    if (lieferscheinModus && lsAbrechnungFilter) {
+      result = result.filter(r => {
+        if (lsAbrechnungFilter === 'offen') return !r.lieferschein_zu_rechnung_id
+        if (lsAbrechnungFilter === 'entwurf') return r.lieferschein_zu_rechnung_id != null && !!r.lieferschein_rechnung_ist_entwurf
+        if (lsAbrechnungFilter === 'abgerechnet') return r.lieferschein_zu_rechnung_id != null && !r.lieferschein_rechnung_ist_entwurf
+        return true
+      })
+    }
+    return result
+  })()
 
   const listeSortiert = sortFaellig
     ? [...listeGefiltert].sort((a, b) => {
@@ -3496,20 +3515,33 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
               className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 w-56"
             />
 
-            {/* Zahlungsstatus */}
-            <select
-              value={zahlungsstatus}
-              onChange={(e) => setZahlungsstatus(e.target.value)}
-              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-            >
-              <option value="">Alle Status</option>
-              <option value="offen">Offen</option>
-              <option value="teilweise">Teilweise bezahlt</option>
-              <option value="bezahlt">Bezahlt</option>
-              <option value="uneinbringlich">Uneinbringlich</option>
-              <option value="entwurf">Entwurf</option>
-              <option value="storniert">Storniert</option>
-            </select>
+            {/* Status-Filter */}
+            {lieferscheinModus ? (
+              <select
+                value={lsAbrechnungFilter}
+                onChange={(e) => setLsAbrechnungFilter(e.target.value as typeof lsAbrechnungFilter)}
+                className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              >
+                <option value="">Alle Status</option>
+                <option value="offen">Nicht abgerechnet</option>
+                <option value="entwurf">Rechnungsentwurf</option>
+                <option value="abgerechnet">Abgerechnet</option>
+              </select>
+            ) : (
+              <select
+                value={zahlungsstatus}
+                onChange={(e) => setZahlungsstatus(e.target.value)}
+                className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              >
+                <option value="">Alle Status</option>
+                <option value="offen">Offen</option>
+                <option value="teilweise">Teilweise bezahlt</option>
+                <option value="bezahlt">Bezahlt</option>
+                <option value="uneinbringlich">Uneinbringlich</option>
+                <option value="entwurf">Entwurf</option>
+                <option value="storniert">Storniert</option>
+              </select>
+            )}
           </div>
 
           {/* Fehlermeldung */}
@@ -3524,18 +3556,41 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         {/* Kennzahlen */}
         {liste.length > 0 && (
           <div className="px-6 pb-3 grid grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Rechnungen</p>
-              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{liste.length}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Gesamt</p>
-              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatEuro(gesamt.brutto)}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
-              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatEuro(gesamt.offen)}</p>
-            </div>
+            {lieferscheinModus ? (
+              <>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Lieferscheine</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{liste.length}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Nicht abgerechnet</p>
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                    {liste.filter(r => !r.lieferschein_zu_rechnung_id).length}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Abgerechnet</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                    {liste.filter(r => r.lieferschein_zu_rechnung_id != null && !r.lieferschein_rechnung_ist_entwurf).length}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Rechnungen</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{liste.length}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Gesamt</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatEuro(gesamt.brutto)}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatEuro(gesamt.offen)}</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -3651,7 +3706,22 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                       <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
                         {r.rechnungsnummer ?? '—'}
                         {r.dokument_typ === 'Gutschrift' && <span className="ml-1.5 text-[10px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded px-1">Gutschrift</span>}
-                        {r.dokument_typ === 'Lieferschein' && <span className="ml-1.5 text-[10px] text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded px-1">{!r.lieferschein_zu_rechnung_id ? 'Lieferschein' : r.lieferschein_rechnung_ist_entwurf ? 'Entwurf' : '✓ abgerechnet'}</span>}
+                        {r.dokument_typ === 'Lieferschein' && (
+                          lieferscheinModus
+                            ? (r.herkunft_angebot_nr ?? r.herkunft_auftrag_nr)
+                              ? <span className="ml-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">
+                                  aus {r.herkunft_angebot_nr ?? r.herkunft_auftrag_nr}
+                                </span>
+                              : null
+                            : <span className="ml-1.5 text-[10px] text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded px-1">
+                                {!r.lieferschein_zu_rechnung_id ? 'Lieferschein' : r.lieferschein_rechnung_ist_entwurf ? 'Entwurf' : '✓ abgerechnet'}
+                              </span>
+                        )}
+                        {!lieferscheinModus && r.dokument_typ !== 'Lieferschein' && r.dokument_typ !== 'Gutschrift' && (r.herkunft_auftrag_nr ?? r.herkunft_proforma_nr) && (
+                          <span className="ml-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">
+                            aus {r.herkunft_auftrag_nr ?? r.herkunft_proforma_nr}
+                          </span>
+                        )}
                         {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1">Entwurf</span>}
                         {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1">Storniert</span>}
                       </td>

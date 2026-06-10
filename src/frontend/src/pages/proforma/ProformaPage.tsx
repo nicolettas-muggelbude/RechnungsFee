@@ -390,6 +390,7 @@ function ProformaDetail({
   const [konvLaedt, setKonvLaedt] = useState(false)
   const [finLaedt, setFinLaedt] = useState(false)
   const [pdfLaedt, setPdfLaedt] = useState(false)
+  const hatBezug = !!proforma.rechnung_zu_proforma_id
   const [zeigMailEingabe, setZeigMailEingabe] = useState(false)
   const [mailAdresse, setMailAdresse] = useState('')
   const [zeigZahlungsForm, setZeigZahlungsForm] = useState(false)
@@ -526,7 +527,9 @@ function ProformaDetail({
           <button onClick={() => handleMail()} disabled={pdfLaedt || !!proforma.ist_entwurf} className={btnNeutral}>
             ✉️ Mail senden
           </button>
-          <button onClick={onEdit} className={btnNeutral}>
+          <button onClick={onEdit} disabled={hatBezug}
+            title={hatBezug ? 'Bereits eine Rechnung vorhanden' : undefined}
+            className={btnNeutral}>
             ✏️ Bearbeiten
           </button>
           {!proforma.rechnung_zu_proforma_id ? (
@@ -543,7 +546,9 @@ function ProformaDetail({
               → {proforma.rechnung_zu_proforma_nr ?? `RE #${proforma.rechnung_zu_proforma_id}`}
             </button>
           )}
-          <button onClick={onDelete} className={btnRed}>
+          <button onClick={onDelete} disabled={hatBezug}
+            title={hatBezug ? 'Kann nicht gelöscht werden – bereits eine Rechnung vorhanden' : undefined}
+            className={btnRed}>
             🗑 Löschen
           </button>
         </div>
@@ -726,6 +731,8 @@ export function ProformaPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [filterId, setFilterId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
+  const [suche, setSuche] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const { data: proformas, isLoading } = useQuery({
     queryKey: ['proformas'],
@@ -749,9 +756,22 @@ export function ProformaPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['proformas'] }); setSelectedId(null) },
   })
 
-  const anzeigeProformas = filterId
-    ? (proformas?.filter(p => p.id === filterId) ?? [])
-    : (proformas ?? [])
+  const anzeigeProformas = (proformas ?? []).filter(p => {
+    if (filterId && p.id !== filterId) return false
+    if (statusFilter) {
+      if (statusFilter === 'entwurf' && !p.ist_entwurf) return false
+      if (statusFilter === 'abgerechnet' && (p.ist_entwurf || !p.rechnung_zu_proforma_id)) return false
+      if (statusFilter === 'offen' && (p.ist_entwurf || !!p.rechnung_zu_proforma_id)) return false
+    }
+    if (suche) {
+      const q = suche.toLowerCase()
+      return (
+        (p.rechnungsnummer ?? '').toLowerCase().includes(q) ||
+        (p.kunde_name ?? p.partner_freitext ?? '').toLowerCase().includes(q)
+      )
+    }
+    return true
+  })
 
   const selected = proformas?.find(p => p.id === selectedId) ?? null
 
@@ -765,42 +785,91 @@ export function ProformaPage() {
     <div className="flex h-full">
       {/* Liste */}
       <div className={`${formModus ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Proforma</h1>
-            {filterId && (
-              <button
-                onClick={() => setFilterId(null)}
-                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-800"
-              >
-                Gefiltert × alle anzeigen
-              </button>
-            )}
+        {/* Header – bleibt beim Scrollen stehen */}
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Proforma</h1>
+              {filterId && (
+                <button
+                  onClick={() => setFilterId(null)}
+                  className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-800"
+                >
+                  Gefiltert × alle anzeigen
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => { setFormModus('neu'); setSelectedId(null) }}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+            >
+              + Neue Proforma
+            </button>
           </div>
-          <button
-            onClick={() => { setFormModus('neu'); setSelectedId(null) }}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-          >
-            + Neue Proforma
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="search"
+              placeholder="Nummer oder Kunde suchen…"
+              value={suche}
+              onChange={e => setSuche(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 flex-1 min-w-[160px]"
+            />
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+            >
+              <option value="">Alle Status</option>
+              <option value="offen">Offen</option>
+              <option value="abgerechnet">Abgerechnet</option>
+              <option value="entwurf">Entwurf</option>
+            </select>
+          </div>
         </div>
+
+        {/* Kennzahlen – bleibt beim Scrollen stehen */}
+        {(proformas?.length ?? 0) > 0 && (
+          <div className="px-6 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Proformas</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{proformas!.length}</p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Offen</p>
+              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {proformas!.filter(p => !p.ist_entwurf && !p.rechnung_zu_proforma_id).length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Abgerechnet</p>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                {proformas!.filter(p => !!p.rechnung_zu_proforma_id).length}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
             </div>
-          ) : !anzeigeProformas.length ? (
+          ) : !proformas?.length ? (
             <div className="p-10 text-center">
               <p className="text-slate-500 dark:text-slate-400">Noch keine Proforma-Rechnungen vorhanden.</p>
               <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Klicke auf „+ Neue Proforma" oder erstelle eine aus einem Angebot.</p>
+            </div>
+          ) : !anzeigeProformas.length ? (
+            <div className="p-10 text-center">
+              <p className="text-slate-500 dark:text-slate-400">Keine Proformas für diese Filter.</p>
+              <button onClick={() => { setSuche(''); setStatusFilter('') }} className="mt-2 text-sm text-blue-600 hover:underline">Filter zurücksetzen</button>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Datum</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nummer</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kunde</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
@@ -824,8 +893,15 @@ export function ProformaPage() {
                           : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{p.rechnungsnummer}</td>
                     <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(p.datum)}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
+                      {p.rechnungsnummer}
+                      {(p.herkunft_angebot_nr ?? p.herkunft_auftrag_nr) && (
+                        <span className="ml-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">
+                          aus {p.herkunft_angebot_nr ?? p.herkunft_auftrag_nr}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{p.kunde_name ?? p.partner_freitext ?? '—'}</td>
                     <td className="px-5 py-3 text-right text-slate-700 dark:text-slate-200">
                       {(parseFloat(p.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')} €

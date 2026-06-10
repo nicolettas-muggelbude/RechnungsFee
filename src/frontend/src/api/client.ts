@@ -933,6 +933,12 @@ export type Rechnung = {
   proforma_zu_auftrag_nr: string | null
   angebot_zu_auftrag_id: number | null
   angebot_zu_auftrag_nr: string | null
+  herkunft_angebot_id: number | null
+  herkunft_angebot_nr: string | null
+  herkunft_auftrag_id: number | null
+  herkunft_auftrag_nr: string | null
+  herkunft_proforma_id: number | null
+  herkunft_proforma_nr: string | null
   erstellt_am: string
   aktualisiert_am: string
 }

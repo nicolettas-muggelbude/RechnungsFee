@@ -11,6 +11,14 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 - **Nie `git push`** ohne explizite Nachfrage
 - Skripte mit neuer Version: Änderungen nicht einzeln nachfragen
 
+## Tastaturkürzel
+
+| Kürzel | Aktion | Implementierung |
+|--------|--------|-----------------|
+| Strg + Super + E | Direkt zu Eingangsrechnungen | `AppLayout.tsx` keydown-Handler → `/rechnungen?typ=eingang`; `RechnungenPage` liest `?typ=`-Parameter |
+
+---
+
 ## Dev-Start (lokal)
 
 Zwei Terminals:

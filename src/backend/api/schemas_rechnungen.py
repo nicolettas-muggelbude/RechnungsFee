@@ -268,6 +268,13 @@ class RechnungResponse(BaseModel):
     proforma_zu_auftrag_nr: Optional[str] = None
     angebot_zu_auftrag_id: Optional[int] = None     # auf Auftrag: aus welchem Angebot
     angebot_zu_auftrag_nr: Optional[str] = None
+    # Herkunftsdokument (Lieferschein/Proforma/Rechnung: aus welchem Angebot/Auftrag/Proforma erstellt)
+    herkunft_angebot_id: Optional[int] = None
+    herkunft_angebot_nr: Optional[str] = None
+    herkunft_auftrag_id: Optional[int] = None
+    herkunft_auftrag_nr: Optional[str] = None
+    herkunft_proforma_id: Optional[int] = None
+    herkunft_proforma_nr: Optional[str] = None
     erstellt_am: datetime
     aktualisiert_am: datetime
 
@@ -410,7 +417,9 @@ class RechnungResponse(BaseModel):
                 pass
         _resolve("auftrag_zu_angebot_id",    "auftrag_zu_angebot_nr")
         _resolve("rechnung_zu_auftrag_id",   "rechnung_zu_auftrag_nr")
+        _resolve("rechnung_zu_proforma_id",  "rechnung_zu_proforma_nr")
         _resolve("lieferschein_zu_auftrag_id","lieferschein_zu_auftrag_nr")
+        _resolve("proforma_zu_angebot_id",   "proforma_zu_angebot_nr")
         _resolve("proforma_zu_auftrag_id",   "proforma_zu_auftrag_nr")
         # Bei Auftrag: Eltern-Angebot ermitteln
         if getattr(obj, "dokument_typ", None) == "Auftrag":
@@ -425,6 +434,75 @@ class RechnungResponse(BaseModel):
                     if eltern_ang:
                         data.angebot_zu_auftrag_id = eltern_ang.id
                         data.angebot_zu_auftrag_nr = eltern_ang.rechnungsnummer
+            except Exception:
+                pass
+        # Bei Lieferschein: Eltern-Angebot oder Eltern-Auftrag ermitteln
+        if getattr(obj, "dokument_typ", None) == "Lieferschein":
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    eltern_ang = session.query(obj.__class__).filter(
+                        obj.__class__.lieferschein_zu_angebot_id == obj.id,
+                        obj.__class__.dokument_typ == "Angebot",
+                    ).first()
+                    if eltern_ang:
+                        data.herkunft_angebot_id = eltern_ang.id
+                        data.herkunft_angebot_nr = eltern_ang.rechnungsnummer
+                    else:
+                        eltern_au = session.query(obj.__class__).filter(
+                            obj.__class__.lieferschein_zu_auftrag_id == obj.id,
+                            obj.__class__.dokument_typ == "Auftrag",
+                        ).first()
+                        if eltern_au:
+                            data.herkunft_auftrag_id = eltern_au.id
+                            data.herkunft_auftrag_nr = eltern_au.rechnungsnummer
+            except Exception:
+                pass
+        # Bei Proforma: Eltern-Angebot oder Eltern-Auftrag ermitteln
+        if getattr(obj, "dokument_typ", None) == "Proforma":
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    eltern_ang = session.query(obj.__class__).filter(
+                        obj.__class__.proforma_zu_angebot_id == obj.id,
+                        obj.__class__.dokument_typ == "Angebot",
+                    ).first()
+                    if eltern_ang:
+                        data.herkunft_angebot_id = eltern_ang.id
+                        data.herkunft_angebot_nr = eltern_ang.rechnungsnummer
+                    else:
+                        eltern_au = session.query(obj.__class__).filter(
+                            obj.__class__.proforma_zu_auftrag_id == obj.id,
+                            obj.__class__.dokument_typ == "Auftrag",
+                        ).first()
+                        if eltern_au:
+                            data.herkunft_auftrag_id = eltern_au.id
+                            data.herkunft_auftrag_nr = eltern_au.rechnungsnummer
+            except Exception:
+                pass
+        # Bei Rechnung: Eltern-Auftrag oder Eltern-Proforma ermitteln
+        if getattr(obj, "dokument_typ", None) in ("Rechnung", None):
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    eltern_au = session.query(obj.__class__).filter(
+                        obj.__class__.rechnung_zu_auftrag_id == obj.id,
+                        obj.__class__.dokument_typ == "Auftrag",
+                    ).first()
+                    if eltern_au:
+                        data.herkunft_auftrag_id = eltern_au.id
+                        data.herkunft_auftrag_nr = eltern_au.rechnungsnummer
+                    else:
+                        eltern_prf = session.query(obj.__class__).filter(
+                            obj.__class__.rechnung_zu_proforma_id == obj.id,
+                            obj.__class__.dokument_typ == "Proforma",
+                        ).first()
+                        if eltern_prf:
+                            data.herkunft_proforma_id = eltern_prf.id
+                            data.herkunft_proforma_nr = eltern_prf.rechnungsnummer
             except Exception:
                 pass
         return data
