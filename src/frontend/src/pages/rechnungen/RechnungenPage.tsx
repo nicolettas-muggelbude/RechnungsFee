@@ -3758,7 +3758,14 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                 }
               }}
               onFinalisiert={(r) => setPendingEditRechnung(r)}
-              onZahlungErfasst={(r) => setPendingEditRechnung(r)}
+              onZahlungErfasst={(r) => {
+                setPendingEditRechnung(r)
+                qc.setQueryData(
+                  ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus],
+                  (old: import('../../api/client').Rechnung[] | undefined) =>
+                    old?.map(x => x.id === r.id ? r : x) ?? old,
+                )
+              }}
               onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
               onRechnungAusLs={(id) => rechnungAusLsMutation.mutate(id)}
               onSelectId={(id, isLieferschein, filterRechnungId) => {
