@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -775,6 +775,29 @@ export function ProformaPage() {
 
   const selected = proformas?.find(p => p.id === selectedId) ?? null
 
+  const listContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (formModus) return
+      if (!anzeigeProformas.length) return
+      e.preventDefault()
+      const idx = selectedId != null ? anzeigeProformas.findIndex(p => p.id === selectedId) : -1
+      const nextIdx = e.key === 'ArrowDown' ? Math.min(idx + 1, anzeigeProformas.length - 1) : Math.max(idx - 1, 0)
+      const next = anzeigeProformas[nextIdx]
+      if (!next) return
+      setSelectedId(next.id)
+      listContainerRef.current?.focus({ preventScroll: true })
+      requestAnimationFrame(() => {
+        listContainerRef.current?.querySelector(`[data-proforma-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [anzeigeProformas, selectedId, formModus])
+
   function handleDelete() {
     if (!selected) return
     if (!confirm(`Proforma ${selected.rechnungsnummer} wirklich löschen?`)) return
@@ -849,7 +872,7 @@ export function ProformaPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
@@ -884,6 +907,7 @@ export function ProformaPage() {
                   return (
                   <tr
                     key={p.id}
+                    data-proforma-id={p.id}
                     onClick={() => { setSelectedId(p.id); setFormModus(null) }}
                     className={`border-b border-slate-50 dark:border-slate-700 last:border-0 cursor-pointer transition-colors ${
                       selectedId === p.id

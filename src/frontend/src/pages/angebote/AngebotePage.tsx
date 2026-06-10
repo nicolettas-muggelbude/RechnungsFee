@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -867,6 +867,29 @@ export function AngebotePage() {
     return true
   })
 
+  const listContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (formModus) return
+      if (!angeboteGefiltert.length) return
+      e.preventDefault()
+      const idx = selectedId != null ? angeboteGefiltert.findIndex(a => a.id === selectedId) : -1
+      const nextIdx = e.key === 'ArrowDown' ? Math.min(idx + 1, angeboteGefiltert.length - 1) : Math.max(idx - 1, 0)
+      const next = angeboteGefiltert[nextIdx]
+      if (!next) return
+      setSelectedId(next.id)
+      listContainerRef.current?.focus({ preventScroll: true })
+      requestAnimationFrame(() => {
+        listContainerRef.current?.querySelector(`[data-angebot-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [angeboteGefiltert, selectedId, formModus])
+
   function handleDelete() {
     if (!selected) return
     if (!confirm(`Angebot ${selected.rechnungsnummer} wirklich löschen?`)) return
@@ -934,7 +957,7 @@ export function AngebotePage() {
         )}
 
         {/* Tabelle */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
           {isLoading ? (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
@@ -965,6 +988,7 @@ export function AngebotePage() {
                 {angeboteGefiltert.map(a => (
                   <tr
                     key={a.id}
+                    data-angebot-id={a.id}
                     onClick={() => { setSelectedId(a.id); setFormModus(null) }}
                     className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
                       selectedId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''

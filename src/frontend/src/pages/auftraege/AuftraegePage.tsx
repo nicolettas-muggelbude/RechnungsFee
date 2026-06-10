@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -770,6 +770,29 @@ export function AuftraegePage() {
     return true
   })
 
+  const listContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (zeigFormular) return
+      if (!auftraegeListe.length) return
+      e.preventDefault()
+      const idx = selId != null ? auftraegeListe.findIndex(a => a.id === selId) : -1
+      const nextIdx = e.key === 'ArrowDown' ? Math.min(idx + 1, auftraegeListe.length - 1) : Math.max(idx - 1, 0)
+      const next = auftraegeListe[nextIdx]
+      if (!next) return
+      setSelId(next.id)
+      listContainerRef.current?.focus({ preventScroll: true })
+      requestAnimationFrame(() => {
+        listContainerRef.current?.querySelector(`[data-auftrag-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [auftraegeListe, selId, zeigFormular])
+
   // ?id=X beim ersten Mount: Auftrag direkt vom Server laden (wie RechnungenPage)
   useEffect(() => {
     const openId = searchParams.get('id')
@@ -891,7 +914,7 @@ export function AuftraegePage() {
         )}
 
         {/* Einträge */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
           {isLoading && (
             <div className="p-6 animate-pulse space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded" />)}
@@ -924,6 +947,7 @@ export function AuftraegePage() {
                 {auftraegeListe.map(a => (
                   <tr
                     key={a.id}
+                    data-auftrag-id={a.id}
                     onClick={() => { setSelId(a.id); setZeigFormular(false) }}
                     className={`border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors ${
                       selId === a.id ? 'bg-blue-50 dark:bg-slate-600 border-l-2 border-l-blue-500' : ''
