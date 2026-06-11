@@ -1461,9 +1461,11 @@ def _run_migrations() -> None:
             print("[Migration] Schema auf Version 67 (Datenfix: Betriebseinnahmen (7%) euer_zeile=12)")
 
         if version < 68:
-            conn.execute(text(
-                "ALTER TABLE unternehmen ADD COLUMN wiederkehrend_aktiv BOOLEAN NOT NULL DEFAULT 0"
-            ))
+            cols68 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "wiederkehrend_aktiv" not in cols68:
+                conn.execute(text(
+                    "ALTER TABLE unternehmen ADD COLUMN wiederkehrend_aktiv BOOLEAN NOT NULL DEFAULT 0"
+                ))
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS rechnungsvorlagen (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
