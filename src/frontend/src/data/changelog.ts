@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juni 2026',
     eintraege: [
       { typ: 'neu', text: 'EÜR Aufschlüsselung: Schaltfläche „🔍 Aufschlüsselung" zeigt je EÜR-Zeile die enthaltenen Kategorien mit Einzelbeträgen – für Steuerberater und eigene Kontrolle' },
+      { typ: 'verbesserung', text: 'Mail-Signatur: Vorschau rendert jetzt Markdown als HTML (Fett, Links, Bilder) statt Rohtext – Markdown-Hilfe mit Cheatsheet einblendbar (Issue #150)' },
       { typ: 'verbesserung', text: 'Buchungsanzeige: Kategorie-Dropdowns können optional die SKR03- oder SKR04-Kontonummer hinter der Bezeichnung anzeigen (z. B. „Büromaterial [4930]") – einstellbar unter Einstellungen → Unternehmen → Rechnungen' },
     ],
   },

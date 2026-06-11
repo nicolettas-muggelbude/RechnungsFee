@@ -963,6 +963,25 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
 const DEFAULT_SIGNATUR = (firmenname: string) =>
   `--\n${firmenname}`
 
+function mdToHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.9em">$1</code>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:200px;vertical-align:middle">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#2563eb">$1</a>')
+    .replace(/\n/g, '<br>')
+}
+
+const MD_CHEATSHEET = [
+  { syntax: '**fett**',         ergebnis: 'fett' },
+  { syntax: '*kursiv*',         ergebnis: 'kursiv' },
+  { syntax: '`code`',           ergebnis: 'code' },
+  { syntax: '[Text](URL)',       ergebnis: 'Link' },
+  { syntax: '![alt](bild-url)', ergebnis: 'Bild' },
+]
+
 function SignaturSektion({ data }: { data: Unternehmen }) {
   const qc = useQueryClient()
   const [signatur, setSignatur] = useState(
@@ -970,6 +989,7 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
   )
   const [gespeichert, setGespeichert] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
+  const [zeigHilfe, setZeigHilfe] = useState(false)
 
   const mut = useMutation({
     mutationFn: () => updateUnternehmen({ mail_signatur: signatur }),
@@ -986,7 +1006,32 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">Signatur-Text</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Signatur-Text</label>
+            <button
+              type="button"
+              onClick={() => setZeigHilfe(v => !v)}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {zeigHilfe ? 'Hilfe ausblenden' : 'Markdown-Hilfe'}
+            </button>
+          </div>
+          {zeigHilfe && (
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Markdown-Syntax</p>
+              <table className="w-full text-xs">
+                <tbody>
+                  {MD_CHEATSHEET.map(r => (
+                    <tr key={r.syntax} className="border-t border-slate-100 dark:border-slate-800 first:border-0">
+                      <td className="py-1 pr-3 font-mono text-slate-600 dark:text-slate-300">{r.syntax}</td>
+                      <td className="py-1 text-slate-400 dark:text-slate-500">→ {r.ergebnis}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">HTML-Tags wie <code className="font-mono">&lt;pre&gt;</code> werden ebenfalls unterstützt.</p>
+            </div>
+          )}
           <textarea
             value={signatur}
             onChange={ev => setSignatur(ev.target.value)}
@@ -997,9 +1042,12 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</p>
-          <div className="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 min-h-32">
-            <pre className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-sans">{signatur || <span className="text-slate-300 dark:text-slate-600 italic">Noch kein Text eingegeben</span>}</pre>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau (HTML-Mail)</p>
+          <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 min-h-32 text-xs text-slate-700 dark:text-slate-300">
+            {signatur
+              ? <div dangerouslySetInnerHTML={{ __html: mdToHtml(signatur) }} />
+              : <span className="text-slate-300 dark:text-slate-600 italic">Noch kein Text eingegeben</span>
+            }
           </div>
         </div>
       </div>
