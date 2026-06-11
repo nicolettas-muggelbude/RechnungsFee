@@ -166,15 +166,34 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                 kz[mapping[0]] += marge if marge else e.netto_betrag
                 kz[mapping[1]] += e.ust_betrag
 
+        # Storno einer Einnahme: art ist "Ausgabe" (umgekehrt), konto_ust_skr ist Einnahme-Konto.
+        # Muss Ausgangsumsätze (KZ 81/83 etc.) reduzieren – sonst bleibt der Original-Umsatz
+        # stehen und der Storno ist in der UStVA unsichtbar.
+        if e.art == "Ausgabe" and e.ust_betrag and e.ust_betrag != 0:
+            mapping = _KONTO_EINNAHME.get(ust_konto)
+            if mapping:
+                kz[mapping[0]] -= e.netto_betrag
+                kz[mapping[1]] -= e.ust_betrag
+
         # KZ 41 – ig. Lieferungen: 0% USt, Erkennung via konto_skr03 8125/3125
         if (e.art == "Einnahme"
                 and (e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
                 and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
             kz["kz_41"] += e.netto_betrag
 
+        # Ausgabe-Vorsteuer → KZ 66/61/67.
+        # Storno einer Einnahme hat ebenfalls art=Ausgabe, aber konto_ust ist ein Einnahme-Konto
+        # → ausschließen, damit kein falscher Vorsteuer-Eintrag entsteht.
         if e.art == "Ausgabe" and e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
+            if not _KONTO_EINNAHME.get(ust_konto):
+                vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
+                kz[vst_kz] += e.vorsteuer_betrag
+
+        # Storno einer Ausgabe: art ist "Einnahme" (umgekehrt), vorsteuer_betrag ist negativ.
+        # Muss Vorsteuer (KZ 66 etc.) reduzieren – sonst bleibt die Original-Vorsteuer stehen.
+        if e.art == "Einnahme" and e.vorsteuer_betrag and e.vorsteuer_betrag < 0:
             vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
-            kz[vst_kz] += e.vorsteuer_betrag
+            kz[vst_kz] += e.vorsteuer_betrag  # negativer Wert → reduziert KZ
 
     q = Decimal("0.01")
     for k in kz:
