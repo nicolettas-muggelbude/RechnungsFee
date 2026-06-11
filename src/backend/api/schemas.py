@@ -78,6 +78,7 @@ class UnternehmenBase(BaseModel):
     angebote_aktiv: bool = False
     proforma_aktiv: bool = False
     auftraege_aktiv: bool = False
+    wiederkehrend_aktiv: bool = False
 
     @field_validator("versteuerungsart")
     @classmethod
