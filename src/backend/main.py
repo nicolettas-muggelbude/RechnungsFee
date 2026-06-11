@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail
 
-SCHEMA_VERSION = 66
+SCHEMA_VERSION = 67
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1448,6 +1448,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 66"))
             conn.commit()
             print("[Migration] Schema auf Version 66 (SMTP + Mail-Templates pro Dokumenttyp)")
+
+        if version < 67:
+            # Datenfix Issue #132: 'Betriebseinnahmen (7%)' fehlte in Migration 26 →
+            # euer_zeile war NULL → 7%-Umsätze aus Rechnungs-Zahlungen wurden nicht in EÜR gezeigt.
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile = 12 WHERE name = 'Betriebseinnahmen (7%)' AND euer_zeile IS NOT 12"
+            ))
+            conn.execute(text("PRAGMA user_version = 67"))
+            conn.commit()
+            print("[Migration] Schema auf Version 67 (Datenfix: Betriebseinnahmen (7%) euer_zeile=12)")
 
 
 def _migrate_kategorien() -> None:

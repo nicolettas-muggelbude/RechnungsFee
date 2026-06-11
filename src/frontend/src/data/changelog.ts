@@ -31,6 +31,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Markdown-Signatur: die Mail-Signatur wird als HTML gerendert (Fett, Links, Zeilenumbrüche) mit plain-text-Fallback für ältere Mailprogramme' },
       { typ: 'verbesserung', text: 'Beim Fallback auf den OS-Mailclient erscheint ein Hinweis-Toast mit Link zur SMTP-Einrichtung – Dokumentenpakete können per mailto nicht als Anhang mitgesendet werden' },
       { typ: 'fix', text: 'Dokumentenpaket-Anhang: Dateiname wurde fälschlicherweise auf dem Paket-Eintrag gesucht statt auf dem verknüpften Beleg – Anhänge haben jetzt den korrekten Originalnamen' },
+      { typ: 'fix', text: 'EÜR: Betriebseinnahmen aus Rechnungen mit 7 % USt wurden nicht angezeigt – die Kategorie „Betriebseinnahmen (7%)" fehlte in Migration 26 und hatte kein EÜR-Zeilen-Mapping (Issue #132)' },
+      { typ: 'fix', text: 'EÜR und UStVA: Storno-Gegenbuchungen wurden nicht korrekt verrechnet – Einnahme-Storni wurden addiert statt subtrahiert; Vorsteuer-Storni wurden ignoriert' },
     ],
   },
   {
