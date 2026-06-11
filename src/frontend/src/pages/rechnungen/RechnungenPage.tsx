@@ -453,6 +453,7 @@ function ZahlungsDialog({
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['auftraege'] })
+      qc.invalidateQueries({ queryKey: ['vorlage-rechnungen'] })
       onSuccess(result)
     },
     onError: (e: Error) => setFehler(e.message),
@@ -900,6 +901,7 @@ function RechnungDetail({
     mutationFn: (grund: string) => stornoRechnung(rechnung.id, grund),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      qc.invalidateQueries({ queryKey: ['vorlage-rechnungen'] })
       setZeigStornoEingabe(false)
       setStornoGrund(null)
       setStornoSonstiges('')
@@ -917,6 +919,7 @@ function RechnungDetail({
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       qc.invalidateQueries({ queryKey: ['auftraege'] })
+      qc.invalidateQueries({ queryKey: ['vorlage-rechnungen'] })
       onFinalisiert?.(updated)
     },
     onError: (e: Error) => alert(e.message),
@@ -935,6 +938,7 @@ function RechnungDetail({
     mutationFn: () => forderungsausbuchenRechnung(rechnung.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      qc.invalidateQueries({ queryKey: ['vorlage-rechnungen'] })
       setZeigForderungsausfall(false)
     },
     onError: (e: Error) => alert(e.message),
