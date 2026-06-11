@@ -11,6 +11,19 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 - **Nie `git push`** ohne explizite Nachfrage
 - Skripte mit neuer Version: Änderungen nicht einzeln nachfragen
 
+## Issue-Management
+
+### Automatisches Schließen bei ausbleibender Antwort
+
+Label **`awaiting-response`** auf ein Issue setzen → schließt sich automatisch nach **14 Tagen** ohne Reaktion (täglicher Cron-Job, `.github/workflows/stale.yml`).
+
+**Ablauf:**
+1. Issue kommentieren und auf Antwort warten
+2. Label `awaiting-response` setzen (GitHub-Seitenleiste)
+3. Antwortet jemand → Label entfernen, sonst schließt es sich automatisch
+
+---
+
 ## Tastaturkürzel
 
 | Kürzel | Aktion | Implementierung |
