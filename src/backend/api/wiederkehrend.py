@@ -447,6 +447,7 @@ def beende_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     auftrag_id = v.auftrag_id
     v.aktiv = False
     v.beendet = True
+    db.flush()  # aktiv=False muss in DB sichtbar sein bevor _revert_auftrag_status abfragt
     if auftrag_id:
         _revert_auftrag_status(auftrag_id, db, ziel_status="abgeschlossen")
     db.commit()
