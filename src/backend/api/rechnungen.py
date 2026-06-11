@@ -1202,10 +1202,16 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         Rechnung.proforma_zu_auftrag_id == rechnung_id,
         Rechnung.dokument_typ == "Auftrag",
     ).first()
+    def _hat_aktive_vorlage(auftrag_id: int) -> bool:
+        from database.models import Rechnungsvorlage as _RV
+        return bool(db.query(_RV).filter(
+            _RV.auftrag_id == auftrag_id, _RV.aktiv == True  # noqa: E712
+        ).first())
+
     if _auftrag_ref:
         _auftrag_ref.proforma_zu_auftrag_id = None
         if not _auftrag_ref.rechnung_zu_auftrag_id and not _auftrag_ref.lieferschein_zu_auftrag_id:
-            _auftrag_ref.auftrag_status = "offen"
+            _auftrag_ref.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref.id) else "offen"
     _auftrag_ref2 = db.query(Rechnung).filter(
         Rechnung.rechnung_zu_auftrag_id == rechnung_id,
         Rechnung.dokument_typ == "Auftrag",
@@ -1213,9 +1219,9 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     if _auftrag_ref2:
         _auftrag_ref2.rechnung_zu_auftrag_id = None
         if not _auftrag_ref2.proforma_zu_auftrag_id and not _auftrag_ref2.lieferschein_zu_auftrag_id:
-            _auftrag_ref2.auftrag_status = "offen"
+            _auftrag_ref2.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref2.id) else "offen"
         elif _auftrag_ref2.auftrag_status == "rechnung_gestellt":
-            _auftrag_ref2.auftrag_status = "in_bearbeitung"
+            _auftrag_ref2.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref2.id) else "in_bearbeitung"
     db.delete(rechnung)
     db.commit()
 
@@ -2782,7 +2788,7 @@ class AuftragStatusUpdate(BaseModel):
 
 @router.post("/{auftrag_id}/auftrag-status", response_model=RechnungResponse)
 def auftrag_status_setzen(auftrag_id: int, data: AuftragStatusUpdate, db: Session = Depends(get_db)):
-    erlaubt = {"offen", "in_bearbeitung", "rechnung_gestellt", "abgeschlossen", "storniert"}
+    erlaubt = {"offen", "in_bearbeitung", "laufend", "rechnung_gestellt", "abgeschlossen", "storniert"}
     if data.status not in erlaubt:
         raise HTTPException(status_code=422, detail=f"Status muss einer von {erlaubt} sein.")
     auftrag = db.query(Rechnung).filter(

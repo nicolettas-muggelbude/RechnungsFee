@@ -1623,9 +1623,13 @@ export type Rechnungsvorlage = {
   letzte_erstellung: string | null
   erstellte_rechnungen: number
   erstellt_am: string
+  auftrag_id: number | null
+  auftrag_nr: string | null
+  beleg_id: number | null
+  beleg_name: string | null
 }
 
-export type VorlageCreate = Omit<Rechnungsvorlage, 'id' | 'kunde_name' | 'letzte_erstellung' | 'erstellte_rechnungen' | 'erstellt_am'>
+export type VorlageCreate = Omit<Rechnungsvorlage, 'id' | 'kunde_name' | 'auftrag_nr' | 'beleg_id' | 'beleg_name' | 'letzte_erstellung' | 'erstellte_rechnungen' | 'erstellt_am'>
 export type VorlageUpdate = Partial<VorlageCreate>
 
 export const getVorlagen = () => request<Rechnungsvorlage[]>('/wiederkehrend')
@@ -1641,4 +1645,11 @@ export const entwurfJetzt = (id: number) =>
   request<EntwurfErgebnis>(`/wiederkehrend/${id}/jetzt`, { method: 'POST' })
 export const preiseSynchronisieren = (id: number) =>
   request<Rechnungsvorlage>(`/wiederkehrend/${id}/preise-sync`, { method: 'POST' })
+export const uploadVertragVorlage = (id: number, datei: File) => {
+  const form = new FormData()
+  form.append('datei', datei)
+  return request<Rechnungsvorlage>(`/wiederkehrend/${id}/vertrag`, { method: 'POST', body: form })
+}
+export const deleteVertragVorlage = (id: number) =>
+  request<Rechnungsvorlage>(`/wiederkehrend/${id}/vertrag`, { method: 'DELETE' })
 

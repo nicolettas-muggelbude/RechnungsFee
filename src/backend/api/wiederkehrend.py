@@ -9,24 +9,29 @@ Abweichung wird als Preisaenderung zurückgegeben.
 """
 
 import calendar
+import hashlib
 import json
+import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import (
     Artikel,
+    Beleg,
     Nummernkreis,
     Rechnung,
     Rechnungsposition,
     Rechnungsvorlage,
     Unternehmen,
 )
+from api.rechnungen import APP_DATA_DIR, BELEG_DIR, ERLAUBTE_MIME_TYPES
 
 router = APIRouter(prefix="/api/wiederkehrend", tags=["Wiederkehrend"])
 
@@ -57,6 +62,7 @@ class VorlageCreate(BaseModel):
     zahlungsziel_tage: Optional[int] = None
     notizen: Optional[str] = None
     positionen: list[VorlagePosition] = []
+    auftrag_id: Optional[int] = None
 
 
 class VorlageUpdate(BaseModel):
@@ -68,6 +74,7 @@ class VorlageUpdate(BaseModel):
     zahlungsziel_tage: Optional[int] = None
     notizen: Optional[str] = None
     positionen: Optional[list[VorlagePosition]] = None
+    auftrag_id: Optional[int] = None
 
 
 class Preisaenderung(BaseModel):
@@ -99,6 +106,10 @@ class VorlageResponse(BaseModel):
     letzte_erstellung: Optional[date]
     erstellte_rechnungen: int
     erstellt_am: datetime
+    auftrag_id: Optional[int]
+    auftrag_nr: Optional[str]
+    beleg_id: Optional[int]
+    beleg_name: Optional[str]
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +181,30 @@ def _to_response(v: Rechnungsvorlage) -> VorlageResponse:
         letzte_erstellung=v.letzte_erstellung,
         erstellte_rechnungen=v.erstellte_rechnungen,
         erstellt_am=v.erstellt_am,
+        auftrag_id=v.auftrag_id,
+        auftrag_nr=v.auftrag.rechnungsnummer if v.auftrag else None,
+        beleg_id=v.beleg_id,
+        beleg_name=v.beleg.original_name if v.beleg else None,
     )
+
+
+def _set_auftrag_laufend(auftrag: Rechnung) -> None:
+    """Setzt Auftrag-Status auf 'laufend' wenn noch nicht abgeschlossen/storniert."""
+    if auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
+        auftrag.auftrag_status = "laufend"
+
+
+def _revert_auftrag_status(auftrag_id: int, db: Session) -> None:
+    """Setzt Auftrag-Status zurück wenn keine aktiven Vorlagen mehr existieren."""
+    hat_aktive = db.query(Rechnungsvorlage).filter(
+        Rechnungsvorlage.auftrag_id == auftrag_id,
+        Rechnungsvorlage.aktiv == True,  # noqa: E712
+    ).first()
+    if hat_aktive:
+        return
+    auftrag = db.query(Rechnung).filter(Rechnung.id == auftrag_id).first()
+    if auftrag and auftrag.auftrag_status == "laufend":
+        auftrag.auftrag_status = "in_bearbeitung"
 
 
 def _erstelle_entwurf(vorlage: Rechnungsvorlage, db: Session) -> tuple[int, str, list[dict]]:
@@ -302,6 +336,10 @@ def liste_vorlagen(db: Session = Depends(get_db)):
 def erstelle_vorlage(data: VorlageCreate, db: Session = Depends(get_db)):
     if data.intervall not in INTERVALLE:
         raise HTTPException(400, f"intervall muss einer von {sorted(INTERVALLE)} sein.")
+    if data.auftrag_id:
+        auftrag = db.query(Rechnung).filter(Rechnung.id == data.auftrag_id).first()
+        if not auftrag or auftrag.dokument_typ != "Auftrag":
+            raise HTTPException(404, "Auftrag nicht gefunden.")
     v = Rechnungsvorlage(
         bezeichnung=data.bezeichnung,
         intervall=data.intervall,
@@ -311,8 +349,12 @@ def erstelle_vorlage(data: VorlageCreate, db: Session = Depends(get_db)):
         zahlungsziel_tage=data.zahlungsziel_tage,
         notizen=data.notizen,
         positionen_json=json.dumps([p.model_dump() for p in data.positionen], default=str),
+        auftrag_id=data.auftrag_id,
     )
     db.add(v)
+    db.flush()
+    if data.auftrag_id and data.aktiv:
+        _set_auftrag_laufend(auftrag)
     db.commit()
     db.refresh(v)
     return _to_response(v)
@@ -339,8 +381,16 @@ def aktualisiere_vorlage(vorlage_id: int, data: VorlageUpdate, db: Session = Dep
         v.intervall = data.intervall
     if data.naechstes_datum is not None:
         v.naechstes_datum = data.naechstes_datum
+    alter_auftrag_id = v.auftrag_id
     if data.aktiv is not None:
+        war_aktiv = v.aktiv
         v.aktiv = data.aktiv
+        if war_aktiv and not data.aktiv and v.auftrag_id:
+            _revert_auftrag_status(v.auftrag_id, db)
+        elif not war_aktiv and data.aktiv and v.auftrag_id:
+            auftrag = db.query(Rechnung).filter(Rechnung.id == v.auftrag_id).first()
+            if auftrag:
+                _set_auftrag_laufend(auftrag)
     if data.kunde_id is not None:
         v.kunde_id = data.kunde_id
     if data.zahlungsziel_tage is not None:
@@ -349,6 +399,20 @@ def aktualisiere_vorlage(vorlage_id: int, data: VorlageUpdate, db: Session = Dep
         v.notizen = data.notizen
     if data.positionen is not None:
         v.positionen_json = json.dumps([p.model_dump() for p in data.positionen], default=str)
+    if data.auftrag_id is not None:
+        if data.auftrag_id != v.auftrag_id:
+            # Alten Auftrag-Status ggf. zurücksetzen
+            if alter_auftrag_id:
+                _revert_auftrag_status(alter_auftrag_id, db)
+            if data.auftrag_id > 0:
+                neuer_auftrag = db.query(Rechnung).filter(Rechnung.id == data.auftrag_id).first()
+                if not neuer_auftrag or neuer_auftrag.dokument_typ != "Auftrag":
+                    raise HTTPException(404, "Auftrag nicht gefunden.")
+                v.auftrag_id = data.auftrag_id
+                if v.aktiv:
+                    _set_auftrag_laufend(neuer_auftrag)
+            else:
+                v.auftrag_id = None
     db.commit()
     db.refresh(v)
     return _to_response(v)
@@ -359,7 +423,11 @@ def loesche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     v = db.query(Rechnungsvorlage).filter(Rechnungsvorlage.id == vorlage_id).first()
     if not v:
         raise HTTPException(404, "Vorlage nicht gefunden.")
+    auftrag_id = v.auftrag_id
     db.delete(v)
+    db.flush()
+    if auftrag_id:
+        _revert_auftrag_status(auftrag_id, db)
     db.commit()
 
 
@@ -413,6 +481,67 @@ def preise_synchronisieren(vorlage_id: int, db: Session = Depends(get_db)):
                 p["netto"] = str(art.vk_netto)
                 p["ust_satz"] = str(art.steuersatz)
     v.positionen_json = json.dumps(positionen, default=str)
+    db.commit()
+    db.refresh(v)
+    return _to_response(v)
+
+
+@router.post("/{vorlage_id}/vertrag", response_model=VorlageResponse)
+async def upload_vertrag(vorlage_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Vertrag-PDF an eine Vorlage hängen (ersetzt vorherigen Vertrag)."""
+    v = db.query(Rechnungsvorlage).filter(Rechnungsvorlage.id == vorlage_id).first()
+    if not v:
+        raise HTTPException(404, "Vorlage nicht gefunden.")
+    mime = datei.content_type or ""
+    if mime not in ERLAUBTE_MIME_TYPES:
+        raise HTTPException(422, f"Dateityp '{mime}' nicht erlaubt. Erlaubt: PDF, JPEG, PNG, TIFF.")
+    inhalt = await datei.read()
+    sha256 = hashlib.sha256(inhalt).hexdigest()
+    jetzt = datetime.now()
+    ziel_dir = BELEG_DIR / str(jetzt.year) / jetzt.strftime("%m")
+    ziel_dir.mkdir(parents=True, exist_ok=True)
+    original = Path(datei.filename or "vertrag")
+    stem = original.stem[:50]
+    suffix = original.suffix.lower() or ".bin"
+    dateiname_lokal = f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
+    rel_pfad = f"belege/{jetzt.year}/{jetzt.strftime('%m')}/{dateiname_lokal}"
+    (ziel_dir / dateiname_lokal).write_bytes(inhalt)
+    if v.beleg_id:
+        alter_beleg = db.query(Beleg).filter(Beleg.id == v.beleg_id).first()
+        if alter_beleg:
+            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
+            if alter_pfad.exists():
+                alter_pfad.unlink()
+            db.delete(alter_beleg)
+    beleg = Beleg(
+        dateiname=rel_pfad,
+        original_name=datei.filename or "vertrag",
+        mime_type=mime,
+        dateigroesse=len(inhalt),
+        sha256=sha256,
+    )
+    db.add(beleg)
+    db.flush()
+    v.beleg_id = beleg.id
+    db.commit()
+    db.refresh(v)
+    return _to_response(v)
+
+
+@router.delete("/{vorlage_id}/vertrag", response_model=VorlageResponse)
+def loesche_vertrag(vorlage_id: int, db: Session = Depends(get_db)):
+    """Vertrag-PDF von Vorlage entfernen."""
+    v = db.query(Rechnungsvorlage).filter(Rechnungsvorlage.id == vorlage_id).first()
+    if not v:
+        raise HTTPException(404, "Vorlage nicht gefunden.")
+    if v.beleg_id:
+        beleg = db.query(Beleg).filter(Beleg.id == v.beleg_id).first()
+        if beleg:
+            pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+            if pfad.exists():
+                pfad.unlink()
+            db.delete(beleg)
+        v.beleg_id = None
     db.commit()
     db.refresh(v)
     return _to_response(v)

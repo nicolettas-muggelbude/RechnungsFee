@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getVorlagen, createVorlage, updateVorlage, deleteVorlage,
   entwurfJetzt, preiseSynchronisieren, getKunden, getUstSaetze,
+  getAuftraege, getUnternehmen, uploadVertragVorlage, deleteVertragVorlage,
   type Rechnungsvorlage, type VorlageCreate, type EntwurfErgebnis,
-  type ArtikelSuche,
+  type ArtikelSuche, type Rechnung,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 
@@ -182,11 +183,21 @@ function VorlageFormular({
   isSaving,
   onSpeichern,
   onAbbrechen,
+  auftraegeAktiv = false,
+  auftraege = [],
+  onVertragUpload,
+  onVertragDelete,
+  isVertragUploading = false,
 }: {
   initial?: Rechnungsvorlage
   isSaving: boolean
   onSpeichern: (data: VorlageCreate) => void
   onAbbrechen: () => void
+  auftraegeAktiv?: boolean
+  auftraege?: Rechnung[]
+  onVertragUpload?: (file: File) => void
+  onVertragDelete?: () => void
+  isVertragUploading?: boolean
 }) {
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: ustSaetze } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze })
@@ -203,6 +214,7 @@ function VorlageFormular({
   const [kundeId, setKundeId] = useState(initial?.kunde_id ? String(initial.kunde_id) : '')
   const [zahlungsziel, setZahlungsziel] = useState(initial?.zahlungsziel_tage ? String(initial.zahlungsziel_tage) : '')
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
+  const [auftragId, setAuftragId] = useState(initial?.auftrag_id ? String(initial.auftrag_id) : '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>('netto')
   const [fehler, setFehler] = useState<string | null>(null)
 
@@ -256,6 +268,7 @@ function VorlageFormular({
       naechstes_datum: naechstesDatum,
       aktiv,
       kunde_id: kundeId ? parseInt(kundeId) : null,
+      auftrag_id: auftragId ? parseInt(auftragId) : null,
       zahlungsziel_tage: zahlungsziel ? parseInt(zahlungsziel) : null,
       notizen: notizen.trim() || null,
       positionen: positionen
@@ -338,6 +351,60 @@ function VorlageFormular({
           placeholder="Erscheint als Fußtext auf der Rechnung"
         />
       </div>
+
+      {auftraegeAktiv && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Auftrag verknüpfen</label>
+          <select value={auftragId} onChange={e => setAuftragId(e.target.value)} className={selectCls}>
+            <option value="">— Kein Auftrag —</option>
+            {auftraege.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.rechnungsnummer} · {a.kunde_name ?? ''}
+              </option>
+            ))}
+          </select>
+          {auftragId && (
+            <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">
+              Der Auftrag wird auf „Laufend" gesetzt, solange diese Vorlage aktiv ist.
+            </p>
+          )}
+        </div>
+      )}
+
+      {initial && (
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+            Vertragsdokument (PDF)
+          </label>
+          {initial.beleg_name ? (
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
+              <span className="text-slate-400 dark:text-slate-500 text-lg">📄</span>
+              <span className="text-sm text-slate-700 dark:text-slate-200 flex-1 truncate">{initial.beleg_name}</span>
+              <button type="button" onClick={onVertragDelete}
+                disabled={isVertragUploading}
+                className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 disabled:opacity-50 shrink-0">
+                Entfernen
+              </button>
+            </div>
+          ) : (
+            <label className={`flex items-center gap-3 cursor-pointer rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-3 hover:border-blue-400 dark:hover:border-blue-600 transition-colors${isVertragUploading ? ' opacity-50 pointer-events-none' : ''}`}>
+              <span className="text-2xl">📎</span>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                  {isVertragUploading ? 'Wird hochgeladen…' : 'Vertragsdokument hochladen'}
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">PDF, JPG, PNG – max. 20 MB</p>
+              </div>
+              <input
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) onVertragUpload?.(f) }}
+              />
+            </label>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -448,6 +515,21 @@ function VorlageKarte({
         </div>
       </div>
 
+      {(vorlage.auftrag_nr || vorlage.beleg_name) && (
+        <div className="flex flex-wrap gap-2">
+          {vorlage.auftrag_nr && (
+            <span className="inline-flex items-center gap-1 text-xs bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700 rounded-full px-2 py-0.5">
+              📋 {vorlage.auftrag_nr}
+            </span>
+          )}
+          {vorlage.beleg_name && (
+            <span className="inline-flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">
+              📄 Vertrag hinterlegt
+            </span>
+          )}
+        </div>
+      )}
+
       {vorlage.positionen.length > 0 && (
         <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
           {vorlage.positionen.slice(0, 3).map((p, i) => (
@@ -503,6 +585,13 @@ export function WiederkehrendePage() {
     queryFn: getVorlagen,
   })
 
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+  const { data: auftraege = [] } = useQuery({
+    queryKey: ['auftraege'],
+    queryFn: getAuftraege,
+    enabled: !!unternehmen?.auftraege_aktiv,
+  })
+
   const vorlagenGefiltert = vorlagen.filter(v => {
     if (intervallFilter && v.intervall !== intervallFilter) return false
     if (aktivFilter === 'aktiv' && !v.aktiv) return false
@@ -540,6 +629,19 @@ export function WiederkehrendePage() {
 
   const syncMut = useMutation({
     mutationFn: preiseSynchronisieren,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wiederkehrend'] }),
+  })
+
+  const vertragUploadMut = useMutation({
+    mutationFn: ({ id, datei }: { id: number; datei: File }) => uploadVertragVorlage(id, datei),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wiederkehrend'] })
+      qc.invalidateQueries({ queryKey: ['auftraege'] })
+    },
+  })
+
+  const vertragDeleteMut = useMutation({
+    mutationFn: (id: number) => deleteVertragVorlage(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wiederkehrend'] }),
   })
 
@@ -644,6 +746,11 @@ export function WiederkehrendePage() {
             isSaving={createMut.isPending || updateMut.isPending}
             onSpeichern={handleSave}
             onAbbrechen={() => setFormModus(null)}
+            auftraegeAktiv={!!unternehmen?.auftraege_aktiv}
+            auftraege={auftraege}
+            onVertragUpload={typeof formModus === 'number' ? (datei) => vertragUploadMut.mutate({ id: formModus, datei }) : undefined}
+            onVertragDelete={typeof formModus === 'number' ? () => vertragDeleteMut.mutate(formModus) : undefined}
+            isVertragUploading={vertragUploadMut.isPending || vertragDeleteMut.isPending}
           />
         </div>
       )}

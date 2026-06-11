@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend
 
-SCHEMA_VERSION = 69
+SCHEMA_VERSION = 70
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1502,6 +1502,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 69"))
             conn.commit()
             print("[Migration] Schema auf Version 69 (Datenfix #132: 'Betriebseinnahmen (19%)' → 'Betriebseinnahmen', euer_zeile=12 gesichert)")
+
+        if version < 70:
+            cols70 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungsvorlagen)")).fetchall()}
+            if "auftrag_id" not in cols70:
+                conn.execute(text(
+                    "ALTER TABLE rechnungsvorlagen ADD COLUMN auftrag_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL"
+                ))
+            if "beleg_id" not in cols70:
+                conn.execute(text(
+                    "ALTER TABLE rechnungsvorlagen ADD COLUMN beleg_id INTEGER REFERENCES belege(id) ON DELETE SET NULL"
+                ))
+            conn.execute(text("PRAGMA user_version = 70"))
+            conn.commit()
+            print("[Migration] Schema auf Version 70 (rechnungsvorlagen: auftrag_id + beleg_id für Auftrag-Verknüpfung und Vertrags-Upload)")
 
 
 def _migrate_kategorien() -> None:

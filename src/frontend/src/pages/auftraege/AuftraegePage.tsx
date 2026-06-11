@@ -31,6 +31,7 @@ const selectCls = `${inputCls} bg-white dark:bg-slate-700`
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   offen:              { label: 'Offen',           cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
   in_bearbeitung:     { label: 'In Bearbeitung',  cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
+  laufend:            { label: 'Laufend',         cls: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-700' },
   rechnung_gestellt:  { label: 'Rechnung',        cls: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300 border-violet-200 dark:border-violet-700' },
   abgeschlossen:      { label: 'Abgeschlossen',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700' },
   storniert:          { label: 'Storniert',       cls: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400 border-red-200 dark:border-red-700' },
@@ -596,7 +597,7 @@ function AuftragDetail({
           <button onClick={handleMail} disabled={pdfLaedt || !!auftrag.ist_entwurf} className={btnNeutral}>✉️ Mail senden</button>
           <button
             onClick={onEdit}
-            disabled={hatBezug || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
+            disabled={hatBezug || auftrag.auftrag_status === 'in_bearbeitung' || auftrag.auftrag_status === 'laufend' || auftrag.auftrag_status === 'rechnung_gestellt' || auftrag.auftrag_status === 'abgeschlossen' || auftrag.auftrag_status === 'storniert'}
             title={hatBezug ? 'Bereits ein Folgedokument vorhanden' : auftrag.auftrag_status !== 'offen' ? 'Nur offene Aufträge können bearbeitet werden' : undefined}
             className={btnNeutral}
           >✏️ Bearbeiten</button>
@@ -915,6 +916,7 @@ export function AuftraegePage() {
               <option value="">Alle Status</option>
               <option value="offen">Offen</option>
               <option value="in_bearbeitung">In Bearbeitung</option>
+              <option value="laufend">Laufend</option>
               <option value="rechnung_gestellt">Rechnung</option>
               <option value="abgeschlossen">Abgeschlossen</option>
               <option value="storniert">Storniert</option>
@@ -937,9 +939,9 @@ export function AuftraegePage() {
               </p>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">In Bearbeitung</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">In Bearb. / Laufend</p>
               <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                {auftraege!.filter(a => !a.ist_entwurf && a.auftrag_status === 'in_bearbeitung').length}
+                {auftraege!.filter(a => !a.ist_entwurf && (a.auftrag_status === 'in_bearbeitung' || a.auftrag_status === 'laufend')).length}
               </p>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">

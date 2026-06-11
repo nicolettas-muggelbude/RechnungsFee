@@ -605,8 +605,12 @@ class Rechnungsvorlage(Base):
     letzte_erstellung: Mapped[date | None] = mapped_column(Date)
     erstellte_rechnungen: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id", ondelete="SET NULL"))
+    beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id", ondelete="SET NULL"))
 
-    kunde: Mapped["Kunde | None"] = relationship()
+    kunde: Mapped["Kunde | None"] = relationship(foreign_keys=[kunde_id])
+    auftrag: Mapped["Rechnung | None"] = relationship(foreign_keys=[auftrag_id])
+    beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
 
 
 # ---------------------------------------------------------------------------
