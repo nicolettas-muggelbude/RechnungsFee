@@ -540,6 +540,7 @@ class Rechnung(Base):
     rechnung_zu_proforma_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     # Aufträge
     auftrag_status: Mapped[str | None] = mapped_column(String(20))  # offen|in_bearbeitung|abgeschlossen|storniert
+    vorlage_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungsvorlagen.id", ondelete="SET NULL"), nullable=True)
     auftrag_zu_angebot_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)   # auf Angebot: welcher Auftrag entstand
     rechnung_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)  # auf Auftrag: welche Rechnung entstand
     lieferschein_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)

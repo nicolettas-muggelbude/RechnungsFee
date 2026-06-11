@@ -1645,6 +1645,19 @@ export const entwurfJetzt = (id: number) =>
   request<EntwurfErgebnis>(`/wiederkehrend/${id}/jetzt`, { method: 'POST' })
 export const preiseSynchronisieren = (id: number) =>
   request<Rechnungsvorlage>(`/wiederkehrend/${id}/preise-sync`, { method: 'POST' })
+export type VorlageRechnungKompakt = {
+  id: number
+  rechnungsnummer: string | null
+  datum: string
+  brutto_gesamt: string
+  zahlungsstatus: string | null
+  ist_entwurf: boolean
+  kunde_name: string | null
+}
+
+export const getVorlageRechnungen = (id: number) =>
+  request<VorlageRechnungKompakt[]>(`/wiederkehrend/${id}/rechnungen`)
+
 export const uploadVertragVorlage = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)

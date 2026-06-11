@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
@@ -90,6 +90,18 @@ class EntwurfErgebnis(BaseModel):
     rechnung_id: int
     rechnungsnummer: str
     preisaenderungen: list[Preisaenderung]
+
+
+class VorlageRechnungKompakt(BaseModel):
+    id: int
+    rechnungsnummer: str | None
+    datum: str
+    brutto_gesamt: str
+    zahlungsstatus: str | None
+    ist_entwurf: bool
+    kunde_name: str | None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VorlageResponse(BaseModel):
@@ -233,6 +245,7 @@ def _erstelle_entwurf(vorlage: Rechnungsvorlage, db: Session) -> tuple[int, str,
         netto_gesamt=Decimal("0.00"),
         ust_gesamt=Decimal("0.00"),
         brutto_gesamt=Decimal("0.00"),
+        vorlage_id=vorlage.id,
     )
     db.add(rechnung)
     db.flush()
@@ -429,6 +442,34 @@ def loesche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     if auftrag_id:
         _revert_auftrag_status(auftrag_id, db, ziel_status="abgeschlossen")
     db.commit()
+
+
+@router.get("/{vorlage_id}/rechnungen", response_model=list[VorlageRechnungKompakt])
+def get_vorlage_rechnungen(vorlage_id: int, db: Session = Depends(get_db)):
+    """Alle Rechnungen die aus dieser Vorlage erstellt wurden."""
+    from database.models import Kunde
+    rows = (
+        db.query(Rechnung, Kunde)
+        .outerjoin(Kunde, Rechnung.kunde_id == Kunde.id)
+        .filter(Rechnung.vorlage_id == vorlage_id)
+        .order_by(Rechnung.datum.desc())
+        .all()
+    )
+    result = []
+    for re, k in rows:
+        name = None
+        if k:
+            name = k.firmenname or " ".join(filter(None, [k.vorname, k.nachname])) or None
+        result.append(VorlageRechnungKompakt(
+            id=re.id,
+            rechnungsnummer=re.rechnungsnummer,
+            datum=str(re.datum),
+            brutto_gesamt=str(re.brutto_gesamt or "0.00"),
+            zahlungsstatus=re.zahlungsstatus,
+            ist_entwurf=bool(re.ist_entwurf),
+            kunde_name=name,
+        ))
+    return result
 
 
 @router.post("/pruefen", response_model=list[EntwurfErgebnis])

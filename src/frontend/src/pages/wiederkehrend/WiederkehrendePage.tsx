@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   getVorlagen, createVorlage, updateVorlage, deleteVorlage,
   entwurfJetzt, preiseSynchronisieren, getKunden, getUstSaetze,
   getAuftraege, getUnternehmen, uploadVertragVorlage, deleteVertragVorlage,
+  getVorlageRechnungen,
   type Rechnungsvorlage, type VorlageCreate, type EntwurfErgebnis,
-  type ArtikelSuche, type Rechnung,
+  type ArtikelSuche, type Rechnung, type VorlageRechnungKompakt,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 
@@ -598,6 +600,120 @@ function VorlageKarte({
 }
 
 // ---------------------------------------------------------------------------
+// Detail-Panel – generierte Rechnungen
+// ---------------------------------------------------------------------------
+
+const ZS_LABEL: Record<string, { label: string; cls: string }> = {
+  offen:      { label: 'Offen',      cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
+  bezahlt:    { label: 'Bezahlt',    cls: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border-green-200 dark:border-green-700' },
+  teilbezahlt:{ label: 'Teilbezahlt',cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
+  ueberfaellig:{ label: 'Überfällig',cls: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 border-red-200 dark:border-red-700' },
+}
+
+function VorlageDetail({
+  vorlage,
+  onClose,
+  onBearbeiten,
+}: {
+  vorlage: Rechnungsvorlage
+  onClose: () => void
+  onBearbeiten: () => void
+}) {
+  const navigate = useNavigate()
+  const { data: rechnungen = [], isLoading } = useQuery({
+    queryKey: ['vorlage-rechnungen', vorlage.id],
+    queryFn: () => getVorlageRechnungen(vorlage.id),
+  })
+
+  const gesamt = rechnungen.reduce((s, r) => s + parseFloat(r.brutto_gesamt || '0'), 0)
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <div>
+          <p className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[200px]">{vorlage.bezeichnung}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">{INTERVALL_LABEL[vorlage.intervall]} · {vorlage.kunde_name ?? 'Kein Kunde'}</p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl shrink-0">×</button>
+      </div>
+
+      <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+        {/* Schnellaktionen */}
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={onBearbeiten}
+            className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">
+            ✏️ Bearbeiten
+          </button>
+        </div>
+
+        {/* Statistik */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Erstellt</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{vorlage.erstellte_rechnungen}×</p>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Gesamtumsatz</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
+              {gesamt.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            </p>
+          </div>
+        </div>
+
+        {/* Rechnungsliste */}
+        <div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+            Generierte Rechnungen
+          </p>
+          {isLoading && <p className="text-sm text-slate-400 dark:text-slate-500 py-4 text-center">Lade…</p>}
+          {!isLoading && rechnungen.length === 0 && (
+            <p className="text-sm text-slate-400 dark:text-slate-500 py-4 text-center">
+              Noch keine Rechnungen erstellt.
+            </p>
+          )}
+          {rechnungen.length > 0 && (
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-900">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Datum</th>
+                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Nummer</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Brutto</th>
+                    <th className="px-3 py-2 text-center text-slate-500 dark:text-slate-400 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rechnungen.map(r => {
+                    const zs = ZS_LABEL[r.zahlungsstatus ?? 'offen'] ?? ZS_LABEL.offen
+                    return (
+                      <tr key={r.id}
+                        onClick={() => navigate(`/rechnungen?id=${r.id}`)}
+                        className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{fmt(r.datum)}</td>
+                        <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-300">{r.rechnungsnummer ?? '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
+                          {parseFloat(r.brutto_gesamt || '0').toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.ist_entwurf
+                            ? <span className="inline-block text-xs font-medium px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
+                            : <span className={`inline-block text-xs font-medium px-1.5 py-0.5 rounded border ${zs.cls}`}>{zs.label}</span>
+                          }
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Hauptseite
 // ---------------------------------------------------------------------------
 
@@ -606,6 +722,7 @@ export function WiederkehrendePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const [formModus, setFormModus] = useState<'neu' | number | null>(null)
+  const [selId, setSelId] = useState<number | null>(null)
   const [defaultAuftragId, setDefaultAuftragId] = useState<number | undefined>()
   const [defaultAuftrag, setDefaultAuftrag] = useState<Rechnung | undefined>()
   const [letzterEntwurf, setLetzterEntwurf] = useState<EntwurfErgebnis | null>(null)
@@ -708,14 +825,19 @@ export function WiederkehrendePage() {
 
   const editVorlage = typeof formModus === 'number' ? vorlagen.find(v => v.id === formModus) : undefined
 
+  const selVorlage = selId != null ? vorlagen.find(v => v.id === selId) ?? null : null
+
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="flex h-full">
+    {/* Linke Seite */}
+    <div className={`${selVorlage && !formModus ? 'flex-1 min-w-0' : 'flex-1'} flex flex-col overflow-hidden`}>
+    <div className="p-6 space-y-6 overflow-y-auto flex-1">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Wiederkehrende Rechnungen</h1>
         {formModus === null && (
           <button
-            onClick={() => setFormModus('neu')}
+            onClick={() => { setFormModus('neu'); setSelId(null) }}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shrink-0">
             + Neue Vorlage
           </button>
@@ -823,17 +945,32 @@ export function WiederkehrendePage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {vorlagenGefiltert.map(v => (
-            <VorlageKarte
-              key={v.id}
-              vorlage={v}
-              onBearbeiten={() => setFormModus(v.id)}
-              onLoeschen={() => handleLoeschen(v.id, v.bezeichnung)}
-              onEntwurfJetzt={() => entwurfMut.mutate(v.id)}
-              onPreisSync={() => syncMut.mutate(v.id)}
-            />
+            <div key={v.id} onClick={() => { setSelId(v.id); setFormModus(null) }}
+              className={`cursor-pointer rounded-xl transition-all ${selId === v.id ? 'ring-2 ring-blue-500' : ''}`}>
+              <VorlageKarte
+                vorlage={v}
+                onBearbeiten={() => { setFormModus(v.id); setSelId(null) }}
+                onLoeschen={() => handleLoeschen(v.id, v.bezeichnung)}
+                onEntwurfJetzt={() => entwurfMut.mutate(v.id)}
+                onPreisSync={() => syncMut.mutate(v.id)}
+              />
+            </div>
           ))}
         </div>
       )}
+    </div>{/* end overflow scroll */}
+    </div>{/* end linke Seite */}
+
+    {/* Rechtes Detail-Panel */}
+    {selVorlage && !formModus && (
+      <div className="w-96 shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <VorlageDetail
+          vorlage={selVorlage}
+          onClose={() => setSelId(null)}
+          onBearbeiten={() => { setFormModus(selVorlage.id); setSelId(null) }}
+        />
+      </div>
+    )}
     </div>
   )
 }

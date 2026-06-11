@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend
 
-SCHEMA_VERSION = 70
+SCHEMA_VERSION = 71
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1516,6 +1516,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 70"))
             conn.commit()
             print("[Migration] Schema auf Version 70 (rechnungsvorlagen: auftrag_id + beleg_id für Auftrag-Verknüpfung und Vertrags-Upload)")
+
+        if version < 71:
+            cols71 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "vorlage_id" not in cols71:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN vorlage_id INTEGER REFERENCES rechnungsvorlagen(id) ON DELETE SET NULL"
+                ))
+            conn.execute(text("PRAGMA user_version = 71"))
+            conn.commit()
+            print("[Migration] Schema auf Version 71 (rechnungen.vorlage_id: Verknüpfung zu wiederkehrender Vorlage)")
 
 
 def _migrate_kategorien() -> None:
