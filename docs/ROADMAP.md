@@ -77,6 +77,7 @@
 **Stammdaten & Einstellungen**
 - Kunden, Lieferanten, Artikel, Artikelgruppen
 - Kategorien (SKR03/04, EÜR-Zeile, EKS-Kategorie, Beschreibung, editierbar)
+- Buchungsanzeige: Kontonummer (SKR03/04) optional in Kategorie-Dropdowns einblenden
 - Steuersätze, Konten, Nummernkreise, Unternehmensprofil
 - Unterschrift (Zeichnen oder Datei-Upload), Zahlungshinweis, QR-Zahlung
 - PDF-Vorlagen (Briefbogen, Schriftart, Fußzeile)
