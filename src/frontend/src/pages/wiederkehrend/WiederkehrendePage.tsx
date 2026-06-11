@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import {
   getVorlagen, createVorlage, updateVorlage, deleteVorlage,
   entwurfJetzt, preiseSynchronisieren, getKunden, getUstSaetze,
@@ -187,6 +187,7 @@ function VorlageFormular({
   auftraegeAktiv = false,
   auftraege = [],
   defaultAuftragId,
+  defaultAuftrag,
   onVertragUpload,
   onVertragDelete,
   isVertragUploading = false,
@@ -198,6 +199,7 @@ function VorlageFormular({
   auftraegeAktiv?: boolean
   auftraege?: Rechnung[]
   defaultAuftragId?: number
+  defaultAuftrag?: Rechnung
   onVertragUpload?: (file: File) => void
   onVertragDelete?: () => void
   isVertragUploading?: boolean
@@ -210,31 +212,53 @@ function VorlageFormular({
     ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
     ?? '19'
 
-  const [bezeichnung, setBezeichnung] = useState(initial?.bezeichnung ?? '')
+  const [bezeichnung, setBezeichnung] = useState(() => {
+    if (initial?.bezeichnung) return initial.bezeichnung
+    if (defaultAuftrag) return `${defaultAuftrag.rechnungsnummer ?? ''} – Wiederkehrend`.trimStart()
+    return ''
+  })
   const [intervall, setIntervall] = useState(initial?.intervall ?? 'monatlich')
   const [naechstesDatum, setNaechstesDatum] = useState(initial?.naechstes_datum ?? heuteIso())
   const [aktiv, setAktiv] = useState(initial?.aktiv ?? true)
-  const [kundeId, setKundeId] = useState(initial?.kunde_id ? String(initial.kunde_id) : '')
+  const [kundeId, setKundeId] = useState(() => {
+    if (initial?.kunde_id) return String(initial.kunde_id)
+    if (defaultAuftrag?.kunde_id) return String(defaultAuftrag.kunde_id)
+    return ''
+  })
   const [zahlungsziel, setZahlungsziel] = useState(initial?.zahlungsziel_tage ? String(initial.zahlungsziel_tage) : '')
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
-  const [auftragId, setAuftragId] = useState(
-    initial?.auftrag_id ? String(initial.auftrag_id) : defaultAuftragId ? String(defaultAuftragId) : ''
-  )
+  const [auftragId, setAuftragId] = useState(() => {
+    if (initial?.auftrag_id) return String(initial.auftrag_id)
+    if (defaultAuftragId) return String(defaultAuftragId)
+    if (defaultAuftrag?.id) return String(defaultAuftrag.id)
+    return ''
+  })
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>('netto')
   const [fehler, setFehler] = useState<string | null>(null)
 
-  const [positionen, setPositionen] = useState<PositionEntwurf[]>(() =>
-    initial?.positionen?.length
-      ? initial.positionen.map(p => ({
-          beschreibung: p.beschreibung,
-          menge: String(p.menge),
-          einheit: p.einheit,
-          einzelpreis: String(p.netto),
-          ust_satz: String(p.ust_satz),
-          artikel_id: p.artikel_id ?? null,
-        }))
-      : [leerPosition()]
-  )
+  const [positionen, setPositionen] = useState<PositionEntwurf[]>(() => {
+    if (initial?.positionen?.length) {
+      return initial.positionen.map(p => ({
+        beschreibung: p.beschreibung,
+        menge: String(p.menge),
+        einheit: p.einheit,
+        einzelpreis: String(p.netto),
+        ust_satz: String(p.ust_satz),
+        artikel_id: p.artikel_id ?? null,
+      }))
+    }
+    if (defaultAuftrag?.positionen?.length) {
+      return defaultAuftrag.positionen.map(p => ({
+        beschreibung: p.beschreibung,
+        menge: String(p.menge),
+        einheit: p.einheit,
+        einzelpreis: String(p.netto),
+        ust_satz: String(p.ust_satz),
+        artikel_id: p.artikel_id ?? null,
+      }))
+    }
+    return [leerPosition()]
+  })
 
   // Gewerbekunde → Netto, Privatkunde → Brutto
   useEffect(() => {
@@ -580,22 +604,29 @@ function VorlageKarte({
 export function WiederkehrendePage() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const [formModus, setFormModus] = useState<'neu' | number | null>(null)
   const [defaultAuftragId, setDefaultAuftragId] = useState<number | undefined>()
+  const [defaultAuftrag, setDefaultAuftrag] = useState<Rechnung | undefined>()
   const [letzterEntwurf, setLetzterEntwurf] = useState<EntwurfErgebnis | null>(null)
   const [suche, setSuche] = useState('')
   const [intervallFilter, setIntervallFilter] = useState('')
   const [aktivFilter, setAktivFilter] = useState('')
 
-  // ?auftrag_id=X von AuftraegePage: Formular direkt öffnen
+  // Navigation von AuftraegePage: Auftrag-Daten vorausfüllen
   useEffect(() => {
+    const stateAuftrag = (location.state as any)?.auftrag as Rechnung | undefined
+    if (stateAuftrag) {
+      setDefaultAuftrag(stateAuftrag)
+      setDefaultAuftragId(stateAuftrag.id)
+      setFormModus('neu')
+      return
+    }
+    // Fallback: ?auftrag_id=X per URL-Param
     const aid = searchParams.get('auftrag_id')
     if (aid) {
       const id = parseInt(aid, 10)
-      if (!isNaN(id)) {
-        setDefaultAuftragId(id)
-        setFormModus('neu')
-      }
+      if (!isNaN(id)) { setDefaultAuftragId(id); setFormModus('neu') }
       setSearchParams({}, { replace: true })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -770,6 +801,7 @@ export function WiederkehrendePage() {
             auftraegeAktiv={!!unternehmen?.auftraege_aktiv}
             auftraege={auftraege}
             defaultAuftragId={formModus === 'neu' ? defaultAuftragId : undefined}
+            defaultAuftrag={formModus === 'neu' ? defaultAuftrag : undefined}
             onVertragUpload={typeof formModus === 'number' ? (datei) => vertragUploadMut.mutate({ id: formModus, datei }) : undefined}
             onVertragDelete={typeof formModus === 'number' ? () => vertragDeleteMut.mutate(formModus) : undefined}
             isVertragUploading={vertragUploadMut.isPending || vertragDeleteMut.isPending}

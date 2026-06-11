@@ -657,7 +657,7 @@ function AuftragDetail({
           {/* → Wiederkehrende Vorlage */}
           {unternehmen?.wiederkehrend_aktiv && auftrag.auftrag_status !== 'storniert' && auftrag.auftrag_status !== 'abgeschlossen' && (
             <button
-              onClick={() => navigate(`/wiederkehrend?auftrag_id=${auftrag.id}`)}
+              onClick={() => navigate('/wiederkehrend', { state: { auftrag } })}
               className={btnNeutral}
               title="Wiederkehrende Vorlage für diesen Auftrag erstellen"
             >
