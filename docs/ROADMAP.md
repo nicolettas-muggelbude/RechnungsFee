@@ -137,6 +137,18 @@
 
 ---
 
+## 📋 v0.5.x – Umsatzsteuererklärung
+
+Die jährliche USt-Erklärung (Formular USt 2 / Anlage UR) als Ausfüllhilfe – aufgebaut auf den bereits vorhandenen UStVA-Daten.
+
+- [ ] **Jahres-USt-Berechnung** – Summierung aller UStVA-Voranmeldungsdaten über das Steuerjahr; Abgleich gezahlter Vorauszahlungen vs. Jahressteuerschuld
+- [ ] **Anzeigehilfe Formular USt 2** – alle relevanten Kennzahlen (KZ 81/86/35/36/41/43/47/48/51/66/89/93) je Steuerjahr tabellarisch
+- [ ] **Anlage UR** – Umsätze nach Steuersätzen aufgeschlüsselt (19 %, 7 %, steuerfrei, ig. Lieferungen, §13b)
+- [ ] **PDF-Zusammenfassung** – druckbares Beiblatt mit allen Kennzahlen und Berechnungsweg (zur Weitergabe an Steuerberater oder als Arbeitshilfe beim ELSTER-Ausfüllen)
+- [ ] **ELSTER-Export (XML)** – Datenübergabe-Datei nach ELSTER-Schema (ERiC-Schnittstelle) als optionaler Export
+
+---
+
 ## 💡 Ideen (ohne Zeitplan)
 
 - **Thunderbird-Integration** – `thunderbird -compose` als dritte Mail-Option neben SMTP und mailto; ermöglicht Dateianhänge ohne SMTP-Konfiguration und nutzt Thunderbirds GPG-Integration automatisch (Issue #147)
