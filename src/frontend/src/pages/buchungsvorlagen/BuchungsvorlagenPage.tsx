@@ -118,7 +118,6 @@ function VorlageFormular({
   const set = (k: keyof FormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
   const aufwandKategorien = kategorien.filter(k => k.kontenart === 'Aufwand')
-  const bankKonten = konten.filter(k => k.kontoart === 'bank' || k.kontoart === 'giro' || k.kontoart === 'kreditkarte')
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -233,7 +232,7 @@ function VorlageFormular({
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Konto</label>
           <select value={form.konto_id ?? ''} onChange={e => set('konto_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
             <option value="">– kein Konto –</option>
-            {konten.map(k => <option key={k.id} value={k.id}>{k.bezeichnung}</option>)}
+            {konten.map(k => <option key={k.id} value={k.id}>{k.bezeichnung ?? ''}</option>)}
           </select>
         </div>
       </div>
@@ -541,6 +540,7 @@ export default function BuchungsvorlagenPage() {
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: getKategorien })
   const { data: lieferanten = [] } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
   const { data: konten = [] } = useQuery({ queryKey: ['konten'], queryFn: getKonten })
+  const bankKonten = konten.filter(k => k.kontoart === 'bank')
 
   const selVorlage = vorlagen.find(v => v.id === selId)
 
@@ -667,7 +667,7 @@ export default function BuchungsvorlagenPage() {
               <VorlageFormular
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.bezeichnung, kontoart: k.kontoart }))}
+                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
                 onSave={d => createMut.mutate(d)}
                 onAbbrechen={() => setFormModus(null)}
               />
@@ -680,7 +680,7 @@ export default function BuchungsvorlagenPage() {
                 initial={selVorlage}
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.bezeichnung, kontoart: k.kontoart }))}
+                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
                 onSave={d => updateMut.mutate({ id: selVorlage.id, data: d })}
                 onAbbrechen={() => setFormModus(null)}
               />
