@@ -590,7 +590,7 @@ export default function BuchungsvorlagenPage() {
               <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-5">Neue Vorlage</h2>
               <VorlageFormular
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
-                lieferanten={lieferanten as { id: number; name: string }[]}
+                lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
                 konten={konten as { id: number; bezeichnung: string; kontoart: string }[]}
                 onSave={d => createMut.mutate(d)}
                 onAbbrechen={() => setFormModus(null)}
@@ -603,7 +603,7 @@ export default function BuchungsvorlagenPage() {
               <VorlageFormular
                 initial={selVorlage}
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
-                lieferanten={lieferanten as { id: number; name: string }[]}
+                lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
                 konten={konten as { id: number; bezeichnung: string; kontoart: string }[]}
                 onSave={d => updateMut.mutate({ id: selVorlage.id, data: d })}
                 onAbbrechen={() => setFormModus(null)}
