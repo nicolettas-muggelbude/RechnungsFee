@@ -15,8 +15,7 @@ const fakturierungAlleItems = [
   { to: '/proformas',       label: 'Proforma',               icon: '📋', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.proforma_aktiv },
   { to: '/lieferscheine',   label: 'Lieferscheine',          icon: '🚚', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.lieferschein_aktiv },
   { to: '/rechnungen',      label: 'Rechnungen',             icon: '🧾', bald: false, zeigen: (_u: Unternehmen | undefined) => true },
-  { to: '/wiederkehrend',      label: 'Wiederkehrend',          icon: '🔁', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.wiederkehrend_aktiv },
-  { to: '/buchungsvorlagen',   label: 'Buchungsvorlagen',       icon: '🔄', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.buchungsvorlagen_aktiv },
+  { to: '/wiederkehrend',   label: 'Wiederkehrend',          icon: '🔁', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.wiederkehrend_aktiv },
 ]
 
 const buchhaltungNavBase = [
@@ -53,7 +52,7 @@ const einstellungenNav = [
   { to: '/unternehmen',      label: 'Unternehmen',       icon: '🏢' },
 ]
 
-const buchhaltungPfade   = buchhaltungNavBase.map(n => n.to)
+const buchhaltungPfade   = [...buchhaltungNavBase.map(n => n.to), '/buchungsvorlagen']
 const auswertungAllePfade = auswertungNavAlle.map(n => n.to)
 const stammdatenPfade    = stammdatenNav.map(n => n.to)
 const einstellungenPfade = einstellungenNav.map(n => n.to)
@@ -89,6 +88,14 @@ function CollapsibleSection({
   badge?: boolean
 }) {
   const [offen, setOffen] = useState(aktiv)
+  const prevLen = useRef(items.length)
+  useEffect(() => {
+    if (aktiv) setOffen(true)
+  }, [aktiv])
+  useEffect(() => {
+    if (items.length > prevLen.current) setOffen(true)
+    prevLen.current = items.length
+  }, [items.length])
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
@@ -187,6 +194,10 @@ export function AppLayout() {
   const navKontext: NavKontext = { unt: untDef, zm: zmPruefung }
   const auswertungNav = auswertungNavAlle.filter(n => n.zeigen(navKontext))
   const fakturierungNav = fakturierungAlleItems.filter(n => n.zeigen(untDef))
+  const buchhaltungNav = [
+    ...buchhaltungNavBase,
+    ...(untDef?.buchungsvorlagen_aktiv ? [{ to: '/buchungsvorlagen', label: 'Buchungsvorlagen', icon: '🔄' }] : []),
+  ]
 
   const { data: faelligeBuchungen = [] } = useQuery({
     queryKey: ['buchungsvorlagen-faellig'],
@@ -240,11 +251,7 @@ export function AppLayout() {
               </div>
             ) : (
               <NavLink key={to} to={to} className={navLinkClass}>
-                <span>{icon}</span>
-                <span className="flex-1">{label}</span>
-                {to === '/buchungsvorlagen' && faelligBadge && (
-                  <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-                )}
+                <span>{icon}</span><span>{label}</span>
               </NavLink>
             )
           )}
@@ -254,7 +261,11 @@ export function AppLayout() {
             label="Buchhaltung"
             icon="📒"
             aktiv={buchhaltungAktiv}
-            items={buchhaltungNavBase}
+            badge={faelligBadge}
+            items={buchhaltungNav.map(n => ({
+              ...n,
+              badge: n.to === '/buchungsvorlagen' && faelligBadge,
+            }))}
           />
 
           {/* Auswertung */}
