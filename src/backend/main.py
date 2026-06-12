@@ -32,7 +32,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen
 
-SCHEMA_VERSION = 74
+SCHEMA_VERSION = 75
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1588,6 +1588,21 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 74 (buchungsvorlagen: Wiederkehrende Buchungen für Fixkosten)")
 
+        if version < 75:
+            # Datenfix Issue #132: 'Betriebseinnahmen (19%)' und 'Betriebseinnahmen (7%)' bekamen
+            # in manchen älteren DBs euer_zeile=NULL. Migration 69 hatte nur 'Betriebseinnahmen'
+            # und 'Betriebseinnahmen (0%)' gesichert; wenn die Umbenennung (19%)→Basis nicht
+            # griff (Kategorie existierte bereits mit anderem Namen), blieb euer_zeile NULL →
+            # Rechnungseinnahmen fehlten in der EÜR trotz korrekter UStVA.
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile=12 "
+                "WHERE name IN ('Betriebseinnahmen (19%)', 'Betriebseinnahmen (7%)') "
+                "AND (euer_zeile IS NULL OR euer_zeile != 12)"
+            ))
+            conn.execute(text("PRAGMA user_version = 75"))
+            conn.commit()
+            print("[Migration] Schema auf Version 75 (Datenfix #132: Betriebseinnahmen-Varianten euer_zeile=12)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -1649,9 +1664,11 @@ def _migrate_kategorien() -> None:
 
         # EÜR-Zeilen-Korrekturen
         euer_korrekturen = [
-            ("Mitgliedsbeiträge", 60),         # war 46 (Beratungskosten) – Issue #106
-            ("Betriebseinnahmen", 12),          # Sicherheitsnetz: nie NULL lassen
-            ("Betriebseinnahmen (0%)", 12),     # dto.
+            ("Mitgliedsbeiträge", 60),          # war 46 (Beratungskosten) – Issue #106
+            ("Betriebseinnahmen", 12),           # Sicherheitsnetz: nie NULL lassen
+            ("Betriebseinnahmen (0%)", 12),      # dto.
+            ("Betriebseinnahmen (19%)", 12),     # Datenfix #132: ältere DBs mit altem Kategorienamen
+            ("Betriebseinnahmen (7%)", 12),      # dto.
             # Gewährte Skonti: euer_zeile → NULL (Issue #132, Migration 73 – kein Doppelabzug)
         ]
         for name, zeile in euer_korrekturen:
