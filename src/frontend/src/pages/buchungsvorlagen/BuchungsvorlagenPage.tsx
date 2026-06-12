@@ -7,6 +7,7 @@ import {
   getKategorien, getLieferanten, getKonten,
   type Buchungsvorlage, type BuchungsvorlageCreate,
 } from '../../api/client'
+import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
 
 // ---------------------------------------------------------------------------
 // Konstanten
@@ -108,7 +109,9 @@ function VorlageFormular({
   lieferanten: { id: number; name: string }[]
   konten: { id: number; bezeichnung: string; kontoart: string }[]
 }) {
+  const qc = useQueryClient()
   const [form, setForm] = useState<FormData>(initial ? fromVorlage(initial) : leereForm())
+  const [showNeuLieferant, setShowNeuLieferant] = useState(false)
 
   const set = (k: keyof FormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
@@ -167,10 +170,27 @@ function VorlageFormular({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Lieferant</label>
-          <select value={form.lieferant_id ?? ''} onChange={e => set('lieferant_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
-            <option value="">– kein Lieferant –</option>
-            {lieferanten.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+          <div className="flex gap-1">
+            <select value={form.lieferant_id ?? ''} onChange={e => set('lieferant_id', e.target.value ? Number(e.target.value) : null)} className={selectCls + ' flex-1'}>
+              <option value="">– kein Lieferant –</option>
+              {lieferanten.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <button type="button" onClick={() => setShowNeuLieferant(true)}
+              title="Neuen Lieferanten anlegen"
+              className="shrink-0 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 text-base leading-none">
+              +
+            </button>
+          </div>
+          {showNeuLieferant && (
+            <LieferantErstellenModal
+              onClose={() => setShowNeuLieferant(false)}
+              onSave={(neu) => {
+                setShowNeuLieferant(false)
+                set('lieferant_id', neu.id)
+                qc.invalidateQueries({ queryKey: ['lieferanten'] })
+              }}
+            />
+          )}
         </div>
       </div>
 
