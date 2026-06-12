@@ -127,7 +127,7 @@ function LogoSektion({
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
           className="hidden"
           onChange={handleDatei}
         />
@@ -149,7 +149,7 @@ function LogoSektion({
             {deleteMut.isPending ? '…' : 'Entfernen'}
           </button>
         )}
-        <p className="text-xs text-slate-400 dark:text-slate-500">PNG, JPEG oder WEBP · max. 2 MB</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">PNG, JPEG, WEBP oder SVG · max. 2 MB</p>
         {fehler && <p className="text-xs text-red-600 dark:text-red-400">{fehler}</p>}
       </div>
     </div>
@@ -962,18 +962,6 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
             <strong>Gmail:</strong> Nutze ein App-Passwort (Google-Konto → Sicherheit → 2-FA → App-Passwörter). Host: smtp.gmail.com, Port: 587 (STARTTLS).
           </div>
 
-          <hr className="border-slate-100 dark:border-slate-700" />
-
-          <div className="flex gap-2 items-center">
-            <input type="email" value={testMail} onChange={e => setTestMail(e.target.value)}
-              placeholder="Test-Empfänger eingeben…" className={`${inputCls} flex-1`} />
-            <button type="button" onClick={handleTest} disabled={!testMail.trim() || testStatus === 'sending'}
-              className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 whitespace-nowrap">
-              {testStatus === 'sending' ? 'Sende…' : '✉️ Testmail'}
-            </button>
-          </div>
-          {testStatus === 'ok' && <p className="text-sm text-green-600 dark:text-green-400">✓ Testmail gesendet</p>}
-          {testStatus === 'error' && <p className="text-sm text-red-600 dark:text-red-400">{testFehler}</p>}
         </div>
       )}
 
@@ -986,6 +974,23 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
         </button>
         {gespeichert && <span className="text-sm text-green-600 dark:text-green-400">✓ Gespeichert</span>}
       </div>
+
+      {aktiv && (
+        <>
+          <hr className="border-slate-100 dark:border-slate-700" />
+          <p className="text-xs text-slate-500 dark:text-slate-400">Testmail erst nach dem Speichern senden.</p>
+          <div className="flex gap-2 items-center">
+            <input type="email" value={testMail} onChange={e => setTestMail(e.target.value)}
+              placeholder="Test-Empfänger eingeben…" className={`${inputCls} flex-1`} />
+            <button type="button" onClick={handleTest} disabled={!testMail.trim() || testStatus === 'sending'}
+              className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 whitespace-nowrap">
+              {testStatus === 'sending' ? 'Sende…' : '✉️ Testmail'}
+            </button>
+          </div>
+          {testStatus === 'ok' && <p className="text-sm text-green-600 dark:text-green-400">✓ Testmail gesendet</p>}
+          {testStatus === 'error' && <p className="text-sm text-red-600 dark:text-red-400">{testFehler}</p>}
+        </>
+      )}
     </div>
   )
 }

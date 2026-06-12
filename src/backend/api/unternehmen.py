@@ -17,7 +17,7 @@ from .schemas import UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse
 router = APIRouter(prefix="/api/unternehmen", tags=["Stammdaten"])
 
 UPLOAD_DIR = Path.home() / ".local" / "share" / "RechnungsFee" / "uploads"
-ERLAUBTE_TYPEN = {"image/png", "image/jpeg", "image/webp"}
+ERLAUBTE_TYPEN = {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
 MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
@@ -84,13 +84,25 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
             return "jpeg"
         if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
             return "webp"
+        stripped = data[:512].lstrip()
+        if stripped.startswith(b"<?xml") or stripped.startswith(b"<svg"):
+            return "svg"
         return None
 
     erkannt = _detect_image_type(inhalt)
-    typ_map = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
+    typ_map = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}
     content_type = typ_map.get(erkannt or "", file.content_type or "")
     if content_type not in ERLAUBTE_TYPEN:
-        raise HTTPException(status_code=400, detail="Nur PNG, JPEG und WEBP sind erlaubt.")
+        raise HTTPException(status_code=400, detail="Nur PNG, JPEG, WEBP und SVG sind erlaubt.")
+
+    # SVG → PNG konvertieren (cairosvg, 300 DPI – unterstützt Gradienten, Clipping, Raster)
+    if content_type == "image/svg+xml":
+        try:
+            import cairosvg
+            inhalt = cairosvg.svg2png(bytestring=inhalt, dpi=300)
+            content_type = "image/png"
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"SVG-Konvertierung fehlgeschlagen: {e}")
 
     # Dateierweiterung bestimmen
     ext_map = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}

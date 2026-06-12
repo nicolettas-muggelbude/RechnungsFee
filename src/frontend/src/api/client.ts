@@ -1723,4 +1723,6 @@ export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
 }
 export const deleteBuchungsvorlageBeleg = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}/beleg`, { method: 'DELETE' })
+export const erledigtVorlage = (id: number) =>
+  request<unknown>(`/buchungsvorlagen/${id}/erledigt`, { method: 'POST' })
 

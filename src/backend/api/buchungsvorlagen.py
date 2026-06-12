@@ -238,7 +238,9 @@ def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     # Betrag: brutto oder netto → immer als brutto speichern
     brutto = v.betrag if v.ist_brutto else (v.betrag * (1 + v.ust_satz / 100)).quantize(Q, ROUND_HALF_UP)
     netto, ust_betrag = _berechne_ust(brutto, v.ust_satz)
-    vorsteuer = _berechne_vorsteuer(ust_betrag, bool(kat and kat.vorsteuerabzug_moeglich if kat else False), kat)
+    ist_privat = kat.kontenart == "Privat" if kat else False
+    vorsteuerabzug_flag = bool(v.ust_satz > 0 and not ist_privat)
+    vorsteuer = _berechne_vorsteuer(ust_betrag, vorsteuerabzug_flag, kat)
     konto_skr03 = kat.konto_skr03 if kat else None
     konto_skr04 = kat.konto_skr04 if kat else None
     konto_ust_skr03, konto_ust_skr04 = _ust_konto("Ausgabe", v.ust_satz)
@@ -256,7 +258,7 @@ def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
         ust_satz=v.ust_satz,
         ust_betrag=ust_betrag,
         vorsteuer_betrag=vorsteuer,
-        vorsteuerabzug=bool(kat.vorsteuerabzug_moeglich if kat else False),
+        vorsteuerabzug=vorsteuerabzug_flag,
         konto_skr03=konto_skr03,
         konto_skr04=konto_skr04,
         konto_ust_skr03=konto_ust_skr03 if v.ust_satz > 0 else None,
@@ -319,6 +321,20 @@ async def upload_beleg(vorlage_id: int, datei: UploadFile = File(...), db: Sessi
     v.beleg_id = beleg.id
     db.commit()
     return {"id": beleg.id, "original_name": beleg.original_name}
+
+
+@router.post("/{vorlage_id}/erledigt", response_model=BuchungsvorlageResponse)
+def vorlage_erledigt(vorlage_id: int, db: Session = Depends(get_db)):
+    """Rückt naechstes_datum vor – beleg-Modus: Eingangsrechnung wurde verarbeitet."""
+    v = db.query(Buchungsvorlage).filter(Buchungsvorlage.id == vorlage_id).first()
+    if not v:
+        raise HTTPException(404, "Vorlage nicht gefunden")
+    v.letzte_buchung = date.today()
+    v.erstellte_buchungen = (v.erstellte_buchungen or 0) + 1
+    v.naechstes_datum = _vorruecken(v.naechstes_datum, v.intervall)
+    db.commit()
+    db.refresh(v)
+    return _to_response(v)
 
 
 @router.delete("/{vorlage_id}/beleg", status_code=204)

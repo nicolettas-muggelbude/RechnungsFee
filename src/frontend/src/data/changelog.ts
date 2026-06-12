@@ -26,9 +26,11 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.3.12',
     datum: 'Juni 2026',
     eintraege: [
-      { typ: 'neu', text: 'Wiederkehrende Buchungen (Fixkosten): Vorlagen für Daueraufträge und monatliche Eingangsrechnungen – Modus „Direkt" erstellt sofort einen Journal-Eintrag, Modus „Warte auf Beleg" füllt das Eingangsrechnungs-Formular mit Lieferant, Betrag und USt-Satz vor; optional aktivierbar unter Einstellungen → Unternehmen' },
+      { typ: 'neu', text: 'Wiederkehrende Buchungen (Fixkosten): Vorlagen für Daueraufträge und monatliche Eingangsrechnungen – Modus „Direkt" erstellt sofort einen Journal-Eintrag, Modus „Warte auf Beleg" füllt das Eingangsrechnungsformular mit Lieferant, Betrag und USt-Satz vor; optional aktivierbar unter Einstellungen → Unternehmen' },
+      { typ: 'neu', text: 'Buchungsvorlagen – Beleg-Modus: PDF der Eingangsrechnung direkt im Detailpanel hochladen; OCR extrahiert Belegnummer, Betrag und Fälligkeit automatisch; nach dem Speichern rückt das nächste Fälligkeitsdatum automatisch um ein Intervall vor' },
       { typ: 'neu', text: 'Buchungsvorlagen: Fälligkeits-Badge im Menü – bei überfälligen Vorlagen erscheint ein oranger Punkt neben „Buchungsvorlagen" und neben „Buchhaltung"; Fälligkeiten werden alle 5 Minuten aktualisiert' },
       { typ: 'neu', text: 'Buchungsvorlagen: Vertragsdokument (PDF/Bild) direkt an einer Vorlage hinterlegen; Suche nach Bezeichnung, Lieferant oder Kategorie; Filter nach aktiv/inaktiv und Modus' },
+      { typ: 'verbesserung', text: 'Buchungsvorlagen – Übersicht: Karten im Wiederkehrend-Stil (2-spaltig, Nächste Fälligkeit zuerst, Erstellt×-Datum, Modus-Badge mit Border, Aktionsbutton direkt in der Karte)' },
     ],
   },
   {

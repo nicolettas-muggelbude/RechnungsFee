@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getBuchungsvorlagen, createBuchungsvorlage, updateBuchungsvorlage,
   deleteBuchungsvorlage, buchungAusfuehren,
   uploadBuchungsvorlageBeleg, deleteBuchungsvorlageBeleg,
+  analysiereRechnung,
   getKategorien, getLieferanten, getKonten,
-  type Buchungsvorlage, type BuchungsvorlageCreate,
+  type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
 } from '../../api/client'
 import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
 
@@ -266,22 +268,20 @@ function VorlageFormular({
 // Karte
 // ---------------------------------------------------------------------------
 
-function VorlageKarte({ vorlage, onClick, aktiv }: {
+function VorlageKarte({ vorlage, onBuchen, onEingangsrechnung }: {
   vorlage: Buchungsvorlage
-  onClick: () => void
-  aktiv: boolean
+  onBuchen: () => void
+  onEingangsrechnung: () => void
 }) {
   const faellig = istFaellig(vorlage.naechstes_datum) && vorlage.aktiv
   const betragNum = parseFloat(vorlage.betrag)
 
   return (
-    <div onClick={onClick}
-      className={`cursor-pointer bg-white dark:bg-slate-800 rounded-xl border p-5 space-y-3 transition-all ${
-        aktiv ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-700' :
-        vorlage.aktiv ? 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700' :
-        'border-slate-100 dark:border-slate-800 opacity-60'
-      }`}>
-      <div className="flex items-start justify-between gap-2">
+    <div className={`bg-white dark:bg-slate-800 rounded-xl border ${
+      vorlage.aktiv ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 dark:border-slate-800 opacity-60'
+    } p-5 space-y-3`}>
+
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg">{INTERVALL_ICON[vorlage.intervall] ?? '📒'}</span>
           <div className="min-w-0">
@@ -291,26 +291,17 @@ function VorlageKarte({ vorlage, onClick, aktiv }: {
             </p>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {!vorlage.aktiv && (
             <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Pausiert</span>
           )}
           {faellig && (
             <span className="text-xs bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-medium">Fällig</span>
           )}
-          <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">
-            {vorlage.modus === 'direkt' ? '⚡ Direkt' : '📄 Beleg'}
-          </span>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-sm">
-        <div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Betrag ({vorlage.ist_brutto ? 'brutto' : 'netto'})</p>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">
-            {betragNum === 0 ? <span className="text-slate-400 dark:text-slate-500 font-normal italic">variabel</span> : `${betragNum.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
-          </p>
-        </div>
         <div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Nächste Fälligkeit</p>
           <p className={`font-medium ${faellig ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}>
@@ -318,18 +309,52 @@ function VorlageKarte({ vorlage, onClick, aktiv }: {
           </p>
         </div>
         <div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Betrag ({vorlage.ist_brutto ? 'brutto' : 'netto'})</p>
+          <p className="font-medium text-slate-700 dark:text-slate-200">
+            {betragNum === 0
+              ? <span className="text-slate-400 dark:text-slate-500 font-normal italic">variabel</span>
+              : `${betragNum.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+          </p>
+        </div>
+        <div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Erstellt</p>
-          <p className="font-medium text-slate-700 dark:text-slate-200">{vorlage.erstellte_buchungen}×</p>
+          <p className="font-medium text-slate-700 dark:text-slate-200">
+            {vorlage.erstellte_buchungen}×{vorlage.letzte_buchung ? ` · ${fmt(vorlage.letzte_buchung)}` : ''}
+          </p>
         </div>
       </div>
 
-      {(vorlage.beleg_name) && (
-        <div className="flex gap-2">
-          <span className="inline-flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">
-            📄 Vertrag hinterlegt
+      <div className="flex flex-wrap gap-2">
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+          vorlage.modus === 'direkt'
+            ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
+        }`}>
+          {vorlage.modus === 'direkt' ? '⚡ Dauerauftrag/SEPA' : '📄 Warte auf Beleg'}
+        </span>
+        {vorlage.beleg_name && (
+          <span className="inline-flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-full px-2 py-0.5">
+            📎 Vertrag hinterlegt
           </span>
-        </div>
-      )}
+        )}
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        {vorlage.modus === 'direkt' ? (
+          <button
+            onClick={e => { e.stopPropagation(); onBuchen() }}
+            disabled={betragNum === 0}
+            className="flex-1 px-3 py-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            📒 Jetzt buchen
+          </button>
+        ) : (
+          <button
+            onClick={e => { e.stopPropagation(); onEingangsrechnung() }}
+            className="flex-1 px-3 py-1.5 text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+            📥 Eingangsrechnung erfassen
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -353,8 +378,33 @@ function VorlageDetail({
   onBelegUpload: (f: File) => void
   onBelegLoeschen: () => void
 }) {
+  const navigate = useNavigate()
+  const [ocrLaed, setOcrLaed] = useState(false)
   const faellig = istFaellig(vorlage.naechstes_datum) && vorlage.aktiv
   const betragNum = parseFloat(vorlage.betrag)
+
+  async function handleRechnungsUpload(file: File) {
+    setOcrLaed(true)
+    try {
+      const ergebnis = await analysiereRechnung(file)
+      const kombiniert: AnalyseErgebnis = {
+        ...ergebnis,
+        format: 'vorlage',
+        lieferant_vorschlaege: vorlage.lieferant_id
+          ? [{ id: vorlage.lieferant_id, name: vorlage.lieferant_name ?? '', score: 1 }]
+          : (ergebnis.lieferant_vorschlaege ?? []),
+        positionen: ergebnis.positionen?.length
+          ? ergebnis.positionen
+          : betragNum > 0
+            ? [{ beschreibung: vorlage.bezeichnung, menge: '1', einheit: 'Monat', netto: String(betragNum), ust_satz: vorlage.ust_satz }]
+            : [],
+      }
+      sessionStorage.setItem(`vorlage_ocr_${vorlage.id}`, JSON.stringify(kombiniert))
+    } catch {
+      // OCR fehlgeschlagen – navigieren ohne Vorausfüllung
+    }
+    navigate(`/rechnungen?typ=eingang&vorlage=${vorlage.id}`)
+  }
 
   return (
     <div className="space-y-5">
@@ -419,19 +469,37 @@ function VorlageDetail({
         </div>
       )}
 
-      {/* Warte auf Beleg – Hinweis */}
+      {/* Warte auf Beleg – Upload + OCR */}
       {vorlage.modus === 'beleg' && (
         <div className={`p-4 rounded-xl border ${faellig ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'}`}>
           <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-            {faellig ? '⚠️ Fällig – Eingangsrechnung anlegen' : '📄 Eingangsrechnung anlegen'}
+            {faellig ? '⚠️ Fällig – Eingangsrechnung erfassen' : '📄 Eingangsrechnung erfassen'}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-            Öffnet das Eingangsrechnungs-Formular mit Lieferant und Betrag vorausgefüllt.
+            PDF hochladen → OCR füllt Belegnummer und Betrag automatisch aus.
           </p>
-          <a href={`/rechnungen?typ=eingang&vorlage=${vorlage.id}`}
-            className="block w-full text-center px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            📥 Eingangsrechnung anlegen
-          </a>
+          <label className={`flex flex-col items-center gap-1.5 cursor-pointer w-full px-3 py-4 border-2 border-dashed rounded-lg transition-colors mb-2 ${
+            ocrLaed
+              ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/30 cursor-wait'
+              : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20'
+          }`}>
+            {ocrLaed ? (
+              <span className="text-sm text-blue-600 dark:text-blue-400">⏳ Analysiere Rechnung…</span>
+            ) : (
+              <>
+                <span className="text-sm text-slate-600 dark:text-slate-300">📎 Rechnung hochladen (PDF / Bild)</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">OCR extrahiert alle Felder automatisch</span>
+              </>
+            )}
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={ocrLaed}
+              onChange={e => { if (e.target.files?.[0]) handleRechnungsUpload(e.target.files[0]) }} />
+          </label>
+          <button
+            onClick={() => navigate(`/rechnungen?typ=eingang&vorlage=${vorlage.id}`)}
+            className="w-full text-xs text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors py-1"
+          >
+            Ohne Beleg manuell eingeben →
+          </button>
         </div>
       )}
 
@@ -462,6 +530,7 @@ function VorlageDetail({
 
 export default function BuchungsvorlagenPage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [selId, setSelId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [suche, setSuche] = useState('')
@@ -568,18 +637,23 @@ export default function BuchungsvorlagenPage() {
         </div>
 
         {/* Liste */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className={`flex-1 overflow-y-auto p-4 grid gap-4 content-start ${formModus ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {gefiltert.length === 0 && (
-            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+            <div className="col-span-full text-center py-12 text-slate-400 dark:text-slate-500">
               <p className="text-3xl mb-2">📒</p>
               <p className="text-sm">{vorlagen.length === 0 ? 'Noch keine Buchungsvorlagen angelegt' : 'Keine Vorlagen gefunden'}</p>
             </div>
           )}
           {gefiltert.map(v => (
-            <VorlageKarte key={v.id} vorlage={v}
-              aktiv={selId === v.id}
+            <div key={v.id}
               onClick={() => { setSelId(v.id); setFormModus(null) }}
-            />
+              className={`cursor-pointer rounded-xl transition-all ${selId === v.id ? 'ring-2 ring-blue-500' : ''}`}>
+              <VorlageKarte
+                vorlage={v}
+                onBuchen={() => handleBuchen(v.id)}
+                onEingangsrechnung={() => navigate(`/rechnungen?typ=eingang&vorlage=${v.id}`)}
+              />
+            </div>
           ))}
         </div>
       </div>

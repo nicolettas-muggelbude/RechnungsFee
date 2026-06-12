@@ -116,10 +116,13 @@
 - [x] Schnellstart von Auftrags-Seite: „🔁 Wiederkehrend"-Button befüllt das Formular mit Auftragsdaten
 
 ### Wiederkehrende Buchungen
-- [ ] Vorlagen für Fixkosten (Miete, Leasing, Abonnements) mit Fälligkeitsintervall
-- [ ] Hinweis auf fällige Buchungen beim App-Start
-- [ ] Modus „Direkt": Entwurf anlegen, Ein-Klick-Bestätigung
-- [ ] Modus „Warte auf Beleg": PDF-Import matcht Lieferant + Betrag → ersetzt Platzhalter
+- [x] Vorlagen für Fixkosten (Miete, Leasing, Abonnements) mit Fälligkeitsintervall (monatlich/quartalsweise/jährlich)
+- [x] Fälligkeits-Badge im Menü (oranger Punkt bei überfälligen Vorlagen, alle 5 Minuten aktualisiert)
+- [x] Modus „Direkt": Ein-Klick-Buchung → Journal-Eintrag sofort; Datum rückt automatisch vor
+- [x] Modus „Warte auf Beleg": PDF hochladen → OCR extrahiert Belegnummer/Betrag/Fälligkeit → Eingangsrechnungsformular vorausgefüllt; Datum rückt nach dem Speichern automatisch vor
+- [x] Vertragsdokument (PDF/Bild) an Vorlage hinterlegen
+- [x] Lieferant direkt aus dem Vorlagenformular anlegen
+- [x] Variabler Betrag (0 = variabel): Beleg-Modus mit OCR statt manuellem Eintrag
 
 ---
 
