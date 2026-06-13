@@ -1923,6 +1923,10 @@ def _migrate_kategorien() -> None:
 
         # ── Fehlende Kategorien eintragen ─────────────────────────────────────
         neue = [
+            # Betriebseinnahmen: müssen VOR _migrate_signaturen() existieren (Datenfix kategorie_id=NULL)
+            {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
+            {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
+            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3400", "konto_skr04": "5400", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
