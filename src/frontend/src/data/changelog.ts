@@ -23,9 +23,11 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.3.13',
+    version: 'v0.3.14',
     datum: 'Juni 2026',
     eintraege: [
+      { typ: 'neu', text: 'Anlage AVEUR – Anlagenverzeichnis: Wirtschaftsgüter (KFZ, EDV, Sonstiges) erfassen; lineare AfA mit Monatsprinzip im Kaufjahr; Privatanteil für KFZ; Abschreibungsplan je Gut; PDF-Export als Anlage AVEUR' },
+      { typ: 'verbesserung', text: 'EÜR: AfA aus dem Anlagenverzeichnis fließt automatisch in Zeile 36 ein – kein manueller Journaleintrag mehr nötig; blaue Info-Box zeigt den übernommenen Betrag; amber-Hinweis wenn Anlagezugänge existieren aber kein Gut im Anlagenverzeichnis erfasst ist' },
       { typ: 'neu', text: 'Buchungsvorlagen: Vorlagen können jetzt auch als Einnahme angelegt werden (z. B. Eigenverbrauch Telefon, Sachentnahmen) – Art-Umschalter im Formular, Kategorienliste zeigt passende Erlös-Kategorien (Issue #157)' },
       { typ: 'neu', text: 'Backup – Ebene 1: Beim Beenden der App wird automatisch ein lokaler WAL-sicherer DB-Snapshot erstellt (max. 5 Kopien, älteste werden automatisch gelöscht)' },
       { typ: 'neu', text: 'Backup – Ebene 2: Externes Backup auf NAS, USB oder Netzlaufwerk beim App-Ende – immer AES-256-GCM-verschlüsselt (DSGVO Art. 32); bis zu 2 Ziele konfigurierbar; enthält Datenbank und alle hochgeladenen Belege' },
@@ -34,15 +36,13 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Wiederherstellung – Lokale Snapshots: Aus dem automatisch erstellten lokalen DB-Snapshot direkt über die Backup-Seite wiederherstellen – Backup auswählen, bestätigen, Neustart; kein manuelles Dateikopieren nötig' },
       { typ: 'neu', text: 'Wiederherstellung – ZIP-Upload: Manuelles Backup (.zip) oder verschlüsseltes externes Backup (.zip.enc) hochladen; Passwortfeld erscheint automatisch bei .zip.enc; Datenbank und Belege werden beim Neustart vollständig wiederhergestellt' },
       { typ: 'verbesserung', text: 'Backup-Seite: zwei Karteireiter „Backup" und „Wiederherstellung" mit klarer Trennung der drei Backup-Ebenen (Lokal-Snapshot, Manuell-ZIP, Extern-verschlüsselt)' },
-      { typ: 'fix', text: 'UStVA / EÜR: Skonto-Buchungen haben USt-Konten nicht doppelt gemindert (KZ 81/83 und EÜR Zeile 17) – der Zahlungsbetrag enthielt Skonto bereits korrekt (Issue #155)' },
-      { typ: 'fix', text: 'Kategorien: Fehlermeldung beim Löschen einer belegten Kategorie wird jetzt inline angezeigt statt als nativer alert()-Dialog (Issue #156)' },
-      { typ: 'verbesserung', text: 'Buchungsvorlagen: Warndialog wenn „Jetzt buchen" für einen Zeitraum ausgelöst wird der noch nicht fällig ist – verhindert versehentliche Doppelbuchungen (Issue #158)' },
-      { typ: 'fix', text: 'Windows: Beim App-Ende erscheint kein Konsolen-Fenster mehr kurz auf dem Bildschirm (CREATE_NO_WINDOW für curl.exe + taskkill)' },
       { typ: 'verbesserung', text: 'Beenden: kein Bestätigungsdialog mehr – App schließt sich direkt; nur wenn das externe Backup fehlschlägt erscheint ein Retry-Dialog' },
+      { typ: 'verbesserung', text: 'Buchungsvorlagen: Warndialog wenn „Jetzt buchen" für einen Zeitraum ausgelöst wird der noch nicht fällig ist – verhindert versehentliche Doppelbuchungen (Issue #158)' },
       { typ: 'fix', text: 'EÜR: Bei Neuinstallation fehlten die Kategorien „Betriebseinnahmen" (19%/7%/0%) – Rechnungszahlungen wurden ohne Kategorie gebucht und erschienen nicht in der EÜR; bestehende Buchungen werden beim nächsten Start automatisch repariert (Issue #155)' },
       { typ: 'fix', text: 'Journal: Nach CSV-Export erscheint jetzt eine Erfolgsmeldung mit Hinweis dass die Datei in Downloads gespeichert wurde (Issue #136)' },
       { typ: 'fix', text: 'Buchungsvorlagen: Bestätigungsdialog beim Buchen wurde in Tauri/Windows nicht angezeigt (window.confirm() funktioniert in WebView nicht) – ersetzt durch React-Modal mit Abbrechen/Buchen; Warnhinweis bei nicht fälliger Vorlage jetzt sichtbar (Issue #158)' },
-      { typ: 'neu', text: 'Anlage AVEUR – Anlagenverzeichnis: Wirtschaftsgüter (KFZ, EDV, Sonstiges) erfassen; lineare AfA mit Monatsprinzip im Kaufjahr; Privatanteil für KFZ; Abschreibungsplan je Gut; Gesamt-AfA je Jahr (→ EÜR Zeile 36); PDF-Export als Anlage AVEUR' },
+      { typ: 'fix', text: 'Windows: Beim App-Ende erscheint kein Konsolen-Fenster mehr kurz auf dem Bildschirm (CREATE_NO_WINDOW für curl.exe + taskkill)' },
+      { typ: 'fix', text: 'Kategorien: Fehlermeldung beim Löschen einer belegten Kategorie wird jetzt inline angezeigt statt als nativer alert()-Dialog (Issue #156)' },
     ],
   },
   {
