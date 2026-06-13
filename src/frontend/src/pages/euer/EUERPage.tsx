@@ -183,7 +183,7 @@ export function EUERPage() {
           {parseFloat(ergebnis.anlage_zugaenge) > 0 && (
             <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
               <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV, Maschinen o.ä.) sind nicht enthalten –
-              bitte <strong>Anlage AVEUR</strong> (Abschreibungsplan) separat ausfüllen.
+              die jährliche AfA ermittelst du unter <strong>Auswertung → Anlage AVEUR</strong> (Anlagenverzeichnis) und trägst sie in EÜR Zeile 36 ein.
             </div>
           )}
 
