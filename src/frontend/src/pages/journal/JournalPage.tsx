@@ -61,6 +61,7 @@ export function JournalPage() {
   const [aktiverEintragId, setAktiverEintragId] = useState<number | null>(null)
   const [kassenbuchLaedt, setKassenbuchLaedt] = useState(false)
   const [exportLaedt, setExportLaedt] = useState(false)
+  const [csvErfolg, setCsvErfolg] = useState<string | null>(null)
 
   const aktivesJahr = new Date().getFullYear()
   const filterParams = filterModus === 'monat'
@@ -86,10 +87,12 @@ export function JournalPage() {
 
   async function handleKassenbuchExport(format: 'pdf' | 'csv') {
     setKassenbuchLaedt(true)
+    setCsvErfolg(null)
     try {
       const { von, bis } = kassenbuchDatumsbereich()
       const url = await getKassenbuchExportUrl(von, bis, format)
       await openUrl(url)
+      if (format === 'csv') setCsvErfolg('Kassenbuch als CSV exportiert und in deinen Downloads gespeichert.')
     } finally {
       setKassenbuchLaedt(false)
     }
@@ -97,6 +100,7 @@ export function JournalPage() {
 
   async function handleJournalExport(format: 'pdf' | 'csv') {
     setExportLaedt(true)
+    setCsvErfolg(null)
     try {
       const p: Parameters<typeof getJournalExportUrl>[0] = { format }
       if (filterModus === 'monat') {
@@ -116,6 +120,7 @@ export function JournalPage() {
       if (zahlungsartTyp) p.zahlungsart_typ = zahlungsartTyp
       const url = await getJournalExportUrl(p)
       await openUrl(url)
+      if (format === 'csv') setCsvErfolg('Journal als CSV exportiert und in deinen Downloads gespeichert.')
     } finally {
       setExportLaedt(false)
     }
@@ -360,6 +365,16 @@ export function JournalPage() {
         )}
       </div>
       </div>{/* Ende Kopf+Filter */}
+
+      {csvErfolg && (
+        <div className="shrink-0 px-6 pb-3">
+          <div className="flex items-center gap-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2.5 text-sm text-green-800 dark:text-green-300">
+            <span className="shrink-0">✓</span>
+            <span>{csvErfolg}</span>
+            <button onClick={() => setCsvErfolg(null)} className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200">✕</button>
+          </div>
+        </div>
+      )}
 
       {/* Tabelle – scrollbar */}
       <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-6">
