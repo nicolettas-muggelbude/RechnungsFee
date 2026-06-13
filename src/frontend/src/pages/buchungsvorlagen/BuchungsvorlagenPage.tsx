@@ -585,6 +585,7 @@ export default function BuchungsvorlagenPage() {
   const [suche, setSuche] = useState('')
   const [aktivFilter, setAktivFilter] = useState<'alle' | 'aktiv' | 'inaktiv'>('aktiv')
   const [modusFilter, setModusFilter] = useState<'' | 'direkt' | 'beleg'>('')
+  const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string } | null>(null)
 
   const { data: vorlagen = [] } = useQuery({ queryKey: ['buchungsvorlagen'], queryFn: getBuchungsvorlagen })
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
@@ -643,12 +644,7 @@ export default function BuchungsvorlagenPage() {
   function handleBuchen(id: number) {
     const v = vorlagen.find(v => v.id === id)
     if (!v) return
-    const nichtFaellig = v.naechstes_datum > heuteIso()
-    const meldung = nichtFaellig
-      ? `Diese Vorlage wurde bereits gebucht und ist erst am ${fmt(v.naechstes_datum)} wieder fällig.\n\nTrotzdem jetzt buchen?`
-      : 'Jetzt einen Journal-Eintrag erstellen und Datum vorrücken?'
-    if (!confirm(meldung)) return
-    buchenMut.mutate(id)
+    setBuchungsBestaetigung({ id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung })
   }
 
   return (
@@ -756,6 +752,56 @@ export default function BuchungsvorlagenPage() {
             onBelegUpload={f => belegUploadMut.mutate({ id: selVorlage.id, datei: f })}
             onBelegLoeschen={() => belegLoeschenMut.mutate(selVorlage.id)}
           />
+        </div>
+      )}
+
+      {/* Buchungs-Bestätigungsdialog (ersetzt window.confirm – funktioniert in Tauri) */}
+      {buchungsBestaetigung && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-md mx-4 p-6">
+            {buchungsBestaetigung.warnung ? (
+              <>
+                <div className="flex items-start gap-3 mb-4">
+                  <span className="text-2xl shrink-0">⚠️</span>
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">Vorlage noch nicht fällig</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-medium">„{buchungsBestaetigung.bezeichnung}"</span> wurde bereits gebucht und ist erst am{' '}
+                      <span className="font-medium text-orange-600 dark:text-orange-400">{fmt(buchungsBestaetigung.datum)}</span> wieder fällig.
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Trotzdem jetzt buchen?</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setBuchungsBestaetigung(null)}
+                    className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                    Abbrechen
+                  </button>
+                  <button onClick={() => { buchenMut.mutate(buchungsBestaetigung.id); setBuchungsBestaetigung(null) }}
+                    className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 font-medium">
+                    Trotzdem buchen
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2">Jetzt buchen?</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+                  Erstellt einen Journal-Eintrag für <span className="font-medium">„{buchungsBestaetigung.bezeichnung}"</span> und rückt das Datum um ein Intervall vor.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setBuchungsBestaetigung(null)}
+                    className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                    Abbrechen
+                  </button>
+                  <button onClick={() => { buchenMut.mutate(buchungsBestaetigung.id); setBuchungsBestaetigung(null) }}
+                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">
+                    Jetzt buchen
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
