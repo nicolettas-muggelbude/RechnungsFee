@@ -6,7 +6,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -80,6 +80,20 @@ def shutdown():
         os._exit(0)
     threading.Thread(target=_exit, daemon=True).start()
     return {"ok": True}
+
+
+def _decrypt_bytes(data: bytes, passwort: str) -> bytes:
+    """Entschlüsselt AES-256-GCM. Format: salt(16)+nonce(12)+ciphertext+tag."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives import hashes
+
+    salt  = data[:16]
+    nonce = data[16:28]
+    ct    = data[28:]
+    kdf   = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100_000)
+    key   = kdf.derive(passwort.encode())
+    return AESGCM(key).decrypt(nonce, ct, None)
 
 
 def _encrypt_bytes(data: bytes, passwort: str) -> bytes:
@@ -185,19 +199,33 @@ def backup_erstellen():
 
 
 @app.post("/api/backup/wiederherstellen")
-async def backup_wiederherstellen(datei: UploadFile = File(...)):
-    """Nimmt ein Backup-ZIP entgegen, validiert es und speichert als Pending-Marker."""
+async def backup_wiederherstellen(
+    datei: UploadFile = File(...),
+    passwort: str = Form(default=""),
+):
+    """Nimmt .zip (unverschlüsselt) oder .zip.enc (AES-256) entgegen, validiert und speichert als Pending-Marker."""
     import io
     import zipfile
-    if not (datei.filename or "").endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Nur ZIP-Dateien (.zip) werden akzeptiert")
-    content = await datei.read()
+    filename = datei.filename or ""
+    content  = await datei.read()
+
+    if filename.endswith(".zip.enc"):
+        if not passwort:
+            raise HTTPException(status_code=400, detail="Verschlüsseltes Backup (.zip.enc) erfordert ein Passwort")
+        try:
+            content = _decrypt_bytes(content, passwort)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Entschlüsselung fehlgeschlagen – falsches Passwort?")
+    elif not filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Nur .zip oder .zip.enc Dateien werden akzeptiert")
+
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             if "rechnungsfee.db" not in zf.namelist():
                 raise HTTPException(status_code=400, detail="Ungültiges Backup: rechnungsfee.db nicht gefunden")
     except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Ungültige ZIP-Datei")
+        raise HTTPException(status_code=400, detail="Ungültige ZIP-Datei (oder falsches Passwort)")
+
     RESTORE_MARKER.write_bytes(content)
     return {"ok": True, "neustart_erforderlich": True}
 

@@ -708,10 +708,11 @@ export async function downloadBackup(): Promise<string> {
   return filename
 }
 
-export async function uploadBackupWiederherstellen(datei: File): Promise<void> {
+export async function uploadBackupWiederherstellen(datei: File, passwort?: string): Promise<void> {
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('datei', datei)
+  if (passwort) form.append('passwort', passwort)
   const res = await fetch(`${base}/backup/wiederherstellen`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

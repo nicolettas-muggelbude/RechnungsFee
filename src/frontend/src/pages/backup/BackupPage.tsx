@@ -259,20 +259,28 @@ function BackupTab() {
 function WiederherstellungTab() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [datei, setDatei] = useState<File | null>(null)
+  const [passwort, setPasswort] = useState('')
+  const [zeigPasswort, setZeigPasswort] = useState(false)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'bereit' | 'err'>('idle')
   const [fehler, setFehler] = useState<string | null>(null)
+
+  const istVerschluesselt = datei?.name.endsWith('.zip.enc') ?? false
+  const kannWiederherstellen = !!datei && (!istVerschluesselt || !!passwort)
 
   async function waehleDatei() {
     if (isTauri()) {
       try {
         const { open } = await import('@tauri-apps/plugin-dialog')
-        const pfad = await open({ title: 'Backup-ZIP wählen', filters: [{ name: 'Backup', extensions: ['zip'] }] })
+        const pfad = await open({
+          title: 'Backup wählen',
+          filters: [{ name: 'Backup', extensions: ['zip', 'zip.enc'] }],
+        })
         if (typeof pfad === 'string' && pfad) {
-          // Datei über fetch einlesen (Tauri file:// protocol)
           const res = await fetch(`file://${pfad}`)
           const blob = await res.blob()
           const name = pfad.split(/[\\/]/).pop() ?? 'backup.zip'
-          setDatei(new File([blob], name, { type: 'application/zip' }))
+          setDatei(new File([blob], name))
+          setPasswort('')
         }
         return
       } catch { /* Fallback auf normalen Input */ }
@@ -281,10 +289,10 @@ function WiederherstellungTab() {
   }
 
   async function wiederherstellen() {
-    if (!datei) return
+    if (!datei || !kannWiederherstellen) return
     setStatus('uploading'); setFehler(null)
     try {
-      await uploadBackupWiederherstellen(datei)
+      await uploadBackupWiederherstellen(datei, istVerschluesselt ? passwort : undefined)
       setStatus('bereit')
     } catch (e) {
       setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler')
@@ -333,22 +341,48 @@ function WiederherstellungTab() {
             </div>
           ) : (
             <div className="space-y-4">
-              <input ref={fileInputRef} type="file" accept=".zip" className="hidden"
-                onChange={e => setDatei(e.target.files?.[0] ?? null)} />
+              <input ref={fileInputRef} type="file" accept=".zip,.zip.enc" className="hidden"
+                onChange={e => { setDatei(e.target.files?.[0] ?? null); setPasswort('') }} />
 
               <div className="flex items-center gap-3">
                 <button type="button" onClick={waehleDatei}
                   className="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200">
-                  ZIP-Datei wählen
+                  Backup-Datei wählen
                 </button>
-                {datei && <span className="text-sm text-slate-600 dark:text-slate-300 font-mono">{datei.name}</span>}
+                {datei && (
+                  <span className="text-sm text-slate-600 dark:text-slate-300 font-mono flex items-center gap-2">
+                    {datei.name}
+                    {istVerschluesselt && <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">verschlüsselt</span>}
+                  </span>
+                )}
               </div>
+
+              {istVerschluesselt && (
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                    Backup-Passwort <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative max-w-sm">
+                    <input
+                      type={zeigPasswort ? 'text' : 'password'}
+                      value={passwort}
+                      onChange={e => setPasswort(e.target.value)}
+                      placeholder="Passwort das beim Backup gesetzt wurde"
+                      className={`${inputCls} pr-24`}
+                    />
+                    <button type="button" onClick={() => setZeigPasswort(z => !z)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2 py-1">
+                      {zeigPasswort ? 'Verbergen' : 'Anzeigen'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {fehler && <p className="text-sm text-red-600 dark:text-red-400">{fehler}</p>}
 
-              <button onClick={wiederherstellen} disabled={!datei || status === 'uploading'}
+              <button onClick={wiederherstellen} disabled={!kannWiederherstellen || status === 'uploading'}
                 className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg">
-                {status === 'uploading' ? 'Wird hochgeladen…' : 'Backup hochladen und vorbereiten'}
+                {status === 'uploading' ? 'Wird verarbeitet…' : 'Backup hochladen und vorbereiten'}
               </button>
             </div>
           )}
