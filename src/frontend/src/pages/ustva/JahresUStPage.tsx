@@ -104,8 +104,8 @@ export function JahresUStPage() {
   })() : []
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Jahresumsatzsteuererklärung</h1>
+    <div className="p-6 max-w-4xl space-y-0">
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 mt-2">Jahresumsatzsteuererklärung</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         Anzeigehilfe für die USt 2A – berechnet aus allen Journalbuchungen des Wirtschaftsjahres (Ist-Versteuerung).
         Übertrage die Kennziffern in{' '}
