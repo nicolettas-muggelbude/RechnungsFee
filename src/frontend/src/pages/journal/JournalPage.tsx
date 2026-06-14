@@ -56,6 +56,9 @@ export function JournalPage() {
 
   const [zahlungsartTyp, _setZahlungsartTyp] = useState<'' | 'bar' | 'unbar'>(() => journalFilter.zahlungsartTyp)
   const setZahlungsartTyp = (z: '' | 'bar' | 'unbar') => { journalFilter.zahlungsartTyp = z; _setZahlungsartTyp(z) }
+
+  const [nurBebuchte, _setNurBebuchte] = useState<boolean>(() => journalFilter.nurBebuchte)
+  const setNurBebuchte = (v: boolean) => { journalFilter.nurBebuchte = v; _setNurBebuchte(v) }
   const [showBuchung, setShowBuchung] = useState(false)
   const [showAbschluss, setShowAbschluss] = useState(false)
   const [aktiverEintragId, setAktiverEintragId] = useState<number | null>(null)
@@ -137,16 +140,17 @@ export function JournalPage() {
   })
 
   const { data: kategorien } = useQuery({
-    queryKey: ['kategorien'],
-    queryFn: () => getKategorien(),
+    queryKey: ['kategorien', nurBebuchte],
+    queryFn: () => getKategorien(false, nurBebuchte),
   })
 
-  const hatAktiveFilter = art !== '' || kategorieId !== '' || zahlungsartTyp !== '' || filterModus !== 'monat'
+  const hatAktiveFilter = art !== '' || kategorieId !== '' || zahlungsartTyp !== '' || filterModus !== 'monat' || nurBebuchte
 
   function resetFilter() {
     setArt('')
     setKategorieId('')
     setZahlungsartTyp('')
+    setNurBebuchte(false)
     setFilterModus('monat')
     setMonat(aktuellerMonat())
     setDatum(heuteIso())
@@ -321,6 +325,19 @@ export function JournalPage() {
             <option key={k.id} value={k.id}>{k.name}</option>
           ))}
         </select>
+
+        {/* Nur bebuchte Kategorien */}
+        <button
+          onClick={() => { setNurBebuchte(!nurBebuchte); setKategorieId('') }}
+          title="Nur Kategorien anzeigen, die mindestens eine Buchung haben"
+          className={`rounded-lg px-3 py-1.5 text-sm border transition-colors ${
+            nurBebuchte
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+          }`}
+        >
+          Nur bebuchte
+        </button>
 
         {/* Zahlungsart */}
         <select

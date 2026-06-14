@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/kategorien", tags=["Stammdaten"])
 def list_kategorien(
     kontenart: str | None = None,
     nur_aktive: bool = False,
+    nur_bebuchte: bool = False,
     db: Session = Depends(get_db),
 ):
     q = db.query(Kategorie)
@@ -24,6 +25,10 @@ def list_kategorien(
         q = q.filter(Kategorie.kontenart == kontenart)
     if nur_aktive:
         q = q.filter(Kategorie.aktiv == True)
+    if nur_bebuchte:
+        q = q.filter(
+            db.query(Journaleintrag).filter(Journaleintrag.kategorie_id == Kategorie.id).exists()
+        )
     return q.order_by(Kategorie.kontenart, Kategorie.name).all()
 
 

@@ -27,6 +27,7 @@ export interface JournalFilterState {
   art:            '' | 'Einnahme' | 'Ausgabe'
   kategorieId:    string
   zahlungsartTyp: '' | 'bar' | 'unbar'
+  nurBebuchte:    boolean
 }
 
 export const journalFilter: JournalFilterState = {
@@ -38,6 +39,7 @@ export const journalFilter: JournalFilterState = {
   art:            '',
   kategorieId:    '',
   zahlungsartTyp: '',
+  nurBebuchte:    false,
 }
 
 // ---------------------------------------------------------------------------

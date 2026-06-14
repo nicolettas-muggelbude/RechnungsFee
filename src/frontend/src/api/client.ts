@@ -294,8 +294,13 @@ export type KategorieCreate = {
   ust_satz_standard?: number
   beschreibung?: string | null
 }
-export const getKategorien = (nurAktive = false) =>
-  request<Kategorie[]>(`/kategorien${nurAktive ? '?nur_aktive=true' : ''}`)
+export const getKategorien = (nurAktive = false, nurBebuchte = false) => {
+  const params = new URLSearchParams()
+  if (nurAktive) params.set('nur_aktive', 'true')
+  if (nurBebuchte) params.set('nur_bebuchte', 'true')
+  const qs = params.toString()
+  return request<Kategorie[]>(`/kategorien${qs ? '?' + qs : ''}`)
+}
 export const toggleKategorieAktiv = (id: number) =>
   request<Kategorie>(`/kategorien/${id}/aktiv`, { method: 'PATCH' })
 export const updateKategorieKonten = (id: number, data: { konto_skr03?: string; konto_skr04?: string }) =>
