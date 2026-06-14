@@ -310,34 +310,34 @@ export function JournalPage() {
           <option value="Ausgabe">Ausgaben</option>
         </select>
 
-        {/* Kategorie */}
-        <select
-          value={kategorieId}
-          onChange={(e) => setKategorieId(e.target.value)}
-          className={`rounded-lg px-3 py-1.5 text-sm focus:outline-none border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 transition-shadow ${
-            kategorieId !== ''
-              ? 'ring-2 ring-blue-500'
-              : 'focus:ring-2 focus:ring-blue-500'
-          }`}
-        >
-          <option value="">Alle Kategorien</option>
-          {(kategorien ?? []).map((k) => (
-            <option key={k.id} value={k.id}>{k.name}</option>
-          ))}
-        </select>
-
-        {/* Nur bebuchte Kategorien */}
-        <button
-          onClick={() => { setNurBebuchte(!nurBebuchte); setKategorieId('') }}
-          title="Nur Kategorien anzeigen, die mindestens eine Buchung haben"
-          className={`rounded-lg px-3 py-1.5 text-sm border transition-colors ${
-            nurBebuchte
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-          }`}
-        >
-          Nur bebuchte
-        </button>
+        {/* Kategorie + Nur-bebuchte-Toggle als Button-Group */}
+        <div className="flex">
+          <select
+            value={kategorieId}
+            onChange={(e) => setKategorieId(e.target.value)}
+            className={`rounded-l-lg px-3 py-1.5 text-sm focus:outline-none border border-r-0 border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 transition-shadow ${
+              kategorieId !== ''
+                ? 'ring-2 ring-blue-500'
+                : 'focus:ring-2 focus:ring-blue-500'
+            }`}
+          >
+            <option value="">Alle Kategorien</option>
+            {(kategorien ?? []).map((k) => (
+              <option key={k.id} value={k.id}>{k.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { setNurBebuchte(!nurBebuchte); setKategorieId('') }}
+            title="Nur Kategorien anzeigen, die mindestens eine Buchung haben"
+            className={`rounded-r-lg px-3 py-1.5 text-sm border transition-colors whitespace-nowrap ${
+              nurBebuchte
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Nur bebuchte
+          </button>
+        </div>
 
         {/* Zahlungsart */}
         <select
