@@ -410,6 +410,17 @@ export function ExportPage() {
               <li>Format: DATEV EXTF Buchungsstapel v700/9, UTF-8 mit BOM, Semikolon-getrennt</li>
             </ul>
           </div>
+
+          {/* Beta-Hinweis */}
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 flex gap-3">
+            <span className="text-amber-500 dark:text-amber-400 shrink-0">⚠</span>
+            <p className="text-xs text-amber-800 dark:text-amber-300">
+              <span className="font-semibold">Beta:</span> Das EXTF-Format wurde nach DATEV-Spezifikation implementiert, konnte mangels DATEV-Lizenz aber nicht gegen die echte Software getestet werden.
+              Wir bitten um Rückmeldung – Fehler gerne als{' '}
+              <a href="https://github.com/nicolettas-muggelbude/RechnungsFee/issues" target="_blank" rel="noreferrer"
+                className="underline">GitHub-Issue</a> melden.
+            </p>
+          </div>
         </div>
       </div>
     </div>
