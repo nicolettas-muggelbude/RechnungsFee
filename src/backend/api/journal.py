@@ -769,10 +769,9 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         netto_betrag=s_netto,
         ust_satz=original.ust_satz,
         ust_betrag=s_ust,
-        # Storno kehrt den Vorsteuer-Betrag um, damit sich Original und Storno in der EÜR aufheben.
-        # Negativer Wert ist korrekt: EÜR summiert SUM(vorsteuer_betrag) ohne art-Filter.
         vorsteuer_betrag=-original.vorsteuer_betrag,
         brutto_betrag=s_brutto,
+        marge_25a_brutto=original.marge_25a_brutto,
         vorsteuerabzug=False,
         steuerbefreiung_grund=None,
         immutable=True,

@@ -134,6 +134,9 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         .all()
     )
 
+    # Lookup-Cache: belegnr → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
+    _marge_cache: dict[str, Decimal | None] = {}
+
     kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
 
     for e in eintraege:
@@ -176,7 +179,23 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         if e.art == "Ausgabe" and e.ust_betrag and e.ust_betrag != 0 and e.zahlungsart != "Skonto":
             mapping = _KONTO_EINNAHME.get(ust_konto)
             if mapping:
-                kz[mapping[0]] -= e.netto_betrag
+                # §25a: Storno muss marge_25a_brutto verwenden (wie Einnahme-Pfad),
+                # nicht netto_betrag – sonst wird mehr aus KZ 81 subtrahiert als addiert wurde.
+                marge_st = getattr(e, "marge_25a_brutto", None)
+                if marge_st is None and e.beschreibung and e.beschreibung.startswith("STORNO "):
+                    # Fallback für alte Storno-Einträge ohne marge_25a_brutto:
+                    # belegnr des Originals aus "STORNO <belegnr>: ..." parsen
+                    try:
+                        orig_belegnr = e.beschreibung.split(":")[0].removeprefix("STORNO ").strip()
+                        if orig_belegnr not in _marge_cache:
+                            orig = db.query(Journaleintrag).filter(
+                                Journaleintrag.belegnr == orig_belegnr
+                            ).first()
+                            _marge_cache[orig_belegnr] = getattr(orig, "marge_25a_brutto", None) if orig else None
+                        marge_st = _marge_cache[orig_belegnr]
+                    except Exception:
+                        pass
+                kz[mapping[0]] -= marge_st if marge_st else e.netto_betrag
                 kz[mapping[1]] -= e.ust_betrag
 
         # KZ 41 – ig. Lieferungen: 0% USt, Erkennung via konto_skr03 8125/3125

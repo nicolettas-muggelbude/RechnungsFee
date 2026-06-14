@@ -1635,6 +1635,7 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             ust_betrag=s_ust,
             vorsteuer_betrag=-eintrag.vorsteuer_betrag,
             brutto_betrag=s_brutto,
+            marge_25a_brutto=eintrag.marge_25a_brutto,
             vorsteuerabzug=False,
             steuerbefreiung_grund=None,
             immutable=True,
