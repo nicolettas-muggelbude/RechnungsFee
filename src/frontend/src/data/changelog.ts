@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.15',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'fix', text: 'EÜR: Seite konnte nicht geladen werden wenn kein Anlagenverzeichnis vorhanden ist (Fehler trat bei allen Nutzern ohne AVEUR-Einträge auf)' },
+      { typ: 'neu', text: 'Journal: Toggle „Nur bebuchte" neben dem Kategorie-Dropdown – zeigt nur Kategorien mit mindestens einer Buchung; erleichtert Prüf- und Abstimmarbeiten vor UStVA und EÜR' },
+    ],
+  },
+  {
     version: 'v0.3.14',
     datum: 'Juni 2026',
     eintraege: [
