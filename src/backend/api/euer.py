@@ -349,7 +349,7 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
             zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * (e.netto_betrag or ZERO)
 
         if e.ust_betrag and e.ust_betrag != 0:
-            if e.art == "Einnahme" and e.ust_betrag > 0:
+            if e.art == "Einnahme" and e.ust_betrag > 0 and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
                 zeilen.setdefault(17, {})
                 zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) + e.ust_betrag
             elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
