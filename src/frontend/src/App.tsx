@@ -24,6 +24,7 @@ import { ProformaPage } from './pages/proforma/ProformaPage'
 import { ExportPage } from './pages/ExportPage'
 import { EksPage } from './pages/eks/EksPage'
 import { UStVAPage } from './pages/ustva/UStVAPage'
+import { JahresUStPage } from './pages/ustva/JahresUStPage'
 import { ZMPage } from './pages/zm/ZMPage'
 import { EUERPage } from './pages/euer/EUERPage'
 import { AnlageverzeichnisPage } from './pages/anlageverzeichnis/AnlageverzeichnisPage'
@@ -112,6 +113,7 @@ function AppRoutes() {
           <Route path="/exporte" element={<ExportPage />} />
           <Route path="/eks" element={<EksPage />} />
           <Route path="/ustva" element={<UStVAPage />} />
+          <Route path="/jahres-ust" element={<JahresUStPage />} />
           <Route path="/zm" element={<ZMPage />} />
           <Route path="/euer" element={<EUERPage />} />
           <Route path="/anlageverzeichnis" element={<AnlageverzeichnisPage />} />

@@ -1545,6 +1545,31 @@ export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
 }
 
+export type JahresUStVAErgebnis = {
+  jahr: number
+  von: string
+  bis: string
+  ist_kleinunternehmer: boolean
+  kz_81: string; kz_83: string; kz_86: string; kz_88: string
+  kz_41: string; kz_87: string; kz_89: string; kz_93: string
+  kz_46: string; kz_47: string; kz_84: string; kz_85: string
+  kz_66: string; kz_61: string; kz_67: string
+  zahllast: string
+  kz_48: string
+  summe_vorauszahlungen: string
+  restschuld: string
+  gespeicherte_perioden: number
+  hat_ig_transaktionen: boolean
+}
+
+export const berechneJahresUStVA = (jahr: number) =>
+  request<JahresUStVAErgebnis>(`/ustva/jahreserklarung?jahr=${jahr}`)
+
+export const getJahresUStVAPdfUrl = async (jahr: number): Promise<string> => {
+  const base = await getBaseUrl()
+  return `${base}/ustva/jahreserklarung/pdf?jahr=${jahr}`
+}
+
 // --- Zusammenfassende Meldung (ZM) ---
 
 export type ZMPosition = {

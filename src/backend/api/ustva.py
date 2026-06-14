@@ -31,10 +31,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Journaleintrag, Unternehmen, UstvaExport
+from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport
 
 router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
 
@@ -499,4 +500,362 @@ def ustva_pdf(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="UStVA_{zeitraum}.pdf"'},
+    )
+
+
+# ===========================================================================
+# Jahresumsatzsteuererklärung (USt 2A / Anlage UR)
+# ===========================================================================
+
+class JahresUStVAErgebnis(BaseModel):
+    jahr: int
+    von: date
+    bis: date
+    ist_kleinunternehmer: bool
+    # Reguläre KZs – identisch mit den Voranmeldungs-KZs, Jahressumme aus Journal
+    kz_81: Decimal = ZERO; kz_83: Decimal = ZERO
+    kz_86: Decimal = ZERO; kz_88: Decimal = ZERO
+    kz_41: Decimal = ZERO; kz_87: Decimal = ZERO
+    kz_89: Decimal = ZERO; kz_93: Decimal = ZERO
+    kz_46: Decimal = ZERO; kz_47: Decimal = ZERO
+    kz_84: Decimal = ZERO; kz_85: Decimal = ZERO
+    kz_66: Decimal = ZERO; kz_61: Decimal = ZERO; kz_67: Decimal = ZERO
+    zahllast: Decimal = ZERO
+    # §19 Kleinunternehmer: Brutto-Umsätze ohne USt-Ausweis (Zeile 23)
+    kz_48: Decimal = ZERO
+    # Vorauszahlungsanrechnung (aus gespeicherten Voranmeldungen)
+    summe_vorauszahlungen: Decimal = ZERO
+    restschuld: Decimal = ZERO          # positiv = Nachzahlung, negativ = Erstattung
+    gespeicherte_perioden: int = 0
+    hat_ig_transaktionen: bool = False  # → Anlage UR erforderlich
+
+
+def _berechne_ku_kz48(von: date, bis: date, db: Session) -> Decimal:
+    """KZ 48: §19-Umsätze (Kleinunternehmer). Brutto-Einnahmen ohne Privateinlagen (euer_zeile=107)."""
+    eintraege = (
+        db.query(Journaleintrag)
+        .outerjoin(Kategorie, Journaleintrag.kategorie_id == Kategorie.id)
+        .filter(
+            Journaleintrag.datum >= von,
+            Journaleintrag.datum <= bis,
+            Journaleintrag.art == "Einnahme",
+            Journaleintrag.zahlungsart != "Skonto",
+            # Privateinlagen (euer_zeile=107) ausschließen
+            or_(
+                Journaleintrag.kategorie_id.is_(None),
+                Kategorie.euer_zeile.is_(None),
+                Kategorie.euer_zeile != 107,
+            ),
+        )
+        .all()
+    )
+    total = sum(Decimal(str(e.brutto_betrag or 0)) for e in eintraege)
+    return total.quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+
+def _generate_pdf_jahres(jahr: int, ergebnis: JahresUStVAErgebnis, unt: Unternehmen) -> bytes:
+    from fpdf import FPDF
+
+    def _find_dejavu_dir() -> Path:
+        import sys
+        if getattr(sys, "frozen", False):
+            p = Path(sys._MEIPASS) / "fonts"  # type: ignore[attr-defined]
+            if (p / "DejaVuSans.ttf").exists():
+                return p
+        local = Path(__file__).parent.parent / "fonts"
+        if (local / "DejaVuSans.ttf").exists():
+            return local
+        for p in [
+            Path("/usr/share/fonts/truetype/dejavu"),
+            Path("/usr/share/fonts/dejavu"),
+            Path("/usr/share/fonts/dejavu-sans-fonts"),
+        ]:
+            if (p / "DejaVuSans.ttf").exists():
+                return p
+        raise FileNotFoundError("DejaVu-Fonts nicht gefunden.")
+
+    BLAU   = (37, 99, 235)
+    DUNKEL = (30, 41, 59)
+    MITTEL = (100, 116, 139)
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    fonts = _find_dejavu_dir()
+    pdf.add_font("DejaVu", "",  str(fonts / "DejaVuSans.ttf"))
+    pdf.add_font("DejaVu", "B", str(fonts / "DejaVuSans-Bold.ttf"))
+    pdf.add_page()
+    pdf.set_margins(20, 20, 20)
+    pdf.set_auto_page_break(True, margin=20)
+
+    # Kopfzeile
+    pdf.set_fill_color(*BLAU)
+    pdf.rect(0, 0, 210, 18, "F")
+    pdf.set_font("DejaVu", "B", 11)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_xy(20, 5)
+    pdf.cell(0, 8, f"Jahresumsatzsteuererklärung {jahr} – Anzeigehilfe (USt 2A)", ln=True, align="L")
+    pdf.set_text_color(*DUNKEL)
+
+    pdf.set_xy(20, 24)
+    pdf.set_font("DejaVu", "B", 14)
+    pdf.cell(0, 8, f"Wirtschaftsjahr {jahr}", ln=True, align="L")
+
+    pdf.set_font("DejaVu", "", 9)
+    pdf.set_text_color(*MITTEL)
+    name = unt.firmenname or f"{unt.vorname or ''} {unt.nachname or ''}".strip()
+    pdf.cell(0, 5,
+        f"{name}  ·  Steuernummer: {unt.steuernummer or '—'}  ·  Finanzamt: {unt.finanzamt or '—'}",
+        ln=True, align="L")
+    if unt.w_idnr:
+        pdf.cell(0, 5, f"Wirtschafts-IdNr. (Zeile 1): {unt.w_idnr}", ln=True, align="L")
+    pdf.ln(4)
+
+    def euro(v: Decimal) -> str:
+        neg = v < 0
+        s = f"{abs(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
+        return f"− {s}" if neg else s
+
+    def kz_row(kz_nr: str, bezeichnung: str, wert: Decimal, ist_steuer: bool = False, bold: bool = False):
+        y = pdf.get_y()
+        h = 7
+        chip_color = (71, 85, 105) if bold else BLAU
+        pdf.set_fill_color(*chip_color)
+        pdf.set_font("DejaVu", "B", 8)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_xy(20, y)
+        pdf.cell(12, h, kz_nr, border=0, fill=True, align="C")
+        font_size = 8 if ist_steuer else 9
+        pdf.set_font("DejaVu", "B" if bold else "", font_size)
+        pdf.set_text_color(MITTEL if ist_steuer else DUNKEL)
+        pdf.set_xy(34, y)
+        pdf.cell(120, h, bezeichnung, border=0, align="L")
+        color = (220, 38, 38) if wert < 0 else DUNKEL
+        pdf.set_text_color(*color)
+        pdf.set_font("DejaVu", "B" if bold else "", 9)
+        pdf.set_xy(155, y)
+        pdf.cell(35, h, euro(wert), align="R", border=0)
+        pdf.ln(h + 1)
+
+    def section(titel: str):
+        pdf.set_fill_color(229, 231, 235)
+        pdf.set_font("DejaVu", "B", 9)
+        pdf.set_text_color(*DUNKEL)
+        pdf.set_x(20)
+        pdf.cell(170, 6, f"  {titel}", fill=True, ln=True, align="L")
+        pdf.ln(1)
+
+    if ergebnis.ist_kleinunternehmer:
+        section("Kleinunternehmer §19 UStG")
+        kz_row("48", "Umsätze, für die als KU keine USt geschuldet wird (§19 Abs. 1 UStG)", ergebnis.kz_48, bold=True)
+        pdf.ln(2)
+        pdf.set_fill_color(219, 234, 254)
+        pdf.set_x(20)
+        pdf.set_font("DejaVu", "", 8)
+        pdf.set_text_color(30, 64, 175)
+        pdf.multi_cell(170, 5,
+            f"Dein Gesamtumsatz {jahr}: {euro(ergebnis.kz_48)}. "
+            "Als Kleinunternehmer §19 UStG schulde ich keine Umsatzsteuer. "
+            "Der Umsatz ist in der Jahressteuererklärung (USt 2A, Zeile 23 / KZ 48) anzugeben, "
+            "damit das Finanzamt prüfen kann ob die §19-Grenze eingehalten wurde.",
+            fill=True, align="L")
+        pdf.ln(4)
+    else:
+        # Reguläre KZ-Tabelle (nur Zeilen ≠ 0)
+        letzter_abschnitt = None
+        for (abschnitt, kz_nr, bezeichnung, ist_steuer, _auto) in KZ_META:
+            key = f"kz_{kz_nr}"
+            wert: Decimal = getattr(ergebnis, key, ZERO)
+            if wert == ZERO:
+                continue
+            eff = abschnitt if abschnitt else letzter_abschnitt
+            if eff != letzter_abschnitt:
+                if letzter_abschnitt is not None:
+                    pdf.ln(2)
+                section(eff)
+                letzter_abschnitt = eff
+            kz_row(kz_nr, bezeichnung, wert, ist_steuer=ist_steuer)
+
+        # Jahressteuer
+        pdf.ln(2)
+        section("H. Jahressteuer")
+        label = "Verbleibender Überschuss (Erstattung)" if ergebnis.zahllast < 0 else "Jahresumsatzsteuer"
+        kz_row("—", label, ergebnis.zahllast, bold=True)
+
+        # Vorauszahlungsanrechnung
+        if ergebnis.gespeicherte_perioden > 0:
+            pdf.ln(2)
+            section(f"Vorauszahlungsanrechnung ({ergebnis.gespeicherte_perioden} Voranmeldungen gespeichert)")
+            kz_row("76", "Summe der Vorauszahlungen (aus UStVA-Voranmeldungen)", ergebnis.summe_vorauszahlungen)
+            restlabel = "Verbleibender Überschuss (Erstattung)" if ergebnis.restschuld < 0 else "Verbleibende Zahllast"
+            kz_row("—", restlabel, ergebnis.restschuld, bold=True)
+            pdf.ln(2)
+            pdf.set_fill_color(254, 243, 199)
+            pdf.set_x(20)
+            pdf.set_font("DejaVu", "", 8)
+            pdf.set_text_color(120, 80, 0)
+            pdf.multi_cell(170, 5,
+                "Hinweis Vorauszahlungen: Die Summe ergibt sich aus den in RechnungsFee gespeicherten "
+                "Voranmeldungen. Wurden nicht alle Zeiträume gespeichert, weicht die Summe ab. "
+                "Eine Dauerfristverlängerungs-Sondervorauszahlung muss ggf. manuell ergänzt werden.",
+                fill=True, align="L")
+        elif not ergebnis.ist_kleinunternehmer:
+            pdf.ln(2)
+            pdf.set_fill_color(243, 244, 246)
+            pdf.set_x(20)
+            pdf.set_font("DejaVu", "", 8)
+            pdf.set_text_color(*MITTEL)
+            pdf.multi_cell(170, 5,
+                "Vorauszahlungen: Keine Voranmeldungen in RechnungsFee gespeichert. "
+                "Trage deine geleisteten Vorauszahlungen manuell in ELSTER ein (KZ 76).",
+                fill=True, align="L")
+
+        # Anlage-UR-Hinweis
+        if ergebnis.hat_ig_transaktionen:
+            pdf.ln(3)
+            pdf.set_fill_color(254, 226, 226)
+            pdf.set_x(20)
+            pdf.set_font("DejaVu", "B", 8)
+            pdf.set_text_color(185, 28, 28)
+            pdf.multi_cell(170, 5,
+                "Anlage UR erforderlich: Im Journal existieren innergemeinschaftliche Umsätze "
+                "(KZ 41/89/93) oder §13b-Leistungen (KZ 46/84). "
+                "Die Anlage UR ist separat in ELSTER auszufüllen (Aufschlüsselung nach EU-Ländern).",
+                fill=True, align="L")
+
+    pdf.ln(4)
+    # Allgemeiner Hinweis
+    pdf.set_fill_color(254, 243, 199)
+    pdf.set_x(20)
+    pdf.set_font("DejaVu", "", 8)
+    pdf.set_text_color(120, 80, 0)
+    pdf.multi_cell(170, 5,
+        "Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
+        "Übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie deinem Steuerberater. "
+        "Grundlage: Journalbuchungen nach Ist-Versteuerung (Zahlungsdatum). "
+        "Nicht abgedeckt: KZ 62 (Einfuhrumsatzsteuer), KZ 50 (unterjähriger KU-Wechsel), "
+        "Reiseleistungen §25 UStG, Durchschnittssatz §23/23a UStG.",
+        fill=True, align="L")
+
+    # Fußzeile
+    pdf.set_y(-15)
+    pdf.set_font("DejaVu", "", 7)
+    pdf.set_text_color(*MITTEL)
+    name_kurz = name[:40]
+    pdf.cell(85, 5, f"Erstellt mit RechnungsFee  ·  {name_kurz}", align="L")
+    pdf.cell(85, 5, f"Jahresumsatzsteuererklärung {jahr}", align="R")
+
+    buf = BytesIO()
+    pdf.output(buf)
+    return buf.getvalue()
+
+
+@router.get("/jahreserklarung", response_model=JahresUStVAErgebnis)
+def jahresumsatzsteuer(
+    jahr: int = Query(..., description="Wirtschaftsjahr (z. B. 2026)"),
+    db: Session = Depends(get_db),
+):
+    unt = db.query(Unternehmen).first()
+    if not unt:
+        raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
+
+    von = date(jahr, 1, 1)
+    bis = date(jahr, 12, 31)
+    ist_ku = bool(unt.ist_kleinunternehmer)
+
+    kz_48 = ZERO
+    if ist_ku:
+        kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+        kz_48 = _berechne_ku_kz48(von, bis, db)
+    else:
+        kz = _berechne_kz(von, bis, db)
+
+    # Gespeicherte Voranmeldungen für Vorauszahlungsanrechnung
+    voranmeldungen = (
+        db.query(UstvaExport)
+        .filter(UstvaExport.zeitraum.like(f"{jahr}-%"))
+        .all()
+    )
+    q = Decimal("0.01")
+    summe_voa = sum(Decimal(str(v.zahllast)) for v in voranmeldungen).quantize(q, ROUND_HALF_UP)
+    jahressteuer = kz["zahllast"]
+    restschuld = (jahressteuer - summe_voa).quantize(q, ROUND_HALF_UP)
+
+    hat_ig = any(
+        kz.get(k, ZERO) != ZERO
+        for k in ["kz_41", "kz_89", "kz_93", "kz_46", "kz_47", "kz_84", "kz_85"]
+    )
+
+    return JahresUStVAErgebnis(
+        jahr=jahr, von=von, bis=bis, ist_kleinunternehmer=ist_ku,
+        kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
+        kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
+        kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
+        kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
+        kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
+        kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),
+        kz_67=kz.get("kz_67", ZERO),
+        zahllast=jahressteuer,
+        kz_48=kz_48,
+        summe_vorauszahlungen=summe_voa,
+        restschuld=restschuld,
+        gespeicherte_perioden=len(voranmeldungen),
+        hat_ig_transaktionen=hat_ig,
+    )
+
+
+@router.get("/jahreserklarung/pdf")
+def jahresumsatzsteuer_pdf(
+    jahr: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    unt = db.query(Unternehmen).first()
+    if not unt:
+        raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
+
+    von = date(jahr, 1, 1)
+    bis = date(jahr, 12, 31)
+    ist_ku = bool(unt.ist_kleinunternehmer)
+
+    kz_48 = ZERO
+    if ist_ku:
+        kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+        kz_48 = _berechne_ku_kz48(von, bis, db)
+    else:
+        kz = _berechne_kz(von, bis, db)
+
+    voranmeldungen = (
+        db.query(UstvaExport)
+        .filter(UstvaExport.zeitraum.like(f"{jahr}-%"))
+        .all()
+    )
+    q = Decimal("0.01")
+    summe_voa = sum(Decimal(str(v.zahllast)) for v in voranmeldungen).quantize(q, ROUND_HALF_UP)
+    jahressteuer = kz["zahllast"]
+
+    hat_ig = any(
+        kz.get(k, ZERO) != ZERO
+        for k in ["kz_41", "kz_89", "kz_93", "kz_46", "kz_47", "kz_84", "kz_85"]
+    )
+
+    ergebnis = JahresUStVAErgebnis(
+        jahr=jahr, von=von, bis=bis, ist_kleinunternehmer=ist_ku,
+        kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
+        kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
+        kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
+        kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
+        kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
+        kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),
+        kz_67=kz.get("kz_67", ZERO),
+        zahllast=jahressteuer, kz_48=kz_48,
+        summe_vorauszahlungen=summe_voa,
+        restschuld=(jahressteuer - summe_voa).quantize(q, ROUND_HALF_UP),
+        gespeicherte_perioden=len(voranmeldungen),
+        hat_ig_transaktionen=hat_ig,
+    )
+    pdf_bytes = _generate_pdf_jahres(jahr, ergebnis, unt)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="JahresUSt_{jahr}.pdf"'},
     )

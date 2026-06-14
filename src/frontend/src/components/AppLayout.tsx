@@ -31,8 +31,9 @@ type ZeigenFn = (k: NavKontext) => boolean
 const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: ZeigenFn }[] = [
   { to: '/euer',             label: 'EÜR',               icon: '📊', zeigen: () => true },
   { to: '/anlageverzeichnis', label: 'AVEÜR',              icon: '🏛️', zeigen: () => true },
-  { to: '/ustva',   label: 'UStVA',       icon: '🏛️', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },
-  { to: '/zm',      label: 'ZM',          icon: '🌍', zeigen: ({ zm }) => !!zm?.hat_ig_eintraege },
+  { to: '/ustva',      label: 'UStVA',         icon: '🏛️', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },
+  { to: '/jahres-ust', label: 'Jahres-USt',   icon: '📅', zeigen: () => true },
+  { to: '/zm',         label: 'ZM',            icon: '🌍', zeigen: ({ zm }) => !!zm?.hat_ig_eintraege },
   { to: '/eks',     label: 'EKS',         icon: '📋', zeigen: ({ unt }) => !!unt?.bezieht_transferleistungen },
   { to: '/exporte', label: 'Exporte', icon: '📦', zeigen: () => true },
 ]
