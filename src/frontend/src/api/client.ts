@@ -940,6 +940,7 @@ export type Rechnungsposition = {
   ust_betrag: string
   brutto: string
   differenzbesteuerung: boolean
+  rabatt_prozent?: string
 }
 
 export type RechnungspositionCreate = {
@@ -951,6 +952,7 @@ export type RechnungspositionCreate = {
   artikel_id?: number
   kategorie_id?: number
   differenzbesteuerung?: boolean
+  rabatt_prozent?: number
 }
 
 export type ZahlungKompakt = {
@@ -1043,6 +1045,7 @@ export type Rechnung = {
   herkunft_proforma_nr: string | null
   erstellt_am: string
   aktualisiert_am: string
+  rabatt_prozent: string
 }
 
 export type RechnungCreate = {
@@ -1066,6 +1069,7 @@ export type RechnungCreate = {
   dokumentenpaket_id?: number
   lieferadresse_id?: number | null
   positionen: RechnungspositionCreate[]
+  rabatt_prozent?: number
   netto_gesamt_override?: string
   ust_gesamt_override?: string
   brutto_gesamt_override?: string

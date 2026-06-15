@@ -16,6 +16,7 @@ Klassenattribute für Vorlage-Anpassungen:
 """
 
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +101,9 @@ def _ust_aufschluesselung(positionen) -> list[tuple[int, float, float]]:
     for pos in positionen:
         satz  = int(float(str(pos.ust_satz)))
         menge = float(str(pos.menge))
-        netto_by[satz] = netto_by.get(satz, 0.0) + float(str(pos.netto))    * menge
+        # pos.brutto − pos.ust_betrag = effektiver Netto-Einzelpreis (nach Positionsrabatt)
+        netto_eff = float(str(pos.brutto)) - float(str(pos.ust_betrag))
+        netto_by[satz] = netto_by.get(satz, 0.0) + netto_eff              * menge
         ust_by[satz]   = ust_by.get(satz, 0.0)   + float(str(pos.ust_betrag)) * menge
     return sorted([(s, netto_by[s], ust_by[s]) for s in netto_by], key=lambda x: x[0])
 
@@ -465,7 +468,27 @@ class RechnungPDFBase(FPDF):
             self.cell(val_w, 5.5, wert, align="R", new_x="LMARGIN", new_y="NEXT")
 
         aufschluesselung = _ust_aufschluesselung(r.positionen)
+        re_rabatt = getattr(r, "rabatt_prozent", Decimal("0")) or Decimal("0")
+
+        # Vor-Rabatt-Summen aus Positionen berechnen (Positions-Ebene bereits eingerechnet)
+        if re_rabatt:
+            pos_netto_sum = sum(
+                (Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag))) * Decimal(str(pos.menge))
+                for pos in r.positionen
+            ).quantize(Decimal("0.01"))
+            pos_ust_sum   = sum(
+                Decimal(str(pos.ust_betrag)) * Decimal(str(pos.menge))
+                for pos in r.positionen
+            ).quantize(Decimal("0.01"))
+            pos_brutto_sum = (pos_netto_sum + pos_ust_sum).quantize(Decimal("0.01"))
+            rabatt_netto   = (pos_netto_sum   * re_rabatt / 100).quantize(Decimal("0.01"))
+            rabatt_brutto  = (pos_brutto_sum  * re_rabatt / 100).quantize(Decimal("0.01"))
+            rabatt_lbl = f"Rabatt {re_rabatt:.4g} %"
+
         if self._ist_netto:
+            if re_rabatt:
+                _sum_row("Zwischensumme", _fmt_euro(pos_netto_sum))
+                _sum_row(rabatt_lbl, f"- {_fmt_euro(rabatt_netto)}", grau=True)
             _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt))
             if len(aufschluesselung) > 1:
                 ust_lbl = "  |  ".join(
@@ -476,6 +499,9 @@ class RechnungPDFBase(FPDF):
                 _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt))
             _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
         else:
+            if re_rabatt:
+                _sum_row("Zwischensumme", _fmt_euro(pos_brutto_sum))
+                _sum_row(rabatt_lbl, f"- {_fmt_euro(rabatt_brutto)}", grau=True)
             _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
             if not unt.get("ist_kleinunternehmer"):
                 saetze_mit_ust = [(satz, ust_sum) for satz, _, ust_sum in aufschluesselung if satz > 0]

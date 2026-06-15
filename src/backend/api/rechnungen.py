@@ -144,11 +144,14 @@ def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str
 
 
 def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
-    """Gibt (ust_betrag, brutto, netto_rund) zurück.
+    """Gibt (ust_betrag, brutto, eff_netto) zurück – nach Positionsrabatt.
     Bei Differenzbesteuerung (§25a) wird keine USt separat ausgewiesen –
     brutto = netto = netto-Eingabe (Preis ist der Rechnungspreis).
     """
     netto = pos_data.netto.quantize(Decimal("0.01"), ROUND_HALF_UP)
+    rabatt = getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+    if rabatt:
+        netto = (netto * (1 - rabatt / 100)).quantize(Decimal("0.01"), ROUND_HALF_UP)
     if getattr(pos_data, "differenzbesteuerung", False) or pos_data.ust_satz == 0:
         return Decimal("0.00"), netto, netto
     ust_betrag = (netto * pos_data.ust_satz / 100).quantize(Decimal("0.01"))
@@ -682,26 +685,33 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             beschreibung=pos_data.beschreibung,
             menge=pos_data.menge,
             einheit=pos_data.einheit,
-            netto=netto,
+            netto=pos_data.netto,          # Original-Einzelpreis (vor Positionsrabatt)
+            rabatt_prozent=getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0"),
             ust_satz=ust_satz,
-            ust_betrag=ust_betrag,
-            brutto=brutto,
+            ust_betrag=ust_betrag,         # basiert auf rabattiertem Netto
+            brutto=brutto,                 # basiert auf rabattiertem Netto
             differenzbesteuerung=ist_diff,
             ek_netto_25a=ek_netto_25a,
             ust_satz_25a=ust_satz_25a,
         )
         db.add(pos)
-        netto_sum += netto * pos_data.menge
+        netto_sum += netto * pos_data.menge   # netto = eff_netto nach Positionsrabatt
         ust_sum += ust_betrag * pos_data.menge
 
     Q = Decimal("0.01")
+    rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
     if data.netto_gesamt_override is not None:
         rechnung.netto_gesamt  = data.netto_gesamt_override.quantize(Q, ROUND_HALF_UP)
         rechnung.ust_gesamt    = (data.ust_gesamt_override or Decimal("0")).quantize(Q, ROUND_HALF_UP)
         rechnung.brutto_gesamt = (data.brutto_gesamt_override or rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
     else:
-        rechnung.netto_gesamt  = netto_sum.quantize(Q, ROUND_HALF_UP)
-        rechnung.ust_gesamt    = ust_sum.quantize(Q, ROUND_HALF_UP)
+        if rechnung.rabatt_prozent:
+            faktor = 1 - rechnung.rabatt_prozent / 100
+            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q, ROUND_HALF_UP)
+            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q, ROUND_HALF_UP)
+        else:
+            rechnung.netto_gesamt  = netto_sum.quantize(Q, ROUND_HALF_UP)
+            rechnung.ust_gesamt    = ust_sum.quantize(Q, ROUND_HALF_UP)
         rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
 
     db.commit()
@@ -752,19 +762,27 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 beschreibung=pos_data.beschreibung,
                 menge=pos_data.menge,
                 einheit=pos_data.einheit,
-                netto=netto,
+                netto=pos_data.netto,      # Original-Einzelpreis
+                rabatt_prozent=getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0"),
                 ust_satz=ust_satz,
                 ust_betrag=ust_betrag,
                 brutto=brutto,
                 differenzbesteuerung=ist_diff,
             )
             db.add(pos)
-            netto_sum += netto * pos_data.menge
+            netto_sum += netto * pos_data.menge   # netto = eff_netto nach Positionsrabatt
             ust_sum += ust_betrag * pos_data.menge
 
-        rechnung.netto_gesamt = netto_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        rechnung.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        Q2 = Decimal("0.01")
+        rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+        if rechnung.rabatt_prozent:
+            faktor = 1 - rechnung.rabatt_prozent / 100
+            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q2, ROUND_HALF_UP)
+            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q2, ROUND_HALF_UP)
+        else:
+            rechnung.netto_gesamt = netto_sum.quantize(Q2, ROUND_HALF_UP)
+            rechnung.ust_gesamt = ust_sum.quantize(Q2, ROUND_HALF_UP)
+        rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q2, ROUND_HALF_UP)
 
         # Gutschrift: Betrag darf den noch verbleibenden Restbetrag nicht überschreiten
         if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
@@ -2577,6 +2595,7 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             menge=pos.menge,
             einheit=pos.einheit,
             netto=pos.netto,
+            rabatt_prozent=pos.rabatt_prozent,
             ust_satz=pos.ust_satz,
             ust_betrag=pos.ust_betrag,
             brutto=pos.brutto,

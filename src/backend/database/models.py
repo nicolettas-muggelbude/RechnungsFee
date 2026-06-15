@@ -527,6 +527,8 @@ class Rechnung(Base):
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)
+    # Rabatt
+    rabatt_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"), nullable=False, server_default="0")
     # Skonto
     skonto_prozent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     skonto_tage: Mapped[int | None] = mapped_column(Integer)
@@ -581,6 +583,7 @@ class Rechnungsposition(Base):
     menge: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=1, nullable=False)
     einheit: Mapped[str] = mapped_column(String(20), default="Stück", nullable=False)
     netto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    rabatt_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"), nullable=False, server_default="0")
     ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     ust_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

@@ -1451,9 +1451,18 @@ function RechnungDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {rechnung.positionen.map((pos) => (
+                  {rechnung.positionen.map((pos) => {
+                    const posRabatt = parseFloat(pos.rabatt_prozent ?? '0') || 0
+                    const effNetto = (parseFloat(pos.brutto) - parseFloat(pos.ust_betrag)) * parseFloat(pos.menge)
+                    const effBrutto = parseFloat(pos.brutto) * parseFloat(pos.menge)
+                    return (
                     <tr key={pos.id} className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{pos.beschreibung}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
+                        {pos.beschreibung}
+                        {posRabatt > 0 && (
+                          <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">(−{posRabatt} %)</span>
+                        )}
+                      </td>
                       {rechnung.dokument_typ === 'Lieferschein' ? <>
                         <td className="px-3 py-2 text-right dark:text-slate-200">{formatMenge(pos.menge)}</td>
                         <td className="px-3 py-2 text-slate-400 dark:text-slate-500">{pos.einheit}</td>
@@ -1462,7 +1471,7 @@ function RechnungDetail({
                           {formatMenge(pos.menge)}{pos.einheit ? ` ${pos.einheit}` : ''}
                         </td>
                         <td className="px-3 py-2 text-right dark:text-slate-200">
-                          {formatEuro((parseFloat(pos.netto) * parseFloat(pos.menge)).toFixed(2))}
+                          {formatEuro(effNetto.toFixed(2))}
                         </td>
                         <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500">
                           {pos.differenzbesteuerung
@@ -1471,20 +1480,37 @@ function RechnungDetail({
                           }
                         </td>
                         <td className="px-3 py-2 text-right font-medium dark:text-slate-200">
-                          {formatEuro((parseFloat(pos.brutto) * parseFloat(pos.menge)).toFixed(2))}
+                          {formatEuro(effBrutto.toFixed(2))}
                         </td>
                       </>}
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
-                {rechnung.dokument_typ !== 'Lieferschein' && (
+                {rechnung.dokument_typ !== 'Lieferschein' && (() => {
+                  const reRabatt = parseFloat(String(rechnung.rabatt_prozent ?? '0')) || 0
+                  const posSum = rechnung.positionen.reduce((s, p) => s + parseFloat(p.brutto) * parseFloat(p.menge), 0)
+                  return (
                   <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    {reRabatt > 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">Zwischensumme</td>
+                        <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(posSum.toFixed(2))}</td>
+                      </tr>
+                    )}
+                    {reRabatt > 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">Rabatt {reRabatt} %</td>
+                        <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">− {formatEuro((posSum * reRabatt / 100).toFixed(2))}</td>
+                      </tr>
+                    )}
                     <tr>
                       <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamt</td>
                       <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(rechnung.brutto_gesamt)}</td>
                     </tr>
                   </tfoot>
-                )}
+                  )
+                })()}
               </table>
             </div>
           </div>
@@ -1893,6 +1919,7 @@ type Positionszeile = {
   einheit: string
   netto: string
   ust_satz: string
+  rabatt_prozent?: string
   artikel_id?: number
   kategorie_id?: string  // nur Eingang, per-Position-Kategorie
   differenzbesteuerung?: boolean
@@ -1904,6 +1931,7 @@ const leerPosition = (defaultUst = '19'): Positionszeile => ({
   einheit: '',
   netto: '',
   ust_satz: defaultUst,
+  rabatt_prozent: '',
   artikel_id: undefined,
   kategorie_id: undefined,
   differenzbesteuerung: false,
@@ -1964,6 +1992,9 @@ function RechnungForm({
   const [skontoTage, setSkontoTage] = useState<string>(
     initial?.skonto_tage != null ? String(initial.skonto_tage) : ''
   )
+  const [rechnungRabatt, setRechnungRabatt] = useState<string>(
+    initial?.rabatt_prozent && parseFloat(String(initial.rabatt_prozent)) > 0 ? String(parseFloat(String(initial.rabatt_prozent))) : ''
+  )
   const [faelligAm, setFaelligAm] = useState(() => {
     if (pf?.faellig_am) return pf.faellig_am
     if (initial?.faellig_am) return initial.faellig_am
@@ -2003,8 +2034,9 @@ function RechnungForm({
         beschreibung: p.beschreibung,
         menge: String(parseFloat(p.menge)),
         einheit: p.einheit,
-        netto: Math.abs(parseFloat(p.brutto)).toFixed(2).replace('.', ','),  // pos.brutto ist bereits Einzelpreis in der DB – nicht durch menge teilen; abs() für alte Gutschrift-Einträge (neg. brutto)
+        netto: Math.abs(parseFloat(p.netto)).toFixed(2).replace('.', ','),  // pos.netto = Original-Einzelpreis (vor Rabatt); abs() für alte Gutschrift-Einträge
         ust_satz: String(parseFloat(p.ust_satz)),
+        rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
         artikel_id: p.artikel_id ?? undefined,
         kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
         differenzbesteuerung: p.differenzbesteuerung ?? false,
@@ -2145,19 +2177,23 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
 
-  // Summenberechnung — reagiert auf eingabeModus
+  // Summenberechnung — reagiert auf eingabeModus und Positionsrabatt
   const summen = positionen.reduce(
     (acc, p) => {
       const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
       const menge = parseFloat(p.menge.replace(',', '.')) || 1
       const ust = parseFloat(p.ust_satz) || 0
+      const posRabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
       let netto: number, ustBetrag: number, brutto: number
       if (eingabeModus === 'brutto') {
-        brutto = eingabe * menge
-        netto = ust > 0 ? (brutto * 100) / (100 + ust) : brutto
-        ustBetrag = brutto - netto
+        const nettoEinzel = ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
+        const nettoNachRabatt = nettoEinzel * (1 - posRabatt / 100)
+        netto = nettoNachRabatt * menge
+        ustBetrag = netto * ust / 100
+        brutto = netto + ustBetrag
       } else {
-        netto = eingabe * menge
+        const nettoNachRabatt = eingabe * (1 - posRabatt / 100)
+        netto = nettoNachRabatt * menge
         ustBetrag = (netto * ust) / 100
         brutto = netto + ustBetrag
       }
@@ -2165,16 +2201,25 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     },
     { netto: 0, ust: 0, brutto: 0 }
   )
+  // Rechnungsrabatt anwenden
+  const rechnungRabattNum = parseFloat(rechnungRabatt.replace(',', '.')) || 0
+  const summenNachRabatt = rechnungRabattNum > 0
+    ? {
+        netto: summen.netto * (1 - rechnungRabattNum / 100),
+        ust: summen.ust * (1 - rechnungRabattNum / 100),
+        brutto: summen.brutto * (1 - rechnungRabattNum / 100),
+      }
+    : summen
 
   // Im Import-Modus: Gesamtbeträge aus dem XML nur anzeigen solange Positionen unverändert.
   // Hat der Nutzer Positionen korrigiert (Abweichung > 1 Cent), live aus Positionen rechnen.
   const pfN = prefillFromAnalyse?.felder?.gesamt_netto
   const pfU = prefillFromAnalyse?.felder?.gesamt_ust
   const pfB = prefillFromAnalyse?.felder?.gesamt_brutto
-  const overridePasst = pfB != null && Math.abs(summen.brutto - Number(pfB)) <= 0.01
+  const overridePasst = pfB != null && Math.abs(summenNachRabatt.brutto - Number(pfB)) <= 0.01
   const anzeigeSummen = (pfN && pfU && pfB && overridePasst)
     ? { netto: parseFloat(String(pfN)), ust: parseFloat(String(pfU)), brutto: parseFloat(String(pfB)) }
-    : summen
+    : summenNachRabatt
 
   function toggleEingabeModus() {
     setEingabeModus((prev) => {
@@ -2295,6 +2340,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         // §25a: kein USt-Ausweis; Eingabewert = Rechnungspreis → direkt als netto senden
         const ust_satz = (istKleinunternehmer || istDiff) ? '0' : (p.ust_satz || '0')
         const netto = (!istDiff && eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
+        const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung,
           menge: p.menge || '1',
@@ -2304,8 +2350,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           artikel_id: p.artikel_id,
           kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
           differenzbesteuerung: istDiff,
+          rabatt_prozent: rabatt > 0 ? rabatt : undefined,
         } as RechnungspositionCreate
       }),
+      rabatt_prozent: rechnungRabattNum > 0 ? rechnungRabattNum : undefined,
     }
   }
 
@@ -2442,6 +2490,25 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
+        </div>
+      )}
+
+      {/* Rechnungsrabatt */}
+      {dokumentTyp !== 'Lieferschein' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Rechnungsrabatt %{' '}<span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auf Gesamtbetrag)</span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.5"
+            value={rechnungRabatt}
+            onChange={(e) => setRechnungRabatt(e.target.value)}
+            placeholder="z. B. 5"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          />
         </div>
       )}
 
@@ -2750,6 +2817,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
                     {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
                   </th>
+                  <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Rabatt %</th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
                   {typ === 'eingang' && (
                     <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">Konto</th>
@@ -2793,6 +2861,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                         onChange={(e) => updatePosition(i, 'netto', e.target.value)}
                         className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
                         placeholder="0,00"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        value={pos.rabatt_prozent ?? ''}
+                        onChange={(e) => updatePosition(i, 'rabatt_prozent', e.target.value)}
+                        className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600"
+                        placeholder="0"
                       />
                     </td>
                     <td className="px-2 py-1.5">
@@ -2850,17 +2927,35 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             {dokumentTyp !== 'Lieferschein' && (
             <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
               <tr>
-                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
                   Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
               </tr>
               <tr>
-                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                 <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
               </tr>
+              {rechnungRabattNum > 0 && (
+                <tr>
+                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                    Zwischensumme Brutto
+                  </td>
+                  <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.brutto)}</td>
+                </tr>
+              )}
+              {rechnungRabattNum > 0 && (
+                <tr>
+                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                    Rabatt {rechnungRabattNum} %
+                  </td>
+                  <td colSpan={2} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                    − {formatEuro((summen.brutto * rechnungRabattNum / 100).toFixed(2))}
+                  </td>
+                </tr>
+              )}
               <tr>
-                <td colSpan={typ === 'eingang' ? 5 : 4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
+                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(anzeigeSummen.brutto)}</td>

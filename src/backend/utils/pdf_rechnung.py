@@ -24,21 +24,36 @@ class RechnungPDF(RechnungPDFBase):
     """Vorlage 0: DIN 5008, graue Tabelle, Zahlungshinweis als Fließtext."""
 
     def _render_positionen(self):
+        from decimal import Decimal
         r = self._r
         ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
+        has_rabatt = not ist_lieferschein and any(
+            (getattr(p, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0
+            for p in r.positionen
+        )
 
         if ist_lieferschein:
             col_w   = [103, 16, 17, 44]
             headers = ["Beschreibung", "Menge", "Einheit", ""]
             aligns  = ["L",            "R",     "L",       "L"]
         elif self._ist_netto:
-            col_w   = [82, 16, 17, 27, 14, 24]
-            headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Netto"]
-            aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
+            if has_rabatt:
+                col_w   = [73, 16, 16, 23, 14, 13, 25]
+                headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "Rabatt", "USt %", "Netto"]
+                aligns  = ["L",            "R",     "L",       "R",           "R",      "R",     "R"]
+            else:
+                col_w   = [82, 16, 17, 27, 14, 24]
+                headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Netto"]
+                aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
         else:
-            col_w   = [82, 16, 17, 16, 49]
-            headers = ["Beschreibung", "Menge", "Einheit", "USt %", "Brutto"]
-            aligns  = ["L",            "R",     "L",       "R",     "R"]
+            if has_rabatt:
+                col_w   = [73, 16, 16, 14, 13, 48]
+                headers = ["Beschreibung", "Menge", "Einheit", "Rabatt", "USt %", "Brutto"]
+                aligns  = ["L",            "R",     "L",       "R",      "R",     "R"]
+            else:
+                col_w   = [82, 16, 17, 16, 49]
+                headers = ["Beschreibung", "Menge", "Einheit", "USt %", "Brutto"]
+                aligns  = ["L",            "R",     "L",       "R",     "R"]
 
         self.set_font("DejaVu", "B", 8)
         self.set_fill_color(*GRAU_HELL)
@@ -53,8 +68,10 @@ class RechnungPDF(RechnungPDFBase):
         for pos in r.positionen:
             menge     = float(str(pos.menge))
             menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
-            ist_diff = getattr(pos, "differenzbesteuerung", False)
+            ist_diff  = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
+            pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
+            rabatt_str = f"{pos_rabatt:.4g} %" if pos_rabatt else ""
             row_y = self.get_y()
             self.set_x(L_MARGIN + col_w[0])
             self.cell(col_w[1], 6, menge_str, align="R")
@@ -66,12 +83,24 @@ class RechnungPDF(RechnungPDFBase):
                                 new_x="LMARGIN", new_y="NEXT")
                 continue
             if self._ist_netto:
-                self.cell(col_w[3], 6, _fmt_euro(pos.netto),             align="R")
-                self.cell(col_w[4], 6, ust_label,                        align="R")
-                self.cell(col_w[5], 6, _fmt_euro(float(str(pos.netto)) * menge), align="R")
+                netto_ges = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge
+                self.cell(col_w[3], 6, _fmt_euro(pos.netto), align="R")
+                if has_rabatt:
+                    self.cell(col_w[4], 6, rabatt_str, align="R")
+                    self.cell(col_w[5], 6, ust_label,  align="R")
+                    self.cell(col_w[6], 6, _fmt_euro(netto_ges), align="R")
+                else:
+                    self.cell(col_w[4], 6, ust_label, align="R")
+                    self.cell(col_w[5], 6, _fmt_euro(float(str(pos.netto)) * menge), align="R")
             else:
-                self.cell(col_w[3], 6, ust_label,              align="R")
-                self.cell(col_w[4], 6, _fmt_euro(pos.brutto),  align="R")
+                brutto_ges = float(str(pos.brutto)) * menge
+                if has_rabatt:
+                    self.cell(col_w[3], 6, rabatt_str, align="R")
+                    self.cell(col_w[4], 6, ust_label,  align="R")
+                    self.cell(col_w[5], 6, _fmt_euro(brutto_ges), align="R")
+                else:
+                    self.cell(col_w[3], 6, ust_label,             align="R")
+                    self.cell(col_w[4], 6, _fmt_euro(pos.brutto), align="R")
             self.set_xy(L_MARGIN, row_y)
             self.multi_cell(col_w[0], 6, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")

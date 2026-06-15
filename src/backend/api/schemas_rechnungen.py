@@ -48,6 +48,7 @@ class RechnungspositionCreate(BaseModel):
     menge: Decimal = Decimal("1.000")
     einheit: str = "Stück"
     netto: Decimal
+    rabatt_prozent: Decimal = Decimal("0")
     ust_satz: Decimal = Decimal("0")
     artikel_id: Optional[int] = None
     kategorie_id: Optional[int] = None
@@ -78,6 +79,7 @@ class RechnungspositionResponse(BaseModel):
     menge: Decimal
     einheit: str
     netto: Decimal
+    rabatt_prozent: Decimal = Decimal("0")
     ust_satz: Decimal
     ust_betrag: Decimal
     brutto: Decimal
@@ -104,6 +106,7 @@ class RechnungCreate(BaseModel):
     notizen: Optional[str] = None
     externe_belegnr: Optional[str] = None
     ist_entwurf: bool = True
+    rabatt_prozent: Decimal = Decimal("0")
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
     dokument_typ: str = "Rechnung"
@@ -219,6 +222,7 @@ class RechnungResponse(BaseModel):
     externe_belegnr: Optional[str]
     leistung_von: Optional[date]
     leistung_bis: Optional[date]
+    rabatt_prozent: Decimal = Decimal("0")
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
     ist_entwurf: bool
