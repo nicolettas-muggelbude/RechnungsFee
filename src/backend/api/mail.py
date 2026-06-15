@@ -20,6 +20,7 @@ from database.models import Unternehmen, Rechnung, DokumentenPaket, KundeLiefera
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
+from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 
 router = APIRouter(prefix="/api/mail", tags=["Mail"])
 logger = logging.getLogger(__name__)
@@ -83,6 +84,23 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         and u and (u.steuernummer or u.ust_idnr)
     )
 
+    # Dokumente ohne Original-Archivierung (Auftrag/Angebot/Proforma: beliebig oft sendbar)
+    _kein_archiv = _dok in ("Auftrag", "Angebot", "Proforma")
+    ist_gutschrift = _dok == "Gutschrift"
+    gutschrift_erstattet = ist_gutschrift and str(getattr(r, "zahlungsstatus", "offen")) == "bezahlt"
+    darf_archiviert = (
+        not r.ist_entwurf
+        and not _kein_archiv
+        and (not ist_gutschrift or gutschrift_erstattet)
+    )
+
+    # Kopie: gespeichertes Original laden + Wasserzeichen
+    if darf_archiviert and r.original_pdf_pfad:
+        kopie_bytes = lade_original_mit_kopie_stempel(APP_DATA_DIR, r.original_pdf_pfad)
+        if kopie_bytes:
+            nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
+            return kopie_bytes, f"{_dok}_{nr}_Kopie.pdf"
+
     if kunde_zugferd:
         try:
             pdf_bytes = generate_zugferd_pdf(r, unt_dict)
@@ -92,6 +110,13 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         pdf_bytes = generate_rechnung_pdf_vorlage1(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
     else:
         pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
+
+    # Original speichern (erste echte Mail)
+    if darf_archiviert and not r.original_pdf_pfad:
+        rel_pfad = speichere_original_pdf(APP_DATA_DIR, r.id, pdf_bytes)
+        r.original_pdf_pfad = rel_pfad
+        r.ausgegeben = True
+        db.commit()
 
     nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
     return pdf_bytes, f"{_dok}_{nr}.pdf"

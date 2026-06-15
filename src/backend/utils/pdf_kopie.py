@@ -36,14 +36,13 @@ def lade_original_mit_kopie_stempel(data_dir: Path, rel_pfad: str) -> bytes | No
 
 
 def _wasserzeichen_seite(breite_mm: float, hoehe_mm: float) -> bytes:
-    """Erstellt eine transparente KOPIE-Wasserzeichen-Seite."""
+    """Erstellt eine KOPIE-Wasserzeichen-Seite (diagonal, halbtransparent rot)."""
     pdf = FPDF(format=(breite_mm, hoehe_mm))
     pdf.add_page()
     pdf.set_font("Helvetica", style="B", size=72)
-    with pdf.local_context(fill_opacity=0.12):
-        pdf.set_text_color(150, 150, 150)
+    with pdf.local_context(fill_opacity=0.25, stroke_opacity=0.25):
+        pdf.set_text_color(180, 0, 0)
         with pdf.rotation(45, x=breite_mm / 2, y=hoehe_mm / 2):
-            # text() erwartet absolute Koordinaten
             pdf.text(x=breite_mm / 2 - 33, y=hoehe_mm / 2 + 12, txt="KOPIE")
     return bytes(pdf.output())
 

@@ -1198,7 +1198,7 @@ function RechnungDetail({
             dokument={rechnung}
             dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as any) ?? 'Rechnung'}
             unternehmen={unternehmen}
-            onClose={() => setZeigMailDialog(false)}
+            onClose={() => { setZeigMailDialog(false); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }}
           />
         )}
 
