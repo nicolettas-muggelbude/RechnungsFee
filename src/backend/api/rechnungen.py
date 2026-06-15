@@ -29,6 +29,7 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
 from utils.rechnungs_parser import analysiere_datei
+from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
@@ -1044,13 +1045,40 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         ).first()
 
     ist_entwurf = rechnung.ist_entwurf
-    _dt_kopie = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
-    # Aufträge (Auftragsbestätigungen) können beliebig oft gedruckt werden – kein Kopie-Banner
-    ist_kopie = (
-        _dt_kopie not in ("Auftrag", "Angebot", "Proforma")
-        and (not ist_entwurf)
-        and (rechnung.ausgegeben or kopie)
+    _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
+
+    # Dokumente die kein Original-Archiv brauchen (beliebig oft druckbar, kein Kopie-Stempel)
+    _kein_archiv = _dok_typ in ("Auftrag", "Angebot", "Proforma")
+
+    # Gutschrift: erst ausgeben wenn Rückerstattung gebucht
+    ist_gutschrift_pdf = _dok_typ == "Gutschrift"
+    gutschrift_erstattet = ist_gutschrift_pdf and str(getattr(rechnung, "zahlungsstatus", "offen")) == "bezahlt"
+    darf_archiviert = (
+        not ist_entwurf
+        and not _kein_archiv
+        and (not ist_gutschrift_pdf or gutschrift_erstattet)
     )
+
+    # Kopie: Original bereits gespeichert → gespeichertes PDF + Wasserzeichen zurückgeben
+    if darf_archiviert and rechnung.original_pdf_pfad:
+        kopie_bytes = lade_original_mit_kopie_stempel(APP_DATA_DIR, rechnung.original_pdf_pfad)
+        if kopie_bytes:
+            _dt_datei = _dok_typ
+            _prefix = {
+                "Gutschrift":   "Gutschrift",
+                "Lieferschein": "Lieferschein",
+            }.get(_dt_datei, "Rechnung")
+            dateiname = f"{_prefix}_{rechnung.rechnungsnummer or rechnung_id}_Kopie.pdf"
+            disposition = "attachment" if download else "inline"
+            return Response(
+                content=kopie_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'{disposition}; filename="{dateiname}"',
+                    "Cache-Control": "no-store",
+                },
+            )
+        # Fallback wenn Datei fehlt: frisch generieren (ohne Kopie-Stempel)
 
     # Netto- oder Bruttorechnung: B2B-Kunden (zugferd_aktiv) → Nettorechnung
     ist_netto = (
@@ -1060,7 +1088,6 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     )
 
     # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen
-    _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung")
     kunde_zugferd = (
         not ist_entwurf
         and ist_netto
@@ -1074,25 +1101,18 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
             kunde_zugferd = False
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
     else:
         vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
         if vorlage_nr == 1:
-            pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
+            pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
         else:
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
+            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
 
-    # ausgegeben beim ersten echten PDF-Öffnen setzen:
-    # – Aufträge/Angebote/Proforma: kein ausgegeben-Tracking (beliebig oft druckbar)
-    # – Gutschrift: erst wenn Rückerstattung gebucht (zahlungsstatus == 'bezahlt')
-    _dt_ausg = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
-    ist_gutschrift_pdf = _dt_ausg == "Gutschrift"
-    gutschrift_erstattet = ist_gutschrift_pdf and str(getattr(rechnung, "zahlungsstatus", "offen")) == "bezahlt"
-    darf_ausgegeben = (
-        _dt_ausg not in ("Auftrag", "Angebot", "Proforma")
-        and (not ist_gutschrift_pdf or gutschrift_erstattet)
-    )
-    if not ist_entwurf and not rechnung.ausgegeben and darf_ausgegeben:
+    # Original speichern (erstes echtes Drucken/Mailen)
+    if darf_archiviert and not rechnung.original_pdf_pfad:
+        rel_pfad = speichere_original_pdf(APP_DATA_DIR, rechnung.id, pdf_bytes)
+        rechnung.original_pdf_pfad = rel_pfad
         rechnung.ausgegeben = True
         db.commit()
 

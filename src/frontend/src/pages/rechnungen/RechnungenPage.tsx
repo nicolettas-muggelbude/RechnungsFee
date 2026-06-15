@@ -969,16 +969,14 @@ function RechnungDetail({
     onError: (e: Error) => alert(e.message),
   })
 
-  /** Lädt das PDF als Blob. Liest ausgegebenRef.current (immer aktuell, kein Closure-Problem)
-   *  um kopie=true zu senden wenn das Dokument bereits ausgegeben wurde. */
+  /** Lädt das PDF als Blob. Das Backend entscheidet anhand original_pdf_pfad ob Original oder Kopie. */
   async function _fetchPdfBlob(): Promise<string> {
     const base = await getApiBase()
-    const params = ausgegebenRef.current ? '?kopie=true' : ''
-    const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf${params}`)
+    const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf`)
     const blob = await resp.blob()
     if (!ausgegebenRef.current) {
-      ausgegebenRef.current = true      // sofort für nächsten Aufruf
-      setLokalAusgegeben(true)          // Re-Render für Button-Text
+      ausgegebenRef.current = true
+      setLokalAusgegeben(true)
     }
     return URL.createObjectURL(blob)
   }
@@ -1099,14 +1097,8 @@ function RechnungDetail({
               >
                 🖨️ {lokalAusgegeben ? 'Kopie drucken' : 'Drucken'}
               </button>
-              <button
-                onClick={handlePdfOeffnen}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-              >
-                📄 {lokalAusgegeben ? 'Kopie öffnen' : 'PDF öffnen'}
-              </button>
               {lokalAusgegeben && (
-                <InfoTooltip text="Diese Rechnung wurde bereits ausgegeben (gedruckt, als PDF geöffnet oder per Mail versandt). Alle weiteren Ausgaben werden automatisch als Kopie markiert, damit Doppelsendungen erkennbar sind." side="bottom" align="right" />
+                <InfoTooltip text="Das Original wurde gespeichert. Alle weiteren Ausdrucke sind Kopien des Originals – mit gleichem Inhalt und KOPIE-Wasserzeichen." side="bottom" align="right" />
               )}
               {!rechnung.storniert && (
                 <button
