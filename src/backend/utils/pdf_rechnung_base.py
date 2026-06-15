@@ -15,6 +15,7 @@ Klassenattribute für Vorlage-Anpassungen:
   _ln_nach_19             Abstand §19-Hinweis → Zahlungsblock
 """
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -50,6 +51,14 @@ FOOTER_H = 28.0
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
+
+def _md(text: str) -> str:
+    """Konvertiert Standard-Markdown zu fpdf2-Syntax.
+    *kursiv* → __kursiv__  (fpdf2 nutzt __ statt *)
+    **fett** bleibt unverändert (Lookahead/Lookbehind schützt Doppel-Sternchen).
+    """
+    return re.sub(r'(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)', r'__\1__', text)
+
 
 def _find_dejavu_dir() -> Path:
     import sys
@@ -452,7 +461,7 @@ class RechnungPDFBase(FPDF):
             self.set_font("DejaVu", "", 9)
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
-            self.multi_cell(NUTZ_W, 5, text, markdown=True)
+            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True)
             self.ln(2)
         else:
             self.ln(4)

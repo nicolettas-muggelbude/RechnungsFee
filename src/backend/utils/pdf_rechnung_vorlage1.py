@@ -13,7 +13,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _iso_zu_de, _adresszeilen,
+    _fmt_euro, _iso_zu_de, _adresszeilen, _md,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -60,7 +60,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         if einleitungstext:
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
-            self.multi_cell(NUTZ_W, 5, einleitungstext, markdown=True)
+            self.multi_cell(NUTZ_W, 5, _md(einleitungstext), markdown=True)
         else:
             self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5.5,
