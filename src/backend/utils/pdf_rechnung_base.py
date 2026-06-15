@@ -180,8 +180,11 @@ class RechnungPDFBase(FPDF):
         self.set_margins(L_MARGIN, 10, R_MARGIN)
         self.set_auto_page_break(auto=True, margin=FOOTER_H + 4)
         dv_dir = _find_dejavu_dir()
-        self.add_font("DejaVu", style="",  fname=str(dv_dir / "DejaVuSans.ttf"))
-        self.add_font("DejaVu", style="B", fname=str(dv_dir / "DejaVuSans-Bold.ttf"))
+        self.add_font("DejaVu", style="",   fname=str(dv_dir / "DejaVuSans.ttf"))
+        self.add_font("DejaVu", style="B",  fname=str(dv_dir / "DejaVuSans-Bold.ttf"))
+        if (dv_dir / "DejaVuSans-Oblique.ttf").exists():
+            self.add_font("DejaVu", style="I",  fname=str(dv_dir / "DejaVuSans-Oblique.ttf"))
+            self.add_font("DejaVu", style="BI", fname=str(dv_dir / "DejaVuSans-BoldOblique.ttf"))
         self._unt         = unternehmen
         self._r           = rechnung
         self._ist_kopie   = ist_kopie

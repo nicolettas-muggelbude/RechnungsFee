@@ -694,7 +694,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             />
             <p className="text-xs text-slate-400 dark:text-slate-500">
               Leer lassen wenn kein Standardtext gewünscht. Pro Rechnung überschreibbar.
-              Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> · Zeilenumbruch mit Enter
+              Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*kursiv*</code> · Zeilenumbruch mit Enter
             </p>
           </div>
         </div>

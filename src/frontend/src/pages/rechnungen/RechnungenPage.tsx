@@ -3033,7 +3033,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             placeholder="Erscheint vor der Positionstabelle. Leer = globaler Standard aus Einstellungen."
           />
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> · Zeilenumbruch mit Enter
+            Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">*kursiv*</code> · Zeilenumbruch mit Enter
           </p>
         </div>
       )}
