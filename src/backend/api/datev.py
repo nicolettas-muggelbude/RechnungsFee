@@ -127,9 +127,14 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen) -> Optional[str]:
 
 
 def _sachkonto(j: Journaleintrag, skr: str) -> Optional[str]:
-    if skr == "SKR03":
-        return j.konto_skr03
-    return j.konto_skr04
+    # Primär: snapshot auf dem Journaleintrag
+    konto = j.konto_skr03 if skr == "SKR03" else j.konto_skr04
+    if konto:
+        return konto
+    # Fallback: aktuelles Konto aus der verknüpften Kategorie (ältere Einträge ohne Snapshot)
+    if j.kategorie:
+        return j.kategorie.konto_skr03 if skr == "SKR03" else j.kategorie.konto_skr04
+    return None
 
 
 def _zeile1(unt: Unternehmen, von: date, bis: date) -> str:
