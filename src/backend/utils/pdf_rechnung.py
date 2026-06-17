@@ -84,6 +84,15 @@ class RechnungPDF(RechnungPDFBase):
             self.set_xy(L_MARGIN, row_y)
             self.multi_cell(col_w[0], 6, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")
+            # Artikelcode-Unterzeile
+            ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
+            if ac:
+                self.set_font("DejaVu", "I", 7)
+                self.set_text_color(*TEXT_GRAU)
+                self.set_x(L_MARGIN)
+                self.cell(col_w[0], 4.5, f"  Art.-Nr.: {ac}", new_x="LMARGIN", new_y="NEXT")
+                self.set_font("DejaVu", "", 8.5)
+                self.set_text_color(*TEXT_DUNKEL)
             # Rabatt-Unterzeile
             if pos_rabatt > 0:
                 self.set_font("DejaVu", "", 7.5)

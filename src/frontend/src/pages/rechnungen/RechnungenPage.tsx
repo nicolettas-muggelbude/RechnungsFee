@@ -1462,7 +1462,12 @@ function RechnungDetail({
                     return (
                     <>
                     <tr key={pos.id} className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{pos.beschreibung}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
+                        {pos.beschreibung}
+                        {pos.artikelcode && (
+                          <div className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">Art.-Nr.: {pos.artikelcode}</div>
+                        )}
+                      </td>
                       {rechnung.dokument_typ === 'Lieferschein' ? <>
                         <td className="px-3 py-2 text-right dark:text-slate-200">{formatMenge(pos.menge)}</td>
                         <td className="px-3 py-2 text-slate-400 dark:text-slate-500">{pos.einheit}</td>

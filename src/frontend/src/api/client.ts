@@ -942,6 +942,7 @@ export type Rechnungsposition = {
   brutto: string
   differenzbesteuerung: boolean
   rabatt_prozent?: string
+  artikelcode: string | null
 }
 
 export type RechnungspositionCreate = {

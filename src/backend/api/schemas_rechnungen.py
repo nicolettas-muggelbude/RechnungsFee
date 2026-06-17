@@ -84,6 +84,7 @@ class RechnungspositionResponse(BaseModel):
     ust_betrag: Decimal
     brutto: Decimal
     differenzbesteuerung: bool = False
+    artikelcode: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -296,6 +297,7 @@ class RechnungResponse(BaseModel):
         for pos_data, pos_orm in zip(data.positionen, obj.positionen):
             if pos_orm.artikel:
                 pos_data.artikel_typ = pos_orm.artikel.typ
+                pos_data.artikelcode = pos_orm.artikel.artikelcode
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None

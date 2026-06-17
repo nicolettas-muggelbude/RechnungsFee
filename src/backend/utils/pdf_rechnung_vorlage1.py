@@ -134,6 +134,16 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 self.cell(col_w[4], 6.5, ust_label, align="R")
                 self.cell(col_w[5], 6.5, _fmt_euro(brutto_ges_vor), align="R",
                           new_x="LMARGIN", new_y="NEXT")
+            # Artikelcode-Unterzeile
+            ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
+            if ac and not ist_lieferschein:
+                self.set_font("DejaVu", "I", 7)
+                self.set_text_color(*TEXT_GRAU)
+                self.set_x(L_MARGIN)
+                self.cell(col_w[0] + col_w[1] + col_w[2], 4.5, f"  Art.-Nr.: {ac}",
+                          new_x="LMARGIN", new_y="NEXT")
+                self.set_font("DejaVu", "", 8.5)
+                self.set_text_color(*TEXT_DUNKEL)
             # Rabatt-Unterzeile
             if pos_rabatt > 0 and not ist_lieferschein:
                 self.set_font("DejaVu", "", 7.5)
