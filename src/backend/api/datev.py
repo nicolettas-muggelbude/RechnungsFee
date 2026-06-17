@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Journaleintrag, Unternehmen
+from database.models import Journaleintrag, Kategorie, Rechnung, Unternehmen
 
 router = APIRouter(prefix="/api/datev", tags=["DATEV"])
 
@@ -134,18 +134,44 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen) -> Optional[str]:
     za = j.zahlungsart
     if za == "Keine":
         return None
+    # Skonto hat keinen eigenen Kassenkontext → Bank als Gegenkonto
+    if za == "Skonto":
+        za = "Bank"
     d = _DEFAULTS.get(unt.kontenrahmen, _DEFAULTS["SKR04"])
     return konfig.get(za) or d.get(za)
 
 
-def _sachkonto(j: Journaleintrag, skr: str) -> Optional[str]:
-    # Primär: snapshot auf dem Journaleintrag
-    konto = j.konto_skr03 if skr == "SKR03" else j.konto_skr04
+def _sachkonto(j: Journaleintrag, skr: str, db: Optional[Session] = None) -> Optional[str]:
+    # 1. Snapshot auf dem Journaleintrag
+    konto = (j.konto_skr03 if skr == "SKR03" else j.konto_skr04) or None
     if konto:
         return konto
-    # Fallback: aktuelles Konto aus der verknüpften Kategorie (ältere Einträge ohne Snapshot)
+    # 2. Aktuelles Konto aus der verknüpften Kategorie (ältere Einträge ohne Snapshot)
     if j.kategorie:
-        return j.kategorie.konto_skr03 if skr == "SKR03" else j.kategorie.konto_skr04
+        k = (j.kategorie.konto_skr03 if skr == "SKR03" else j.kategorie.konto_skr04) or None
+        if k:
+            return k
+    # 3. Fallback für RE-Zahlungen mit fehlender Kategorie-Kontonummer:
+    #    Erlöskonto aus den Positionen der verknüpften Rechnung ermitteln.
+    #    Betrifft Einträge deren Erlös-Kategorie kein SKR-Konto eingetragen hat
+    #    (z. B. selbst angelegte „Erlöse 19%"-Kategorie ohne DATEV-Zuordnung).
+    if db and j.rechnung_id and j.art == "Einnahme":
+        re = db.query(Rechnung).filter(Rechnung.id == j.rechnung_id).first()
+        if re and re.typ == "ausgang" and re.positionen:
+            satz_summen: dict[int, Decimal] = {}
+            for pos in re.positionen:
+                satz = int(pos.ust_satz or 0)
+                satz_summen[satz] = satz_summen.get(satz, Decimal("0")) + (pos.netto or Decimal("0"))
+            dom_satz = max(satz_summen, key=lambda s: satz_summen[s]) if satz_summen else 19
+            namen = {19: "Betriebseinnahmen", 7: "Betriebseinnahmen (7%)", 0: "Betriebseinnahmen (0%)"}
+            kat = db.query(Kategorie).filter(
+                Kategorie.name == namen.get(dom_satz, "Betriebseinnahmen"),
+                Kategorie.aktiv == True,  # noqa: E712
+            ).first()
+            if kat:
+                k = (kat.konto_skr03 if skr == "SKR03" else kat.konto_skr04) or None
+                if k:
+                    return k
     return None
 
 
@@ -213,7 +239,7 @@ def datev_buchungsstapel(
     uebersprungen = 0
 
     for j in eintraege:
-        konto = _sachkonto(j, skr)
+        konto = _sachkonto(j, skr, db)
         gegenkonto = _gegenkonto(j, unt)
 
         if not konto or not gegenkonto:

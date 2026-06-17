@@ -36,6 +36,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: '„Minusbestand erlaubt" ist jetzt standardmäßig deaktiviert (war fälschlicherweise beim Anlegen neuer Artikel aktiviert)' },
       { typ: 'verbesserung', text: 'Positionsbeschreibung im Rechnungsformular: Textarea wächst automatisch mit – Zeilenumbrüche (Enter) werden im Eingabefeld direkt sichtbar und erscheinen auch im PDF (beide Vorlagen, Lieferschein, Angebot, Auftrag, Proforma)' },
       { typ: 'verbesserung', text: 'PDF: Zeilenabstand in mehrzeiligen Positionsbeschreibungen deutlich reduziert – kompaktere Darstellung bei mehreren Zeilen pro Position' },
+      { typ: 'fix', text: 'DATEV-Export: Zahlungseingänge für Ausgangsrechnungen fehlten wenn die Erlös-Kategorie kein SKR-Konto hinterlegt hatte (z. B. selbst angelegte „Erlöse 19%"-Kategorie); Export ermittelt jetzt das Konto über die Rechnungspositionen als Fallback (Issue #167)' },
+      { typ: 'fix', text: 'DATEV-Export: Skonto-Einträge (zahlungsart = „Skonto") wurden übersprungen weil kein Gegenkonto bekannt war; Skonto wird jetzt als Bank-Buchung exportiert (Issue #167)' },
     ],
   },
   {
