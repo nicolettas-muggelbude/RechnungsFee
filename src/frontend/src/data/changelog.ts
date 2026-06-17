@@ -38,6 +38,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'PDF: Zeilenabstand in mehrzeiligen Positionsbeschreibungen deutlich reduziert – kompaktere Darstellung bei mehreren Zeilen pro Position' },
       { typ: 'fix', text: 'DATEV-Export: Zahlungseingänge für Ausgangsrechnungen fehlten wenn die Erlös-Kategorie kein SKR-Konto hinterlegt hatte (z. B. selbst angelegte „Erlöse 19%"-Kategorie); Export ermittelt jetzt das Konto über die Rechnungspositionen als Fallback (Issue #167)' },
       { typ: 'fix', text: 'DATEV-Export: Skonto-Einträge (zahlungsart = „Skonto") wurden übersprungen weil kein Gegenkonto bekannt war; Skonto wird jetzt als Bank-Buchung exportiert (Issue #167)' },
+      { typ: 'fix', text: 'DATEV-Export: Eigenverbrauch-Konten 8920–8925 (SKR03) sind AM-Automatikkonten – BU-Schlüssel wurde fälschlich gesetzt und führte zu DATEV-Importfehler REW00306; jetzt korrekt kein BU-Schlüssel (Issue #165)' },
     ],
   },
   {

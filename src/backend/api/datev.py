@@ -85,8 +85,12 @@ _DEFAULTS: dict[str, dict[str, str]] = {
 
 # DATEV-Automatikkonten (Zusatzfunktion AM): kennen ihren Steuersatz eingebaut.
 # BU-Schlüssel wäre doppelt → REW00306. Alle anderen Erlöskonten brauchen BU 3/2.
+# SKR03 8920–8925: Eigenverbrauch-AM-Konten (Kfz, Licht/Wasser, Waren, Telefon …)
 _AM_KONTEN: dict[str, set[str]] = {
-    "SKR03": {"8100", "8300", "8301", "8400", "8401", "8736", "8850", "8851", "8852"},
+    "SKR03": {
+        "8100", "8300", "8301", "8400", "8401", "8736", "8850", "8851", "8852",
+        "8920", "8921", "8922", "8923", "8924", "8925",
+    },
     "SKR04": {"4100", "4300", "4301", "4400", "4401", "4736"},
 }
 
