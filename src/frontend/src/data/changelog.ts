@@ -26,10 +26,17 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.3.19',
     datum: 'Juni 2026',
     eintraege: [
+      { typ: 'neu', text: 'Rechnungsrabatt als Festbetrag (€): Im Formular per Toggle zwischen % und € wählen – der Festbetrag ist immer ein Bruttobetrag und reduziert den Gesamtbetrag um exakt den eingegebenen Wert; PDF zeigt „Abzug" statt „Rabatt X %"' },
       { typ: 'verbesserung', text: 'PDF-Versand: Original wird beim ersten Drucken oder Mailen gespeichert; alle weiteren Ausgaben sind Kopien des Originals (gleicher Inhalt + KOPIE-Wasserzeichen) – kein wechselnder Status mehr auf Kopien' },
       { typ: 'verbesserung', text: 'Entwurf: Vorschau-Button bleibt; nach Finalisierung nur noch „Drucken" und „Mail senden" – verhindert versehentliche Mehrfach-Ausgabe als Original' },
       { typ: 'verbesserung', text: 'Detail-Panel: Buttons zeigen nach erstem Versand „Kopie drucken" bzw. „Kopie senden"' },
       { typ: 'verbesserung', text: 'Detail-Panel: Zeigt Datum und Uhrzeit des ersten Versands unter „Original versandt" – praktisch als Nachweis wenn ein Kunde behauptet, die Rechnung nicht erhalten zu haben' },
+      { typ: 'fix', text: 'Detail-Panel: Summenblock zeigte Netto-Layout (Einzelpreis/Gesamt als Netto) auch bei Privatkundenrechnungen und Eingangsrechnungen – jetzt korrekt Brutto für B2C/Eingang, Netto nur für B2B mit ZUGFeRD' },
+      { typ: 'fix', text: 'Detail-Panel: Zwischensumme bei Rechnungsrabatt war zu hoch wenn Positionen selbst einen Positionsrabatt hatten (berechnete netto vor statt nach Positionsrabatt)' },
+      { typ: 'fix', text: 'DATEV-Export: BU-Schlüssel wurde fälschlicherweise auch auf Automatikkonten (AM) gesetzt – führte zu Fehler REW00305/REW00306 in DATEV; Erlöskonten 8100/8300/8400/8736/8850 (SKR03) und 4100/4300/4400/4736 (SKR04) bleiben jetzt ohne BU' },
+      { typ: 'fix', text: 'DATEV-Export: Skonti-Konten 8736 (SKR03) und 4736 (SKR04) wurden nicht als Automatikkonten erkannt und erhielten fälschlicherweise einen BU-Schlüssel (Hinweis von Peter1061, Issue #165)' },
+      { typ: 'fix', text: 'DATEV-Export: Konto fehlte bei älteren Journaleinträgen ohne Snapshot – Export verwendete jetzt korrekt das aktuelle Kategorie-Konto als Fallback' },
+      { typ: 'fix', text: 'DATEV-Export: Downloads funktionierten nicht wenn der Browser keine benutzerdefinierten Response-Header lesen durfte (CORS); Hinweis auf Download-Schaltfläche ergänzt' },
     ],
   },
   {
