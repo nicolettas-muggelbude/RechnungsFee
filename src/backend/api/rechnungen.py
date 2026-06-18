@@ -759,6 +759,11 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             rechnung.ust_gesamt    = ust_sum.quantize(Q, ROUND_HALF_UP)
         rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
 
+    # Lagerführung: direkt finalisierte Rechnungen (ist_entwurf=False) buchen den Bestand sofort ab.
+    # Entwürfe holen den Abgang über /finalisieren nach.
+    if not data.ist_entwurf:
+        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)

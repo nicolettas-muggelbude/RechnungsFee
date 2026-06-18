@@ -34,6 +34,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'DATEV-Export: Buchungen ohne Sachkonto (z. B. Kassenanfangsbestand) wurden lautlos übersprungen; jetzt werden sie mit leerem Konto exportiert – DATEV zeigt einen Importfehler den der Steuerberater sieht und korrigieren kann (Issue #163)' },
       { typ: 'fix', text: 'Rechnungsrabatt: Formular zeigte Festbetrag (€) fälschlich als Prozentwert an; PDF berechnete die USt auf den Bruttobetrag vor Rabatt statt nach Rabatt (Issue #170)' },
       { typ: 'fix', text: 'Artikel: Beschreibung löschen wurde nicht gespeichert; Beschreibung wurde beim Einfügen in eine Rechnungsposition nicht übernommen (Issue #172)' },
+      { typ: 'fix', text: 'Lagerführung: Bestand wurde nicht reduziert wenn direkt aus dem Formular finalisiert wurde (nur der Entwurf→Finalisieren-Weg buchte korrekt); Storno erhöhte den Bestand dadurch fälschlich (Issue #173)' },
+      { typ: 'fix', text: 'Lagerführung: Finalisierungssperre bei Bestandsunterschreitung wirkte nur im Entwurf→Finalisieren-Pfad, nicht beim direkten Finalisieren aus dem Formular (Issue #173)' },
     ],
   },
   {
