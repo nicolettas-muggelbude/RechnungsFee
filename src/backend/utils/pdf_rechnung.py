@@ -74,11 +74,16 @@ class RechnungPDF(RechnungPDFBase):
             self.cell(col_w[i], 6.5, h, border="B", fill=True, align=aligns[i])
         self.ln()
 
+        ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
+        _sign = -1.0 if ist_storno else 1.0
+
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
             menge     = float(str(pos.menge))
             menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
+            if ist_storno:
+                menge_str = f"-{menge_str}"
             ist_diff  = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
             pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
@@ -96,16 +101,16 @@ class RechnungPDF(RechnungPDFBase):
                                 new_x="LMARGIN", new_y="NEXT")
                 continue
             if self._ist_netto:
-                netto_ges_vor = float(str(pos.netto)) * menge          # vor Rabatt
-                netto_ges_eff = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge
+                netto_ges_vor = float(str(pos.netto)) * menge * _sign
+                netto_ges_eff = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge * _sign
                 self.cell(col_w[desc_idx + 3], 6, _fmt_euro(pos.netto), align="R")
                 self.cell(col_w[desc_idx + 4], 6, ust_label, align="R")
                 self.cell(col_w[desc_idx + 5], 6, _fmt_euro(netto_ges_vor), align="R")
             else:
                 ust_satz = float(str(pos.ust_satz))
                 ep_brutto = float(str(pos.netto)) * (1 + ust_satz / 100)
-                brutto_ges_vor = ep_brutto * menge                      # vor Rabatt
-                brutto_ges_eff = float(str(pos.brutto)) * menge
+                brutto_ges_vor = ep_brutto * menge * _sign
+                brutto_ges_eff = float(str(pos.brutto)) * menge * _sign
                 self.cell(col_w[desc_idx + 3], 6, _fmt_euro(ep_brutto), align="R")
                 self.cell(col_w[desc_idx + 4], 6, ust_label,            align="R")
                 self.cell(col_w[desc_idx + 5], 6, _fmt_euro(brutto_ges_vor), align="R")

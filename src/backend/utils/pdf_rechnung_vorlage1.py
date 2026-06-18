@@ -127,6 +127,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.cell(col_w[i], 6.5, h, border="B", fill=True, align=aligns[i])
         self.ln()
 
+        ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
+        _sign = -1.0 if ist_storno else 1.0
+
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
@@ -143,16 +146,18 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 self.cell(col_w[desc_col + 1], 6.5, f"{menge:g}", align="R")
                 self.cell(col_w[desc_col + 2], 6.5, einheit)
             elif self._ist_netto:
-                netto_ges_vor = float(str(pos.netto)) * menge
-                netto_ges_eff = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge
+                netto_ges_vor = float(str(pos.netto)) * menge * _sign
+                netto_ges_eff = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge * _sign
+                menge_disp = f"-{menge:g}" if ist_storno else f"{menge:g}"
                 self.cell(col_w[desc_col + 1], 6.5, _fmt_euro(pos.netto), align="R")
                 self.cell(col_w[desc_col + 2], 6.5, ust_label, align="R")
                 self.cell(col_w[desc_col + 3], 6.5, _fmt_euro(netto_ges_vor), align="R")
             else:
                 ust_satz = float(str(pos.ust_satz))
                 ep_brutto = float(str(pos.netto)) * (1 + ust_satz / 100)
-                brutto_ges_vor = ep_brutto * menge
-                brutto_ges_eff = float(str(pos.brutto)) * menge
+                brutto_ges_vor = ep_brutto * menge * _sign
+                brutto_ges_eff = float(str(pos.brutto)) * menge * _sign
+                menge_disp = f"-{menge:g}" if ist_storno else f"{menge:g}"
                 self.cell(col_w[desc_col + 1], 6.5, _fmt_euro(ep_brutto), align="R")
                 self.cell(col_w[desc_col + 2], 6.5, ust_label, align="R")
                 self.cell(col_w[desc_col + 3], 6.5, _fmt_euro(brutto_ges_vor), align="R")

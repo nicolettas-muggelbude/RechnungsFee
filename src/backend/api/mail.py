@@ -85,8 +85,9 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         and u and (u.steuernummer or u.ust_idnr)
     )
 
-    # Dokumente ohne Original-Archivierung (Auftrag/Angebot/Proforma: beliebig oft sendbar)
-    _kein_archiv = _dok in ("Auftrag", "Angebot", "Proforma")
+    _ist_storno_mail = getattr(r, "storniert", False) and _dok == "Rechnung"
+    # Dokumente ohne Original-Archivierung (Auftrag/Angebot/Proforma/Storno: beliebig oft sendbar)
+    _kein_archiv = _dok in ("Auftrag", "Angebot", "Proforma") or _ist_storno_mail
     ist_gutschrift = _dok == "Gutschrift"
     gutschrift_erstattet = ist_gutschrift and str(getattr(r, "zahlungsstatus", "offen")) == "bezahlt"
     darf_archiviert = (
@@ -121,7 +122,8 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         db.commit()
 
     nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
-    return pdf_bytes, f"{_dok}_{nr}.pdf"
+    prefix = "Stornorechnung" if _ist_storno_mail else _dok
+    return pdf_bytes, f"{prefix}_{nr}.pdf"
 
 
 def _build_message(

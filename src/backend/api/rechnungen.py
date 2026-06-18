@@ -1106,9 +1106,11 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
 
     ist_entwurf = rechnung.ist_entwurf
     _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
+    _ist_storno_pdf = getattr(rechnung, "storniert", False) and _dok_typ == "Rechnung"
 
     # Dokumente die kein Original-Archiv brauchen (beliebig oft druckbar, kein Kopie-Stempel)
-    _kein_archiv = _dok_typ in ("Auftrag", "Angebot", "Proforma")
+    # Stornorechnung: immer frisch – das Original-PDF war die ursprüngliche Rechnung
+    _kein_archiv = _dok_typ in ("Auftrag", "Angebot", "Proforma") or _ist_storno_pdf
 
     # Gutschrift: erst ausgeben wenn Rückerstattung gebucht
     ist_gutschrift_pdf = _dok_typ == "Gutschrift"
@@ -1184,13 +1186,16 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         firma = (unt_dict.get("firmenname") or "").replace("/", "-")
         dateiname = f"{firma}_Invoice {rechnung.rechnungsnummer or rechnung_id}.pdf"
     else:
-        _prefix = {
-            "Gutschrift":   "Gutschrift",
-            "Lieferschein": "Lieferschein",
-            "Angebot":      "Angebot",
-            "Proforma":     "Proforma",
-            "Auftrag":      "Auftrag",
-        }.get(_dt_datei, "Rechnung")
+        if _ist_storno_pdf:
+            _prefix = "Stornorechnung"
+        else:
+            _prefix = {
+                "Gutschrift":   "Gutschrift",
+                "Lieferschein": "Lieferschein",
+                "Angebot":      "Angebot",
+                "Proforma":     "Proforma",
+                "Auftrag":      "Auftrag",
+            }.get(_dt_datei, "Rechnung")
         dateiname = f"{_prefix}_{rechnung.rechnungsnummer or rechnung_id}.pdf"
     disposition = "attachment" if download else "inline"
     return Response(
@@ -1757,6 +1762,7 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
 
     rechnung.storniert = True
     rechnung.storno_grund = data.grund.strip()
+    rechnung.storno_datum = heute
     rechnung.immutable = True
 
     # Lagerführung: Bestand zurückbuchen (Storno kehrt Finalisierungs-Buchung um)

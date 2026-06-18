@@ -378,16 +378,26 @@ class RechnungPDFBase(FPDF):
             self.cell(meta_val, 5.5, val)
             meta_y += 5.5
 
-        _dok_meta = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
-        _nr_label = {
-            "Angebot":    "Angebotsnr.",
-            "Lieferschein": "Lieferscheinnr.",
-            "Proforma":   "Proforma-Nr.",
-            "Auftrag":    "Auftragsnr.",
-            "Gutschrift": "Gutschriftnr.",
-        }.get(_dok_meta, "Rechnungsnummer" if r.typ == "ausgang" else "Eingangsrechn.-Nr.")
+        _dok_meta  = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
+        _ist_storno = getattr(r, "storniert", False) and _dok_meta == "Rechnung"
+        if _ist_storno:
+            _nr_label = "Stornorechnung-Nr."
+        else:
+            _nr_label = {
+                "Angebot":      "Angebotsnr.",
+                "Lieferschein": "Lieferscheinnr.",
+                "Proforma":     "Proforma-Nr.",
+                "Auftrag":      "Auftragsnr.",
+                "Gutschrift":   "Gutschriftnr.",
+            }.get(_dok_meta, "Rechnungsnummer" if r.typ == "ausgang" else "Eingangsrechn.-Nr.")
         _meta(_nr_label, r.rechnungsnummer or "—")
-        _meta("Rechnungsdatum", _iso_zu_de(str(r.datum)))
+        if _ist_storno:
+            storno_datum = getattr(r, "storno_datum", None)
+            if storno_datum:
+                _meta("Stornodatum", _iso_zu_de(str(storno_datum)))
+            _meta("Originaldatum", _iso_zu_de(str(r.datum)), dim=True)
+        else:
+            _meta("Rechnungsdatum", _iso_zu_de(str(r.datum)))
         if r.leistung_von and r.leistung_bis:
             _meta("Leistungszeitraum", f"{_iso_zu_de(str(r.leistung_von))} – {_iso_zu_de(str(r.leistung_bis))}")
         elif r.leistung_von and str(r.leistung_von) != str(r.datum):
@@ -418,7 +428,10 @@ class RechnungPDFBase(FPDF):
     def _render_titel(self):
         r = self._r
         dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
-        if dokument_typ == "Gutschrift":
+        ist_storno = getattr(r, "storniert", False) and dokument_typ == "Rechnung"
+        if ist_storno:
+            titel = f"Stornorechnung {r.rechnungsnummer or ''}".strip()
+        elif dokument_typ == "Gutschrift":
             titel = f"Gutschrift {r.rechnungsnummer or ''}".strip()
         elif dokument_typ == "Lieferschein":
             titel = f"Lieferschein {r.rechnungsnummer or ''}".strip()
@@ -436,8 +449,21 @@ class RechnungPDFBase(FPDF):
         self.set_text_color(*TEXT_DUNKEL)
         self.cell(0, 9, titel, new_x="LMARGIN", new_y="NEXT")
 
-        # Bezugszeile bei Gutschriften
-        if dokument_typ == "Gutschrift":
+        if ist_storno:
+            self.set_font("DejaVu", "", 9)
+            self.set_text_color(*TEXT_GRAU)
+            self.cell(0, 5,
+                      f"Stornierung zu Rechnung {r.rechnungsnummer or '–'} vom {_iso_zu_de(str(r.datum))}",
+                      new_x="LMARGIN", new_y="NEXT")
+            storno_grund = getattr(r, "storno_grund", None)
+            if storno_grund:
+                self.ln(1)
+                self.set_font("DejaVu", "", 8.5)
+                self.multi_cell(0, 5,
+                                f"Stornobegründung: {storno_grund}",
+                                new_x="LMARGIN", new_y="NEXT")
+                self.ln(1)
+        elif dokument_typ == "Gutschrift":
             gutschrift_nr = getattr(r, "_gutschrift_original_nr", None)
             if gutschrift_nr:
                 self.set_font("DejaVu", "", 9)
@@ -488,6 +514,9 @@ class RechnungPDFBase(FPDF):
             self.set_text_color(*TEXT_GRAU if grau else TEXT_DUNKEL)
             self.cell(val_w, 5.5, wert, align="R", new_x="LMARGIN", new_y="NEXT")
 
+        ist_storno_sum = getattr(r, "storniert", False) and (getattr(r, "dokument_typ", "Rechnung") or "Rechnung") == "Rechnung"
+        _s = Decimal("-1") if ist_storno_sum else Decimal("1")
+
         aufschluesselung = _ust_aufschluesselung(r.positionen)
         re_rabatt_proz   = getattr(r, "rabatt_prozent", Decimal("0")) or Decimal("0")
         re_rabatt_betrag = getattr(r, "rabatt_betrag", None)
@@ -515,32 +544,32 @@ class RechnungPDFBase(FPDF):
 
         if self._ist_netto:
             if hat_rabatt:
-                _sum_row("Zwischensumme", _fmt_euro(pos_netto_sum))
+                _sum_row("Zwischensumme", _fmt_euro(pos_netto_sum * _s))
                 _sum_row(rabatt_lbl, f"- {_fmt_euro(rabatt_netto)}", grau=True)
-            _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt))
+            _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt * _s))
             if len(aufschluesselung) > 1:
                 ust_lbl = "  |  ".join(
-                    f"{satz} %: {_fmt_euro(ust_sum)}" for satz, _, ust_sum in aufschluesselung
+                    f"{satz} %: {_fmt_euro(ust_sum * _s)}" for satz, _, ust_sum in aufschluesselung
                 )
-                _sum_row(f"USt {ust_lbl}", _fmt_euro(r.ust_gesamt))
+                _sum_row(f"USt {ust_lbl}", _fmt_euro(r.ust_gesamt * _s))
             else:
-                _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt))
-            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+                _sum_row("Umsatzsteuer", _fmt_euro(r.ust_gesamt * _s))
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt * _s), bold=True, trenn=True)
         else:
             if hat_rabatt:
-                _sum_row("Zwischensumme", _fmt_euro(pos_brutto_sum))
+                _sum_row("Zwischensumme", _fmt_euro(pos_brutto_sum * _s))
                 _sum_row(rabatt_lbl, f"- {_fmt_euro(rabatt_brutto)}", grau=True)
-            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt), bold=True, trenn=True)
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt * _s), bold=True, trenn=True)
             if not unt.get("ist_kleinunternehmer"):
                 saetze_mit_ust = [(satz, ust_sum) for satz, _, ust_sum in aufschluesselung if satz > 0]
                 if len(saetze_mit_ust) > 1:
                     ust_lbl = "  |  ".join(
-                        f"{satz} %: {_fmt_euro(ust_sum)}" for satz, ust_sum in saetze_mit_ust
+                        f"{satz} %: {_fmt_euro(ust_sum * _s)}" for satz, ust_sum in saetze_mit_ust
                     )
-                    _sum_row(f"enthaltene USt {ust_lbl}", _fmt_euro(r.ust_gesamt), grau=True)
+                    _sum_row(f"enthaltene USt {ust_lbl}", _fmt_euro(r.ust_gesamt * _s), grau=True)
                 elif saetze_mit_ust:
                     satz, _ = saetze_mit_ust[0]
-                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(r.ust_gesamt), grau=True)
+                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(r.ust_gesamt * _s), grau=True)
 
     def _render_19_hinweis(self):
         unt = self._unt
@@ -589,16 +618,17 @@ class RechnungPDFBase(FPDF):
         ist_angebot      = _dt == "Angebot"
         ist_proforma     = _dt == "Proforma"
         ist_auftrag      = _dt == "Auftrag"
+        ist_storno_rnd   = getattr(self._r, "storniert", False) and _dt == "Rechnung"
         if not ist_lieferschein:
             self._render_summenblock()
             self.ln(self._ln_nach_summen)
             self._render_19_hinweis()
-            if not ist_angebot and not ist_auftrag:
+            if not ist_angebot and not ist_auftrag and not ist_storno_rnd:
                 self._render_zahlungsblock()
         self._render_notizen()
         if ist_lieferschein:
             self._render_empfangsbestaetigung()
-        elif not ist_angebot and not ist_proforma and not ist_auftrag:
+        elif not ist_angebot and not ist_proforma and not ist_auftrag and not ist_storno_rnd:
             embed_unterschrift(self, self._unt, L_MARGIN)
         self.set_text_color(0, 0, 0)
         return bytes(self.output())
