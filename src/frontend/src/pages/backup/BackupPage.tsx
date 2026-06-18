@@ -11,8 +11,10 @@ function istSystemlaufwerk(pfad: string): boolean {
   if (!pfad || pfad.startsWith('smb://')) return false
   const p = pfad.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
   if (p === 'c:' || p.startsWith('c:/')) return true
-  if (p === '/' || p === '/home' || p === '/root' || p.startsWith('/home/') || p.startsWith('/root/')) return true
-  if (p.startsWith('/users/') || p.startsWith('/system/') || p.startsWith('/library/')) return true
+  if (p.startsWith('/')) {
+    const erlaubt = ['/mnt/', '/media/', '/run/media/', '/volumes/']
+    return !erlaubt.some(e => p.startsWith(e))
+  }
   return false
 }
 

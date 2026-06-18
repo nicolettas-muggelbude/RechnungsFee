@@ -303,15 +303,13 @@ def _ist_systemlaufwerk(pfad: str) -> bool:
     if pfad.startswith("smb://"):
         return False
     p = pfad.replace("\\", "/").lower().rstrip("/")
-    # Windows C:
+    # Windows: nur C: blockieren, andere Laufwerksbuchstaben (D:, E: …) sind OK
     if p == "c:" or p.startswith("c:/"):
         return True
-    # Linux /home, /root, /
-    if p in ("/", "/home", "/root") or p.startswith("/home/") or p.startswith("/root/"):
-        return True
-    # macOS /Users, /System, /Library
-    if p.startswith("/users/") or p.startswith("/system/") or p.startswith("/library/"):
-        return True
+    # Linux/macOS: alles unter / blockieren außer bekannte externe Einhängepunkte
+    if p.startswith("/"):
+        erlaubt = ("/mnt/", "/media/", "/run/media/", "/volumes/")
+        return not any(p.startswith(e) for e in erlaubt)
     return False
 
 
