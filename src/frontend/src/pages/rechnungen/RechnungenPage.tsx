@@ -3076,10 +3076,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               {rechnungRabattNum > 0 && (
                 <tr>
                   <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
-                    Rabatt {rechnungRabattNum} %
+                    {rechnungRabattModus === 'betrag' ? 'Abzug' : `Rabatt ${rechnungRabattNum} %`}
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
-                    − {formatEuro((summen.brutto * rechnungRabattNum / 100).toFixed(2))}
+                    − {formatEuro(rechnungRabattModus === 'betrag'
+                      ? rechnungRabattNum.toFixed(2)
+                      : (summen.brutto * rechnungRabattNum / 100).toFixed(2))}
                   </td>
                 </tr>
               )}

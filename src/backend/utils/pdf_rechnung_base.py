@@ -539,8 +539,8 @@ class RechnungPDFBase(FPDF):
                     )
                     _sum_row(f"enthaltene USt {ust_lbl}", _fmt_euro(r.ust_gesamt), grau=True)
                 elif saetze_mit_ust:
-                    satz, ust_sum = saetze_mit_ust[0]
-                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(ust_sum), grau=True)
+                    satz, _ = saetze_mit_ust[0]
+                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(r.ust_gesamt), grau=True)
 
     def _render_19_hinweis(self):
         unt = self._unt
