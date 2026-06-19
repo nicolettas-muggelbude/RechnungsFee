@@ -1134,19 +1134,26 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     if nur_ansehen:
         darf_archiviert = False  # kein Archiv, kein Kopie-Stempel, kein Status-Touch
 
-    # Stornierte Rechnung: "Ansehen" zeigt das gespeicherte Original vor dem Storno
-    if nur_ansehen and _ist_storno_pdf and rechnung.original_pdf_pfad:
-        orig_pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
-        if orig_pfad.exists():
-            nr = (rechnung.rechnungsnummer or str(rechnung_id)).replace("/", "-").replace(" ", "_")
-            return Response(
-                content=orig_pfad.read_bytes(),
-                media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f'inline; filename="Rechnung_{nr}_Original.pdf"',
-                    "Cache-Control": "no-store",
-                },
-            )
+    # Stornierte Rechnung: "Ansehen" zeigt immer das Original vor dem Storno
+    if nur_ansehen and _ist_storno_pdf:
+        if rechnung.original_pdf_pfad:
+            orig_pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
+            if orig_pfad.exists():
+                nr = (rechnung.rechnungsnummer or str(rechnung_id)).replace("/", "-").replace(" ", "_")
+                return Response(
+                    content=orig_pfad.read_bytes(),
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": f'inline; filename="Rechnung_{nr}_Original.pdf"',
+                        "Cache-Control": "no-store",
+                    },
+                )
+        # Kein archiviertes Original (nie gedruckt vor dem Storno) → frisch als Original generieren.
+        # rechnung.storniert wird ohne Commit auf False gesetzt, damit die PDF-Generatoren
+        # das Original-Format erzeugen (kein Storno-Titel, kein negatives Vorzeichen).
+        # Der Session-Rollback beim Request-Ende verwirft die In-Memory-Änderung.
+        _ist_storno_pdf = False
+        rechnung.storniert = False
 
     # Kopie: Original bereits gespeichert → gespeichertes PDF + Wasserzeichen zurückgeben
     if darf_archiviert and rechnung.original_pdf_pfad:
