@@ -110,7 +110,7 @@
 - [x] Buchhalter-CSV-Export: Journal als Semikolon-CSV (UTF-8 mit BOM) für Excel/LibreOffice und Buchhaltungsprogramme ohne DATEV-Import; Zeitraumauswahl wie DATEV
 - [x] Jahresumsatzsteuererklärung (USt 2A / Anlage UR): Anzeigehilfe mit allen KZ-Werten aus den Journalbuchungen des Wirtschaftsjahres; Kleinunternehmer: KZ 48 (§19 Gesamtumsatz); Vorauszahlungsanrechnung aus gespeicherten Voranmeldungen (KZ 76); PDF-Export; Anlage-UR-Hinweis bei ig. Umsätzen
 - [x] Anlage S – Einkünfte aus selbstständiger Arbeit: Anzeigehilfe mit Gewinn/Verlust (aus EÜR), Steuernummer, Finanzamt, Berufsbezeichnung und KFZ-Privatanteil; zeigt welche Zeile in ELSTER wohin gehört
-- [ ] Anlage S – Tätigkeitsart beachten: bei `gewerbe` ausblenden, bei `gemischt` Hinweis anzeigen (Issue #180)
+- [x] Anlage S – Tätigkeitsart beachten: bei `gewerbe` ausblenden, bei `gemischt` Hinweis anzeigen (Issue #180)
 - [ ] Anlage G – Einkünfte aus Gewerbebetrieb: Anzeigehilfe analog Anlage S für Gewerbetreibende (§15 EStG); Gewinn aus EÜR + Block für Gewerbesteuer-Anrechnung (§35 EStG) (Issue #180)
 - [x] Jahresübersicht: Kategoriensummen mit EÜR-Zuordnung (🔍 Aufschlüsselung-Toggle in der EÜR)
 - [x] Anlage AVEÜR – Abschreibungsplan für Anlagegüter (KFZ, EDV)
