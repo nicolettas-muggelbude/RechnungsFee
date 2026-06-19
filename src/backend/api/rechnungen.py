@@ -859,7 +859,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                     )
 
     if data.ist_entwurf is not None:
+        war_entwurf = rechnung.ist_entwurf
         rechnung.ist_entwurf = data.ist_entwurf
+        # Lagerführung: Entwurf → Finalisiert (nur über diesen Pfad; /finalisieren bucht eigenständig)
+        if war_entwurf and not data.ist_entwurf:
+            _lager_buchen(rechnung, db, faktor=Decimal("-1"))
 
     db.commit()
     db.refresh(rechnung)
