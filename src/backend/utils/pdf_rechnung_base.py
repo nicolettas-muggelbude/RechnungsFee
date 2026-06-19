@@ -526,22 +526,24 @@ class RechnungPDFBase(FPDF):
 
         # Vor-Rabatt-Summen aus Positionen berechnen (Positions-Ebene bereits eingerechnet)
         if hat_rabatt:
+            _Q4 = Decimal("0.0001")
+            _Q2 = Decimal("0.01")
             pos_netto_sum = sum(
                 (Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag))) * Decimal(str(pos.menge))
                 for pos in r.positionen
-            ).quantize(Decimal("0.01"))
+            ).quantize(_Q4)
             pos_ust_sum   = sum(
                 Decimal(str(pos.ust_betrag)) * Decimal(str(pos.menge))
                 for pos in r.positionen
-            ).quantize(Decimal("0.01"))
-            pos_brutto_sum = (pos_netto_sum + pos_ust_sum).quantize(Decimal("0.01"))
+            ).quantize(_Q4)
+            pos_brutto_sum = (pos_netto_sum + pos_ust_sum).quantize(_Q4)
             if re_rabatt_betrag:
-                rabatt_brutto = Decimal(str(re_rabatt_betrag)).quantize(Decimal("0.01"))
-                rabatt_netto  = (pos_netto_sum - r.netto_gesamt).quantize(Decimal("0.01"))
+                rabatt_brutto = Decimal(str(re_rabatt_betrag)).quantize(_Q2)
+                rabatt_netto  = (pos_netto_sum - r.netto_gesamt).quantize(_Q2)
                 rabatt_lbl = "Abzug"
             else:
-                rabatt_netto  = (pos_netto_sum  * re_rabatt_proz / 100).quantize(Decimal("0.01"))
-                rabatt_brutto = (pos_brutto_sum * re_rabatt_proz / 100).quantize(Decimal("0.01"))
+                rabatt_netto  = (pos_netto_sum  * re_rabatt_proz / 100).quantize(_Q2)
+                rabatt_brutto = (pos_brutto_sum * re_rabatt_proz / 100).quantize(_Q2)
                 rabatt_lbl = f"Rabatt {re_rabatt_proz:.4g} %"
 
         if self._ist_netto:
