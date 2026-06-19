@@ -608,6 +608,7 @@ export default function BuchungsvorlagenPage() {
 
   function invalidieren() {
     qc.invalidateQueries({ queryKey: ['buchungsvorlagen'] })
+    qc.invalidateQueries({ queryKey: ['buchungsvorlagen-faellig'] })
     qc.invalidateQueries({ queryKey: ['journal'] })
   }
 
