@@ -1390,7 +1390,7 @@ function RechnungDetail({
                 : formatDatum(rechnung.leistung_von ?? rechnung.datum)}
             </span>
           </div>
-          {rechnung.faellig_am && (
+          {rechnung.faellig_am && !rechnung.storniert && (
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">Fällig am</span>
               <span className={
@@ -1422,6 +1422,18 @@ function RechnungDetail({
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
               <span className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">ZUGFeRD ✓</span>
+            </div>
+          )}
+          {rechnung.storniert && rechnung.storno_datum && (
+            <div className="flex justify-between gap-2">
+              <span className="text-slate-500 dark:text-slate-400 shrink-0">Storniert am</span>
+              <span className="text-slate-600 dark:text-slate-300 text-right text-xs">{formatDatum(rechnung.storno_datum)}</span>
+            </div>
+          )}
+          {rechnung.storniert && rechnung.storno_rechnungsnummer && (
+            <div className="flex justify-between gap-2">
+              <span className="text-slate-500 dark:text-slate-400 shrink-0">Stornorechnung-Nr.</span>
+              <span className="text-slate-600 dark:text-slate-300 text-right text-xs font-medium">{rechnung.storno_rechnungsnummer}</span>
             </div>
           )}
           {rechnung.storniert && rechnung.storno_grund && (

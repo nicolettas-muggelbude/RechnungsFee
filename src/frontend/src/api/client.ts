@@ -1073,6 +1073,8 @@ export type Rechnung = {
   immutable: boolean
   storniert: boolean
   storno_grund: string | null
+  storno_datum: string | null
+  storno_rechnungsnummer: string | null
   dokument_typ: string
   gutschrift_zu_rechnung_id: number | null
   gutschrift_zu_rechnung_nr: string | null
