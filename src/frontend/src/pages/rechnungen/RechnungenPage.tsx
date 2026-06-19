@@ -2460,7 +2460,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           beschreibung: p.beschreibung,
           menge: p.menge || '1',
           einheit: p.einheit || 'Stück',
-          netto: netto.toFixed(2),
+          netto: netto.toFixed(4),
           ust_satz,
           artikel_id: p.artikel_id,
           kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
