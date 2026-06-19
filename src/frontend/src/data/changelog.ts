@@ -32,6 +32,9 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Gutschrift: eigener Nummernkreis GS-YY#### – Gutschriften haben jetzt einen separaten Zähler statt den Ausgangsrechnungs-Zähler zu teilen; Format über Einstellungen → Nummernkreise anpassbar' },
       { typ: 'verbesserung', text: 'Stornierte Rechnungen: Ansehen zeigt die Original-Rechnung (vor dem Storno); neuer Button „Stornorechnung drucken" für das Stornorechnung-PDF; Mail-Versand als „Stornorechnung senden" jetzt verfügbar (Issue #178)' },
       { typ: 'fix', text: 'Nummernkreis-Format: einzelne Buchstaben N in Präfixen (z. B. STORNO) wurden fälschlich als Nummern-Platzhalter interpretiert – Ausgabe war STOR10 statt STORNO-260001' },
+      { typ: 'fix', text: 'Lagerführung: Bestand wurde nicht reduziert wenn aus dem Formular finalisiert wurde (Entwurf bearbeiten → Speichern & Finalisieren); SQLAlchemy lieferte nach dem Positions-Neuladen eine leere Liste an _lager_buchen (Issue #173)' },
+      { typ: 'fix', text: 'Lagerführung: Finalisieren direkt aus dem Formular (neuer Entwurf → Finalisieren ohne Umweg über Detail-Panel) buchte den Bestand nicht ab (Issue #173)' },
+      { typ: 'verbesserung', text: 'Berechnungen: Zwischenergebnisse (Positionsrabatt, USt pro Position, Summierung) werden jetzt auf 4 Dezimalstellen gerundet statt 2 – reduziert Rundungsfehler bei vielen Positionen; in der DB gespeicherte Endwerte bleiben 2-stellig' },
     ],
   },
   {
