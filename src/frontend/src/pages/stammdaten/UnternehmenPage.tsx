@@ -321,6 +321,9 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <Field label="Telefon">{inp('telefon', '+49 30 12345678')}</Field>
           </div>
           <Field label="Webseite">{inp('webseite', 'https://maria-muster.de')}</Field>
+          {(form.taetigkeitsart === 'gewerbe' || form.taetigkeitsart === 'gemischt') && (
+            <Field label="Bezeichnung des Gewerbes">{inp('bezeichnung_des_gewerbes', 'z.B. Tischlerei, Buchhandlung, IT-Dienstleistungen')}</Field>
+          )}
         </div>
 
         <hr className="border-slate-100 dark:border-slate-700" />
@@ -485,9 +488,6 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <option value="gemischt">Gemischt</option>
           </select>
         </Field>
-        {(form.taetigkeitsart === 'gewerbe' || form.taetigkeitsart === 'gemischt') && (
-          <Field label="Bezeichnung des Gewerbes (Anlage G Z.4)">{inp('bezeichnung_des_gewerbes', 'z.B. Tischlerei, Buchhandlung, IT-Dienstleistungen')}</Field>
-        )}
       </div>
 
       {/* ── Tab: Rechnungen ───────────────────────────────────────────── */}
