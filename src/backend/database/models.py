@@ -554,6 +554,7 @@ class Rechnung(Base):
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ausgegeben_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_pdf_pfad: Mapped[str | None] = mapped_column(String(500))
+    absender_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gutschrift / Lieferschein
     dokument_typ: Mapped[str] = mapped_column(String(20), default="Rechnung", nullable=False, server_default="Rechnung")
     gutschrift_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)

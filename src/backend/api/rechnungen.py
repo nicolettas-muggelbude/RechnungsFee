@@ -4,6 +4,7 @@ Rechnungen-API (Eingang + Ausgang) mit Journal-Verknüpfung.
 
 import difflib
 import hashlib
+import json
 import re
 import shutil
 import uuid
@@ -182,6 +183,45 @@ def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str
 
 _Q2 = Decimal("0.01")
 _Q4 = Decimal("0.0001")
+
+
+def _absender_snapshot(db: Session) -> str:
+    """JSON-Snapshot der aktuellen Unternehmensdaten – wird beim Finalisieren in rechnungen gespeichert.
+    Stellt sicher dass nachträgliche Stammdaten-Änderungen finalisierte Dokumente nicht verändern (GoBD)."""
+    unt = db.query(Unternehmen).first()
+    if not unt:
+        return ""
+    return json.dumps({
+        "firmenname":              unt.firmenname or "",
+        "vorname":                 unt.vorname or "",
+        "nachname":                unt.nachname or "",
+        "strasse":                 unt.strasse or "",
+        "hausnummer":              unt.hausnummer or "",
+        "plz":                     unt.plz or "",
+        "ort":                     unt.ort or "",
+        "land":                    unt.land or "DE",
+        "steuernummer":            unt.steuernummer or "",
+        "ust_idnr":                unt.ust_idnr or "",
+        "finanzamt":               unt.finanzamt or "",
+        "handelsregister_nr":      unt.handelsregister_nr or "",
+        "handelsregister_gericht": unt.handelsregister_gericht or "",
+        "telefon":                 unt.telefon or "",
+        "email":                   unt.email or "",
+        "webseite":                unt.webseite or "",
+        "iban":                    unt.iban or "",
+        "bic":                     unt.bic or "",
+        "bank_name":               unt.bank_name or "",
+        "logo_pfad":               unt.logo_pfad or "",
+        "berufsbezeichnung":       unt.berufsbezeichnung or "",
+        "kammer_mitgliedschaft":   unt.kammer_mitgliedschaft or "",
+        "ist_kleinunternehmer":    bool(unt.ist_kleinunternehmer),
+        "zahlungshinweis_aktiv":   bool(unt.zahlungshinweis_aktiv),
+        "pdf_vorlage":             int(unt.pdf_vorlage or 0),
+        "unterschrift_bild":       unt.unterschrift_bild or "",
+        "unterschrift_auf_rechnung": bool(unt.unterschrift_auf_rechnung),
+        "qr_zahlung_aktiv":        bool(unt.qr_zahlung_aktiv),
+        "einleitungstext":         unt.einleitungstext or "",
+    }, ensure_ascii=False)
 
 
 def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
@@ -591,6 +631,8 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     auftrag.netto_gesamt = netto_sum.quantize(Q, ROUND_HALF_UP)
     auftrag.ust_gesamt = ust_sum.quantize(Q, ROUND_HALF_UP)
     auftrag.brutto_gesamt = (auftrag.netto_gesamt + auftrag.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+    if not data.ist_entwurf:
+        auftrag.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(auftrag)
     return RechnungResponse.from_orm_extended(auftrag)
@@ -768,6 +810,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     # Entwürfe holen den Abgang über /finalisieren nach.
     if not data.ist_entwurf:
         _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+        rechnung.absender_snapshot = _absender_snapshot(db)
 
     db.commit()
     db.refresh(rechnung)
@@ -871,6 +914,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
             db.flush()  # neue Positionen in DB schreiben bevor Relationship-Cache geleert wird
             db.expire(rechnung, ["positionen"])  # SQLAlchemy-Cache war [] nach delete+flush; fresh load erzwingen
             _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+            rechnung.absender_snapshot = _absender_snapshot(db)
 
     db.commit()
     db.refresh(rechnung)
@@ -930,6 +974,7 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
                 )
 
     rechnung.ist_entwurf = False
+    rechnung.absender_snapshot = _absender_snapshot(db)
 
     # Auftrag-Status auf rechnung_gestellt setzen sobald Rechnung finalisiert
     if rechnung.dokument_typ == "Rechnung":
@@ -975,40 +1020,48 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+
+    # Absenderdaten: Snapshot hat Vorrang vor aktuellen Stammdaten (GoBD – finalisierte Dokumente sind unveränderlich)
     unternehmen = db.query(Unternehmen).first()
-    unt_dict = {}
-    if unternehmen:
-        unt_dict = {
-            "firmenname":              unternehmen.firmenname or "",
-            "vorname":                 unternehmen.vorname or "",
-            "nachname":                unternehmen.nachname or "",
-            "strasse":                 unternehmen.strasse or "",
-            "hausnummer":              unternehmen.hausnummer or "",
-            "plz":                     unternehmen.plz or "",
-            "ort":                     unternehmen.ort or "",
-            "land":                    unternehmen.land or "DE",
-            "steuernummer":            unternehmen.steuernummer or "",
-            "ust_idnr":                unternehmen.ust_idnr or "",
-            "finanzamt":               unternehmen.finanzamt or "",
-            "handelsregister_nr":      unternehmen.handelsregister_nr or "",
-            "handelsregister_gericht": unternehmen.handelsregister_gericht or "",
-            "telefon":                 unternehmen.telefon or "",
-            "email":                   unternehmen.email or "",
-            "webseite":                unternehmen.webseite or "",
-            "iban":                    unternehmen.iban or "",
-            "bic":                     unternehmen.bic or "",
-            "bank_name":               unternehmen.bank_name or "",
-            "logo_pfad":               unternehmen.logo_pfad or "",
-            "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
-            "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
-            "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
-            "zahlungshinweis_aktiv":      unternehmen.zahlungshinweis_aktiv,
-            "pdf_vorlage":                unternehmen.pdf_vorlage if unternehmen else 0,
-            "unterschrift_bild":          unternehmen.unterschrift_bild or "",
-            "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
-            "qr_zahlung_aktiv":           unternehmen.qr_zahlung_aktiv or False,
-            "einleitungstext":            unternehmen.einleitungstext or "",
-        }
+    if rechnung.absender_snapshot:
+        try:
+            unt_dict = json.loads(rechnung.absender_snapshot)
+        except (json.JSONDecodeError, ValueError):
+            unt_dict = {}
+    else:
+        unt_dict = {}
+        if unternehmen:
+            unt_dict = {
+                "firmenname":              unternehmen.firmenname or "",
+                "vorname":                 unternehmen.vorname or "",
+                "nachname":               unternehmen.nachname or "",
+                "strasse":                 unternehmen.strasse or "",
+                "hausnummer":              unternehmen.hausnummer or "",
+                "plz":                     unternehmen.plz or "",
+                "ort":                     unternehmen.ort or "",
+                "land":                    unternehmen.land or "DE",
+                "steuernummer":            unternehmen.steuernummer or "",
+                "ust_idnr":                unternehmen.ust_idnr or "",
+                "finanzamt":               unternehmen.finanzamt or "",
+                "handelsregister_nr":      unternehmen.handelsregister_nr or "",
+                "handelsregister_gericht": unternehmen.handelsregister_gericht or "",
+                "telefon":                 unternehmen.telefon or "",
+                "email":                   unternehmen.email or "",
+                "webseite":                unternehmen.webseite or "",
+                "iban":                    unternehmen.iban or "",
+                "bic":                     unternehmen.bic or "",
+                "bank_name":               unternehmen.bank_name or "",
+                "logo_pfad":               unternehmen.logo_pfad or "",
+                "berufsbezeichnung":       unternehmen.berufsbezeichnung or "",
+                "kammer_mitgliedschaft":   unternehmen.kammer_mitgliedschaft or "",
+                "ist_kleinunternehmer":    unternehmen.ist_kleinunternehmer or False,
+                "zahlungshinweis_aktiv":      unternehmen.zahlungshinweis_aktiv,
+                "pdf_vorlage":                unternehmen.pdf_vorlage if unternehmen else 0,
+                "unterschrift_bild":          unternehmen.unterschrift_bild or "",
+                "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
+                "qr_zahlung_aktiv":           unternehmen.qr_zahlung_aktiv or False,
+                "einleitungstext":            unternehmen.einleitungstext or "",
+            }
 
     # Gutschrift: Originalrechnungsnummer am Objekt hinterlegen (für PDF-Titel)
     if rechnung.gutschrift_zu_rechnung_id:
@@ -1188,7 +1241,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         not ist_entwurf
         and ist_netto
         and _dok_typ == "Rechnung"
-        and (unternehmen.steuernummer or unternehmen.ust_idnr)
+        and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
     )
     if kunde_zugferd:
         try:
@@ -1199,7 +1252,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             kunde_zugferd = False
             pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
     else:
-        vorlage_nr = vorlage if vorlage >= 0 else (unternehmen.pdf_vorlage if unternehmen else 0)
+        vorlage_nr = vorlage if vorlage >= 0 else int(unt_dict.get("pdf_vorlage") or 0)
         if vorlage_nr == 1:
             pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
         else:
@@ -2370,6 +2423,7 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             brutto=Decimal("0.00"),
         ))
 
+    ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(ls)
     return RechnungResponse.from_orm_extended(ls)
@@ -2423,6 +2477,7 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         ))
 
     angebot.lieferschein_zu_angebot_id = ls.id
+    ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(ls)
     return RechnungResponse.from_orm_extended(ls)
@@ -2494,6 +2549,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
 
     angebot.rechnung_zu_angebot_id = rechnung.id
     angebot.angebot_status = "akzeptiert"
+    rechnung.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -2560,6 +2616,7 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         ))
 
     angebot.proforma_zu_angebot_id = proforma.id
+    proforma.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(proforma)
     return RechnungResponse.from_orm_extended(proforma)
@@ -2792,6 +2849,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     _kopiere_positionen(angebot, auftrag, db)
     angebot.auftrag_zu_angebot_id = auftrag.id
     angebot.angebot_status = "akzeptiert"
+    auftrag.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(auftrag)
     return RechnungResponse.from_orm_extended(auftrag)
@@ -2844,6 +2902,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     auftrag.rechnung_zu_auftrag_id = rechnung.id
     if auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
         auftrag.auftrag_status = "in_bearbeitung"
+    rechnung.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -2896,6 +2955,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     auftrag.lieferschein_zu_auftrag_id = lieferschein.id
     if auftrag.auftrag_status == "offen":
         auftrag.auftrag_status = "in_bearbeitung"
+    lieferschein.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(lieferschein)
     return RechnungResponse.from_orm_extended(lieferschein)
@@ -2948,6 +3008,7 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     auftrag.proforma_zu_auftrag_id = proforma.id
     if auftrag.auftrag_status == "offen":
         auftrag.auftrag_status = "in_bearbeitung"
+    proforma.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(proforma)
     return RechnungResponse.from_orm_extended(proforma)
