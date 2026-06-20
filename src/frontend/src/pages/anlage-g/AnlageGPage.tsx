@@ -155,19 +155,21 @@ export function AnlageGPage() {
             {jahre.map(j => <option key={j} value={j}>{j}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-            Hebesatz (%, aus GewSt-Bescheid)
-          </label>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="z. B. 400"
-            value={hebesatzInput}
-            onChange={e => setHebesatzInput(e.target.value)}
-            className="w-28 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-          />
-        </div>
+        {data?.gewst_pflichtig && (
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+              Hebesatz (%, aus GewSt-Bescheid)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="z. B. 400"
+              value={hebesatzInput}
+              onChange={e => setHebesatzInput(e.target.value)}
+              className="w-28 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+            />
+          </div>
+        )}
         {isLoading && <span className="text-sm text-slate-500 dark:text-slate-400">Berechne…</span>}
         {data && !isLoading && (
           <div className="ml-auto flex items-center gap-2">
@@ -223,46 +225,47 @@ export function AnlageGPage() {
           {/* Gewerbesteuer §35 EStG */}
           <Abschnitt titel="Gewerbesteuer-Anrechnung §35 EStG">
             <ZeileText label="Freibetrag Einzelunternehmer" wert="24.500,00 €" />
-            {!data.gewst_pflichtig && (
-              <ZeileText label="Gewinn unter Freibetrag – voraussichtlich keine Gewerbesteuer" wert="" />
-            )}
-            <ZeileNr zeile="52"
-              label="Tatsächlich zu zahlende Gewerbesteuer (lt. Journal)"
-              wert={gewstGezahlt > 0 ? euroFmt(gewstGezahlt) : undefined}
-            />
-            {data.gewst_pflichtig && (
-              <ZeileText
-                label="Richtwert Messbetrag (Schätzung, ohne Hinzurechnungen/Kürzungen)"
-                wert={euroFmt(data.gewst_messbetrag_approx)}
-              />
-            )}
-            {/* Z.51 Messbetrag: auto-berechnet oder manuell */}
-            <div className="flex items-center gap-3 py-2">
-              <span className="shrink-0 inline-flex items-center justify-center w-11 h-6 rounded text-xs font-bold text-white bg-green-600 dark:bg-green-700">
-                Z. 51
-              </span>
-              <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
-                Gewerbesteuer-Messbetrag (lt. Bescheid)
-                {messbetragBerechnet > 0 && !messbetragInput && (
-                  <span className="ml-2 text-xs text-green-600 dark:text-green-400">
-                    berechnet aus Hebesatz
+            {data.gewst_pflichtig ? (
+              <>
+                <ZeileNr zeile="52"
+                  label="Tatsächlich zu zahlende Gewerbesteuer (lt. Journal)"
+                  wert={gewstGezahlt > 0 ? euroFmt(gewstGezahlt) : undefined}
+                />
+                <ZeileText
+                  label="Richtwert Messbetrag (Schätzung, ohne Hinzurechnungen/Kürzungen)"
+                  wert={euroFmt(data.gewst_messbetrag_approx)}
+                />
+                {/* Z.51 Messbetrag: auto-berechnet oder manuell */}
+                <div className="flex items-center gap-3 py-2">
+                  <span className="shrink-0 inline-flex items-center justify-center w-11 h-6 rounded text-xs font-bold text-white bg-green-600 dark:bg-green-700">
+                    Z. 51
                   </span>
+                  <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                    Gewerbesteuer-Messbetrag (lt. Bescheid)
+                    {messbetragBerechnet > 0 && !messbetragInput && (
+                      <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                        berechnet aus Hebesatz
+                      </span>
+                    )}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={messbetragBerechnet > 0 ? euroFmt(messbetragBerechnet) : '0,00'}
+                    value={messbetragInput}
+                    onChange={e => setMessbetragInput(e.target.value)}
+                    className="w-28 text-right border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+                {messbetrag > 0 && (
+                  <ZeileText
+                    label="Anrechenbarer Betrag (Messbetrag × 3,8, §35 EStG)"
+                    wert={euroFmt(anrechnungsbetrag)}
+                  />
                 )}
-              </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder={messbetragBerechnet > 0 ? euroFmt(messbetragBerechnet) : '0,00'}
-                value={messbetragInput}
-                onChange={e => setMessbetragInput(e.target.value)}
-                className="w-28 text-right border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-              />
-            </div>
-            {messbetrag > 0 && (
-              <ZeileText
-                label="Anrechenbarer Betrag (Messbetrag × 3,8, §35 EStG)"
-                wert={euroFmt(anrechnungsbetrag)}
-              />
+              </>
+            ) : (
+              <ZeileText label="Gewinn unter Freibetrag – voraussichtlich keine Gewerbesteuer" wert="" />
             )}
           </Abschnitt>
 
