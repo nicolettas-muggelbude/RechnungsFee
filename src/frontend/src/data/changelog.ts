@@ -23,13 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.3.23',
+    version: 'v0.3.24',
     datum: 'Juni 2026',
     eintraege: [
-      { typ: 'neu', text: '„Ansehen"-Button öffnet PDF in eigenem Fenster ohne Drucken- und Speichern-Optionen (Tauri: natives Fenster mit versteckter Toolbar); stornierte Rechnungen zeigen das Original-Dokument vor dem Storno' },
+      { typ: 'neu', text: 'Anlage G – Einkünfte aus Gewerbebetrieb (§15 EStG): neue Auswertung für Gewerbetreibende und gemischte Tätigkeiten; zeigt Gewinn/Verlust aus der EÜR mit ELSTER-Zeilen; gezahlte Gewerbesteuer wird automatisch aus dem Journal gezogen; Hebesatz-Eingabe berechnet den Messbetrag (Z. 57) und §35-Anrechnungsbetrag automatisch; PDF-Export' },
+      { typ: 'verbesserung', text: 'Anlage S/G: Sichtbarkeitssteuerung nach Tätigkeitsart – Anlage S erscheint nur bei Freiberuflich/Gemischt, Anlage G nur bei Gewerblich/Gemischt; bei Gemischt erscheint jeweils ein Hinweis auf die andere Anlage (Issue #180)' },
       { typ: 'verbesserung', text: 'Detail-Panel (stornierte Rechnungen): Stornodatum und Stornorechnung-Nr. werden jetzt angezeigt; „Fällig am" wird ausgeblendet (Issue #178)' },
-      { typ: 'fix', text: 'Einzelpreis-Rundungsfehler: 7,99 € wurde nach dem Speichern als 7,98 € angezeigt – DB-Typ auf 4 Dezimalstellen erhöht, damit Zwischenwerte verlustfrei gespeichert werden' },
-      { typ: 'fix', text: 'Entwurf bearbeiten: Preisfeld zeigte Netto- statt Brutto-Wert – Brutto wird jetzt korrekt aus dem gespeicherten Netto-Wert zurückgerechnet' },
+      { typ: 'fix', text: 'Buchungsvorlagen: Badge mit fälligen Buchungen im Navigationsmenü wurde nach dem Buchen nicht sofort aktualisiert – Query-Cache wird jetzt direkt invalidiert (Issue #181)' },
+      { typ: 'fix', text: 'Anlage S/G PDF: schwarzes Fenster in Tauri – Content-Disposition war auf attachment gesetzt, WebView2 versuchte Download statt Anzeige; auf inline geändert (Issue #179)' },
     ],
   },
   {
