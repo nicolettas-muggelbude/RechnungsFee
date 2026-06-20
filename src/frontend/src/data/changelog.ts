@@ -26,7 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.3.25',
     datum: 'Juni 2026',
     eintraege: [
-      { typ: 'fix', text: 'GoBD: Absender-Snapshot bei Finalisierung – Stammdatenänderungen verändern nicht mehr die Absenderadresse und IBAN auf bereits finalisierten Dokumenten (Rechnungen, Lieferscheine, Angebote, Aufträge, Proforma, Gutschriften)' },
+      { typ: 'verbesserung', text: 'GoBD: Absender-Snapshot bei Finalisierung – Stammdatenänderungen verändern nicht mehr die Absenderadresse und IBAN auf bereits finalisierten Dokumenten (Rechnungen, Lieferscheine, Angebote, Aufträge, Proforma, Gutschriften)' },
       { typ: 'fix', text: 'Anlage S: ELSTER-KZ-Badge (KZ 100) für Gewinn/Verlust aus freiberuflicher Tätigkeit ergänzt; Anlage S hat kein separates Verlust-KZ – Gewinn und Verlust werden im selben Feld (KZ 100) eingetragen' },
     ],
   },
