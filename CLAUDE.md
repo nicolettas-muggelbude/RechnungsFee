@@ -53,7 +53,7 @@ Dann Browser: http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 93` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 94` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -195,6 +195,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 91 | Nummernkreis gutschrift (GS-YY####) – Gutschriften hatten bisher keinen eigenen Nummernkreis-Eintrag; create_gutschrift() nutzt jetzt gutschrift statt rechnung_ausgang |
 | 92 | rechnungen.absender_snapshot TEXT – JSON-Snapshot der Unternehmensdaten beim Finalisieren; PDF-Generierung nutzt Snapshot statt aktuelle Stammdaten (GoBD: finalisierte Dokumente unveränderlich) |
 | 93 | Backfill absender_snapshot für alle bestehenden finalisierten Dokumente ohne Snapshot (aktueller Stand der Stammdaten wird eingefroren) |
+| 94 | unternehmen.bezeichnung_des_gewerbes VARCHAR(200) – eigenes Feld für Anlage G Z.4 „genaue Bezeichnung des Gewerbes" (z.B. Tischlerei); bisher fälschlich berufsbezeichnung verwendet |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
