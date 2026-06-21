@@ -16,7 +16,7 @@ Versionen werden durch Git-Tags gesetzt – `git tag v0.x.y && git push --tags`.
 - Anlage G: PDF-Export schlug mit „Failed to fetch" fehl wenn ein Hebesatz eingetragen war und Gewerbesteuer-Buchungen im Journal vorhanden waren – Python TypeError (float ÷ Decimal) im Hebesatz-Rückrechnungs-Code behoben (Issue #187)
 
 ### 🔧 Verbessert
-- Anlage G: Gewerbesteuer-Messbetrag (Z. 51) wird jetzt automatisch aus dem Jahresgewinn geschätzt und als Vorschlagswert vorbelegt; mit dem echten Wert aus dem GewSt-Festsetzungsbescheid überschreiben für korrekten §35 EStG Anrechnungsbetrag; Hebesatz-Eingabe entfernt (Issue #182)
+- Anlage G: Gewerbesteuer-Messbetrag (Z. 51) wird automatisch aus dem Jahresgewinn geschätzt und als Vorschlagswert vorbelegt – mit echtem Wert aus GewSt-Festsetzungsbescheid überschreiben; Hebesatz-Eingabe in den GewSt-Abschnitt verschoben; §35 EStG Deckelung korrekt implementiert: anrechenbarer Betrag = Messbetrag × min(4,0; Hebesatz%) (Issue #182)
 
 ---
 

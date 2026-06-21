@@ -143,7 +143,7 @@ def _euro(v: Decimal) -> str:
     return ("− " if neg else "") + s
 
 
-def _generate_anlage_g_pdf(ergebnis: AnlageGErgebnis, messbetrag: float) -> bytes:
+def _generate_anlage_g_pdf(ergebnis: AnlageGErgebnis, messbetrag: float, hebesatz: int = 0) -> bytes:
     messbetrag_d = Decimal(str(messbetrag)).quantize(Decimal("0.01"))
     from fpdf import FPDF
 
@@ -243,14 +243,18 @@ def _generate_anlage_g_pdf(ergebnis: AnlageGErgebnis, messbetrag: float) -> byte
     if ergebnis.gewst_pflichtig:
         if ergebnis.gewst_gezahlt > 0:
             zeile_row("52", "Gewerbesteuer-Vorauszahlungen (lt. Journal)", _euro(ergebnis.gewst_gezahlt))
-            if messbetrag_d > 0:
-                text_row("Hebesatz (aus Bescheid)", f"{round(ergebnis.gewst_gezahlt / messbetrag_d * 100):.0f} %")
         zeile_row("51", "Gewerbesteuer-Messbetrag (lt. Bescheid)",
                   _euro(messbetrag_d) if messbetrag_d > 0 else "→ aus Bescheid")
-        anrechnung = (messbetrag_d * ANRECHNUNGSFAKTOR).quantize(Decimal("0.01"))
-        text_row("Anrechenbarer Betrag (Messbetrag × 4,0, §35 EStG)",
+        if hebesatz > 0:
+            text_row("Hebesatz (aus Bescheid)", f"{hebesatz} %")
+        # §35 EStG: anrechenbarer Betrag = Messbetrag × 4,0, gedeckelt auf tatsächliche GewSt
+        # Deckelung greift wenn Hebesatz < 400 % (tatsächl. GewSt < Messbetrag × 4,0)
+        faktor = min(ANRECHNUNGSFAKTOR, Decimal(hebesatz) / 100) if hebesatz > 0 else ANRECHNUNGSFAKTOR
+        anrechnung = (messbetrag_d * faktor).quantize(Decimal("0.01"))
+        faktor_label = f"{faktor:.1f}".replace(".", ",")
+        text_row(f"Anrechenbarer Betrag (Messbetrag × {faktor_label}, §35 EStG)",
                  _euro(anrechnung) if messbetrag_d > 0 else "—")
-        if ergebnis.gewst_messbetrag_approx > 0:
+        if ergebnis.gewst_messbetrag_approx > 0 and messbetrag_d == 0:
             text_row("Richtwert Messbetrag (Schätzung, ohne Hinzurechnungen/Kürzungen)",
                      _euro(ergebnis.gewst_messbetrag_approx))
     else:
@@ -285,13 +289,14 @@ def _generate_anlage_g_pdf(ergebnis: AnlageGErgebnis, messbetrag: float) -> byte
 def anlage_g_pdf(
     jahr: int = Query(..., ge=2020, le=2100),
     messbetrag: float = Query(default=0.0, ge=0),
+    hebesatz: int = Query(default=0, ge=0, le=1000),
     db: Session = Depends(get_db),
 ):
     unt = db.query(Unternehmen).first()
     if not unt:
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
     ergebnis = anlage_g_berechnen(jahr=jahr, db=db)
-    pdf_bytes = _generate_anlage_g_pdf(ergebnis, messbetrag)
+    pdf_bytes = _generate_anlage_g_pdf(ergebnis, messbetrag, hebesatz)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",

@@ -1811,9 +1811,9 @@ export type AnlageGErgebnis = {
 export const berechneAnlageG = (jahr: number) =>
   request<AnlageGErgebnis>(`/anlage-g/berechnen?jahr=${jahr}`)
 
-export const getAnlageGPdfUrl = async (jahr: number, messbetrag = 0): Promise<string> => {
+export const getAnlageGPdfUrl = async (jahr: number, messbetrag = 0, hebesatz = 0): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/anlage-g/pdf?jahr=${jahr}&messbetrag=${messbetrag.toFixed(2)}`
+  return `${base}/anlage-g/pdf?jahr=${jahr}&messbetrag=${messbetrag.toFixed(2)}&hebesatz=${hebesatz.toFixed(0)}`
 }
 
 

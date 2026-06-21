@@ -81,6 +81,7 @@ export function AnlageGPage() {
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
   const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
   const [messbetragInput, setMessbetragInput] = useState('')
+  const [hebesatzInput, setHebesatzInput] = useState('')
 
   const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
@@ -96,7 +97,11 @@ export function AnlageGPage() {
   const messbetrag = messbetragInput
     ? parseFloat(messbetragInput.replace(',', '.')) || 0
     : richtwertMessbetrag
-  const anrechnungsbetrag = messbetrag * 4.0
+  const hebesatz = parseFloat(hebesatzInput.replace(',', '.')) || 0
+  // §35 EStG: anrechenbarer Betrag = Messbetrag × 4,0, aber max. tatsächlich gezahlte GewSt
+  // tatsächlich gezahlte GewSt = Messbetrag × Hebesatz/100 → Deckelung wenn Hebesatz < 400 %
+  const anrechnungsFaktor = hebesatz > 0 ? Math.min(4.0, hebesatz / 100) : 4.0
+  const anrechnungsbetrag = messbetrag * anrechnungsFaktor
 
   const gv = data ? parseFloat(data.gewinn_verlust) : 0
   const istGewinn = gv >= 0
@@ -105,7 +110,7 @@ export function AnlageGPage() {
   async function handlePdf() {
     setPdfLaedt(true); setPdfFehler(null)
     try {
-      const url = await getAnlageGPdfUrl(jahr, messbetrag)
+      const url = await getAnlageGPdfUrl(jahr, messbetrag, hebesatz)
       if (isTauri()) {
         const resp = await fetch(url)
         if (!resp.ok) throw new Error(`PDF-Fehler: ${resp.status}`)
@@ -233,9 +238,25 @@ export function AnlageGPage() {
                     className="w-28 text-right border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
                   />
                 </div>
+                {/* Hebesatz: optional, für korrekte §35-Deckelung bei Hebesatz < 400 % */}
+                <div className="flex items-center gap-3 py-2">
+                  <span className="shrink-0 w-11" />
+                  <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                    Hebesatz (%, aus GewSt-Bescheid)
+                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">optional</span>
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="z. B. 400"
+                    value={hebesatzInput}
+                    onChange={e => setHebesatzInput(e.target.value)}
+                    className="w-28 text-right border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
                 {messbetrag > 0 && (
                   <ZeileText
-                    label="Anrechenbarer Betrag (Messbetrag × 4,0, §35 EStG)"
+                    label={`Anrechenbarer Betrag (Messbetrag × ${anrechnungsFaktor.toFixed(1).replace('.', ',')}, §35 EStG)`}
                     wert={euroFmt(anrechnungsbetrag)}
                   />
                 )}
