@@ -10,9 +10,9 @@ from .models import Kategorie, EuLand, Nummernkreis
 
 STANDARD_KATEGORIEN = [
     # ── Tabelle A: Betriebseinnahmen ──────────────────────────────────────
-    {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",    "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
-    {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",    "euer_zeile": 13,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
-    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 11,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+    {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
+    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Privatentnahme",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2010", "eks_kategorie": None,    "euer_zeile": 106,  "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Eigenverbrauch von Waren (19%)", "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4640", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
     {"name": "Eigenverbrauch von Waren (7%)",  "kontenart": "Erlös",   "konto_skr03": "8911", "konto_skr04": "4641", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 7},

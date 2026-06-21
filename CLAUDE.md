@@ -211,7 +211,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 92 | rechnungen.absender_snapshot TEXT – JSON-Snapshot der Unternehmensdaten beim Finalisieren; PDF-Generierung nutzt Snapshot statt aktuelle Stammdaten (GoBD: finalisierte Dokumente unveränderlich) |
 | 93 | Backfill absender_snapshot für alle bestehenden finalisierten Dokumente ohne Snapshot (aktueller Stand der Stammdaten wird eingefroren) |
 | 94 | unternehmen.bezeichnung_des_gewerbes VARCHAR(200) – eigenes Feld für Anlage G Z.4 „genaue Bezeichnung des Gewerbes" (z.B. Tischlerei); bisher fälschlich berufsbezeichnung verwendet |
-| 95 | EÜR-Zeilenzuordnung korrigiert (Issue #185): Betriebseinnahmen (7%) → Zeile 13, Betriebseinnahmen (0%) → Zeile 11 (Kleinunternehmer §19); EUR_ZEILEN_META um Zeile 11 ergänzt, Bezeichnungen präzisiert |
+| 95 | EÜR-Zeilenzuordnung korrigiert (Issue #185, Anlage EÜR 2025 BMF): Zeile 12=Kleinunternehmer §19, Zeile 15=umsatzsteuerpflichtige BE (7%+19% gemeinsam), Zeile 16=steuerfreie BE §4; Betriebseinnahmen (19%+7%) → Zeile 15, Betriebseinnahmen (0%) → Zeile 12 |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

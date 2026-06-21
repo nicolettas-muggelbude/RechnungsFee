@@ -2138,20 +2138,30 @@ def _run_migrations() -> None:
             print("[Migration] Schema auf Version 94 (unternehmen.bezeichnung_des_gewerbes – genaue Bezeichnung des Gewerbes für Anlage G Z.4)")
 
         if version < 95:
-            # EÜR-Zeilenzuordnung korrigieren (Issue #185):
-            # Betriebseinnahmen (7%) gehört in Zeile 13, nicht 12
-            # Betriebseinnahmen (0%) gehört in Zeile 11 (Kleinunternehmer §19)
+            # EÜR-Zeilenzuordnung korrigieren (Issue #185, Anlage EÜR 2025 BMF):
+            # Zeile 12  = Kleinunternehmer §19 Abs. 1 UStG
+            # Zeile 15  = Umsatzsteuerpflichtige BE (19% und 7% gemeinsam)
+            # Zeile 16  = Steuerfreie / nicht steuerbare BE (§4 UStG)
+            # 19%-Einnahmen lagen fälschlich in Zeile 12 (Kleinunternehmer-Zeile)
             conn.execute(text(
-                "UPDATE kategorien SET euer_zeile=13 "
-                "WHERE name='Betriebseinnahmen (7%)' AND euer_zeile=12"
+                "UPDATE kategorien SET euer_zeile=15 "
+                "WHERE name IN ('Betriebseinnahmen', 'Betriebseinnahmen (19%)') "
+                "AND (euer_zeile IS NULL OR euer_zeile != 15)"
             ))
             conn.execute(text(
-                "UPDATE kategorien SET euer_zeile=11 "
-                "WHERE name='Betriebseinnahmen (0%)' AND euer_zeile=12"
+                "UPDATE kategorien SET euer_zeile=15 "
+                "WHERE name='Betriebseinnahmen (7%)' "
+                "AND (euer_zeile IS NULL OR euer_zeile != 15)"
+            ))
+            # 0%-Einnahmen = Kleinunternehmer → Zeile 12
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile=12 "
+                "WHERE name='Betriebseinnahmen (0%)' "
+                "AND (euer_zeile IS NULL OR euer_zeile != 12)"
             ))
             conn.execute(text("PRAGMA user_version = 95"))
             conn.commit()
-            print("[Migration] Schema auf Version 95 (EÜR: Betriebseinnahmen 7% → Zeile 13, 0% → Zeile 11)")
+            print("[Migration] Schema auf Version 95 (EÜR: BE 19%/7% → Zeile 15, BE 0% → Zeile 12 Kleinunternehmer)")
 
 
 def _migrate_kategorien() -> None:
@@ -2215,10 +2225,10 @@ def _migrate_kategorien() -> None:
         # EÜR-Zeilen-Korrekturen
         euer_korrekturen = [
             ("Mitgliedsbeiträge", 60),          # war 46 (Beratungskosten) – Issue #106
-            ("Betriebseinnahmen", 12),           # Sicherheitsnetz: nie NULL lassen
-            ("Betriebseinnahmen (19%)", 12),     # Datenfix #132: ältere DBs mit altem Kategorienamen
-            ("Betriebseinnahmen (7%)", 13),      # Issue #185: 7% → Zeile 13 (war fälschlich 12)
-            ("Betriebseinnahmen (0%)", 11),      # Issue #185: Kleinunternehmer §19 → Zeile 11
+            ("Betriebseinnahmen", 15),           # Issue #185: umsatzsteuerpflichtige BE → Zeile 15
+            ("Betriebseinnahmen (19%)", 15),     # Datenfix #132: ältere DBs + Issue #185
+            ("Betriebseinnahmen (7%)", 15),      # Issue #185: 7% gemeinsam mit 19% in Zeile 15
+            ("Betriebseinnahmen (0%)", 12),      # Issue #185: Kleinunternehmer §19 → Zeile 12
             # Gewährte Skonti: euer_zeile → NULL (Issue #132, Migration 73 – kein Doppelabzug)
         ]
         for name, zeile in euer_korrekturen:
@@ -2254,9 +2264,9 @@ def _migrate_kategorien() -> None:
         # ── Fehlende Kategorien eintragen ─────────────────────────────────────
         neue = [
             # Betriebseinnahmen: müssen VOR _migrate_signaturen() existieren (Datenfix kategorie_id=NULL)
-            {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
-            {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 13, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
-            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 11, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
+            {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
+            {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
+            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3400", "konto_skr04": "5400", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
