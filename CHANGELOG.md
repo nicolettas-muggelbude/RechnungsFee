@@ -7,6 +7,13 @@ Versionen werden durch Git-Tags gesetzt – `git tag v0.x.y && git push --tags`.
 
 ---
 
+## [v0.3.28] – Juni 2026
+
+### 🐛 Behoben
+- Lagerführung: Direkt finalisierte Rechnungen (kein Entwurf-Zwischenschritt) haben den Artikelbestand nicht abgebucht – Session hat `autoflush=False`, Positionen waren beim Lager-Buchen noch nicht in der DB; `db.flush()` + `db.expire()` vor `_lager_buchen()` behebt das (Issue #173)
+
+---
+
 ## [v0.3.27] – Juni 2026
 
 ### 🐛 Behoben

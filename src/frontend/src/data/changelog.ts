@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.28',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Lagerführung: Direkt finalisierte Rechnungen (kein Entwurf-Zwischenschritt) haben den Artikelbestand nicht abgebucht – Session hat autoflush=False, Positionen waren beim Lager-Buchen noch nicht in der DB; db.flush() + db.expire() vor _lager_buchen() behebt das (Issue #173)' },
+    ],
+  },
+  {
     version: 'v0.3.27',
     datum: 'Juni 2026',
     eintraege: [
