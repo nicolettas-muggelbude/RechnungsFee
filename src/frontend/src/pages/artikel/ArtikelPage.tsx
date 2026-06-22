@@ -43,6 +43,12 @@ function hatHersteller(typ: ArtikelTyp) { return typ === 'artikel' }
 
 const EINHEITEN = ['Stück', 'Pack', 'Set', 'Lizenz', 'Stunde', 'Tag', 'Monat', 'Pauschal', 'km', 'm²']
 
+// Für Gewicht/Volumen/Länge Dezimalschritt, für alles andere (Stück, Pack …) ganzzahlig
+function stepFuerEinheit(einheit: string | undefined | null): number {
+  const e = (einheit ?? '').trim().toLowerCase()
+  return /^(kg|g|mg|t|l|ml|dl|cl|m[²³]|m|cm|mm|km)$/.test(e) ? 0.001 : 1
+}
+
 function EinheitAuswahl({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const istBekannt = EINHEITEN.includes(value)
   const [freitext, setFreitext] = useState(!istBekannt)
@@ -341,6 +347,7 @@ export function ArtikelFormModal({
   const differenzbesteuerung = watch('differenzbesteuerung')
   const steuersatz = differenzbesteuerung ? 0 : parseFloat(watch('steuersatz') || '0')
   const lager_aktiv = watch('lager_aktiv')
+  const einheit = watch('einheit')
 
   const { data: gruppen = [] } = useQuery({
     queryKey: ['artikel-gruppen', typ],
@@ -674,7 +681,7 @@ export function ArtikelFormModal({
                       {initial ? 'Lagerbestand' : 'Anfangsbestand'}
                     </label>
                     <input
-                      type="number" step="0.001" min="0" placeholder="0"
+                      type="number" step={stepFuerEinheit(einheit)} min="0" placeholder="0"
                       {...register('bestand_aktuell')}
                       className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100"
                     />
@@ -683,7 +690,7 @@ export function ArtikelFormModal({
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Mindestbestand</label>
                       <input
-                        type="number" step="0.001" min="0" placeholder="0"
+                        type="number" step={stepFuerEinheit(einheit)} min="0" placeholder="0"
                         {...register('mindestbestand')}
                         className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100"
                       />
@@ -917,7 +924,7 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
                   ) : (
                     <div className="flex items-center gap-1 mt-0.5">
                       <input
-                        type="number" step="0.001"
+                        type="number" step={stepFuerEinheit(artikel.einheit)}
                         value={bestandEdit}
                         onChange={e => setBestandEdit(e.target.value)}
                         autoFocus
@@ -943,7 +950,7 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
                   ) : (
                     <div className="flex items-center gap-1 mt-0.5">
                       <input
-                        type="number" step="0.001" min="0"
+                        type="number" step={stepFuerEinheit(artikel.einheit)} min="0"
                         value={mindestEdit}
                         onChange={e => setMindestEdit(e.target.value)}
                         autoFocus
