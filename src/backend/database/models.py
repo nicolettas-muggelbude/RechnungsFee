@@ -504,6 +504,11 @@ class Rechnung(Base):
     kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id"))
     lieferant_id: Mapped[int | None] = mapped_column(ForeignKey("lieferanten.id"))
     partner_freitext: Mapped[str | None] = mapped_column(String(200))  # Falls kein Stammdatensatz
+    partner_strasse: Mapped[str | None] = mapped_column(String(200))
+    partner_hausnummer: Mapped[str | None] = mapped_column(String(20))
+    partner_plz: Mapped[str | None] = mapped_column(String(20))
+    partner_ort: Mapped[str | None] = mapped_column(String(200))
+    partner_land: Mapped[str | None] = mapped_column(String(2))
     # Kategorie
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
     # Beträge (Summen, automatisch aus Positionen berechnet)

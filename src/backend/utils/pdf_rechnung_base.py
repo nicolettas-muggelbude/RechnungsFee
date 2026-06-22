@@ -352,6 +352,17 @@ class RechnungPDFBase(FPDF):
         adresszeilen = _adresszeilen(partner_obj)
         if not adresszeilen and freitext:
             adresszeilen = [freitext]
+            strasse = getattr(r, "partner_strasse", None) or ""
+            hausnr  = getattr(r, "partner_hausnummer", None) or ""
+            plz     = getattr(r, "partner_plz", None) or ""
+            ort     = getattr(r, "partner_ort", None) or ""
+            land    = (getattr(r, "partner_land", None) or "DE").upper()
+            if strasse:
+                adresszeilen.append(f"{strasse} {hausnr}".strip())
+            if plz or ort:
+                adresszeilen.append(f"{plz} {ort}".strip())
+            if land != "DE":
+                adresszeilen.append(land)
 
         emp_y = ADRESS_Y + 6.5
         for i, zeile in enumerate(adresszeilen):

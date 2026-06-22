@@ -2122,6 +2122,11 @@ function RechnungForm({
   const [partnerFreitext, setPartnerFreitext] = useState(
     pf?.lieferant_name ?? initial?.partner_freitext ?? ''
   )
+  const [partnerStrasse, setPartnerStrasse] = useState(initial?.partner_strasse ?? '')
+  const [partnerHausnummer, setPartnerHausnummer] = useState(initial?.partner_hausnummer ?? '')
+  const [partnerPlz, setPartnerPlz] = useState(initial?.partner_plz ?? '')
+  const [partnerOrt, setPartnerOrt] = useState(initial?.partner_ort ?? '')
+  const [partnerLand, setPartnerLand] = useState(initial?.partner_land ?? '')
   const [kategorieId, setKategorieId] = useState<string>(String(initial?.kategorie_id ?? ''))
   const [showNeuKategorieForm, setShowNeuKategorieForm] = useState(false)
   const [showNeuLieferant, setShowNeuLieferant] = useState(false)
@@ -2444,6 +2449,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       kunde_id: typ === 'ausgang' ? (partnerId ? parseInt(partnerId) : undefined) : undefined,
       lieferant_id: typ === 'eingang' ? (partnerId ? parseInt(partnerId) : undefined) : undefined,
       partner_freitext: partnerFreitext || undefined,
+      partner_strasse: !partnerId && partnerStrasse ? partnerStrasse : undefined,
+      partner_hausnummer: !partnerId && partnerHausnummer ? partnerHausnummer : undefined,
+      partner_plz: !partnerId && partnerPlz ? partnerPlz : undefined,
+      partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
+      partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
       notizen: notizen || undefined,
       einleitungstext: einleitungstext || undefined,
@@ -2717,6 +2727,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               onChange={(id, text) => {
                 setPartnerId(id != null ? String(id) : '')
                 setPartnerFreitext(text)
+                if (id != null) {
+                  setPartnerStrasse(''); setPartnerHausnummer('')
+                  setPartnerPlz(''); setPartnerOrt(''); setPartnerLand('')
+                }
               }}
               placeholder={
                 typ === 'ausgang'
@@ -2767,6 +2781,63 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           />
         )}
       </div>
+
+      {/* Einmalkunde-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
+      {typ === 'ausgang' && !partnerId && partnerFreitext.trim() && (
+        <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-3 space-y-2">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Adresse des Einmalkunden (optional – erscheint im PDF)</p>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={partnerStrasse}
+                onChange={e => setPartnerStrasse(e.target.value)}
+                placeholder="Straße"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+            </div>
+            <div className="w-24">
+              <input
+                type="text"
+                value={partnerHausnummer}
+                onChange={e => setPartnerHausnummer(e.target.value)}
+                placeholder="Nr."
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-28">
+              <input
+                type="text"
+                value={partnerPlz}
+                onChange={e => setPartnerPlz(e.target.value)}
+                placeholder="PLZ"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+            </div>
+            <div className="flex-1">
+              <input
+                type="text"
+                value={partnerOrt}
+                onChange={e => setPartnerOrt(e.target.value)}
+                placeholder="Ort"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              />
+            </div>
+            <div className="w-20">
+              <input
+                type="text"
+                value={partnerLand}
+                onChange={e => setPartnerLand(e.target.value.toUpperCase().slice(0, 2))}
+                placeholder="DE"
+                maxLength={2}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 uppercase"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lieferadresse – nur bei Lieferschein mit ausgewähltem Kunden */}
       {dokumentTyp === 'Lieferschein' && kundeIdNum && lieferadressen.length > 0 && (

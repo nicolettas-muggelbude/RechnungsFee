@@ -31,6 +31,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'EÜR: Zeilen 20 (Private Kfz-Nutzung 1-%-Methode) und 21 (Sonstige Sach-, Nutzungs- und Leistungsentnahmen / Eigenverbrauch) fehlten in der EÜR-Tabelle – Buchungen auf diese Zeilen erschienen als „?" und wurden nicht zu den Betriebseinnahmen gezählt; laut Anlage EÜR 2025 BMF umfassen Betriebseinnahmen Zeilen 12–22 (Issue #185)' },
       { typ: 'fix', text: 'Anlage G: Labels „Gewerbesteuer-Messbetrag (lt. Bescheid)" und „Hebesatz (%, aus GewSt-Bescheid)" suggerierten fälschlich, man brauche den amtlichen GewSt-Festsetzungsbescheid – der Schätzwert aus dem Jahresgewinn reicht für die Vorabschätzung; Hebesatz der Gemeinde eingeben genügt für den §35-EStG-anrechenbaren Betrag (Issue #182)' },
       { typ: 'verbesserung', text: 'Artikel/Lager: Bestand und Schwellwert zählen beim Klick auf die Pfeiltasten jetzt einheitsabhängig – Stück, Pack, Set u. a. in ganzen Zahlen (Schritt 1); Gewicht, Volumen und Länge (kg, g, l, ml, m, m², cm …) im Dezimalschritt (Issue #189)' },
+      { typ: 'neu', text: 'Einmalkunden: Ausgangsrechnungen im Freitext-Modus (kein Stammdatensatz) können jetzt eine vollständige Adresse (Straße, Hausnummer, PLZ, Ort, Land) erhalten – Adressblock erscheint automatisch im PDF (Issue #188)' },
     ],
   },
   {

@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g
 
-SCHEMA_VERSION = 97
+SCHEMA_VERSION = 98
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2187,6 +2187,23 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 97"))
             conn.commit()
             print("[Migration] Schema auf Version 97 (Spenden SKR03: 4730→1840, SKR04: 6580→2250)")
+
+        if version < 98:
+            # Adressfelder für Einmalkunden (ohne Stammdatensatz) in rechnungen (Issue #188)
+            for col, typ in [
+                ("partner_strasse",    "VARCHAR(200)"),
+                ("partner_hausnummer", "VARCHAR(20)"),
+                ("partner_plz",        "VARCHAR(20)"),
+                ("partner_ort",        "VARCHAR(200)"),
+                ("partner_land",       "VARCHAR(2)"),
+            ]:
+                try:
+                    conn.execute(text(f"ALTER TABLE rechnungen ADD COLUMN {col} {typ}"))
+                except Exception:
+                    pass
+            conn.execute(text("PRAGMA user_version = 98"))
+            conn.commit()
+            print("[Migration] Schema auf Version 98 (Einmalkunden-Adressfelder: partner_strasse/hausnummer/plz/ort/land)")
 
 
 def _migrate_kategorien() -> None:

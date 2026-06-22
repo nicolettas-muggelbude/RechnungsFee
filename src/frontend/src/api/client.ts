@@ -1056,6 +1056,11 @@ export type Rechnung = {
   lieferant_name: string | null
   lieferant_email: string | null
   partner_freitext: string | null
+  partner_strasse: string | null
+  partner_hausnummer: string | null
+  partner_plz: string | null
+  partner_ort: string | null
+  partner_land: string | null
   kategorie_id: number | null
   netto_gesamt: string
   ust_gesamt: string

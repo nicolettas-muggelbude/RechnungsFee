@@ -103,6 +103,11 @@ class RechnungCreate(BaseModel):
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
     partner_freitext: Optional[str] = None
+    partner_strasse: Optional[str] = None
+    partner_hausnummer: Optional[str] = None
+    partner_plz: Optional[str] = None
+    partner_ort: Optional[str] = None
+    partner_land: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
     einleitungstext: Optional[str] = None
@@ -176,6 +181,11 @@ class RechnungUpdate(BaseModel):
     kunde_id: Optional[int] = None
     lieferant_id: Optional[int] = None
     partner_freitext: Optional[str] = None
+    partner_strasse: Optional[str] = None
+    partner_hausnummer: Optional[str] = None
+    partner_plz: Optional[str] = None
+    partner_ort: Optional[str] = None
+    partner_land: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
     externe_belegnr: Optional[str] = None
@@ -213,6 +223,11 @@ class RechnungResponse(BaseModel):
     lieferant_name: Optional[str] = None
     lieferant_email: Optional[str] = None
     partner_freitext: Optional[str]
+    partner_strasse: Optional[str] = None
+    partner_hausnummer: Optional[str] = None
+    partner_plz: Optional[str] = None
+    partner_ort: Optional[str] = None
+    partner_land: Optional[str] = None
     kategorie_id: Optional[int]
     netto_gesamt: Decimal
     ust_gesamt: Decimal
