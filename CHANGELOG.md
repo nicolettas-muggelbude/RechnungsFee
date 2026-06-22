@@ -14,6 +14,7 @@ Versionen werden durch Git-Tags gesetzt – `git tag v0.x.y && git push --tags`.
 
 ### 🐛 Behoben
 - Lagerführung: Direkt finalisierte Rechnungen (kein Entwurf-Zwischenschritt) haben den Artikelbestand nicht abgebucht – Session hat `autoflush=False`, Positionen waren beim Lager-Buchen noch nicht in der DB; `db.flush()` + `db.expire()` vor `_lager_buchen()` behebt das (Issue #173)
+- Kategorien: Spenden (betrieblich) hatte falsche SKR-Kontonummern – SKR03 `4730` (Ausgangsfrachten!) und SKR04 `6580` (Mautgebühren!) korrigiert auf SKR03 `1840` / SKR04 `2250` (Zuwendungen, Spenden, Einzelunternehmen lt. DATEV SKR 2026; Issue #186)
 
 ---
 

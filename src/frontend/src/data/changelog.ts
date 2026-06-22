@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juni 2026',
     eintraege: [
       { typ: 'fix', text: 'Lagerführung: Direkt finalisierte Rechnungen (kein Entwurf-Zwischenschritt) haben den Artikelbestand nicht abgebucht – Session hat autoflush=False, Positionen waren beim Lager-Buchen noch nicht in der DB; db.flush() + db.expire() vor _lager_buchen() behebt das (Issue #173)' },
+      { typ: 'fix', text: 'Kategorien: Spenden (betrieblich) hatte falsche SKR-Kontonummern – SKR03 4730 (Ausgangsfrachten!) und SKR04 6580 (Mautgebühren!) korrigiert auf SKR03 1840 / SKR04 2250 (Zuwendungen, Spenden, Einzelunternehmen lt. DATEV SKR 2026; Issue #186)' },
       { typ: 'verbesserung', text: 'Artikel/Lager: Bestand und Schwellwert zählen beim Klick auf die Pfeiltasten jetzt einheitsabhängig – Stück, Pack, Set u. a. in ganzen Zahlen (Schritt 1); Gewicht, Volumen und Länge (kg, g, l, ml, m, m², cm …) im Dezimalschritt (Issue #189)' },
     ],
   },
