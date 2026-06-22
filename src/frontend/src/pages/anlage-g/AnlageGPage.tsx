@@ -222,10 +222,10 @@ export function AnlageGPage() {
                     Z. 51
                   </span>
                   <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
-                    Gewerbesteuer-Messbetrag (lt. Bescheid)
+                    Gewerbesteuer-Messbetrag (Z. 51)
                     {richtwertMessbetrag > 0 && !messbetragInput && (
                       <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                        Schätzung – mit Bescheid-Wert überschreiben
+                        Schätzwert aus Jahresgewinn – optional mit Bescheid-Wert überschreiben
                       </span>
                     )}
                   </span>
@@ -242,7 +242,7 @@ export function AnlageGPage() {
                 <div className="flex items-center gap-3 py-2">
                   <span className="shrink-0 w-11" />
                   <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
-                    Hebesatz (%, aus GewSt-Bescheid)
+                    Hebesatz der Gemeinde (%)
                     <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">optional</span>
                   </span>
                   <input
@@ -282,7 +282,7 @@ export function AnlageGPage() {
           {/* Gewerbesteuer-Hinweis */}
           {data.gewst_pflichtig && (
             <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-800 dark:text-green-200 mt-4">
-              <strong>Gewerbesteuer-Messbetrag (Z. 51):</strong> Der vorausgefüllte Wert ist eine Schätzung aus dem Jahresgewinn (ohne Hinzurechnungen/Kürzungen nach §§ 8, 9 GewStG). Den genauen Messbetrag findest du im <strong>Gewerbesteuer-Festsetzungsbescheid</strong> – trage ihn dort ein, um den korrekten anrechenbaren Betrag (§35 EStG) zu erhalten.
+              <strong>Gewerbesteuer-Messbetrag (Z. 51):</strong> Der vorausgefüllte Schätzwert ergibt sich aus dem Jahresgewinn geteilt durch 400 (ohne Hinzurechnungen/Kürzungen nach §§ 8, 9 GewStG) – ausreichend für eine Vorabschätzung. Gib zusätzlich den <strong>Hebesatz deiner Gemeinde</strong> ein, um den anrechenbaren Betrag nach §35 EStG zu berechnen. Liegt dir der <strong>Gewerbesteuer-Festsetzungsbescheid</strong> vor, kannst du den amtlichen Messbetrag eintragen, um das exakte Ergebnis zu erhalten.
             </div>
           )}
 
