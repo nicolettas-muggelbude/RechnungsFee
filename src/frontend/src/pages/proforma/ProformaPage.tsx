@@ -824,6 +824,7 @@ export function ProformaPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [filterId, setFilterId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
+  const [vorKundeId, setVorKundeId] = useState<string | undefined>()
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
@@ -832,8 +833,16 @@ export function ProformaPage() {
     queryFn: getProformas,
   })
 
-  // ?id=X aus Navigation (z.B. von AngebotePage)
+  // ?id=X / ?neue_aus_kunde=X aus Navigation
   useEffect(() => {
+    const neuAusKunde = searchParams.get('neue_aus_kunde')
+    if (neuAusKunde) {
+      setVorKundeId(neuAusKunde)
+      setFormModus('neu')
+      setSelectedId(null)
+      setSearchParams({}, { replace: true })
+      return
+    }
     const id = searchParams.get('id')
     if (id) {
       const n = parseInt(id)
@@ -1056,6 +1065,7 @@ export function ProformaPage() {
           <div className="p-6">
             <ProformaFormular
               initial={formModus === 'bearbeiten' && selected ? selected : undefined}
+              vorKundeId={formModus === 'neu' ? vorKundeId : undefined}
               onSpeichern={(id) => { setSelectedId(id); setFormModus(null) }}
               onAbbrechen={() => setFormModus(null)}
             />

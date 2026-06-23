@@ -877,6 +877,7 @@ export function AuftraegePage() {
   const [pendingAuftrag, setPendingAuftrag] = useState<Rechnung | null>(null)
   const [zeigFormular, setZeigFormular] = useState(false)
   const [editAuftrag, setEditAuftrag] = useState<Rechnung | undefined>()
+  const [vorKundeId, setVorKundeId] = useState<string | undefined>()
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
@@ -923,8 +924,17 @@ export function AuftraegePage() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [auftraegeListe, selId, zeigFormular])
 
-  // ?id=X beim ersten Mount: Auftrag direkt vom Server laden (wie RechnungenPage)
+  // ?id=X / ?neue_aus_kunde=X beim ersten Mount
   useEffect(() => {
+    const neuAusKunde = searchParams.get('neue_aus_kunde')
+    if (neuAusKunde) {
+      setVorKundeId(neuAusKunde)
+      setEditAuftrag(undefined)
+      setZeigFormular(true)
+      setSelId(null)
+      setSearchParams({}, { replace: true })
+      return
+    }
     const openId = searchParams.get('id')
     if (openId) {
       const id = parseInt(openId, 10)
@@ -1133,6 +1143,7 @@ export function AuftraegePage() {
           <div className="p-6">
             <AuftragFormular
               initial={editAuftrag}
+              vorKundeId={!editAuftrag ? vorKundeId : undefined}
               onSpeichern={handleSpeichern}
               onAbbrechen={() => { setZeigFormular(false); setEditAuftrag(undefined) }}
             />

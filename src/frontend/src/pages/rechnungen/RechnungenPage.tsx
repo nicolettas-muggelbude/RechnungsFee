@@ -1879,6 +1879,7 @@ function RechnungForm({
   initial,
   prefillFromAnalyse,
   initialDokumentTyp,
+  vorKundeId,
   onSave,
   onCancel,
 }: {
@@ -1886,6 +1887,7 @@ function RechnungForm({
   initial?: Rechnung
   prefillFromAnalyse?: AnalyseErgebnis
   initialDokumentTyp?: 'Lieferschein'
+  vorKundeId?: string
   onSave: (data: RechnungCreate) => void
   onCancel: () => void
 }) {
@@ -1950,7 +1952,7 @@ function RechnungForm({
   })
   const [partnerId, setPartnerId] = useState<string>(
     typ === 'ausgang'
-      ? String(initial?.kunde_id ?? '')
+      ? String(initial?.kunde_id ?? vorKundeId ?? '')
       : String(initial?.lieferant_id ?? '')
   )
   const [partnerFreitext, setPartnerFreitext] = useState(
@@ -3451,6 +3453,14 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
 
   // ?open=ID oder ?id=ID: direkt zu einem Dokument springen
   useEffect(() => {
+    const neuAusKunde = searchParams.get('neue_aus_kunde')
+    if (neuAusKunde) {
+      setVorKundeId(neuAusKunde)
+      setTyp('ausgang')
+      setFormModus('neu')
+      setSearchParams({}, { replace: true })
+      return
+    }
     const openId = searchParams.get('open') ?? searchParams.get('id')
     if (openId) {
       const id = parseInt(openId, 10)
@@ -3538,6 +3548,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
+  const [vorKundeId, setVorKundeId] = useState<string | undefined>()
   const [fehler, setFehler] = useState<string | null>(null)
   const [sortFaellig, setSortFaellig] = useState<'asc' | 'desc' | null>(null)
   const listContainerRef = useRef<HTMLDivElement>(null)
@@ -4157,6 +4168,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
               initial={formModus === 'bearbeiten' ? selectedRechnung ?? undefined : undefined}
               prefillFromAnalyse={formModus === 'neu' ? importPrefill ?? undefined : undefined}
               initialDokumentTyp={lieferscheinModus && formModus === 'neu' ? 'Lieferschein' : undefined}
+              vorKundeId={formModus === 'neu' ? vorKundeId : undefined}
               onSave={(data) => {
                 setPendingEditRechnung(null)
                 if (formModus === 'bearbeiten' && selectedId) {

@@ -307,6 +307,9 @@ function KundeRechnungen({ kunde }: { kunde: Kunde }) {
 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
   const angeboteAktiv = !!unternehmen?.angebote_aktiv
+  const auftraegeAktiv = !!unternehmen?.auftraege_aktiv
+  const proformaAktiv = !!unternehmen?.proforma_aktiv
+  const lieferscheinAktiv = !!unternehmen?.lieferschein_aktiv
 
   const { data: rechnungen, isLoading: laegtRechnungen } = useQuery({
     queryKey: ['kunden-rechnungen', kunde.id],
@@ -347,17 +350,38 @@ function KundeRechnungen({ kunde }: { kunde: Kunde }) {
         </div>
         {/* Aktions-Buttons – nur bei Rechnungen/Angebote-Tab */}
         {tab !== 'dokumente' && (
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             <button
               onClick={() => navigate(`/rechnungen?neue_aus_kunde=${kunde.id}`)}
-              className="flex-1 text-[11px] py-1 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+              className="text-[11px] py-1 px-2 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
               + Neue Rechnung
             </button>
             {angeboteAktiv && (
               <button
                 onClick={() => navigate(`/angebote?kunde_id=${kunde.id}`)}
-                className="flex-1 text-[11px] py-1 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                className="text-[11px] py-1 px-2 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                 + Neues Angebot
+              </button>
+            )}
+            {auftraegeAktiv && (
+              <button
+                onClick={() => navigate(`/auftraege?neue_aus_kunde=${kunde.id}`)}
+                className="text-[11px] py-1 px-2 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                + Neuer Auftrag
+              </button>
+            )}
+            {proformaAktiv && (
+              <button
+                onClick={() => navigate(`/proformas?neue_aus_kunde=${kunde.id}`)}
+                className="text-[11px] py-1 px-2 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                + Neue Proforma
+              </button>
+            )}
+            {lieferscheinAktiv && (
+              <button
+                onClick={() => navigate(`/lieferscheine?neue_aus_kunde=${kunde.id}`)}
+                className="text-[11px] py-1 px-2 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                + Neuer Lieferschein
               </button>
             )}
           </div>
