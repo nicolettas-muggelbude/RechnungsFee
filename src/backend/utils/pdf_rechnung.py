@@ -87,18 +87,20 @@ class RechnungPDF(RechnungPDFBase):
             ist_diff  = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
             pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
-            ROW_H = 5  # einheitliche Zeilenhöhe → Versprung zwischen Beschreibung und Menge behoben
+            ROW_H  = 5    # Zeilenhöhe Einzelzellen (Menge, Preis …)
+            DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
+            DESC_OFFSET = (ROW_H - DESC_H) / 2  # Y-Versatz damit erste Zeile bündig mit ROW_H-Zellen
             row_y = self.get_y()
             self.set_x(other_x)
             self.cell(col_w[desc_idx + 1], ROW_H, menge_str, align="R")
             self.cell(col_w[desc_idx + 2], ROW_H, pos.einheit[:12])
             if ist_lieferschein:
                 self.cell(col_w[desc_idx + 3], ROW_H, "", new_x="LMARGIN", new_y="NEXT")
-                self.set_xy(L_MARGIN, row_y)
+                self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
                 if hat_artikelcode:
                     ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                    self.multi_cell(col_w[0], ROW_H, ac or "", new_x="RIGHT", new_y="TOP")
-                self.multi_cell(col_w[desc_idx], ROW_H, pos.beschreibung or "",
+                    self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP")
+                self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                                 new_x="LMARGIN", new_y="NEXT")
                 self.ln(1.5)
                 continue
@@ -116,11 +118,11 @@ class RechnungPDF(RechnungPDFBase):
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(ep_brutto), align="R")
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
-            self.set_xy(L_MARGIN, row_y)
+            self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
             if hat_artikelcode:
                 ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[0], ROW_H, ac or "", new_x="RIGHT", new_y="TOP")
-            self.multi_cell(col_w[desc_idx], ROW_H, pos.beschreibung or "",
+                self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP")
+            self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")
             # Rabatt-Unterzeile
             if pos_rabatt > 0:

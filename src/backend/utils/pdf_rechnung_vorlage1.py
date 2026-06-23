@@ -137,7 +137,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             ist_diff = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
             pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
-            ROW_H = 5  # einheitliche Zeilenhöhe → Versprung zwischen Beschreibung und Menge behoben
+            ROW_H  = 5    # Zeilenhöhe Einzelzellen (Preis, USt …)
+            DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
+            DESC_OFFSET = (ROW_H - DESC_H) / 2  # Y-Versatz damit erste Zeile bündig mit ROW_H-Zellen
             row_y = self.get_y()
 
             # Spalten rechts der Beschreibung zuerst rendern (kein Y-Vorschub)
@@ -167,10 +169,11 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.set_xy(L_MARGIN, row_y)
             self.cell(col_w[0], ROW_H, str(pos.position_nr), align="R")
             self.cell(col_w[1], ROW_H, pos_datum_str, align="L")
+            self.set_xy(self.get_x(), row_y + DESC_OFFSET)
             if hat_artikelcode:
                 ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[2], ROW_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
-            self.multi_cell(col_w[desc_col], ROW_H, pos.beschreibung or "",
+                self.multi_cell(col_w[2], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+            self.multi_cell(col_w[desc_col], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT")
 
             # Rabatt-Unterzeile
