@@ -11,6 +11,10 @@ Versionen werden durch Git-Tags gesetzt – `git tag v0.x.y && git push --tags`.
 
 ### 🔧 Verbessert
 - Darkmode: Scrollbalken jetzt dunkel (slate-800/600) statt weiß/grau
+- PDF-Kopfzeile: Firmenname und Inhaber getrennt dargestellt (Firma fett, Inhaber darunter); Fußzeile entsprechend
+
+### 🐛 Behoben
+- PDF-Positionstabelle: Zeilenabstand in Beschreibungen wieder 3,5 mm (war nach dem Versprung-Fix fälschlich 5 mm); erste Beschreibungszeile bündig mit Preis/Menge-Zellen; Abstand zwischen Positionen (Issue #190)
 
 ---
 

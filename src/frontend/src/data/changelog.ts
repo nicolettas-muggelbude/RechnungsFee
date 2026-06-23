@@ -27,6 +27,8 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juni 2026',
     eintraege: [
       { typ: 'verbesserung', text: 'Darkmode: Scrollbalken jetzt dunkel (slate-800/600) statt weiß/grau – passt zur dunklen Oberfläche' },
+      { typ: 'fix', text: 'PDF-Positionstabelle: Zeilenabstand in Beschreibungen wieder 3,5 mm (statt 5); erste Beschreibungszeile bündig mit Preis/Menge; Abstand zwischen Positionen (Issue #190)' },
+      { typ: 'verbesserung', text: 'PDF-Kopfzeile: Firmenname und Inhaber getrennt dargestellt (Firma fett, Inhaber darunter)' },
     ],
   },
   {
