@@ -196,7 +196,7 @@ try {
   </div>
 </Layout>
 
-<script define:vars={{ downloadUrls, v }}>
+<script>
   const platform = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase()
   const ua = navigator.userAgent
 
@@ -211,19 +211,9 @@ try {
 
   if (btn && label && hero && os !== 'other') {
     hero.classList.remove('hidden')
-    if (os === 'windows') {
-      btn.href = downloadUrls.windows
-      label.textContent = `⬇ RechnungsFee_${v}_x64-setup.exe herunterladen`
-    } else if (os === 'linux') {
-      btn.href = '#linux'
-      label.textContent = '🐧 Zu den Linux-Installationsoptionen'
-      btn.classList.replace('bg-[#4F46E5]', 'bg-slate-800')
-      btn.classList.replace('hover:bg-[#4338CA]', 'hover:bg-slate-700')
-    } else if (os === 'macos') {
-      btn.href = '#macos'
-      label.textContent = '🍎 Zu den macOS-Installationshinweisen'
-      btn.classList.replace('bg-[#4F46E5]', 'bg-slate-800')
-      btn.classList.replace('hover:bg-[#4338CA]', 'hover:bg-slate-700')
-    }
+    const targets = { windows: '#windows', linux: '#linux', macos: '#macos' }
+    const labels  = { windows: '🪟 Zu Windows', linux: '🐧 Zu Linux', macos: '🍎 Zu macOS' }
+    btn.href = targets[os]
+    label.textContent = labels[os]
   }
 </script>
