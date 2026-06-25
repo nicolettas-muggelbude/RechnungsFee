@@ -28,6 +28,11 @@ jobs:
           rm -f web/src/content/handbuch/_Sidebar.md
           rm -f web/src/content/handbuch/_Footer.md
 
+      - name: Changelog-Daten kopieren
+        run: |
+          mkdir -p web/src/data
+          cp src/frontend/src/data/changelog.ts web/src/data/changelog.ts
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

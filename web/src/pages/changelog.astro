@@ -1,0 +1,53 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { CHANGELOG } from '../data/changelog'
+
+const typConfig = {
+  neu:          { label: 'Neu',          classes: 'bg-emerald-100 text-emerald-700' },
+  verbesserung: { label: 'Verbesserung', classes: 'bg-blue-100 text-blue-700' },
+  fix:          { label: 'Fix',          classes: 'bg-amber-100 text-amber-700' },
+}
+---
+
+<Layout title="Changelog" description="Versionshistorie von RechnungsFee – alle Neuerungen, Verbesserungen und Bugfixes.">
+
+  <div class="max-w-3xl mx-auto px-6 py-16">
+
+    <div class="mb-12">
+      <h1 class="text-4xl font-extrabold text-slate-900 mb-3">Changelog</h1>
+      <p class="text-slate-500">Alle Änderungen seit dem ersten Release – neueste Version zuerst.</p>
+      <!-- Legende -->
+      <div class="flex flex-wrap items-center gap-2 mt-4 text-xs">
+        {Object.values(typConfig).map(t => (
+          <span class={`px-2 py-0.5 rounded font-medium ${t.classes}`}>{t.label}</span>
+        ))}
+      </div>
+    </div>
+
+    <div class="space-y-12">
+      {CHANGELOG.map(v => (
+        <section>
+          <div class="flex items-baseline gap-3 mb-4">
+            <h2 class="text-xl font-bold text-slate-900">{v.version}</h2>
+            <span class="text-sm text-slate-400">{v.datum}</span>
+          </div>
+          <ul class="space-y-2.5">
+            {v.eintraege.map(e => {
+              const cfg = typConfig[e.typ]
+              return (
+                <li class="flex items-start gap-3 text-sm text-slate-600">
+                  <span class={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium ${cfg.classes}`}>
+                    {cfg.label}
+                  </span>
+                  <span>{e.text}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
+
+  </div>
+
+</Layout>
