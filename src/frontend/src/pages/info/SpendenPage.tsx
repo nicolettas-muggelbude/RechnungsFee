@@ -102,8 +102,8 @@ export function SpendenPage() {
       </p>
 
       <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-        Spenden werden von der <strong className="font-medium">PC-Wittfoot UG</strong> entgegengenommen –
-        dem Unternehmen hinter RechnungsFee, das auch für Impressum und Datenschutz verantwortlich ist.
+        Spenden werden treuhänderisch von der <strong className="font-medium">PC-Wittfoot UG</strong> verwaltet
+        (Spendenverwalter, nicht Entwickler). Die Entwicklung von RechnungsFee erfolgt durch die Community als Open-Source-Projekt.
       </p>
 
       <div className="flex justify-center gap-4 text-xs text-slate-400 dark:text-slate-500">
