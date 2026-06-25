@@ -6,12 +6,18 @@ deployed via GitHub Actions auf GitHub Pages.
 ## Status
 
 - [x] Domain beschaffen (rechnungsfee.app)
-- [ ] `web`-Branch anlegen + Astro-Projekt einrichten
-- [ ] GitHub Actions Workflow (Build + Deploy)
-- [ ] Seiten bauen
+- [x] `web`-Branch anlegen + Astro-Projekt einrichten
+- [x] GitHub Actions Workflow (Build + Deploy)
+- [x] Domain in GitHub Pages konfigurieren (CNAME)
+- [ ] Layout + Navigation bauen
+- [ ] Startseite (Hero, Features, Screenshots, Download, Spenden)
+- [ ] Funktionsübersicht (/funktionen)
+- [ ] Spenden-Seite (/spenden)
+- [ ] Impressum + Datenschutz (/impressum, /datenschutz)
+- [ ] Changelog (/changelog aus changelog.ts)
+- [ ] Handbuch (/handbuch/... aus Wiki)
 - [ ] Wiki-Sync einrichten
-- [ ] Domain in GitHub Pages konfigurieren (CNAME)
-- [ ] Jekyll-Dateien aus `docs/` in `main` entfernen (Impressum/Datenschutz wandern in Astro)
+- [ ] Jekyll-Dateien aus `docs/` in `main` entfernen
 
 ---
 
