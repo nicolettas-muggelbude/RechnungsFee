@@ -41,17 +41,25 @@ const features = [
 <Layout>
   <!-- Hero -->
   <section class="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-    <div class="inline-flex items-center gap-2 bg-blue-50 text-[#0070ba] text-sm font-medium px-3 py-1 rounded-full mb-6">
-      <span>✨</span>
-      <span>Aktuelle Version: {version}</span>
+    <!-- Logo -->
+    <div class="flex flex-col items-center gap-4 mb-4">
+      <img src="/logo.svg" alt="RechnungsFee Logo" class="w-24 h-24 md:w-32 md:h-32 drop-shadow-md" />
+      <h1 class="text-6xl md:text-8xl font-extrabold tracking-tight leading-none">
+        <span class="text-slate-900">Rechnungs</span><span class="text-[#0070ba]">Fee</span>
+      </h1>
     </div>
-    <h1 class="text-5xl md:text-6xl font-extrabold text-slate-900 leading-tight mb-6">
-      Buchhaltung für<br />
-      <span class="text-[#0070ba]">Freiberufler & Kleinunternehmer</span>
-    </h1>
-    <p class="text-xl text-slate-500 max-w-2xl mx-auto mb-10">
-      Kostenlos. Lokal. Open Source. Rechnungen schreiben, EÜR erstellen und DATEV-Export –
-      alles auf deinem Gerät, ohne Abo und ohne Cloud.
+    <!-- Tagline -->
+    <p class="text-2xl md:text-3xl font-semibold text-slate-600 mb-4">
+      Deine gute Fee für Rechnung & Buchhaltung
+    </p>
+    <!-- Version-Badge -->
+    <div class="inline-flex items-center gap-2 bg-blue-50 text-[#0070ba] text-sm font-medium px-3 py-1 rounded-full mb-8">
+      <span>✨</span>
+      <span>Aktuelle Version: {version} · Kostenlos · Open Source · Lokal</span>
+    </div>
+    <p class="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
+      Rechnungen schreiben, EÜR erstellen, DATEV-Export – alles auf deinem Gerät,
+      ohne Abo und ohne Cloud. Für Freiberufler & Kleinunternehmer (§19 UStG).
     </p>
 
     <div class="flex flex-col items-center gap-3">
