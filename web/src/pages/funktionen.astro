@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro'
 
 type Feature = { text: string; optional?: boolean }
 
-const bereiche: { icon: string; title: string; text: string; features: Feature[] }[] = [
+const bereiche: { icon: string; title: string; text: string; features: Feature[]; optional?: boolean }[] = [
   {
     icon: '🧾',
     title: 'Rechnungsstellung & Dokumente',
@@ -48,7 +48,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
       { text: 'Umsatzsteuervoranmeldung (UStVA) mit allen Kennzahlen' },
       { text: 'DATEV EXTF Buchungsstapel-Export (SKR03 & SKR04)' },
       { text: 'Anlage G (Gewerbebetrieb) und Anlage S (Selbstständige)' },
-      { text: 'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)', optional: true },
+      { text: 'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)' },
       { text: 'Monatliche oder quartalsweise Umsatzsteuervoranmeldung' },
       { text: 'W-IdNr. (Wirtschafts-Identifikationsnummer)' },
     ],
@@ -110,6 +110,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
     icon: '🏗️',
     title: 'Anlageverzeichnis',
     text: 'Wirtschaftsgüter erfassen und Abschreibungen automatisch berechnen.',
+    optional: true,
     features: [
       { text: 'Anlagetypen: KFZ, EDV/Software, Sonstige' },
       { text: 'Lineare AfA nach Nutzungsdauer' },
@@ -150,7 +151,12 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
         <div>
           <div class="flex items-center gap-3 mb-4">
             <span class="text-4xl">{b.icon}</span>
-            <h2 class="text-2xl font-bold text-slate-900">{b.title}</h2>
+            <div>
+              <h2 class="text-2xl font-bold text-slate-900">{b.title}</h2>
+              {b.optional && (
+                <span class="inline-block bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded mt-1">optional – in den Einstellungen aktivierbar</span>
+              )}
+            </div>
           </div>
           <p class="text-slate-500 mb-6">{b.text}</p>
           <ul class="space-y-2">
