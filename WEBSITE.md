@@ -43,7 +43,7 @@ deployed via GitHub Actions auf GitHub Pages.
 
 ## Startseite (`/`) – Aufbau
 
-1. **Hero** – Headline, Subline, Download-Button (aktuelle Version aus GitHub Releases API), Screenshot
+1. **Hero** – Headline, Subline, Download-Button (OS-erkannt, aktuelle Version aus GitHub Releases API), Screenshot
 2. **Top-Features** – 6–8 Kacheln mit Icon + 1 Satz (Auswahl aus Funktionsübersicht)
 3. **Screenshots** – 2–3 App-Ansichten
 4. **Letzter Release** – Version + Datum, automatisch aktuell
@@ -71,6 +71,22 @@ deployed via GitHub Actions auf GitHub Pages.
 - Markdown-Dateien → `src/content/handbuch/`
 - Sidebar aus `_Sidebar.md` generieren
 - Build-Trigger: Push auf `main` (manuell oder Cron nächtlich)
+
+---
+
+## Download-Button – OS-Erkennung (clientseitig)
+
+`navigator.userAgentData.platform` bzw. `navigator.userAgent` als Fallback.
+
+| Erkanntes OS | Primärer Button | Datei |
+|--------------|-----------------|-------|
+| Windows | ⬇ Für Windows herunterladen | `RechnungsFee_X.X.X_x64-setup.exe` |
+| Linux | ⬇ Für Linux herunterladen | `RechnungsFee_X.X.X_amd64.AppImage` |
+| macOS | ⬇ Für macOS herunterladen | `RechnungsFee_X.X.X_aarch64.dmg` (Apple Silicon, Intel-Link darunter) |
+| Unbekannt | Alle Plattformen anzeigen | – |
+
+Unter dem Primär-Button: kleine Links „Andere Plattformen" → klappt alle Optionen auf.
+Downloadzähler (summiert aus GitHub Releases API `download_count`) neben oder unter dem Button.
 
 ---
 
