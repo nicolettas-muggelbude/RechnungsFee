@@ -13,7 +13,7 @@ export async function getStaticPaths() {
 const { entry } = Astro.props
 const { Content, headings } = await render(entry)
 
-const slug = entry.id.replace(/\.md$/, '')
+const slug = entry.id.replace(/\.md$/, '').toLowerCase()
 const title = headings.find(h => h.depth === 1)?.text ?? slug.replace(/-/g, ' ')
 ---
 
