@@ -85,23 +85,33 @@ def _berechne_vorschau(datum: date, db: Session) -> dict:
 
 @router.get("/fehlt-gestern")
 def fehlt_gestern(db: Session = Depends(get_db)):
-    """Prüft ob für gestern ein Tagesabschluss fehlt.
-    Gibt nur fehlt=True zurück wenn gestern tatsächlich Buchungen existieren –
-    verhindert Fehlalarm bei Ersteinrichtung."""
-    gestern = date.today() - timedelta(days=1)
-    hat_buchungen = (
-        db.query(func.count(Journaleintrag.id))
-        .filter(Journaleintrag.datum == gestern)
-        .scalar() or 0
-    ) > 0
-    if not hat_buchungen:
-        return {"datum": str(gestern), "fehlt": False}
-    existiert = (
-        db.query(Tagesabschluss)
-        .filter(Tagesabschluss.datum == gestern)
-        .first()
-    ) is not None
-    return {"datum": str(gestern), "fehlt": not existiert}
+    """Prüft ob es Tage mit Bar-Buchungen ohne Tagesabschluss gibt.
+    Gibt das älteste solche Datum zurück – nicht nur gestern.
+    Nur Bar-Buchungen (zahlungsart='bar') erfordern einen Tagesabschluss."""
+    heute = date.today()
+    # Alle Tage bis heute (exkl.) mit mindestens einer Bar-Buchung
+    bar_tage = (
+        db.query(Journaleintrag.datum)
+        .filter(
+            Journaleintrag.zahlungsart == "bar",
+            Journaleintrag.datum < heute,
+        )
+        .distinct()
+        .all()
+    )
+    if not bar_tage:
+        return {"datum": str(heute - timedelta(days=1)), "fehlt": False}
+    # Abgedeckte Tage (vorhandene Tagesabschlüsse)
+    abgedeckt = {
+        row.datum
+        for row in db.query(Tagesabschluss.datum).all()
+    }
+    offene = sorted(
+        row.datum for row in bar_tage if row.datum not in abgedeckt
+    )
+    if not offene:
+        return {"datum": str(heute - timedelta(days=1)), "fehlt": False}
+    return {"datum": str(offene[0]), "fehlt": True}
 
 
 @router.get("/vorschau/{datum}", response_model=TagesabschlussVorschau)

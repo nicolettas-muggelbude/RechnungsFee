@@ -436,7 +436,7 @@ export function AppLayout() {
           onClose={() => setAbschlussDialog(null)}
           onSuccess={() => {
             setAbschlussDialog(null)
-            setBannerDismissed(true)
+            setBannerDismissed(false)
             qc.invalidateQueries({ queryKey: ['tagesabschluss-fehlt-gestern'] })
           }}
         />
