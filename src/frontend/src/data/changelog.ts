@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'verbesserung', text: 'Journal: Datumsfeld bei neuer Buchung bleibt leer wenn der aktive Filter einen vergangenen Zeitraum zeigt (z. B. Vorjahr) – verhindert versehentliche Buchungen im falschen Wirtschaftsjahr (Issue #193)' },
       { typ: 'fix', text: 'Artikel bearbeiten: Gruppe auf „–keine–" zurücksetzen wurde nach dem Speichern ignoriert – die ursprüngliche Gruppe blieb erhalten (Issue #192)' },
+      { typ: 'verbesserung', text: 'Tagesabschluss-Erinnerung erscheint nur noch wenn Bar-Buchungen ohne Abschluss existieren – wer nie bar bucht, bekommt die Meldung nie; bei mehreren offenen Tagen wird das älteste Datum angezeigt (Issue #194)' },
     ],
   },
   {
