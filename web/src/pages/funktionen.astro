@@ -1,0 +1,230 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+const bereiche = [
+  {
+    icon: '🧾',
+    title: 'Rechnungsstellung & Dokumente',
+    text: 'Vom Angebot bis zur Stornorechnung – alle Dokumenttypen in einem durchgehenden Workflow.',
+    features: [
+      'Angebot → Auftrag → Lieferschein → Rechnung → Proforma → Gutschrift → Storno',
+      'Wiederkehrende Rechnungen mit frei wählbarem Intervall',
+      'Einleitungstext vor der Positionstabelle (Markdown: fett, kursiv)',
+      'Positionsrabatt und Rechnungsrabatt (% oder €)',
+      'Skonto mit eigenem Zahlungsziel',
+      '§25a UStG Differenzbesteuerung (Ankauf & Weiterverkauf)',
+      'Einmalkunden ohne Kundenstamm (Adresse direkt auf Rechnung)',
+      'Entwurfsmodus – Rechnungen werden erst beim Finalisieren nummeriert',
+      'Eigene Nummernkreise für jeden Dokumenttyp',
+    ],
+  },
+  {
+    icon: '💰',
+    title: 'Journal & Kassenbuch',
+    text: 'GoBD-konformes Journal für alle Einnahmen und Ausgaben – bar, Karte oder Überweisung.',
+    features: [
+      'Buchungen mit Zahlungsart bar, EC/Karte, Überweisung, PayPal u.a.',
+      'Tagesabschluss mit GoBD-Signatur',
+      'km-Pauschale (0,30 €/km) direkt bei der Buchung erfassen',
+      '§13b Umkehr der Steuerschuld (Bauleistungen, EU-Dienstleistungen)',
+      'Innergemeinschaftlicher Erwerb §1a UStG',
+      'Kategorien mit SKR03/SKR04-Kontonummern für DATEV-Export',
+      'Vorsteuer-Anteil nach Kategorie (z.B. 70 % bei Bewirtungskosten)',
+      'Wiederkehrende Buchungen für Fixkosten',
+      'Buchungsvorlagen als Einnahme oder Ausgabe',
+    ],
+  },
+  {
+    icon: '📊',
+    title: 'EÜR & Steuerauswertungen',
+    text: 'Alle relevanten Steuerauswertungen – direkt aus deinen Buchungen, ohne manuelles Zusammenrechnen.',
+    features: [
+      'Einnahmenüberschussrechnung nach Anlage EÜR 2025',
+      'Umsatzsteuervoranmeldung (UStVA) mit allen Kennzahlen',
+      'DATEV EXTF Buchungsstapel-Export (SKR03 & SKR04)',
+      'Anlage G (Gewerbebetrieb) und Anlage S (Selbstständige)',
+      'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)',
+      'Quartalsmäßige und monatliche Umsatzsteuervoranmeldung',
+      'W-IdNr. (Wirtschafts-Identifikationsnummer)',
+    ],
+  },
+  {
+    icon: '📁',
+    title: 'Belege & GoBD-Archivierung',
+    text: 'Digitale Belegverwaltung nach GoBD – unveränderlich, versioniert, durchsuchbar.',
+    features: [
+      'Belegupload per Drag & Drop (PDF, JPG, PNG)',
+      'OCR-Texterkennung (Tesseract) für gescannte Belege & Kassenbons',
+      'PDF/A-3-Archivierung für GoBD-Langzeitarchivierung',
+      'Beleg-Vorschau direkt in der App (inline, ohne externe Viewer)',
+      'Verknüpfung mit Rechnung oder Journalbuchung',
+      'SHA-256-Prüfsumme – Unveränderlichkeit nachweisbar',
+      'Dokumentenpakete für zusammengehörige Belege',
+      'Kundendokumente (Verträge, Zertifikate) mit DSGVO-Löschdatum',
+    ],
+  },
+  {
+    icon: '👥',
+    title: 'Stammdaten',
+    text: 'Kunden, Lieferanten und Artikel – strukturiert und schnell abrufbar.',
+    features: [
+      'Kundenstamm mit Lieferadressen, Skonto und ZUGFeRD-Einstellung',
+      'Lieferantenstamm für Eingangsrechnungen',
+      'Artikelstamm mit Gruppen, Steuersatz und Beschreibung',
+      'Lagerführung: Bestand, Mindestbestand, Bestandswarnung',
+      'Differenzbesteuerung pro Artikel (§25a)',
+      'EK-Preis und Lieferanten-Artikelnummer',
+      'Artikel-Gruppen frei definierbar',
+    ],
+  },
+  {
+    icon: '🔒',
+    title: 'Datenschutz & Datensicherheit',
+    text: 'Deine Daten gehören dir – lokal gespeichert, verschlüsselt gesichert.',
+    features: [
+      'Alle Daten lokal auf deinem Gerät (SQLite)',
+      'Kein Cloud-Zwang, kein Abo, keine Telemetrie',
+      'Automatisches Backup vor jeder Schema-Migration',
+      'Externes Backup auf NAS, USB oder SMB-Freigabe',
+      'AES-256-GCM-Verschlüsselung für externe Backups',
+      'GoBD-konforme Trigger schützen finalisierte Buchungen vor Änderung',
+      'Absender-Snapshot: finalisierte Dokumente bleiben unveränderlich',
+    ],
+  },
+  {
+    icon: '✉️',
+    title: 'Kommunikation & PDF',
+    text: 'Professionelle PDFs und direkter E-Mail-Versand ohne Umweg.',
+    features: [
+      'PDF-Generierung für alle Dokumenttypen',
+      'Eigene PDF-Vorlagen (aktuell 2 Stile)',
+      'Unterschrift-Bild auf Rechnungen',
+      'E-Mail-Versand direkt aus der App (eigener SMTP-Server)',
+      'Individuelle Betreffzeilen und Texte pro Dokumenttyp',
+      'ZUGFeRD / XRechnung (strukturierte Rechnungsdaten im PDF)',
+      'QR-Zahlung auf Rechnungen',
+    ],
+  },
+  {
+    icon: '🏗️',
+    title: 'Anlageverzeichnis',
+    text: 'Wirtschaftsgüter erfassen und Abschreibungen automatisch berechnen.',
+    features: [
+      'Anlagetypen: KFZ, EDV/Software, Sonstige',
+      'Lineare AfA nach Nutzungsdauer',
+      'Privat-Anteil bei gemischt genutzten Wirtschaftsgütern',
+      'Kennzeichen und Kaufdatum',
+      'Anlage AVEÜR-Zuordnung',
+      'Verkaufsdatum und Restbuchwert',
+    ],
+  },
+]
+---
+
+<Layout title="Funktionen" description="Alle Funktionen von RechnungsFee im Überblick – Rechnungsstellung, EÜR, DATEV, Belege, GoBD und mehr.">
+
+  <!-- Header -->
+  <section class="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4">Alle Funktionen</h1>
+    <p class="text-xl text-slate-500 max-w-2xl mx-auto">
+      RechnungsFee deckt den gesamten Buchhaltungsalltag ab – von der ersten Rechnung bis zur Steuererklärung.
+    </p>
+  </section>
+
+  <!-- Funktionsbereiche -->
+  <div class="max-w-6xl mx-auto px-6 space-y-24 pb-24">
+    {bereiche.map((b, i) => (
+      <section class={`grid grid-cols-1 lg:grid-cols-2 gap-12 items-center ${i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+        <!-- Text -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-4xl">{b.icon}</span>
+            <h2 class="text-2xl font-bold text-slate-900">{b.title}</h2>
+          </div>
+          <p class="text-slate-500 mb-6">{b.text}</p>
+          <ul class="space-y-2">
+            {b.features.map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-[#4F46E5] mt-0.5 shrink-0">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <!-- Screenshot-Platzhalter -->
+        <div class="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 aspect-video flex items-center justify-center">
+          <div class="text-center text-slate-400">
+            <div class="text-4xl mb-2">{b.icon}</div>
+            <p class="text-sm font-medium">{b.title}</p>
+            <p class="text-xs mt-1">Screenshot folgt</p>
+          </div>
+        </div>
+      </section>
+    ))}
+
+    <!-- Transferleistungen -->
+    <section class="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 md:p-10">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full">Einzigartig</span>
+      </div>
+      <h2 class="text-2xl font-bold text-slate-900 mb-2">Selbstständige mit Bürgergeld oder ALG II</h2>
+      <p class="text-slate-600 mb-8 max-w-2xl">
+        RechnungsFee ist eine der wenigen Lösungen mit eingebautem Support für Selbstständige,
+        die Transferleistungen beziehen. Kein mühsames Zusammenrechnen – alles automatisch aus deinen Buchungen.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-3xl">📈</span>
+            <h3 class="text-lg font-semibold text-slate-800">Leistungsmonitor</h3>
+          </div>
+          <ul class="space-y-2 mb-6">
+            {[
+              'Zuflüsse im Leistungszeitraum auf einen Blick',
+              'Umschaltbar: Kalendermonat ↔ Leistungszeitraum',
+              'Zeigt anrechenbares Einkommen für das Jobcenter',
+              'Basiert auf dem Zuflussprinzip (Zahlungsdatum)',
+            ].map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-indigo-500 mt-0.5 shrink-0">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <div class="rounded-xl border-2 border-dashed border-indigo-200 bg-white aspect-video flex items-center justify-center">
+            <div class="text-center text-indigo-300">
+              <div class="text-3xl mb-2">📈</div>
+              <p class="text-xs font-medium">Leistungsmonitor – Screenshot folgt</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-3xl">📋</span>
+            <h3 class="text-lg font-semibold text-slate-800">Anlage EKS</h3>
+          </div>
+          <ul class="space-y-2 mb-6">
+            {[
+              'Einkommens- und Selbstständigkeitserklärung vorausgefüllt',
+              'Betriebseinnahmen und -ausgaben automatisch zugeordnet',
+              'km-Pauschale (0,10 €/km) für EKS separat berechnet',
+              'Persistente Formularfelder für wiederkehrende Angaben',
+            ].map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-indigo-500 mt-0.5 shrink-0">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <div class="rounded-xl border-2 border-dashed border-indigo-200 bg-white aspect-video flex items-center justify-center">
+            <div class="text-center text-indigo-300">
+              <div class="text-3xl mb-2">📋</div>
+              <p class="text-xs font-medium">Anlage EKS – Screenshot folgt</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</Layout>
