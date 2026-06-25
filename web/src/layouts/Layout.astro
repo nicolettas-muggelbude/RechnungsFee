@@ -104,5 +104,14 @@ const pageTitle = title === 'RechnungsFee'
       </div>
     </footer>
 
+  <script>
+    // Alle externen Links in neuem Tab öffnen
+    document.querySelectorAll('a[href^="http"]').forEach(a => {
+      if (!a.hostname || a.hostname !== location.hostname) {
+        a.setAttribute('target', '_blank')
+        a.setAttribute('rel', 'noopener noreferrer')
+      }
+    })
+  </script>
   </body>
 </html>
