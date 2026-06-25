@@ -35,3 +35,40 @@
 .handbuch-content hr { @apply border-slate-200 my-8; }
 .handbuch-content img { @apply rounded-lg max-w-full; }
 .handbuch-content strong { @apply font-semibold text-slate-800; }
+
+/* ─── Auto Dark Mode ───────────────────────────────────────────────────────── */
+/* Außerhalb von @layer → überschreibt Tailwind-Layered-Utilities               */
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; }
+
+  body { background-color: #0f172a; color: #e2e8f0; }
+
+  /* Hintergründe */
+  .bg-white    { background-color: #1e293b; }
+  .bg-slate-50 { background-color: #1e293b; }
+
+  /* Texte */
+  .text-slate-900 { color: #f1f5f9; }
+  .text-slate-800 { color: #e2e8f0; }
+  .text-slate-700 { color: #cbd5e1; }
+  .text-slate-600 { color: #94a3b8; }
+  .text-slate-500 { color: #94a3b8; }
+
+  /* Rahmen */
+  .border-slate-200 { border-color: #334155; }
+  .border-slate-100 { border-color: #293548; }
+
+  /* Handbuch */
+  .handbuch-content            { color: #cbd5e1; }
+  .handbuch-content h1         { color: #f1f5f9; }
+  .handbuch-content h2         { color: #f1f5f9; border-color: #334155; }
+  .handbuch-content h3         { color: #e2e8f0; }
+  .handbuch-content li         { color: #94a3b8; }
+  .handbuch-content a          { color: #818cf8; }
+  .handbuch-content code       { background-color: #0f172a; color: #e2e8f0; }
+  .handbuch-content th         { color: #cbd5e1; border-color: #334155; }
+  .handbuch-content td         { border-color: #1e293b; color: #94a3b8; }
+  .handbuch-content hr         { border-color: #334155; }
+  .handbuch-content strong     { color: #e2e8f0; }
+  .handbuch-content blockquote { border-color: #4f46e5; color: #94a3b8; }
+}
