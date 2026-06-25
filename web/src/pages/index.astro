@@ -242,16 +242,18 @@ const features = [
   else if (/mac/i.test(platform) || /mac/i.test(ua)) os = 'macos'
   else if (/linux/i.test(platform) || /linux/i.test(ua)) os = 'linux'
 
-  const labels = {
-    windows: '⬇ Für Windows herunterladen (.exe)',
-    linux:   '⬇ Für Linux herunterladen (.AppImage)',
-    macos:   '⬇ Für macOS herunterladen (.dmg)',
-  }
-
   const btn = document.getElementById('download-btn')
   const label = document.getElementById('download-label')
   if (btn && label && os !== 'other') {
-    btn.href = downloadUrls[os]
-    label.textContent = labels[os]
+    if (os === 'windows') {
+      btn.href = downloadUrls.windows
+      label.textContent = '⬇ Für Windows herunterladen (.exe)'
+    } else if (os === 'linux') {
+      btn.href = '/download#linux'
+      label.textContent = '🐧 Linux – Installationsoptionen'
+    } else if (os === 'macos') {
+      btn.href = '/download#macos'
+      label.textContent = '🍎 macOS – Installationshinweise'
+    }
   }
 </script>
