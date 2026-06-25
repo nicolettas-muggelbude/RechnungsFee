@@ -165,6 +165,7 @@ Dieses Projekt wird offen entwickelt – die Community soll von Anfang an dabei 
 - 🐛 **Bugs melden** → [GitHub Issues](https://github.com/nicolettas-muggelbude/RechnungsFee/issues)
 - 💻 **Code beitragen** → Pull Requests sind willkommen
 - ⭐ **Stern geben** → Hilft anderen, das Projekt zu finden
+- 💙 **Spenden** → [Via PayPal unterstützen](https://www.paypal.com/ncp/payment/UYJ73YNEZ3KHL)
 
 ---
 
