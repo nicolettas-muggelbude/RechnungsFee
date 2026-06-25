@@ -1509,7 +1509,7 @@ export type ArtikelCreate = {
   hersteller?: string
   artikelcode?: string
   beschreibung?: string | null
-  gruppe_id?: number
+  gruppe_id?: number | null
   differenzbesteuerung?: boolean
   lager_aktiv?: boolean
   bestand_aktuell?: string
