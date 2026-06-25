@@ -373,6 +373,16 @@ export function ArtikelFormModal({
     setValue('gruppe_id', '')
   }, [typ, setValue])
 
+  // Timing-Fix: gruppen-Query ist async – wenn Optionen nach dem ersten Render laden,
+  // findet der Browser keinen passenden Option-Wert und zeigt „–keine–".
+  // Nach dem Laden explizit den Wert aus initial wiederherstellen.
+  useEffect(() => {
+    const gid = initial?.gruppe_id ? String(initial.gruppe_id) : ''
+    if (gid && gruppen.some(g => String(g.id) === gid)) {
+      setValue('gruppe_id', gid)
+    }
+  }, [gruppen, initial?.gruppe_id, setValue])
+
   function bruttoAusNetto(netto: number) {
     if (differenzbesteuerung) return netto  // §25a: Brutto = Netto (kein USt-Aufschlag)
     return Math.round(netto * (1 + steuersatz / 100) * 100) / 100
