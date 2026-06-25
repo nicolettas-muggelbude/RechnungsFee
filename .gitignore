@@ -78,6 +78,7 @@ target/
 *.db-wal
 data/
 !src/frontend/src/data/
+!web/src/data/
 backups/
 *.sql
 

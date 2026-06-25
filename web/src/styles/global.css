@@ -10,3 +10,28 @@
   html { scroll-behavior: smooth; }
   body { @apply antialiased text-slate-800; }
 }
+
+/* Handbuch Markdown-Inhalt */
+.handbuch-content {
+  color: theme(colors.slate.700);
+  line-height: 1.75;
+  font-size: 0.9375rem;
+}
+.handbuch-content h1 { @apply text-3xl font-extrabold text-slate-900 mb-6 mt-0; }
+.handbuch-content h2 { @apply text-xl font-bold text-slate-900 mb-3 mt-10 border-b border-slate-100 pb-2; }
+.handbuch-content h3 { @apply text-base font-semibold text-slate-800 mb-2 mt-6; }
+.handbuch-content p  { @apply mb-4; }
+.handbuch-content ul { @apply mb-4 pl-5 space-y-1 list-disc; }
+.handbuch-content ol { @apply mb-4 pl-5 space-y-1 list-decimal; }
+.handbuch-content li { @apply text-slate-600; }
+.handbuch-content a  { @apply text-[#4F46E5] hover:underline; }
+.handbuch-content code { @apply bg-slate-100 text-slate-800 text-sm rounded px-1.5 py-0.5 font-mono; }
+.handbuch-content pre { @apply bg-slate-900 text-slate-100 rounded-xl p-4 mb-4 overflow-x-auto text-sm; }
+.handbuch-content pre code { @apply bg-transparent text-slate-100 p-0; }
+.handbuch-content blockquote { @apply border-l-4 border-indigo-200 pl-4 text-slate-500 italic mb-4; }
+.handbuch-content table { @apply w-full text-sm mb-4 border-collapse; }
+.handbuch-content th { @apply text-left font-semibold text-slate-700 border-b-2 border-slate-200 pb-2 pr-4; }
+.handbuch-content td { @apply border-b border-slate-100 py-2 pr-4 text-slate-600; }
+.handbuch-content hr { @apply border-slate-200 my-8; }
+.handbuch-content img { @apply rounded-lg max-w-full; }
+.handbuch-content strong { @apply font-semibold text-slate-800; }

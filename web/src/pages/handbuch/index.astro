@@ -1,0 +1,21 @@
+---
+import { getCollection } from 'astro:content'
+import HandbuchLayout from '../../layouts/HandbuchLayout.astro'
+import { HANDBUCH_NAV } from '../../data/handbuch-nav'
+
+const pages = await getCollection('handbuch')
+const home = pages.find(p => p.id === 'Home')
+if (home) {
+  return Astro.redirect('/handbuch/Home')
+}
+---
+
+<HandbuchLayout title="Handbuch" currentSlug="">
+  <h1>Handbuch</h1>
+  <p>Willkommen im RechnungsFee Handbuch. Wähle links ein Thema aus.</p>
+  <ul>
+    {HANDBUCH_NAV.flatMap(g => g.items).map(item => (
+      <li><a href={`/handbuch/${item.slug}`}>{item.label}</a></li>
+    ))}
+  </ul>
+</HandbuchLayout>

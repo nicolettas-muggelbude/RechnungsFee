@@ -1,0 +1,54 @@
+---
+import Layout from './Layout.astro'
+import { HANDBUCH_NAV } from '../data/handbuch-nav'
+
+interface Props {
+  title: string
+  currentSlug: string
+}
+
+const { title, currentSlug } = Astro.props
+---
+
+<Layout title={`${title} – Handbuch`} description={`RechnungsFee Handbuch: ${title}`}>
+  <div class="max-w-6xl mx-auto px-6 py-10 flex gap-10 items-start">
+
+    <!-- Sidebar -->
+    <aside class="hidden lg:block w-56 shrink-0 sticky top-24 self-start">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Handbuch</p>
+      <nav class="space-y-4">
+        {HANDBUCH_NAV.map(group => (
+          <div>
+            {group.heading && (
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1 mt-4">
+                {group.heading}
+              </p>
+            )}
+            <ul class="space-y-0.5">
+              {group.items.map(item => (
+                <li>
+                  <a
+                    href={`/handbuch/${item.slug}`}
+                    class={`block text-sm px-2 py-1 rounded-lg transition-colors ${
+                      currentSlug === item.slug
+                        ? 'bg-indigo-50 text-[#4F46E5] font-medium'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </aside>
+
+    <!-- Inhalt -->
+    <article class="handbuch-content min-w-0 flex-1">
+      <slot />
+    </article>
+
+  </div>
+</Layout>
