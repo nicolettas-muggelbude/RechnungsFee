@@ -1,17 +1,161 @@
 ---
+import Layout from '../layouts/Layout.astro'
 
+let version = 'v0.3.30'
+let downloadUrls = {
+  windows:    `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_x64-setup.exe`,
+  linux:      `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_amd64.AppImage`,
+  macos:      `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_aarch64.dmg`,
+  all:        `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+}
+
+try {
+  const res = await fetch('https://api.github.com/repos/nicolettas-muggelbude/RechnungsFee/releases/latest', {
+    headers: import.meta.env.GITHUB_TOKEN ? { Authorization: `token ${import.meta.env.GITHUB_TOKEN}` } : {},
+  })
+  if (res.ok) {
+    const release = await res.json()
+    version = release.tag_name
+    const v = version.replace('v', '')
+    downloadUrls = {
+      windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
+      linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+      macos:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
+      all:     `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+    }
+  }
+} catch {}
+
+const features = [
+  { icon: '🧾', title: 'Rechnungen & Dokumente',   text: 'Angebot → Auftrag → Lieferschein → Rechnung → Gutschrift. Mit Entwurf, Storno und Wiederkehrend.' },
+  { icon: '📊', title: 'EÜR & DATEV-Export',        text: 'Einnahmenüberschussrechnung nach Anlage EÜR 2025, UStVA und DATEV EXTF Buchungsstapel-Export.' },
+  { icon: '📁', title: 'Belege & GoBD',              text: 'Belege hochladen, OCR-Texterkennung, PDF/A-Archivierung. GoBD-konform mit unveränderlichen Einträgen.' },
+  { icon: '💰', title: 'Journal & Kassenbuch',       text: 'Einnahmen und Ausgaben buchen, Tagesabschluss, km-Pauschale, §13b und EU-Erwerbe.' },
+  { icon: '🔒', title: 'Lokal & offline',            text: 'Alle Daten bleiben auf deinem Gerät. Kein Cloud-Zwang, kein Abo, kein Datenschutzproblem.' },
+  { icon: '🆓', title: 'Kostenlos & Open Source',    text: 'AGPLv3 – für immer kostenlos. Code einsehbar, Community-getrieben, keine versteckten Kosten.' },
+  { icon: '🖥️', title: 'Windows, Linux & macOS',    text: 'Native Desktop-App mit Tauri. Läuft auf allen drei Plattformen, inklusive Apple Silicon.' },
+  { icon: '📦', title: 'Artikel & Lagerführung',     text: 'Artikelstamm mit Gruppen, Lagerbestand, Mindestbestand-Warnung und automatischer Bestandsbuchung.' },
+]
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout>
+  <!-- Hero -->
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+    <div class="inline-flex items-center gap-2 bg-blue-50 text-[#0070ba] text-sm font-medium px-3 py-1 rounded-full mb-6">
+      <span>✨</span>
+      <span>Aktuelle Version: {version}</span>
+    </div>
+    <h1 class="text-5xl md:text-6xl font-extrabold text-slate-900 leading-tight mb-6">
+      Buchhaltung für<br />
+      <span class="text-[#0070ba]">Freiberufler & Kleinunternehmer</span>
+    </h1>
+    <p class="text-xl text-slate-500 max-w-2xl mx-auto mb-10">
+      Kostenlos. Lokal. Open Source. Rechnungen schreiben, EÜR erstellen und DATEV-Export –
+      alles auf deinem Gerät, ohne Abo und ohne Cloud.
+    </p>
+
+    <div class="flex flex-col items-center gap-3">
+      <a
+        id="download-btn"
+        href={downloadUrls.all}
+        class="inline-flex items-center gap-3 px-8 py-4 bg-[#0070ba] hover:bg-[#005ea6] text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all"
+      >
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span id="download-label">Jetzt herunterladen</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm text-slate-400">
+        <a href={downloadUrls.all} class="hover:text-slate-600 transition-colors">Alle Plattformen ↗</a>
+        <span>·</span>
+        <span>kostenlos & Open Source</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshot-Platzhalter -->
+  <section class="max-w-5xl mx-auto px-6 mb-24">
+    <div class="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 aspect-video flex items-center justify-center">
+      <div class="text-center text-slate-400">
+        <div class="text-5xl mb-3">🖼️</div>
+        <p class="font-medium">App-Screenshot</p>
+        <p class="text-sm">Platzhalter – wird durch echten Screenshot ersetzt</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="max-w-6xl mx-auto px-6 mb-24">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-slate-900 mb-3">Alles was du brauchst</h2>
+      <p class="text-slate-500 max-w-xl mx-auto">Vollständige Buchhaltungslösung – von der Rechnung bis zur Steuererklärung.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {features.map(f => (
+        <div class="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl p-5 transition-colors">
+          <div class="text-3xl mb-3">{f.icon}</div>
+          <h3 class="font-semibold text-slate-800 mb-1">{f.title}</h3>
+          <p class="text-sm text-slate-500 leading-relaxed">{f.text}</p>
+        </div>
+      ))}
+    </div>
+    <div class="text-center mt-8">
+      <a href="/funktionen" class="text-[#0070ba] font-medium hover:underline">Alle Funktionen im Überblick →</a>
+    </div>
+  </section>
+
+  <!-- Weitere Screenshots -->
+  <section class="bg-slate-50 py-20">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl font-bold text-slate-900 mb-3">Ein Blick in die App</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[['Rechnungsübersicht', '🧾'], ['Journal & Buchungen', '💰'], ['EÜR & Auswertungen', '📊']].map(([label, icon]) => (
+          <div class="rounded-xl border-2 border-dashed border-slate-300 bg-white aspect-video flex items-center justify-center">
+            <div class="text-center text-slate-400">
+              <div class="text-3xl mb-2">{icon}</div>
+              <p class="text-sm font-medium">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Spenden -->
+  <section class="max-w-2xl mx-auto px-6 py-20 text-center">
+    <h2 class="text-2xl font-bold text-slate-900 mb-3">Projekt unterstützen</h2>
+    <p class="text-slate-500 mb-6">
+      RechnungsFee ist kostenlos und wird in der Freizeit entwickelt.
+      Wenn dir die App hilft – freue ich mich über eine Spende.
+    </p>
+    <a href="/spenden" class="inline-flex items-center gap-2 px-6 py-3 bg-[#0070ba] hover:bg-[#005ea6] text-white font-semibold rounded-xl transition-colors shadow-sm">
+      <span>💙</span>
+      <span>Spenden & unterstützen</span>
+    </a>
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ downloadUrls }}>
+  const platform = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase()
+  const ua = navigator.userAgent
+
+  let os = 'other'
+  if (/win/i.test(platform) || /win/i.test(ua)) os = 'windows'
+  else if (/mac/i.test(platform) || /mac/i.test(ua)) os = 'macos'
+  else if (/linux/i.test(platform) || /linux/i.test(ua)) os = 'linux'
+
+  const labels = {
+    windows: '⬇ Für Windows herunterladen (.exe)',
+    linux:   '⬇ Für Linux herunterladen (.AppImage)',
+    macos:   '⬇ Für macOS herunterladen (.dmg)',
+  }
+
+  const btn = document.getElementById('download-btn')
+  const label = document.getElementById('download-label')
+  if (btn && label && os !== 'other') {
+    btn.href = downloadUrls[os]
+    label.textContent = labels[os]
+  }
+</script>

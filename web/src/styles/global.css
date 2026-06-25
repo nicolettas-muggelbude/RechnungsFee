@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+@theme {
+  --color-primary: #0070ba;
+  --color-primary-dark: #005ea6;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply antialiased text-slate-800; }
+}
