@@ -162,6 +162,34 @@
 
 ---
 
+## ♿ Barrierefreiheit (kein fester Zeitplan, aber Pflicht vor 1.0)
+
+Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigation (Combobox) sind vorhanden, aber Screenreader-Unterstützung fehlt weitgehend.
+
+### Priorität 1 – Focus-Management in Modalen
+- [ ] `role="dialog"` + `aria-modal="true"` + `aria-labelledby` auf alle Modal-Overlays
+- [ ] Focus-Trap: Tab bleibt innerhalb des offenen Modals
+- [ ] Initial Focus beim Öffnen (erster Input oder Schließen-Button)
+
+### Priorität 2 – Formulare
+- [ ] `htmlFor` + `id` in allen Formular-Labels verknüpfen (viele fehlen aktuell)
+- [ ] `aria-required="true"` für Pflichtfelder (visuelles `*` reicht nicht für Screenreader)
+- [ ] `aria-describedby` für Fehlermeldungen an den jeweiligen Input koppeln
+
+### Priorität 3 – Semantisches Layout
+- [ ] `<main>`, `<nav>`, `<header>` in `AppLayout.tsx` ergänzen
+- [ ] Dekorative SVG-Icons mit `aria-hidden="true"` versehen
+- [ ] Tabellen (`<table>`) mit `<thead>` / `<tbody>` / `scope`-Attributen
+
+### Priorität 4 – ARIA-Architektur
+- [ ] `aria-label` / `aria-labelledby` für Icon-only-Buttons (Löschen, Bearbeiten etc.)
+- [ ] `aria-expanded` für Akkordeons und aufklappbare Bereiche
+- [ ] `aria-live="polite"` für dynamische Statusmeldungen (Speichern, Fehler)
+
+### Ziel: WCAG 2.1 AA
+
+---
+
 ## 💡 Ideen (ohne Zeitplan)
 
 - **Artikel-Varianten** – Varianten eines Artikels (z. B. Größe, Farbe) mit eigenem Preis und Bestand; Auswahl direkt in der Rechnungsposition (Issue #171)
