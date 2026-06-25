@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Scrat-Backup Icon: Eichel (Acorn) -->
+  <!-- Minimalistisches, modernes Design im Flat-Style -->
+
+  <defs>
+    <!-- Gradient für die Kappe -->
+    <linearGradient id="capGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B6F47;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6B4423;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Gradient für den Körper -->
+    <linearGradient id="bodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#D4A574;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B8860B;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Schatten -->
+    <radialGradient id="shadowGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="70%" style="stop-color:#000000;stop-opacity:0" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:0.2" />
+    </radialGradient>
+  </defs>
+
+  <!-- Hintergrund (optional, transparent) -->
+  <!-- <rect width="256" height="256" fill="#ffffff" rx="32"/> -->
+
+  <!-- Schatten unter der Eichel -->
+  <ellipse cx="128" cy="220" rx="60" ry="12" fill="url(#shadowGradient)" opacity="0.3"/>
+
+  <!-- Eichel-Körper (unterer Teil) -->
+  <path d="
+    M 128 90
+    C 128 90, 100 95, 90 120
+    C 80 145, 75 160, 80 180
+    C 85 200, 100 210, 128 210
+    C 156 210, 171 200, 176 180
+    C 181 160, 176 145, 166 120
+    C 156 95, 128 90, 128 90
+    Z
+  " fill="url(#bodyGradient)" stroke="#A0722B" stroke-width="2"/>
+
+  <!-- Highlight auf dem Körper -->
+  <ellipse cx="110" cy="130" rx="15" ry="25" fill="#E8C89A" opacity="0.4"/>
+
+  <!-- Eichel-Kappe (oberer Teil) -->
+  <path d="
+    M 128 45
+    C 128 45, 95 50, 85 70
+    C 75 90, 80 95, 90 100
+    C 100 105, 128 95, 128 95
+    C 128 95, 156 105, 166 100
+    C 176 95, 181 90, 171 70
+    C 161 50, 128 45, 128 45
+    Z
+  " fill="url(#capGradient)" stroke="#5A3A1A" stroke-width="2"/>
+
+  <!-- Textur-Linien auf der Kappe (Schuppen-Muster) -->
+  <g stroke="#4A2A0A" stroke-width="1.5" fill="none" opacity="0.3">
+    <!-- Horizontale Linien -->
+    <path d="M 90 75 Q 128 73 166 75"/>
+    <path d="M 85 82 Q 128 80 171 82"/>
+    <path d="M 87 89 Q 128 87 169 89"/>
+
+    <!-- Vertikale Linien (Segmente) -->
+    <line x1="105" y1="65" x2="100" y2="95"/>
+    <line x1="128" y1="60" x2="128" y2="95"/>
+    <line x1="151" y1="65" x2="156" y2="95"/>
+  </g>
+
+  <!-- Stiel (kleiner Zweig) -->
+  <path d="
+    M 128 45
+    L 125 35
+    C 123 28, 120 25, 118 28
+    L 115 35
+  " fill="#6B4423" stroke="#4A2A0A" stroke-width="1.5"/>
+
+  <!-- Blatt am Stiel -->
+  <path d="
+    M 118 32
+    C 118 32, 105 30, 100 35
+    C 95 40, 98 45, 105 43
+    C 112 41, 118 35, 118 32
+    Z
+  " fill="#7A9B59" stroke="#5A7B39" stroke-width="1"/>
+
+  <!-- Highlight auf dem Blatt -->
+  <ellipse cx="107" cy="37" rx="4" ry="3" fill="#A0C97A" opacity="0.6"/>
+
+  <!-- Zusätzliche Details auf dem Körper (Streifen für Textur) -->
+  <g stroke="#A0722B" stroke-width="1" fill="none" opacity="0.2">
+    <path d="M 95 130 Q 128 128 161 130"/>
+    <path d="M 92 150 Q 128 148 164 150"/>
+    <path d="M 90 170 Q 128 168 166 170"/>
+  </g>
+</svg>
