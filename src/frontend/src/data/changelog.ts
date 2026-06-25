@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.30',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Journal: Datumsfeld bei neuer Buchung bleibt leer wenn der aktive Filter einen vergangenen Zeitraum zeigt (z. B. Vorjahr) – verhindert versehentliche Buchungen im falschen Wirtschaftsjahr (Issue #193)' },
+    ],
+  },
+  {
     version: 'v0.3.29',
     datum: 'Juni 2026',
     eintraege: [
