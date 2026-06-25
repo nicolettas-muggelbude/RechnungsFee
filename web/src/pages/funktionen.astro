@@ -1,21 +1,27 @@
 ---
 import Layout from '../layouts/Layout.astro'
 
-const bereiche = [
+type Feature = { text: string; optional?: boolean }
+
+const bereiche: { icon: string; title: string; text: string; features: Feature[] }[] = [
   {
     icon: '🧾',
     title: 'Rechnungsstellung & Dokumente',
     text: 'Vom Angebot bis zur Stornorechnung – alle Dokumenttypen in einem durchgehenden Workflow.',
     features: [
-      'Angebot → Auftrag → Lieferschein → Rechnung → Proforma → Gutschrift → Storno',
-      'Wiederkehrende Rechnungen mit frei wählbarem Intervall',
-      'Einleitungstext vor der Positionstabelle (Markdown: fett, kursiv)',
-      'Positionsrabatt und Rechnungsrabatt (% oder €)',
-      'Skonto mit eigenem Zahlungsziel',
-      '§25a UStG Differenzbesteuerung (Ankauf & Weiterverkauf)',
-      'Einmalkunden ohne Kundenstamm (Adresse direkt auf Rechnung)',
-      'Entwurfsmodus – Rechnungen werden erst beim Finalisieren nummeriert',
-      'Eigene Nummernkreise für jeden Dokumenttyp',
+      { text: 'Rechnung, Gutschrift, Stornorechnung' },
+      { text: 'Angebote', optional: true },
+      { text: 'Aufträge', optional: true },
+      { text: 'Lieferschein', optional: true },
+      { text: 'Proforma-Rechnung', optional: true },
+      { text: 'Wiederkehrende Rechnungen mit frei wählbarem Intervall', optional: true },
+      { text: 'Einleitungstext vor der Positionstabelle (Markdown: fett, kursiv)' },
+      { text: 'Positionsrabatt und Rechnungsrabatt (% oder €)' },
+      { text: 'Skonto mit eigenem Zahlungsziel' },
+      { text: '§25a UStG Differenzbesteuerung (Ankauf & Weiterverkauf)' },
+      { text: 'Einmalkunden ohne Kundenstamm' },
+      { text: 'Entwurfsmodus – Nummerierung erst beim Finalisieren' },
+      { text: 'Eigene Nummernkreise für jeden Dokumenttyp' },
     ],
   },
   {
@@ -23,15 +29,14 @@ const bereiche = [
     title: 'Journal & Kassenbuch',
     text: 'GoBD-konformes Journal für alle Einnahmen und Ausgaben – bar, Karte oder Überweisung.',
     features: [
-      'Buchungen mit Zahlungsart bar, EC/Karte, Überweisung, PayPal u.a.',
-      'Tagesabschluss mit GoBD-Signatur',
-      'km-Pauschale (0,30 €/km) direkt bei der Buchung erfassen',
-      '§13b Umkehr der Steuerschuld (Bauleistungen, EU-Dienstleistungen)',
-      'Innergemeinschaftlicher Erwerb §1a UStG',
-      'Kategorien mit SKR03/SKR04-Kontonummern für DATEV-Export',
-      'Vorsteuer-Anteil nach Kategorie (z.B. 70 % bei Bewirtungskosten)',
-      'Wiederkehrende Buchungen für Fixkosten',
-      'Buchungsvorlagen als Einnahme oder Ausgabe',
+      { text: 'Buchungen mit allen Zahlungsarten (bar, EC, Überweisung, PayPal u.a.)' },
+      { text: 'Tagesabschluss mit GoBD-Signatur' },
+      { text: 'km-Pauschale (0,30 €/km) direkt bei der Buchung' },
+      { text: '§13b Umkehr der Steuerschuld (Bauleistungen, EU-Dienstleistungen)' },
+      { text: 'Innergemeinschaftlicher Erwerb §1a UStG' },
+      { text: 'Kategorien mit SKR03/SKR04-Kontonummern für DATEV' },
+      { text: 'Vorsteuer-Anteil nach Kategorie (z.B. 70 % Bewirtungskosten)' },
+      { text: 'Wiederkehrende Buchungen für Fixkosten', optional: true },
     ],
   },
   {
@@ -39,13 +44,13 @@ const bereiche = [
     title: 'EÜR & Steuerauswertungen',
     text: 'Alle relevanten Steuerauswertungen – direkt aus deinen Buchungen, ohne manuelles Zusammenrechnen.',
     features: [
-      'Einnahmenüberschussrechnung nach Anlage EÜR 2025',
-      'Umsatzsteuervoranmeldung (UStVA) mit allen Kennzahlen',
-      'DATEV EXTF Buchungsstapel-Export (SKR03 & SKR04)',
-      'Anlage G (Gewerbebetrieb) und Anlage S (Selbstständige)',
-      'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)',
-      'Quartalsmäßige und monatliche Umsatzsteuervoranmeldung',
-      'W-IdNr. (Wirtschafts-Identifikationsnummer)',
+      { text: 'Einnahmenüberschussrechnung nach Anlage EÜR 2025' },
+      { text: 'Umsatzsteuervoranmeldung (UStVA) mit allen Kennzahlen' },
+      { text: 'DATEV EXTF Buchungsstapel-Export (SKR03 & SKR04)' },
+      { text: 'Anlage G (Gewerbebetrieb) und Anlage S (Selbstständige)' },
+      { text: 'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)', optional: true },
+      { text: 'Monatliche oder quartalsweise Umsatzsteuervoranmeldung' },
+      { text: 'W-IdNr. (Wirtschafts-Identifikationsnummer)' },
     ],
   },
   {
@@ -53,14 +58,14 @@ const bereiche = [
     title: 'Belege & GoBD-Archivierung',
     text: 'Digitale Belegverwaltung nach GoBD – unveränderlich, versioniert, durchsuchbar.',
     features: [
-      'Belegupload per Drag & Drop (PDF, JPG, PNG)',
-      'OCR-Texterkennung (Tesseract) für gescannte Belege & Kassenbons',
-      'PDF/A-3-Archivierung für GoBD-Langzeitarchivierung',
-      'Beleg-Vorschau direkt in der App (inline, ohne externe Viewer)',
-      'Verknüpfung mit Rechnung oder Journalbuchung',
-      'SHA-256-Prüfsumme – Unveränderlichkeit nachweisbar',
-      'Dokumentenpakete für zusammengehörige Belege',
-      'Kundendokumente (Verträge, Zertifikate) mit DSGVO-Löschdatum',
+      { text: 'Belegupload per Drag & Drop (PDF, JPG, PNG)' },
+      { text: 'OCR-Texterkennung (Tesseract) für gescannte Belege & Kassenbons' },
+      { text: 'PDF/A-3-Archivierung für GoBD-Langzeitarchivierung' },
+      { text: 'Beleg-Vorschau direkt in der App (inline)' },
+      { text: 'Verknüpfung mit Rechnung oder Journalbuchung' },
+      { text: 'SHA-256-Prüfsumme – Unveränderlichkeit nachweisbar' },
+      { text: 'Dokumentenpakete für zusammengehörige Belege' },
+      { text: 'Kundendokumente mit DSGVO-Löschdatum', optional: true },
     ],
   },
   {
@@ -68,13 +73,12 @@ const bereiche = [
     title: 'Stammdaten',
     text: 'Kunden, Lieferanten und Artikel – strukturiert und schnell abrufbar.',
     features: [
-      'Kundenstamm mit Lieferadressen, Skonto und ZUGFeRD-Einstellung',
-      'Lieferantenstamm für Eingangsrechnungen',
-      'Artikelstamm mit Gruppen, Steuersatz und Beschreibung',
-      'Lagerführung: Bestand, Mindestbestand, Bestandswarnung',
-      'Differenzbesteuerung pro Artikel (§25a)',
-      'EK-Preis und Lieferanten-Artikelnummer',
-      'Artikel-Gruppen frei definierbar',
+      { text: 'Kundenstamm mit Lieferadressen und Skonto' },
+      { text: 'Lieferantenstamm für Eingangsrechnungen' },
+      { text: 'Artikelstamm mit Gruppen und Steuersatz' },
+      { text: 'Lagerführung: Bestand, Mindestbestand, Bestandswarnung', optional: true },
+      { text: '§25a Differenzbesteuerung pro Artikel' },
+      { text: 'EK-Preis und Lieferanten-Artikelnummer' },
     ],
   },
   {
@@ -82,13 +86,12 @@ const bereiche = [
     title: 'Datenschutz & Datensicherheit',
     text: 'Deine Daten gehören dir – lokal gespeichert, verschlüsselt gesichert.',
     features: [
-      'Alle Daten lokal auf deinem Gerät (SQLite)',
-      'Kein Cloud-Zwang, kein Abo, keine Telemetrie',
-      'Automatisches Backup vor jeder Schema-Migration',
-      'Externes Backup auf NAS, USB oder SMB-Freigabe',
-      'AES-256-GCM-Verschlüsselung für externe Backups',
-      'GoBD-konforme Trigger schützen finalisierte Buchungen vor Änderung',
-      'Absender-Snapshot: finalisierte Dokumente bleiben unveränderlich',
+      { text: 'Alle Daten lokal auf deinem Gerät (SQLite, kein Cloud-Zwang)' },
+      { text: 'Automatisches Backup vor jeder Schema-Migration' },
+      { text: 'Externes Backup auf NAS, USB oder SMB-Freigabe', optional: true },
+      { text: 'AES-256-GCM-Verschlüsselung für externe Backups', optional: true },
+      { text: 'GoBD-Trigger schützen finalisierte Buchungen vor Änderung' },
+      { text: 'Absender-Snapshot: finalisierte Dokumente bleiben unveränderlich' },
     ],
   },
   {
@@ -96,13 +99,11 @@ const bereiche = [
     title: 'Kommunikation & PDF',
     text: 'Professionelle PDFs und direkter E-Mail-Versand ohne Umweg.',
     features: [
-      'PDF-Generierung für alle Dokumenttypen',
-      'Eigene PDF-Vorlagen (aktuell 2 Stile)',
-      'Unterschrift-Bild auf Rechnungen',
-      'E-Mail-Versand direkt aus der App (eigener SMTP-Server)',
-      'Individuelle Betreffzeilen und Texte pro Dokumenttyp',
-      'ZUGFeRD / XRechnung (strukturierte Rechnungsdaten im PDF)',
-      'QR-Zahlung auf Rechnungen',
+      { text: 'PDF-Generierung für alle Dokumenttypen (2 Vorlagen)' },
+      { text: 'Unterschrift-Bild auf Rechnungen', optional: true },
+      { text: 'E-Mail-Versand direkt aus der App (eigener SMTP)', optional: true },
+      { text: 'QR-Zahlung auf Rechnungen', optional: true },
+      { text: 'ZUGFeRD / XRechnung (strukturierte Rechnungsdaten im PDF)' },
     ],
   },
   {
@@ -110,12 +111,11 @@ const bereiche = [
     title: 'Anlageverzeichnis',
     text: 'Wirtschaftsgüter erfassen und Abschreibungen automatisch berechnen.',
     features: [
-      'Anlagetypen: KFZ, EDV/Software, Sonstige',
-      'Lineare AfA nach Nutzungsdauer',
-      'Privat-Anteil bei gemischt genutzten Wirtschaftsgütern',
-      'Kennzeichen und Kaufdatum',
-      'Anlage AVEÜR-Zuordnung',
-      'Verkaufsdatum und Restbuchwert',
+      { text: 'Anlagetypen: KFZ, EDV/Software, Sonstige' },
+      { text: 'Lineare AfA nach Nutzungsdauer' },
+      { text: 'Privat-Anteil bei gemischt genutzten Wirtschaftsgütern' },
+      { text: 'Anlage AVEÜR-Zuordnung' },
+      { text: 'Verkaufsdatum und Restbuchwert' },
     ],
   },
 ]
@@ -126,9 +126,20 @@ const bereiche = [
   <!-- Header -->
   <section class="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
     <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4">Alle Funktionen</h1>
-    <p class="text-xl text-slate-500 max-w-2xl mx-auto">
+    <p class="text-xl text-slate-500 max-w-2xl mx-auto mb-6">
       RechnungsFee deckt den gesamten Buchhaltungsalltag ab – von der ersten Rechnung bis zur Steuererklärung.
     </p>
+    <!-- Legende -->
+    <div class="inline-flex items-center gap-6 text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-5 py-2">
+      <span class="flex items-center gap-1.5">
+        <span class="text-[#4F46E5]">✓</span> Standard
+      </span>
+      <span class="text-slate-300">|</span>
+      <span class="flex items-center gap-1.5">
+        <span class="inline-block bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded">optional</span>
+        in den Einstellungen aktivierbar
+      </span>
+    </div>
   </section>
 
   <!-- Funktionsbereiche -->
@@ -146,7 +157,10 @@ const bereiche = [
             {b.features.map(f => (
               <li class="flex items-start gap-2 text-sm text-slate-600">
                 <span class="text-[#4F46E5] mt-0.5 shrink-0">✓</span>
-                <span>{f}</span>
+                <span>{f.text}</span>
+                {f.optional && (
+                  <span class="inline-block shrink-0 bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded leading-none mt-0.5">optional</span>
+                )}
               </li>
             ))}
           </ul>
@@ -164,7 +178,7 @@ const bereiche = [
 
     <!-- Transferleistungen -->
     <section class="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 md:p-10">
-      <div class="flex items-center gap-3 mb-2">
+      <div class="mb-2">
         <span class="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full">Einzigartig</span>
       </div>
       <h2 class="text-2xl font-bold text-slate-900 mb-2">Selbstständige mit Bürgergeld oder ALG II</h2>
