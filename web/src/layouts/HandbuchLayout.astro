@@ -52,3 +52,15 @@ const { title, currentSlug } = Astro.props
 
   </div>
 </Layout>
+
+<script>
+  // Wiki-interne Links: relative Pfade wie "Erste-Schritte" → "/handbuch/Erste-Schritte"
+  document.querySelectorAll('.handbuch-content a[href]').forEach(a => {
+    const href = a.getAttribute('href') ?? ''
+    if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('#') && !href.startsWith('mailto')) {
+      const base = href.split('#')[0]
+      const anchor = href.includes('#') ? '#' + href.split('#')[1] : ''
+      a.setAttribute('href', `/handbuch/${base}${anchor}`)
+    }
+  })
+</script>

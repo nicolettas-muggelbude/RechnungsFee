@@ -5,7 +5,7 @@ import HandbuchLayout from '../../layouts/HandbuchLayout.astro'
 export async function getStaticPaths() {
   const pages = await getCollection('handbuch')
   return pages.map(entry => ({
-    params: { slug: entry.id },
+    params: { slug: entry.id.replace(/\.md$/, '') },
     props: { entry },
   }))
 }
@@ -13,9 +13,10 @@ export async function getStaticPaths() {
 const { entry } = Astro.props
 const { Content, headings } = await render(entry)
 
-const title = headings.find(h => h.depth === 1)?.text ?? entry.id.replace(/-/g, ' ')
+const slug = entry.id.replace(/\.md$/, '')
+const title = headings.find(h => h.depth === 1)?.text ?? slug.replace(/-/g, ' ')
 ---
 
-<HandbuchLayout title={title} currentSlug={entry.id}>
+<HandbuchLayout title={title} currentSlug={slug}>
   <Content />
 </HandbuchLayout>
