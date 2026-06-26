@@ -312,33 +312,40 @@ function KleinunternehmerWarnung() {
 
 function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
   const heute = heuteIso()
-  const ausgang = rechnungen.filter(r => r.typ === 'ausgang')
-  const eingang = rechnungen.filter(r => r.typ === 'eingang')
+  const sortiert = [...rechnungen].sort((a, b) => (a.faellig_am ?? '') < (b.faellig_am ?? '') ? -1 : 1)
 
-  function FaelligTabelle({ liste, titel }: { liste: Rechnung[], titel: string }) {
-    if (liste.length === 0) return null
-    return (
-      <div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{titel}</p>
+  const gesamt = rechnungen.length
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 mb-6">
+      <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
+        <span className="text-amber-500">⚠️</span>
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fällige Rechnungen</h3>
+        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">nächste 7 Tage + überfällig · {gesamt} Einträge</span>
+      </div>
+      <div className="overflow-y-auto resize-y px-5 py-4" style={{ height: '240px', minHeight: '96px' }}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500">
-              <th className="pb-1.5 text-left font-medium">Rg.-Datum</th>
               <th className="pb-1.5 text-left font-medium">Fällig am</th>
+              <th className="pb-1.5 text-left font-medium">Typ</th>
               <th className="pb-1.5 text-left font-medium">Partner</th>
               <th className="pb-1.5 text-left font-medium">Rg.-Nr.</th>
               <th className="pb-1.5 text-right font-medium">Betrag</th>
             </tr>
           </thead>
           <tbody>
-            {liste.map(r => {
+            {sortiert.map(r => {
               const ueberfaellig = r.faellig_am && r.faellig_am < heute
               return (
                 <tr key={r.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0">
-                  <td className="py-2 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDatum(r.datum)}</td>
                   <td className={`py-2 pr-4 whitespace-nowrap font-medium ${ueberfaellig ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
                     {r.faellig_am ? formatDatum(r.faellig_am) : '—'}
                     {ueberfaellig && <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r.typ === 'eingang' ? 'bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-400' : 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'}`}>
+                      {r.typ === 'eingang' ? 'Eingang' : 'Ausgang'}
+                    </span>
                   </td>
                   <td className="py-2 pr-4 text-slate-700 dark:text-slate-200 truncate max-w-[140px]">
                     {r.typ === 'ausgang' ? (r.kunde_name ?? r.partner_freitext ?? '—') : (r.lieferant_name ?? r.partner_freitext ?? '—')}
@@ -350,21 +357,6 @@ function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
             })}
           </tbody>
         </table>
-      </div>
-    )
-  }
-
-  const gesamt = ausgang.length + eingang.length
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 mb-6">
-      <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
-        <span className="text-amber-500">⚠️</span>
-        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fällige Rechnungen</h3>
-        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">nächste 7 Tage + überfällig · {gesamt} Einträge</span>
-      </div>
-      <div className="overflow-y-auto resize-y px-5 py-4 space-y-5" style={{ height: '240px', minHeight: '96px' }}>
-        <FaelligTabelle liste={ausgang} titel="Ausgangsrechnungen" />
-        <FaelligTabelle liste={eingang} titel="Eingangsrechnungen" />
       </div>
     </div>
   )
