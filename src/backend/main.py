@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g
 
-SCHEMA_VERSION = 100
+SCHEMA_VERSION = 101
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2229,6 +2229,57 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 100 (kunden_belege.loeschdatum: DSGVO-Löschdatum pro Dokument)")
 
+        if version < 101:
+            # Issue #195: Falsche SKR-Konten und fehlende EÜR-Zeilen bei Erlös-Kategorien
+            # USt-Erstattung FA: 1779 = "USt aus ig. Erwerb ohne VoSt-Abzug" → korrekt: 1790/3841 (Umsatzsteuerverbindlichkeiten Vorjahr)
+            conn.execute(text("""
+                UPDATE kategorien SET
+                    konto_skr03_default = '1790',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '1790' ELSE konto_skr03 END,
+                    konto_skr04_default = '3841',
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '3841' ELSE konto_skr04 END,
+                    euer_zeile = 18
+                WHERE name = 'Umsatzsteuer-Erstattung FA'
+            """))
+            # VoSt-Erstattung FA: 1570 = "Abziehbare Vorsteuer" (Asset-Konto, kein Erstattungskonto); 1570 existiert in SKR04 nicht
+            conn.execute(text("""
+                UPDATE kategorien SET
+                    konto_skr03_default = '1790',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '1790' ELSE konto_skr03 END,
+                    konto_skr04_default = '3841',
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '3841' ELSE konto_skr04 END,
+                    euer_zeile = 18
+                WHERE name = 'Vorsteuererstattung FA'
+            """))
+            # Zuwendungen von Dritten: 8910 = "Entnahmen (Waren) 19%" und 4910 = "Erträge aus Zuschreibungen" → korrekt: 2747/4982 (Sonstige steuerfreie BE)
+            conn.execute(text("""
+                UPDATE kategorien SET
+                    konto_skr03_default = '2747',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '2747' ELSE konto_skr03 END,
+                    konto_skr04_default = '4982',
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '4982' ELSE konto_skr04 END
+                WHERE name = 'Zuwendungen von Dritten'
+                  AND (konto_skr03 = '8910' OR konto_skr04 = '4910')
+            """))
+            # Eigenverbrauch (7%): 8911+4641 liegen im 19%-Kontenbereich (8910-8913 / 4640-4644) → korrekt: 8915/4610
+            conn.execute(text("""
+                UPDATE kategorien SET
+                    konto_skr03_default = '8915',
+                    konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN '8915' ELSE konto_skr03 END,
+                    konto_skr04_default = '4610',
+                    konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN '4610' ELSE konto_skr04 END,
+                    euer_zeile = 21
+                WHERE name = 'Eigenverbrauch von Waren (7%)'
+            """))
+            # Eigenverbrauch (19%): SKR-Konten korrekt, EÜR-Zeile 21 fehlte
+            conn.execute(text(
+                "UPDATE kategorien SET euer_zeile = 21 "
+                "WHERE name = 'Eigenverbrauch von Waren (19%)' AND euer_zeile IS NULL"
+            ))
+            conn.execute(text("PRAGMA user_version = 101"))
+            conn.commit()
+            print("[Migration] Schema auf Version 101 (Issue #195: SKR-Konten Erlöse korrigiert, EÜR-Zeilen ergänzt)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -2348,13 +2399,13 @@ def _migrate_kategorien() -> None:
             {"name": "Wareneinkauf Nicht-EU",                "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Miete Büro (0%)",                      "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 39,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "KFZ-Leasing",                          "kontenart": "Aufwand", "konto_skr03": "4570", "konto_skr04": "6560", "eks_kategorie": "B6_3",  "euer_zeile": 68,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Eigenverbrauch von Waren (19%)",       "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4640", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
-            {"name": "Eigenverbrauch von Waren (7%)",        "kontenart": "Erlös",   "konto_skr03": "8911", "konto_skr04": "4641", "eks_kategorie": "A2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
+            {"name": "Eigenverbrauch von Waren (19%)",       "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4640", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+            {"name": "Eigenverbrauch von Waren (7%)",        "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
             {"name": "USt auf Eigenverbrauch",               "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "1776", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4910", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer (vereinnahmt)",           "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "1776", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Umsatzsteuer-Erstattung FA",           "kontenart": "Erlös",   "konto_skr03": "1779", "konto_skr04": "1779", "eks_kategorie": "A5_3",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Umsatzsteuer-Erstattung FA",           "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Löhne & Gehälter Teilzeit",           "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_2",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "AG-Anteil Sozialversicherung",        "kontenart": "Aufwand", "konto_skr03": "4130", "konto_skr04": "6110", "eks_kategorie": "B2_1",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Minijob / geringfügige Beschäftigung", "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6030", "eks_kategorie": "B2_3",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

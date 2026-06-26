@@ -30,6 +30,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Dashboard: Fällige Rechnungen – Eingang und Ausgang in einer gemeinsamen Tabelle nach Datum sortiert; Eingangsrechnungen waren zuvor hinter langen Ausgangs-Listen versteckt' },
       { typ: 'fix', text: 'Eingangsrechnung: Lagerbestand-Prüfung wird nicht mehr ausgelöst – bei Eingangsrechnungen findet kein Lagerabzug statt' },
       { typ: 'fix', text: 'Dashboard: Fällige Rechnungen wurden nach dem Anlegen einer Rechnung nicht sofort aktualisiert (Cache-Invalidierung fehlte)' },
+      { typ: 'fix', text: 'Kategorien Erlöse: Falsche SKR-Kontonummern korrigiert – USt-/Vorsteuererstattung FA (1779/1570 → 1790/3841), Zuwendungen von Dritten (8910/4910 → 2747/4982), Eigenverbrauch 7% (8911/4641 → 8915/4610)' },
+      { typ: 'fix', text: 'EÜR: Fehlende Zeilen ergänzt – FA-Erstattungen erscheinen jetzt in Zeile 18, Eigenverbrauch in Zeile 21' },
     ],
   },
   {
