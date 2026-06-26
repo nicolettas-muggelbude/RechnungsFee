@@ -27,7 +27,9 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juni 2026',
     eintraege: [
       { typ: 'verbesserung', text: 'Sidebar: Auf-/Zugeklappt-Zustand der Menü-Abschnitte wird gespeichert und beim nächsten Start wiederhergestellt (vorher: immer alles aufgeklappt)' },
+      { typ: 'verbesserung', text: 'Dashboard: Fällige Rechnungen – Eingang und Ausgang in einer gemeinsamen Tabelle nach Datum sortiert; Eingangsrechnungen waren zuvor hinter langen Ausgangs-Listen versteckt' },
       { typ: 'fix', text: 'Eingangsrechnung: Lagerbestand-Prüfung wird nicht mehr ausgelöst – bei Eingangsrechnungen findet kein Lagerabzug statt' },
+      { typ: 'fix', text: 'Dashboard: Fällige Rechnungen wurden nach dem Anlegen einer Rechnung nicht sofort aktualisiert (Cache-Invalidierung fehlte)' },
     ],
   },
   {
