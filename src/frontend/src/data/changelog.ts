@@ -26,6 +26,8 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.3.31',
     datum: 'Juli 2026',
     eintraege: [
+      { typ: 'neu', text: 'Sidebar: Handbuch-Link öffnet rechnungsfee.app/handbuch im System-Browser' },
+      { typ: 'verbesserung', text: 'Impressum- und Datenschutz-Links zeigen jetzt auf rechnungsfee.app statt auf die alte GitHub-Pages-URL' },
       { typ: 'verbesserung', text: 'Spenden-Seite: Banküberweisung mit IBAN als gebührenfreie Alternative zu PayPal ergänzt; PayPal-Gebührenhinweis (~1,5 % + 0,35 €) direkt unter dem Button' },
       { typ: 'fix', text: 'Spenden-Seite: PC-Wittfoot UG korrekt als Spendenverwalter (nicht Entwickler) ausgewiesen; Transparenzhinweis direkt unter dem PayPal-Button platziert' },
     ],
