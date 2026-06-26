@@ -44,8 +44,9 @@
   body { background-color: #0f172a; color: #e2e8f0; }
 
   /* Hintergründe */
-  .bg-white    { background-color: #1e293b; }
-  .bg-slate-50 { background-color: #1e293b; }
+  .bg-white     { background-color: #1e293b; }
+  .bg-slate-50  { background-color: #1e293b; }
+  .bg-slate-100 { background-color: #293548; }
 
   /* Texte */
   .text-slate-900 { color: #f1f5f9; }
