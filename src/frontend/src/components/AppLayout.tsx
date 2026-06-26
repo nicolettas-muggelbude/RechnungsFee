@@ -91,15 +91,37 @@ function CollapsibleSection({
   items: { to: string; label: string; icon: string; badge?: boolean }[]
   badge?: boolean
 }) {
-  const [offen, setOffen] = useState(aktiv)
+  const storageKey = `sidebar_open_${label}`
+
+  const [offen, setOffen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved !== null) return saved === 'true'
+    } catch {}
+    return false
+  })
+
   const prevLen = useRef(items.length)
+
   useEffect(() => {
-    if (aktiv) setOffen(true)
-  }, [aktiv])
+    if (aktiv) {
+      setOffen(true)
+      try { localStorage.setItem(storageKey, 'true') } catch {}
+    }
+  }, [aktiv, storageKey])
+
   useEffect(() => {
     if (items.length > prevLen.current) setOffen(true)
     prevLen.current = items.length
   }, [items.length])
+
+  const toggle = () => {
+    setOffen(o => {
+      const next = !o
+      try { localStorage.setItem(storageKey, String(next)) } catch {}
+      return next
+    })
+  }
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
@@ -111,7 +133,7 @@ function CollapsibleSection({
   return (
     <div className="mt-1">
       <button
-        onClick={() => setOffen(o => !o)}
+        onClick={toggle}
         className={`w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors ${
           aktiv
             ? 'text-blue-700 dark:text-blue-300'
