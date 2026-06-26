@@ -23,11 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.32',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Sidebar: Auf-/Zugeklappt-Zustand der Menü-Abschnitte wird gespeichert und beim nächsten Start wiederhergestellt (vorher: immer alles aufgeklappt)' },
+    ],
+  },
+  {
     version: 'v0.3.31',
-    datum: 'Juli 2026',
+    datum: 'Juni 2026',
     eintraege: [
       { typ: 'neu', text: 'Sidebar: Handbuch-Link öffnet rechnungsfee.app/handbuch im System-Browser' },
-      { typ: 'verbesserung', text: 'Sidebar: Auf-/Zugeklappt-Zustand der Menü-Abschnitte wird gespeichert und beim nächsten Start wiederhergestellt (vorher: immer alles aufgeklappt)' },
       { typ: 'verbesserung', text: 'Impressum- und Datenschutz-Links zeigen jetzt auf rechnungsfee.app statt auf die alte GitHub-Pages-URL' },
       { typ: 'verbesserung', text: 'Spenden-Seite: Banküberweisung mit IBAN als gebührenfreie Alternative zu PayPal ergänzt; PayPal-Gebührenhinweis (~1,5 % + 0,35 €) direkt unter dem Button' },
       { typ: 'fix', text: 'Spenden-Seite: PC-Wittfoot UG korrekt als Spendenverwalter (nicht Entwickler) ausgewiesen; Transparenzhinweis direkt unter dem PayPal-Button platziert' },
