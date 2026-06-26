@@ -2,8 +2,8 @@ import { openUrl } from '../../api/client'
 
 const PAYPAL_URL = 'https://www.paypal.com/ncp/payment/UYJ73YNEZ3KHL'
 const GITHUB_URL = 'https://github.com/nicolettas-muggelbude/RechnungsFee'
-const IMPRESSUM_URL = 'https://nicolettas-muggelbude.github.io/RechnungsFee/impressum'
-const DATENSCHUTZ_URL = 'https://nicolettas-muggelbude.github.io/RechnungsFee/datenschutz'
+const IMPRESSUM_URL = 'https://rechnungsfee.app/impressum'
+const DATENSCHUTZ_URL = 'https://rechnungsfee.app/datenschutz'
 
 export function SpendenPage() {
   return (
