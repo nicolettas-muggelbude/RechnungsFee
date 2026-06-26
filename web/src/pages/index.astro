@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import { getDownloadStats } from '../lib/downloads'
 
 let version = 'v0.3.30'
 let downloadUrls = {
@@ -25,6 +26,10 @@ try {
     }
   }
 } catch {}
+
+const token = import.meta.env.GITHUB_TOKEN as string | undefined
+const dlStats = await getDownloadStats(token)
+const dlTotal = dlStats.total > 0 ? dlStats.total.toLocaleString('de-DE') : null
 
 const features = [
   { icon: '🧾', title: 'Rechnungen & Dokumente',   text: 'Angebot → Auftrag → Lieferschein → Rechnung → Gutschrift. Mit Entwurf, Storno und Wiederkehrend.' },
@@ -77,6 +82,10 @@ const features = [
         <a href={downloadUrls.all} class="hover:text-slate-600 transition-colors">Alle Plattformen ↗</a>
         <span>·</span>
         <span>kostenlos & Open Source</span>
+        {dlTotal && <>
+          <span>·</span>
+          <span>⬇ {dlTotal}× heruntergeladen</span>
+        </>}
       </div>
     </div>
   </section>

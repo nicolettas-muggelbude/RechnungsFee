@@ -79,6 +79,7 @@ target/
 data/
 !src/frontend/src/data/
 !web/src/data/
+!web/src/lib/
 backups/
 *.sql
 
