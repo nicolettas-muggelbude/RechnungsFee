@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import { getDownloadStats } from '../lib/downloads'
 
 let version = 'v0.3.30'
 let v = '0.3.30'
@@ -30,6 +31,10 @@ try {
     }
   }
 } catch {}
+
+const token = import.meta.env.GITHUB_TOKEN as string | undefined
+const dlStats = await getDownloadStats(token)
+const fmt = (n: number) => n > 0 ? n.toLocaleString('de-DE') + '×' : null
 ---
 
 <Layout title="Download" description={`RechnungsFee ${version} herunterladen – für Windows, Linux und macOS. Kostenlos & Open Source.`}>
@@ -59,6 +64,7 @@ try {
         <span class="text-3xl">🪟</span>
         <h2 class="text-2xl font-bold text-slate-900">Windows</h2>
         <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded font-medium">x64</span>
+        {fmt(dlStats.windows) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.windows)} heruntergeladen</span>}
       </div>
       <p class="text-slate-600 mb-6">
         Der Installer richtet RechnungsFee ein und legt eine Verknüpfung im Startmenü an.
@@ -85,6 +91,7 @@ try {
         <span class="text-3xl">🐧</span>
         <h2 class="text-2xl font-bold text-slate-900">Linux</h2>
         <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded font-medium">x86_64 AppImage</span>
+        {fmt(dlStats.linux) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.linux)} heruntergeladen</span>}
       </div>
 
       <!-- Option A: Installer-Skript -->
@@ -134,6 +141,7 @@ try {
       <div class="flex items-center gap-3 mb-5">
         <span class="text-3xl">🍎</span>
         <h2 class="text-2xl font-bold text-slate-900">macOS</h2>
+        {fmt(dlStats.macos) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.macos)} heruntergeladen</span>}
       </div>
       <p class="text-slate-600 mb-4">
         RechnungsFee ist nicht mit einem Apple-Entwicklerzertifikat signiert.
