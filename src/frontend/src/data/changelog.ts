@@ -23,9 +23,30 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.3.31',
-    datum: 'Juli 2026',
+    version: 'v0.3.32',
+    datum: 'Juni 2026',
     eintraege: [
+      { typ: 'neu', text: 'Steuer-Fristenliste (Issue #198): Übersicht aller anstehenden UStVA-, ESt- und GewSt-Fristen für die nächsten 3/6/12 Monate – mit Feiertag-Verschiebung je nach Bundesland und Dauerfristverlängerung' },
+      { typ: 'neu', text: 'Stammdaten – Steuer & Recht: Bundesland, Dauerfristverlängerung (UStVA) sowie ESt- und GewSt-Vorauszahlungs-Toggles ergänzt' },
+      { typ: 'neu', text: 'Dashboard: Banner zeigt die nächste Steuerfrist mit Dringlichkeitsanzeige; Klick öffnet die vollständige Fristenliste' },
+      { typ: 'verbesserung', text: 'Sidebar: Auf-/Zugeklappt-Zustand der Menü-Abschnitte wird gespeichert und beim nächsten Start wiederhergestellt (vorher: immer alles aufgeklappt)' },
+      { typ: 'verbesserung', text: 'Dashboard: Fällige Rechnungen – Eingang und Ausgang in einer gemeinsamen Tabelle nach Datum sortiert; Eingangsrechnungen waren zuvor hinter langen Ausgangs-Listen versteckt' },
+      { typ: 'fix', text: 'Eingangsrechnung: Lagerbestand-Prüfung wird nicht mehr ausgelöst – bei Eingangsrechnungen findet kein Lagerabzug statt' },
+      { typ: 'fix', text: 'Dashboard: Fällige Rechnungen wurden nach dem Anlegen einer Rechnung nicht sofort aktualisiert (Cache-Invalidierung fehlte)' },
+      { typ: 'verbesserung', text: 'Datumsfelder: Direkte Tastatureingabe im Format TT.MM.JJJJ mit automatischer Punkt-Einfügung; kleines Kalender-Icon öffnet weiterhin den nativen Picker für Maus-Nutzer (Issue #196)' },
+      { typ: 'verbesserung', text: 'Kontextmenü: Browser-Rechtsklickmenü deaktiviert – Rechtsklick auf markierten Text zeigt Kopieren, in Eingabefeldern Einfügen (Issue #197)' },
+      { typ: 'verbesserung', text: 'App-Logo: „Fee" erscheint jetzt in Indigo-Akzentfarbe (#4F46E5) – einheitliches Erscheinungsbild wie auf der Website' },
+      { typ: 'fix', text: 'Sidebar: Überschrift „RechnungsFee" wurde im Dark Mode grau statt weiß dargestellt' },
+      { typ: 'fix', text: 'Kategorien Erlöse: Falsche SKR-Kontonummern korrigiert – USt-/Vorsteuererstattung FA (1779/1570 → 1790/3841), Zuwendungen von Dritten (8910/4910 → 2747/4982), Eigenverbrauch 7% (8911/4641 → 8915/4610)' },
+      { typ: 'fix', text: 'EÜR: Fehlende Zeilen ergänzt – FA-Erstattungen erscheinen jetzt in Zeile 18, Eigenverbrauch in Zeile 21' },
+    ],
+  },
+  {
+    version: 'v0.3.31',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Sidebar: Handbuch-Link öffnet rechnungsfee.app/handbuch im System-Browser' },
+      { typ: 'verbesserung', text: 'Impressum- und Datenschutz-Links zeigen jetzt auf rechnungsfee.app statt auf die alte GitHub-Pages-URL' },
       { typ: 'verbesserung', text: 'Spenden-Seite: Banküberweisung mit IBAN als gebührenfreie Alternative zu PayPal ergänzt; PayPal-Gebührenhinweis (~1,5 % + 0,35 €) direkt unter dem Button' },
       { typ: 'fix', text: 'Spenden-Seite: PC-Wittfoot UG korrekt als Spendenverwalter (nicht Entwickler) ausgewiesen; Transparenzhinweis direkt unter dem PayPal-Button platziert' },
     ],
