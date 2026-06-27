@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { getFristen, type FristenResponse } from '../../api/client'
 
 const TYP_STYLE: Record<string, string> = {
@@ -80,7 +81,7 @@ export function FristenPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 mb-6">
           <p className="text-sm text-amber-800 dark:text-amber-300">
             <strong>Bundesland nicht hinterlegt.</strong> Hinterlege dein Bundesland in{' '}
-            <a href="/stammdaten/unternehmen" className="underline">Stammdaten → Unternehmen → Steuer &amp; Recht</a>,
+            <Link to="/unternehmen?tab=steuer" className="underline">Einstellungen → Unternehmen → Steuer &amp; Recht</Link>,
             damit Fristverschiebungen durch Feiertage korrekt berechnet werden.
           </p>
         </div>

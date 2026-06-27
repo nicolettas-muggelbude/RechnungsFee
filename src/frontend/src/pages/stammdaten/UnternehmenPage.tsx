@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail,
   type Unternehmen,
@@ -1525,7 +1526,11 @@ function UnterschriftSektion({ data }: { data: Unternehmen }) {
 // ---------------------------------------------------------------------------
 
 export function UnternehmenPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('firma')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as TabId | null
+  const [activeTab, setActiveTab] = useState<TabId>(
+    tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'firma'
+  )
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['unternehmen'],
