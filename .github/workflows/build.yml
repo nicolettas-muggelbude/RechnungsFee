@@ -423,3 +423,101 @@ jobs:
           PYEOF
 
           gh release upload "$TAG" latest.json --clobber --repo "$REPO"
+
+  # ── Release Notes generieren & Release veröffentlichen ───────────────────
+  release-notes:
+    needs: updater-json
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Release Notes aus changelog.ts generieren und veröffentlichen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 << 'PYEOF'
+          import re, os
+
+          tag  = os.environ['TAG']
+          v    = tag.lstrip('v')
+          repo = os.environ['REPO']
+          base = f'https://github.com/{repo}/releases/download/{tag}'
+
+          with open('src/frontend/src/data/changelog.ts', encoding='utf-8') as f:
+              content = f.read()
+
+          start = content.find(f"version: '{tag}'")
+          if start == -1:
+              entries = []
+              print(f"Warnung: Version {tag} nicht in changelog.ts gefunden")
+          else:
+              next_v = content.find("version: 'v", start + 1)
+              block  = content[start:next_v] if next_v != -1 else content[start:]
+              entries = re.findall(
+                  r"\{\s*typ:\s*'(neu|verbesserung|fix)',\s*text:\s*'([^']+)'\s*\}",
+                  block, re.DOTALL
+              )
+
+          notes  = '## 💾 Downloads\n\n'
+          notes += '| Plattform | Download |\n|-----------|----------|\n'
+          notes += f'| 🪟 **Windows** (x64) | [⬇ RechnungsFee_{v}_x64-setup.exe]({base}/RechnungsFee_{v}_x64-setup.exe) |\n'
+          notes += f'| 🐧 **Linux** (x86_64, versioniert) | [⬇ RechnungsFee_{v}_amd64.AppImage]({base}/RechnungsFee_{v}_amd64.AppImage) |\n'
+          notes += f'| 🐧 **Linux** (x86_64, via install.sh) | [⬇ RechnungsFee_amd64.AppImage]({base}/RechnungsFee_amd64.AppImage) |\n'
+          notes += f'| 🐧 **Linux** Installer | [⬇ install-linux.sh]({base}/install-linux.sh) |\n'
+          notes += f'| 🍎 **macOS** (Apple Silicon, versioniert) | [⬇ RechnungsFee_{v}_aarch64.dmg]({base}/RechnungsFee_{v}_aarch64.dmg) |\n'
+          notes += f'| 🍎 **macOS** (Apple Silicon) | [⬇ RechnungsFee_aarch64.dmg]({base}/RechnungsFee_aarch64.dmg) |\n'
+          notes += f'\n> 🍎 **macOS:** Nicht signiert – beim ersten Start Rechtsklick → Öffnen, oder:\n'
+          notes += f'> `xattr -cr RechnungsFee_{v}_aarch64.dmg`\n\n'
+          notes += '> 🔍 **OCR für gescannte Belege & Kassenbons** (Tesseract OCR):\n'
+          notes += '> - 🪟 Windows: automatisch durch den Installer\n'
+          notes += '> - 🐧 Linux: wird vom `install-linux.sh`-Skript angeboten; manuell: `sudo apt install tesseract-ocr tesseract-ocr-deu`\n'
+          notes += '> - 🍎 macOS: `brew install tesseract tesseract-lang`\n'
+          notes += '>\n> Ohne Tesseract zeigt RechnungsFee einen Installationshinweis sobald ein gescannter Beleg importiert wird.\n\n---\n\n'
+
+          neu  = [tx for tp, tx in entries if tp == 'neu']
+          verb = [tx for tp, tx in entries if tp == 'verbesserung']
+          bugs = [tx for tp, tx in entries if tp == 'fix']
+
+          if neu:
+              notes += '## ✨ Neu\n\n' + ''.join(f'- {t}\n' for t in neu) + '\n'
+          if verb:
+              notes += '## 🔧 Verbesserungen\n\n' + ''.join(f'- {t}\n' for t in verb) + '\n'
+          if bugs:
+              notes += '## 🐛 Bugfixes\n\n' + ''.join(f'- {t}\n' for t in bugs) + '\n'
+
+          with open('release-notes.md', 'w', encoding='utf-8') as f:
+              f.write(notes)
+          print(f'release-notes.md generiert ({len(entries)} Einträge)')
+          PYEOF
+
+          gh release edit "$TAG" \
+            --notes-file release-notes.md \
+            --draft=false \
+            --repo "$REPO"
+
+  # ── Website deployen (main → web mergen → löst website.yml aus) ─────────
+  deploy-web:
+    needs: release-notes
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: main in web-Branch mergen und pushen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout web
+          git merge origin/main --no-edit
+          git push origin web

@@ -1113,6 +1113,7 @@ export function ArtikelPage() {
             </div>
           </div>
           <input
+            data-search-input
             value={suche}
             onChange={e => setSuche(e.target.value)}
             placeholder="Suche nach Bezeichnung, Artikelnummer, Gruppe …"

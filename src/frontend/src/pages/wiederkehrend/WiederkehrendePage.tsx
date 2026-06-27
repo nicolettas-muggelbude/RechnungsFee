@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
@@ -358,10 +359,9 @@ function VorlageFormular({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Erster / nächster Entwurf *</label>
-          <input
-            type="date"
+          <DateInput
             value={naechstesDatum}
-            onChange={e => setNaechstesDatum(e.target.value)}
+            onChange={setNaechstesDatum}
             className={inputCls}
           />
         </div>
@@ -917,7 +917,7 @@ export function WiederkehrendePage() {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <input type="search" placeholder="Bezeichnung oder Kunde suchen…"
+            <input type="search" data-search-input placeholder="Bezeichnung oder Kunde suchen…"
               value={suche} onChange={e => setSuche(e.target.value)}
               className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 flex-1 min-w-[140px]"
             />

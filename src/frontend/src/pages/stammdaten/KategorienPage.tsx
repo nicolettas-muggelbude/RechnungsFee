@@ -426,6 +426,7 @@ export function KategorienPage() {
       <div className="mb-5 flex items-center gap-3 flex-wrap">
         <input
           type="search"
+          data-search-input
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder={`Name, SKR-Konto${hatEks ? ', EKS' : ''} oder Beschreibung suchen …`}

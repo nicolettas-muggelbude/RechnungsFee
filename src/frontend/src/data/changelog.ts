@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.33',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Strg+F fokussiert das Suchfeld auf jeder Seite mit Suchfunktion – Rechnungen, Angebote, Aufträge, Proforma, Artikel, Kunden, Lieferanten, Kategorien, Buchungsvorlagen und Wiederkehrende Vorlagen' },
+      { typ: 'fix', text: 'Dashboard: Steuer-Fristenliste-Banner erscheint nicht mehr wenn kein Bundesland in den Stammdaten hinterlegt ist (Issue #199)' },
+      { typ: 'verbesserung', text: 'Stammdaten – Steuer-Fristenliste: aktiv/inaktiv-Badge neben dem Abschnittstitel; Optionen (Dauerfristverlängerung, ESt- und GewSt-Vorauszahlungen) sind ausgegraut bis ein Bundesland gesetzt ist' },
+      { typ: 'verbesserung', text: 'Stammdaten: Tab kann per URL-Parameter direkt geöffnet werden – Links aus der App zeigen direkt auf den richtigen Tab (z. B. ?tab=email oder ?tab=steuer)' },
+      { typ: 'fix', text: 'SMTP-Einrichten-Links in Rechnungen, Angeboten, Aufträgen und Proforma zeigten auf eine veraltete URL – jetzt korrekt auf Stammdaten → E-Mail-Tab' },
+      { typ: 'fix', text: 'Fristenliste: Link im Bundesland-Hinweis navigiert jetzt direkt auf Stammdaten → Steuer & Recht (statt Seitenreload auf alter URL)' },
+    ],
+  },
+  {
     version: 'v0.3.32',
     datum: 'Juni 2026',
     eintraege: [

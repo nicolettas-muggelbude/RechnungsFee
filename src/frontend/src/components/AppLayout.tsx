@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, type EntwurfErgebnis } from '../api/client'
+import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, openUrl, type EntwurfErgebnis } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
@@ -37,6 +37,7 @@ const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: Zeig
   { to: '/anlage-s', label: 'Anlage S',   icon: '📝', zeigen: ({ unt }) => unt?.taetigkeitsart !== 'gewerbe' },
   { to: '/anlage-g', label: 'Anlage G',   icon: '🏭', zeigen: ({ unt }) => unt?.taetigkeitsart === 'gewerbe' || unt?.taetigkeitsart === 'gemischt' },
   { to: '/eks',     label: 'EKS',         icon: '📋', zeigen: ({ unt }) => !!unt?.bezieht_transferleistungen },
+  { to: '/fristen', label: 'Fristen',     icon: '🗓️', zeigen: () => true },
   { to: '/exporte', label: 'Exporte', icon: '📦', zeigen: () => true },
 ]
 
@@ -91,15 +92,37 @@ function CollapsibleSection({
   items: { to: string; label: string; icon: string; badge?: boolean }[]
   badge?: boolean
 }) {
-  const [offen, setOffen] = useState(aktiv)
+  const storageKey = `sidebar_open_${label}`
+
+  const [offen, setOffen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved !== null) return saved === 'true'
+    } catch {}
+    return false
+  })
+
   const prevLen = useRef(items.length)
+
   useEffect(() => {
-    if (aktiv) setOffen(true)
-  }, [aktiv])
+    if (aktiv) {
+      setOffen(true)
+      try { localStorage.setItem(storageKey, 'true') } catch {}
+    }
+  }, [aktiv, storageKey])
+
   useEffect(() => {
     if (items.length > prevLen.current) setOffen(true)
     prevLen.current = items.length
   }, [items.length])
+
+  const toggle = () => {
+    setOffen(o => {
+      const next = !o
+      try { localStorage.setItem(storageKey, String(next)) } catch {}
+      return next
+    })
+  }
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
@@ -111,7 +134,7 @@ function CollapsibleSection({
   return (
     <div className="mt-1">
       <button
-        onClick={() => setOffen(o => !o)}
+        onClick={toggle}
         className={`w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors ${
           aktiv
             ? 'text-blue-700 dark:text-blue-300'
@@ -161,6 +184,22 @@ export function AppLayout() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [navigate])
+
+  // Ctrl+F → Suchfeld fokussieren (wenn vorhanden)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.shiftKey && !e.metaKey && !e.altKey && e.key === 'f') {
+        const searchInput = document.querySelector<HTMLInputElement>('[data-search-input]')
+        if (searchInput) {
+          e.preventDefault()
+          searchInput.focus()
+          searchInput.select()
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
   const [abschlussDialog, setAbschlussDialog] = useState<string | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
   const [wiederErgebnisse, setWiederErgebnisse] = useState<EntwurfErgebnis[]>([])
@@ -226,13 +265,20 @@ export function AppLayout() {
   const einstellungenAktiv = einstellungenPfade.some(p => location.pathname.startsWith(p))
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div
+      className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden"
+      onContextMenu={(e) => {
+        const t = e.target as HTMLElement
+        const hasSelection = (window.getSelection()?.toString().length ?? 0) > 0
+        if (!hasSelection && !t.closest('input, textarea, select, [contenteditable]')) e.preventDefault()
+      }}
+    >
       {/* Sidebar */}
       <aside className="w-56 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
           <img src="/logo.svg" alt="RechnungsFee" className="w-8 h-8 flex-shrink-0" />
           <div>
-            <h1 className="font-bold text-slate-800 dark:text-slate-100 text-lg leading-tight">RechnungsFee</h1>
+            <h1 className="font-bold text-lg leading-tight"><span className="text-slate-800 dark:text-white">Rechnungs</span><span className="text-[#4F46E5]">Fee</span></h1>
             <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight">v{__APP_VERSION__}</p>
           </div>
         </div>
@@ -308,6 +354,12 @@ export function AppLayout() {
           <NavLink to="/spenden" className={navLinkClass}>
             <span>💙</span><span>Spenden</span>
           </NavLink>
+          <button
+            onClick={() => openUrl('https://rechnungsfee.app/handbuch')}
+            className="flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 w-full text-left"
+          >
+            <span>📖</span><span>Handbuch</span>
+          </button>
 
         </nav>
       </aside>

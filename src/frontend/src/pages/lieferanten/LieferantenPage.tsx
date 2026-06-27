@@ -240,6 +240,7 @@ export function LieferantenPage() {
           </div>
           <input
             type="text"
+            data-search-input
             placeholder="Suchen…"
             value={suche}
             onChange={(e) => setSuche(e.target.value)}

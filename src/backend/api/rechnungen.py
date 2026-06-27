@@ -86,7 +86,10 @@ def _lager_buchen(rechnung: "Rechnung", db: Session, faktor: Decimal) -> None:
     faktor=-1: Finalisierung (Abgang), faktor=+1: Storno/Rückbuchung.
     pos.menge ist bei Gutschriften bereits negativ → Rückbuchung automatisch.
     Minusbestand-Prüfung nur beim Abgang (faktor=-1) und nur wenn nicht erlaubt.
+    Eingangsrechnungen lösen keinen Lagerabgang aus.
     """
+    if rechnung.typ == "eingang":
+        return
     for pos in rechnung.positionen:
         if not pos.artikel_id:
             continue

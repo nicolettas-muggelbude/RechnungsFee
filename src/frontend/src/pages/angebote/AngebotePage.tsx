@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -355,11 +356,11 @@ function AngebotFormular({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Angebotsdatum</label>
-          <input type="date" value={datum} onChange={e => setDatum(e.target.value)} className={inputCls} />
+          <DateInput value={datum} onChange={setDatum} className={inputCls} />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Gültig bis *</label>
-          <input type="date" value={gueltigBis} onChange={e => setGueltigBis(e.target.value)} className={inputCls} required />
+          <DateInput value={gueltigBis} onChange={setGueltigBis} className={inputCls} required />
         </div>
       </div>
 
@@ -816,7 +817,7 @@ function AngebotDetail({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
               <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
-              <button onClick={() => { setZeigSmtpHinweis(false); navigate('/stammdaten/unternehmen') }}
+              <button onClick={() => { setZeigSmtpHinweis(false); navigate('/unternehmen?tab=email') }}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
                 Jetzt einrichten →
               </button>
@@ -1029,6 +1030,7 @@ export function AngebotePage() {
           <div className="flex flex-wrap gap-2">
             <input
               type="search"
+              data-search-input
               placeholder="Nummer oder Kunde suchen…"
               value={suche}
               onChange={e => setSuche(e.target.value)}

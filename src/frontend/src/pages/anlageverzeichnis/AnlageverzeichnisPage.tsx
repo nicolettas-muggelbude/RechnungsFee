@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getAnlagegueter, createAnlagegut, updateAnlagegut, deleteAnlagegut,
@@ -94,7 +95,7 @@ function AnlagegutFormular({
         </div>
         <div>
           <label className={labelCls}>Kaufdatum *</label>
-          <input type="date" className={inputCls} value={form.kaufdatum} onChange={e => set('kaufdatum', e.target.value)} />
+          <DateInput className={inputCls} value={form.kaufdatum} onChange={(v) => set('kaufdatum', v)} />
         </div>
       </div>
 
@@ -129,7 +130,7 @@ function AnlagegutFormular({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Verkauft am</label>
-          <input type="date" className={inputCls} value={form.verkauft_am ?? ''} onChange={e => set('verkauft_am', e.target.value || null)} />
+          <DateInput className={inputCls} value={form.verkauft_am ?? ''} onChange={(v) => set('verkauft_am', v || null)} />
         </div>
         <div className="flex items-end pb-1">
           <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">

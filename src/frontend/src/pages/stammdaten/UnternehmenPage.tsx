@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail,
   type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
-import { guardedDateChange } from '../../utils/dateInput'
+import { DateInput } from '../../components/DateInput'
 import { KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 
 // ---------------------------------------------------------------------------
@@ -184,6 +185,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
     mutationFn: (d: Partial<Unternehmen>) => updateUnternehmen(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unternehmen'] })
+      qc.invalidateQueries({ queryKey: ['fristen'] })
       setGespeichert(true)
       setFehler(null)
       setTimeout(() => setGespeichert(false), 2500)
@@ -401,10 +403,9 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             </p>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Geburtsdatum">
-                <input
-                  type="date"
+                <DateInput
                   value={form.geburtsdatum ?? ''}
-                  onChange={guardedDateChange((v) => set('geburtsdatum', v))}
+                  onChange={(v) => set('geburtsdatum', v)}
                   className={inputCls}
                 />
               </Field>
@@ -445,6 +446,84 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <option value="monat">Monatlich</option>
           </select>
         </Field>
+
+        <hr className="border-slate-100 dark:border-slate-700" />
+
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Steuer-Fristenliste</p>
+          {form.bundesland
+            ? <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">aktiv</span>
+            : <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">inaktiv – Bundesland wählen</span>
+          }
+        </div>
+
+        <Field label={<>Bundesland <InfoTooltip text="Aktiviert die Steuer-Fristenliste. Solange kein Bundesland gesetzt ist, werden keine Fristen berechnet und der Dashboard-Banner bleibt ausgeblendet. Bundesländer haben unterschiedliche Feiertage, die Abgabefristen verschieben können." /></>}>
+          <select
+            value={form.bundesland ?? ''}
+            onChange={ev => set('bundesland', ev.target.value || null)}
+            className={selectCls}
+          >
+            <option value="">– bitte wählen –</option>
+            <option value="BB">Brandenburg</option>
+            <option value="BE">Berlin</option>
+            <option value="BW">Baden-Württemberg</option>
+            <option value="BY">Bayern</option>
+            <option value="HB">Bremen</option>
+            <option value="HE">Hessen</option>
+            <option value="HH">Hamburg</option>
+            <option value="MV">Mecklenburg-Vorpommern</option>
+            <option value="NI">Niedersachsen</option>
+            <option value="NW">Nordrhein-Westfalen</option>
+            <option value="RP">Rheinland-Pfalz</option>
+            <option value="SH">Schleswig-Holstein</option>
+            <option value="SL">Saarland</option>
+            <option value="SN">Sachsen</option>
+            <option value="ST">Sachsen-Anhalt</option>
+            <option value="TH">Thüringen</option>
+          </select>
+        </Field>
+
+        <div className={`flex items-center gap-3 ${!form.bundesland ? 'opacity-40 pointer-events-none' : ''}`}>
+          <input
+            id="dauerfrist"
+            type="checkbox"
+            checked={form.dauerfristverlaengerung_ust ?? false}
+            onChange={ev => set('dauerfristverlaengerung_ust', ev.target.checked)}
+            disabled={!form.bundesland}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="dauerfrist" className="text-sm text-slate-700 dark:text-slate-200">
+            Dauerfristverlängerung (UStVA) <span className="text-slate-400 text-xs">– Frist verschiebt sich um +1 Monat</span>
+          </label>
+        </div>
+
+        <div className={`flex items-center gap-3 ${!form.bundesland ? 'opacity-40 pointer-events-none' : ''}`}>
+          <input
+            id="est_vz"
+            type="checkbox"
+            checked={form.est_vorauszahlungen_aktiv ?? false}
+            onChange={ev => set('est_vorauszahlungen_aktiv', ev.target.checked)}
+            disabled={!form.bundesland}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="est_vz" className="text-sm text-slate-700 dark:text-slate-200">
+            Einkommensteuer-Vorauszahlungen <span className="text-slate-400 text-xs">– Termine 10.03 / 10.06 / 10.09 / 10.12</span>
+          </label>
+        </div>
+
+        <div className={`flex items-center gap-3 ${!form.bundesland ? 'opacity-40 pointer-events-none' : ''}`}>
+          <input
+            id="gewst_vz"
+            type="checkbox"
+            checked={form.gewst_vorauszahlungen_aktiv ?? false}
+            onChange={ev => set('gewst_vorauszahlungen_aktiv', ev.target.checked)}
+            disabled={!form.bundesland}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="gewst_vz" className="text-sm text-slate-700 dark:text-slate-200">
+            Gewerbesteuer-Vorauszahlungen <span className="text-slate-400 text-xs">– Termine 15.02 / 15.05 / 15.08 / 15.11</span>
+          </label>
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <Field label={<>Kontenrahmen <InfoTooltip text="SKR03: Standard für Dienstleister und Freiberufler. SKR04: Standard für Handel und produzierende Betriebe. SKR49: Für Vereine und Non-Profits." /></>}>
@@ -1457,7 +1536,11 @@ function UnterschriftSektion({ data }: { data: Unternehmen }) {
 // ---------------------------------------------------------------------------
 
 export function UnternehmenPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('firma')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as TabId | null
+  const [activeTab, setActiveTab] = useState<TabId>(
+    tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'firma'
+  )
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['unternehmen'],

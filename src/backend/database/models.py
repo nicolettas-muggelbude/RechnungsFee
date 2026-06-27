@@ -54,6 +54,10 @@ class Unternehmen(Base):
     w_idnr: Mapped[str | None] = mapped_column(String(20))
     finanzamt: Mapped[str | None] = mapped_column(String(200))
     voranmeldungsrhythmus: Mapped[str] = mapped_column(String(12), default="quartal", nullable=False)  # monat|quartal
+    bundesland: Mapped[str | None] = mapped_column(String(2))  # z.B. BY, NW, BE
+    dauerfristverlaengerung_ust: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    est_vorauszahlungen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    gewst_vorauszahlungen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Status
     ist_kleinunternehmer: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     bezieht_transferleistungen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

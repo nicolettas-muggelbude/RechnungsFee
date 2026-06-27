@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, type Rechnung } from '../../api/client'
-import { guardedDateChange } from '../../utils/dateInput'
+import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, type Rechnung } from '../../api/client'
+import { DateInput } from '../../components/DateInput'
 import { dashboardFilter } from '../../store/filterStore'
 
 function formatEuro(val: string | number): string {
@@ -307,38 +307,96 @@ function KleinunternehmerWarnung() {
 }
 
 // ---------------------------------------------------------------------------
+// Steuer-Fristen-Banner
+// ---------------------------------------------------------------------------
+
+function SteuerFristenBanner() {
+  const navigate = useNavigate()
+  const { data } = useQuery({
+    queryKey: ['fristen', 3],
+    queryFn: () => getFristen(3),
+    staleTime: 1000 * 60 * 60,
+  })
+
+  if (!data || !data.konfiguriert || data.fristen.length === 0) return null
+
+  const naechste = data.fristen[0]
+  const heute = new Date(); heute.setHours(0, 0, 0, 0)
+  const fristDatum = new Date(naechste.faellig)
+  const tage = Math.round((fristDatum.getTime() - heute.getTime()) / 86_400_000)
+
+  const dringend = tage <= 14
+  const [d, m, y] = naechste.faellig.split('-').reverse()
+
+  return (
+    <div
+      className={`rounded-lg border p-4 mb-4 cursor-pointer ${
+        dringend
+          ? 'bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-800'
+          : 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800'
+      }`}
+      onClick={() => navigate('/fristen')}
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-xl">🗓️</span>
+        <div className="flex-1 min-w-0">
+          <p className={`font-semibold text-sm ${dringend ? 'text-amber-800 dark:text-amber-300' : 'text-blue-800 dark:text-blue-300'}`}>
+            Nächste Steuerfrist: {naechste.bezeichnung}
+          </p>
+          <p className={`text-sm ${dringend ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>
+            Fällig am {d}.{m}.{y}
+            {tage === 0 ? ' – heute!' : tage > 0 ? ` – noch ${tage} ${tage === 1 ? 'Tag' : 'Tage'}` : ' – abgelaufen'}
+            {data.fristen.length > 1 ? ` · ${data.fristen.length - 1} weitere` : ''}
+          </p>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${dringend ? 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'}`}>
+          Alle anzeigen →
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
 function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
   const heute = heuteIso()
-  const ausgang = rechnungen.filter(r => r.typ === 'ausgang')
-  const eingang = rechnungen.filter(r => r.typ === 'eingang')
+  const sortiert = [...rechnungen].sort((a, b) => (a.faellig_am ?? '') < (b.faellig_am ?? '') ? -1 : 1)
 
-  function FaelligTabelle({ liste, titel }: { liste: Rechnung[], titel: string }) {
-    if (liste.length === 0) return null
-    return (
-      <div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{titel}</p>
+  const gesamt = rechnungen.length
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 mb-6">
+      <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
+        <span className="text-amber-500">⚠️</span>
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fällige Rechnungen</h3>
+        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">nächste 7 Tage + überfällig · {gesamt} Einträge</span>
+      </div>
+      <div className="overflow-y-auto resize-y px-5 py-4" style={{ height: '240px', minHeight: '96px' }}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500">
-              <th className="pb-1.5 text-left font-medium">Rg.-Datum</th>
               <th className="pb-1.5 text-left font-medium">Fällig am</th>
+              <th className="pb-1.5 text-left font-medium">Typ</th>
               <th className="pb-1.5 text-left font-medium">Partner</th>
               <th className="pb-1.5 text-left font-medium">Rg.-Nr.</th>
               <th className="pb-1.5 text-right font-medium">Betrag</th>
             </tr>
           </thead>
           <tbody>
-            {liste.map(r => {
+            {sortiert.map(r => {
               const ueberfaellig = r.faellig_am && r.faellig_am < heute
               return (
                 <tr key={r.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0">
-                  <td className="py-2 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDatum(r.datum)}</td>
                   <td className={`py-2 pr-4 whitespace-nowrap font-medium ${ueberfaellig ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
                     {r.faellig_am ? formatDatum(r.faellig_am) : '—'}
                     {ueberfaellig && <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r.typ === 'eingang' ? 'bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-400' : 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'}`}>
+                      {r.typ === 'eingang' ? 'Eingang' : 'Ausgang'}
+                    </span>
                   </td>
                   <td className="py-2 pr-4 text-slate-700 dark:text-slate-200 truncate max-w-[140px]">
                     {r.typ === 'ausgang' ? (r.kunde_name ?? r.partner_freitext ?? '—') : (r.lieferant_name ?? r.partner_freitext ?? '—')}
@@ -350,21 +408,6 @@ function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
             })}
           </tbody>
         </table>
-      </div>
-    )
-  }
-
-  const gesamt = ausgang.length + eingang.length
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-800 mb-6">
-      <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
-        <span className="text-amber-500">⚠️</span>
-        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fällige Rechnungen</h3>
-        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">nächste 7 Tage + überfällig · {gesamt} Einträge</span>
-      </div>
-      <div className="overflow-y-auto resize-y px-5 py-4 space-y-5" style={{ height: '240px', minHeight: '96px' }}>
-        <FaelligTabelle liste={ausgang} titel="Ausgangsrechnungen" />
-        <FaelligTabelle liste={eingang} titel="Eingangsrechnungen" />
       </div>
     </div>
   )
@@ -432,7 +475,7 @@ export function Dashboard() {
   })
 
   const { data: faellige } = useQuery({
-    queryKey: ['rechnungen-faellig'],
+    queryKey: ['rechnungen', 'faellig'],
     queryFn: () => getFaelligeRechnungen(7),
     staleTime: 1000 * 60 * 5,
   })
@@ -491,6 +534,7 @@ export function Dashboard() {
     <div className="p-6 max-w-4xl mx-auto">
       <KleinunternehmerWarnung />
       <LagerwarnungWidget />
+      <SteuerFristenBanner />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
 
@@ -521,27 +565,24 @@ export function Dashboard() {
             />
           )}
           {filterModus === 'datum' && (
-            <input
-              type="date"
+            <DateInput
               value={datum}
-              onChange={guardedDateChange(setDatum)}
+              onChange={setDatum}
               className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
             />
           )}
           {filterModus === 'zeitraum' && (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DateInput
                 value={datumVon}
-                onChange={guardedDateChange(setDatumVon)}
+                onChange={setDatumVon}
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
               <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
-              <input
-                type="date"
+              <DateInput
                 value={datumBis}
                 min={datumVon}
-                onChange={guardedDateChange(setDatumBis)}
+                onChange={setDatumBis}
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
               />
             </div>

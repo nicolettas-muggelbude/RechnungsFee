@@ -220,6 +220,10 @@ export type Unternehmen = {
   w_idnr?: string
   finanzamt?: string
   voranmeldungsrhythmus: 'monat' | 'quartal'
+  bundesland?: string | null
+  dauerfristverlaengerung_ust: boolean
+  est_vorauszahlungen_aktiv: boolean
+  gewst_vorauszahlungen_aktiv: boolean
   ist_kleinunternehmer: boolean
   bezieht_transferleistungen: boolean
   geburtsdatum?: string | null
@@ -2081,3 +2085,28 @@ export async function getAveurPdfUrl(jahr: number): Promise<string> {
   return `${base}/anlageverzeichnis/pdf?jahr=${jahr}`
 }
 
+// --- Steuer-Fristenliste ---
+
+export interface SteuerFrist {
+  typ: 'UStVA' | 'ESt-VZ' | 'GewSt-VZ'
+  bezeichnung: string
+  zeitraum: string
+  faellig_original: string
+  faellig: string
+  hinweis: string | null
+}
+
+export interface FristenResponse {
+  fristen: SteuerFrist[]
+  bundesland: string | null
+  bundesland_name: string
+  rhythmus: string | null
+  dauerfristverlaengerung: boolean
+  est_aktiv: boolean
+  gewst_aktiv: boolean
+  ist_kleinunternehmer: boolean
+  konfiguriert: boolean
+}
+
+export const getFristen = (monate: number) =>
+  request<FristenResponse>(`/fristen?monate=${monate}`)

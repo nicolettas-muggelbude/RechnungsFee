@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DateInput } from '../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   downloadGobdExport,
@@ -65,11 +66,11 @@ function ZeitraumAuswahl({
         <>
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Von</label>
-            <input type="date" value={vonCustom} onChange={(e) => setVonCustom(e.target.value)} className={inp} />
+            <DateInput value={vonCustom} onChange={setVonCustom} className={inp} />
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Bis</label>
-            <input type="date" value={bisCustom} onChange={(e) => setBisCustom(e.target.value)} className={inp} />
+            <DateInput value={bisCustom} onChange={setBisCustom} className={inp} />
           </div>
         </>
       )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -234,7 +235,7 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
                 className={`${inp} w-full`} placeholder="Bezeichnung" autoFocus />
               <div>
                 <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Löschdatum (DSGVO)</label>
-                <input type="date" value={editLoeschdatum} onChange={e => setEditLoeschdatum(e.target.value)}
+                <DateInput value={editLoeschdatum} onChange={setEditLoeschdatum}
                   className={`${inp} w-full`} />
                 {editLoeschdatum && <button type="button" onClick={() => setEditLoeschdatum('')}
                   className="text-xs text-slate-400 hover:text-slate-600 mt-1">× Kein Löschdatum</button>}
@@ -279,7 +280,7 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
           placeholder="Bezeichnung (optional)" className={`${inp} w-full`} />
         <div>
           <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Löschdatum (DSGVO, optional)</label>
-          <input type="date" value={uploadLoeschdatum} onChange={e => setUploadLoeschdatum(e.target.value)}
+          <DateInput value={uploadLoeschdatum} onChange={setUploadLoeschdatum}
             className={`${inp} w-full`} />
         </div>
         <label className={`flex items-center justify-center gap-2 px-3 py-2 text-xs rounded-lg cursor-pointer
@@ -618,6 +619,7 @@ export function KundenPage() {
           </div>
           <input
             type="text"
+            data-search-input
             placeholder="Suchen…"
             value={suche}
             onChange={(e) => setSuche(e.target.value)}

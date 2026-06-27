@@ -148,6 +148,7 @@
 ### UX & Community
 - [x] Tagesabschluss-Erinnerung nur bei offenen Bar-Buchungen: Banner erscheint ausschließlich wenn Tage mit Bar-Buchungen ohne Abschluss existieren; ältestes offenes Datum wird angezeigt (Issue #194)
 - [x] Spenden-Seite: PayPal-Link, Kostenübersicht, alternative Unterstützungsmöglichkeiten; Impressum + Datenschutz auf GitHub Pages (Issue #174)
+- [x] Steuer-Fristenliste (Issue #198): Übersicht fälliger UStVA-, ESt- und GewSt-Vorauszahlungsfristen für 3/6/12 Monate; automatische Verschiebung auf nächsten Werktag je Bundesland; Dauerfristverlängerung-Toggle; Dashboard-Banner für die nächste Frist
 
 ---
 
@@ -190,7 +191,47 @@ Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigat
 
 ---
 
+## ⌨️ Ziel: Vollständige Tastatursteuerung (kein fester Zeitplan)
+
+**Ziel:** RechnungsFee soll komplett ohne Maus bedienbar sein – von der Navigation bis zum Finalisieren einer Rechnung.
+
+### Globale Kürzel
+
+| Kürzel | Aktion | Status |
+|--------|--------|--------|
+| Strg + F | Suchfeld auf der aktuellen Seite fokussieren | ✅ v0.3.33 |
+| Strg + Shift + E | Direkt zu Eingangsrechnungen | ✅ v0.3.26 |
+| Strg + N | Neue Rechnung / Neues Dokument anlegen (kontextabhängig) | [ ] |
+| Strg + S | Speichern (im aktiven Formular) | [ ] |
+| Strg + Enter | Finalisieren (Entwurf → Rechnung) | [ ] |
+| Esc | Dialog / Detail-Panel schließen | [ ] |
+
+### Navigation & Listen
+
+- [ ] Sidebar vollständig per Tab erreichbar; aktiver Menüpunkt per Enter öffnen
+- [ ] Listeneinträge (Rechnungen, Kunden usw.) per Pfeiltasten durchblättern; Enter öffnet Detail-Panel
+- [ ] Detail-Panel: Tab-Navigation durch alle Aktions-Buttons (Bearbeiten, Drucken, Stornieren …)
+- [ ] Tabellen-Header per Tab fokussierbar, Enter sortiert die Spalte
+
+### Formulare
+
+- [ ] Tab / Shift+Tab springt durch alle Felder in logischer Reihenfolge
+- [ ] Positionszeilen: Tab springt durch alle Spalten, Enter fügt neue Zeile hinzu
+- [ ] Datums-Felder: Pfeiltasten erhöhen/verringern Tag/Monat/Jahr
+- [ ] Dropdowns (USt-Satz, Kategorie, Zahlungsart): Pfeiltasten + Enter, kein Mausklick nötig
+- [ ] Autocomplete (Artikel, Kunde): Pfeiltasten wählen Vorschlag, Enter übernimmt
+
+### Modals & Dialoge
+
+- [ ] Focus-Trap: Tab bleibt innerhalb des offenen Dialogs
+- [ ] Esc schließt alle Dialoge (Mail, Storno, Finalisieren, …)
+- [ ] Bestätigungs-Buttons (Ja/Nein) per Enter / Leertaste auslösbar
+
+---
+
 ## 💡 Ideen (ohne Zeitplan)
+
+- **Kalenderansicht** (Issue #198, Folge-Feature) – Vollständige Monatsansicht mit Buchungen, Steuerfristen und Feiertagen. Setzt Steuer-Fristenliste voraus. Größerer Scope, kein fester Zeitplan.
 
 - **Artikel-Varianten** – Varianten eines Artikels (z. B. Größe, Farbe) mit eigenem Preis und Bestand; Auswahl direkt in der Rechnungsposition (Issue #171)
 

@@ -27,6 +27,10 @@ class UnternehmenBase(BaseModel):
     w_idnr: Optional[str] = None
     finanzamt: Optional[str] = None
     voranmeldungsrhythmus: str = "quartal"
+    bundesland: Optional[str] = None
+    dauerfristverlaengerung_ust: bool = False
+    est_vorauszahlungen_aktiv: bool = False
+    gewst_vorauszahlungen_aktiv: bool = False
     ist_kleinunternehmer: bool = False
     bezieht_transferleistungen: bool = False
     geburtsdatum: Optional[date] = None

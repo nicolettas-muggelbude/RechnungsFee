@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { KategorieErstellenModal } from '../../components/KategorieErstellenModal'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
@@ -117,6 +118,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum }: Pr
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = useForm<SingleValues>({
     resolver: zodResolver(singleSchema),
@@ -501,10 +503,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum }: Pr
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Datum</label>
-                <input
-                  type="date"
-                  {...register('datum')}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                <Controller
+                  name="datum"
+                  control={control}
+                  render={({ field }) => (
+                    <DateInput
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    />
+                  )}
                 />
                 {errors.datum && (
                   <p className="text-red-500 text-xs mt-0.5">{errors.datum.message}</p>
@@ -861,10 +869,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum }: Pr
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Datum</label>
-                <input
-                  type="date"
-                  {...registerS('datum')}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                <Controller
+                  name="datum"
+                  control={controlS}
+                  render={({ field }) => (
+                    <DateInput
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    />
+                  )}
                 />
                 {errorsS.datum && (
                   <p className="text-red-500 text-xs mt-0.5">{errorsS.datum.message}</p>
