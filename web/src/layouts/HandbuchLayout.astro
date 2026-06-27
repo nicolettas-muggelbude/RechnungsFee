@@ -32,11 +32,7 @@ const { title, currentSlug } = Astro.props
                 <li>
                   <a
                     href={`/handbuch/${item.slug}`}
-                    class={`block text-sm px-2 py-1 rounded-lg transition-colors ${
-                      currentSlug === item.slug
-                        ? 'bg-indigo-100 dark:bg-indigo-800/60 text-[#4F46E5] dark:text-indigo-300 font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
+                    class={`nav-item block text-sm px-2 py-1 rounded-lg transition-colors ${currentSlug === item.slug ? 'nav-item--active' : ''}`}
                   >
                     {item.label}
                   </a>
@@ -55,6 +51,36 @@ const { title, currentSlug } = Astro.props
 
   </div>
 </Layout>
+
+<style>
+  .nav-item {
+    color: #475569;
+    text-decoration: none;
+  }
+  .nav-item:hover {
+    background-color: #e2e8f0;
+    color: #0f172a;
+  }
+  .nav-item--active {
+    background-color: #e0e7ff;
+    color: #4F46E5;
+    font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    .nav-item {
+      color: #94a3b8;
+    }
+    .nav-item:hover {
+      background-color: #334155;
+      color: #f1f5f9;
+    }
+    .nav-item--active {
+      background-color: rgba(67, 56, 202, 0.4);
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+  }
+</style>
 
 <script is:inline>
   ;(function () {
