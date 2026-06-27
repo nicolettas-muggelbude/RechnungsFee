@@ -18,5 +18,7 @@ const title = headings.find(h => h.depth === 1)?.text ?? slug.replace(/-/g, ' ')
 ---
 
 <HandbuchLayout title={title} currentSlug={slug}>
-  <Content />
+  <div data-pagefind-filter="section:handbuch">
+    <Content />
+  </div>
 </HandbuchLayout>

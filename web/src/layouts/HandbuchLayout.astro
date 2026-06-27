@@ -52,7 +52,7 @@ const { title, currentSlug } = Astro.props
   </div>
 </Layout>
 
-<style>
+<style is:global>
   .nav-item {
     color: #475569;
     text-decoration: none;
@@ -131,8 +131,9 @@ const { title, currentSlug } = Astro.props
     script.onload = function () {
       new PagefindUI({
         element: '#handbuch-search',
-        showSubResults: false,
+        showSubResults: true,
         showImages: false,
+        filters: { section: 'handbuch' },
         translations: { placeholder: 'Suchen …' },
       })
     }
