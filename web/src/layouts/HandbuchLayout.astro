@@ -65,11 +65,29 @@ const { title, currentSlug } = Astro.props
 
     const style = document.createElement('style')
     style.textContent = `
+      #handbuch-search {
+        --pagefind-ui-scale: 0.65;
+        --pagefind-ui-border-radius: 6px;
+        --pagefind-ui-primary: #4F46E5;
+        --pagefind-ui-text: #334155;
+        --pagefind-ui-background: #ffffff;
+        --pagefind-ui-border: #cbd5e1;
+        --pagefind-ui-font: inherit;
+      }
+      .dark #handbuch-search {
+        --pagefind-ui-text: #cbd5e1;
+        --pagefind-ui-background: #1e293b;
+        --pagefind-ui-border: #475569;
+        --pagefind-ui-primary: #818cf8;
+      }
       #handbuch-search .pagefind-ui__form { margin: 0; }
-      #handbuch-search .pagefind-ui__search-input { font-size: 0.8rem; padding: 0.35rem 0.6rem; }
-      #handbuch-search .pagefind-ui__results-area { position: absolute; z-index: 50; background: white;
-        border: 1px solid #e2e8f0; border-radius: 0.5rem; box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        width: 320px; max-height: 400px; overflow-y: auto; margin-top: 4px; }
+      #handbuch-search .pagefind-ui__results-area {
+        position: absolute; z-index: 50;
+        background: var(--pagefind-ui-background);
+        border: 1px solid var(--pagefind-ui-border);
+        border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        width: 300px; max-height: 380px; overflow-y: auto; margin-top: 4px;
+      }
     `
     document.head.appendChild(style)
 
@@ -80,7 +98,7 @@ const { title, currentSlug } = Astro.props
         element: '#handbuch-search',
         showSubResults: false,
         showImages: false,
-        translations: { placeholder: 'Handbuch durchsuchen …' },
+        translations: { placeholder: 'Suchen …' },
       })
     }
     document.head.appendChild(script)
