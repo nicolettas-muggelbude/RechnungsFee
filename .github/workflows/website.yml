@@ -31,7 +31,8 @@ jobs:
       - name: Changelog-Daten kopieren
         run: |
           mkdir -p web/src/data
-          cp src/frontend/src/data/changelog.ts web/src/data/changelog.ts
+          git fetch origin main --depth=1
+          git show origin/main:src/frontend/src/data/changelog.ts > web/src/data/changelog.ts
 
       - uses: actions/setup-node@v4
         with:
