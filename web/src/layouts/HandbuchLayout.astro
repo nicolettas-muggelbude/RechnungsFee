@@ -10,7 +10,7 @@ interface Props {
 const { title, currentSlug } = Astro.props
 ---
 
-<Layout title={`${title} – Handbuch`} description={`RechnungsFee Handbuch: ${title}`}>
+<Layout title={`${title} – Handbuch`} description={`RechnungsFee Handbuch: ${title}`} pagefindIgnore={false}>
   <div class="max-w-6xl mx-auto px-6 py-10 flex gap-10 items-start">
 
     <!-- Sidebar -->
@@ -135,6 +135,16 @@ const { title, currentSlug } = Astro.props
         showImages: false,
         filters: { section: 'handbuch' },
         translations: { placeholder: 'Suchen …' },
+      })
+
+      document.addEventListener('click', function (e) {
+        var searchEl = document.getElementById('handbuch-search')
+        if (!searchEl || searchEl.contains(e.target)) return
+        var input = searchEl.querySelector('input')
+        if (input && input.value) {
+          input.value = ''
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        }
       })
     }
     document.head.appendChild(script)

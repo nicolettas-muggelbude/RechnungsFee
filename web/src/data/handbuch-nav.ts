@@ -42,14 +42,7 @@ export const HANDBUCH_NAV: NavGroup[] = [
     items: [
       { label: 'Auswertungen & Export', slug: 'auswertungen-und-export' },
       { label: 'Anlage AVEÜR', slug: 'anlage-aveür' },
-    ],
-  },
-  {
-    heading: 'Auswertungen',
-    items: [
       { label: 'Steuer-Fristenliste', slug: 'steuer-fristenliste' },
-      { label: 'Auswertungen & Export', slug: 'auswertungen-und-export' },
-      { label: 'Anlage AVEÜR', slug: 'anlage-aveür' },
     ],
   },
   {

@@ -4,11 +4,13 @@ import '../styles/global.css'
 interface Props {
   title?: string
   description?: string
+  pagefindIgnore?: boolean
 }
 
 const {
   title = 'RechnungsFee',
   description = 'Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer. Lokal, offline, Open Source.',
+  pagefindIgnore = true,
 } = Astro.props
 
 const pageTitle = title === 'RechnungsFee'
@@ -32,7 +34,7 @@ const pageTitle = title === 'RechnungsFee'
   <body class="bg-white">
 
     <!-- Header -->
-    <header class="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
+    <header data-pagefind-ignore class="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
       <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <a href="/" class="flex items-center gap-2 font-extrabold text-xl tracking-tight">
           <img src="/logo.svg" alt="" class="w-8 h-8" />
@@ -65,12 +67,12 @@ const pageTitle = title === 'RechnungsFee'
     </header>
 
     <!-- Inhalt -->
-    <main>
+    <main data-pagefind-ignore={pagefindIgnore || undefined}>
       <slot />
     </main>
 
     <!-- Footer -->
-    <footer class="bg-slate-900 text-slate-400 mt-24">
+    <footer data-pagefind-ignore class="bg-slate-900 text-slate-400 mt-24">
       <div class="max-w-6xl mx-auto px-6 py-12">
         <div class="flex flex-col md:flex-row justify-between items-start gap-8">
           <div>
