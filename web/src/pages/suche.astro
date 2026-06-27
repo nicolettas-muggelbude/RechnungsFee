@@ -1,0 +1,30 @@
+---
+import Layout from '../layouts/Layout.astro'
+---
+
+<Layout title="Suche" description="RechnungsFee durchsuchen">
+  <div class="max-w-3xl mx-auto px-6 py-12">
+    <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Suche</h1>
+    <div id="search"></div>
+  </div>
+</Layout>
+
+<link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
+<script src="/pagefind/pagefind-ui.js" is:inline></script>
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    new PagefindUI({
+      element: '#search',
+      showSubResults: true,
+      translations: {
+        placeholder: 'Suchen …',
+        zero_results: 'Keine Ergebnisse für [SEARCH_TERM]',
+        many_results: '[COUNT] Ergebnisse für [SEARCH_TERM]',
+        one_result: '[COUNT] Ergebnis für [SEARCH_TERM]',
+        alt_search: 'Keine Ergebnisse für [SEARCH_TERM]. Ergebnisse für [DIFFERENT_TERM]:',
+        search_suggestion: 'Keine Ergebnisse für [SEARCH_TERM]. Meintest du:',
+        searching: 'Suche …',
+      },
+    })
+  })
+</script>
