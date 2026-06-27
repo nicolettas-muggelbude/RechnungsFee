@@ -455,7 +455,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           }
         </div>
 
-        <Field label={<>Bundesland <InfoTooltip text="Wird für die Berechnung der Steuerfristen benötigt – Feiertage sind bundeslandspezifisch und verschieben Abgabefristen." /></>}>
+        <Field label={<>Bundesland <InfoTooltip text="Aktiviert die Steuer-Fristenliste. Solange kein Bundesland gesetzt ist, werden keine Fristen berechnet und der Dashboard-Banner bleibt ausgeblendet. Bundesländer haben unterschiedliche Feiertage, die Abgabefristen verschieben können." /></>}>
           <select
             value={form.bundesland ?? ''}
             onChange={ev => set('bundesland', ev.target.value || null)}
