@@ -66,7 +66,7 @@ const { title, currentSlug } = Astro.props
     const style = document.createElement('style')
     style.textContent = `
       #handbuch-search {
-        --pagefind-ui-scale: 0.65;
+        --pagefind-ui-scale: 0.55;
         --pagefind-ui-border-radius: 6px;
         --pagefind-ui-primary: #4F46E5;
         --pagefind-ui-text: #334155;
@@ -74,11 +74,16 @@ const { title, currentSlug } = Astro.props
         --pagefind-ui-border: #cbd5e1;
         --pagefind-ui-font: inherit;
       }
-      .dark #handbuch-search {
-        --pagefind-ui-text: #cbd5e1;
-        --pagefind-ui-background: #1e293b;
-        --pagefind-ui-border: #475569;
-        --pagefind-ui-primary: #818cf8;
+      @media (prefers-color-scheme: dark) {
+        #handbuch-search {
+          --pagefind-ui-text: #cbd5e1;
+          --pagefind-ui-background: #1e293b;
+          --pagefind-ui-border: #475569;
+          --pagefind-ui-primary: #818cf8;
+        }
+        #handbuch-search .pagefind-ui__results-area {
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
       }
       #handbuch-search .pagefind-ui__form { margin: 0; }
       #handbuch-search .pagefind-ui__results-area {
