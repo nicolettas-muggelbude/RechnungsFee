@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, openUrl, type EntwurfErgebnis } from '../api/client'
@@ -102,19 +102,12 @@ function CollapsibleSection({
     return false
   })
 
-  const prevLen = useRef(items.length)
-
   useEffect(() => {
     if (aktiv) {
       setOffen(true)
       try { localStorage.setItem(storageKey, 'true') } catch {}
     }
   }, [aktiv, storageKey])
-
-  useEffect(() => {
-    if (items.length > prevLen.current) setOffen(true)
-    prevLen.current = items.length
-  }, [items.length])
 
   const toggle = () => {
     setOffen(o => {
