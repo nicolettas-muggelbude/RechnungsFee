@@ -90,15 +90,12 @@ const features = [
     </div>
   </section>
 
-  <!-- Screenshot-Platzhalter -->
+  <!-- Hero-Screenshot -->
   <section class="max-w-5xl mx-auto px-6 mb-24">
-    <div class="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 aspect-video flex items-center justify-center">
-      <div class="text-center text-slate-400">
-        <div class="text-5xl mb-3">🖼️</div>
-        <p class="font-medium">App-Screenshot</p>
-        <p class="text-sm">Platzhalter – wird durch echten Screenshot ersetzt</p>
-      </div>
-    </div>
+    <picture>
+      <source srcset="/screenshots/dark/dark_app-screenshot.png" media="(prefers-color-scheme: dark)" />
+      <img src="/screenshots/light/light_app-screenshot.png" alt="RechnungsFee App-Screenshot" class="rounded-2xl shadow-2xl w-full" />
+    </picture>
   </section>
 
   <!-- Features -->
@@ -160,23 +157,26 @@ const features = [
         <h2 class="text-3xl font-bold text-slate-900 mb-3">Ein Blick in die App</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[['Rechnungsübersicht', '🧾'], ['Journal & Buchungen', '💰'], ['EÜR & Auswertungen', '📊']].map(([label, icon]) => (
-          <div class="rounded-xl border-2 border-dashed border-slate-300 bg-white aspect-video flex items-center justify-center">
-            <div class="text-center text-slate-400">
-              <div class="text-3xl mb-2">{icon}</div>
-              <p class="text-sm font-medium">{label}</p>
-            </div>
-          </div>
+        {[
+          ['Rechnungsübersicht', 'rechnungsübersicht'],
+          ['Journal & Buchungen', 'journal_und_buchungen'],
+          ['EÜR & Auswertungen', 'euer_und_auswertung'],
+        ].map(([label, name]) => (
+          <picture>
+            <source srcset={`/screenshots/dark/dark_${name}.png`} media="(prefers-color-scheme: dark)" />
+            <img src={`/screenshots/light/light_${name}.png`} alt={label} class="rounded-xl shadow-md w-full" loading="lazy" />
+          </picture>
         ))}
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        {[['Leistungsmonitor', '📈'], ['Anlage EKS', '📋']].map(([label, icon]) => (
-          <div class="rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950 aspect-video flex items-center justify-center">
-            <div class="text-center text-indigo-300">
-              <div class="text-3xl mb-2">{icon}</div>
-              <p class="text-sm font-medium">{label}</p>
-            </div>
-          </div>
+        {[
+          ['Leistungsmonitor', 'leistungsmonitor'],
+          ['Anlage EKS', 'anlage-eks'],
+        ].map(([label, name]) => (
+          <picture>
+            <source srcset={`/screenshots/dark/dark_${name}.png`} media="(prefers-color-scheme: dark)" />
+            <img src={`/screenshots/light/light_${name}.png`} alt={label} class="rounded-xl shadow-md w-full" loading="lazy" />
+          </picture>
         ))}
       </div>
     </div>

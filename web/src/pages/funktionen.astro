@@ -3,10 +3,11 @@ import Layout from '../layouts/Layout.astro'
 
 type Feature = { text: string; optional?: boolean }
 
-const bereiche: { icon: string; title: string; text: string; features: Feature[]; optional?: boolean }[] = [
+const bereiche: { icon: string; title: string; text: string; screenshot: string; features: Feature[]; optional?: boolean }[] = [
   {
     icon: '🧾',
     title: 'Rechnungsstellung & Dokumente',
+    screenshot: 'rechnungsstellung_und_dokumente',
     text: 'Vom Angebot bis zur Stornorechnung – alle Dokumenttypen in einem durchgehenden Workflow.',
     features: [
       { text: 'Rechnung, Gutschrift, Stornorechnung' },
@@ -27,6 +28,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '💰',
     title: 'Journal & Kassenbuch',
+    screenshot: 'journal_und_kassenbuch',
     text: 'GoBD-konformes Journal für alle Einnahmen und Ausgaben – bar, Karte oder Überweisung.',
     features: [
       { text: 'Buchungen mit allen Zahlungsarten (bar, EC, Überweisung, PayPal u.a.)' },
@@ -42,6 +44,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '📊',
     title: 'EÜR & Steuerauswertungen',
+    screenshot: 'euer_und_steuerauswertung',
     text: 'Alle relevanten Steuerauswertungen – direkt aus deinen Buchungen, ohne manuelles Zusammenrechnen.',
     features: [
       { text: 'Einnahmenüberschussrechnung nach Anlage EÜR 2025' },
@@ -56,6 +59,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '📁',
     title: 'Belege & GoBD-Archivierung',
+    screenshot: 'belege_und_gobd-archivierung',
     text: 'Digitale Belegverwaltung nach GoBD – unveränderlich, versioniert, durchsuchbar.',
     features: [
       { text: 'Belegupload per Drag & Drop (PDF, JPG, PNG)' },
@@ -71,6 +75,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '👥',
     title: 'Stammdaten',
+    screenshot: 'stammdaten',
     text: 'Kunden, Lieferanten und Artikel – strukturiert und schnell abrufbar.',
     features: [
       { text: 'Kundenstamm mit Lieferadressen und Skonto' },
@@ -84,6 +89,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '🔒',
     title: 'Datenschutz & Datensicherheit',
+    screenshot: 'datenschutz_und_datensicherheit',
     text: 'Deine Daten gehören dir – lokal gespeichert, verschlüsselt gesichert.',
     features: [
       { text: 'Alle Daten lokal auf deinem Gerät (SQLite, kein Cloud-Zwang)' },
@@ -97,6 +103,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '✉️',
     title: 'Kommunikation & PDF',
+    screenshot: 'kommunikation_und_pdf',
     text: 'Professionelle PDFs und direkter E-Mail-Versand ohne Umweg.',
     features: [
       { text: 'PDF-Generierung für alle Dokumenttypen (2 Vorlagen)' },
@@ -109,6 +116,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '🎨',
     title: 'Bedienbarkeit',
+    screenshot: 'bedienbarkeit',
     text: 'Native App-Erfahrung – ohne Browser-Umweg, mit Tastaturkürzeln und komfortablem Design.',
     features: [
       { text: 'Light Mode & Dark Mode (systemseitig oder manuell)' },
@@ -120,6 +128,7 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
   {
     icon: '🏗️',
     title: 'Anlageverzeichnis',
+    screenshot: 'anlageverzeichnis',
     text: 'Wirtschaftsgüter erfassen und Abschreibungen automatisch berechnen.',
     optional: true,
     features: [
@@ -182,14 +191,11 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
             ))}
           </ul>
         </div>
-        <!-- Screenshot-Platzhalter -->
-        <div class="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 aspect-video flex items-center justify-center">
-          <div class="text-center text-slate-400">
-            <div class="text-4xl mb-2">{b.icon}</div>
-            <p class="text-sm font-medium">{b.title}</p>
-            <p class="text-xs mt-1">Screenshot folgt</p>
-          </div>
-        </div>
+        <!-- Screenshot -->
+        <picture>
+          <source srcset={`/screenshots/dark/dark_${b.screenshot}.png`} media="(prefers-color-scheme: dark)" />
+          <img src={`/screenshots/light/light_${b.screenshot}.png`} alt={b.title} class="rounded-2xl shadow-xl w-full" loading="lazy" />
+        </picture>
       </section>
     ))}
 
@@ -223,12 +229,10 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
               </li>
             ))}
           </ul>
-          <div class="rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 aspect-video flex items-center justify-center">
-            <div class="text-center text-indigo-300">
-              <div class="text-3xl mb-2">📈</div>
-              <p class="text-xs font-medium">Leistungsmonitor – Screenshot folgt</p>
-            </div>
-          </div>
+          <picture>
+            <source srcset="/screenshots/dark/dark_leistungsmonitor.png" media="(prefers-color-scheme: dark)" />
+            <img src="/screenshots/light/light_leistungsmonitor.png" alt="Leistungsmonitor" class="rounded-xl shadow-lg w-full" loading="lazy" />
+          </picture>
         </div>
         <div>
           <div class="flex items-center gap-3 mb-3">
@@ -248,12 +252,10 @@ const bereiche: { icon: string; title: string; text: string; features: Feature[]
               </li>
             ))}
           </ul>
-          <div class="rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 aspect-video flex items-center justify-center">
-            <div class="text-center text-indigo-300">
-              <div class="text-3xl mb-2">📋</div>
-              <p class="text-xs font-medium">Anlage EKS – Screenshot folgt</p>
-            </div>
-          </div>
+          <picture>
+            <source srcset="/screenshots/dark/dark_anlage-eks.png" media="(prefers-color-scheme: dark)" />
+            <img src="/screenshots/light/light_anlage-eks.png" alt="Anlage EKS" class="rounded-xl shadow-lg w-full" loading="lazy" />
+          </picture>
         </div>
       </div>
     </section>
