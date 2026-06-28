@@ -15,6 +15,34 @@ import Layout from '../layouts/Layout.astro'
       link.href = '/pagefind/pagefind-ui.css'
       document.head.appendChild(link)
 
+      const style = document.createElement('style')
+      style.textContent = `
+        #search {
+          --pagefind-ui-primary: #4F46E5;
+          --pagefind-ui-text: #334155;
+          --pagefind-ui-background: #ffffff;
+          --pagefind-ui-border: #cbd5e1;
+          --pagefind-ui-font: inherit;
+        }
+        @media (prefers-color-scheme: dark) {
+          #search {
+            --pagefind-ui-primary: #818cf8;
+            --pagefind-ui-text: #cbd5e1;
+            --pagefind-ui-background: #1e293b;
+            --pagefind-ui-border: #475569;
+            --pagefind-ui-tag: #334155;
+          }
+          #search .pagefind-ui__result { border-color: #334155; }
+          #search .pagefind-ui__result-title { color: #e2e8f0; }
+          #search .pagefind-ui__result-excerpt { color: #94a3b8; }
+          #search .pagefind-ui__filter-panel { color: #cbd5e1; }
+          #search .pagefind-ui__filter-value { color: #cbd5e1; background: #1e293b; border-color: #475569; }
+          #search .pagefind-ui__filter-value:checked + label { background: rgba(79,70,229,0.2); }
+          #search .pagefind-ui__message { color: #94a3b8; }
+        }
+      `
+      document.head.appendChild(style)
+
       const script = document.createElement('script')
       script.src = '/pagefind/pagefind-ui.js'
       script.onload = function () {
