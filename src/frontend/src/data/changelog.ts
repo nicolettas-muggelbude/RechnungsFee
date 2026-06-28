@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.34',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Sidebar: Abschnitte (Buchhaltung, Auswertung usw.) öffnen sich nicht mehr selbstständig beim App-Start – der gespeicherte Zustand wird jetzt zuverlässig beibehalten' },
+    ],
+  },
+  {
     version: 'v0.3.33',
     datum: 'Juni 2026',
     eintraege: [
