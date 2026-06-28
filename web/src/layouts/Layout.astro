@@ -124,5 +124,68 @@ const pageTitle = title === 'RechnungsFee'
       }
     })
   </script>
+
+  <script>
+    // Lightbox für Screenshots
+    ;(function () {
+      const style = document.createElement('style')
+      style.textContent = `
+        @keyframes lb-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes lb-zoom { from { transform: scale(0.92); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+        #lb-overlay { animation: lb-fade 0.18s ease }
+        #lb-overlay img { animation: lb-zoom 0.18s ease }
+        #lb-close:hover { background: rgba(255,255,255,0.25) !important }
+      `
+      document.head.appendChild(style)
+
+      let overlay: HTMLElement | null = null
+
+      function closeOverlay() {
+        overlay?.remove()
+        overlay = null
+        document.body.style.overflow = ''
+      }
+
+      document.addEventListener('click', function (e) {
+        const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('.lightbox-link')
+        if (!link) return
+        e.preventDefault()
+
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        const src = isDark ? (link.dataset.lbDark ?? link.dataset.lbLight) : link.dataset.lbLight
+        const alt = link.dataset.lbAlt ?? ''
+
+        overlay = document.createElement('div')
+        overlay.id = 'lb-overlay'
+        overlay.style.cssText =
+          'position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;padding:1.5rem'
+
+        const img = document.createElement('img')
+        img.src = src ?? ''
+        img.alt = alt
+        img.style.cssText =
+          'max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px;box-shadow:0 30px 80px rgba(0,0,0,0.8);cursor:default'
+        img.addEventListener('click', e => e.stopPropagation())
+
+        const btn = document.createElement('button')
+        btn.id = 'lb-close'
+        btn.innerHTML = '✕'
+        btn.title = 'Schließen (Esc)'
+        btn.style.cssText =
+          'position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.12);color:#fff;border:none;width:2.5rem;height:2.5rem;border-radius:50%;font-size:1.1rem;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;justify-content:center'
+        btn.addEventListener('click', closeOverlay)
+
+        overlay.appendChild(img)
+        overlay.appendChild(btn)
+        overlay.addEventListener('click', closeOverlay)
+        document.body.appendChild(overlay)
+        document.body.style.overflow = 'hidden'
+      })
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay) closeOverlay()
+      })
+    })()
+  </script>
   </body>
 </html>

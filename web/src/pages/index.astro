@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import Screenshot from '../components/Screenshot.astro'
 import { getDownloadStats } from '../lib/downloads'
 
 let version = 'v0.3.30'
@@ -92,10 +93,7 @@ const features = [
 
   <!-- Hero-Screenshot -->
   <section class="max-w-5xl mx-auto px-6 mb-24">
-    <picture>
-      <source srcset="/screenshots/dark/dark_app-screenshot.png" media="(prefers-color-scheme: dark)" />
-      <img src="/screenshots/light/light_app-screenshot.png" alt="RechnungsFee App-Screenshot" class="rounded-2xl shadow-2xl w-full" />
-    </picture>
+    <Screenshot light="/screenshots/light/light_app-screenshot.png" dark="/screenshots/dark/dark_app-screenshot.png" alt="RechnungsFee App-Screenshot" />
   </section>
 
   <!-- Features -->
@@ -162,10 +160,7 @@ const features = [
           ['Journal & Buchungen', 'journal_und_buchungen'],
           ['EÜR & Auswertungen', 'euer_und_auswertung'],
         ].map(([label, name]) => (
-          <picture>
-            <source srcset={`/screenshots/dark/dark_${name}.png`} media="(prefers-color-scheme: dark)" />
-            <img src={`/screenshots/light/light_${name}.png`} alt={label} class="rounded-xl shadow-md w-full" loading="lazy" />
-          </picture>
+          <Screenshot light={`/screenshots/light/light_${name}.png`} dark={`/screenshots/dark/dark_${name}.png`} alt={label} class="rounded-xl" />
         ))}
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -173,10 +168,7 @@ const features = [
           ['Leistungsmonitor', 'leistungsmonitor'],
           ['Anlage EKS', 'anlage-eks'],
         ].map(([label, name]) => (
-          <picture>
-            <source srcset={`/screenshots/dark/dark_${name}.png`} media="(prefers-color-scheme: dark)" />
-            <img src={`/screenshots/light/light_${name}.png`} alt={label} class="rounded-xl shadow-md w-full" loading="lazy" />
-          </picture>
+          <Screenshot light={`/screenshots/light/light_${name}.png`} dark={`/screenshots/dark/dark_${name}.png`} alt={label} class="rounded-xl" />
         ))}
       </div>
     </div>
