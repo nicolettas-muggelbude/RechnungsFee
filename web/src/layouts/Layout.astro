@@ -63,7 +63,10 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString()
     <header data-pagefind-ignore class="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
       <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <a href="/" class="flex items-center gap-2 font-extrabold text-xl tracking-tight">
-          <img src="/logo.svg" alt="" class="w-8 h-8" />
+          <picture>
+            <source srcset="/logo_neu/logo_rounded.svg" media="(prefers-color-scheme: dark)" />
+            <img src="/logo_neu/logo_bordered_svg.svg" alt="" class="w-8 h-8" />
+          </picture>
           <span class="text-slate-900 dark:text-white">Rechnungs</span><span class="text-[#4F46E5]">Fee</span>
         </a>
         <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -103,7 +106,10 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString()
         <div class="flex flex-col md:flex-row justify-between items-start gap-8">
           <div>
             <div class="flex items-center gap-2 font-extrabold text-xl tracking-tight mb-2">
-              <img src="/logo.svg" alt="" class="w-8 h-8" />
+              <picture>
+                <source srcset="/logo_neu/logo_rounded.svg" media="(prefers-color-scheme: dark)" />
+                <img src="/logo_neu/logo_bordered_svg.svg" alt="" class="w-8 h-8" />
+              </picture>
               <span class="text-white">Rechnungs</span><span class="text-[#4F46E5]">Fee</span>
             </div>
             <p class="text-sm max-w-xs">Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer. Open Source (AGPLv3).</p>
