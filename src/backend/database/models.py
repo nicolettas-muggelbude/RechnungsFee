@@ -137,6 +137,8 @@ class Unternehmen(Base):
     datev_konto_bank:      Mapped[str | None] = mapped_column(String(10))
     datev_konto_karte:     Mapped[str | None] = mapped_column(String(10))
     datev_konto_paypal:    Mapped[str | None] = mapped_column(String(10))
+    # GuV / §141 AO Buchführungspflicht
+    guv_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

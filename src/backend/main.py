@@ -31,9 +31,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv
 
-SCHEMA_VERSION = 102
+SCHEMA_VERSION = 103
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -82,6 +82,7 @@ app.include_router(datev.router)
 app.include_router(anlage_s.router)
 app.include_router(anlage_g.router)
 app.include_router(fristen_api.router)
+app.include_router(guv.router)
 
 
 @app.post("/api/shutdown")
@@ -2294,6 +2295,14 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 102"))
             conn.commit()
             print("[Migration] Schema auf Version 102 (unternehmen: bundesland, Steuer-Fristenliste-Felder)")
+
+        if version < 103:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "guv_aktiv" not in cols:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN guv_aktiv INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 103"))
+            conn.commit()
+            print("[Migration] Schema auf Version 103 (unternehmen: guv_aktiv – GuV / §141 AO Buchführungspflicht)")
 
 
 def _migrate_kategorien() -> None:

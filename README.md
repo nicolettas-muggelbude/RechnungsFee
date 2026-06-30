@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/frontend/public/logo.svg" alt="RechnungsFee Logo" width="120"/>
+  <img src="src/frontend/public/logo.svg?v=2" alt="RechnungsFee Logo" width="120"/>
   <br/>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/readme-title-dark.svg"/>

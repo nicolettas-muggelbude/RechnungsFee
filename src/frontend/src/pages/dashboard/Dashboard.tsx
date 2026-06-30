@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, type Rechnung } from '../../api/client'
+import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, type Rechnung } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { dashboardFilter } from '../../store/filterStore'
 
@@ -250,6 +250,66 @@ function LagerwarnungWidget() {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// §141 AO Buchführungspflicht-Warnung (nur für Gewerbetreibende)
+// ---------------------------------------------------------------------------
+
+function BuchfuehrungspflichtWarnung() {
+  const navigate = useNavigate()
+  const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+
+  const istGewerbe = unt?.taetigkeitsart === 'gewerbe' || unt?.taetigkeitsart === 'gemischt'
+
+  const { data: sw } = useQuery({
+    queryKey: ['guv-schwellenwert'],
+    queryFn: getGUVSchwellenwert,
+    enabled: istGewerbe,
+    staleTime: 1000 * 60 * 60,
+  })
+
+  if (!istGewerbe || !sw || !sw.warnung_aktiv) return null
+
+  const umsatzProzent = Math.min(sw.umsatz_prozent * 100, 100)
+  const gewinnProzent = Math.min(sw.gewinn_prozent * 100, 100)
+  const maxProzent    = Math.max(umsatzProzent, gewinnProzent)
+
+  return (
+    <div
+      className={`rounded-lg border p-4 mb-4 cursor-pointer ${
+        sw.grenze_erreicht
+          ? 'bg-red-50 border-red-300 dark:bg-red-950 dark:border-red-800'
+          : 'bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-800'
+      }`}
+      onClick={() => navigate('/guv')}
+    >
+      <div className="flex items-start gap-3">
+        <span className="text-xl">{sw.grenze_erreicht ? '🚨' : '⚠️'}</span>
+        <div className="flex-1">
+          <p className={`font-semibold text-sm ${sw.grenze_erreicht ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}`}>
+            {sw.grenze_erreicht
+              ? '§ 141 AO: Buchführungspflicht erreicht!'
+              : '§ 141 AO: Buchführungspflicht-Schwellenwert in Sicht'}
+          </p>
+          <p className={`text-sm mt-0.5 ${sw.grenze_erreicht ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+            {sw.grenze_erreicht
+              ? `Umsatz ${sw.jahr}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(sw.umsatz_aktuell))} · Gewinn: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(sw.gewinn_aktuell))}. Eine doppelte Buchführung (GuV) ist nun vorgeschrieben – spreche mit deinem Steuerberater.`
+              : `Umsatz ${sw.jahr}: ${(umsatzProzent).toFixed(0)} % von 800.000 € · Gewinn: ${(gewinnProzent).toFixed(0)} % von 80.000 €. Bei Überschreitung wird die GuV-Pflicht nach § 141 AO ausgelöst.`}
+          </p>
+          <div className="mt-2 h-1.5 rounded-full bg-amber-200 dark:bg-amber-900 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${sw.grenze_erreicht ? 'bg-red-500' : 'bg-amber-500'}`}
+              style={{ width: `${maxProzent}%` }}
+            />
+          </div>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${sw.grenze_erreicht ? 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300' : 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300'}`}>
+          GuV →
+        </span>
       </div>
     </div>
   )
@@ -532,6 +592,7 @@ export function Dashboard() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      <BuchfuehrungspflichtWarnung />
       <KleinunternehmerWarnung />
       <LagerwarnungWidget />
       <SteuerFristenBanner />

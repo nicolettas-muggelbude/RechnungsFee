@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.3.34',
+    datum: 'Juni 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Sidebar: Abschnitte (Buchhaltung, Auswertung usw.) öffnen sich nicht mehr selbstständig beim App-Start – der gespeicherte Zustand wird jetzt zuverlässig beibehalten' },
+      { typ: 'verbesserung', text: 'Neues App-Logo: überarbeitet und in App-Icon, Favicon und Desktop-Icon übernommen' },
+      { typ: 'neu', text: 'GuV – Gewinn- und Verlustrechnung: Näherungsauswertung auf Basis der EÜR-Daten. Manuell aktivierbar unter Einstellungen → Unternehmen → Tab Steuer & Recht. Wird automatisch aktiviert bei Überschreitung der § 141 AO Schwellenwerte (800.000 € Umsatz oder 80.000 € Gewinn). Dashboard-Warnung mit Fortschrittsbalken ab 80 % der Grenzen.' },
+    ],
+  },
+  {
     version: 'v0.3.33',
     datum: 'Juni 2026',
     eintraege: [

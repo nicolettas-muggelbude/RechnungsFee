@@ -289,6 +289,7 @@ export type Unternehmen = {
   datev_konto_karte?: string | null
   datev_konto_paypal?: string | null
   einleitungstext?: string | null
+  guv_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -2110,3 +2111,42 @@ export interface FristenResponse {
 
 export const getFristen = (monate: number) =>
   request<FristenResponse>(`/fristen?monate=${monate}`)
+
+
+// ---------------------------------------------------------------------------
+// GuV – Gewinn- und Verlustrechnung (§ 141 AO Schwellenwert-Prüfung)
+// ---------------------------------------------------------------------------
+
+export type GUVPosition = {
+  nr: number
+  bezeichnung: string
+  typ: 'ertrag' | 'aufwand'
+  betrag: string
+}
+
+export type GUVErgebnis = {
+  jahr: number
+  positionen: GUVPosition[]
+  summe_ertraege: string
+  summe_aufwendungen: string
+  jahresergebnis: string
+}
+
+export type GUVSchwellenwert = {
+  jahr: number
+  umsatz_aktuell: string
+  gewinn_aktuell: string
+  umsatz_grenze: string
+  gewinn_grenze: string
+  umsatz_prozent: number
+  gewinn_prozent: number
+  warnung_aktiv: boolean
+  grenze_erreicht: boolean
+  guv_aktiv: boolean
+}
+
+export const berechneGUV = (jahr: number) =>
+  request<GUVErgebnis>(`/guv/berechnen?jahr=${jahr}`)
+
+export const getGUVSchwellenwert = () =>
+  request<GUVSchwellenwert>('/guv/schwellenwert')

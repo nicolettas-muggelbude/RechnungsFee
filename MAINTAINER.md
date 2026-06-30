@@ -1,3 +1,12 @@
+<div align="center">
+  <img src="src/frontend/public/logo.svg" alt="RechnungsFee Logo" width="80"/>
+  <br/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme-title-dark.svg"/>
+    <img src="assets/readme-title.svg" alt="RechnungsFee" height="36"/>
+  </picture>
+</div>
+
 # 🛠️ Maintainer-Guide
 
 Dieser Guide richtet sich an Projekt-Maintainer und beschreibt interne Prozesse.

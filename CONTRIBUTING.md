@@ -1,3 +1,12 @@
+<div align="center">
+  <img src="src/frontend/public/logo.svg" alt="RechnungsFee Logo" width="80"/>
+  <br/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme-title-dark.svg"/>
+    <img src="assets/readme-title.svg" alt="RechnungsFee" height="36"/>
+  </picture>
+</div>
+
 # 🤝 Beitragen zu RechnungsFee
 
 Vielen Dank für dein Interesse an RechnungsFee! Wir freuen uns über jeden Beitrag aus der Community.

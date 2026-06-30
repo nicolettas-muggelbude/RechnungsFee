@@ -567,6 +567,25 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <option value="gemischt">Gemischt</option>
           </select>
         </Field>
+
+        <hr className="border-slate-100 dark:border-slate-700" />
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.guv_aktiv}
+            onChange={ev => set('guv_aktiv', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              GuV-Auswertung aktivieren
+            </span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Gewinn- und Verlustrechnung (Näherung auf EÜR-Basis). Wird automatisch aktiviert wenn die §&nbsp;141 AO Schwellenwerte überschritten werden (800.000&nbsp;€ Umsatz oder 80.000&nbsp;€ Gewinn).
+            </p>
+          </div>
+        </label>
       </div>
 
       {/* ── Tab: Rechnungen ───────────────────────────────────────────── */}
@@ -837,6 +856,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             </div>
           </label>
         </div>
+
       </div>
 
       {/* Fehler + Speichern-Button (nur für Firma/Steuer/Rechnungen/Artikel-Tabs) */}
