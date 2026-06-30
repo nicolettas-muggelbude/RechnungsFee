@@ -149,6 +149,8 @@
 - [x] Tagesabschluss-Erinnerung nur bei offenen Bar-Buchungen: Banner erscheint ausschließlich wenn Tage mit Bar-Buchungen ohne Abschluss existieren; ältestes offenes Datum wird angezeigt (Issue #194)
 - [x] Spenden-Seite: PayPal-Link, Kostenübersicht, alternative Unterstützungsmöglichkeiten; Impressum + Datenschutz auf GitHub Pages (Issue #174)
 - [x] Steuer-Fristenliste (Issue #198): Übersicht fälliger UStVA-, ESt- und GewSt-Vorauszahlungsfristen für 3/6/12 Monate; automatische Verschiebung auf nächsten Werktag je Bundesland; Dauerfristverlängerung-Toggle; Dashboard-Banner für die nächste Frist
+- [x] Neues App-Logo: überarbeitetes Icon in App, Favicon, Desktop-Shortcut und README
+- [x] GuV – Gewinn- und Verlustrechnung (§141 AO): Näherungsauswertung aus EÜR-Daten; Dashboard-Warnung ab 80 % der Buchführungspflicht-Schwellenwerte (800.000 € Umsatz / 80.000 € Gewinn); automatische Aktivierung bei Überschreitung für Gewerbetreibende
 
 ---
 
