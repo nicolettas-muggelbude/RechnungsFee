@@ -521,3 +521,8 @@ jobs:
           git checkout web
           git merge origin/main --no-edit
           git push origin web
+
+      - name: Website-Workflow triggern
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run website.yml --repo ${{ github.repository }} --ref web
