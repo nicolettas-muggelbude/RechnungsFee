@@ -55,6 +55,7 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)' },
       { text: 'Monatliche oder quartalsweise Umsatzsteuervoranmeldung' },
       { text: 'W-IdNr. (Wirtschafts-Identifikationsnummer)' },
+      { text: 'GuV – Gewinn- und Verlustrechnung (§141 AO Schwellenwert-Monitoring)', optional: true },
     ],
   },
   {
@@ -183,11 +184,11 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
           <ul class="space-y-2">
             {b.features.map(f => (
               <li class="flex items-start gap-2 text-sm text-slate-600">
-                <span class="text-[#4F46E5] mt-0.5 shrink-0">✓</span>
+                {f.optional
+                  ? <span class="inline-block shrink-0 bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded leading-none mt-0.5">optional</span>
+                  : <span class="text-[#4F46E5] mt-0.5 shrink-0">✓</span>
+                }
                 <span>{f.text}</span>
-                {f.optional && (
-                  <span class="inline-block shrink-0 bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded leading-none mt-0.5">optional</span>
-                )}
               </li>
             ))}
           </ul>
