@@ -67,14 +67,14 @@
 
 ## Phase 3 – Auto-Filter & Mischkonto-Logik
 
-- [ ] **3.1** `api/auto_filter.py`
+- [x] **3.1** `api/auto_filter.py`
   - CRUD für `auto_filter_regeln`
   - `POST /api/auto-filter/vorschlag` – Klassifizierungs-Vorschlag
-- [ ] **3.2** Vorschlag-Engine (Reihenfolge):
+- [x] **3.2** Vorschlag-Engine (Reihenfolge):
   1. Explizite Keywords (`privatentnahme`, `einlage`)
-  2. User-Regeln (SQL LIKE auf partner/verwendungszweck)
-  3. Historische Häufigkeit (>5 gleiche Entscheidungen)
-  4. Heuristiken (`GmbH`, `AG` → geschäftlich)
+  2. User-Regeln (SQL LIKE auf partner/verwendungszweck, höchste Priorität zuerst)
+  3. Historische Häufigkeit (>5 gleiche user-überschriebene Einträge für denselben Partner)
+  4. Heuristiken (GmbH/AG/KG/OHG/e.V./Finanzamt/Krankenkasse → geschäftlich)
 
 ---
 
