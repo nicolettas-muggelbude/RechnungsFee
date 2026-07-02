@@ -2354,6 +2354,9 @@ export const getOffeneForderungen = () =>
 export const getKundenguthaben = (kundeId: number) =>
   request<Forderung[]>(`/forderungen/offen?kunde_id=${kundeId}`)
 
+export const getLieferantenguthaben = (lieferantId: number) =>
+  request<Forderung[]>(`/forderungen/offen?lieferant_id=${lieferantId}`)
+
 export const forderungVerrechnen = (forderungId: number, rechnungId: number) =>
   request<Forderung>(`/forderungen/${forderungId}/verrechnen`, {
     method: 'POST',

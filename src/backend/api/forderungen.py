@@ -14,6 +14,7 @@ from database.models import Forderung, Journaleintrag, Kategorie, Rechnung
 from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _partner_name, _ust_konto
+from database.models import Lieferant
 from .schemas import JournalEintragCreate
 
 router = APIRouter(prefix="/api/forderungen", tags=["Forderungen"])
@@ -80,6 +81,7 @@ def get_forderungen(status: Optional[str] = None, db: Session = Depends(get_db))
 @router.get("/offen", response_model=list[ForderungResponse])
 def get_offene_forderungen(
     kunde_id: Optional[int] = None,
+    lieferant_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(Forderung).filter(Forderung.status == "offen")
@@ -88,6 +90,12 @@ def get_offene_forderungen(
             Forderung.typ == "kundenguthaben",
             Forderung.partner_typ == "kunde",
             Forderung.partner_id == kunde_id,
+        )
+    elif lieferant_id is not None:
+        q = q.filter(
+            Forderung.typ == "lieferantenguthaben",
+            Forderung.partner_typ == "lieferant",
+            Forderung.partner_id == lieferant_id,
         )
     return q.order_by(Forderung.erstellt_am.desc()).all()
 
@@ -179,24 +187,32 @@ def forderung_verrechnen(
     data: VerrechnenRequest,
     db: Session = Depends(get_db),
 ):
-    """Kundenguthaben als Teilzahlung auf eine offene Ausgangsrechnung anrechnen."""
+    """Kunden- oder Lieferantenguthaben als Teilzahlung auf eine offene Rechnung anrechnen."""
     f = db.query(Forderung).filter(Forderung.id == forderung_id).first()
     if not f:
         raise HTTPException(status_code=404, detail="Forderung nicht gefunden.")
     if f.status != "offen":
         raise HTTPException(status_code=409, detail="Forderung ist nicht offen.")
-    if f.typ != "kundenguthaben":
-        raise HTTPException(status_code=400, detail="Nur Kundenguthaben können verrechnet werden.")
+    if f.typ not in ("kundenguthaben", "lieferantenguthaben"):
+        raise HTTPException(status_code=400, detail="Nur Kunden- oder Lieferantenguthaben können verrechnet werden.")
 
     rechnung = db.query(Rechnung).filter(Rechnung.id == data.rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.typ != "ausgang":
-        raise HTTPException(status_code=400, detail="Verrechnung nur bei Ausgangsrechnungen.")
     if rechnung.storniert:
         raise HTTPException(status_code=400, detail="Stornierte Rechnung.")
-    if rechnung.kunde_id != f.partner_id:
-        raise HTTPException(status_code=400, detail="Kunde stimmt nicht mit Forderung überein.")
+
+    # Richtungs-Prüfung: Kundenguthaben → Ausgangsrechnung, Lieferantenguthaben → Eingangsrechnung
+    if f.typ == "kundenguthaben":
+        if rechnung.typ != "ausgang":
+            raise HTTPException(status_code=400, detail="Kundenguthaben nur gegen Ausgangsrechnungen.")
+        if rechnung.kunde_id != f.partner_id:
+            raise HTTPException(status_code=400, detail="Kunde stimmt nicht mit Forderung überein.")
+    else:
+        if rechnung.typ != "eingang":
+            raise HTTPException(status_code=400, detail="Lieferantenguthaben nur gegen Eingangsrechnungen.")
+        if rechnung.lieferant_id != f.partner_id:
+            raise HTTPException(status_code=400, detail="Lieferant stimmt nicht mit Forderung überein.")
 
     restbetrag = abs(rechnung.brutto_gesamt - rechnung.bezahlt_betrag)
     if restbetrag <= Decimal("0.004"):
@@ -217,8 +233,13 @@ def forderung_verrechnen(
         ust_satz = Decimal(str(max(gruppen, key=lambda s: gruppen[s])))
         kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k] if k is not None else Decimal("0"))
 
+    ist_einnahme = f.typ == "kundenguthaben"
+    art = "Einnahme" if ist_einnahme else "Ausgabe"
+    bezeichnung = "Kundenguthaben" if ist_einnahme else "Lieferantenguthaben"
+    vst_abzug = not ist_einnahme and ust_satz > 0
+
     kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
-    konto_ust_skr03, konto_ust_skr04 = _ust_konto("Einnahme", ust_satz) if ust_satz > 0 else (None, None)
+    konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
     if ust_satz > 0:
         netto = (betrag * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -230,20 +251,20 @@ def forderung_verrechnen(
     eintrag = Journaleintrag(
         datum=date_type.today(),
         belegnr=_naechste_belegnr(db, date_type.today()),
-        beschreibung=f"Verrechnung Kundenguthaben: {_partner_name(rechnung)}",
+        beschreibung=f"Verrechnung {bezeichnung}: {_partner_name(rechnung)}",
         kategorie_id=kat_id,
         konto_skr03=kat.konto_skr03 if kat else None,
         konto_skr04=kat.konto_skr04 if kat else None,
         konto_ust_skr03=konto_ust_skr03,
         konto_ust_skr04=konto_ust_skr04,
         zahlungsart="Verrechnung",
-        art="Einnahme",
+        art=art,
         netto_betrag=netto,
         ust_satz=ust_satz,
         ust_betrag=ust_betrag,
-        vorsteuer_betrag=Decimal("0.00"),
+        vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vst_abzug, kat),
         brutto_betrag=betrag,
-        vorsteuerabzug=False,
+        vorsteuerabzug=vst_abzug,
         rechnung_id=rechnung.id,
         immutable=True,
     )

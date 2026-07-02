@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, getRechnung, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, createGutschrift, forderungsausbuchenRechnung,
-  getKundenguthaben, forderungVerrechnen, type Forderung,
+  getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, openPdfReadOnly, downloadPdfForMail,
@@ -929,11 +929,18 @@ function RechnungDetail({
     enabled: rechnung.typ === 'ausgang' && !!rechnung.kunde_id && hatZahlungsoption,
     staleTime: 1000 * 60,
   })
+  const { data: lieferantenguthaben } = useQuery({
+    queryKey: ['lieferantenguthaben', rechnung.lieferant_id],
+    queryFn: () => getLieferantenguthaben(rechnung.lieferant_id!),
+    enabled: rechnung.typ === 'eingang' && !!rechnung.lieferant_id && hatZahlungsoption,
+    staleTime: 1000 * 60,
+  })
   const verrechneMut = useMutation({
     mutationFn: (forderungId: number) => forderungVerrechnen(forderungId, rechnung.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       qc.invalidateQueries({ queryKey: ['kundenguthaben', rechnung.kunde_id] })
+      qc.invalidateQueries({ queryKey: ['lieferantenguthaben', rechnung.lieferant_id] })
       qc.invalidateQueries({ queryKey: ['forderungen'] })
     },
   })
@@ -1666,28 +1673,34 @@ function RechnungDetail({
           </div>
         </div>}
 
-        {/* Kundenguthaben verrechnen */}
-        {kundenguthaben && kundenguthaben.length > 0 && hatZahlungsoption && (
-          <div className="space-y-1.5">
-            {kundenguthaben.map((f: Forderung) => (
-              <div key={f.id} className="flex items-center justify-between gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
-                    Kundenguthaben verfügbar: {new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(f.betrag)))}
-                  </p>
-                  {f.notiz && <p className="text-[10px] text-blue-600 dark:text-blue-400 truncate">{f.notiz}</p>}
+        {/* Kunden-/Lieferantenguthaben verrechnen */}
+        {hatZahlungsoption && (() => {
+          const fmt = (v: string | number) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(v)))
+          const guthaben = rechnung.typ === 'ausgang' ? (kundenguthaben ?? []) : (lieferantenguthaben ?? [])
+          const label = rechnung.typ === 'ausgang' ? 'Kundenguthaben' : 'Lieferantenguthaben'
+          if (guthaben.length === 0) return null
+          return (
+            <div className="space-y-1.5">
+              {guthaben.map((f: Forderung) => (
+                <div key={f.id} className="flex items-center justify-between gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
+                      {label} verfügbar: {fmt(f.betrag)}
+                    </p>
+                    {f.notiz && <p className="text-[10px] text-blue-600 dark:text-blue-400 truncate">{f.notiz}</p>}
+                  </div>
+                  <button
+                    onClick={() => verrechneMut.mutate(f.id)}
+                    disabled={verrechneMut.isPending}
+                    className="shrink-0 px-2.5 py-1 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  >
+                    {verrechneMut.isPending ? '…' : 'Verrechnen'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => verrechneMut.mutate(f.id)}
-                  disabled={verrechneMut.isPending}
-                  className="shrink-0 px-2.5 py-1 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 transition-colors"
-                >
-                  {verrechneMut.isPending ? '…' : 'Verrechnen'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Verknüpfte Zahlungen */}
         {rechnung.zahlungen.length > 0 && (

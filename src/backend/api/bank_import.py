@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import (
     BankImport, BankTemplate, BankTransaktion, Forderung, Journaleintrag,
-    Kategorie, Konto, Kunde, Rechnung, Unternehmen,
+    Kategorie, Konto, Kunde, Lieferant, Rechnung, Unternehmen,
 )
 from utils.bank_csv_parser import (
     detect_delimiter,
@@ -252,6 +252,49 @@ def _match_kundenguthaben(
                         return f
 
         # Fallback: Keyword im Verwendungszweck reicht auch ohne Namens-Match
+        if hat_keyword:
+            return f
+
+    return None
+
+
+def _match_lieferantenguthaben(
+    db: Session,
+    tx: BankTransaktion,
+) -> Optional[Forderung]:
+    """Sucht ein offenes Lieferantenguthaben das zur eingehenden Transaktion passt.
+
+    Matching: Betrag ±0,02 € + Lieferantenname-Overlap ODER Keyword im Verwendungszweck.
+    """
+    if tx.betrag <= 0:
+        return None
+
+    kandidaten = (
+        db.query(Forderung)
+        .filter(
+            Forderung.typ == "lieferantenguthaben",
+            Forderung.status == "offen",
+            Forderung.betrag.between(tx.betrag - Decimal("0.02"), tx.betrag + Decimal("0.02")),
+        )
+        .all()
+    )
+
+    if not kandidaten:
+        return None
+
+    verwendung_lower = (tx.verwendungszweck or "").lower().replace("-", "")
+    hat_keyword = any(kw in verwendung_lower for kw in _RUECKERSTATTUNG_KEYWORDS)
+
+    for f in kandidaten:
+        if f.rechnung_id:
+            rechnung = db.query(Rechnung).filter(Rechnung.id == f.rechnung_id).first()
+            if rechnung and rechnung.lieferant_id:
+                lieferant = db.query(Lieferant).filter(Lieferant.id == rechnung.lieferant_id).first()
+                if lieferant:
+                    lieferant_name = (lieferant.firma or f"{lieferant.vorname or ''} {lieferant.nachname or ''}").strip()
+                    if _name_match(lieferant_name, tx.partner_name):
+                        return f
+
         if hat_keyword:
             return f
 
@@ -573,6 +616,14 @@ def auto_buchen(konto_id: int, db: Session = Depends(get_db)):
             guthaben = _match_kundenguthaben(db, tx)
             if guthaben:
                 guthaben.status = "ausgeglichen"
+                tx.ist_rueckerstattung = True
+                gebucht += 1
+                continue
+
+            # Eingehende Zahlung: Lieferantenguthaben-Rückerstattung erkennen
+            lguthaben = _match_lieferantenguthaben(db, tx)
+            if lguthaben:
+                lguthaben.status = "ausgeglichen"
                 tx.ist_rueckerstattung = True
                 gebucht += 1
                 continue
