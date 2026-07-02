@@ -124,7 +124,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const txDuplikate = vorschau?.transaktionen.filter(t => t.ist_duplikat).length ?? 0
 
   const autoBuchenMut = useMutation({
-    mutationFn: () => autoBuchen(aktuellesKontoId!),
+    mutationFn: (importId?: number) => autoBuchen(aktuellesKontoId!, importId),
   })
 
   const importMut = useMutation({
@@ -135,9 +135,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
         dateiname: datei?.name ?? 'import.csv',
         transaktionen: txAuswahl,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       setSchritt(3)
-      autoBuchenMut.mutate()
+      autoBuchenMut.mutate(res.import_id)
     },
     onError: (e: Error) => setFehler(e.message),
   })
@@ -533,6 +533,9 @@ function AbgleichDialog({ tx, vorschlaege, onZuordnen, onOhneRechnung, onClose, 
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{v.rechnungsnummer}</p>
+            {v.externe_belegnr && (
+              <p className="text-xs font-mono text-slate-400 dark:text-slate-500">Lief.-Nr. {v.externe_belegnr}</p>
+            )}
             <p className="text-xs text-slate-500 dark:text-slate-400">{v.partner} · {datumFmt(v.datum)}</p>
           </div>
           <div className="text-right shrink-0">

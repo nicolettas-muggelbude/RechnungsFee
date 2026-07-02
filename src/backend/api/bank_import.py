@@ -132,6 +132,7 @@ class BuchungsRequest(BaseModel):
 class AbgleichVorschlag(BaseModel):
     rechnung_id: int
     rechnungsnummer: str
+    externe_belegnr: Optional[str] = None
     partner: str
     datum: date
     brutto_gesamt: Decimal
@@ -152,6 +153,7 @@ class TransaktionKlassifizierung(BaseModel):
 class AutoBuchenResult(BaseModel):
     gebucht: int
     offen: int
+    import_id: Optional[int] = None
     forderungen: int
     fehler: int
 
@@ -594,12 +596,12 @@ def importieren(data: ImportiereRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/{konto_id}/auto-buchen", response_model=AutoBuchenResult)
-def auto_buchen(konto_id: int, db: Session = Depends(get_db)):
-    """Batch: alle pending Transaktionen abgleichen und eindeutige Treffer automatisch buchen."""
+def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Batch: pending Transaktionen des aktuellen Imports abgleichen und eindeutige Treffer buchen."""
     if not db.query(Konto).filter(Konto.id == konto_id).first():
         raise HTTPException(status_code=404, detail="Konto nicht gefunden.")
 
-    pending = (
+    q = (
         db.query(BankTransaktion)
         .filter(
             BankTransaktion.konto_id == konto_id,
@@ -608,9 +610,10 @@ def auto_buchen(konto_id: int, db: Session = Depends(get_db)):
             BankTransaktion.ist_einlage == False,
             BankTransaktion.journal_id == None,
         )
-        .order_by(BankTransaktion.datum.asc())
-        .all()
     )
+    if import_id is not None:
+        q = q.filter(BankTransaktion.import_id == import_id)
+    pending = q.order_by(BankTransaktion.datum.asc()).all()
 
     unternehmen = db.query(Unternehmen).first()
     gebucht = offen = forderungen = fehler = 0
@@ -658,7 +661,7 @@ def auto_buchen(konto_id: int, db: Session = Depends(get_db)):
             fehler += 1
 
     db.commit()
-    return AutoBuchenResult(gebucht=gebucht, offen=offen, forderungen=forderungen, fehler=fehler)
+    return AutoBuchenResult(gebucht=gebucht, offen=offen, forderungen=forderungen, fehler=fehler, import_id=import_id)
 
 
 @router.get("/{konto_id}", response_model=list[BankTransaktionResponse])
@@ -741,6 +744,7 @@ def abgleich_transaktion(tx_id: int, db: Session = Depends(get_db)):
             vorschlaege.append(AbgleichVorschlag(
                 rechnung_id=rechnung.id,
                 rechnungsnummer=rechnung.rechnungsnummer or "?",
+                externe_belegnr=rechnung.externe_belegnr or None,
                 partner=_partner_name(rechnung),
                 datum=rechnung.datum,
                 brutto_gesamt=rechnung.brutto_gesamt,

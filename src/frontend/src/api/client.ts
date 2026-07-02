@@ -2245,6 +2245,7 @@ export type BankTransaktion = {
 export type BankAbgleichVorschlag = {
   rechnung_id: number
   rechnungsnummer: string
+  externe_belegnr?: string | null
   partner: string
   datum: string
   brutto_gesamt: string
@@ -2304,8 +2305,8 @@ export type AutoBuchenResult = {
   fehler: number
 }
 
-export const autoBuchen = (kontoId: number) =>
-  request<AutoBuchenResult>(`/bank-import/${kontoId}/auto-buchen`, { method: 'POST' })
+export const autoBuchen = (kontoId: number, importId?: number) =>
+  request<AutoBuchenResult>(`/bank-import/${kontoId}/auto-buchen${importId != null ? `?import_id=${importId}` : ''}`, { method: 'POST' })
 
 export const klassifiziereBankTransaktion = (
   txId: number,
