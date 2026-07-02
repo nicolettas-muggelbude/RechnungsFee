@@ -2231,6 +2231,7 @@ export type BankTransaktion = {
   ist_geschaeftlich: boolean
   ist_privatentnahme: boolean
   ist_einlage: boolean
+  ist_rueckerstattung: boolean
   auto_vorschlag?: string | null
   user_ueberschrieben: boolean
   kategorie_id?: number | null

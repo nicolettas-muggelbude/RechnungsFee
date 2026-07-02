@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen
 
-SCHEMA_VERSION = 110
+SCHEMA_VERSION = 111
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2394,6 +2394,14 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 110"))
             conn.commit()
             print("[Migration] Schema auf Version 110 (konten: datev_kontonummer; journal: konto_id – DATEV Gegenkonto pro Bankkonto)")
+
+        if version < 111:
+            tx_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(bank_transaktionen)")).fetchall()}
+            if "ist_rueckerstattung" not in tx_cols:
+                conn.execute(text("ALTER TABLE bank_transaktionen ADD COLUMN ist_rueckerstattung BOOLEAN DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 111"))
+            conn.commit()
+            print("[Migration] Schema auf Version 111 (bank_transaktionen: ist_rueckerstattung)")
 
 
 def _migrate_kategorien() -> None:

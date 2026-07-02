@@ -668,6 +668,10 @@ interface BuchungsCelleProps {
 }
 
 function BuchungsCelle({ tx, ladendeTxId, buchePending, onBuchen }: BuchungsCelleProps) {
+  if (tx.ist_rueckerstattung) {
+    return <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">Rückerstattung</span>
+  }
+
   if (tx.journal_id) {
     const info = tx.rechnung_info
     if (info) {

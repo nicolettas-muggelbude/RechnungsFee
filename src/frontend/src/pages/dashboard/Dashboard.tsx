@@ -347,12 +347,18 @@ function LieferantenguthabenWidget() {
                   <span className="text-orange-700 dark:text-orange-400 block truncate">{f.notiz}</span>
                 )}
               </div>
-              <button
-                onClick={() => { setAusbuchenId(f.id); setKategorieId(''); setNotiz('') }}
-                className="px-2 py-1 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 rounded hover:bg-orange-100 dark:hover:bg-orange-900/50 whitespace-nowrap shrink-0"
-              >
-                Ausbuchen
-              </button>
+              {f.typ === 'kundenguthaben' ? (
+                <span className="text-[10px] text-orange-600 dark:text-orange-400 shrink-0 text-right leading-tight">
+                  Wird bei Rück&shy;überweisung<br />oder Verrechnung geschlossen
+                </span>
+              ) : (
+                <button
+                  onClick={() => { setAusbuchenId(f.id); setKategorieId(''); setNotiz('') }}
+                  className="px-2 py-1 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 rounded hover:bg-orange-100 dark:hover:bg-orange-900/50 whitespace-nowrap shrink-0"
+                >
+                  Ausbuchen
+                </button>
+              )}
             </div>
             {ausbuchenId === f.id && (
               <div className="mt-2 p-3 bg-white dark:bg-zinc-800 rounded-lg border border-orange-200 dark:border-orange-700 space-y-2">

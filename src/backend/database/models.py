@@ -795,6 +795,7 @@ class BankTransaktion(Base):
     ist_geschaeftlich: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     ist_privatentnahme: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ist_einlage: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ist_rueckerstattung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_vorschlag: Mapped[str | None] = mapped_column(String(20))
     user_ueberschrieben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     dedupe_hash: Mapped[str | None] = mapped_column(String(64), index=True)

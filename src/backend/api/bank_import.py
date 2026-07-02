@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import (
     BankImport, BankTemplate, BankTransaktion, Forderung, Journaleintrag,
-    Kategorie, Konto, Rechnung, Unternehmen,
+    Kategorie, Konto, Kunde, Rechnung, Unternehmen,
 )
 from utils.bank_csv_parser import (
     detect_delimiter,
@@ -111,6 +111,7 @@ class BankTransaktionResponse(BaseModel):
     ist_geschaeftlich: bool
     ist_privatentnahme: bool
     ist_einlage: bool
+    ist_rueckerstattung: bool = False
     auto_vorschlag: Optional[str] = None
     user_ueberschrieben: bool
     kategorie_id: Optional[int] = None
@@ -203,6 +204,58 @@ def _abgleich_score(rechnung: Rechnung, tx: BankTransaktion) -> tuple[int, bool,
     nm = _nummer_match(rechnung, tx.verwendungszweck)
     nam = _name_match(_partner_name(rechnung), tx.partner_name)
     return int(bm) + int(nm) + int(nam), bm, nm, nam
+
+
+_RUECKERSTATTUNG_KEYWORDS = {"erstattung", "rueckerstattung", "rückerstattung", "refund", "rueck", "rück"}
+
+
+def _match_kundenguthaben(
+    db: Session,
+    tx: BankTransaktion,
+) -> Optional[Forderung]:
+    """Sucht ein offenes Kundenguthaben das zur ausgehenden Transaktion passt.
+
+    Matching-Kriterien (mind. eines muss zutreffen):
+    1. Betrag ±0,02 € + Kundenname-Overlap im partner_name der Transaktion
+    2. Betrag ±0,02 € + Keyword (ERSTATTUNG, RUECKERSTATTUNG, …) im Verwendungszweck
+    """
+    if tx.betrag >= 0:
+        return None
+
+    tx_abs = abs(tx.betrag)
+
+    kandidaten = (
+        db.query(Forderung)
+        .filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.status == "offen",
+            Forderung.betrag.between(tx_abs - Decimal("0.02"), tx_abs + Decimal("0.02")),
+        )
+        .all()
+    )
+
+    if not kandidaten:
+        return None
+
+    verwendung_lower = (tx.verwendungszweck or "").lower().replace("-", "")
+    hat_keyword = any(kw in verwendung_lower for kw in _RUECKERSTATTUNG_KEYWORDS)
+
+    for f in kandidaten:
+        # Kundenname aus verknüpfter Rechnung holen
+        if f.rechnung_id:
+            rechnung = db.query(Rechnung).filter(Rechnung.id == f.rechnung_id).first()
+            if rechnung and rechnung.kunde_id:
+                kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first()
+                if kunde:
+                    kunde_name = (kunde.firma or f"{kunde.vorname or ''} {kunde.nachname or ''}").strip()
+                    if _name_match(kunde_name, tx.partner_name):
+                        return f
+
+        # Fallback: Keyword im Verwendungszweck reicht auch ohne Namens-Match
+        if hat_keyword:
+            return f
+
+    return None
 
 
 def _buche_pfad_a(
@@ -516,6 +569,14 @@ def auto_buchen(konto_id: int, db: Session = Depends(get_db)):
 
     for tx in pending:
         try:
+            # Ausgehende Zahlung: Kundenguthaben-Rückerstattung erkennen
+            guthaben = _match_kundenguthaben(db, tx)
+            if guthaben:
+                guthaben.status = "ausgeglichen"
+                tx.ist_rueckerstattung = True
+                gebucht += 1
+                continue
+
             rechnung_typ = "ausgang" if tx.betrag > 0 else "eingang"
             offene = db.query(Rechnung).filter(
                 Rechnung.ist_entwurf == False,
