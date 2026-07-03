@@ -3,9 +3,12 @@ API-Endpunkte für Bank-CSV-Import.
 """
 
 import hashlib
+import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -663,17 +666,27 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
 
             score3_treffer = [r for r in offene if _abgleich_score(r, tx)[0] == 3]
 
+            logger.info(
+                "auto_buchen tx=%s betrag=%s score3_count=%d",
+                tx.id, tx.betrag, len(score3_treffer),
+            )
+
             if len(score3_treffer) == 1:
                 _, forderung = _buche_pfad_a(db, tx, score3_treffer[0], unternehmen=unternehmen)
                 gebucht += 1
                 if forderung:
                     forderungen += 1
+                    logger.info("auto_buchen: Forderung angelegt id=%s betrag=%s", forderung.id, forderung.betrag)
+                else:
+                    logger.info("auto_buchen: kein Surplus → keine Forderung")
             elif tx.kategorie_id:
                 _buche_pfad_b(db, tx)
                 gebucht += 1
             else:
                 offen += 1
         except Exception:
+            logger.exception("auto_buchen tx=%s Fehler", tx.id if tx else "?")
+            db.rollback()
             fehler += 1
 
     db.commit()
