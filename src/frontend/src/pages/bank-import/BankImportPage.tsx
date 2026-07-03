@@ -5,7 +5,6 @@ import {
   getKonten,
   getBankTemplates,
   getBankTransaktionen,
-  getUnternehmen,
   vorschauBankImport,
   importiereBankTransaktionen,
   bucheTransaktion,
@@ -37,7 +36,6 @@ function ibanFmt(iban: string): string {
   return iban.replace(/(.{4})/g, '$1 ').trim()
 }
 
-const MANUELL_LS_KEY = 'bank_import_manuell'
 
 // ---------------------------------------------------------------------------
 // Import-Dialog (3 Schritte)
@@ -724,12 +722,6 @@ function BuchungsCelle({ tx, ladendeTxId, buchePending, onBuchen }: BuchungsCell
 function Transaktionsliste({ konto }: { konto: Konto }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [manuellOverride, setManuellOverride] = useState<boolean | null>(() => {
-    const stored = localStorage.getItem(MANUELL_LS_KEY)
-    return stored !== null ? stored === '1' : null
-  })
-  const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
-  const manuellModus = manuellOverride !== null ? manuellOverride : (unt?.bank_import_manuell ?? false)
   const [buchungTx, setBuchungTx] = useState<BankTransaktion | null>(null)
   const [abgleichDialog, setAbgleichDialog] = useState<{ tx: BankTransaktion; vorschlaege: BankAbgleichVorschlag[] } | null>(null)
   const [ueberzahlungInfo, setUeberzahlungInfo] = useState<{
@@ -781,7 +773,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const abgleichMut = useMutation({
     mutationFn: (tx: BankTransaktion) => abgleichTransaktion(tx.id),
     onSuccess: (vorschlaege, tx) => {
-      if (!manuellModus && vorschlaege.length === 1 && vorschlaege[0].score === 3) {
+      if (vorschlaege.length === 1 && vorschlaege[0].score === 3) {
         bucheMut.mutate({ txId: tx.id, rechnungId: vorschlaege[0].rechnung_id })
         return
       }
@@ -792,7 +784,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   })
 
   function proceedOhneAbgleich(tx: BankTransaktion) {
-    if (!manuellModus && tx.kategorie_id) bucheMut.mutate({ txId: tx.id, rechnungId: null })
+    if (tx.kategorie_id) bucheMut.mutate({ txId: tx.id, rechnungId: null })
     else setBuchungTx(tx)
   }
 
@@ -818,19 +810,6 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
           {gebuchte > 0 && <span className="text-green-600 dark:text-green-400">{gebuchte} gebucht</span>}
           {offene.length > 0 && <span className="text-amber-600 dark:text-amber-400">{offene.length} offen</span>}
         </div>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={manuellModus}
-            onChange={e => {
-              const an = e.target.checked
-              setManuellOverride(an)
-              localStorage.setItem(MANUELL_LS_KEY, an ? '1' : '0')
-            }}
-            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
-          />
-          <span className="text-xs text-slate-500 dark:text-slate-400">Immer manuell bestätigen</span>
-        </label>
       </div>
 
       {toast && (
@@ -926,13 +905,6 @@ export function BankImportPage() {
 
   const { data: konten = [] } = useQuery({ queryKey: ['konten'], queryFn: getKonten })
   const { data: templates = [] } = useQuery({ queryKey: ['bank-templates'], queryFn: getBankTemplates })
-  const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
-
-  const manuellModus = (() => {
-    const stored = localStorage.getItem(MANUELL_LS_KEY)
-    if (stored !== null) return stored === '1'
-    return unt?.bank_import_manuell ?? false
-  })()
 
   const geschaeftskonten = konten.filter(k => k.kontotyp !== 'privat' && k.aktiv !== false)
   const aktivesKonto = geschaeftskonten.find(k => k.id === aktivesKontoId) ?? geschaeftskonten[0]
