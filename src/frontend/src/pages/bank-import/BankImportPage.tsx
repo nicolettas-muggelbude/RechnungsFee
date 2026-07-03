@@ -728,6 +728,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     rechnungId: number; rechnungsnummer: string; partner: string; ueberzahlung: number
   } | null>(null)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
+  const [suche, setSuche] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat'>('alle')
+  const [datumVon, setDatumVon] = useState('')
+  const [datumBis, setDatumBis] = useState('')
 
   const { data: txs = [], isLoading } = useQuery({
     queryKey: ['bank-transaktionen', konto.id],
@@ -802,11 +806,58 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const gebuchte = txs.filter(tx => !!tx.journal_id).length
   const ladendeTxId = abgleichMut.isPending && abgleichMut.variables ? abgleichMut.variables.id : null
 
+  const gefilterteTxs = txs.filter(tx => {
+    if (statusFilter === 'offen' && !(tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.journal_id)) return false
+    if (statusFilter === 'gebucht' && !tx.journal_id) return false
+    if (statusFilter === 'privat' && (tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage)) return false
+    if (datumVon && tx.datum < datumVon) return false
+    if (datumBis && tx.datum > datumBis) return false
+    if (suche) {
+      const s = suche.toLowerCase()
+      if (!((tx.partner_name ?? '').toLowerCase().includes(s) ||
+            (tx.verwendungszweck ?? '').toLowerCase().includes(s) ||
+            (tx.buchungstext ?? '').toLowerCase().includes(s))) return false
+    }
+    return true
+  })
+
   return (
     <>
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div className="flex flex-col gap-2 mb-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="search"
+            placeholder="Partner, Verwendungszweck…"
+            value={suche}
+            onChange={e => setSuche(e.target.value)}
+            className="flex-1 min-w-[180px] text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+          />
+          <input
+            type="date"
+            value={datumVon}
+            onChange={e => setDatumVon(e.target.value)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+          />
+          <span className="text-xs text-slate-400">–</span>
+          <input
+            type="date"
+            value={datumBis}
+            onChange={e => setDatumBis(e.target.value)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+          />
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+          >
+            <option value="alle">Alle</option>
+            <option value="offen">Offen</option>
+            <option value="gebucht">Gebucht</option>
+            <option value="privat">Privat</option>
+          </select>
+        </div>
         <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span>{txs.length} Transaktionen</span>
+          <span>{gefilterteTxs.length} von {txs.length} Transaktionen</span>
           {gebuchte > 0 && <span className="text-green-600 dark:text-green-400">{gebuchte} gebucht</span>}
           {offene.length > 0 && <span className="text-amber-600 dark:text-amber-400">{offene.length} offen</span>}
         </div>
@@ -832,7 +883,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             </tr>
           </thead>
           <tbody>
-            {txs.map(tx => (
+            {gefilterteTxs.map(tx => (
               <tr key={tx.id} className="border-t border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30">
                 <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 dark:text-slate-300 text-xs">{datumFmt(tx.datum)}</td>
                 <td className={`px-4 py-2.5 text-right font-mono font-medium whitespace-nowrap text-sm ${
