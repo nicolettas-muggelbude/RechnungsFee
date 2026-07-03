@@ -26,11 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.4.0',
     datum: 'Juli 2026',
     eintraege: [
-      { typ: 'neu', text: 'Bank CSV-Import – Fundament: 7 System-Templates (Sparkasse MT940/CAMT, DKB, ING, Volksbank, Commerzbank, PayPal), automatische Encoding- und Format-Erkennung, Template-API für eigene Bank-Formate' },
-      { typ: 'neu', text: 'Bank CSV-Import – Import-Backend: Vorschau-Endpoint (parst CSV ohne Speichern), Import-Endpoint (speichert bestätigte Transaktionen), Duplikat-Erkennung via SHA-256-Hash (Datum + Betrag + Partner-IBAN + Verwendungszweck)' },
-      { typ: 'neu', text: 'Bank CSV-Import – Auto-Filter: CRUD für Klassifizierungsregeln (SQL-LIKE auf Partner/Verwendungszweck), Vorschlag-Engine (Keywords → User-Regeln → Verlauf → Heuristik), Vorschlag-Endpoint pro Transaktion' },
-      { typ: 'neu', text: 'Bank CSV-Import – Frontend: Import-Dialog (5-Schritt-Stepper: Konto+Datei → Template → Vorschau → Zusammenfassung → Fertig), Transaktionsliste mit Klassifizierungs-Badges, aktivierbar unter Einstellungen → Unternehmen → Funktionen' },
-      { typ: 'neu', text: 'Bank CSV-Import – Halbautomatik: „Als Buchung übernehmen"-Button pro Transaktion; auto-bucht wenn Kategorie gesetzt ist, öffnet BuchungForm (vorausgefüllt) wenn Kategorie fehlt; Toggle „Immer manuell bestätigen" (localStorage); „Gebucht"-Badge nach erfolgreicher Buchung' },
+      { typ: 'neu', text: 'Bank CSV-Import (vollständig): Kontoauszüge importieren und automatisch mit offenen Rechnungen abgleichen. 9 System-Templates (Sparkasse MT940/CAMT, DKB, ING, Volksbank, VR-Bank/Sparda/GLS, Commerzbank, Postbank, PayPal) mit automatischer Format-Erkennung. Import-Dialog mit Vorschau und Duplikat-Schutz (SHA-256). Halbautomatik: Score aus Betrag + Rechnungsnummer + Partnername – bei eindeutigem Treffer wird direkt gebucht, sonst öffnet sich der Abgleich-Dialog zur manuellen Auswahl. Rechnungsnummer-Matching erkennt vollständige Nummern (RE-24-0001) und Zahlenteil ohne Präfix (240001). Überzahlungen erzeugen automatisch ein Lieferanten- oder Kundenguthaben (offener Verrechnungsposten); Guthaben-Badge erscheint bei der nächsten Rechnung des gleichen Partners und kann per Klick verrechnet werden. Dashboard-Widget für alle offenen Guthaben. Transaktionsliste mit Filter nach Suche, Datum und Status (Offen/Gebucht/Privat). Klassifizierungsregeln für wiederkehrende Buchungen ohne Rechnungsbezug.' },
     ],
   },
   {
