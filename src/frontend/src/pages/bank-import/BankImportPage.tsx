@@ -55,11 +55,12 @@ type AnalyseStatus =
 interface ImportDialogProps {
   konten: Konto[]
   templates: BankTemplate[]
+  manuellModus: boolean
   onClose: () => void
   onErfolg: (kontoId: number) => void
 }
 
-function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProps) {
+function ImportDialog({ konten, templates, manuellModus, onClose, onErfolg }: ImportDialogProps) {
   const [schritt, setSchritt] = useState<Schritt>(1)
   const [datei, setDatei] = useState<File | null>(null)
   const [templateId, setTemplateId] = useState<string>('')
@@ -137,7 +138,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       }),
     onSuccess: (res) => {
       setSchritt(3)
-      autoBuchenMut.mutate(res.import_id)
+      if (!manuellModus) {
+        autoBuchenMut.mutate(res.import_id)
+      }
     },
     onError: (e: Error) => setFehler(e.message),
   })
@@ -399,6 +402,13 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                 <p className="text-sm text-slate-400 dark:text-slate-500 text-center animate-pulse">
                   Transaktionen werden automatisch abgeglichen…
                 </p>
+              )}
+
+              {manuellModus && !autoBuchenMut.data && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-center">
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{importMut.data.erfolg}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Alle manuell prüfen</div>
+                </div>
               )}
 
               {autoBuchenMut.data && (
@@ -926,6 +936,13 @@ export function BankImportPage() {
 
   const { data: konten = [] } = useQuery({ queryKey: ['konten'], queryFn: getKonten })
   const { data: templates = [] } = useQuery({ queryKey: ['bank-templates'], queryFn: getBankTemplates })
+  const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
+
+  const manuellModus = (() => {
+    const stored = localStorage.getItem(MANUELL_LS_KEY)
+    if (stored !== null) return stored === '1'
+    return unt?.bank_import_manuell ?? false
+  })()
 
   const geschaeftskonten = konten.filter(k => k.kontotyp !== 'privat' && k.aktiv !== false)
   const aktivesKonto = geschaeftskonten.find(k => k.id === aktivesKontoId) ?? geschaeftskonten[0]
@@ -985,6 +1002,7 @@ export function BankImportPage() {
         <ImportDialog
           konten={geschaeftskonten}
           templates={templates}
+          manuellModus={manuellModus}
           onClose={() => setDialogOffen(false)}
           onErfolg={handleErfolg}
         />
