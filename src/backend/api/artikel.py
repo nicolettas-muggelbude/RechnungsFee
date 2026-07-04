@@ -226,6 +226,22 @@ def get_artikel_rechnungen(artikel_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.patch("/{artikel_id}/archivieren", response_model=ArtikelResponse)
+def archiviere_artikel(artikel_id: int, db: Session = Depends(get_db)):
+    artikel = db.query(Artikel).filter(Artikel.id == artikel_id).first()
+    if not artikel:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden.")
+    if artikel.lager_aktiv and artikel.bestand_aktuell and artikel.bestand_aktuell != Decimal("0"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Artikel kann nicht archiviert werden: Lagerbestand ist {artikel.bestand_aktuell} {artikel.einheit} (muss 0 sein).",
+        )
+    artikel.aktiv = False
+    db.commit()
+    db.refresh(artikel)
+    return artikel
+
+
 @router.get("/lagerwarnung/liste", response_model=list[ArtikelResponse])
 def get_lagerwarnung(db: Session = Depends(get_db)):
     """Artikel mit aktivierter Lagerführung deren Bestand den Mindestbestand erreicht oder unterschreitet."""

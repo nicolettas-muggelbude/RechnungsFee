@@ -9,6 +9,7 @@ import {
   getLieferanten, getUstSaetze, type Artikel, type ArtikelTyp,
   getArtikelGruppen, createArtikelGruppe, updateArtikelGruppe,
   toggleArtikelGruppeAktiv, deleteArtikelGruppe, getUnternehmen,
+  archiviereArtikel,
 } from '../../api/client'
 
 // ---------------------------------------------------------------------------
@@ -765,8 +766,14 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
   })
   const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
 
-  const toggleAktiv = useMutation({
-    mutationFn: () => updateArtikel(artikel.id, { aktiv: !artikel.aktiv }),
+  const [archivFehler, setArchivFehler] = useState('')
+  const archiviereMut = useMutation({
+    mutationFn: () => archiviereArtikel(artikel.id),
+    onSuccess: () => { setArchivFehler(''); qc.invalidateQueries({ queryKey: ['artikel'] }) },
+    onError: (e: Error) => setArchivFehler(e.message),
+  })
+  const aktiviereMut = useMutation({
+    mutationFn: () => updateArtikel(artikel.id, { aktiv: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['artikel'] }),
   })
 
@@ -1025,12 +1032,26 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
 
       {/* Footer */}
       <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 py-3">
-        <button
-          onClick={() => toggleAktiv.mutate()}
-          className={`text-xs ${artikel.aktiv ? 'text-slate-400 hover:text-red-500 dark:hover:text-red-400' : 'text-green-600 dark:text-green-400 hover:text-green-700'}`}
-        >
-          {artikel.aktiv ? 'Als inaktiv markieren' : 'Wieder aktivieren'}
-        </button>
+        {archivFehler && (
+          <p className="text-xs text-red-600 dark:text-red-400 mb-2">{archivFehler}</p>
+        )}
+        {artikel.aktiv ? (
+          <button
+            onClick={() => { setArchivFehler(''); archiviereMut.mutate() }}
+            disabled={archiviereMut.isPending}
+            className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50"
+          >
+            {archiviereMut.isPending ? 'Archiviert…' : 'Archivieren'}
+          </button>
+        ) : (
+          <button
+            onClick={() => aktiviereMut.mutate()}
+            disabled={aktiviereMut.isPending}
+            className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 disabled:opacity-50"
+          >
+            {aktiviereMut.isPending ? 'Aktiviert…' : 'Wieder aktivieren'}
+          </button>
+        )}
       </div>
     </div>
   )

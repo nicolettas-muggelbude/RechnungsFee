@@ -29,6 +29,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Rechnungen: Filtereinstellung (Monat/Jahr/Zeitraum/Alle) bleibt beim Navigieren erhalten und wird erst beim nächsten App-Start zurückgesetzt.' },
       { typ: 'verbesserung', text: 'App-Icon: Überarbeitetes Desktop-Icon mit Rahmen (Windows, Linux, macOS) – alle Größen 16–1024 px erneuert.' },
       { typ: 'verbesserung', text: 'Deinstallation (Windows): Beim Setzen des Hakens „Anwendungsdaten löschen" erscheint jetzt ein Bestätigungsdialog mit Auflistung der betroffenen Daten (Datenbank, Belege, Backups). Der Standard-Button ist „Nein" – ein versehentliches Löschen ist damit ausgeschlossen.' },
+      { typ: 'verbesserung', text: 'Artikel archivieren statt löschen: Artikel, Dienstleistungen und Fremdleistungen können jetzt archiviert (inaktiv gesetzt) werden. Archivierte Einträge verschwinden aus Auswahlfeldern, bleiben aber in bestehenden Rechnungen erhalten. Bei aktiver Lagerführung muss der Bestand zuerst auf 0 gebracht werden.' },
     ],
   },
   {
