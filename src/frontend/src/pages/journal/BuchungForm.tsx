@@ -258,10 +258,10 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     gewaehlteKat?.konto_skr03 === '3300' || gewaehlteKat?.konto_skr04 === '5300' ? '13b_abs1' :
     gewaehlteKat?.konto_skr03 === '3610' || gewaehlteKat?.konto_skr04 === '5600' ? '13b_abs2' : null
 
-  // ust_sonderfall: auto-setzen wenn Kategorie einen Sonderfall impliziert
+  // ust_sonderfall: auto-setzen wenn Kategorie einen Sonderfall impliziert, sonst leeren
   useEffect(() => {
     if (skipSonderfallRef.current) { skipSonderfallRef.current = false; return }
-    if (katSonderfall) setValue('ust_sonderfall', katSonderfall)
+    setValue('ust_sonderfall', katSonderfall ?? '')
   }, [katSonderfall, setValue])
 
   // km-Eingabe: brutto_betrag auto-berechnen (EÜR: 0,30 €/km)
