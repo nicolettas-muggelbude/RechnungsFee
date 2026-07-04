@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "fileDropEnabled": false
+        "dragDropEnabled": false
       }
     ],
     "security": {
