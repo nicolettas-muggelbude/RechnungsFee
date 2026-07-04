@@ -31,6 +31,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Deinstallation (Windows): Beim Setzen des Hakens „Anwendungsdaten löschen" erscheint jetzt ein Bestätigungsdialog mit Auflistung der betroffenen Daten (Datenbank, Belege, Backups). Der Standard-Button ist „Nein" – ein versehentliches Löschen ist damit ausgeschlossen.' },
       { typ: 'verbesserung', text: 'Artikel archivieren statt löschen: Artikel, Dienstleistungen und Fremdleistungen können jetzt archiviert (inaktiv gesetzt) werden. Archivierte Einträge verschwinden aus Auswahlfeldern, bleiben aber in bestehenden Rechnungen erhalten. Bei aktiver Lagerführung muss der Bestand zuerst auf 0 gebracht werden.' },
       { typ: 'verbesserung', text: 'Kontenrahmen-Auswahl (Setup & Stammdaten): SKR03 jetzt als Empfehlung für Freiberufler, Dienstleister und Gewerbetreibende (Handwerk, kleine Betriebe) beschrieben. Hinweis ergänzt, dass die Zuordnungen Empfehlungen sind und Steuerberater bzw. Finanzamt entscheidend sind.' },
+      { typ: 'fix', text: 'Bank-Import: IBAN im CSV-Header wurde bei deutschen Konten um die letzten 2 Stellen gekürzt – das zugehörige Konto wurde dadurch nicht erkannt. Außerdem werden jetzt CAMT-Exporte (ZIP mit XML oder direkte XML-Datei, ISO 20022 camt.053/054) direkt importiert – kein CSV-Template notwendig.' },
     ],
   },
   {
