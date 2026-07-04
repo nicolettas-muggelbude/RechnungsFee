@@ -10,11 +10,7 @@
     "beforeBuildCommand": "cd src/frontend && npm run build"
   },
   "app": {
-    "windows": [
-      {
-        "dragDropEnabled": false
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

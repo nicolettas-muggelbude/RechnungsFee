@@ -60,14 +60,12 @@ interface ImportDialogProps {
 function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProps) {
   const [schritt, setSchritt] = useState<Schritt>(1)
   const [datei, setDatei] = useState<File | null>(null)
-  const [dragOver, setDragOver] = useState(false)
   const [templateId, setTemplateId] = useState<string>('')
   const [manuellKontoId, setManuellKontoId] = useState<number>(konten[0]?.id ?? 0)
   const [analyseStatus, setAnalyseStatus] = useState<AnalyseStatus>({ art: 'idle' })
   const [vorschau, setVorschau] = useState<BankVorschauResponse | null>(null)
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set())
   const [fehler, setFehler] = useState<string | null>(null)
-  const fileRef = { current: null as HTMLInputElement | null }
 
   const geschaeftskonten = konten.filter(k => k.kontotyp !== 'privat')
 
@@ -187,26 +185,10 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
             <div className="space-y-4">
 
               {/* Datei-Upload */}
-              <div
-                onClick={() => fileRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                onDragEnter={e => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={e => {
-                  e.preventDefault()
-                  setDragOver(false)
-                  const f = e.dataTransfer.files?.[0]
-                  if (f) {
-                    setDatei(f)
-                    setAnalyseStatus({ art: 'idle' })
-                    setVorschau(null)
-                    setFehler(null)
-                  }
-                }}
-                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-                  dragOver
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : datei
+              <label
+                htmlFor="bank-import-datei"
+                className={`block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                  datei
                     ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
                     : 'border-slate-300 dark:border-slate-600 hover:border-blue-400'
                 }`}
@@ -217,12 +199,10 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                     <p className="text-xs text-slate-400 dark:text-slate-500">Klicken oder Datei ablegen zum Wechseln</p>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {dragOver ? 'Datei loslassen …' : 'CSV-, XML- oder ZIP-Datei hier ablegen oder klicken'}
-                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">CSV-, XML- oder ZIP-Datei hier ablegen oder klicken</p>
                 )}
                 <input
-                  ref={el => { fileRef.current = el }}
+                  id="bank-import-datei"
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
@@ -231,7 +211,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                     setFehler(null)
                   }}
                 />
-              </div>
+              </label>
 
               {/* Template (immer sichtbar, klein) */}
               <div>
