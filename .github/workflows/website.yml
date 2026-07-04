@@ -49,9 +49,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/upload-pages-artifact@v4
+      - name: GitHub-Pages-Artifact erstellen
+        run: tar --dereference --hard-dereference --directory web/dist -czf "$RUNNER_TEMP/artifact.tar.gz" .
+
+      - uses: actions/upload-artifact@v5
         with:
-          path: web/dist
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar.gz
+          if-no-files-found: error
 
   deploy:
     needs: build
