@@ -769,7 +769,7 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
   const [archivFehler, setArchivFehler] = useState('')
   const archiviereMut = useMutation({
     mutationFn: () => archiviereArtikel(artikel.id),
-    onSuccess: () => { setArchivFehler(''); qc.invalidateQueries({ queryKey: ['artikel'] }) },
+    onSuccess: () => { setArchivFehler(''); qc.refetchQueries({ queryKey: ['artikel'] }) },
     onError: (e: Error) => setArchivFehler(e.message),
   })
   const aktiviereMut = useMutation({
@@ -1081,11 +1081,12 @@ export function ArtikelPage() {
     queryFn: () => getArtikelGruppen(typFilter || undefined, true),
   })
 
-  // selected mit aktuellem Listeneintrag synchronisieren (z. B. nach Toggle-Mutationen)
+  // selected mit aktuellem Listeneintrag synchronisieren; schließt Detail-Panel wenn Item aus Liste verschwindet
   useEffect(() => {
     if (!selected || !artikel) return
     const aktuell = artikel.find(a => a.id === selected.id)
     if (aktuell) setSelected(aktuell)
+    else setSelected(null)
   }, [artikel])
 
   const gefiltert = (artikel ?? []).filter(a => {
