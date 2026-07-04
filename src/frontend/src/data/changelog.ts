@@ -37,6 +37,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Stammdaten: IBAN-Eingabe wird automatisch in 4er-Gruppen formatiert (z. B. DE89 3704 0044 0532 0130 00) – auch bereits gespeicherte IBANs ohne Leerzeichen werden beim Öffnen korrekt dargestellt.' },
       { typ: 'fix', text: 'Rechnungen: Schwarzer Bildschirm beim Löschen des Rechnungsdatums behoben – leeres oder ungültiges Datum führt nicht mehr zu einem App-Absturz.' },
       { typ: 'fix', text: 'Kategorien: Vorsteuer-Prozentsatz für Bewirtungskosten korrigiert – per §15 UStG ist die Vorsteuer zu 100 % abzugsfähig (nicht 70 %); der 70 %-Abzug gilt nur ertragsteuerlich (§ 4 Abs. 5 Nr. 2 EStG). Betrifft beide Kategorien „Bewirtungskosten" und „Bewirtungskosten (nicht abzugsfähig)".' },
+      { typ: 'fix', text: 'Bank-Import: Drag & Drop für CSV-, XML- und ZIP-Dateien funktioniert jetzt – die Drop-Handler fehlten vollständig. In der Desktop-App zusätzlich Tauri-Konfiguration korrigiert, die OS-Dateidrops bisher abgefangen hat.' },
     ],
   },
   {
