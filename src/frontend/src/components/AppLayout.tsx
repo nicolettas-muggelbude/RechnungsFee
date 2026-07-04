@@ -10,21 +10,21 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck'
 // ---------------------------------------------------------------------------
 
 const fakturierungAlleItems = [
-  { to: '/angebote',        label: 'Angebote',               icon: '📝', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.angebote_aktiv },
-  { to: '/auftraege',       label: 'Aufträge',               icon: '📋', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.auftraege_aktiv },
-  { to: '/proformas',       label: 'Proforma',               icon: '📋', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.proforma_aktiv },
-  { to: '/lieferscheine',   label: 'Lieferscheine',          icon: '🚚', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.lieferschein_aktiv },
-  { to: '/rechnungen',      label: 'Rechnungen',             icon: '🧾', bald: false, zeigen: (_u: Unternehmen | undefined) => true },
-  { to: '/wiederkehrend',   label: 'Wiederkehrend',          icon: '🔁', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.wiederkehrend_aktiv },
+  { to: '/angebote',        label: 'Angebote',               icon: 'request_quote',  bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.angebote_aktiv },
+  { to: '/auftraege',       label: 'Aufträge',               icon: 'assignment',     bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.auftraege_aktiv },
+  { to: '/proformas',       label: 'Proforma',               icon: 'description',    bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.proforma_aktiv },
+  { to: '/lieferscheine',   label: 'Lieferscheine',          icon: 'local_shipping', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.lieferschein_aktiv },
+  { to: '/rechnungen',      label: 'Rechnungen',             icon: 'receipt_long',   bald: false, zeigen: (_u: Unternehmen | undefined) => true },
+  { to: '/wiederkehrend',   label: 'Wiederkehrend',          icon: 'autorenew',      bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.wiederkehrend_aktiv },
 ]
 
 const buchhaltungNavBase = [
-  { to: '/journal',          label: 'Journal',          icon: '📒' },
-  { to: '/tagesabschluesse', label: 'Tagesabschlüsse',  icon: '📋' },
+  { to: '/journal',          label: 'Journal',          icon: 'menu_book' },
+  { to: '/tagesabschluesse', label: 'Tagesabschlüsse',  icon: 'today' },
 ]
 
 const buchhaltungNavOptional: { to: string; label: string; icon: string; zeigen: (u: Unternehmen | undefined) => boolean }[] = [
-  { to: '/bank-import', label: 'Bank-Import', icon: '🏦', zeigen: (u) => !!u?.bank_import_aktiv },
+  { to: '/bank-import', label: 'Bank-Import', icon: 'account_balance', zeigen: (u) => !!u?.bank_import_aktiv },
 ]
 
 import type { Unternehmen, ZMPruefung } from '../api/client'
@@ -33,33 +33,33 @@ type NavKontext = { unt: Unternehmen | undefined; zm: ZMPruefung | undefined }
 type ZeigenFn = (k: NavKontext) => boolean
 
 const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: ZeigenFn }[] = [
-  { to: '/euer',             label: 'EÜR',               icon: '📊', zeigen: () => true },
-  { to: '/anlageverzeichnis', label: 'AVEÜR',              icon: '🏛️', zeigen: () => true },
-  { to: '/guv',         label: 'GuV',           icon: '📈', zeigen: ({ unt }) => !!unt?.guv_aktiv },
-  { to: '/ustva',      label: 'UStVA',         icon: '🏛️', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },
-  { to: '/jahres-ust', label: 'Jahres-USt',   icon: '📅', zeigen: () => true },
-  { to: '/zm',         label: 'ZM',            icon: '🌍', zeigen: ({ zm }) => !!zm?.hat_ig_eintraege },
-  { to: '/anlage-s', label: 'Anlage S',   icon: '📝', zeigen: ({ unt }) => unt?.taetigkeitsart !== 'gewerbe' },
-  { to: '/anlage-g', label: 'Anlage G',   icon: '🏭', zeigen: ({ unt }) => unt?.taetigkeitsart === 'gewerbe' || unt?.taetigkeitsart === 'gemischt' },
-  { to: '/eks',     label: 'EKS',         icon: '📋', zeigen: ({ unt }) => !!unt?.bezieht_transferleistungen },
-  { to: '/fristen', label: 'Fristen',     icon: '🗓️', zeigen: () => true },
-  { to: '/exporte', label: 'Exporte', icon: '📦', zeigen: () => true },
+  { to: '/euer',              label: 'EÜR',          icon: 'bar_chart',       zeigen: () => true },
+  { to: '/anlageverzeichnis', label: 'AVEÜR',         icon: 'domain',          zeigen: () => true },
+  { to: '/guv',               label: 'GuV',           icon: 'trending_up',     zeigen: ({ unt }) => !!unt?.guv_aktiv },
+  { to: '/ustva',             label: 'UStVA',         icon: 'account_balance', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },
+  { to: '/jahres-ust',        label: 'Jahres-USt',    icon: 'calendar_month',  zeigen: () => true },
+  { to: '/zm',                label: 'ZM',            icon: 'public',          zeigen: ({ zm }) => !!zm?.hat_ig_eintraege },
+  { to: '/anlage-s',          label: 'Anlage S',      icon: 'article',         zeigen: ({ unt }) => unt?.taetigkeitsart !== 'gewerbe' },
+  { to: '/anlage-g',          label: 'Anlage G',      icon: 'article',         zeigen: ({ unt }) => unt?.taetigkeitsart === 'gewerbe' || unt?.taetigkeitsart === 'gemischt' },
+  { to: '/eks',               label: 'EKS',           icon: 'assignment_ind',  zeigen: ({ unt }) => !!unt?.bezieht_transferleistungen },
+  { to: '/fristen',           label: 'Fristen',       icon: 'event',           zeigen: () => true },
+  { to: '/exporte',           label: 'Exporte',       icon: 'upload_file',     zeigen: () => true },
 ]
 
 const stammdatenNav = [
-  { to: '/kunden',      label: 'Kunden',      icon: '👤' },
-  { to: '/lieferanten', label: 'Lieferanten', icon: '🏭' },
-  { to: '/artikel',     label: 'Artikel', icon: '📦' },
+  { to: '/kunden',      label: 'Kunden',      icon: 'person' },
+  { to: '/lieferanten', label: 'Lieferanten', icon: 'factory' },
+  { to: '/artikel',     label: 'Artikel',     icon: 'inventory_2' },
 ]
 
 const einstellungenNav = [
-  { to: '/dokumentenpakete', label: 'Dokumentenpakete', icon: '📎' },
-  { to: '/konten',           label: 'Konten',            icon: '🏦' },
-  { to: '/kategorien',       label: 'Kategorien',        icon: '🏷️' },
-  { to: '/nummernkreise',    label: 'Nummernkreise',     icon: '🔢' },
-  { to: '/ust-saetze',       label: 'Steuersätze',       icon: '%' },
-  { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: '📄' },
-  { to: '/unternehmen',      label: 'Unternehmen',       icon: '🏢' },
+  { to: '/dokumentenpakete', label: 'Dokumentenpakete', icon: 'folder_zip' },
+  { to: '/konten',           label: 'Konten',            icon: 'account_balance_wallet' },
+  { to: '/kategorien',       label: 'Kategorien',        icon: 'label' },
+  { to: '/nummernkreise',    label: 'Nummernkreise',     icon: 'pin' },
+  { to: '/ust-saetze',       label: 'Steuersätze',       icon: 'percent' },
+  { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: 'file_copy' },
+  { to: '/unternehmen',      label: 'Unternehmen',       icon: 'business' },
 ]
 
 const buchhaltungPfade   = [...buchhaltungNavBase.map(n => n.to), '/buchungsvorlagen', ...buchhaltungNavOptional.map(n => n.to)]
@@ -75,6 +75,10 @@ function formatDatum(iso: string): string {
 // ---------------------------------------------------------------------------
 // Hilfskomponenten
 // ---------------------------------------------------------------------------
+
+function NavIcon({ name }: { name: string }) {
+  return <span className="material-symbols-outlined shrink-0" style={{ fontSize: '18px', fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20" }}>{name}</span>
+}
 
 function SectionLabel({ label }: { label: string }) {
   return (
@@ -140,7 +144,7 @@ function CollapsibleSection({
         }`}
       >
         <span className="flex items-center gap-3">
-          <span>{icon}</span>
+          <NavIcon name={icon} />
           <span>{label}</span>
           {badge && <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />}
         </span>
@@ -151,7 +155,7 @@ function CollapsibleSection({
         <div className="border-l-2 border-slate-100 dark:border-slate-800 ml-6">
           {items.map(({ to, label: l, icon: ic, badge: itemBadge }) => (
             <NavLink key={to} to={to} className={navLinkClass}>
-              <span>{ic}</span><span className="flex-1">{l}</span>
+              <NavIcon name={ic} /><span className="flex-1">{l}</span>
               {itemBadge && <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />}
             </NavLink>
           ))}
@@ -237,7 +241,7 @@ export function AppLayout() {
   const fakturierungNav = fakturierungAlleItems.filter(n => n.zeigen(untDef))
   const buchhaltungNav = [
     ...buchhaltungNavBase,
-    ...(untDef?.buchungsvorlagen_aktiv ? [{ to: '/buchungsvorlagen', label: 'Buchungsvorlagen', icon: '🔄' }] : []),
+    ...(untDef?.buchungsvorlagen_aktiv ? [{ to: '/buchungsvorlagen', label: 'Buchungsvorlagen', icon: 'repeat' }] : []),
     ...buchhaltungNavOptional.filter(n => n.zeigen(untDef)),
   ]
 
@@ -286,7 +290,7 @@ export function AppLayout() {
 
           {/* Dashboard */}
           <NavLink to="/" end className={navLinkClass}>
-            <span>📊</span><span>Dashboard</span>
+            <NavIcon name="home" /><span>Dashboard</span>
           </NavLink>
 
           {/* Fakturierung – immer sichtbar */}
@@ -294,13 +298,13 @@ export function AppLayout() {
           {fakturierungNav.map(({ to, label, icon, bald }) =>
             bald ? (
               <div key={to} className="flex items-center gap-3 px-4 py-2 text-sm text-slate-300 dark:text-slate-600 cursor-not-allowed select-none">
-                <span className="opacity-40">{icon}</span>
+                <span className="opacity-40"><NavIcon name={icon} /></span>
                 <span>{label}</span>
                 <span className="ml-auto text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded px-1.5 py-0.5">bald</span>
               </div>
             ) : (
               <NavLink key={to} to={to} className={navLinkClass}>
-                <span>{icon}</span><span>{label}</span>
+                <NavIcon name={icon} /><span>{label}</span>
               </NavLink>
             )
           )}
@@ -308,7 +312,7 @@ export function AppLayout() {
           {/* Buchhaltung */}
           <CollapsibleSection
             label="Buchhaltung"
-            icon="📒"
+            icon="menu_book"
             aktiv={buchhaltungAktiv}
             badge={faelligBadge}
             items={buchhaltungNav.map(n => ({
@@ -320,7 +324,7 @@ export function AppLayout() {
           {/* Auswertung */}
           <CollapsibleSection
             label="Auswertung"
-            icon="📈"
+            icon="trending_up"
             aktiv={auswertungAktiv}
             items={auswertungNav}
           />
@@ -328,7 +332,7 @@ export function AppLayout() {
           {/* Stammdaten */}
           <CollapsibleSection
             label="Stammdaten"
-            icon="👥"
+            icon="contacts"
             aktiv={stammdatenAktiv}
             items={stammdatenNav}
           />
@@ -336,7 +340,7 @@ export function AppLayout() {
           {/* Einstellungen */}
           <CollapsibleSection
             label="Einstellungen"
-            icon="⚙️"
+            icon="settings"
             aktiv={einstellungenAktiv}
             items={einstellungenNav}
           />
@@ -345,19 +349,19 @@ export function AppLayout() {
           <div className="border-t border-slate-100 dark:border-slate-800 mt-3 mb-1" />
 
           <NavLink to="/backup" className={navLinkClass}>
-            <span>💾</span><span>Backup</span>
+            <NavIcon name="save" /><span>Backup</span>
           </NavLink>
           <NavLink to="/info" className={navLinkClass}>
-            <span>ℹ️</span><span>Info & Updates</span>
+            <NavIcon name="info" /><span>Info & Updates</span>
           </NavLink>
           <NavLink to="/spenden" className={navLinkClass}>
-            <span>💙</span><span>Spenden</span>
+            <NavIcon name="volunteer_activism" /><span>Spenden</span>
           </NavLink>
           <button
             onClick={() => openUrl('https://rechnungsfee.app/handbuch')}
             className="flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 w-full text-left"
           >
-            <span>📖</span><span>Handbuch</span>
+            <NavIcon name="help" /><span>Handbuch</span>
           </button>
 
         </nav>

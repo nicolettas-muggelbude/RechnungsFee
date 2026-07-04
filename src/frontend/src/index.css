@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "material-symbols/outlined.css";
 
 /* Basis-Schrift */
 body {
