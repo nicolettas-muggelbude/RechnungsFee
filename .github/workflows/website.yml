@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/configure-pages@v5
+
       - name: Wiki klonen
         run: |
           git clone https://github.com/nicolettas-muggelbude/RechnungsFee.wiki.git wiki-src
@@ -49,14 +51,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: GitHub-Pages-Artifact erstellen
-        run: tar --dereference --hard-dereference --directory web/dist -czf "$RUNNER_TEMP/artifact.tar.gz" .
-
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: github-pages
-          path: ${{ runner.temp }}/artifact.tar.gz
-          if-no-files-found: error
+          path: web/dist
 
   deploy:
     needs: build
@@ -66,4 +63,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
