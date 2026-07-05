@@ -161,8 +161,17 @@ export function AnlageSPage() {
 
           {/* Laufende Einkünfte */}
           <Abschnitt titel="Laufende Einkünfte (aus EÜR)">
-            <ElsterKz kz="KZ 100" label={istGewinn ? 'Gewinn aus freiberuflicher Tätigkeit' : 'Verlust aus freiberuflicher Tätigkeit'}
-              wert={euroFmt(gv)} />
+            <div className="flex items-center gap-3 py-2">
+              <span className="shrink-0 inline-flex items-center justify-center w-11 h-6 rounded text-xs font-bold text-white bg-teal-600 dark:bg-teal-700">
+                KZ 100
+              </span>
+              <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                {istGewinn ? 'Gewinn aus freiberuflicher Tätigkeit' : 'Verlust aus freiberuflicher Tätigkeit'}
+              </span>
+              <span className={`tabular-nums text-sm font-medium ${!istGewinn ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                {!istGewinn && '− '}{euroFmt(gv)}
+              </span>
+            </div>
           </Abschnitt>
 
           {/* KFZ */}

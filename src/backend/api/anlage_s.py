@@ -186,9 +186,9 @@ def _generate_anlage_s_pdf(ergebnis: AnlageSErgebnis) -> bytes:
     # Laufende Einkünfte
     gv = ergebnis.gewinn_verlust
     ist_gewinn = gv >= 0
-    section_header("Laufende Einkünfte (aus EÜR, ELSTER KZ 100)")
-    text_row("Gewinn freiberufliche Tätigkeit", _euro(gv) if ist_gewinn else "—")
-    text_row("Verlust freiberufliche Tätigkeit", _euro(gv) if not ist_gewinn else "—")
+    section_header("Laufende Einkünfte (aus EÜR)")
+    kz_label = "Gewinn freiberufliche Tätigkeit  (ELSTER KZ 100)" if ist_gewinn else "Verlust freiberufliche Tätigkeit  (ELSTER KZ 100)"
+    text_row(kz_label, _euro(gv))
     pdf.ln(2)
 
     # KFZ
