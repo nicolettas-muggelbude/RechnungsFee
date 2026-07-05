@@ -136,7 +136,7 @@ function CollapsibleSection({
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors rounded-md ${
       isActive
-        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700'
+        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100'
     }`
 
@@ -263,10 +263,10 @@ export function AppLayout() {
   const zeigeBanner = fehltGestern?.fehlt === true && !bannerDismissed
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
+    `flex items-center gap-3 mx-2 px-3 py-2 text-sm font-medium transition-colors rounded-md ${
       isActive
-        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700'
-        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100'
     }`
 
   const buchhaltungAktiv  = buchhaltungPfade.some(p => location.pathname.startsWith(p))
@@ -304,7 +304,7 @@ export function AppLayout() {
           <SectionLabel label="Fakturierung" />
           {fakturierungNav.map(({ to, label, icon, bald }) =>
             bald ? (
-              <div key={to} className="flex items-center gap-3 px-4 py-2 text-sm text-slate-300 dark:text-slate-600 cursor-not-allowed select-none">
+              <div key={to} className="flex items-center gap-3 mx-2 px-3 py-2 text-sm text-slate-300 dark:text-slate-600 cursor-not-allowed select-none rounded-md">
                 <span className="opacity-40"><NavIcon name={icon} /></span>
                 <span>{label}</span>
                 <span className="ml-auto text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded px-1.5 py-0.5">bald</span>
@@ -366,7 +366,7 @@ export function AppLayout() {
           </NavLink>
           <button
             onClick={() => openUrl('https://rechnungsfee.app/handbuch')}
-            className="flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 w-full text-left"
+            className="flex items-center gap-3 mx-2 px-3 py-2 text-sm font-medium transition-colors rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 w-full text-left"
           >
             <NavIcon name="help" /><span>Handbuch</span>
           </button>

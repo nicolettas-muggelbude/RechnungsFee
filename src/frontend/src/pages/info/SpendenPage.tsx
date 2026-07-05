@@ -35,19 +35,19 @@ export function SpendenPage() {
           <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Einmalige &amp; anlassbezogene Kosten</h2>
           <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
             <div className="flex items-start gap-2">
-              <span className="shrink-0">🖥️</span>
+              <span className="material-symbols-outlined text-[#4F46E5] shrink-0" style={{ fontSize: '1.25rem' }}>computer</span>
               <span>Infrastruktur – Hardware, Tools und Lizenzen für die Entwicklung</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="shrink-0">🎤</span>
+              <span className="material-symbols-outlined text-[#4F46E5] shrink-0" style={{ fontSize: '1.25rem' }}>mic</span>
               <span>Raummiete für kostenfreie Vorträge und Workshops rund um RechnungsFee</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="shrink-0">👕</span>
+              <span className="material-symbols-outlined text-[#4F46E5] shrink-0" style={{ fontSize: '1.25rem' }}>checkroom</span>
               <span>Merchandise – Aufkleber, Shirts und Materialien für die Community</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="shrink-0">🎪</span>
+              <span className="material-symbols-outlined text-[#4F46E5] shrink-0" style={{ fontSize: '1.25rem' }}>celebration</span>
               <span>Event-Teilnahmen – Anreise, Unterkunft und Standgebühren</span>
             </div>
           </div>
@@ -67,7 +67,7 @@ export function SpendenPage() {
             onClick={() => openUrl(PAYPAL_URL)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-[#0070ba] hover:bg-[#005ea6] text-white font-semibold rounded-xl text-sm transition-colors shadow-sm"
           >
-            <span>💙</span>
+            <span className="material-symbols-outlined leading-none" style={{ fontSize: '1.25rem' }}>favorite</span>
             <span>Via PayPal spenden</span>
           </button>
           <p className="text-xs text-slate-400 dark:text-slate-500">
@@ -112,7 +112,7 @@ export function SpendenPage() {
         <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Andere Wege zu helfen</h2>
         <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
           <li className="flex items-start gap-2">
-            <span className="mt-0.5">⭐</span>
+            <span className="material-symbols-outlined text-[#4F46E5] mt-0.5 shrink-0" style={{ fontSize: '1.25rem' }}>star</span>
             <span>
               Das Projekt auf{' '}
               <button
@@ -125,11 +125,11 @@ export function SpendenPage() {
             </span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="mt-0.5">🐛</span>
+            <span className="material-symbols-outlined text-[#4F46E5] mt-0.5 shrink-0" style={{ fontSize: '1.25rem' }}>bug_report</span>
             <span>Bugs melden und Feature-Wünsche als GitHub Issue eintragen</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="mt-0.5">📣</span>
+            <span className="material-symbols-outlined text-[#4F46E5] mt-0.5 shrink-0" style={{ fontSize: '1.25rem' }}>campaign</span>
             <span>RechnungsFee anderen Freiberuflern und Kleinunternehmern empfehlen</span>
           </li>
         </ul>
