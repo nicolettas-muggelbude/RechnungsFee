@@ -48,22 +48,6 @@ function ZeileText({ label, wert }: { label: string; wert?: string }) {
   )
 }
 
-function ElsterKz({ kz, label, wert, leer = false }: {
-  kz: string; label: string; wert?: string; leer?: boolean
-}) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <span className="shrink-0 inline-flex items-center justify-center w-11 h-6 rounded text-xs font-bold text-white bg-teal-600 dark:bg-teal-700">
-        {kz}
-      </span>
-      <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{label}</span>
-      <span className={`tabular-nums text-sm font-medium ${leer ? 'text-slate-300 dark:text-slate-600' : 'text-slate-800 dark:text-slate-100'}`}>
-        {wert ?? <span className="text-slate-300 dark:text-slate-600">—</span>}
-      </span>
-    </div>
-  )
-}
-
 function SummenZeile({ label, betrag }: { label: string; betrag: number }) {
   const negativ = betrag < 0
   return (
