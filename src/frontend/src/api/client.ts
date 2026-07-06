@@ -292,6 +292,7 @@ export type Unternehmen = {
   guv_aktiv?: boolean
   bank_import_aktiv?: boolean
   bank_import_manuell?: boolean
+  dashboard_config?: string | null
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>

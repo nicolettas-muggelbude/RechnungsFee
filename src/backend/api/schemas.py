@@ -101,6 +101,7 @@ class UnternehmenBase(BaseModel):
     guv_aktiv: bool = False
     bank_import_aktiv: bool = False
     bank_import_manuell: bool = False
+    dashboard_config: Optional[str] = None
 
     @field_validator("versteuerungsart")
     @classmethod

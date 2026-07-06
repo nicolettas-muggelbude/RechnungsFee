@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { getJournal, getUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, type Rechnung, type Forderung } from '../../api/client'
+import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, type Rechnung, type Forderung } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { dashboardFilter } from '../../store/filterStore'
 
@@ -670,8 +670,351 @@ function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
   )
 }
 
+// ── Dashboard-Konfiguration ──────────────────────────────────────────────────
+
+interface DashboardQuicklink {
+  id: string
+  label: string
+  url: string
+  icon: string | null
+  anzeigemodus: 'icon' | 'text' | 'beides'
+}
+
+interface DashboardConfig {
+  widget_order: string[]
+  widget_visibility: Record<string, boolean>
+  quicklinks: DashboardQuicklink[]
+}
+
+const WIDGET_DEFS: Array<{ id: string; label: string; warnung: boolean }> = [
+  { id: 'buchfuehrung',        label: 'Buchführungspflicht-Warnung',  warnung: true },
+  { id: 'ueberzahlung',        label: 'Überzahlung',                  warnung: false },
+  { id: 'lieferantenguthaben', label: 'Lieferantenguthaben',          warnung: false },
+  { id: 'kleinunternehmer',    label: 'Kleinunternehmer-Warnung',     warnung: true },
+  { id: 'lager',               label: 'Lagerwarnung',                 warnung: false },
+  { id: 'fristen',             label: 'Steuer-Fristen',               warnung: true },
+  { id: 'quicklinks',          label: 'Schnellzugriff',               warnung: false },
+  { id: 'kacheln',             label: 'Einnahmen / Ausgaben / Saldo', warnung: false },
+  { id: 'faellige',            label: 'Fällige Rechnungen',           warnung: false },
+  { id: 'letzte_buchungen',    label: 'Letzte Buchungen',             warnung: false },
+]
+
+const NON_HIDEABLE = new Set(['buchfuehrung', 'kleinunternehmer', 'fristen', 'kacheln'])
+
+const DEFAULT_CONFIG: DashboardConfig = {
+  widget_order: WIDGET_DEFS.map(w => w.id),
+  widget_visibility: {
+    ueberzahlung: true, lieferantenguthaben: true, lager: true,
+    quicklinks: true, faellige: true, letzte_buchungen: true,
+  },
+  quicklinks: [],
+}
+
+const QUICKLINK_ICONS = [
+  'account_balance', 'language', 'computer', 'mail', 'calculate',
+  'receipt_long', 'business_center', 'shopping_cart', 'phone',
+  'calendar_month', 'folder_open', 'cloud', 'gavel', 'person',
+  'link', 'open_in_new',
+]
+
+function parseConfig(raw: string | null | undefined): DashboardConfig {
+  if (!raw) return DEFAULT_CONFIG
+  try {
+    const p = JSON.parse(raw) as Partial<DashboardConfig>
+    const allIds = WIDGET_DEFS.map(w => w.id)
+    const saved = Array.isArray(p.widget_order) ? p.widget_order.filter(id => allIds.includes(id)) : []
+    const missing = allIds.filter(id => !saved.includes(id))
+    return {
+      widget_order: [...saved, ...missing],
+      widget_visibility: { ...DEFAULT_CONFIG.widget_visibility, ...(p.widget_visibility ?? {}) },
+      quicklinks: Array.isArray(p.quicklinks) ? p.quicklinks : [],
+    }
+  } catch { return DEFAULT_CONFIG }
+}
+
+async function openExternUrl(url: string) {
+  if (!url) return
+  try {
+    const { isTauri } = await import('@tauri-apps/api/core')
+    if (isTauri()) {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await (invoke as (cmd: string, args?: Record<string, unknown>) => Promise<void>)('open_url', { url })
+      return
+    }
+  } catch { /* ignorieren */ }
+  window.open(url, '_blank', 'noopener')
+}
+
+function QuicklinksWidget({ links }: { links: DashboardQuicklink[] }) {
+  if (links.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-2 mb-4">
+      {links.map(link => (
+        <button
+          key={link.id}
+          onClick={() => openExternUrl(link.url)}
+          title={link.anzeigemodus === 'icon' ? link.label : undefined}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shadow-sm"
+        >
+          {(link.anzeigemodus === 'icon' || link.anzeigemodus === 'beides') && link.icon && (
+            <span className="material-symbols-outlined" style={{ fontSize: '1.1rem' }}>{link.icon}</span>
+          )}
+          {(link.anzeigemodus === 'text' || link.anzeigemodus === 'beides') && (
+            <span>{link.label}</span>
+          )}
+          {link.anzeigemodus === 'icon' && !link.icon && <span>{link.label}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function DashboardKonfigModal({
+  config,
+  onSave,
+  onClose,
+  saving,
+}: {
+  config: DashboardConfig
+  onSave: (c: DashboardConfig) => void
+  onClose: () => void
+  saving: boolean
+}) {
+  const [order, setOrder] = useState(config.widget_order)
+  const [visibility, setVisibility] = useState(config.widget_visibility)
+  const [links, setLinks] = useState<DashboardQuicklink[]>(config.quicklinks)
+  const [editLinkId, setEditLinkId] = useState<string | null>(null)
+  const [neuLinkAktiv, setNeuLinkAktiv] = useState(false)
+  const [neuLink, setNeuLink] = useState<Omit<DashboardQuicklink, 'id'>>({
+    label: '', url: '', icon: null, anzeigemodus: 'beides',
+  })
+
+  function moveWidget(idx: number, dir: -1 | 1) {
+    const n = [...order]; const j = idx + dir
+    if (j < 0 || j >= n.length) return
+    ;[n[idx], n[j]] = [n[j], n[idx]]; setOrder(n)
+  }
+
+  function moveLink(idx: number, dir: -1 | 1) {
+    const n = [...links]; const j = idx + dir
+    if (j < 0 || j >= n.length) return
+    ;[n[idx], n[j]] = [n[j], n[idx]]; setLinks(n)
+  }
+
+  function addLink() {
+    if (!neuLink.label.trim()) return
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+    setLinks(l => [...l, { id, ...neuLink, label: neuLink.label.trim(), url: neuLink.url.trim() }])
+    setNeuLink({ label: '', url: '', icon: null, anzeigemodus: 'beides' })
+    setNeuLinkAktiv(false)
+  }
+
+  function updateLink(id: string, changes: Partial<DashboardQuicklink>) {
+    setLinks(l => l.map(x => x.id === id ? { ...x, ...changes } : x))
+  }
+
+  const iconPicker = (sel: string | null, onSel: (ic: string | null) => void) => (
+    <div className="flex flex-wrap gap-1.5">
+      <button type="button" onClick={() => onSel(null)}
+        className={`px-2 py-1 text-xs rounded border transition-colors ${!sel ? 'bg-indigo-100 border-indigo-400 text-indigo-700 dark:bg-indigo-900/50 dark:border-indigo-500 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400'}`}
+      >kein Icon</button>
+      {QUICKLINK_ICONS.map(ic => (
+        <button key={ic} type="button" onClick={() => onSel(ic)} title={ic}
+          className={`p-1.5 rounded border transition-colors ${sel === ic ? 'bg-indigo-100 border-indigo-400 text-indigo-700 dark:bg-indigo-900/50 dark:border-indigo-500 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400'}`}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '1.1rem' }}>{ic}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const anzeigeButtons = (cur: 'icon' | 'text' | 'beides', onChange: (m: 'icon' | 'text' | 'beides') => void) => (
+    <div className="flex gap-2">
+      {(['icon', 'text', 'beides'] as const).map(m => (
+        <button key={m} type="button" onClick={() => onChange(m)}
+          className={`px-3 py-1 text-xs rounded-lg border transition-colors ${cur === m ? 'bg-indigo-100 border-indigo-400 text-indigo-700 dark:bg-indigo-900/50 dark:border-indigo-500 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400'}`}
+        >{m === 'icon' ? 'Nur Icon' : m === 'text' ? 'Nur Text' : 'Icon + Text'}</button>
+      ))}
+    </div>
+  )
+
+  const linkForm = (label: string, url: string, icon: string | null, anzeigemodus: 'icon' | 'text' | 'beides',
+    onLabel: (v: string) => void, onUrl: (v: string) => void,
+    onIcon: (v: string | null) => void, onAnzeige: (v: 'icon' | 'text' | 'beides') => void
+  ) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Name</label>
+          <input type="text" value={label} onChange={e => onLabel(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="z.B. Online-Banking" />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">URL / Pfad</label>
+          <input type="text" value={url} onChange={e => onUrl(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="https://... oder C:\Programme\..." />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block">Icon</label>
+        {iconPicker(icon, onIcon)}
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block">Beschriftung</label>
+        {anzeigeButtons(anzeigemodus, onAnzeige)}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl my-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Dashboard konfigurieren</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-8">
+          {/* Schnellzugriff-Links */}
+          <section>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Schnellzugriff-Links</h3>
+            <div className="space-y-2">
+              {links.map((link, idx) => (
+                <div key={link.id} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900/40">
+                    <div className="flex flex-col">
+                      <button type="button" onClick={() => moveLink(idx, -1)} disabled={idx === 0}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-25 leading-none">
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>arrow_upward</span>
+                      </button>
+                      <button type="button" onClick={() => moveLink(idx, 1)} disabled={idx === links.length - 1}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-25 leading-none">
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>arrow_downward</span>
+                      </button>
+                    </div>
+                    {link.icon && <span className="material-symbols-outlined text-slate-500 dark:text-slate-400" style={{ fontSize: '1.1rem' }}>{link.icon}</span>}
+                    <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{link.label || '(kein Name)'}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px] hidden sm:block">{link.url}</span>
+                    <button type="button"
+                      onClick={() => setEditLinkId(editLinkId === link.id ? null : link.id)}
+                      className={`${editLinkId === link.id ? 'text-indigo-500' : 'text-slate-400 hover:text-indigo-500'}`}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '1.1rem' }}>edit</span>
+                    </button>
+                    <button type="button" onClick={() => { setLinks(l => l.filter(x => x.id !== link.id)); if (editLinkId === link.id) setEditLinkId(null) }}
+                      className="text-slate-400 hover:text-red-500">
+                      <span className="material-symbols-outlined" style={{ fontSize: '1.1rem' }}>delete</span>
+                    </button>
+                  </div>
+                  {editLinkId === link.id && (
+                    <div className="px-3 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                      {linkForm(link.label, link.url, link.icon, link.anzeigemodus,
+                        v => updateLink(link.id, { label: v }),
+                        v => updateLink(link.id, { url: v }),
+                        v => updateLink(link.id, { icon: v }),
+                        v => updateLink(link.id, { anzeigemodus: v }),
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {!neuLinkAktiv ? (
+                <button type="button" onClick={() => setNeuLinkAktiv(true)}
+                  className="flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium mt-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: '1.1rem' }}>add_circle</span>
+                  Link hinzufügen
+                </button>
+              ) : (
+                <div className="border border-indigo-300 dark:border-indigo-700 rounded-xl p-3 bg-indigo-50/40 dark:bg-indigo-950/20">
+                  {linkForm(neuLink.label, neuLink.url, neuLink.icon, neuLink.anzeigemodus,
+                    v => setNeuLink(n => ({ ...n, label: v })),
+                    v => setNeuLink(n => ({ ...n, url: v })),
+                    v => setNeuLink(n => ({ ...n, icon: v })),
+                    v => setNeuLink(n => ({ ...n, anzeigemodus: v })),
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    <button type="button" onClick={addLink} disabled={!neuLink.label.trim()}
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg font-medium disabled:opacity-50">
+                      Hinzufügen
+                    </button>
+                    <button type="button" onClick={() => { setNeuLinkAktiv(false); setNeuLink({ label: '', url: '', icon: null, anzeigemodus: 'beides' }) }}
+                      className="px-4 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Widget-Reihenfolge */}
+          <section>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Widget-Reihenfolge</h3>
+            <div className="space-y-1.5">
+              {order.map((id, idx) => {
+                const def = WIDGET_DEFS.find(w => w.id === id)
+                if (!def) return null
+                const canHide = !NON_HIDEABLE.has(id)
+                const isVisible = canHide ? (visibility[id] ?? true) : true
+                return (
+                  <div key={id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isVisible ? 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-700/50 opacity-55'}`}>
+                    <div className="flex flex-col">
+                      <button type="button" onClick={() => moveWidget(idx, -1)} disabled={idx === 0}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-25 leading-none">
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>arrow_upward</span>
+                      </button>
+                      <button type="button" onClick={() => moveWidget(idx, 1)} disabled={idx === order.length - 1}
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-25 leading-none">
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>arrow_downward</span>
+                      </button>
+                    </div>
+                    <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{def.label}</span>
+                    {def.warnung ? (
+                      <span title="Warnung – immer eingeblendet" className="material-symbols-outlined text-amber-400" style={{ fontSize: '1rem' }}>lock</span>
+                    ) : NON_HIDEABLE.has(id) ? (
+                      <span title="Immer eingeblendet" className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '1rem' }}>lock</span>
+                    ) : (
+                      <button type="button"
+                        onClick={() => setVisibility(v => ({ ...v, [id]: !(v[id] ?? true) }))}
+                        title={isVisible ? 'Widget ausblenden' : 'Widget einblenden'}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>{isVisible ? 'visibility' : 'visibility_off'}</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+            Abbrechen
+          </button>
+          <button type="button"
+            onClick={() => onSave({ widget_order: order, widget_visibility: visibility, quicklinks: links })}
+            disabled={saving}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            {saving ? 'Speichern…' : 'Speichern'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Dashboard() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [konfModus, setKonfModus] = useState(false)
+
   // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende
   const [filterModus, _setFilterModus] = useState<FilterModus>(() => (dashboardFilter.modus as FilterModus) ?? 'monat')
   const setFilterModus = (m: FilterModus) => { dashboardFilter.modus = m; _setFilterModus(m) }
@@ -707,6 +1050,13 @@ export function Dashboard() {
     queryKey: ['unternehmen'],
     queryFn: getUnternehmen,
     staleTime: 1000 * 60 * 10,
+  })
+
+  const konfig = parseConfig(unternehmen?.dashboard_config)
+
+  const { mutate: saveKonfig, isPending: konfSaving } = useMutation({
+    mutationFn: (c: DashboardConfig) => updateUnternehmen({ dashboard_config: JSON.stringify(c) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['unternehmen'] }); setKonfModus(false) },
   })
 
   const [zuflussAnsicht, setZuflussAnsicht] = useState<ZuflussAnsicht>('monat')
@@ -787,179 +1137,166 @@ export function Dashboard() {
   const hatPrivatbuchungen = privat.length > 0
   const zeigeZuflussMonitor = unternehmen?.bezieht_transferleistungen === true
 
+  function renderWidget(id: string) {
+    const vis = konfig.widget_visibility
+    switch (id) {
+      case 'buchfuehrung': return <BuchfuehrungspflichtWarnung key="buchfuehrung" />
+      case 'ueberzahlung': return (vis.ueberzahlung ?? true) ? <UeberzahlungWidget key="ueberzahlung" /> : null
+      case 'lieferantenguthaben': return (vis.lieferantenguthaben ?? true) ? <LieferantenguthabenWidget key="lieferantenguthaben" /> : null
+      case 'kleinunternehmer': return <KleinunternehmerWarnung key="kleinunternehmer" />
+      case 'lager': return (vis.lager ?? true) ? <LagerwarnungWidget key="lager" /> : null
+      case 'fristen': return <SteuerFristenBanner key="fristen" />
+      case 'quicklinks':
+        return (vis.quicklinks ?? true) && konfig.quicklinks.length > 0
+          ? <QuicklinksWidget key="quicklinks" links={konfig.quicklinks} />
+          : null
+      case 'kacheln':
+        return (
+          <div key="kacheln">
+            {zeigeZuflussMonitor && (
+              <div className="mb-6">
+                <ZuflussMonitor
+                  zufluss={zufluss}
+                  zeitraumLabel={zuflussLabel}
+                  ansicht={zuflussAnsicht}
+                  onAnsichtWechsel={setZuflussAnsicht}
+                  hatZeitraum={hatZeitraum}
+                  laedt={zeitraumLaedt && zuflussAnsicht === 'zeitraum'}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-4 mb-2">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebseinnahmen</p>
+                <p className="text-2xl font-bold text-green-600">{loaded ? formatEuro(einnahmen) : '—'}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebsausgaben</p>
+                <p className="text-2xl font-bold text-red-600">{loaded ? formatEuro(ausgaben) : '—'}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Saldo</p>
+                <p className={`text-2xl font-bold ${saldo >= 0 ? 'text-blue-600' : 'text-red-700'}`}>{loaded ? formatEuro(saldo) : '—'}</p>
+              </div>
+            </div>
+            {hatPrivatbuchungen ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 pl-1">
+                🏠 {privat.length} Privatbuchung{privat.length !== 1 ? 'en' : ''} (
+                {formatEuro(privat.reduce((s, e) => s + parseFloat(e.brutto_betrag), 0))}) im
+                gewählten Zeitraum – nicht in den Kacheln enthalten.
+              </p>
+            ) : <div className="mb-6" />}
+            {zmPruefung?.faellig && (
+              <div onClick={() => navigate('/zm')}
+                className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-3 mb-4 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors"
+              >
+                <span className="text-2xl">🇪🇺</span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">Zusammenfassende Meldung fällig – {zmPruefung.zeitraum_label}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">Frist: {zmPruefung.deadline.split('-').reverse().join('.')} · Einzureichen beim BZSt über ELSTER</p>
+                </div>
+                <span className="text-amber-600 dark:text-amber-400 text-sm">→</span>
+              </div>
+            )}
+          </div>
+        )
+      case 'faellige':
+        return (vis.faellige ?? true) && faellige && faellige.length > 0
+          ? <FaelligeKachel key="faellige" rechnungen={faellige} />
+          : null
+      case 'letzte_buchungen':
+        if (!(vis.letzte_buchungen ?? true)) return null
+        return (
+          <div key="letzte_buchungen" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-700 dark:text-slate-200">Letzte Buchungen</h3>
+              {letzteEintraege.length > 0 && (
+                <span className="text-xs text-slate-400 dark:text-slate-500">{letzteEintraege.length} Einträge</span>
+              )}
+            </div>
+            {letzteEintraege.length === 0 ? (
+              <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen im gewählten Zeitraum.</p>
+            ) : (
+              <div className="overflow-y-auto resize-y" style={{ height: '240px', minHeight: '96px' }}>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {letzteEintraege.map((e) => (
+                      <tr key={e.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700">
+                        <td className="px-5 py-3 text-slate-500 dark:text-slate-400 w-28">{formatDatum(e.datum)}</td>
+                        <td className="px-5 py-3 text-slate-400 dark:text-slate-500 w-32 font-mono text-xs">{e.belegnr}</td>
+                        <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
+                          {e.beschreibung}
+                          {e.kategorie_kontenart === 'Privat' && (
+                            <span className="ml-1.5 text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded px-1 dark:bg-purple-950 dark:border-purple-800">Privat</span>
+                          )}
+                        </td>
+                        <td className={`px-5 py-3 text-right font-medium ${e.kategorie_kontenart === 'Privat' ? 'text-slate-400' : e.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'}`}>
+                          {e.art === 'Ausgabe' ? '−' : '+'}{formatEuro(e.brutto_betrag)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      default: return null
+    }
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <BuchfuehrungspflichtWarnung />
-      <UeberzahlungWidget />
-      <LieferantenguthabenWidget />
-      <KleinunternehmerWarnung />
-      <LagerwarnungWidget />
-      <SteuerFristenBanner />
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
-
-        {/* Zeitfilter */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Zeitfilter */}
           <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
             {(['monat', 'datum', 'zeitraum', 'alle'] as FilterModus[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setFilterModus(m)}
-                className={`px-3 py-1.5 transition-colors ${
-                  filterModus === m
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                }`}
-              >
+              <button key={m} onClick={() => setFilterModus(m)}
+                className={`px-3 py-1.5 transition-colors ${filterModus === m ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
                 {m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : m === 'zeitraum' ? 'Zeitraum' : 'Jahr'}
               </button>
             ))}
           </div>
-
           {filterModus === 'monat' && (
-            <input
-              type="month"
-              value={monat}
-              onChange={(e) => setMonat(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-            />
+            <input type="month" value={monat} onChange={(e) => setMonat(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
           )}
           {filterModus === 'datum' && (
-            <DateInput
-              value={datum}
-              onChange={setDatum}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-            />
+            <DateInput value={datum} onChange={setDatum}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
           )}
           {filterModus === 'zeitraum' && (
             <div className="flex items-center gap-2">
-              <DateInput
-                value={datumVon}
-                onChange={setDatumVon}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-              />
+              <DateInput value={datumVon} onChange={setDatumVon}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
               <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
-              <DateInput
-                value={datumBis}
-                min={datumVon}
-                onChange={setDatumBis}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-              />
+              <DateInput value={datumBis} min={datumVon} onChange={setDatumBis}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
             </div>
           )}
+          {/* Konfigurieren */}
+          <button onClick={() => setKonfModus(true)} title="Dashboard konfigurieren"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>settings</span>
+          </button>
         </div>
       </div>
 
-      {/* Zufluss-Monitor */}
-      {zeigeZuflussMonitor && (
-        <div className="mb-6">
-          <ZuflussMonitor
-            zufluss={zufluss}
-            zeitraumLabel={zuflussLabel}
-            ansicht={zuflussAnsicht}
-            onAnsichtWechsel={setZuflussAnsicht}
-            hatZeitraum={hatZeitraum}
-            laedt={zeitraumLaedt && zuflussAnsicht === 'zeitraum'}
-          />
-        </div>
+      {/* Konfigurierbare Widgets */}
+      {konfig.widget_order.map(id => renderWidget(id))}
+
+      {/* Konfigurationsmodal */}
+      {konfModus && (
+        <DashboardKonfigModal
+          config={konfig}
+          onSave={saveKonfig}
+          onClose={() => setKonfModus(false)}
+          saving={konfSaving}
+        />
       )}
-
-      {/* Kacheln (nur Betriebsbuchungen) */}
-      <div className="grid grid-cols-3 gap-4 mb-2">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebseinnahmen</p>
-          <p className="text-2xl font-bold text-green-600">
-            {loaded ? formatEuro(einnahmen) : '—'}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebsausgaben</p>
-          <p className="text-2xl font-bold text-red-600">
-            {loaded ? formatEuro(ausgaben) : '—'}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Saldo</p>
-          <p className={`text-2xl font-bold ${saldo >= 0 ? 'text-blue-600' : 'text-red-700'}`}>
-            {loaded ? formatEuro(saldo) : '—'}
-          </p>
-        </div>
-      </div>
-
-      {/* Privat-Hinweis unter den Kacheln */}
-      {hatPrivatbuchungen && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 pl-1">
-          🏠 {privat.length} Privatbuchung{privat.length !== 1 ? 'en' : ''} (
-          {formatEuro(privat.reduce((s, e) => s + parseFloat(e.brutto_betrag), 0))}) im
-          gewählten Zeitraum – nicht in den Kacheln enthalten.
-        </p>
-      )}
-      {!hatPrivatbuchungen && <div className="mb-6" />}
-
-      {/* ZM-Hinweis */}
-      {zmPruefung?.faellig && (
-        <div
-          onClick={() => navigate('/zm')}
-          className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-3 mb-4 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors"
-        >
-          <span className="text-2xl">🇪🇺</span>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-              Zusammenfassende Meldung fällig – {zmPruefung.zeitraum_label}
-            </p>
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Frist: {zmPruefung.deadline.split('-').reverse().join('.')} · Einzureichen beim BZSt über ELSTER
-            </p>
-          </div>
-          <span className="text-amber-600 dark:text-amber-400 text-sm">→</span>
-        </div>
-      )}
-
-      {/* Fällige Rechnungen */}
-      {faellige && faellige.length > 0 && (
-        <FaelligeKachel rechnungen={faellige} />
-      )}
-
-      {/* Letzte Buchungen */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-700 dark:text-slate-200">Letzte Buchungen</h3>
-          {letzteEintraege.length > 0 && (
-            <span className="text-xs text-slate-400 dark:text-slate-500">{letzteEintraege.length} Einträge</span>
-          )}
-        </div>
-        {letzteEintraege.length === 0 ? (
-          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen im gewählten Zeitraum.</p>
-        ) : (
-          <div className="overflow-y-auto resize-y" style={{ height: '240px', minHeight: '96px' }}>
-            <table className="w-full text-sm">
-              <tbody>
-                {letzteEintraege.map((e) => (
-                  <tr key={e.id} className="border-b border-slate-50 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700">
-                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400 w-28">{formatDatum(e.datum)}</td>
-                    <td className="px-5 py-3 text-slate-400 dark:text-slate-500 w-32 font-mono text-xs">{e.belegnr}</td>
-                    <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
-                      {e.beschreibung}
-                      {e.kategorie_kontenart === 'Privat' && (
-                        <span className="ml-1.5 text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded px-1 dark:bg-purple-950 dark:border-purple-800">
-                          Privat
-                        </span>
-                      )}
-                    </td>
-                    <td className={`px-5 py-3 text-right font-medium ${
-                      e.kategorie_kontenart === 'Privat'
-                        ? 'text-slate-400'
-                        : e.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {e.art === 'Ausgabe' ? '−' : '+'}{formatEuro(e.brutto_betrag)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
