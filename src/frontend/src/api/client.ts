@@ -740,6 +740,25 @@ export const getKontokorrentKunde = (id: number) =>
 export const getKontokorrentLieferant = (id: number) =>
   request<KontokorrentBewegung[]>(`/lieferanten/${id}/kontokorrent`)
 
+export async function downloadKontokorrentPdf(id: number, von: string, bis: string) {
+  const base = await getBaseUrl()
+  await openUrl(`${base}/kunden/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`)
+}
+
+export type KontokorrentMailData = {
+  an: string
+  cc?: string
+  betreff: string
+  text: string
+  von: string
+  bis: string
+}
+export const sendeKontokorrentMail = (id: number, data: KontokorrentMailData) =>
+  request<{ ok: boolean }>(`/kunden/${id}/kontokorrent/mail`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
 // --- Lieferanten ---
 export type Lieferant = {
   id?: number

@@ -16,11 +16,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Beleg, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Rechnung, Nummernkreis
+from database.models import Beleg, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Rechnung, Nummernkreis, Unternehmen
 from .journal import _belegnr_aus_format
 from .schemas import KundeCreate, KundeUpdate, KundeResponse
 from .schemas_rechnungen import BelegResponse
 from utils.pdf_dsgvo import generate_dsgvo_pdf
+from utils.pdf_kontokorrent import erstelle_kontokorrent_pdf
 
 _BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 _ERLAUBTE_MIME = {"application/pdf", "image/jpeg", "image/png", "image/tiff", "image/webp",
@@ -561,6 +562,144 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
         saldo += b["betrag"]
         ergebnis.append(KontokorrentBewegung(saldo=round(saldo, 2), **b))
     return ergebnis
+
+
+def _kontokorrent_bewegungen(
+    kunde_id: int, von: _date, bis: _date, db: Session
+) -> tuple[list[dict], str]:
+    """Gibt (bewegungen_dicts, partner_name) zurück, gefiltert nach Zeitraum."""
+    kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
+    if not kunde:
+        raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
+    partner_name = (
+        kunde.firmenname
+        or " ".join(t for t in [kunde.vorname, kunde.nachname] if t)
+        or f"Kunde #{kunde_id}"
+    )
+
+    rechnungen = (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.kunde_id == kunde_id,
+            Rechnung.typ == "ausgang",
+            Rechnung.ist_entwurf == False,
+            Rechnung.dokument_typ.in_(["Rechnung", "Gutschrift", "Stornorechnung"]),
+        )
+        .all()
+    )
+    rechnung_ids = {r.id for r in rechnungen}
+
+    raw: list[dict] = []
+    for r in rechnungen:
+        if r.dokument_typ == "Rechnung":
+            typ, betrag = "rechnung", float(r.brutto_gesamt)
+        elif r.dokument_typ == "Gutschrift":
+            typ, betrag = "gutschrift", -float(r.brutto_gesamt)
+        else:
+            typ, betrag = "storno", -float(r.brutto_gesamt)
+        datum = (r.ausgegeben_am.date() if r.ausgegeben_am else r.datum)
+        if not (von <= datum <= bis):
+            continue
+        raw.append({
+            "datum": str(datum), "typ": typ,
+            "belegnr": r.rechnungsnummer or str(r.id),
+            "beschreibung": f"{r.dokument_typ} {r.rechnungsnummer or '—'}",
+            "betrag": betrag,
+        })
+
+    zahlungen = (
+        db.query(Journaleintrag)
+        .filter(
+            Journaleintrag.rechnung_id.in_(rechnung_ids),
+            Journaleintrag.art == "Einnahme",
+            Journaleintrag.datum >= von,
+            Journaleintrag.datum <= bis,
+        )
+        .all()
+    )
+    for j in zahlungen:
+        raw.append({
+            "datum": str(j.datum), "typ": "zahlung",
+            "belegnr": j.belegnr, "beschreibung": j.beschreibung,
+            "betrag": -float(j.brutto_betrag),
+        })
+
+    raw.sort(key=lambda b: b["datum"])
+    saldo = 0.0
+    bewegungen: list[dict] = []
+    for b in raw:
+        saldo += b["betrag"]
+        bewegungen.append({**b, "saldo": round(saldo, 2)})
+    return bewegungen, partner_name
+
+
+@router.get("/{kunde_id}/kontokorrent/pdf")
+def kontokorrent_pdf(
+    kunde_id: int,
+    von: _date = None,
+    bis: _date = None,
+    db: Session = Depends(get_db),
+):
+    if not von:
+        von = _date((_date.today().year), 1, 1)
+    if not bis:
+        bis = _date.today()
+    bewegungen, partner_name = _kontokorrent_bewegungen(kunde_id, von, bis, db)
+    unt = db.query(Unternehmen).first()
+    unt_dict = {c.name: getattr(unt, c.name) for c in unt.__table__.columns} if unt else {}
+
+    pdf_bytes = erstelle_kontokorrent_pdf(
+        unternehmen=unt_dict,
+        partner_name=partner_name,
+        von=str(von),
+        bis=str(bis),
+        bewegungen=bewegungen,
+    )
+    dateiname = f"Kontokorrent_{partner_name.replace(' ', '_')}_{von}_{bis}.pdf"
+    return _Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+    )
+
+
+class KontokorrentMailRequest(BaseModel):
+    an: str
+    cc: Optional[str] = None
+    betreff: str
+    text: str
+    von: Optional[_date] = None
+    bis: Optional[_date] = None
+
+
+@router.post("/{kunde_id}/kontokorrent/mail")
+def kontokorrent_mail(
+    kunde_id: int,
+    data: KontokorrentMailRequest,
+    db: Session = Depends(get_db),
+):
+    from .mail import _build_message, _smtp_einstellungen, _sende
+    von = data.von or _date(_date.today().year, 1, 1)
+    bis = data.bis or _date.today()
+    bewegungen, partner_name = _kontokorrent_bewegungen(kunde_id, von, bis, db)
+    unt = _smtp_einstellungen(db)
+    unt_dict = {c.name: getattr(unt, c.name) for c in unt.__table__.columns}
+
+    pdf_bytes = erstelle_kontokorrent_pdf(
+        unternehmen=unt_dict,
+        partner_name=partner_name,
+        von=str(von),
+        bis=str(bis),
+        bewegungen=bewegungen,
+    )
+    dateiname = f"Kontokorrent_{partner_name.replace(' ', '_')}_{von}_{bis}.pdf"
+    empfaenger = [data.an]
+    if data.cc:
+        empfaenger.append(data.cc)
+    msg = _build_message(unt, data.an, data.cc, data.betreff, data.text,
+                         attachments=[(pdf_bytes, dateiname)])
+    _sende(unt, msg, empfaenger)
+    return {"ok": True}
 
 
 @router.get("/{kunde_id}", response_model=KundeResponse)
