@@ -2464,18 +2464,24 @@ def _run_migrations() -> None:
             print("[Migration] Schema auf Version 112 (Bewirtungskosten: vorsteuer_prozent 70/0 → 100, Beschreibungen korrigiert)")
 
         if version < 113:
-            conn.execute(text("ALTER TABLE unternehmen ADD COLUMN dashboard_config TEXT"))
+            cols_u113 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "dashboard_config" not in cols_u113:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN dashboard_config TEXT"))
             conn.execute(text("PRAGMA user_version = 113"))
             conn.commit()
             print("[Migration] Schema auf Version 113 (unternehmen.dashboard_config – konfigurierbares Dashboard)")
 
         if version < 114:
-            conn.execute(text("""
-                INSERT OR IGNORE INTO bank_templates
-                    (id, name, bank, format, delimiter, encoding, decimal_separator, date_format, skip_rows, column_mapping, ist_system)
-                VALUES
-                    ('CAMT_XML', 'CAMT / ISO 20022 (automatisch erkannt)', 'CAMT', 'CAMT', ';', 'UTF-8', '.', 'ISO', 0, '{}', 1)
-            """))
+            tables = {r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()}
+            if 'bank_templates' in tables:
+                conn.execute(text("""
+                    INSERT OR IGNORE INTO bank_templates
+                        (id, name, bank, format, delimiter, encoding, decimal_separator, date_format, skip_rows, column_mapping, ist_system)
+                    VALUES
+                        ('CAMT_XML', 'CAMT / ISO 20022 (automatisch erkannt)', 'CAMT', 'CAMT', ';', 'UTF-8', '.', 'ISO', 0, '{}', 1)
+                """))
             conn.execute(text("PRAGMA user_version = 114"))
             conn.commit()
             print("[Migration] Schema auf Version 114 (bank_templates: CAMT_XML-System-Eintrag – FK-Fix für CAMT-Import)")
@@ -2495,6 +2501,10 @@ def _run_migrations() -> None:
                     "CREATE UNIQUE INDEX IF NOT EXISTS uix_lieferanten_kreditor_nr "
                     "ON lieferanten (kreditor_nr) WHERE kreditor_nr IS NOT NULL"
                 ))
+            # aktiv-Spalte in nummernkreise nachrüsten falls fehlend (war nur im Modell, nie migriert)
+            cols_nk = {r[1] for r in conn.execute(text("PRAGMA table_info(nummernkreise)")).fetchall()}
+            if "aktiv" not in cols_nk:
+                conn.execute(text("ALTER TABLE nummernkreise ADD COLUMN aktiv BOOLEAN NOT NULL DEFAULT 1"))
             # Nummernkreise für Debitoren/Kreditoren
             conn.execute(text("""
                 INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, aktiv)
