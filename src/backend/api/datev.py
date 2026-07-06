@@ -22,7 +22,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Journaleintrag, Kategorie, Konto, Rechnung, Unternehmen
+from database.models import Journaleintrag, Kategorie, Konto, Kunde, Lieferant, Rechnung, Unternehmen
 
 router = APIRouter(prefix="/api/datev", tags=["DATEV"])
 
@@ -261,6 +261,26 @@ def datev_buchungsstapel(
         .all()
     )
 
+    # Lookup-Maps für Spalte 48: Kreditoren-/Debitorennummer
+    kunde_ids = {j.kunde_id for j in eintraege if j.kunde_id}
+    rechnung_ids_set = {j.rechnung_id for j in eintraege if j.rechnung_id}
+    debitor_map: dict[int, str] = {
+        k.id: k.debitor_nr
+        for k in db.query(Kunde).filter(Kunde.id.in_(kunde_ids)).all()
+        if k.debitor_nr
+    }
+    rechnung_lieferant: dict[int, int] = {
+        r.id: r.lieferant_id
+        for r in db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids_set)).all()
+        if r.lieferant_id
+    }
+    lieferant_ids = set(rechnung_lieferant.values())
+    kreditor_map: dict[int, str] = {
+        lf.id: lf.kreditor_nr
+        for lf in db.query(Lieferant).filter(Lieferant.id.in_(lieferant_ids)).all()
+        if lf.kreditor_nr
+    }
+
     skr = unt.kontenrahmen
     zeilen: list[str] = [_zeile1(unt, von, bis)]
     uebersprungen = 0
@@ -285,6 +305,18 @@ def datev_buchungsstapel(
         belegfeld1 = (j.externe_belegnr or j.belegnr)[:12]
         buchungstext = j.beschreibung[:60]
 
+        # Spalte 48: Kreditoren-/Debitorennummer
+        personenkonto = ""
+        if j.art == "Einnahme" and j.kunde_id:
+            personenkonto = debitor_map.get(j.kunde_id, "")
+        elif j.art == "Ausgabe" and j.rechnung_id:
+            lf_id = rechnung_lieferant.get(j.rechnung_id)
+            if lf_id:
+                personenkonto = kreditor_map.get(lf_id, "")
+
+        leere_felder = [""] * 35    # Felder 15–49
+        leere_felder[33] = personenkonto  # Feld 48 (Index 47 gesamt → 47-14=33)
+
         row = [
             _fmt(betrag),       # 1: Umsatz
             sh,                  # 2: S/H
@@ -298,7 +330,7 @@ def datev_buchungsstapel(
             "",                  # 12: Belegfeld 2
             "",                  # 13: Skonto
             buchungstext,        # 14: Buchungstext
-        ] + [""] * 35           # 15-49: leer
+        ] + leere_felder        # 15-49
 
         zeilen.append(";".join(row))
 
