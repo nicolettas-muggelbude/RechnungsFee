@@ -249,7 +249,7 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
             </>
           )}
         </div>
-        {saveMut.isError && <p className="text-xs text-red-500 mt-1">Fehler beim Speichern.</p>}
+        {saveMut.isError && <p className="text-xs text-red-500 mt-1">{(saveMut.error as Error)?.message ?? 'Fehler beim Speichern.'}</p>}
       </div>
 
       {/* Zeitraum + Aktionen */}

@@ -184,7 +184,7 @@ function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
                 )}
               </div>
               {saveMut.isError && (
-                <p className="text-xs text-red-500 mt-1">Fehler beim Speichern.</p>
+                <p className="text-xs text-red-500 mt-1">{(saveMut.error as Error)?.message ?? 'Fehler beim Speichern.'}</p>
               )}
             </div>
 
