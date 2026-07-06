@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'verbesserung', text: 'GuV – Gewinn- und Verlustrechnung: Neuer „🔍 Aufschlüsselung"-Button zeigt zu jeder GuV-Position die zugrundeliegenden EÜR-Zeilen mit Einzelbeträgen – analog zur Aufschlüsselung in der EÜR-Auswertung.' },
+      { typ: 'neu', text: 'Dashboard konfigurierbar: Über das Zahnrad-Symbol oben rechts lässt sich das Dashboard individuell anpassen – Widgets verschieben, aus- und einblenden sowie eigene Schnellzugriff-Links anlegen (z. B. Online-Banking, ELSTER, Desktop-Apps). Jeder Link erhält einen Namen, eine URL oder einen lokalen Pfad sowie ein frei wählbares Icon. Warn-Widgets (Buchführungspflicht, Kleinunternehmer, Steuer-Fristen) sind verschiebbar, aber nicht deaktivierbar.' },
     ],
   },
   {
