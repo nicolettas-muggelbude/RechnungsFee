@@ -11,6 +11,20 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 - **Nie `git push`** ohne explizite Nachfrage
 - Skripte mit neuer Version: Änderungen nicht einzeln nachfragen
 
+## PDF-Endpunkte – Content-Disposition IMMER `inline`
+
+**Alle** Backend-Endpunkte die PDFs zurückgeben und per `openUrl()` im Frontend aufgerufen werden, müssen `inline` als Content-Disposition verwenden:
+
+```python
+# RICHTIG – PDF wird im WebviewWindow angezeigt
+headers={"Content-Disposition": f'inline; filename="{dateiname}"'}
+
+# FALSCH – WebviewWindow öffnet schwarzes Fenster (versucht zu downloaden)
+headers={"Content-Disposition": f'attachment; filename="{dateiname}"'}
+```
+
+`attachment` ist nur korrekt für: CSV, ZIP, JSON, Backup-Dateien – alles was explizit als Datei-Download gedacht ist (nicht angezeigt werden soll).
+
 ## Issue-Management
 
 ### Automatisches Schließen bei ausbleibender Antwort
