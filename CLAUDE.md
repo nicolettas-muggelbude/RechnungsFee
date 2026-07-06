@@ -56,7 +56,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 112` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 114` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -231,6 +231,8 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 109 | unternehmen.bank_import_manuell BOOLEAN DEFAULT 0 – persistenter Halbautomatik/Manuell-Modus; Score-3-Einzeltreffer wird bei Halbautomatik direkt gebucht; Manuell-Toggle in Einstellungen + per-Session-Override im Import |
 | 110 | konten.datev_kontonummer VARCHAR(8) – individuelles DATEV-Gegenkonto pro Bankkonto (überschreibt globales datev_konto_bank); journal.konto_id FK → konten – Bank-Import-Buchungen merken welches Konto; DATEV-Export nutzt konto.datev_kontonummer wenn gesetzt |
 | 112 | Bewirtungskosten: vorsteuer_prozent 70→100, (nicht abzugsfähig): 0→100 – Vorsteuer ist per §15 UStG zu 100% abzugsfähig; nur der Nettoanteil unterliegt dem 70%-Abzug nach §4 Abs. 5 Nr. 2 EStG (Issue #214) |
+| 113 | unternehmen.dashboard_config TEXT – konfigurierbares Dashboard (Widget-Reihenfolge, Sichtbarkeit, Schnellzugriff-Links als JSON) |
+| 114 | bank_templates: CAMT_XML-System-Eintrag – FK-Fix: bank_imports.template_id REFERENCES bank_templates(id), CAMT-Imports erzeugten IntegrityError weil 'CAMT_XML' nicht in bank_templates existierte (Issue #209) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
