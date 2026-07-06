@@ -423,11 +423,16 @@ def update_lieferant(lieferant_id: int, data: LieferantUpdate, db: Session = Dep
     lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
     if not lieferant:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
-    neue_nr = data.model_dump(exclude_none=True).get("lieferantennummer")
+    dump = data.model_dump(exclude_none=True)
+    neue_nr = dump.get("lieferantennummer")
     if neue_nr and neue_nr != lieferant.lieferantennummer:
         if db.query(Lieferant).filter(Lieferant.lieferantennummer == neue_nr, Lieferant.id != lieferant_id).first():
             raise HTTPException(status_code=409, detail=f"Lieferantennummer '{neue_nr}' ist bereits vergeben.")
-    for key, value in data.model_dump(exclude_none=True).items():
+    neue_kreditor = dump.get("kreditor_nr")
+    if neue_kreditor and neue_kreditor != lieferant.kreditor_nr:
+        if db.query(Lieferant).filter(Lieferant.kreditor_nr == neue_kreditor, Lieferant.id != lieferant_id).first():
+            raise HTTPException(status_code=409, detail=f"Kreditorennummer '{neue_kreditor}' ist bereits vergeben.")
+    for key, value in dump.items():
         setattr(lieferant, key, value)
     db.commit()
     db.refresh(lieferant)

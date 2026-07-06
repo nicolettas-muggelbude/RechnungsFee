@@ -715,11 +715,16 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
     if not kunde:
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
-    neue_nr = data.model_dump(exclude_none=True).get("kundennummer")
+    dump = data.model_dump(exclude_none=True)
+    neue_nr = dump.get("kundennummer")
     if neue_nr and neue_nr != kunde.kundennummer:
         if db.query(Kunde).filter(Kunde.kundennummer == neue_nr, Kunde.id != kunde_id).first():
             raise HTTPException(status_code=409, detail=f"Kundennummer '{neue_nr}' ist bereits vergeben.")
-    for key, value in data.model_dump(exclude_none=True).items():
+    neue_debitor = dump.get("debitor_nr")
+    if neue_debitor and neue_debitor != kunde.debitor_nr:
+        if db.query(Kunde).filter(Kunde.debitor_nr == neue_debitor, Kunde.id != kunde_id).first():
+            raise HTTPException(status_code=409, detail=f"Debitorennummer '{neue_debitor}' ist bereits vergeben.")
+    for key, value in dump.items():
         setattr(kunde, key, value)
     db.commit()
     db.refresh(kunde)
