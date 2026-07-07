@@ -33,7 +33,7 @@ jobs:
       - name: Changelog-Daten kopieren
         run: |
           mkdir -p web/src/data
-          curl -sSfL \n            "https://raw.githubusercontent.com/nicolettas-muggelbude/RechnungsFee/main/src/frontend/src/data/changelog.ts" \n            -o web/src/data/changelog.ts
+          curl -sSfL "https://raw.githubusercontent.com/nicolettas-muggelbude/RechnungsFee/main/src/frontend/src/data/changelog.ts" -o web/src/data/changelog.ts
 
       - uses: actions/setup-node@v5
         with:
