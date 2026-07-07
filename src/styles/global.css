@@ -46,6 +46,7 @@
 @layer base {
   html { scroll-behavior: smooth; }
   body { @apply antialiased text-slate-800; }
+  ::selection { background-color: #4F46E5; color: #ffffff; }
 }
 
 /* Screenshot-Komponente: dark/light Bild per data-theme steuern */
@@ -124,6 +125,7 @@ html[data-theme="dark"] .theme-img-dark  { display: block; }
     & .border-slate-100  { border-color: #293548; }
     & .border-indigo-200 { border-color: #3730a3; }
     & .brand-fee         { color: #4f46e5; }
+    & ::selection { background-color: #6366f1; color: #ffffff; }
     & .handbuch-content            { color: #cbd5e1; }
     & .handbuch-content h1         { color: #f1f5f9; }
     & .handbuch-content h2         { color: #f1f5f9; border-color: #334155; }
@@ -173,6 +175,7 @@ html[data-theme="dark"] {
   & .border-slate-100  { border-color: #293548; }
   & .border-indigo-200 { border-color: #3730a3; }
   & .brand-fee         { color: #4f46e5; }
+  & ::selection { background-color: #6366f1; color: #ffffff; }
   & .handbuch-content            { color: #cbd5e1; }
   & .handbuch-content h1         { color: #f1f5f9; }
   & .handbuch-content h2         { color: #f1f5f9; border-color: #334155; }
