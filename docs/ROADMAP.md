@@ -121,7 +121,6 @@ Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigat
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
 - **hellocash-Anbindung** – REST-API (Issue #13)
-- **Dashboard konfigurierbar** – Kacheln ein-/ausblenden, Reihenfolge, externer Link Online-Banking
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
 - **Datenübernahme aus anderen Programmen** – Importassistent für Kunden, Artikel, Rechnungen und Buchungen aus gängigen Programmen (z. B. lexoffice, sevDesk, FastBill, Excel/CSV); erleichtert den Umstieg auf RechnungsFee ohne Datenverlust
