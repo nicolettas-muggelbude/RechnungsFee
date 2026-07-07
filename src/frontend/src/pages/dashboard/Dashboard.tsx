@@ -147,7 +147,7 @@ function ZuflussMonitor({
       <div>
         <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 mb-1">
           <span>0 €</span>
-          <span className="text-slate-500 dark:text-slate-400 font-medium">{formatEuro(zufluss)}</span>
+          <span className="text-slate-500 dark:text-slate-400 font-medium">{laedt && zufluss === 0 ? '…' : formatEuro(zufluss)}</span>
           <span>1.200 €</span>
         </div>
         <div className="h-3 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden relative">
@@ -168,16 +168,16 @@ function ZuflussMonitor({
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div>
           <span className="block text-slate-400 dark:text-slate-500">{zeitraumLabel}</span>
-          <span className="font-semibold text-slate-800 dark:text-slate-100">{formatEuro(zufluss)}</span>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">{laedt && zufluss === 0 ? '…' : formatEuro(zufluss)}</span>
         </div>
         <div>
           <span className="block text-slate-400 dark:text-slate-500">Freibetrag (ca.)</span>
-          <span className="font-semibold text-green-700 dark:text-green-300">{formatEuro(freibetrag)}</span>
+          <span className="font-semibold text-green-700 dark:text-green-300">{laedt && zufluss === 0 ? '…' : formatEuro(freibetrag)}</span>
         </div>
         <div>
           <span className="block text-slate-400 dark:text-slate-500">Anrechenbar (ca.)</span>
           <span className={`font-semibold ${anrechenbar > 0 ? farben.text : 'text-slate-400'}`}>
-            {formatEuro(anrechenbar)}
+            {laedt && zufluss === 0 ? '…' : formatEuro(anrechenbar)}
           </span>
         </div>
       </div>
@@ -1070,7 +1070,7 @@ export function Dashboard() {
     : null
 
   // Aktuellen Monat für Zufluss-Monitor (Monat-Ansicht)
-  const { data: aktuelleEintraege } = useQuery({
+  const { data: aktuelleEintraege, isFetching: monatLaedt } = useQuery({
     queryKey: ['journal-aktuell', aktuellerMonat()],
     queryFn: () => getJournal({ monat: aktuellerMonat() }),
     enabled: unternehmen?.bezieht_transferleistungen === true,
@@ -1165,7 +1165,7 @@ export function Dashboard() {
               ansicht={zuflussAnsicht}
               onAnsichtWechsel={setZuflussAnsicht}
               hatZeitraum={hatZeitraum}
-              laedt={zeitraumLaedt && zuflussAnsicht === 'zeitraum'}
+              laedt={(zuflussAnsicht === 'zeitraum' && zeitraumLaedt) || (zuflussAnsicht === 'monat' && monatLaedt)}
             />
           </div>
         )
