@@ -1,0 +1,30 @@
+---
+interface Props {
+  light: string
+  dark: string
+  alt: string
+  class?: string
+}
+const { light, dark, alt, class: cls = '' } = Astro.props
+---
+<a
+  href={light}
+  data-lb-light={light}
+  data-lb-dark={dark}
+  data-lb-alt={alt}
+  class={`lightbox-link block cursor-zoom-in group ${cls}`}
+  title="Klicken zum Vergrößern"
+>
+  <img
+    src={light}
+    alt={alt}
+    class="theme-img-light w-full rounded-2xl shadow-xl group-hover:shadow-2xl group-hover:scale-[1.01] transition-all duration-200"
+    loading="lazy"
+  />
+  <img
+    src={dark}
+    alt={alt}
+    class="theme-img-dark w-full rounded-2xl shadow-xl group-hover:shadow-2xl group-hover:scale-[1.01] transition-all duration-200"
+    loading="lazy"
+  />
+</a>

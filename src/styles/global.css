@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* ─── Lokale Fonts (DSGVO-konform, kein Google-Server-Kontakt) ─────────────── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-variable.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  display: inline-block;
+}
+
+@theme {
+  --color-primary: #4F46E5;
+  --color-primary-dark: #4338CA;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply antialiased text-slate-800; }
+}
+
+/* Screenshot-Komponente: dark/light Bild per data-theme steuern */
+.theme-img-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .theme-img-light { display: none; }
+  html:not([data-theme="light"]) .theme-img-dark  { display: block; }
+}
+html[data-theme="dark"] .theme-img-light { display: none; }
+html[data-theme="dark"] .theme-img-dark  { display: block; }
+
+/* Handbuch Markdown-Inhalt */
+.handbuch-content {
+  color: theme(colors.slate.700);
+  line-height: 1.75;
+  font-size: 0.9375rem;
+}
+.handbuch-content h1 { @apply text-3xl font-extrabold text-slate-900 mb-6 mt-0; }
+.handbuch-content h2 { @apply text-xl font-bold text-slate-900 mb-3 mt-10 border-b border-slate-100 pb-2; }
+.handbuch-content h3 { @apply text-base font-semibold text-slate-800 mb-2 mt-6; }
+.handbuch-content p  { @apply mb-4; }
+.handbuch-content ul { @apply mb-4 pl-5 space-y-1 list-disc; }
+.handbuch-content ol { @apply mb-4 pl-5 space-y-1 list-decimal; }
+.handbuch-content li { @apply text-slate-600; }
+.handbuch-content a  { @apply text-[#4F46E5] hover:underline; }
+.handbuch-content code { @apply bg-slate-100 text-slate-800 text-sm rounded px-1.5 py-0.5 font-mono; }
+.handbuch-content pre { @apply bg-slate-900 text-slate-100 rounded-xl p-4 mb-4 overflow-x-auto text-sm; }
+.handbuch-content pre code { @apply bg-transparent text-slate-100 p-0; }
+.handbuch-content blockquote { @apply border-l-4 border-indigo-200 pl-4 text-slate-500 italic mb-4; }
+.handbuch-content table { @apply w-full text-sm mb-4 border-collapse; }
+.handbuch-content th { @apply text-left font-semibold text-slate-700 border-b-2 border-slate-200 pb-2 pr-4; }
+.handbuch-content td { @apply border-b border-slate-100 py-2 pr-4 text-slate-600; }
+.handbuch-content hr { @apply border-slate-200 my-8; }
+.handbuch-content img { @apply rounded-lg max-w-full; }
+.handbuch-content strong { @apply font-semibold text-slate-800; }
+
+/* ─── Dark Mode (Auto via OS + manuell via Toggle) ─────────────────────────── */
+/* Außerhalb von @layer → überschreibt Tailwind-Layered-Utilities               */
+
+/* Gemeinsame Dark-Styles als Nesting – 2× definiert:                           */
+/*   1) OS-Präferenz (außer manuell auf Light gesetzt)                           */
+/*   2) Manuell auf Dark gesetzt via data-theme="dark"                           */
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    color-scheme: dark;
+    & body { background-color: #0f172a; color: #e2e8f0; }
+    & .bg-white        { background-color: #1e293b; }
+    & .bg-white\/90    { background-color: rgba(15, 23, 42, 0.9); }
+    & .bg-white\/95    { background-color: rgba(15, 23, 42, 0.95); }
+    & .bg-slate-50     { background-color: #1e293b; }
+    & .bg-slate-100    { background-color: #293548; }
+    & .bg-blue-100     { background-color: #1e3a5f; }
+    & .bg-indigo-50    { background-color: #1e1b4b; }
+    & .bg-indigo-100   { background-color: #312e81; }
+    & .bg-pink-100     { background-color: #500724; }
+    & .bg-violet-100   { background-color: #2e1065; }
+    & .bg-amber-100    { background-color: #451a03; }
+    & .bg-red-100      { background-color: #450a0a; }
+    & .bg-emerald-100  { background-color: #022c22; }
+    & .text-slate-900   { color: #f1f5f9; }
+    & .text-slate-800   { color: #e2e8f0; }
+    & .text-slate-700   { color: #cbd5e1; }
+    & .text-slate-600   { color: #94a3b8; }
+    & .text-slate-500   { color: #94a3b8; }
+    & .text-blue-700    { color: #93c5fd; }
+    & .text-indigo-400  { color: #818cf8; }
+    & .text-indigo-600  { color: #818cf8; }
+    & .text-indigo-700  { color: #a5b4fc; }
+    & .text-pink-700    { color: #f9a8d4; }
+    & .text-violet-700  { color: #c4b5fd; }
+    & .text-amber-700   { color: #fcd34d; }
+    & .text-red-700     { color: #fca5a5; }
+    & .text-emerald-700 { color: #6ee7b7; }
+    & .border-slate-200  { border-color: #334155; }
+    & .border-slate-100  { border-color: #293548; }
+    & .border-indigo-200 { border-color: #3730a3; }
+    & .brand-fee         { color: #4f46e5; }
+    & .handbuch-content            { color: #cbd5e1; }
+    & .handbuch-content h1         { color: #f1f5f9; }
+    & .handbuch-content h2         { color: #f1f5f9; border-color: #334155; }
+    & .handbuch-content h3         { color: #e2e8f0; }
+    & .handbuch-content li         { color: #94a3b8; }
+    & .handbuch-content a          { color: #818cf8; }
+    & .handbuch-content code       { background-color: #0f172a; color: #e2e8f0; }
+    & .handbuch-content th         { color: #cbd5e1; border-color: #334155; }
+    & .handbuch-content td         { border-color: #1e293b; color: #94a3b8; }
+    & .handbuch-content hr         { border-color: #334155; }
+    & .handbuch-content strong     { color: #e2e8f0; }
+    & .handbuch-content blockquote { border-color: #4f46e5; color: #94a3b8; }
+  }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  & body { background-color: #0f172a; color: #e2e8f0; }
+  & .bg-white        { background-color: #1e293b; }
+  & .bg-white\/90    { background-color: rgba(15, 23, 42, 0.9); }
+  & .bg-white\/95    { background-color: rgba(15, 23, 42, 0.95); }
+  & .bg-slate-50     { background-color: #1e293b; }
+  & .bg-slate-100    { background-color: #293548; }
+  & .bg-blue-100     { background-color: #1e3a5f; }
+  & .bg-indigo-50    { background-color: #1e1b4b; }
+  & .bg-indigo-100   { background-color: #312e81; }
+  & .bg-pink-100     { background-color: #500724; }
+  & .bg-violet-100   { background-color: #2e1065; }
+  & .bg-amber-100    { background-color: #451a03; }
+  & .bg-red-100      { background-color: #450a0a; }
+  & .bg-emerald-100  { background-color: #022c22; }
+  & .text-slate-900   { color: #f1f5f9; }
+  & .text-slate-800   { color: #e2e8f0; }
+  & .text-slate-700   { color: #cbd5e1; }
+  & .text-slate-600   { color: #94a3b8; }
+  & .text-slate-500   { color: #94a3b8; }
+  & .text-blue-700    { color: #93c5fd; }
+  & .text-indigo-400  { color: #818cf8; }
+  & .text-indigo-600  { color: #818cf8; }
+  & .text-indigo-700  { color: #a5b4fc; }
+  & .text-pink-700    { color: #f9a8d4; }
+  & .text-violet-700  { color: #c4b5fd; }
+  & .text-amber-700   { color: #fcd34d; }
+  & .text-red-700     { color: #fca5a5; }
+  & .text-emerald-700 { color: #6ee7b7; }
+  & .border-slate-200  { border-color: #334155; }
+  & .border-slate-100  { border-color: #293548; }
+  & .border-indigo-200 { border-color: #3730a3; }
+  & .brand-fee         { color: #4f46e5; }
+  & .handbuch-content            { color: #cbd5e1; }
+  & .handbuch-content h1         { color: #f1f5f9; }
+  & .handbuch-content h2         { color: #f1f5f9; border-color: #334155; }
+  & .handbuch-content h3         { color: #e2e8f0; }
+  & .handbuch-content li         { color: #94a3b8; }
+  & .handbuch-content a          { color: #818cf8; }
+  & .handbuch-content code       { background-color: #0f172a; color: #e2e8f0; }
+  & .handbuch-content th         { color: #cbd5e1; border-color: #334155; }
+  & .handbuch-content td         { border-color: #1e293b; color: #94a3b8; }
+  & .handbuch-content hr         { border-color: #334155; }
+  & .handbuch-content strong     { color: #e2e8f0; }
+  & .handbuch-content blockquote { border-color: #4f46e5; color: #94a3b8; }
+}

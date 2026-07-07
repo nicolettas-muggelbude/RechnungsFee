@@ -1,0 +1,167 @@
+---
+import Layout from './Layout.astro'
+import { HANDBUCH_NAV } from '../data/handbuch-nav'
+
+interface Props {
+  title: string
+  currentSlug: string
+}
+
+const { title, currentSlug } = Astro.props
+---
+
+<Layout title={`${title} – Handbuch`} description={`RechnungsFee Handbuch: ${title}`} pagefindIgnore={false}>
+  <div class="max-w-6xl mx-auto px-6 py-10 flex gap-10 items-start">
+
+    <!-- Sidebar -->
+    <aside class="hidden lg:block w-56 shrink-0 sticky top-24 self-start">
+      <!-- Suche -->
+      <div id="handbuch-search" class="mb-4"></div>
+
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Handbuch</p>
+      <nav class="space-y-4">
+        {HANDBUCH_NAV.map(group => (
+          <div>
+            {group.heading && (
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1 mt-4">
+                {group.heading}
+              </p>
+            )}
+            <ul class="space-y-0.5">
+              {group.items.map(item => (
+                <li>
+                  <a
+                    href={`/handbuch/${item.slug}/`}
+                    class={`nav-item block text-sm px-2 py-1 rounded-lg transition-colors ${currentSlug === item.slug ? 'nav-item--active' : ''}`}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </aside>
+
+    <!-- Inhalt -->
+    <article class="handbuch-content min-w-0 flex-1">
+      <slot />
+    </article>
+
+  </div>
+</Layout>
+
+<style is:global>
+  .nav-item {
+    color: #475569;
+    text-decoration: none;
+  }
+  .nav-item:hover {
+    background-color: #e2e8f0;
+    color: #0f172a;
+  }
+  .nav-item--active {
+    background-color: #e0e7ff;
+    color: #4F46E5;
+    font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .nav-item { color: #94a3b8; }
+    html:not([data-theme="light"]) .nav-item:hover { background-color: #334155; color: #f1f5f9; }
+    html:not([data-theme="light"]) .nav-item--active { background-color: rgba(67, 56, 202, 0.4); color: #a5b4fc; font-weight: 600; }
+  }
+  html[data-theme="dark"] .nav-item { color: #94a3b8; }
+  html[data-theme="dark"] .nav-item:hover { background-color: #334155; color: #f1f5f9; }
+  html[data-theme="dark"] .nav-item--active { background-color: rgba(67, 56, 202, 0.4); color: #a5b4fc; font-weight: 600; }
+</style>
+
+<script is:inline>
+  ;(function () {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = '/pagefind/pagefind-ui.css'
+    document.head.appendChild(link)
+
+    const style = document.createElement('style')
+    style.textContent = `
+      #handbuch-search {
+        --pagefind-ui-scale: 0.55;
+        --pagefind-ui-border-radius: 6px;
+        --pagefind-ui-primary: #4F46E5;
+        --pagefind-ui-text: #334155;
+        --pagefind-ui-background: #ffffff;
+        --pagefind-ui-border: #cbd5e1;
+        --pagefind-ui-font: inherit;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) #handbuch-search {
+          --pagefind-ui-text: #cbd5e1;
+          --pagefind-ui-background: #1e293b;
+          --pagefind-ui-border: #475569;
+          --pagefind-ui-primary: #818cf8;
+        }
+        html:not([data-theme="light"]) #handbuch-search .pagefind-ui__results-area {
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+      }
+      html[data-theme="dark"] #handbuch-search {
+        --pagefind-ui-text: #cbd5e1;
+        --pagefind-ui-background: #1e293b;
+        --pagefind-ui-border: #475569;
+        --pagefind-ui-primary: #818cf8;
+      }
+      html[data-theme="dark"] #handbuch-search .pagefind-ui__results-area {
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      }
+      #handbuch-search .pagefind-ui__form { margin: 0; }
+      #handbuch-search .pagefind-ui__message { padding-left: 0.5rem; }
+      #handbuch-search .pagefind-ui__results { padding: 0.4rem 0.5rem; }
+      #handbuch-search .pagefind-ui__result { padding-left: 0; }
+      #handbuch-search .pagefind-ui__result-link { padding-left: 0; }
+      #handbuch-search .pagefind-ui__results-area {
+        position: absolute; z-index: 50;
+        background: var(--pagefind-ui-background);
+        border: 1px solid var(--pagefind-ui-border);
+        border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        width: 300px; max-height: 380px; overflow-y: auto; margin-top: 4px;
+      }
+    `
+    document.head.appendChild(style)
+
+    const script = document.createElement('script')
+    script.src = '/pagefind/pagefind-ui.js'
+    script.onload = function () {
+      new PagefindUI({
+        element: '#handbuch-search',
+        showSubResults: true,
+        showImages: false,
+        filters: { section: 'handbuch' },
+        translations: { placeholder: 'Suchen …' },
+      })
+
+      document.addEventListener('click', function (e) {
+        var searchEl = document.getElementById('handbuch-search')
+        if (!searchEl || searchEl.contains(e.target)) return
+        var input = searchEl.querySelector('input')
+        if (input && input.value) {
+          input.value = ''
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+      })
+    }
+    document.head.appendChild(script)
+  })()
+</script>
+
+<script>
+  // Wiki-interne Links: relative Pfade wie "Erste-Schritte" → "/handbuch/erste-schritte/"
+  document.querySelectorAll('.handbuch-content a[href]').forEach(a => {
+    const href = a.getAttribute('href') ?? ''
+    if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('#') && !href.startsWith('mailto')) {
+      const base = href.split('#')[0].toLowerCase()
+      const anchor = href.includes('#') ? '#' + href.split('#')[1] : ''
+      a.setAttribute('href', `/handbuch/${base}/${anchor}`)
+    }
+  })
+</script>

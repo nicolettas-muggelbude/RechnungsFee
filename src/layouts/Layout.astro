@@ -1,0 +1,384 @@
+---
+import '../styles/global.css'
+
+interface Props {
+  title?: string
+  description?: string
+  pagefindIgnore?: boolean
+  ogImage?: string
+}
+
+const {
+  title = 'RechnungsFee',
+  description = 'Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer. Lokal, offline, Open Source.',
+  pagefindIgnore = false,
+  ogImage = '/og.png',
+} = Astro.props
+
+const pageTitle = title === 'RechnungsFee'
+  ? 'RechnungsFee – Buchhaltung für Freiberufler & Kleinunternehmer'
+  : `${title} – RechnungsFee`
+
+const canonicalUrl = Astro.url.href
+const ogImageUrl = new URL(ogImage, Astro.site).toString()
+---
+<!doctype html>
+<html lang="de">
+  <head>
+    <!-- Anti-Flash: Theme vor erstem Render setzen (sessionStorage = Tab-Sitzung, kein Persist über Browser-Neustart) -->
+    <script is:inline>
+      ;(function(){
+        var t=sessionStorage.getItem('theme');
+        var dark=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+      })()
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{pageTitle}</title>
+    <link rel="canonical" href={canonicalUrl} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="RechnungsFee" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    <link rel="icon" type="image/svg+xml" href="/logo_neu/logo_bordered_svg.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/logo_neu/logo_rounded_x512.png" />
+    <link rel="preload" href="/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin />
+    <slot name="head" />
+  </head>
+  <body class="bg-white">
+
+    <!-- Header -->
+    <header data-pagefind-ignore class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
+      <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2 font-extrabold text-xl tracking-tight">
+          <img src="/logo_neu/logo_bordered_svg.svg" alt="" class="w-8 h-8" />
+          <span><span class="text-slate-900">Rechnungs</span><span class="text-indigo-600 brand-fee">Fee</span></span>
+        </a>
+        <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
+          <a href="/funktionen" class="hover:text-indigo-600 transition-colors">Funktionen</a>
+          <a href="/download" class="hover:text-indigo-600 transition-colors">Download</a>
+          <a href="/handbuch/erste-schritte/" class="hover:text-indigo-600 transition-colors">Handbuch</a>
+          <a href="/changelog" class="hover:text-indigo-600 transition-colors">Changelog</a>
+          <a href="/team" class="hover:text-indigo-600 transition-colors">Team</a>
+          <a href="/spenden" class="hover:text-indigo-600 transition-colors">Spenden</a>
+          <a href="/suche" aria-label="Suche" class="hover:text-indigo-600 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </a>
+          <a
+            href="https://github.com/nicolettas-muggelbude/RechnungsFee"
+            target="_blank"
+            rel="noopener"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            GitHub
+          </a>
+
+          <!-- Theme-Toggle ☀ [●] ☾ -->
+          <div class="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+            <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75ZM7.5 12a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Zm11.394-5.834a.75.75 0 0 0-1.06-1.06l-1.591 1.59a.75.75 0 1 0 1.06 1.061l1.591-1.59ZM21.75 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5H21a.75.75 0 0 1 .75.75Zm-3.916 6.894a.75.75 0 0 0 1.06-1.06l-1.59-1.591a.75.75 0 1 0-1.061 1.06l1.59 1.591ZM12 18a.75.75 0 0 1 .75.75V21a.75.75 0 0 1-1.5 0v-2.25A.75.75 0 0 1 12 18Zm-6.894-1.916a.75.75 0 0 0-1.06 1.06l1.59 1.591a.75.75 0 1 0 1.061-1.06l-1.59-1.591ZM6 12a.75.75 0 0 1-.75.75H3a.75.75 0 0 1 0-1.5h2.25A.75.75 0 0 1 6 12Zm.166-6.166a.75.75 0 0 0 0 1.06l1.591 1.591a.75.75 0 1 0 1.06-1.06L7.227 5.834a.75.75 0 0 0-1.06 0Z"/>
+            </svg>
+            <button
+              id="theme-toggle"
+              role="switch"
+              aria-checked="false"
+              aria-label="Dark Mode umschalten"
+              class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1"
+              style="background-color:#cbd5e1"
+            >
+              <span
+                id="toggle-thumb"
+                class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200"
+              ></span>
+            </button>
+            <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 0 1 .162.819A8.97 8.97 0 0 0 9 6a9 9 0 0 0 9 9 8.97 8.97 0 0 0 3.463-.69.75.75 0 0 1 .981.98 10.503 10.503 0 0 1-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 0 1 .818.162Z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </nav>
+
+        <!-- Hamburger (nur Mobile) -->
+        <button
+          id="mobile-menu-btn"
+          class="md:hidden p-2 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+          aria-label="Menü öffnen"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+        >
+          <svg id="menu-icon-open" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+          <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Mobile Nav Drawer -->
+    <div
+      id="mobile-menu"
+      class="md:hidden hidden fixed inset-x-0 top-16 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-lg"
+      aria-label="Mobile Navigation"
+    >
+      <nav class="max-w-6xl mx-auto px-6 py-4 flex flex-col gap-1">
+        <a href="/funktionen" class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Funktionen</a>
+        <a href="/download"   class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Download</a>
+        <a href="/handbuch/erste-schritte/"   class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Handbuch</a>
+        <a href="/changelog"  class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Changelog</a>
+        <a href="/team"       class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Team</a>
+        <a href="/spenden"    class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">Spenden</a>
+        <div class="border-t border-slate-100 my-2"></div>
+        <a href="https://github.com/nicolettas-muggelbude/RechnungsFee" target="_blank" rel="noopener"
+           class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="/suche" class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          Suche
+        </a>
+        <!-- Dark Mode Toggle Mobile -->
+        <button
+          id="mobile-theme-btn"
+          class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors w-full text-left"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 0 1 .162.819A8.97 8.97 0 0 0 9 6a9 9 0 0 0 9 9 8.97 8.97 0 0 0 3.463-.69.75.75 0 0 1 .981.98 10.503 10.503 0 0 1-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 0 1 .818.162Z" clip-rule="evenodd"/>
+          </svg>
+          Dark Mode umschalten
+        </button>
+      </nav>
+    </div>
+    <!-- Overlay hinter dem Drawer -->
+    <div id="mobile-overlay" class="md:hidden hidden fixed inset-0 z-30" aria-hidden="true"></div>
+
+    <!-- Inhalt -->
+    <main data-pagefind-ignore={pagefindIgnore || undefined}>
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer data-pagefind-ignore class="bg-slate-900 text-slate-400 mt-24">
+      <div class="max-w-6xl mx-auto px-6 py-12">
+        <div class="flex flex-col md:flex-row justify-between items-start gap-8">
+          <div>
+            <div class="flex items-center gap-2 font-extrabold text-xl tracking-tight mb-2">
+              <img src="/logo_neu/logo_bordered_svg.svg" alt="" class="w-8 h-8" />
+              <span><span class="text-white">Rechnungs</span><span class="text-indigo-600 brand-fee">Fee</span></span>
+            </div>
+            <p class="text-sm max-w-xs">Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer. Open Source (AGPLv3).</p>
+          </div>
+          <div class="flex flex-wrap gap-8 text-sm">
+            <div class="space-y-2">
+              <p class="text-white font-medium">Projekt</p>
+              <ul class="space-y-1">
+                <li><a href="/funktionen" class="hover:text-white transition-colors">Funktionen</a></li>
+                <li><a href="/download" class="hover:text-white transition-colors">Download</a></li>
+                <li><a href="/changelog" class="hover:text-white transition-colors">Changelog</a></li>
+                <li><a href="/handbuch/erste-schritte/" class="hover:text-white transition-colors">Handbuch</a></li>
+              </ul>
+            </div>
+            <div class="space-y-2">
+              <p class="text-white font-medium">Community</p>
+              <ul class="space-y-1">
+                <li><a href="https://github.com/nicolettas-muggelbude/RechnungsFee" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+                <li><a href="https://github.com/nicolettas-muggelbude/RechnungsFee/issues" target="_blank" rel="noopener" class="hover:text-white transition-colors">Bugs & Ideen</a></li>
+                <li><a href="/team" class="hover:text-white transition-colors">Team</a></li>
+                <li><a href="/spenden" class="hover:text-white transition-colors">Spenden</a></li>
+              </ul>
+            </div>
+            <div class="space-y-2">
+              <p class="text-white font-medium">Rechtliches</p>
+              <ul class="space-y-1">
+                <li><a href="/impressum" class="hover:text-white transition-colors">Impressum</a></li>
+                <li><a href="/datenschutz" class="hover:text-white transition-colors">Datenschutz</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="border-t border-slate-800 mt-8 pt-8 text-xs text-slate-500">
+          © {new Date().getFullYear()} RechnungsFee – AGPLv3 – Spendenverwaltung: PC-Wittfoot UG
+        </div>
+      </div>
+    </footer>
+
+  <script>
+    // Alle externen Links in neuem Tab öffnen
+    document.querySelectorAll('a[href^="http"]').forEach(a => {
+      if (!a.hostname || a.hostname !== location.hostname) {
+        a.setAttribute('target', '_blank')
+        a.setAttribute('rel', 'noopener noreferrer')
+      }
+    })
+  </script>
+
+  <script>
+    // Lightbox für Screenshots
+    ;(function () {
+      const style = document.createElement('style')
+      style.textContent = `
+        @keyframes lb-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes lb-zoom { from { transform: scale(0.92); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+        #lb-overlay { animation: lb-fade 0.18s ease }
+        #lb-overlay img { animation: lb-zoom 0.18s ease }
+        #lb-close:hover { background: rgba(255,255,255,0.25) !important }
+      `
+      document.head.appendChild(style)
+
+      let overlay: HTMLElement | null = null
+
+      function closeOverlay() {
+        overlay?.remove()
+        overlay = null
+        document.body.style.overflow = ''
+      }
+
+      document.addEventListener('click', function (e) {
+        const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('.lightbox-link')
+        if (!link) return
+        e.preventDefault()
+
+        const t = document.documentElement.getAttribute('data-theme')
+        const isDark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        const src = isDark ? (link.dataset.lbDark ?? link.dataset.lbLight) : link.dataset.lbLight
+        const alt = link.dataset.lbAlt ?? ''
+
+        overlay = document.createElement('div')
+        overlay.id = 'lb-overlay'
+        overlay.style.cssText =
+          'position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;padding:1.5rem'
+
+        const img = document.createElement('img')
+        img.src = src ?? ''
+        img.alt = alt
+        img.style.cssText =
+          'max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px;box-shadow:0 30px 80px rgba(0,0,0,0.8);cursor:default'
+        img.addEventListener('click', e => e.stopPropagation())
+
+        const btn = document.createElement('button')
+        btn.id = 'lb-close'
+        btn.innerHTML = '✕'
+        btn.title = 'Schließen (Esc)'
+        btn.style.cssText =
+          'position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.12);color:#fff;border:none;width:2.5rem;height:2.5rem;border-radius:50%;font-size:1.1rem;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;justify-content:center'
+        btn.addEventListener('click', closeOverlay)
+
+        overlay.appendChild(img)
+        overlay.appendChild(btn)
+        overlay.addEventListener('click', closeOverlay)
+        document.body.appendChild(overlay)
+        document.body.style.overflow = 'hidden'
+      })
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay) closeOverlay()
+      })
+    })()
+  </script>
+  <!-- Hamburger-Menü JS -->
+  <script is:inline>
+    ;(function () {
+      var btn     = document.getElementById('mobile-menu-btn')
+      var menu    = document.getElementById('mobile-menu')
+      var overlay = document.getElementById('mobile-overlay')
+      var iconO   = document.getElementById('menu-icon-open')
+      var iconC   = document.getElementById('menu-icon-close')
+      if (!btn || !menu) return
+
+      function open() {
+        menu.classList.remove('hidden')
+        overlay && overlay.classList.remove('hidden')
+        iconO && iconO.classList.add('hidden')
+        iconC && iconC.classList.remove('hidden')
+        btn.setAttribute('aria-expanded', 'true')
+        document.body.style.overflow = 'hidden'
+      }
+      function close() {
+        menu.classList.add('hidden')
+        overlay && overlay.classList.add('hidden')
+        iconO && iconO.classList.remove('hidden')
+        iconC && iconC.classList.add('hidden')
+        btn.setAttribute('aria-expanded', 'false')
+        document.body.style.overflow = ''
+      }
+
+      btn.addEventListener('click', function () {
+        menu.classList.contains('hidden') ? open() : close()
+      })
+      overlay && overlay.addEventListener('click', close)
+      menu.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', close) })
+
+      // Mobile Dark-Mode-Button delegiert an Desktop-Toggle
+      var mobileThemeBtn = document.getElementById('mobile-theme-btn')
+      mobileThemeBtn && mobileThemeBtn.addEventListener('click', function () {
+        var t = document.getElementById('theme-toggle')
+        t && t.click()
+      })
+    })()
+  </script>
+
+  <script is:inline>
+    ;(function () {
+      var root   = document.documentElement
+      var toggle = document.getElementById('theme-toggle')
+      var thumb  = document.getElementById('toggle-thumb')
+      if (!toggle || !thumb) return
+
+      function isDark() {
+        return root.getAttribute('data-theme') === 'dark'
+      }
+
+      function apply(dark) {
+        toggle.setAttribute('aria-checked', String(dark))
+        toggle.style.backgroundColor = dark ? '#4f46e5' : '#cbd5e1'
+        thumb.style.transform = dark ? 'translateX(16px)' : 'translateX(0)'
+      }
+
+      apply(isDark())
+
+      toggle.addEventListener('click', function () {
+        var dark = !isDark()
+        root.setAttribute('data-theme', dark ? 'dark' : 'light')
+        sessionStorage.setItem('theme', dark ? 'dark' : 'light')
+        apply(dark)
+      })
+
+      // OS-Präferenz ändert sich → nur übernehmen wenn kein manuelles Override gesetzt
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+        if (!sessionStorage.getItem('theme')) {
+          root.setAttribute('data-theme', e.matches ? 'dark' : 'light')
+          apply(e.matches)
+        }
+      })
+    })()
+  </script>
+  </body>
+</html>

@@ -1,0 +1,275 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Screenshot from '../components/Screenshot.astro'
+
+type Feature = { text: string; optional?: boolean }
+
+const bereiche: { icon: string; title: string; text: string; screenshot: string; features: Feature[]; optional?: boolean }[] = [
+  {
+    icon: 'receipt_long',
+    title: 'Rechnungsstellung & Dokumente',
+    screenshot: 'rechnungsstellung_und_dokumente',
+    text: 'Vom Angebot bis zur Stornorechnung – alle Dokumenttypen in einem durchgehenden Workflow.',
+    features: [
+      { text: 'Rechnung, Gutschrift, Stornorechnung' },
+      { text: 'Angebote', optional: true },
+      { text: 'Aufträge', optional: true },
+      { text: 'Lieferschein', optional: true },
+      { text: 'Proforma-Rechnung', optional: true },
+      { text: 'Wiederkehrende Rechnungen mit frei wählbarem Intervall', optional: true },
+      { text: 'Einleitungstext vor der Positionstabelle (Markdown: fett, kursiv)' },
+      { text: 'Positionsrabatt und Rechnungsrabatt (% oder €)' },
+      { text: 'Skonto mit eigenem Zahlungsziel' },
+      { text: '§25a UStG Differenzbesteuerung (Ankauf & Weiterverkauf)' },
+      { text: 'Einmalkunden ohne Kundenstamm' },
+      { text: 'Entwurfsmodus – Nummerierung erst beim Finalisieren' },
+      { text: 'Eigene Nummernkreise für jeden Dokumenttyp' },
+    ],
+  },
+  {
+    icon: 'menu_book',
+    title: 'Journal & Kassenbuch',
+    screenshot: 'journal_und_kassenbuch',
+    text: 'GoBD-konformes Journal für alle Einnahmen und Ausgaben – bar, Karte oder Überweisung.',
+    features: [
+      { text: 'Buchungen mit allen Zahlungsarten (bar, EC, Überweisung, PayPal u.a.)' },
+      { text: 'Tagesabschluss mit GoBD-Signatur' },
+      { text: 'km-Pauschale (0,30 €/km) direkt bei der Buchung' },
+      { text: '§13b Umkehr der Steuerschuld (Bauleistungen, EU-Dienstleistungen)' },
+      { text: 'Innergemeinschaftlicher Erwerb §1a UStG' },
+      { text: 'Kategorien mit SKR03/SKR04-Kontonummern für DATEV' },
+      { text: 'Vorsteuer-Anteil nach Kategorie (z.B. 70 % Bewirtungskosten)' },
+      { text: 'Wiederkehrende Buchungen für Fixkosten', optional: true },
+    ],
+  },
+  {
+    icon: 'account_balance',
+    title: 'Bank-Import & Zahlungsabgleich',
+    screenshot: 'journal_und_kassenbuch',
+    text: 'CSV- und CAMT-Dateien direkt importieren – offene Rechnungen werden automatisch abgeglichen.',
+    optional: true,
+    features: [
+      { text: 'CSV-Import (Sparkasse, DKB, N26, ING u.a.) und CAMT.053 XML' },
+      { text: 'Automatischer Abgleich mit offenen Rechnungen (Score-basiert)' },
+      { text: 'Halbautomatik: Einzeltreffer direkt buchen, Mehrfachtreffer manuell wählen' },
+      { text: 'Duplikat-Erkennung – jede Transaktion wird nur einmal importiert' },
+      { text: 'Überzahlungen und Lieferantenguthaben werden erkannt' },
+    ],
+  },
+  {
+    icon: 'finance',
+    title: 'EÜR & Steuerauswertungen',
+    screenshot: 'euer_und_steuerauswertung',
+    text: 'Alle relevanten Steuerauswertungen – direkt aus deinen Buchungen, ohne manuelles Zusammenrechnen.',
+    features: [
+      { text: 'Einnahmenüberschussrechnung nach Anlage EÜR 2025' },
+      { text: 'Umsatzsteuervoranmeldung (UStVA) mit allen Kennzahlen' },
+      { text: 'DATEV EXTF Buchungsstapel-Export (SKR03 & SKR04)' },
+      { text: 'Anlage G (Gewerbebetrieb) und Anlage S (Selbstständige)' },
+      { text: 'Anlageverzeichnis mit AfA-Plan (Anlage AVEÜR)' },
+      { text: 'Monatliche oder quartalsweise Umsatzsteuervoranmeldung' },
+      { text: 'W-IdNr. (Wirtschafts-Identifikationsnummer)' },
+      { text: 'GuV – Gewinn- und Verlustrechnung (§141 AO Schwellenwert-Monitoring)', optional: true },
+    ],
+  },
+  {
+    icon: 'folder_copy',
+    title: 'Belege & GoBD-Archivierung',
+    screenshot: 'belege_und_gobd-archivierung',
+    text: 'Digitale Belegverwaltung nach GoBD – unveränderlich, versioniert, durchsuchbar.',
+    features: [
+      { text: 'Belegupload per Drag & Drop (PDF, JPG, PNG)' },
+      { text: 'OCR-Texterkennung (Tesseract) für gescannte Belege & Kassenbons' },
+      { text: 'PDF/A-3-Archivierung für GoBD-Langzeitarchivierung' },
+      { text: 'Beleg-Vorschau direkt in der App (inline)' },
+      { text: 'Verknüpfung mit Rechnung oder Journalbuchung' },
+      { text: 'SHA-256-Prüfsumme – Unveränderlichkeit nachweisbar' },
+      { text: 'Dokumentenpakete für zusammengehörige Belege' },
+      { text: 'Kundendokumente mit DSGVO-Löschdatum', optional: true },
+    ],
+  },
+  {
+    icon: 'group',
+    title: 'Stammdaten',
+    screenshot: 'stammdaten',
+    text: 'Kunden, Lieferanten und Artikel – strukturiert und schnell abrufbar.',
+    features: [
+      { text: 'Kundenstamm mit Lieferadressen und Skonto' },
+      { text: 'Lieferantenstamm für Eingangsrechnungen' },
+      { text: 'Artikelstamm mit Gruppen und Steuersatz' },
+      { text: 'Lagerführung: Bestand, Mindestbestand, Bestandswarnung', optional: true },
+      { text: '§25a Differenzbesteuerung pro Artikel' },
+      { text: 'EK-Preis und Lieferanten-Artikelnummer' },
+      { text: 'Debitor-/Kreditorennummern (automatisch vergeben, DATEV Spalte 48)' },
+      { text: 'Kontokorrent-Auszug: Bewegungsliste mit laufendem Saldo, PDF-Download und Mail-Versand' },
+    ],
+  },
+  {
+    icon: 'security',
+    title: 'Datenschutz & Datensicherheit',
+    screenshot: 'datenschutz_und_datensicherheit',
+    text: 'Deine Daten gehören dir – lokal gespeichert, verschlüsselt gesichert.',
+    features: [
+      { text: 'Alle Daten lokal auf deinem Gerät (SQLite, kein Cloud-Zwang)' },
+      { text: 'Automatisches Backup vor jeder Schema-Migration' },
+      { text: 'Externes Backup auf NAS, USB oder SMB-Freigabe', optional: true },
+      { text: 'AES-256-GCM-Verschlüsselung für externe Backups (immer aktiv)' },
+      { text: 'GoBD-Trigger schützen finalisierte Buchungen vor Änderung' },
+      { text: 'Absender-Snapshot: finalisierte Dokumente bleiben unveränderlich' },
+    ],
+  },
+  {
+    icon: 'mail',
+    title: 'Kommunikation & PDF',
+    screenshot: 'kommunikation_und_pdf',
+    text: 'Professionelle PDFs und direkter E-Mail-Versand ohne Umweg.',
+    features: [
+      { text: 'PDF-Generierung für alle Dokumenttypen (2 Vorlagen)' },
+      { text: 'Unterschrift-Bild auf Rechnungen', optional: true },
+      { text: 'E-Mail-Versand direkt aus der App (eigener SMTP)', optional: true },
+      { text: 'QR-Zahlung auf Rechnungen', optional: true },
+      { text: 'ZUGFeRD / XRechnung (strukturierte Rechnungsdaten im PDF)' },
+    ],
+  },
+  {
+    icon: 'tune',
+    title: 'Bedienbarkeit',
+    screenshot: 'bedienbarkeit',
+    text: 'Native App-Erfahrung – ohne Browser-Umweg, mit Tastaturkürzeln und komfortablem Design.',
+    features: [
+      { text: 'Light Mode & Dark Mode (systemseitig oder manuell)' },
+      { text: 'Native Desktop-App für Windows, Linux & macOS (Tauri)' },
+      { text: 'Tastaturkürzel (z.B. Strg+Shift+E für Eingangsrechnungen)' },
+      { text: 'Automatische Updates (Updater-Benachrichtigung im Info-Bereich)' },
+      { text: 'Konfigurierbares Dashboard: Widgets verschieben, ein-/ausblenden', optional: true },
+      { text: 'Schnellzugriff-Links im Dashboard (Online-Banking, ELSTER, beliebige URLs)', optional: true },
+    ],
+  },
+  {
+    icon: 'inventory_2',
+    title: 'Anlageverzeichnis',
+    screenshot: 'anlageverzeichnis',
+    text: 'Wirtschaftsgüter erfassen und Abschreibungen automatisch berechnen.',
+    optional: true,
+    features: [
+      { text: 'Anlagetypen: KFZ, EDV/Software, Sonstige' },
+      { text: 'Lineare AfA nach Nutzungsdauer' },
+      { text: 'Privat-Anteil bei gemischt genutzten Wirtschaftsgütern' },
+      { text: 'Anlage AVEÜR-Zuordnung' },
+      { text: 'Verkaufsdatum und Restbuchwert' },
+    ],
+  },
+]
+---
+
+<Layout title="Funktionen" description="Alle Funktionen von RechnungsFee im Überblick – Rechnungsstellung, EÜR, DATEV, Belege, GoBD und mehr.">
+
+  <!-- Header -->
+  <section class="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4">Alle Funktionen</h1>
+    <p class="text-xl text-slate-500 max-w-2xl mx-auto mb-6">
+      RechnungsFee deckt den gesamten Buchhaltungsalltag ab – von der ersten Rechnung bis zur Steuererklärung.
+    </p>
+    <!-- Legende -->
+    <div class="inline-flex items-center gap-6 text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-5 py-2">
+      <span class="flex items-center gap-1.5">
+        <span class="text-indigo-600">✓</span> Standard
+      </span>
+      <span class="text-slate-300">|</span>
+      <span class="flex items-center gap-1.5">
+        <span class="inline-block bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded">optional</span>
+        in den Einstellungen aktivierbar
+      </span>
+    </div>
+  </section>
+
+  <!-- Funktionsbereiche -->
+  <div class="max-w-6xl mx-auto px-6 space-y-24 pb-24">
+    {bereiche.map((b, i) => (
+      <section class={`grid grid-cols-1 lg:grid-cols-2 gap-12 items-center ${i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+        <!-- Text -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-indigo-600" style="font-size:2.5rem">{b.icon}</span>
+            <div>
+              <h2 class="text-2xl font-bold text-slate-900">{b.title}</h2>
+              {b.optional && (
+                <span class="inline-block bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded mt-1">optional – in den Einstellungen aktivierbar</span>
+              )}
+            </div>
+          </div>
+          <p class="text-slate-500 mb-6">{b.text}</p>
+          <ul class="space-y-2">
+            {b.features.map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                {f.optional
+                  ? <span class="inline-block shrink-0 bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded leading-none mt-0.5">optional</span>
+                  : <span class="text-indigo-600 mt-0.5 shrink-0">✓</span>
+                }
+                <span>{f.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <!-- Screenshot -->
+        <Screenshot light={`/screenshots/light/light_${b.screenshot}.png`} dark={`/screenshots/dark/dark_${b.screenshot}.png`} alt={b.title} />
+      </section>
+    ))}
+
+    <!-- Transferleistungen -->
+    <section class="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 md:p-10">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full">Einzigartig</span>
+        <span class="inline-block bg-indigo-100 text-indigo-600 text-xs font-medium px-1.5 py-0.5 rounded">optional – in den Einstellungen aktivierbar</span>
+      </div>
+      <h2 class="text-2xl font-bold text-slate-900 mb-2">Selbstständige mit Bürgergeld oder ALG II</h2>
+      <p class="text-slate-600 mb-8 max-w-2xl">
+        RechnungsFee ist eine der wenigen Lösungen mit eingebautem Support für Selbstständige,
+        die Transferleistungen beziehen. Kein mühsames Zusammenrechnen – alles automatisch aus deinen Buchungen.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="material-symbols-outlined text-indigo-600" style="font-size:2rem">monitoring</span>
+            <h3 class="text-lg font-semibold text-slate-800">Leistungsmonitor</h3>
+          </div>
+          <ul class="space-y-2 mb-6">
+            {[
+              'Zuflüsse im Leistungszeitraum auf einen Blick',
+              'Umschaltbar: Kalendermonat ↔ Leistungszeitraum',
+              'Zeigt anrechenbares Einkommen für das Jobcenter',
+              'Basiert auf dem Zuflussprinzip (Zahlungsdatum)',
+            ].map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-indigo-500 mt-0.5 shrink-0">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <Screenshot light="/screenshots/light/light_leistungsmonitor.png" dark="/screenshots/dark/dark_leistungsmonitor.png" alt="Leistungsmonitor" />
+        </div>
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="material-symbols-outlined text-indigo-600" style="font-size:2rem">assignment</span>
+            <h3 class="text-lg font-semibold text-slate-800">Anlage EKS</h3>
+          </div>
+          <ul class="space-y-2 mb-6">
+            {[
+              'Einkommens- und Selbstständigkeitserklärung vorausgefüllt',
+              'Betriebseinnahmen und -ausgaben automatisch zugeordnet',
+              'km-Pauschale (0,10 €/km) für EKS separat berechnet',
+              'Persistente Formularfelder für wiederkehrende Angaben',
+            ].map(f => (
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-indigo-500 mt-0.5 shrink-0">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <Screenshot light="/screenshots/light/light_anlage-eks.png" dark="/screenshots/dark/dark_anlage-eks.png" alt="Anlage EKS" />
+        </div>
+      </div>
+    </section>
+  </div>
+
+</Layout>

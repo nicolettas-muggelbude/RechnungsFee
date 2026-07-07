@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="clip_path_1">
+      <rect width="512" height="512" />
+    </clipPath>
+    <filter color-interpolation-filters="sRGB" x="-339" y="-433" width="341" height="435" id="filter_2">
+      <feFlood flood-opacity="0" result="BackgroundImageFix_1" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" in="SourceAlpha" />
+      <feOffset dx="0" dy="0" />
+      <feGaussianBlur stdDeviation="7.5" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0.78 0 0 0 0 0.824 0 0 0 0 0.996 0 0 0 0.498 0" />
+      <feBlend mode="normal" in2="BackgroundImageFix_1" result="Shadow_2" />
+      <feBlend mode="normal" in="SourceGraphic" in2="Shadow_2" result="Shape_3" />
+    </filter>
+    <linearGradient id="gradient_3" gradientUnits="userSpaceOnUse" x1="0" y1="194.523" x2="157.037" y2="0">
+      <stop offset="0" stop-color="#3730A3" />
+      <stop offset="1" stop-color="#818CF8" />
+    </linearGradient>
+    <filter color-interpolation-filters="sRGB" x="-155.037" y="-192.523" width="157.037" height="194.523" id="filter_4">
+      <feFlood flood-opacity="0" result="BackgroundImageFix_1" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" in="SourceAlpha" />
+      <feOffset dx="0" dy="0" />
+      <feGaussianBlur stdDeviation="7.5" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0.78 0 0 0 0 0.824 0 0 0 0 0.996 0 0 0 1 0" />
+      <feBlend mode="normal" in2="BackgroundImageFix_1" result="Shadow_2" />
+      <feBlend mode="normal" in="SourceGraphic" in2="Shadow_2" result="Shape_3" />
+    </filter>
+    <filter color-interpolation-filters="sRGB" x="-196" y="-193" width="198" height="195" id="filter_5">
+      <feFlood flood-opacity="0" result="BackgroundImageFix_1" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" in="SourceAlpha" />
+      <feOffset dx="0" dy="0" />
+      <feGaussianBlur stdDeviation="7.5" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0.961 0 0 0 0 0.62 0 0 0 0 0.043 0 0 0 0.498 0" />
+      <feBlend mode="normal" in2="BackgroundImageFix_1" result="Shadow_2" />
+      <feBlend mode="normal" in="SourceGraphic" in2="Shadow_2" result="Shape_3" />
+    </filter>
+  </defs>
+  <g clip-path="url(#clip_path_1)">
+    <rect width="512" height="512" fill="#FFFFFF" fill-rule="evenodd" />
+    <path d="M412 0C467.236 0 512 44.764 512 100L512 412C512 467.236 467.236 512 412 512L100 512C44.764 512 0 467.236 0 412L0 100C0 44.764 44.764 0 100 0L412 0Z" fill="#FFFFFF" />
+    <path d="M277 0C312.351 0 341 28.649 341 64L341 411C341 424.257 330.257 435 317 435L24 435C10.7434 435 0 424.257 0 411L0 24C0 10.7434 10.7434 0 24 0L277 0Z" fill="#FFFFFF" stroke-width="12" stroke="#4F46E5" filter="url(#filter_2)" transform="translate(85 38)" />
+    <path d="M19.7867 219.033L196.61 0L245.63 39.5733L49.0199 283.117L0 243.543L19.7867 219.033L19.7867 219.033Z" fill="#FFFFFF" fill-rule="evenodd" transform="translate(193.741 242.703)" />
+    <path d="M176.405 96.7327L150.664 32.454L137.667 0L98.9293 96.7327L0 135.159L98.9293 173.585L137.667 270.317L176.405 173.585L275.334 135.159L176.405 96.7327L176.405 96.7327Z" fill="#FFFFFF" fill-rule="evenodd" transform="translate(271.333 134.341)" />
+    <path d="M0 194.523L157.037 0" fill="none" stroke-width="24" stroke="url(#gradient_3)" stroke-linecap="round" filter="url(#filter_4)" transform="translate(237 287)" />
+    <path d="M99 0L127.001 69.9228L198 97.5L127.001 125.077L99 195L70.9986 125.077L0 97.5L70.9986 69.9228L99 0Z" fill="#F59E0B" fill-rule="evenodd" filter="url(#filter_5)" transform="translate(310 172)" />
+    <path d="M0 12C0 5.37259 5.37259 0 12 0C18.6274 0 24 5.37259 24 12C24 18.6274 18.6274 24 12 24C5.37259 24 0 18.6274 0 12Z" fill="#FFFFFF" fill-rule="evenodd" fill-opacity="0.65" transform="translate(378 234)" />
+    <path d="M0 10C0 7.23857 0.689163 4.88156 2.06748 2.92892C3.4458 0.976303 5.10959 0 7.05882 0L152.941 0C154.89 0 156.554 0.976303 157.932 2.92892C159.311 4.88156 160 7.23857 160 10C160 12.7614 159.311 15.1184 157.932 17.0711C156.554 19.0237 154.89 20 152.941 20L7.05882 20C5.10959 20 3.4458 19.0237 2.06748 17.0711C0.689163 15.1184 0 12.7614 0 10L0 10Z" fill="#C7D2FE" fill-rule="evenodd" transform="translate(125.25 185.146)" />
+    <path d="M0 10C0 7.23857 0.828583 4.88156 2.48574 2.92892C4.1429 0.976303 6.14326 0 8.48685 0L206.513 0C208.857 0 210.857 0.976303 212.514 2.92892C214.171 4.88156 215 7.23857 215 10C215 12.7614 214.171 15.1184 212.514 17.0711C210.857 19.0237 208.857 20 206.513 20L8.48685 20C6.14326 20 4.1429 19.0237 2.48574 17.0711C0.828583 15.1184 0 12.7614 0 10L0 10Z" fill="#C7D2FE" fill-rule="evenodd" transform="translate(125.25 223.146)" />
+    <path d="M0 10C0 7.23859 0.781052 4.88156 2.34315 2.92892C3.90524 0.976318 5.79086 0 8 0L152 0C154.209 0 156.095 0.976318 157.657 2.92892C159.219 4.88156 160 7.23859 160 10C160 12.7614 159.219 15.1184 157.657 17.0711C156.095 19.0237 154.209 20 152 20L8 20C5.79086 20 3.90524 19.0237 2.34315 17.0711C0.781052 15.1184 0 12.7614 0 10L0 10Z" fill="#C7D2FE" fill-rule="evenodd" transform="translate(125.25 261.146)" />
+    <path d="M0 10C0 7.23859 0.874611 4.88156 2.62383 2.92892C4.37306 0.976318 6.48456 0 8.95833 0L206.042 0C208.515 0 210.627 0.976318 212.376 2.92892C214.125 4.88156 215 7.23859 215 10C215 12.7614 214.125 15.1184 212.376 17.0711C210.627 19.0237 208.515 20 206.042 20L8.95833 20C6.48456 20 4.37306 19.0237 2.62383 17.0711C0.874611 15.1184 0 12.7614 0 10L0 10Z" fill="#C7D2FE" fill-rule="evenodd" transform="translate(125.25 299.146)" />
+    <path d="M0 10C0 7.23859 0.937256 4.88156 2.81177 2.92892C4.68629 0.976318 6.94904 0 9.60001 0L150.4 0C153.051 0 155.314 0.976318 157.188 2.92892C159.063 4.88156 160 7.23859 160 10C160 12.7614 159.063 15.1184 157.188 17.0711C155.314 19.0237 153.051 20 150.4 20L9.60001 20C6.94904 20 4.68629 19.0237 2.81177 17.0711C0.937256 15.1184 0 12.7614 0 10L0 10Z" fill="#C7D2FE" fill-rule="evenodd" transform="translate(125.25 337.146)" />
+    <path d="M48.5156 44.2749L45.3516 51.2622L24.8291 51.2622Q24.7412 52.8223 24.7412 54.5142Q24.7412 56.1621 24.8291 57.6562L42.4072 57.6562L38.9355 64.8193L25.9497 64.8193Q27.5537 70.5103 31.0254 73.125Q34.519 75.7397 39.375 75.7397Q43.5938 75.7397 46.6479 74.2017Q49.7021 72.6416 51.46 71.3672L56.6235 82.2876Q53.1519 85.166 48.7354 86.6382Q44.3188 88.0884 39.375 88.0884Q29.0259 88.0884 21.665 82.0239Q14.3262 75.9375 11.8872 64.8193L2.61475 64.8193L5.20752 57.6562L10.9204 57.6562Q10.8325 56.1182 10.8325 54.5142Q10.8325 52.8662 10.9204 51.2622L2.61475 51.2622L5.20752 44.2749L11.8872 44.2749Q14.2822 33.1128 21.6431 26.9824Q29.0259 20.8301 39.375 20.8301Q44.5166 20.8301 48.8892 22.3682Q53.2837 23.9062 56.8213 26.7847L51.7017 37.7051Q49.79 36.3647 46.6919 34.7827Q43.6157 33.1787 39.375 33.1787Q34.519 33.1787 31.0254 35.8594Q27.5537 38.54 25.9497 44.2749L48.5156 44.2749Z" fill="#4F46E5" transform="translate(125 61.271)" />
+    <path d="M36 0C71.351 0 100 28.649 100 64L100 100L24 100C10.7433 100 0 89.2566 0 76L0 0L36 0Z" fill="#4F46E5" transform="translate(326 38)" />
+  </g>
+</svg>

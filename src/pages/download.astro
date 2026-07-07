@@ -1,0 +1,227 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { getDownloadStats } from '../lib/downloads'
+
+let version = 'v0.3.30'
+let v = '0.3.30'
+let downloadUrls = {
+  windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
+  linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+  linuxSh: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/install-linux.sh`,
+  macosArm:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
+  macosX64:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64.dmg`,
+  all:     `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+}
+
+try {
+  const res = await fetch('https://api.github.com/repos/nicolettas-muggelbude/RechnungsFee/releases/latest', {
+    headers: import.meta.env.GITHUB_TOKEN ? { Authorization: `token ${import.meta.env.GITHUB_TOKEN}` } : {},
+  })
+  if (res.ok) {
+    const release = await res.json()
+    version = release.tag_name
+    v = version.replace('v', '')
+    downloadUrls = {
+      windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
+      linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+      linuxSh: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/install-linux.sh`,
+      macosArm:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
+      macosX64:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64.dmg`,
+      all:     `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+    }
+  }
+} catch {}
+
+const token = import.meta.env.GITHUB_TOKEN as string | undefined
+const dlStats = await getDownloadStats(token)
+const fmt = (n: number) => n > 0 ? n.toLocaleString('de-DE') + '×' : null
+---
+
+<Layout title="Download" description={`RechnungsFee ${version} herunterladen – für Windows, Linux und macOS. Kostenlos & Open Source.`}>
+
+  <!-- Hero -->
+  <section class="max-w-3xl mx-auto px-6 pt-16 pb-10 text-center">
+    <h1 class="text-4xl font-extrabold text-slate-900 mb-3">Download</h1>
+    <p class="text-slate-500 mb-2">
+      RechnungsFee {version} · kostenlos · Open Source (AGPLv3)
+    </p>
+    <!-- OS-erkannter Schnelllink -->
+    <div id="os-hero" class="mt-6 hidden">
+      <a id="os-btn" href="#windows" class="inline-flex items-center gap-3 px-8 py-4 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold text-lg rounded-xl shadow-lg transition-all">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span id="os-label">Herunterladen</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="max-w-3xl mx-auto px-6 pb-24 space-y-10">
+
+    <!-- Windows -->
+    <section id="windows" class="scroll-mt-24 bg-white border border-slate-200 rounded-2xl p-8">
+      <div class="flex items-center gap-3 mb-5">
+        <span class="text-3xl">🪟</span>
+        <h2 class="text-2xl font-bold text-slate-900">Windows</h2>
+        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-medium">x64</span>
+        {fmt(dlStats.windows) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.windows)} heruntergeladen</span>}
+      </div>
+      <p class="text-slate-600 mb-6">
+        Der Installer richtet RechnungsFee ein und legt eine Verknüpfung im Startmenü an.
+        Tesseract OCR für gescannte Belege wird automatisch mitinstalliert.
+      </p>
+      <a
+        href={downloadUrls.windows}
+        class="inline-flex items-center gap-2 px-6 py-3 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold rounded-xl transition-colors shadow-sm"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        RechnungsFee_{v}_x64-setup.exe herunterladen
+      </a>
+      <p class="text-xs text-slate-400 mt-3">
+        Falls Windows SmartScreen eine Warnung zeigt: „Weitere Informationen" → „Trotzdem ausführen".
+        Die App ist signiert, aber noch ohne Extended Validation Zertifikat.
+      </p>
+    </section>
+
+    <!-- Linux -->
+    <section id="linux" class="scroll-mt-24 bg-white border border-slate-200 rounded-2xl p-8">
+      <div class="flex items-center gap-3 mb-5">
+        <span class="text-3xl">🐧</span>
+        <h2 class="text-2xl font-bold text-slate-900">Linux</h2>
+        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-medium">x86_64 AppImage</span>
+        {fmt(dlStats.linux) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.linux)} heruntergeladen</span>}
+      </div>
+
+      <!-- Option A: Installer-Skript -->
+      <div class="mb-6">
+        <h3 class="font-semibold text-slate-800 mb-2">Option A – Installer-Skript (empfohlen)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Das Skript lädt die AppImage herunter, macht sie ausführbar, legt einen
+          Desktop-Eintrag an und bietet optional Tesseract OCR für OCR-Belegimport an.
+        </p>
+        <a
+          href={downloadUrls.linuxSh}
+          class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+        >
+          install-linux.sh herunterladen
+        </a>
+        <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
+          <span class="text-slate-400"># Nach dem Download ausführbar machen und starten:</span><br/>
+          chmod +x install-linux.sh<br/>
+          ./install-linux.sh
+        </div>
+      </div>
+
+      <div class="border-t border-slate-100 pt-6">
+        <h3 class="font-semibold text-slate-800 mb-2">Option B – AppImage direkt</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Kein Installer nötig – einfach herunterladen, ausführbar machen und starten.
+        </p>
+        <a
+          href={downloadUrls.linux}
+          class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+        >
+          RechnungsFee_{v}_amd64.AppImage herunterladen
+        </a>
+        <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
+          chmod +x RechnungsFee_{v}_amd64.AppImage<br/>
+          ./RechnungsFee_{v}_amd64.AppImage
+        </div>
+        <p class="text-xs text-slate-400 mt-3">
+          Tesseract OCR für gescannte Belege nachinstallieren (optional):<br/>
+          <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">sudo apt install tesseract-ocr tesseract-ocr-deu</code>
+        </p>
+      </div>
+    </section>
+
+    <!-- macOS -->
+    <section id="macos" class="scroll-mt-24 bg-white border border-slate-200 rounded-2xl p-8">
+      <div class="flex items-center gap-3 mb-5">
+        <span class="text-3xl">🍎</span>
+        <h2 class="text-2xl font-bold text-slate-900">macOS</h2>
+        {fmt(dlStats.macos) && <span class="ml-auto text-xs text-slate-400">⬇ {fmt(dlStats.macos)} heruntergeladen</span>}
+      </div>
+      <p class="text-slate-600 mb-4">
+        RechnungsFee ist nicht mit einem Apple-Entwicklerzertifikat signiert.
+        Beim ersten Start erscheint ein Gatekeeper-Hinweis – einmalig mit einem
+        der folgenden Wege umgehen:
+      </p>
+
+      <div class="space-y-6">
+        <!-- Apple Silicon -->
+        <div>
+          <h3 class="font-semibold text-slate-800 mb-2">Apple Silicon (M1/M2/M3/M4)</h3>
+          <a
+            href={downloadUrls.macosArm}
+            class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+          >
+            RechnungsFee_{v}_aarch64.dmg herunterladen
+          </a>
+          <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
+            <span class="text-slate-400"># Quarantäne-Flag entfernen, dann öffnen:</span><br/>
+            xattr -cr ~/Downloads/RechnungsFee_{v}_aarch64.dmg
+          </div>
+          <p class="text-xs text-slate-400 mt-2">
+            Alternativ: Rechtsklick auf das DMG → „Öffnen" → „Öffnen" bestätigen.
+          </p>
+        </div>
+
+        <!-- Intel -->
+        <div class="border-t border-slate-100 pt-5">
+          <h3 class="font-semibold text-slate-800 mb-2">Intel (x86_64)</h3>
+          <a
+            href={downloadUrls.macosX64}
+            class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+          >
+            RechnungsFee_{v}_x64.dmg herunterladen
+          </a>
+          <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
+            xattr -cr ~/Downloads/RechnungsFee_{v}_x64.dmg
+          </div>
+        </div>
+
+        <!-- Tesseract macOS -->
+        <div class="border-t border-slate-100 pt-5">
+          <p class="text-sm text-slate-600">
+            Tesseract OCR für gescannte Belege (optional):
+          </p>
+          <div class="mt-2 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
+            brew install tesseract tesseract-lang
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alle Releases -->
+    <div class="text-center">
+      <a href={downloadUrls.all} class="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+        Alle Versionen & Release Notes auf GitHub ↗
+      </a>
+    </div>
+
+  </div>
+</Layout>
+
+<script>
+  const platform = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase()
+  const ua = navigator.userAgent
+
+  let os = 'other'
+  if (/win/i.test(platform) || /win/i.test(ua)) os = 'windows'
+  else if (/mac/i.test(platform) || /mac/i.test(ua)) os = 'macos'
+  else if (/linux/i.test(platform) || /linux/i.test(ua)) os = 'linux'
+
+  const btn = document.getElementById('os-btn')
+  const label = document.getElementById('os-label')
+  const hero = document.getElementById('os-hero')
+
+  if (btn && label && hero && os !== 'other') {
+    hero.classList.remove('hidden')
+    const targets = { windows: '#windows', linux: '#linux', macos: '#macos' }
+    const labels  = { windows: '🪟 Zu Windows', linux: '🐧 Zu Linux', macos: '🍎 Zu macOS' }
+    btn.href = targets[os]
+    label.textContent = labels[os]
+  }
+</script>

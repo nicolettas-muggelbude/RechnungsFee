@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Hintergrund -->
+  <rect width="512" height="512" rx="110" fill="#111827"/>
+
+  <!-- Frosch (zentriert, skaliert auf 512x512) -->
+  <!-- Augenhügel -->
+  <circle cx="185" cy="168" r="82" fill="#10b981"/>
+  <circle cx="327" cy="168" r="82" fill="#10b981"/>
+
+  <!-- Kopf/Körper -->
+  <ellipse cx="256" cy="340" rx="195" ry="160" fill="#10b981"/>
+  <path d="M 90 240 Q 92 145 185 133 Q 256 113 327 133 Q 420 145 422 240 Z" fill="#10b981"/>
+
+  <!-- Augen weiß -->
+  <circle cx="185" cy="163" r="57" fill="white"/>
+  <circle cx="327" cy="163" r="57" fill="white"/>
+
+  <!-- Pupillen -->
+  <circle cx="189" cy="167" r="31" fill="#064e3b"/>
+  <circle cx="331" cy="167" r="31" fill="#064e3b"/>
+
+  <!-- Glanzpunkt -->
+  <circle cx="205" cy="148" r="13" fill="white"/>
+  <circle cx="347" cy="148" r="13" fill="white"/>
+
+  <!-- Bauch (heller) -->
+  <ellipse cx="256" cy="375" rx="128" ry="98" fill="#6ee7b7"/>
+
+  <!-- Nasenlöcher -->
+  <ellipse cx="225" cy="288" rx="13" ry="10" fill="#059669"/>
+  <ellipse cx="287" cy="288" rx="13" ry="10" fill="#059669"/>
+
+  <!-- Lächeln -->
+  <path d="M 190 352 Q 256 405 322 352" stroke="#059669" stroke-width="13" fill="none" stroke-linecap="round"/>
+</svg>

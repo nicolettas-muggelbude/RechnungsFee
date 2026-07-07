@@ -1,0 +1,141 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+const PAYPAL_URL = 'https://www.paypal.com/ncp/payment/UYJ73YNEZ3KHL'
+const GITHUB_URL = 'https://github.com/nicolettas-muggelbude/RechnungsFee'
+---
+
+<Layout title="Spenden" description="RechnungsFee unterstützen – per PayPal oder Banküberweisung. Kostenlos, Open Source, Community-entwickelt.">
+
+  <div class="max-w-2xl mx-auto px-6 py-16 space-y-10">
+
+    <!-- Header -->
+    <div class="text-center">
+      <img src="/logo_neu/logo_bordered_svg.svg" alt="" class="w-20 h-20 mx-auto mb-4" />
+      <h1 class="text-4xl font-extrabold mb-3">
+        <span class="text-slate-900">Rechnungs</span><span class="text-indigo-600 brand-fee">Fee</span>
+        <span class="text-slate-900"> unterstützen</span>
+      </h1>
+      <p class="text-slate-500 max-w-lg mx-auto">
+        RechnungsFee ist kostenlos, Open Source (AGPLv3) und wird in der Freizeit entwickelt.
+        Jede Unterstützung hilft dabei, das Projekt weiterzuführen und neue Features umzusetzen.
+      </p>
+    </div>
+
+    <!-- Kosten -->
+    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-5">
+      <div>
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Laufende Kosten</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between text-slate-700">
+            <span>GitHub (Hosting, Actions, Releases)</span>
+            <span class="font-medium text-emerald-600">kostenlos</span>
+          </div>
+          <div class="flex justify-between text-slate-700">
+            <span>Entwicklungszeit (Freizeit)</span>
+            <span class="font-medium text-slate-400">unbezahlt</span>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-slate-200 pt-5">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Einmalige &amp; anlassbezogene Kosten</h2>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-indigo-600 shrink-0" style="font-size:1.25rem">computer</span>
+            <span>Infrastruktur – Hardware, Tools und Lizenzen für die Entwicklung</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-indigo-600 shrink-0" style="font-size:1.25rem">mic</span>
+            <span>Raummiete für kostenfreie Vorträge und Workshops rund um RechnungsFee</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-indigo-600 shrink-0" style="font-size:1.25rem">checkroom</span>
+            <span>Merchandise – Aufkleber, Shirts und Materialien für die Community</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-indigo-600 shrink-0" style="font-size:1.25rem">celebration</span>
+            <span>Event-Teilnahmen – Anreise, Unterkunft und Standgebühren</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Spenden -->
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 space-y-6">
+      <p class="text-slate-700 text-center">
+        Wenn RechnungsFee dir Arbeit spart oder dich in deiner Selbstständigkeit unterstützt –
+        freue ich mich über jede Spende, egal wie klein.
+      </p>
+
+      <!-- PayPal -->
+      <div class="flex flex-col items-center gap-2">
+        <a
+          href={PAYPAL_URL}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 px-8 py-3 bg-[#0070ba] hover:bg-[#005ea6] text-white font-semibold rounded-xl text-sm transition-colors shadow-sm"
+        >
+          <span class="material-symbols-outlined leading-none" style="font-size:1.25rem">favorite</span>
+          <span>Via PayPal spenden</span>
+        </a>
+        <p class="text-xs text-slate-400">PayPal zieht Transaktionsgebühren ab (~1,5 % + 0,35 €)</p>
+      </div>
+
+      <!-- IBAN -->
+      <div class="border-t border-indigo-200 pt-6">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 text-center">
+          Oder gebührenfrei per Banküberweisung
+        </p>
+        <div class="bg-white border border-indigo-200 rounded-xl p-5 space-y-2 text-sm">
+          {[
+            ['Kontoinhaber', 'PC-Wittfoot UG'],
+            ['IBAN', 'DE43 2805 0100 0093 3624 57'],
+            ['BIC', 'SLZODE22XXX'],
+            ['Verwendungszweck', 'Spende RechnungsFee'],
+          ].map(([label, value]) => (
+            <div class="flex justify-between gap-4">
+              <span class="text-slate-400 shrink-0">{label}</span>
+              <span class="text-slate-700 font-mono text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Transparenz -->
+      <p class="text-xs text-slate-500 text-center pt-1">
+        Spenden werden treuhänderisch von der <strong class="font-medium text-slate-600">PC-Wittfoot UG</strong> verwaltet
+        (Spendenverwalter, nicht Entwickler).
+        Die Entwicklung von RechnungsFee erfolgt durch die Community als Open-Source-Projekt.
+      </p>
+    </div>
+
+    <!-- Andere Wege -->
+    <div class="border border-slate-200 rounded-2xl p-6 space-y-4">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Andere Wege zu helfen</h2>
+      <ul class="space-y-3 text-sm text-slate-600">
+        <li class="flex items-start gap-2">
+          <span class="material-symbols-outlined text-indigo-600 mt-0.5 shrink-0" style="font-size:1.25rem">star</span>
+          <span>
+            Das Projekt auf{' '}
+            <a href={GITHUB_URL} target="_blank" rel="noopener" class="text-indigo-600 hover:underline">
+              GitHub mit einem Stern markieren
+            </a>
+            – macht RechnungsFee für andere sichtbarer
+          </span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="material-symbols-outlined text-indigo-600 mt-0.5 shrink-0" style="font-size:1.25rem">bug_report</span>
+          <span>Bugs melden und Feature-Wünsche als GitHub Issue eintragen</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="material-symbols-outlined text-indigo-600 mt-0.5 shrink-0" style="font-size:1.25rem">campaign</span>
+          <span>RechnungsFee anderen Freiberuflern und Kleinunternehmern empfehlen</span>
+        </li>
+      </ul>
+    </div>
+
+    <p class="text-sm text-slate-400 text-center">Danke, dass du RechnungsFee nutzt. ♥</p>
+
+  </div>
+
+</Layout>

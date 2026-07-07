@@ -1,0 +1,330 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Screenshot from '../components/Screenshot.astro'
+
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'RechnungsFee',
+  description: 'Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG). Rechnungen, EÜR, DATEV-Export, GoBD-konformes Journal – lokal & offline.',
+  url: 'https://rechnungsfee.app',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Windows, Linux, macOS',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+  license: 'https://www.gnu.org/licenses/agpl-3.0.html',
+  downloadUrl: 'https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest',
+  softwareVersion: 'latest',
+  screenshot: 'https://rechnungsfee.app/screenshots/light/light_app-screenshot.png',
+  inLanguage: 'de',
+  author: { '@type': 'Organization', name: 'Muggelbude', url: 'https://muggelbude.it' },
+  isAccessibleForFree: true,
+  keywords: 'Buchhaltung, Freiberufler, Kleinunternehmer, §19 UStG, EÜR, DATEV, Rechnungssoftware, Open Source',
+})
+import { getDownloadStats } from '../lib/downloads'
+
+let version = 'v0.3.30'
+let downloadUrls = {
+  windows:    `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_x64-setup.exe`,
+  linux:      `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_amd64.AppImage`,
+  macos:      `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_0.3.30_aarch64.dmg`,
+  all:        `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+}
+
+try {
+  const res = await fetch('https://api.github.com/repos/nicolettas-muggelbude/RechnungsFee/releases/latest', {
+    headers: import.meta.env.GITHUB_TOKEN ? { Authorization: `token ${import.meta.env.GITHUB_TOKEN}` } : {},
+  })
+  if (res.ok) {
+    const release = await res.json()
+    version = release.tag_name
+    const v = version.replace('v', '')
+    downloadUrls = {
+      windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
+      linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+      macos:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
+      all:     `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/tag/${version}`,
+    }
+  }
+} catch {}
+
+const token = import.meta.env.GITHUB_TOKEN as string | undefined
+const dlStats = await getDownloadStats(token)
+const dlTotal = dlStats.total > 0 ? dlStats.total.toLocaleString('de-DE') : null
+
+const features = [
+  { icon: 'receipt_long',       title: 'Rechnungen & Dokumente',   text: 'Angebot → Auftrag → Lieferschein → Rechnung → Gutschrift. Mit Entwurf, Storno und Wiederkehrend.' },
+  { icon: 'finance',            title: 'EÜR & DATEV-Export',        text: 'Einnahmenüberschussrechnung nach Anlage EÜR 2025, UStVA und DATEV EXTF Buchungsstapel-Export.' },
+  { icon: 'folder_copy',        title: 'Belege & GoBD',              text: 'Belege hochladen, OCR-Texterkennung, PDF/A-Archivierung. GoBD-konform mit unveränderlichen Einträgen.' },
+  { icon: 'menu_book',          title: 'Journal & Kassenbuch',       text: 'Einnahmen und Ausgaben buchen, Tagesabschluss, km-Pauschale, §13b und EU-Erwerbe.' },
+  { icon: 'security',           title: 'Lokal & offline',            text: 'Alle Daten bleiben auf deinem Gerät. Kein Cloud-Zwang, kein Abo, kein Datenschutzproblem.' },
+  { icon: 'volunteer_activism', title: 'Kostenlos & Open Source',    text: 'AGPLv3 – für immer kostenlos. Code einsehbar, Community-getrieben, keine versteckten Kosten.' },
+  { icon: 'computer',           title: 'Windows, Linux & macOS',    text: 'Native Desktop-App mit Tauri. Light & Dark Mode. Läuft auf allen drei Plattformen, inklusive Apple Silicon.' },
+  { icon: 'inventory_2',        title: 'Artikel & Lagerführung',     text: 'Artikelstamm mit Gruppen, Lagerbestand, Mindestbestand-Warnung und automatischer Bestandsbuchung.' },
+]
+---
+
+<Layout description="Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG). Rechnungen, EÜR, DATEV-Export, GoBD-konformes Journal – lokal & offline. Für Windows, Linux & macOS.">
+  <script slot="head" type="application/ld+json" set:html={jsonLd} />
+  <!-- Hero -->
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+    <!-- Logo -->
+    <div class="flex flex-col items-center gap-4 mb-4">
+      <img src="/logo_neu/logo_bordered_svg.svg" alt="RechnungsFee Logo" class="w-24 h-24 md:w-32 md:h-32 drop-shadow-md" />
+      <h1 class="text-6xl md:text-8xl font-extrabold tracking-tight leading-none">
+        <span class="text-slate-900">Rechnungs</span><span class="text-indigo-600 brand-fee">Fee</span>
+      </h1>
+    </div>
+    <!-- Tagline -->
+    <p class="text-2xl md:text-3xl font-semibold text-slate-600 mb-4">
+      Deine gute Fee für Rechnung & Buchhaltung
+    </p>
+    <!-- Version-Badge -->
+    <div class="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full mb-8">
+      <span>✨</span>
+      <span>Aktuelle Version: {version} · Kostenlos · Open Source · Lokal</span>
+    </div>
+    <p class="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
+      Rechnungen schreiben, EÜR erstellen, DATEV-Export – alles auf deinem Gerät,
+      ohne Abo und ohne Cloud. Für Freiberufler & Kleinunternehmer (§19 UStG).
+    </p>
+
+    <div class="flex flex-col items-center gap-3">
+      <a
+        id="download-btn"
+        href={downloadUrls.all}
+        class="inline-flex items-center gap-3 px-8 py-4 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all"
+      >
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span id="download-label">Jetzt herunterladen</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm text-slate-400">
+        <a href={downloadUrls.all} class="hover:text-slate-600 transition-colors">Alle Plattformen ↗</a>
+        <span>·</span>
+        <span>kostenlos & Open Source</span>
+        {dlTotal && <>
+          <span>·</span>
+          <span>⬇ {dlTotal}× heruntergeladen</span>
+        </>}
+      </div>
+    </div>
+  </section>
+
+  <!-- Hero-Screenshot -->
+  <section class="max-w-5xl mx-auto px-6 mb-24">
+    <Screenshot light="/screenshots/light/light_app-screenshot.png" dark="/screenshots/dark/dark_app-screenshot.png" alt="RechnungsFee App-Screenshot" />
+  </section>
+
+  <!-- Features -->
+  <section class="max-w-6xl mx-auto px-6 mb-24">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-slate-900 mb-3">Alles was du brauchst</h2>
+      <p class="text-slate-500 max-w-xl mx-auto">Vollständige Buchhaltungslösung – von der Rechnung bis zur Steuererklärung.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {features.map(f => (
+        <div class="bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl p-5 transition-colors">
+          <span class="material-symbols-outlined text-indigo-600 mb-3" style="font-size:2rem">{f.icon}</span>
+          <h3 class="font-semibold text-slate-800 mb-1">{f.title}</h3>
+          <p class="text-sm text-slate-500 leading-relaxed">{f.text}</p>
+        </div>
+      ))}
+    </div>
+    <div class="text-center mt-8">
+      <a href="/funktionen" class="text-indigo-600 font-medium hover:underline">Alle Funktionen im Überblick →</a>
+    </div>
+  </section>
+
+  <!-- Besonderheit: Transferleistungen -->
+  <section class="max-w-6xl mx-auto px-6 mb-24">
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 md:p-8">
+      <div class="mb-6">
+        <span class="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-3">Einzigartig</span>
+        <h3 class="text-xl font-bold text-slate-900 mb-2">Speziell für Selbstständige mit Bürgergeld oder ALG II</h3>
+        <p class="text-slate-600 text-sm max-w-2xl">
+          RechnungsFee ist eine der wenigen Buchhaltungslösungen mit eingebautem Support für
+          Selbstständige, die Transferleistungen beziehen. Kein mühsames Zusammenrechnen – alles automatisch.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-white border border-indigo-200 rounded-xl p-5">
+          <span class="material-symbols-outlined text-indigo-600 mb-3" style="font-size:2rem">monitoring</span>
+          <h4 class="font-semibold text-slate-800 mb-1">Leistungsmonitor</h4>
+          <p class="text-sm text-slate-500 leading-relaxed">
+            Übersicht der Zuflüsse im Leistungszeitraum – zeigt auf einen Blick ob und wie viel
+            Einkommen beim Jobcenter angerechnet wird. Umschaltbar zwischen Kalendermonat und Leistungszeitraum.
+          </p>
+        </div>
+        <div class="bg-white border border-indigo-200 rounded-xl p-5">
+          <span class="material-symbols-outlined text-indigo-600 mb-3" style="font-size:2rem">assignment</span>
+          <h4 class="font-semibold text-slate-800 mb-1">EKS – Anlage EKS</h4>
+          <p class="text-sm text-slate-500 leading-relaxed">
+            Einkommens- und Selbstständigkeitserklärung für das Jobcenter – vorausgefüllt aus deinen
+            Buchungen. Betriebseinnahmen, Ausgaben und km-Pauschale werden automatisch zugeordnet.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Weitere Screenshots -->
+  <section class="bg-slate-50 py-20">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl font-bold text-slate-900 mb-3">Ein Blick in die App</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          ['Rechnungsübersicht', 'rechnungsübersicht'],
+          ['Journal & Buchungen', 'journal_und_buchungen'],
+          ['EÜR & Auswertungen', 'euer_und_auswertung'],
+        ].map(([label, name]) => (
+          <Screenshot light={`/screenshots/light/light_${name}.png`} dark={`/screenshots/dark/dark_${name}.png`} alt={label} class="rounded-xl" />
+        ))}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        {[
+          ['Leistungsmonitor', 'leistungsmonitor'],
+          ['Anlage EKS', 'anlage-eks'],
+        ].map(([label, name]) => (
+          <Screenshot light={`/screenshots/light/light_${name}.png`} dark={`/screenshots/dark/dark_${name}.png`} alt={label} class="rounded-xl" />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Mitmachen -->
+  <section class="max-w-6xl mx-auto px-6 py-20">
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-8 md:p-12 text-center space-y-8">
+      <div class="space-y-3">
+        <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900">
+          RechnungsFee ist ein <span class="text-indigo-600">Community-Projekt</span>
+        </h2>
+        <p class="text-slate-600 max-w-2xl mx-auto">
+          Hinter der App stecken Menschen wie du – Tester, Designer, Entwickler und alle, die Ideen einbringen.
+          Egal ob Bug-Report, Featurewunsch oder Code: jede Beteiligung macht die App besser.
+        </p>
+      </div>
+
+      <!-- Rollen-Übersicht -->
+      <div class="flex flex-wrap justify-center gap-3">
+        {[
+          { icon: 'bug_report',   label: 'Testen & Bugs melden' },
+          { icon: 'palette',      label: 'Design & Ideen'        },
+          { icon: 'code',         label: 'Code beitragen'        },
+          { icon: 'menu_book',    label: 'Dokumentation'         },
+          { icon: 'receipt_long', label: 'Steuerfachwissen'      },
+          { icon: 'campaign',     label: 'Weitersagen'           },
+        ].map(r => (
+          <span class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-700 shadow-sm">
+            <span class="material-symbols-outlined text-indigo-600 leading-none" style="font-size:1.1rem">{r.icon}</span>
+            {r.label}
+          </span>
+        ))}
+      </div>
+
+      <!-- CTAs -->
+      <div class="flex flex-wrap justify-center gap-4">
+        <a
+          href="/team"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold rounded-xl text-sm transition-colors shadow-sm"
+        >
+          Das Team kennenlernen →
+        </a>
+        <a
+          href="https://github.com/nicolettas-muggelbude/RechnungsFee/issues/new/choose"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 hover:border-indigo-200 text-slate-700 font-semibold rounded-xl text-sm transition-colors shadow-sm"
+        >
+          🐛 Bug melden / Idee einreichen
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mehr aus der Muggelbude -->
+  <section class="bg-slate-900 py-16">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <p class="text-slate-400 text-sm uppercase tracking-wide font-medium mb-1">Mehr aus der Muggelbude</p>
+          <h2 class="text-2xl font-bold text-white">Weitere Open-Source-Projekte</h2>
+        </div>
+        <a
+          href="https://muggelbude.it"
+          target="_blank"
+          rel="noopener"
+          class="text-indigo-400 hover:text-indigo-300 font-medium text-sm transition-colors shrink-0"
+        >
+          Alle Projekte auf muggelbude.it →
+        </a>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a
+          href="https://muggelbude.it"
+          target="_blank"
+          rel="noopener"
+          class="flex items-center gap-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded-xl p-5 transition-colors group"
+        >
+          <img src="/scrat-logo.svg" alt="Scrat Backup Logo" class="w-12 h-12 shrink-0" />
+          <div>
+            <p class="font-semibold text-white group-hover:text-indigo-300 transition-colors">Scrat Backup</p>
+            <p class="text-sm text-slate-400">Einfaches Backup-Tool für lokale Datensicherung.</p>
+          </div>
+        </a>
+        <a
+          href="https://muggelbude.it"
+          target="_blank"
+          rel="noopener"
+          class="flex items-center gap-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded-xl p-5 transition-colors group"
+        >
+          <img src="/quark-logo.svg" alt="Quark Logo" class="w-12 h-12 shrink-0" />
+          <div>
+            <p class="font-semibold text-white group-hover:text-indigo-300 transition-colors">Quark</p>
+            <p class="text-sm text-slate-400">QR-Code-Generator für Links, Text und mehr.</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Spenden -->
+  <section class="max-w-2xl mx-auto px-6 py-20 text-center">
+    <h2 class="text-2xl font-bold text-slate-900 mb-3">Projekt unterstützen</h2>
+    <p class="text-slate-500 mb-6">
+      RechnungsFee ist kostenlos und wird in der Freizeit entwickelt.
+      Wenn dir die App hilft – freue ich mich über eine Spende.
+    </p>
+    <a href="/spenden" class="inline-flex items-center gap-2 px-6 py-3 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold rounded-xl transition-colors shadow-sm">
+      <span class="material-symbols-outlined leading-none" style="font-size:1.25rem">favorite</span>
+      <span>Spenden & unterstützen</span>
+    </a>
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ downloadUrls }}>
+  const platform = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase()
+  const ua = navigator.userAgent
+
+  let os = 'other'
+  if (/win/i.test(platform) || /win/i.test(ua)) os = 'windows'
+  else if (/mac/i.test(platform) || /mac/i.test(ua)) os = 'macos'
+  else if (/linux/i.test(platform) || /linux/i.test(ua)) os = 'linux'
+
+  const btn = document.getElementById('download-btn')
+  const label = document.getElementById('download-label')
+  if (btn && label && os !== 'other') {
+    if (os === 'windows') {
+      btn.href = downloadUrls.windows
+      label.textContent = '⬇ Für Windows herunterladen (.exe)'
+    } else if (os === 'linux') {
+      btn.href = '/download#linux'
+      label.textContent = '🐧 Linux – Installationsoptionen'
+    } else if (os === 'macos') {
+      btn.href = '/download#macos'
+      label.textContent = '🍎 macOS – Installationshinweise'
+    }
+  }
+</script>

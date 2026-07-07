@@ -1,0 +1,24 @@
+---
+import { getCollection, render } from 'astro:content'
+import HandbuchLayout from '../../layouts/HandbuchLayout.astro'
+
+export async function getStaticPaths() {
+  const pages = await getCollection('handbuch')
+  return pages.map(entry => ({
+    params: { slug: entry.id.replace(/\.md$/, '') },
+    props: { entry },
+  }))
+}
+
+const { entry } = Astro.props
+const { Content, headings } = await render(entry)
+
+const slug = entry.id.replace(/\.md$/, '').toLowerCase()
+const title = headings.find(h => h.depth === 1)?.text ?? slug.replace(/-/g, ' ')
+---
+
+<HandbuchLayout title={title} currentSlug={slug}>
+  <div data-pagefind-filter="section:handbuch">
+    <Content />
+  </div>
+</HandbuchLayout>
