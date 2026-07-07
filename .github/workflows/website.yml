@@ -25,29 +25,27 @@ jobs:
       - name: Wiki klonen
         run: |
           git clone https://github.com/nicolettas-muggelbude/RechnungsFee.wiki.git wiki-src
-          mkdir -p web/src/content/handbuch
-          cp wiki-src/*.md web/src/content/handbuch/ 2>/dev/null || true
-          rm -f web/src/content/handbuch/_Sidebar.md
-          rm -f web/src/content/handbuch/_Footer.md
+          mkdir -p src/content/handbuch
+          cp wiki-src/*.md src/content/handbuch/ 2>/dev/null || true
+          rm -f src/content/handbuch/_Sidebar.md
+          rm -f src/content/handbuch/_Footer.md
 
       - name: Changelog-Daten kopieren
         run: |
-          mkdir -p web/src/data
-          curl -sSfL "https://raw.githubusercontent.com/nicolettas-muggelbude/RechnungsFee/main/src/frontend/src/data/changelog.ts" -o web/src/data/changelog.ts
+          mkdir -p src/data
+          curl -sSfL "https://raw.githubusercontent.com/nicolettas-muggelbude/RechnungsFee/main/src/frontend/src/data/changelog.ts" -o src/data/changelog.ts
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         run: npm ci
-        working-directory: web
 
       - name: Astro bauen
         run: npm run build
-        working-directory: web
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -55,7 +53,7 @@ jobs:
         run: |
           tar \
             --dereference --hard-dereference \
-            --directory "web/dist" \
+            --directory "dist" \
             -cvf "$RUNNER_TEMP/artifact.tar" \
             --exclude=.git --exclude=.github \
             .
