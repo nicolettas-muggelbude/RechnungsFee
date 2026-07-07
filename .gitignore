@@ -25,3 +25,4 @@ pnpm-debug.log*
 
 # wird vom CI aus src/frontend/src/data/changelog.ts kopiert
 src/data/changelog.ts
+*:Zone.Identifier
