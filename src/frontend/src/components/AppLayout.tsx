@@ -526,8 +526,8 @@ export function AppLayout() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 flex">
-          <div className={`overflow-y-auto h-full${einstellungen.ausrichtung === 'zentriert' ? ' w-full max-w-[1400px] mx-auto' : ' flex-1'}`}>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className={`h-full${einstellungen.ausrichtung === 'zentriert' ? ' max-w-[1400px] mx-auto' : ''}`}>
             <Outlet />
           </div>
         </div>
