@@ -37,6 +37,12 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Zufluss-Monitor zeigte kurzzeitig 0,00 € während die Buchungsdaten noch geladen wurden (React Query Cache-Timing). Der Monitor zeigt jetzt einen Lade-Spinner und „…" als Platzhalter bis die Daten vollständig vorliegen.' },
       { typ: 'fix', text: 'Neuen Kunden oder Lieferanten anlegen schlug mit „Failed to fetch" fehl wenn die automatisch vergebene Debitor- oder Kreditorennummer bereits belegt war (z. B. nach einer Nummernkreis-Formatänderung). Die nächste freie Nummer wird jetzt automatisch gesucht und vergeben.' },
       { typ: 'fix', text: 'Kontokorrent-Tab: Der angezeigte Nummernvorschlag (nächste freie Debitor-/Kreditorennummer) konnte eine bereits manuell vergebene Nummer anzeigen. Die Vorschau überspringt jetzt belegte Nummern und zeigt immer die tatsächlich nächste freie Nummer an (Issue #219).' },
+    ],
+  },
+  {
+    version: 'v0.4.7',
+    datum: 'Juli 2026',
+    eintraege: [
       { typ: 'fix', text: 'App-Zoom: Beim Verkleinern (Strg+–) entstand ein ungenutzter Leerbereich am unteren und rechten Rand – Sidebar und Inhalt rutschten nach oben. Ursache war CSS zoom auf dem HTML-Element, das die Webview-Viewport-Größe nicht anpasst. Zoom nutzt jetzt die native Tauri-Webview-Skalierung (setZoom), die den gesamten Anzeigebereich korrekt füllt.' },
     ],
   },
