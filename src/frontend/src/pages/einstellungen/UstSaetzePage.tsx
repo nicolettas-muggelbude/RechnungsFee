@@ -64,7 +64,7 @@ export function UstSaetzePage() {
   }
 
   return (
-    <div className={`max-w-xl ${mxAuto} py-8 px-4 space-y-6`}>
+    <div className={`max-w-xl ${mxAuto} p-6 space-y-6`}>
       <div>
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Steuersätze</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
