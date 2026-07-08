@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { getFristen, type FristenResponse } from '../../api/client'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 const TYP_STYLE: Record<string, string> = {
   UStVA:     'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
@@ -46,6 +47,7 @@ const MONATE_OPTIONS = [
 ]
 
 export function FristenPage() {
+  const mxAuto = useMxAuto()
   const [monate, setMonate] = useState(3)
 
   const { data, isLoading, error } = useQuery<FristenResponse>({
@@ -55,7 +57,7 @@ export function FristenPage() {
   })
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className={`p-6 max-w-3xl ${mxAuto}`}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Steuer-Fristenliste</h1>

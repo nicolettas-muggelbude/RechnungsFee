@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, type Rechnung, type Forderung } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { dashboardFilter } from '../../store/filterStore'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -1015,6 +1016,7 @@ function DashboardKonfigModal({
 }
 
 export function Dashboard() {
+  const mxAuto = useMxAuto()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [konfModus, setKonfModus] = useState(false)
@@ -1253,7 +1255,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className={`p-6 max-w-4xl ${mxAuto}`}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>

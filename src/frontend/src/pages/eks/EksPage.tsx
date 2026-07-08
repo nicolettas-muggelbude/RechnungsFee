@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { eksHalbjahr, eksHalbjahresPdf, type EksHalbjahr, type EksFeld } from '../../api/client'
 import { EksEinstellungenModal } from './EksEinstellungenModal'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -307,6 +308,7 @@ function TabelleC({ felder, res }: { felder: EksFeld[]; res: EksHalbjahr }) {
 // ---------------------------------------------------------------------------
 
 export function EksPage() {
+  const mxAuto = useMxAuto()
   const [startMonat, setStartMonat] = useState(halbjahrStart())
   const [art, setArt] = useState<'abschliessend' | 'vorlaeufig'>('abschliessend')
   const [ergebnis, setErgebnis] = useState<EksHalbjahr | null>(null)
@@ -364,7 +366,7 @@ export function EksPage() {
   const zeitraumLabel = `${MONATE_KURZ[parseInt(startM) - 1]} ${startJahr} – ${MONATE_KURZ[endM - 1]} ${endJahr}`
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className={`p-6 max-w-6xl ${mxAuto} space-y-6`}>
       {/* Kopfzeile */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Anlage EKS</h1>

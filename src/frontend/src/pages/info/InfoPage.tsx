@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CHANGELOG, type ChangelogVersion, type EintragTyp } from '../../data/changelog'
 import { useUpdateCheck } from '../../hooks/useUpdateCheck'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 const TYP_CFG: Record<EintragTyp, { label: string; cls: string }> = {
   neu:          { label: 'Neu',          cls: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
@@ -50,10 +51,11 @@ function VersionsBlock({ v, defaultOffen }: { v: ChangelogVersion; defaultOffen:
 }
 
 export function InfoPage() {
+  const mxAuto = useMxAuto()
   const { updateAvailable, version, downloading, progress, installUpdate } = useUpdateCheck()
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className={`p-6 max-w-3xl ${mxAuto} space-y-6`}>
 
       {/* Header */}
       <div className="flex items-center gap-4">

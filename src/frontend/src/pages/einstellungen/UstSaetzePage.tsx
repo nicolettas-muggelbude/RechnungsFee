@@ -4,12 +4,14 @@ import {
   getUstSaetze, createUstSatz, updateUstSatz, deleteUstSatz,
   type UstSatz,
 } from '../../api/client'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 function formatSatz(satz: string): string {
   return parseFloat(satz).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' %'
 }
 
 export function UstSaetzePage() {
+  const mxAuto = useMxAuto()
   const qc = useQueryClient()
   const [neuerSatz, setNeuerSatz] = useState('')
   const [neueBez, setNeueBez] = useState('')
@@ -62,7 +64,7 @@ export function UstSaetzePage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto py-8 px-4 space-y-6">
+    <div className={`max-w-xl ${mxAuto} py-8 px-4 space-y-6`}>
       <div>
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Steuersätze</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">

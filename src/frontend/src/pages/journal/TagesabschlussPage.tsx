@@ -8,6 +8,7 @@ import {
 } from '../../api/client'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -380,6 +381,7 @@ function DifferenzStatistik({ abschluesse }: { abschluesse: Tagesabschluss[] }) 
 // ---------------------------------------------------------------------------
 
 export function TagesabschlussPage() {
+  const mxAuto = useMxAuto()
   const qc = useQueryClient()
   const [offeneId, setOffeneId] = useState<number | null>(null)
   const [dialogOffen, setDialogOffen] = useState(false)
@@ -408,7 +410,7 @@ export function TagesabschlussPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className={`p-6 max-w-4xl ${mxAuto}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>

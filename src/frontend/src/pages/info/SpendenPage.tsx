@@ -1,4 +1,5 @@
 import { openUrl } from '../../api/client'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 const PAYPAL_URL = 'https://www.paypal.com/ncp/payment/UYJ73YNEZ3KHL'
 const GITHUB_URL = 'https://github.com/nicolettas-muggelbude/RechnungsFee'
@@ -6,8 +7,9 @@ const IMPRESSUM_URL = 'https://rechnungsfee.app/impressum'
 const DATENSCHUTZ_URL = 'https://rechnungsfee.app/datenschutz'
 
 export function SpendenPage() {
+  const mxAuto = useMxAuto()
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
+    <div className={`max-w-2xl ${mxAuto} px-6 py-10 space-y-8`}>
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">RechnungsFee unterstützen</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { berechneZM, getUnternehmen, type ZMErgebnis } from '../../api/client'
+import { useMxAuto } from '../../hooks/useAnsicht'
 
 const MONATE = ['', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
@@ -16,6 +17,7 @@ function datumFmt(iso: string): string {
 }
 
 export function ZMPage() {
+  const mxAuto = useMxAuto()
   const now = new Date()
   const [modus, setModus] = useState<'quartal' | 'monat'>('quartal')
   const [jahr, setJahr] = useState(now.getFullYear())
@@ -38,7 +40,7 @@ export function ZMPage() {
 
   if (unt?.ist_kleinunternehmer) {
     return (
-      <div className="max-w-2xl mx-auto px-6 py-8">
+      <div className={`max-w-2xl ${mxAuto} px-6 py-8`}>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Zusammenfassende Meldung (ZM)</h1>
         <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 text-sm text-slate-600 dark:text-slate-300">
           Als Kleinunternehmer nach §19 UStG bist du von der Zusammenfassenden Meldung befreit.
@@ -48,7 +50,7 @@ export function ZMPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className={`max-w-2xl ${mxAuto} px-6 py-8`}>
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Zusammenfassende Meldung (ZM)</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         §18a UStG – Meldepflicht für innergemeinschaftliche Lieferungen und Dienstleistungen.
