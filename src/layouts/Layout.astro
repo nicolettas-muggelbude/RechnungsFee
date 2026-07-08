@@ -281,6 +281,9 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString()
         img.alt = alt
         img.style.cssText =
           'max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px;box-shadow:0 30px 80px rgba(0,0,0,0.8);cursor:default'
+        img.addEventListener('load', () => {
+          if (img.naturalWidth) img.style.maxWidth = img.naturalWidth + 'px'
+        })
         img.addEventListener('click', e => e.stopPropagation())
 
         const btn = document.createElement('button')
