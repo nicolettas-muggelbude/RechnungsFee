@@ -15,7 +15,6 @@ import {
   autoBuchen,
   ueberzahlungAnerkennen,
   loescheTransaktion,
-  loescheGebuchte,
   loescheUngebuchte,
   isTauri,
   type Konto,

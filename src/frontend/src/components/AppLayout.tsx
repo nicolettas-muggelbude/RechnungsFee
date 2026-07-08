@@ -181,7 +181,7 @@ function CollapsibleSection({
 export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { einstellungen } = useAnsicht()
+  useAnsicht()
   const qc = useQueryClient()
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
