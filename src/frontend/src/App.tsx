@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { getSetupStatus, isTauri } from './api/client'
@@ -39,6 +39,8 @@ import { InfoPage } from './pages/info/InfoPage'
 import { SpendenPage } from './pages/info/SpendenPage'
 import { FristenPage } from './pages/fristen/FristenPage'
 import { BankImportPage } from './pages/bank-import/BankImportPage'
+import { AnsichtPage } from './pages/einstellungen/AnsichtPage'
+import { AnsichtContext, useAnsichtState } from './hooks/useAnsicht'
 
 function AppRoutes() {
   const { data: status, isLoading } = useQuery({
@@ -128,6 +130,7 @@ function AppRoutes() {
           <Route path="/anlage-g" element={<AnlageGPage />} />
           <Route path="/fristen" element={<FristenPage />} />
           <Route path="/bank-import" element={<BankImportPage />} />
+          <Route path="/ansicht" element={<AnsichtPage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/info" element={<InfoPage />} />
           <Route path="/spenden" element={<SpendenPage />} />
@@ -141,6 +144,11 @@ function AppRoutes() {
 }
 
 type SchliessenPhase = 'backup-laeuft' | 'backup-ok' | 'extern-fehler'
+
+function AnsichtProvider({ children }: { children: React.ReactNode }) {
+  const state = useAnsichtState()
+  return <AnsichtContext.Provider value={state}>{children}</AnsichtContext.Provider>
+}
 
 export default function App() {
   const [zeigSchliessen, setZeigSchliessen] = useState(false)
@@ -226,6 +234,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <AnsichtProvider>
       <AppRoutes />
       {zeigSchliessen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -311,6 +320,7 @@ export default function App() {
           </div>
         </div>
       )}
+      </AnsichtProvider>
     </BrowserRouter>
   )
 }

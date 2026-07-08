@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useAnsicht } from '../../hooks/useAnsicht'
+import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -228,6 +230,9 @@ function AfaPlanModal({ gut, onClose }: { gut: Anlagegut; onClose: () => void })
 // ---------------------------------------------------------------------------
 export function AnlageverzeichnisPage() {
   const qc = useQueryClient()
+  const { einstellungen } = useAnsicht()
+  const manuell = einstellungen.splitter === 'manuell'
+  const [splitterBreite, startSplitterDrag] = useSplitterBreite('anlageverzeichnis', 50)
   const [jahr, setJahr] = useState(AKTUELLES_JAHR)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [selId, setSelId] = useState<number | null>(null)
@@ -297,7 +302,10 @@ export function AnlageverzeichnisPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* Linke Spalte */}
-      <div className={`${formModus ? 'w-1/2 min-w-[320px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 overflow-hidden`}>
+      <div
+        className={`${formModus ? (manuell ? 'shrink-0' : 'w-1/2 min-w-[320px] shrink-0') : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 overflow-hidden`}
+        style={formModus && manuell ? { width: splitterBreite, minWidth: '280px' } : undefined}
+      >
 
         {/* Kopf */}
         <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-700">
@@ -388,6 +396,13 @@ export function AnlageverzeichnisPage() {
           })}
         </div>
       </div>
+
+      {formModus && manuell && (
+        <div
+          className="w-1 shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors select-none"
+          onMouseDown={startSplitterDrag}
+        />
+      )}
 
       {/* Rechte Spalte – Formular */}
       {formModus && (

@@ -1,0 +1,6 @@
+Buchungstag;Valuta;Auftraggeber/Beguenstigter;Verwendungszweck;IBAN;BIC;Betrag;Glaeubiger-ID;Mandatsreferenz;Kundenreferenz
+06.01.2026;06.01.2026;Muster GmbH;Honorar Webentwicklung;DE98765432109876543210;MARKDEF1XXX;3.570,00;;;
+11.01.2026;11.01.2026;Hosteurope GmbH;Hosting Januar;DE11222233334444555566;DEUTDEDB001;-14,99;;;
+17.01.2026;17.01.2026;Finanzamt Stuttgart;Einkommensteuer-Vorauszahlung;DE55666677778888999900;DTABDE5WXXX;-750,00;;;
+23.01.2026;23.01.2026;Beispiel UG;Teilzahlung Auftrag AU-260001;DE33444455556666777788;COBADEFFXXX;1.547,50;;;
+27.01.2026;27.01.2026;IHK Stuttgart;Mitgliedsbeitrag 2026;DE77888899990000111122;SSKMDEMMXXX;-120,00;;;

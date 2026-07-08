@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAnsicht } from '../../hooks/useAnsicht'
+import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { listen } from '@tauri-apps/api/event'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -3493,6 +3495,9 @@ type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr' | 'alle'
 
 export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' | 'lieferscheine' } = {}) {
   const qc = useQueryClient()
+  const { einstellungen } = useAnsicht()
+  const manuell = einstellungen.splitter === 'manuell'
+  const [splitterBreite, startSplitterDrag] = useSplitterBreite('rechnungen', 33)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
@@ -3836,7 +3841,10 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         />
       )}
       {/* Linke Spalte */}
-      <div className={`${formModus ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
+      <div
+        className={`${formModus ? (manuell ? 'shrink-0' : 'w-1/3 min-w-[260px] shrink-0') : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}
+        style={formModus && manuell ? { width: splitterBreite, minWidth: '220px' } : undefined}
+      >
         <div className="p-6 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{lieferscheinModus ? 'Lieferscheine' : 'Rechnungen'}</h2>
@@ -4206,6 +4214,13 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
           </div>
         </div>
       </div>
+
+      {formModus && manuell && (
+        <div
+          className="w-1 shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors select-none"
+          onMouseDown={startSplitterDrag}
+        />
+      )}
 
       {/* Rechte Spalte: Detail oder Formular */}
       {formModus && (

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, openUrl, type EntwurfErgebnis } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
+import { useAnsicht } from '../hooks/useAnsicht'
 
 // ---------------------------------------------------------------------------
 // Navigationsstruktur
@@ -53,6 +54,7 @@ const stammdatenNav = [
 ]
 
 const einstellungenNav = [
+  { to: '/ansicht',          label: 'Ansicht',           icon: 'tune' },
   { to: '/dokumentenpakete', label: 'Dokumentenpakete', icon: 'folder_zip' },
   { to: '/konten',           label: 'Konten',            icon: 'account_balance_wallet' },
   { to: '/kategorien',       label: 'Kategorien',        icon: 'label' },
@@ -179,6 +181,7 @@ function CollapsibleSection({
 export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { einstellungen } = useAnsicht()
   const qc = useQueryClient()
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
@@ -523,8 +526,10 @@ export function AppLayout() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <Outlet />
+        <div className="flex-1 min-h-0 flex">
+          <div className={`flex-1 overflow-y-auto h-full${einstellungen.ausrichtung === 'zentriert' ? ' max-w-[1400px] mx-auto' : ''}`}>
+            <Outlet />
+          </div>
         </div>
       </main>
 

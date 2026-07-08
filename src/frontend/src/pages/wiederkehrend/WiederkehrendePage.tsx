@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAnsicht } from '../../hooks/useAnsicht'
+import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useLocation } from 'react-router-dom'
@@ -751,6 +753,9 @@ function VorlageDetail({
 
 export function WiederkehrendePage() {
   const qc = useQueryClient()
+  const { einstellungen } = useAnsicht()
+  const manuell = einstellungen.splitter === 'manuell'
+  const [splitterBreite, startSplitterDrag] = useSplitterBreite('wiederkehrend', 33)
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const [formModus, setFormModus] = useState<'neu' | number | null>(null)
@@ -905,7 +910,10 @@ export function WiederkehrendePage() {
     <div className="flex h-full">
 
       {/* Linke Seite – Liste (schrumpft wenn rechts etwas geöffnet ist) */}
-      <div className={`${formModus !== null ? 'w-1/3 min-w-[280px] shrink-0' : selVorlage ? 'flex-1' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 overflow-hidden`}>
+      <div
+        className={`${formModus !== null ? (manuell ? 'shrink-0' : 'w-1/3 min-w-[280px] shrink-0') : selVorlage ? 'flex-1' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 overflow-hidden`}
+        style={formModus !== null && manuell ? { width: splitterBreite, minWidth: '220px' } : undefined}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -992,6 +1000,13 @@ export function WiederkehrendePage() {
           )}
         </div>
       </div>
+
+      {formModus !== null && manuell && (
+        <div
+          className="w-1 shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors select-none"
+          onMouseDown={startSplitterDrag}
+        />
+      )}
 
       {/* Rechts: Formular */}
       {formModus !== null && (

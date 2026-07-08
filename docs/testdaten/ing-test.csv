@@ -1,0 +1,19 @@
+Umsatzanzeige;;
+;;
+Kontonummer:;DE12 3456 7890 1234 5678 90 / Girokonto;
+;;
+Von:;01.01.2026;
+Bis:;31.01.2026;
+Kontostand vom 31.01.2026:;5.234,56 EUR;
+;;
+;;
+;;
+;;
+;;
+;;
+Buchung;Valuta;Auftraggeber/Empfänger;Buchungstext;Verwendungszweck;Betrag;Glaeubiger ID;Mandats ID;IBAN
+04.01.2026;04.01.2026;Muster GmbH;Gutschrift;Honorar Dezember Nachzahlung;1.785,00;;;DE98765432109876543210
+09.01.2026;09.01.2026;GitHub Inc;Lastschrift;GitHub Pro Abo;-4,00;;;DE11222233334444555566
+16.01.2026;16.01.2026;Beispiel UG;Gutschrift;Rechnung RE-260004;892,50;;;DE33444455556666777788
+21.01.2026;21.01.2026;Stadtwerke GmbH;Lastschrift;Stromabschlag Januar;-98,00;;;DE77888899990000111122
+26.01.2026;26.01.2026;DATEV eG;Lastschrift;DATEV Unternehmen online;-22,50;;;DE55666677778888999900

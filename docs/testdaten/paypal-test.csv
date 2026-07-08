@@ -1,0 +1,5 @@
+Datum,Uhrzeit,Zeitzone,Name,Typ,Status,Währung,Brutto,Entgelt,Netto,Absender-E-Mail-Adresse,Empfänger-E-Mail-Adresse,Transaktionscode,Beschreibung,Betreff,Hinweis,Guthaben,Adressstatus
+05.01.2026,09:14:00,Europe/Berlin,Muster GmbH,Zahlung erhalten,Abgeschlossen,EUR,"1.190,00","-34,51","1.155,49",zahlung@muster-gmbh.de,hallo@meinefirma.de,8AB123456CD789012,,"Rechnung RE-260001",,,"Bestätigt"
+12.01.2026,14:23:00,Europe/Berlin,Adobe Systems,Express-Checkout-Zahlung,Abgeschlossen,EUR,"-54,99","0,00","-54,99",adobe@adobe.com,hallo@meinefirma.de,9XY987654ZA321098,,Creative Cloud Monatsabo,,,
+20.01.2026,11:05:00,Europe/Berlin,GitHub Inc,Automatische Zahlung,Abgeschlossen,EUR,"-10,00","0,00","-10,00",billing@github.com,hallo@meinefirma.de,7PQ456789RS123456,,GitHub Copilot Abo,,,
+28.01.2026,16:44:00,Europe/Berlin,Beispiel UG,Zahlung erhalten,Abgeschlossen,EUR,"595,00","-17,86","577,14",info@beispiel-ug.de,hallo@meinefirma.de,3LM234567NO890123,,"Rechnung RE-260006",,,"Nicht bestätigt"

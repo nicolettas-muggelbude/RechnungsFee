@@ -1,0 +1,7 @@
+Buchungsdatum;Wertstellung;Status;Zahlungspflichtige*r;Zahlungsempfänger*in;Verwendungszweck;Glaeubiger-ID;Mandatsreferenz;IBAN;Betrag (€)
+03.01.2026;03.01.2026;Gebucht;Muster GmbH;;Honorar Januar Entwicklung;;; DE98765432109876543210;2.500,00
+08.01.2026;08.01.2026;Gebucht;;Amazon Business;Büromaterial Bestellung;DE35ZZZ00000314591;AMZN0001;DE11222233334444555566;-67,89
+14.01.2026;14.01.2026;Gebucht;Beispiel UG;;Rechnung RE-260002;;;DE33444455556666777788;1.190,00
+19.01.2026;19.01.2026;Gebucht;;Adobe Systems;Creative Cloud Abo;DE82ZZZ00000123456;ADBE0001;DE55666677778888999900;-54,99
+24.01.2026;24.01.2026;Gebucht;;Finanzamt München;USt-Vorauszahlung Q4 2025;;;DE77888899990000111122;-380,00
+30.01.2026;30.01.2026;Gebucht;Klein und Partner GbR;;Nachtragszahlung Projekt;;; DE66777788889999000011;850,00

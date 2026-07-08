@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAnsicht } from '../../hooks/useAnsicht'
+import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -938,6 +940,9 @@ function AngebotDetail({
 
 export function AngebotePage() {
   const qc = useQueryClient()
+  const { einstellungen } = useAnsicht()
+  const manuell = einstellungen.splitter === 'manuell'
+  const [splitterBreite, startSplitterDrag] = useSplitterBreite('angebote', 33)
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
@@ -1015,7 +1020,10 @@ export function AngebotePage() {
   return (
     <div className="flex h-full">
       {/* Liste – schrumpft auf 1/3 wenn Formular aktiv */}
-      <div className={`${formModus ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}>
+      <div
+        className={`${formModus ? (manuell ? 'shrink-0' : 'w-1/3 min-w-[260px] shrink-0') : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 min-h-0 transition-all`}
+        style={formModus && manuell ? { width: splitterBreite, minWidth: '220px' } : undefined}
+      >
         {/* Header – bleibt beim Scrollen stehen */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -1135,6 +1143,13 @@ export function AngebotePage() {
           </div>
         </div>
       </div>
+
+      {formModus && manuell && (
+        <div
+          className="w-1 shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors select-none"
+          onMouseDown={startSplitterDrag}
+        />
+      )}
 
       {/* Rechter Panel: Formular oder Detail */}
       {formModus && (

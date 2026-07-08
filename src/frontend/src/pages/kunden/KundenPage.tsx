@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAnsicht } from '../../hooks/useAnsicht'
+import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
@@ -745,6 +747,9 @@ const EMPTY: FormValues = {
 
 export function KundenPage() {
   const qc = useQueryClient()
+  const { einstellungen } = useAnsicht()
+  const manuell = einstellungen.splitter === 'manuell'
+  const [splitterBreite, startSplitterDrag] = useSplitterBreite('kunden', 33)
   const [selected, setSelected] = useState<Kunde | null>(null)
   const [suche, setSuche] = useState('')
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
@@ -846,7 +851,10 @@ export function KundenPage() {
     <div className="flex h-full">
 
       {/* ── Linke Spalte (breit) ─────────────────────────────────────── */}
-      <div className={`${showForm ? 'w-1/3 min-w-[260px] shrink-0' : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}>
+      <div
+        className={`${showForm ? (manuell ? 'shrink-0' : 'w-1/3 min-w-[260px] shrink-0') : 'flex-1'} flex flex-col border-e border-slate-200 dark:border-slate-700 min-w-0 transition-all`}
+        style={showForm && manuell ? { width: splitterBreite, minWidth: '220px' } : undefined}
+      >
 
         {/* Header */}
         <div className="p-6 pb-4 shrink-0">
@@ -992,6 +1000,13 @@ export function KundenPage() {
         </div>
 
       </div>
+
+      {showForm && manuell && (
+        <div
+          className="w-1 shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors select-none"
+          onMouseDown={startSplitterDrag}
+        />
+      )}
 
       {/* ── Rechte Spalte (Rechnungen oder Formular) ─────────────────── */}
       {!showForm && (
