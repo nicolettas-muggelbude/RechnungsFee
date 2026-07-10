@@ -1216,7 +1216,7 @@ export function Dashboard() {
       case 'letzte_buchungen':
         if (!(vis.letzte_buchungen ?? true)) return null
         return (
-          <div key="letzte_buchungen" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div key="letzte_buchungen" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 pb-2">
             <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <h3 className="font-semibold text-slate-700 dark:text-slate-200">Letzte Buchungen</h3>
               {letzteEintraege.length > 0 && (

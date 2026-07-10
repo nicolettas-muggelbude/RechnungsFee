@@ -141,6 +141,7 @@ class Unternehmen(Base):
     guv_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # Bank CSV-Import
     bank_import_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    bank_import_manuell: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # Dashboard-Konfiguration (JSON: widget_order, widget_visibility, quicklinks)
     dashboard_config: Mapped[str | None] = mapped_column(Text)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

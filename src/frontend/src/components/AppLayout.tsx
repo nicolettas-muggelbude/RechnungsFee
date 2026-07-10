@@ -197,6 +197,18 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [navigate])
 
+  // F1 → Handbuch öffnen
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault()
+        openUrl('https://rechnungsfee.app/handbuch/erste-schritte/')
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   // Ctrl+F → Suchfeld fokussieren (wenn vorhanden)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
