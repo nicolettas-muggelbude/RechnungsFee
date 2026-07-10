@@ -501,28 +501,12 @@ jobs:
             --draft=false \
             --repo "$REPO"
 
-  # ── Website deployen (main → web mergen → website.yml via PAT triggern) ─
+  # ── Website-Workflow triggern ─────────────────────────────────────────────
   deploy-web:
     needs: release-notes
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PAGES_TOKEN }}
-
-      - name: main in web-Branch mergen und pushen
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout web
-          git merge origin/main --no-edit
-          git push origin web
-
       - name: Website-Workflow triggern
         env:
           GH_TOKEN: ${{ secrets.PAGES_TOKEN }}
@@ -530,6 +514,6 @@ jobs:
           if [ -n "$GH_TOKEN" ]; then
             gh workflow run website.yml --repo ${{ github.repository }} --ref web
           else
-            echo "::warning::PAGES_TOKEN nicht gesetzt – bitte Secret anlegen (PAT mit workflow-Scope). Website muss manuell getriggert werden."
+            echo "::warning::PAGES_TOKEN nicht gesetzt – Website muss manuell getriggert werden."
           fi
 
