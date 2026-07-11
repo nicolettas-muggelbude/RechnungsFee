@@ -4,7 +4,7 @@ import Screenshot from '../components/Screenshot.astro'
 
 type Feature = { text: string; optional?: boolean }
 
-const bereiche: { icon: string; title: string; text: string; screenshot: string; features: Feature[]; optional?: boolean }[] = [
+const bereiche: { icon: string; title: string; text: string; screenshot: string; features: Feature[]; optional?: boolean; placeholder?: boolean }[] = [
   {
     icon: 'receipt_long',
     title: 'Rechnungsstellung & Dokumente',
@@ -54,6 +54,22 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'Halbautomatik: Einzeltreffer direkt buchen, Mehrfachtreffer manuell wählen' },
       { text: 'Duplikat-Erkennung – jede Transaktion wird nur einmal importiert' },
       { text: 'Überzahlungen und Lieferantenguthaben werden erkannt' },
+    ],
+  },
+  {
+    icon: 'dashboard',
+    title: 'Unternehmer-Cockpit',
+    screenshot: 'cockpit',
+    placeholder: true,
+    text: 'Wie läuft das Geschäft – auf einen Blick. Grafische Auswertung für Monat, Quartal oder Jahr, ohne Fachbegriffe.',
+    features: [
+      { text: 'Einnahmen, Ausgaben, Gewinn und Gewinnmarge als KPI-Kacheln' },
+      { text: 'Balkendiagramm: Einnahmen & Ausgaben im Jahresverlauf' },
+      { text: 'Liniendiagramm: Gewinnverlauf' },
+      { text: 'Donut-Chart: Ausgaben nach Kategorie (was frisst mein Geld?)' },
+      { text: 'Aufschlüsselung nach USt-Satz (19 % / 7 % / 0 %)' },
+      { text: 'Dashboard-Widget: aktueller Monat mit Vorjahresvergleich (↑↓)' },
+      { text: 'Alle Beträge netto – mit Tooltip-Erklärungen für jeden Wert' },
     ],
   },
   {
@@ -216,7 +232,15 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
           </ul>
         </div>
         <!-- Screenshot -->
-        <Screenshot light={`/screenshots/light/light_${b.screenshot}.png`} dark={`/screenshots/dark/dark_${b.screenshot}.png`} alt={b.title} />
+        {b.placeholder ? (
+          <div class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400 text-sm min-h-64 gap-2">
+            <span class="material-symbols-outlined text-4xl text-slate-300">image</span>
+            <span class="font-medium">Screenshot folgt</span>
+            <span class="text-xs font-mono text-slate-300">light_{b.screenshot}.png / dark_{b.screenshot}.png</span>
+          </div>
+        ) : (
+          <Screenshot light={`/screenshots/light/light_${b.screenshot}.png`} dark={`/screenshots/dark/dark_${b.screenshot}.png`} alt={b.title} />
+        )}
       </section>
     ))}
 
