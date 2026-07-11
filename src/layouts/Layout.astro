@@ -6,6 +6,7 @@ interface Props {
   description?: string
   pagefindIgnore?: boolean
   ogImage?: string
+  jsonLd?: object
 }
 
 const {
@@ -13,6 +14,7 @@ const {
   description = 'Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer. Lokal, offline, Open Source.',
   pagefindIgnore = false,
   ogImage = '/og.png',
+  jsonLd,
 } = Astro.props
 
 const pageTitle = title === 'RechnungsFee'
@@ -61,6 +63,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString()
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo_neu/logo_rounded_x512.png" />
     <link rel="preload" href="/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
     <slot name="head" />
   </head>
   <body class="bg-white">
