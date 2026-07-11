@@ -30,7 +30,7 @@ const ideenChips: string[] = await (async () => {
       if (inIdeen) {
         const m2 = line.match(/^- \*\*(.+?)\*\*/)
         if (m2) {
-          const label = m2[1].trim()
+          const label = m2[1].split(':')[0].trim()
           if (label.length >= 4 && label.length <= 45) ideen.push(label)
         }
       }
