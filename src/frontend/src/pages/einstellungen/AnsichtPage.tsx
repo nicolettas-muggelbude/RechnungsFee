@@ -51,6 +51,31 @@ export function AnsichtPage() {
         <p className="text-sm text-slate-500 dark:text-slate-400">Einstellungen werden sofort übernommen und pro Gerät gespeichert.</p>
       </div>
 
+      {/* Farbschema */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Farbschema</h2>
+        <div className="space-y-2">
+          <OptionCard
+            aktiv={einstellungen.farbschema === 'system'}
+            onClick={() => set({ farbschema: 'system' })}
+            titel="Systemeinstellung (Standard)"
+            beschreibung="Folgt automatisch der Hell/Dunkel-Einstellung des Betriebssystems."
+          />
+          <OptionCard
+            aktiv={einstellungen.farbschema === 'hell'}
+            onClick={() => set({ farbschema: 'hell' })}
+            titel="Hell"
+            beschreibung="Immer helles Design, unabhängig von der Systemeinstellung."
+          />
+          <OptionCard
+            aktiv={einstellungen.farbschema === 'dunkel'}
+            onClick={() => set({ farbschema: 'dunkel' })}
+            titel="Dunkel"
+            beschreibung="Immer dunkles Design, unabhängig von der Systemeinstellung."
+          />
+        </div>
+      </section>
+
       {/* Inhaltsausrichtung */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Inhaltsausrichtung</h2>
