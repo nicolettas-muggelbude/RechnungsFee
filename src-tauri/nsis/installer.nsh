@@ -53,8 +53,20 @@ Bitte Tesseract OCR manuell installieren:$\nhttps://github.com/UB-Mannheim/tesse
   ; Tesseract wird bei der Deinstallation nicht entfernt –
   ; es koennte von anderen Anwendungen genutzt werden.
 
-  ; Anwendungsdaten loeschen – nur wenn der Haken gesetzt wurde
+  ; Anwendungsdaten loeschen:
+  ; Tauri setzt $DeleteAppData wenn der Haken "Anwendungsdaten loeschen" gesetzt ist.
+  ; Fallback: wenn $DeleteAppData leer/unbekannt, aber Verzeichnis existiert → nachfragen.
   ${If} $DeleteAppData == 1
+  ${OrIf} $DeleteAppData == "true"
+    Goto daten_fragen
+  ${ElseIf} ${FileExists} "$APPDATA\RechnungsFee\*.*"
+    ; Haken wurde nicht erkannt, aber Daten sind vorhanden → aktiv nachfragen
+    Goto daten_fragen
+  ${Else}
+    Goto daten_ende
+  ${EndIf}
+
+  daten_fragen:
     MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 \
       "⚠ Achtung: Alle Daten werden unwiderruflich gelöscht!$\n$\n\
 Folgende Daten werden entfernt:$\n\
@@ -64,13 +76,11 @@ Folgende Daten werden entfernt:$\n\
 Pfad: $APPDATA\RechnungsFee$\n$\n\
 Möchtest du wirklich fortfahren?" \
       IDYES daten_loeschen
-    ; Abbruch – Haken zuruecksetzen damit Tauri die LocalAppData ebenfalls behaelt
     StrCpy $DeleteAppData 0
     Goto daten_ende
 
-    daten_loeschen:
-      RMDir /r "$APPDATA\RechnungsFee"
+  daten_loeschen:
+    RMDir /r "$APPDATA\RechnungsFee"
 
-    daten_ende:
-  ${EndIf}
+  daten_ende:
 !macroend
