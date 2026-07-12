@@ -12,13 +12,38 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/github-script@v7
         with:
-          only-labels: 'awaiting-response'
-          days-before-stale: 14
-          days-before-close: 0
-          stale-issue-label: 'stale'
-          close-issue-label: 'stale'
-          stale-issue-message: ''
-          close-issue-message: 'Automatisch geschlossen – 14 Tage keine Antwort. Bei weiteren Fragen gerne ein neues Issue öffnen.'
-          operations-per-run: 50
+          script: |
+            const cutoff = new Date()
+            cutoff.setDate(cutoff.getDate() - 14)
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'awaiting-response',
+              per_page: 100,
+            })
+
+            for (const issue of issues) {
+              const updated = new Date(issue.updated_at)
+              if (updated < cutoff) {
+                console.log(`Schließe Issue #${issue.number}: ${issue.title}`)
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: 'Automatisch geschlossen – 14 Tage keine Antwort. Bei weiteren Fragen gerne ein neues Issue öffnen.',
+                })
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'not_planned',
+                })
+              } else {
+                console.log(`Issue #${issue.number} noch aktiv (${issue.updated_at}), übersprungen`)
+              }
+            }
