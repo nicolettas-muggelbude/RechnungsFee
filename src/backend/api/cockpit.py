@@ -136,8 +136,8 @@ def get_cockpit(
                 kat_name = kat.name
                 kat_aus[kat_name] = kat_aus.get(kat_name, ZERO) + aus
 
-            # Einnahmen nach USt-Satz
-            if ein > ZERO:
+            # Einnahmen nach USt-Satz (auch Stornos mit ein < 0 berücksichtigen)
+            if ein != ZERO:
                 satz = int(e.ust_satz or 0)
                 key = "19" if satz == 19 else "7" if satz == 7 else "0"
                 ust_ein[key] = ust_ein.get(key, ZERO) + ein
