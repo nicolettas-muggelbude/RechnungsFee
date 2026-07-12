@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.9',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Cockpit – Storno-Buchungen wurden in der USt-Satz-Aufschlüsselung nicht abgezogen; KPI-Kacheln waren korrekt (Issue #241).' },
+      { typ: 'fix', text: 'Windows-Deinstallation – Bestätigungsdialog erschien nicht und Daten in %AppData%\\RechnungsFee wurden nicht gelöscht; Fallback-Erkennung ergänzt (Issue #206).' },
+    ],
+  },
+  {
     version: 'v0.4.8',
     datum: 'Juli 2026',
     eintraege: [
