@@ -1,0 +1,21 @@
+{
+  "name": "RechnungsFee",
+  "short_name": "RechnungsFee",
+  "description": "Kostenlose Buchhaltungssoftware für Freiberufler & Kleinunternehmer",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo_neu/logo_rounded_x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
