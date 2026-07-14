@@ -23,13 +23,6 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.4.10',
-    datum: 'Juli 2026',
-    eintraege: [
-      { typ: 'fix', text: 'Datenübernahme – ungenutzter useMutation-Import in DatensmigrationsPage.tsx führte zu TypeScript-Fehler beim Build (Build v0.4.9 schlug fehl).' },
-    ],
-  },
-  {
     version: 'v0.4.9',
     datum: 'Juli 2026',
     eintraege: [
