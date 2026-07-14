@@ -293,6 +293,7 @@ export type Unternehmen = {
   bank_import_aktiv?: boolean
   bank_import_manuell?: boolean
   dashboard_config?: string | null
+  datenmigration_aktiv?: boolean
 }
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
@@ -2521,3 +2522,96 @@ export type CockpitDaten = {
 
 export const getCockpit = (zeitraum: 'monat' | 'quartal' | 'jahr', wert: string) =>
   request<CockpitDaten>(`/cockpit?zeitraum=${zeitraum}&wert=${encodeURIComponent(wert)}`)
+
+// ---------------------------------------------------------------------------
+// Datenübernahme / CSV-Import
+// ---------------------------------------------------------------------------
+
+export type ImportVorschauZeile = {
+  zeile: number
+  daten: Record<string, string>
+  status: 'neu' | 'duplikat' | 'fehler'
+  duplikat_id?: number | null
+  fehler?: string | null
+}
+
+export type ImportSpaltenResponse = {
+  spaltennamen: string[]
+  vorschau: string[][]
+  delimiter: string
+  encoding: string
+}
+
+export type ImportMappingVorlage = {
+  id: number
+  name: string
+  typ: string
+  hat_header: boolean
+  mapping_json: string
+  typ_erkennung_aktiv: boolean
+  erstellt_am: string
+}
+
+export type ImportErgebnis = {
+  importiert: number
+  aktualisiert: number
+  ignoriert: number
+  fehler: { zeile: number; fehler: string }[]
+}
+
+export type ImportZeileAktion = {
+  zeile: number
+  daten: Record<string, string>
+  aktion: 'übernehmen' | 'ignorieren' | 'überschreiben'
+  duplikat_id?: number | null
+}
+
+export async function getMusterCsv(typ: string): Promise<Blob> {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/datenmigration/muster-csv/${typ}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.blob()
+}
+
+export async function getSpalten(datei: File, hatHeader: boolean): Promise<ImportSpaltenResponse> {
+  const form = new FormData()
+  form.append('datei', datei)
+  form.append('hat_header', String(hatHeader))
+  return request<ImportSpaltenResponse>('/datenmigration/spalten', { method: 'POST', body: form })
+}
+
+export async function getImportVorschau(
+  typ: string,
+  datei: File,
+  hatHeader: boolean,
+  mappingJson: string,
+  typErkennungAktiv: boolean,
+): Promise<ImportVorschauZeile[]> {
+  const form = new FormData()
+  form.append('datei', datei)
+  form.append('hat_header', String(hatHeader))
+  form.append('mapping_json', mappingJson)
+  form.append('typ_erkennung_aktiv', String(typErkennungAktiv))
+  return request<ImportVorschauZeile[]>(`/datenmigration/vorschau/${typ}`, { method: 'POST', body: form })
+}
+
+export const importDurchfuehren = (
+  typ: string,
+  zeilen: ImportZeileAktion[],
+) =>
+  request<ImportErgebnis>(`/datenmigration/importieren/${typ}`, {
+    method: 'POST',
+    body: JSON.stringify({ zeilen }),
+  })
+
+export const getMappingVorlagen = () =>
+  request<ImportMappingVorlage[]>('/datenmigration/mapping-vorlagen')
+
+export const saveMappingVorlage = (data: Omit<ImportMappingVorlage, 'id' | 'erstellt_am'>) =>
+  request<ImportMappingVorlage>('/datenmigration/mapping-vorlagen', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const deleteMappingVorlage = (id: number) =>
+  request<void>(`/datenmigration/mapping-vorlagen/${id}`, { method: 'DELETE' })

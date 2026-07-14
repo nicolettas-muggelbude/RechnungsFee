@@ -31,9 +31,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration
 
-SCHEMA_VERSION = 115
+SCHEMA_VERSION = 116
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -88,6 +88,7 @@ app.include_router(bank_import.router)
 app.include_router(auto_filter.router)
 app.include_router(forderungen.router)
 app.include_router(cockpit.router)
+app.include_router(datenmigration.router)
 
 
 @app.post("/api/shutdown")
@@ -2518,6 +2519,25 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 115"))
             conn.commit()
             print("[Migration] Schema auf Version 115 (kunden.debitor_nr, lieferanten.kreditor_nr – Kontokorrent Grundlage)")
+
+        if version < 116:
+            cols_u = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "datenmigration_aktiv" not in cols_u:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN datenmigration_aktiv BOOLEAN DEFAULT 0"))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS import_mapping_vorlagen (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(100) NOT NULL,
+                    typ VARCHAR(20) NOT NULL,
+                    hat_header BOOLEAN DEFAULT 1,
+                    mapping_json TEXT NOT NULL,
+                    typ_erkennung_aktiv BOOLEAN DEFAULT 0,
+                    erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("PRAGMA user_version = 116"))
+            conn.commit()
+            print("[Migration] Schema auf Version 116 (datenmigration_aktiv, import_mapping_vorlagen)")
 
 
 def _migrate_kategorien() -> None:

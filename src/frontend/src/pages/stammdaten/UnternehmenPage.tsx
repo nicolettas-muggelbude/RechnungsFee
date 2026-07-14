@@ -893,6 +893,28 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           </label>
         </div>
 
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Datenübernahme</h3>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!form.datenmigration_aktiv}
+              onChange={ev => set('datenmigration_aktiv', ev.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Datenübernahme aktivieren
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Kunden, Lieferanten und Artikel per CSV aus anderen Programmen importieren.
+                Nach der Übernahme hier wieder deaktivieren.
+              </p>
+            </div>
+          </label>
+        </div>
+
       </div>
 
       {/* Fehler + Speichern-Button (nur für Firma/Steuer/Rechnungen/Artikel-Tabs) */}

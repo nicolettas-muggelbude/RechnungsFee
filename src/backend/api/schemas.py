@@ -102,6 +102,7 @@ class UnternehmenBase(BaseModel):
     bank_import_aktiv: bool = False
     bank_import_manuell: bool = False
     dashboard_config: Optional[str] = None
+    datenmigration_aktiv: bool = False
 
     @field_validator("versteuerungsart")
     @classmethod
@@ -642,5 +643,57 @@ class EksEinstellungenCreate(EksEinstellungenBase):
 class EksEinstellungenResponse(EksEinstellungenBase):
     id: int
     aktualisiert_am: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Datenübernahme / CSV-Import
+# ---------------------------------------------------------------------------
+
+class ImportVorschauZeile(BaseModel):
+    zeile: int
+    daten: dict
+    status: str          # neu | duplikat | fehler
+    duplikat_id: Optional[int] = None
+    fehler: Optional[str] = None
+
+
+class ImportZeileAktion(BaseModel):
+    zeile: int
+    daten: dict
+    aktion: str          # übernehmen | ignorieren | überschreiben
+    duplikat_id: Optional[int] = None
+
+
+class ImportRequest(BaseModel):
+    zeilen: List[ImportZeileAktion]
+
+
+class ImportErgebnis(BaseModel):
+    importiert: int
+    aktualisiert: int
+    ignoriert: int
+    fehler: List[dict]
+
+
+class ImportSpaltenResponse(BaseModel):
+    spaltennamen: List[str]        # aus Header oder ["Spalte 1", "Spalte 2", ...]
+    vorschau: List[List[str]]      # erste 5 Zeilen als Liste von Zellwerten
+    delimiter: str
+    encoding: str
+
+
+class ImportMappingVorlageCreate(BaseModel):
+    name: str
+    typ: str                       # kunden | lieferanten | artikel | gemischt
+    hat_header: bool = True
+    mapping_json: str              # JSON: {"col_0": "firmenname", ...}
+    typ_erkennung_aktiv: bool = False
+
+
+class ImportMappingVorlageResponse(ImportMappingVorlageCreate):
+    id: int
+    erstellt_am: datetime
 
     model_config = {"from_attributes": True}

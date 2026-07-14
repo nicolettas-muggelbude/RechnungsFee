@@ -40,6 +40,7 @@ import { InfoPage } from './pages/info/InfoPage'
 import { SpendenPage } from './pages/info/SpendenPage'
 import { FristenPage } from './pages/fristen/FristenPage'
 import { BankImportPage } from './pages/bank-import/BankImportPage'
+import { DatensmigrationsPage } from './pages/datenmigration/DatensmigrationsPage'
 import { AnsichtPage } from './pages/einstellungen/AnsichtPage'
 import { AnsichtContext, useAnsichtState } from './hooks/useAnsicht'
 
@@ -132,6 +133,7 @@ function AppRoutes() {
           <Route path="/anlage-g" element={<AnlageGPage />} />
           <Route path="/fristen" element={<FristenPage />} />
           <Route path="/bank-import" element={<BankImportPage />} />
+          <Route path="/datenmigration" element={<DatensmigrationsPage />} />
           <Route path="/ansicht" element={<AnsichtPage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/info" element={<InfoPage />} />

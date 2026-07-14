@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -384,6 +385,7 @@ export function LieferantenPage() {
   const [suche, setSuche] = useState('')
   const [editLieferant, setEditLieferant] = useState<Lieferant | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [importOffen, setImportOffen] = useState(false)
   const [deleteFehlgeschlagen, setDeleteFehlgeschlagen] = useState(false)
   const [showDsgvoBestaetigung, setShowDsgvoBestaetigung] = useState(false)
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
@@ -493,9 +495,18 @@ export function LieferantenPage() {
         <div className="p-6 pb-4 shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Lieferanten</h2>
-            <button onClick={openCreate} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700">
-              + Neu
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setImportOffen(true)}
+                title="CSV importieren"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+              >
+                <span className="material-symbols-outlined text-xl">upload_file</span>
+              </button>
+              <button onClick={openCreate} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700">
+                + Neu
+              </button>
+            </div>
           </div>
           <input
             type="text"
@@ -769,6 +780,7 @@ export function LieferantenPage() {
           </div>
         </div>
       )}
+      {importOffen && <ImportDialog typ="lieferanten" onClose={() => setImportOffen(false)} />}
     </div>
   )
 }

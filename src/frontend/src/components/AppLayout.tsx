@@ -422,6 +422,11 @@ export function AppLayout() {
           {/* Trennlinie */}
           <div className="border-t border-slate-100 dark:border-slate-800 mt-3 mb-1" />
 
+          {untDef?.datenmigration_aktiv && (
+            <NavLink to="/datenmigration" className={navLinkClass}>
+              <NavIcon name="upload_file" /><span>Datenübernahme</span>
+            </NavLink>
+          )}
           <NavLink to="/backup" className={navLinkClass}>
             <NavIcon name="save" /><span>Backup</span>
           </NavLink>
