@@ -1,0 +1,11 @@
+Umsätze
+Konto;Filial-/Kontonummer;IBAN;Währung
+Business BasicKonto;330 1234567 00;DE04480700240123456700;EUR
+
+1.2.2026 - 28.2.2026
+Letzter Kontostand;;;;1.199,38;EUR
+Vorgemerkte und noch nicht gebuchte Umsätze sind nicht Bestandteil dieser Übersicht.
+Buchungstag;Wert;Umsatzart;Begünstigter / Auftraggeber;Verwendungszweck;IBAN / Kontonummer;BIC;Kundenreferenz;Mandatsreferenz;Gläubiger ID;Fremde Gebühren;Betrag;Abweichender Empfänger;Anzahl der Aufträge;Anzahl der Schecks;Soll;Haben;Währung
+25.2.2026;25.2.2026;SEPA Überweisung;Max Mustermann GmbH;REIND260105397;DE78864444921100748888;;NOTPROVIDED;;;;2.688,15;Max Mustermann GmbH;;;;2.688,15;EUR
+23.2.2026;23.2.2026;SEPA Lastschrift;Max Mustermann GmbH;RED260105397;DE87304444000008996811;;C56444670+U775555695;43786D6DEA155555B17C8555DE;DE40ZZ555550205556;;-4,99;;;;-4,99;;EUR
+Kontostand;28.2.2026;;;3.882,54;EUR
