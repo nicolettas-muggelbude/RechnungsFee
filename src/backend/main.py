@@ -2540,11 +2540,15 @@ def _run_migrations() -> None:
             print("[Migration] Schema auf Version 116 (datenmigration_aktiv, import_mapping_vorlagen)")
 
         if version < 117:
-            conn.execute(text("""
-                UPDATE bank_templates
-                SET column_mapping = '{"__erkennungs__": ["Datum", "Uhrzeit", "Beschreibung", "Brutto", "Währung", "Transaktionscode"], "Datum": "datum", "Uhrzeit": "uhrzeit", "Beschreibung": "buchungstext", "Name": "partner_name", "Brutto": "betrag", "Währung": "waehrung", "Transaktionscode": "referenz"}'
-                WHERE id = 'paypal'
-            """))
+            tables_117 = {r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()}
+            if 'bank_templates' in tables_117:
+                conn.execute(text("""
+                    UPDATE bank_templates
+                    SET column_mapping = '{"__erkennungs__": ["Datum", "Uhrzeit", "Beschreibung", "Brutto", "Währung", "Transaktionscode"], "Datum": "datum", "Uhrzeit": "uhrzeit", "Beschreibung": "buchungstext", "Name": "partner_name", "Brutto": "betrag", "Währung": "waehrung", "Transaktionscode": "referenz"}'
+                    WHERE id = 'paypal'
+                """))
             conn.execute(text("PRAGMA user_version = 117"))
             conn.commit()
             print("[Migration] Schema auf Version 117 (PayPal-Template: Spalte 'Beschreibung' statt 'Typ'/'Betreff' – Issue #248)")
