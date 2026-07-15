@@ -36,6 +36,10 @@ _UNPLAUSIBLE_DOS_CODEPAGES = {
 
 
 def detect_encoding(raw: bytes) -> str:
+    # UTF-8-BOM (z.B. PayPal-Exporte) explizit behandeln – sonst landet "﻿" im
+    # ersten Spaltennamen und Template-Erkennung/Mapping schlagen komplett fehl (Issue #248).
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return "utf-8-sig"
     result = from_bytes(raw).best()
     if result is None:
         return "UTF-8"
