@@ -174,6 +174,13 @@ class AutoBuchenResult(BaseModel):
 
 def _dedupe_hash(tx: dict) -> str:
     raw = f"{tx.get('datum')}|{tx.get('betrag')}|{tx.get('partner_iban') or ''}|{tx.get('verwendungszweck') or ''}"
+    # Referenz (z.B. PayPal-Transaktionscode) zusätzlich einbeziehen wenn vorhanden – bei
+    # Banken ohne IBAN/Verwendungszweck im Export ist das sonst die einzige eindeutige ID
+    # (Issue #248). Nur bei vorhandenem Wert angehängt, damit sich der Hash für alle anderen
+    # Templates (die referenz nie befüllen) nicht ändert und bestehende Dedupe-Historien gültig bleiben.
+    referenz = tx.get('referenz')
+    if referenz:
+        raw += f"|{referenz}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
