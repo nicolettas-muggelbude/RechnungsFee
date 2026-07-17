@@ -1490,7 +1490,7 @@ def _erstelle_skonto_eintrag(
     db: Session,
     rechnung: "Rechnung",
     rechnung_id: int,
-    data: "BarZahlungCreate",
+    datum: date,
     skonto_betrag: Decimal,
     ust_satz: Decimal,
     steuerbefreiung_grund: str | None,
@@ -1509,8 +1509,8 @@ def _erstelle_skonto_eintrag(
     kat = db.query(_Kategorie).filter(_Kategorie.name == kat_name).first()
     sk_vorsteuerabzug = (rechnung.typ == "eingang" and ust_satz > 0)
     sk = Journaleintrag(
-        datum=data.datum,
-        belegnr=_naechste_belegnr_journal(db, data.datum),
+        datum=datum,
+        belegnr=_naechste_belegnr_journal(db, datum),
         beschreibung=f"Skonto {rechnung.rechnungsnummer}",
         kategorie_id=kat.id if kat else None,
         konto_skr03=sk_konto_skr03,
@@ -1822,7 +1822,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     eintrag = erster_eintrag
 
     if data.skonto_betrag and data.skonto_betrag > 0:
-        _erstelle_skonto_eintrag(db, rechnung, rechnung_id, data, data.skonto_betrag, ust_satz,
+        _erstelle_skonto_eintrag(db, rechnung, rechnung_id, data.datum, data.skonto_betrag, ust_satz,
                                  steuerbefreiung_grund, art)
 
     db.flush()

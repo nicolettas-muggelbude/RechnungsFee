@@ -5,7 +5,7 @@ API-Endpunkte für Bank-CSV-Import.
 import hashlib
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -36,7 +36,9 @@ from utils.bank_csv_parser import (
 )
 from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
-from .rechnungen import _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _partner_name, _ust_konto
+from .rechnungen import (
+    _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erstelle_skonto_eintrag, _partner_name, _ust_konto,
+)
 from .schemas import JournalEintragCreate
 
 router = APIRouter(prefix="/api/bank-import", tags=["Bank-Import"])
@@ -197,11 +199,27 @@ def _vorhandene_hashes(db: Session, konto_id: int) -> set[str]:
     return {r[0] for r in rows}
 
 
-def _betrag_match(rechnung: Rechnung, tx_betrag: Decimal) -> bool:
+def _skonto_zielbetrag(rechnung: Rechnung, tx_datum: Optional[date]) -> Optional[Decimal]:
+    """Erwarteter Zahlbetrag bei Skontoabzug, wenn die Skonto-Frist (Rechnungsdatum + skonto_tage)
+    eingehalten wurde. Gibt None zurück wenn kein Skonto konfiguriert ist oder die Frist verstrichen ist."""
+    if not rechnung.skonto_prozent or not rechnung.skonto_tage or not tx_datum:
+        return None
+    frist = rechnung.datum + timedelta(days=rechnung.skonto_tage)
+    if tx_datum > frist:
+        return None
+    faktor = (Decimal("100") - rechnung.skonto_prozent) / Decimal("100")
+    return (rechnung.brutto_gesamt * faktor).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+
+def _betrag_match(rechnung: Rechnung, tx_betrag: Decimal, tx_datum: Optional[date] = None) -> bool:
     restbetrag = abs(rechnung.brutto_gesamt - rechnung.bezahlt_betrag)
     tx_abs = abs(tx_betrag)
     # Exakter Treffer (±2 Cent)
     if abs(restbetrag - tx_abs) <= Decimal("0.02"):
+        return True
+    # Skonto-Zahlung: Betrag entspricht dem Rechnungsbetrag abzüglich Skonto, Frist eingehalten (Issue #252)
+    skonto_ziel = _skonto_zielbetrag(rechnung, tx_datum)
+    if skonto_ziel is not None and abs(skonto_ziel - tx_abs) <= Decimal("0.02"):
         return True
     # Überzahlung: tx deckt den Restbetrag vollständig → Surplus wird als Forderung gebucht
     if tx_abs > restbetrag + Decimal("0.02"):
@@ -252,7 +270,7 @@ def _name_match(partner_rechnung: str, partner_tx: str | None) -> bool:
 
 def _abgleich_score(rechnung: Rechnung, tx: BankTransaktion) -> tuple[int, bool, bool, bool]:
     """Gibt (score, betrag_match, nummer_match, name_match) zurück."""
-    bm = _betrag_match(rechnung, tx.betrag)
+    bm = _betrag_match(rechnung, tx.betrag, tx.datum)
     nm = _nummer_match(rechnung, tx.verwendungszweck, tx.buchungstext)
     nam = _name_match(_partner_name(rechnung), tx.partner_name)
     return int(bm) + int(nm) + int(nam), bm, nm, nam
@@ -423,6 +441,17 @@ def _buche_pfad_a(
     eintrag.signatur = signatur_journaleintrag(eintrag)
     db.add(eintrag)
     db.flush()
+
+    # Skonto-Erkennung: Differenz zwischen Restbetrag und gebuchtem Betrag entspricht dem
+    # konfigurierten Skontoabzug und die Frist wurde eingehalten (Issue #252)
+    differenz = restbetrag - betrag_zu_buchen
+    if differenz > Decimal("0.02"):
+        skonto_ziel = _skonto_zielbetrag(rechnung, tx.datum)
+        if skonto_ziel is not None and abs(skonto_ziel - betrag_zu_buchen) <= Decimal("0.02"):
+            skonto_betrag = differenz.quantize(Decimal("0.01"), ROUND_HALF_UP)
+            _erstelle_skonto_eintrag(db, rechnung, rechnung.id, tx.datum, skonto_betrag, ust_satz,
+                                     steuerbefreiung_grund, art)
+            db.flush()
 
     tx.rechnung_id = rechnung.id
     tx.journal_id = eintrag.id
