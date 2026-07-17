@@ -962,6 +962,15 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 
     if data.ist_entwurf is not None:
         war_entwurf = rechnung.ist_entwurf
+        if war_entwurf and not data.ist_entwurf and rechnung.datum > date.today():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Finalisierung verweigert: Das Rechnungsdatum ({rechnung.datum.strftime('%d.%m.%Y')}) "
+                    f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
+                    f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+                ),
+            )
         rechnung.ist_entwurf = data.ist_entwurf
         # Lagerführung: Entwurf → Finalisiert (nur über diesen Pfad; /finalisieren bucht eigenständig)
         if war_entwurf and not data.ist_entwurf:
@@ -1008,6 +1017,16 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if not rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+
+    if rechnung.datum > date.today():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Finalisierung verweigert: Das Rechnungsdatum ({rechnung.datum.strftime('%d.%m.%Y')}) "
+                f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
+                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+            ),
+        )
 
     # Gutschrift: Summen-Check – darf den Original-Bruttobetrag nicht überschreiten
     if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:

@@ -1977,6 +1977,7 @@ function RechnungForm({
 
   const [rechnungsnummer, setRechnungsnummer] = useState(initial?.rechnungsnummer ?? '')
   const [datum, setDatum] = useState(pf?.datum ?? initial?.datum ?? heuteIso())
+  const [zukunftsdatumHinweis, setZukunftsdatumHinweis] = useState(false)
   const [leistungVon, setLeistungVon] = useState(initial?.leistung_von ?? initial?.datum ?? pf?.datum ?? heuteIso())
   const [leistungBis, setLeistungBis] = useState(initial?.leistung_bis ?? '')
   const [leistungManuell, setLeistungManuell] = useState(
@@ -2413,6 +2414,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       alert('Bitte mindestens eine Position mit Beschreibung eingeben.')
       return
     }
+    // Zukunftsdatum ist im Entwurf erlaubt (z.B. Rechnung vorbereiten, Versand später) –
+    // beim Finalisieren wird das Backend es ohnehin ablehnen (§14 Abs. 4 UStG). Hier nur Hinweis, kein Blocker.
+    if (istEntwurf && datum > heuteIso()) {
+      setZukunftsdatumHinweis(true)
+      setTimeout(() => setZukunftsdatumHinweis(false), 6000)
+    }
     onSave(buildData(istEntwurf))
   }
 
@@ -2456,6 +2463,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
+          {zukunftsdatumHinweis && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Rechnungsdatum liegt in der Zukunft – im Entwurf möglich, muss aber vor dem Finalisieren angepasst werden.
+            </p>
+          )}
         </div>
       </div>
 
