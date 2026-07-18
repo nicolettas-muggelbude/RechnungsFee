@@ -251,6 +251,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 116 | unternehmen.datenmigration_aktiv BOOLEAN; import_mapping_vorlagen-Tabelle – Datenübernahme per CSV (Kunden/Lieferanten/Artikel) mit manueller Feldzuordnung, Header-Toggle, Duplikatstrategie, gespeicherten Mappings (Issue #245) |
 | 117 | Datenfix: bank_templates PayPal-Mapping korrigiert – reale PayPal-Business-CSV (accountStatements) hat Spalte „Beschreibung" statt „Typ"/„Betreff" (die es gar nicht gibt); Import ergab 0 Transaktionen (Issue #248) |
 | 118 | bank_templates: Vivid-Template ergänzt (Completed date/Counterparty name/Reference/Payment amount/Payment currency) (Issue #248) |
+| 119 | unternehmen.kontenuebersicht_aktiv BOOLEAN – Kategorien-Summenliste mit SKR03/04-Kontonummer (Issue #255) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

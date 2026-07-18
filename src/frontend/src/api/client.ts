@@ -290,6 +290,7 @@ export type Unternehmen = {
   datev_konto_paypal?: string | null
   einleitungstext?: string | null
   guv_aktiv?: boolean
+  kontenuebersicht_aktiv?: boolean
   bank_import_aktiv?: boolean
   bank_import_manuell?: boolean
   dashboard_config?: string | null

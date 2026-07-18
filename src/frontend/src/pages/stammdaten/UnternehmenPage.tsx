@@ -592,6 +592,23 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           </div>
         </label>
 
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.kontenuebersicht_aktiv}
+            onChange={ev => set('kontenuebersicht_aktiv', ev.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Kontenübersicht aktivieren
+            </span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Zeigt unter Auswertungen eine Summenliste aller bebuchten Kategorien mit SKR03/04-Kontonummer – hilfreich für die Abstimmung mit Steuerberater oder eigene Kontrolle.
+            </p>
+          </div>
+        </label>
+
       </div>
 
       {/* ── Tab: Funktionen ───────────────────────────────────────────── */}
