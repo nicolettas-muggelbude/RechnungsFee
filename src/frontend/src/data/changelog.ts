@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.14',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Sidebar – unnötiger horizontaler Scrollbalken entfernt.' },
+    ],
+  },
+  {
     version: 'v0.4.13',
     datum: 'Juli 2026',
     eintraege: [
