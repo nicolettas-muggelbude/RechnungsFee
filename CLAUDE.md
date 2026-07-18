@@ -299,8 +299,10 @@ sonst findet GitHub Actions die Workflow-Datei nicht.
 - Sidecar: PyInstaller (Linux/macOS: `build-sidecar.sh`, Windows: `build-sidecar.ps1`)
 - Signierung: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` als GitHub Secrets
 - macOS: kein Apple-Zertifikat → Gatekeeper-Bypass per Rechtsklick→Öffnen oder `xattr -cr`
-- Ergebnis: Draft-Release mit `.AppImage`, `.msi`, `.dmg` (arm64+x64), `latest.json`
-- Release manuell auf GitHub veröffentlichen → erst dann ist Updater aktiv
+- Ergebnis: Release mit `.AppImage`, `.msi`, `.dmg` (arm64+x64), `latest.json`
+- Veröffentlichung läuft automatisch (`draft: false`) – der Updater ist direkt nach erfolgreichem Build aktiv, kein manueller Freigabe-Schritt nötig
+- Job `deploy-web` (nach `release-notes`) triggert automatisch `website.yml --ref web`, sobald `PAGES_TOKEN`-Secret gesetzt ist – die Website aktualisiert sich also von selbst
+- Trotzdem nach jedem Release kurz verifizieren: `gh release view vX.Y.Z` (Status + Notes) und `gh run list --workflow=website.yml` (Website-Deploy erfolgreich?)
 
 ### Release-Notes Download-Tabelle – echte Dateinamen (Tauri-Namensschema)
 ```markdown
