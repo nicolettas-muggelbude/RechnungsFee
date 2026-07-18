@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
+import { DateInput } from '../../components/DateInput'
+import { bankImportFilter, type BankImportFilterModus } from '../../store/filterStore'
 import {
   getKonten,
   getBankTemplates,
@@ -826,9 +828,38 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat'>('alle')
-  const [datumVon, setDatumVon] = useState('')
-  const [datumBis, setDatumBis] = useState('')
+
   const [limit, setLimit] = useState(200)
+
+  // Zeitraum-Filter – Session-persistent über filterStore.ts, gleiches Muster wie Journal/Dashboard/Rechnungen
+  const [filterModus, _setFilterModus] = useState<BankImportFilterModus>(() => bankImportFilter.modus)
+  const setFilterModus = (m: BankImportFilterModus) => { bankImportFilter.modus = m; _setFilterModus(m); setLimit(200) }
+  const [monat, _setMonat] = useState<string>(() => bankImportFilter.monat)
+  const setMonat = (m: string) => { bankImportFilter.monat = m; _setMonat(m); setLimit(200) }
+  const [datum, _setDatum] = useState<string>(() => bankImportFilter.datum)
+  const setDatum = (d: string) => { bankImportFilter.datum = d; _setDatum(d); setLimit(200) }
+  const [datumVon, _setDatumVon] = useState<string>(() => bankImportFilter.datumVon)
+  const setDatumVon = (d: string) => { bankImportFilter.datumVon = d; _setDatumVon(d); setLimit(200) }
+  const [datumBis, _setDatumBis] = useState<string>(() => bankImportFilter.datumBis)
+  const setDatumBis = (d: string) => { bankImportFilter.datumBis = d; _setDatumBis(d); setLimit(200) }
+
+  const aktivesJahr = new Date().getFullYear()
+  function monatsEnde(monatStr: string): string {
+    const [y, m] = monatStr.split('-').map(Number)
+    const letzterTag = new Date(y, m, 0).getDate()
+    return `${y}-${String(m).padStart(2, '0')}-${String(letzterTag).padStart(2, '0')}`
+  }
+  const { von: effektivVon, bis: effektivBis }: { von?: string; bis?: string } =
+    filterModus === 'monat'
+      ? { von: `${monat}-01`, bis: monatsEnde(monat) }
+      : filterModus === 'datum'
+        ? { von: datum, bis: datum }
+        : filterModus === 'zeitraum'
+          ? { von: datumVon, bis: datumBis }
+          : filterModus === 'jahr'
+            ? { von: `${aktivesJahr}-01-01`, bis: `${aktivesJahr}-12-31` }
+            : { von: undefined, bis: undefined } // 'alle'
+
   const [berKonfig, setBerKonfig] = useState<BereinigungKonfig>(() => {
     try { return JSON.parse(localStorage.getItem('bankBereinigung') ?? 'null') ?? { tage: null, maxN: null } }
     catch { return { tage: null, maxN: null } }
@@ -837,17 +868,12 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const autoCleanupRan = useRef(false)
 
   const { data: txListe, isLoading } = useQuery({
-    queryKey: ['bank-transaktionen', konto.id, limit, datumVon, datumBis],
-    queryFn: () => getBankTransaktionen(konto.id!, { limit, von: datumVon || undefined, bis: datumBis || undefined }),
+    queryKey: ['bank-transaktionen', konto.id, limit, filterModus, monat, datum, datumVon, datumBis],
+    queryFn: () => getBankTransaktionen(konto.id!, { limit, von: effektivVon, bis: effektivBis }),
     enabled: !!konto.id,
   })
   const txs = txListe?.transaktionen ?? []
   const txsGesamt = txListe?.total ?? 0
-
-  function datumFilterAendern(setter: (v: string) => void, wert: string) {
-    setter(wert)
-    setLimit(200)
-  }
 
   const anerkenneMut = useMutation({
     mutationFn: (rechnungId: number) => ueberzahlungAnerkennen(rechnungId),
@@ -940,11 +966,6 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txs.length])
 
-  if (isLoading) return <p className="text-sm text-slate-500 dark:text-slate-400 py-4">Lade Transaktionen…</p>
-  if (txs.length === 0) return (
-    <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-sm">Noch keine Transaktionen importiert.</div>
-  )
-
   const offene = txs.filter(tx => tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.journal_id)
   const gebuchteList = txs.filter(tx => !!tx.journal_id)
   const gebuchte = gebuchteList.length
@@ -977,19 +998,53 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             onChange={e => setSuche(e.target.value)}
             className="flex-1 min-w-[180px] text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
           />
-          <input
-            type="date"
-            value={datumVon}
-            onChange={e => datumFilterAendern(setDatumVon, e.target.value)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-          />
-          <span className="text-xs text-slate-400">–</span>
-          <input
-            type="date"
-            value={datumBis}
-            onChange={e => datumFilterAendern(setDatumBis, e.target.value)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-          />
+          <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
+            {(['alle', 'jahr', 'monat', 'datum', 'zeitraum'] as BankImportFilterModus[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setFilterModus(m)}
+                className={`px-3 py-1.5 capitalize transition-colors ${
+                  filterModus === m
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {m === 'alle' ? 'Alle' : m === 'jahr' ? 'Jahr' : m === 'monat' ? 'Monat' : m === 'datum' ? 'Tag' : 'Zeitraum'}
+              </button>
+            ))}
+          </div>
+          {filterModus === 'monat' && (
+            <input
+              type="month"
+              value={monat}
+              onChange={e => setMonat(e.target.value)}
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            />
+          )}
+          {filterModus === 'datum' && (
+            <DateInput
+              value={datum}
+              onChange={setDatum}
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            />
+          )}
+          {filterModus === 'zeitraum' && (
+            <div className="flex items-center gap-2">
+              <DateInput
+                value={datumVon}
+                onChange={setDatumVon}
+                className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              />
+              <span className="text-xs text-slate-400">–</span>
+              <DateInput
+                value={datumBis}
+                min={datumVon}
+                onChange={setDatumBis}
+                className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              />
+            </div>
+          )}
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -1011,6 +1066,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             </svg>
           </button>
         </div>
+        {!isLoading && txs.length > 0 && (
         <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
           <span>{gefilterteTxs.length} von {txsGesamt} Transaktionen</span>
           {gebuchte > 0 && <span className="text-green-600 dark:text-green-400">{gebuchte} gebucht</span>}
@@ -1024,6 +1080,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             </button>
           )}
         </div>
+        )}
 
         {zahnradOffen && (
           <div className="mt-1 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
@@ -1089,6 +1146,17 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
         }`}>{toast.text}</div>
       )}
 
+      {isLoading && (
+        <p className="text-sm text-slate-500 dark:text-slate-400 py-4">Lade Transaktionen…</p>
+      )}
+
+      {!isLoading && txs.length === 0 && (
+        <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-sm">
+          {filterModus === 'alle' ? 'Noch keine Transaktionen importiert.' : 'Keine Transaktionen im gewählten Zeitraum.'}
+        </div>
+      )}
+
+      {!isLoading && txs.length > 0 && (
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table className="w-full text-sm">
           <thead>
@@ -1120,6 +1188,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
           </tbody>
         </table>
       </div>
+      )}
 
       {abgleichDialog && (
         <AbgleichDialog

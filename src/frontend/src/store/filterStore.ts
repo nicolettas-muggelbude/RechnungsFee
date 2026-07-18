@@ -93,3 +93,26 @@ export const lieferscheinFilter: RechnungenFilterState = {
   datumVon: heute(),
   datumBis: heute(),
 }
+
+// ---------------------------------------------------------------------------
+// Bank-Import
+// ---------------------------------------------------------------------------
+
+export type BankImportFilterModus = 'monat' | 'datum' | 'zeitraum' | 'alle' | 'jahr'
+
+export interface BankImportFilterState {
+  modus:    BankImportFilterModus
+  monat:    string
+  datum:    string
+  datumVon: string
+  datumBis: string
+}
+
+// Voreinstellung "alle" – entspricht dem bisherigen Standardverhalten (kein Datumsfilter).
+export const bankImportFilter: BankImportFilterState = {
+  modus:    'alle',
+  monat:    aktuellerMonat(),
+  datum:    heute(),
+  datumVon: heute(),
+  datumBis: heute(),
+}

@@ -194,6 +194,7 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
             <select {...register('kontotyp')} className={inp}>
               <option value="geschaeftlich">Geschäftlich</option>
               <option value="mischkonto">Mischkonto (privat &amp; geschäftlich)</option>
+              <option value="privat">Privat (nicht für Bank-Import verfügbar)</option>
             </select>
           </div>
 

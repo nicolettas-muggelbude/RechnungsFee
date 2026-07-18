@@ -15,11 +15,11 @@ function isoToGerman(iso: string): string {
 }
 
 function germanToIso(s: string): string {
-  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/)
   if (!m) return ''
   const dd = m[1].padStart(2, '0')
   const mm = m[2].padStart(2, '0')
-  const y = m[3]
+  const y = m[3].length === 2 ? `20${m[3]}` : m[3]
   if (parseInt(mm) < 1 || parseInt(mm) > 12) return ''
   if (parseInt(dd) < 1 || parseInt(dd) > 31) return ''
   const iso = `${y}-${mm}-${dd}`
