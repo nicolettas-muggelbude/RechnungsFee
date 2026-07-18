@@ -39,6 +39,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Konten – Verwendung „Privat" fehlte im Auswahlfeld beim Anlegen/Bearbeiten, obwohl Datenmodell und Anzeige den Wert bereits unterstützten (Issue #266).' },
       { typ: 'fix', text: 'Datumsfelder – ein 2-stelliges Jahr (z. B. „26.06.26") wurde nicht erkannt; wird jetzt automatisch auf „2026" erweitert (Issue #196).' },
       { typ: 'verbesserung', text: 'Bank-Import – Datumsfilter der Transaktionsliste hat jetzt denselben Jahr/Monat/Tag/Zeitraum-Modus wie Journal/Dashboard/Rechnungen inkl. direkter Texteingabe; der gewählte Zeitraum bleibt beim Seitenwechsel erhalten (Issue #196).' },
+      { typ: 'fix', text: 'PayPal-CSV-Import – ein Transaktionscode wurde gelegentlich fälschlich als Konto-IBAN erkannt („Konto nicht konfiguriert"), da die IBAN-Suche immer mindestens 3 Zeilen las statt der tatsächlichen skip_rows des Templates (0 bei PayPal) (Issue #267).' },
       { typ: 'fix', text: 'Sidebar – unnötiger horizontaler Scrollbalken entfernt.' },
     ],
   },

@@ -220,10 +220,12 @@ def extract_konto_iban(raw: bytes, template) -> Optional[str]:
     Sucht in den übersprungenen Header-Zeilen (skip_rows) nach der eigenen Konto-IBAN.
     Gibt die IBAN ohne Leerzeichen zurück oder None.
     """
+    skip_rows = getattr(template, "skip_rows", 0)
+    if skip_rows == 0:
+        return None
     enc = detect_encoding(raw)
     text = raw.decode(enc, errors="replace")
-    n = max(getattr(template, "skip_rows", 0), 1)
-    header_text = "\n".join(text.splitlines()[:n + 2])
+    header_text = "\n".join(text.splitlines()[:skip_rows])
     match = _IBAN_RE.search(header_text)
     if match:
         iban = match.group(0).replace(" ", "")
