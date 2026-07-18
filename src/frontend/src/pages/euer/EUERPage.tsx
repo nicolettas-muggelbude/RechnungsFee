@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, openUrl, type EUERErgebnis, type EUERDetailErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 const ABSCHNITT_LABEL: Record<string, string> = {
   A: 'A – Betriebseinnahmen',
@@ -36,7 +37,6 @@ export function EUERPage() {
   const mxAuto = useMxAuto()
   const now = new Date()
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
-  const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [detailansicht, setDetailansicht] = useState(false)
   const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
@@ -53,10 +53,9 @@ export function EUERPage() {
   })
 
   async function handlePdf() {
-    setPdfLaedt(true); setPdfFehler(null)
+    setPdfFehler(null)
     try { await openUrl(await getEUERPdfUrl(jahr)) }
     catch (e: any) { setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen') }
-    finally { setPdfLaedt(false) }
   }
 
   // Zeilen nach Abschnitt gruppieren
@@ -104,10 +103,7 @@ export function EUERPage() {
               }`}>
               🔍 Aufschlüsselung
             </button>
-            <button onClick={handlePdf} disabled={pdfLaedt}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              {pdfLaedt ? '…' : '📄 PDF'}
-            </button>
+            <ExportButtons formats={['pdf']} onExport={handlePdf} />
             {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
           </div>
         )}

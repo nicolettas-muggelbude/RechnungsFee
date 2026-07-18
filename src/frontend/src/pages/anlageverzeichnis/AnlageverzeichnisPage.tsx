@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
+import { ExportButtons } from '../../components/ExportButtons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getAnlagegueter, createAnlagegut, updateAnlagegut, deleteAnlagegut,
@@ -267,7 +268,6 @@ export function AnlageverzeichnisPage() {
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [selId, setSelId] = useState<number | null>(null)
   const [planGut, setPlanGut] = useState<Anlagegut | null>(null)
-  const [pdfLaedt, setPdfLaedt] = useState(false)
 
   const { data: gueter = [] } = useQuery({ queryKey: ['anlagegueter'], queryFn: getAnlagegueter })
   const selGut = gueter.find(g => g.id === selId)
@@ -277,13 +277,8 @@ export function AnlageverzeichnisPage() {
   const deleteMut = useMutation({ mutationFn: deleteAnlagegut, onSuccess: () => { qc.invalidateQueries({ queryKey: ['anlagegueter'] }); setSelId(null) } })
 
   async function handlePdf() {
-    setPdfLaedt(true)
-    try {
-      const url = await getAveurPdfUrl(jahr)
-      await openUrl(url)
-    } finally {
-      setPdfLaedt(false)
-    }
+    const url = await getAveurPdfUrl(jahr)
+    await openUrl(url)
   }
 
   // AfA des aktuellen Jahres je Gut
@@ -351,11 +346,7 @@ export function AnlageverzeichnisPage() {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-              <button
-                onClick={handlePdf} disabled={pdfLaedt}
-                className="flex items-center gap-1.5 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                {pdfLaedt ? '⏳' : '📄'} PDF
-              </button>
+              <ExportButtons formats={['pdf']} onExport={handlePdf} />
               <button onClick={() => { setFormModus('neu'); setSelId(null) }}
                 className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-blue-700">
                 + Neu

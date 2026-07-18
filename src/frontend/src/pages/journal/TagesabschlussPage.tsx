@@ -9,6 +9,7 @@ import {
 import { TagesabschlussDialog } from './TagesabschlussDialog'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -186,10 +187,10 @@ function AbschlussDetail({ a }: { a: Tagesabschluss }) {
   const differenz = parseFloat(a.differenz)
   const hatDifferenz = Math.abs(differenz) > 0.005
 
-  function exportEinzel() {
+  async function exportEinzel() {
     // Datum als Monat exportieren (einzelner Tag liegt immer in einem Monat)
     const monat = a.datum.slice(0, 7) // YYYY-MM
-    downloadTagesabschlussPdf({ zeitraum: 'monat', wert: monat })
+    await downloadTagesabschlussPdf({ zeitraum: 'monat', wert: monat })
   }
 
   return (
@@ -244,12 +245,7 @@ function AbschlussDetail({ a }: { a: Tagesabschluss }) {
 
       {/* Einzel-Export */}
       <div className="flex justify-end">
-        <button
-          onClick={exportEinzel}
-          className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors flex items-center gap-1.5"
-        >
-          <span>↓</span> PDF exportieren
-        </button>
+        <ExportButtons formats={['pdf']} onExport={exportEinzel} />
       </div>
     </div>
   )
@@ -401,11 +397,11 @@ export function TagesabschlussPage() {
     setOffeneId((prev) => (prev === id ? null : id))
   }
 
-  function handleExport() {
+  async function handleExport() {
     if (exportZeitraum === 'alle') {
-      downloadTagesabschlussPdf({ zeitraum: 'alle' })
+      await downloadTagesabschlussPdf({ zeitraum: 'alle' })
     } else {
-      downloadTagesabschlussPdf({ zeitraum: exportZeitraum, wert: exportWert })
+      await downloadTagesabschlussPdf({ zeitraum: exportZeitraum, wert: exportWert })
     }
   }
 
@@ -467,12 +463,9 @@ export function TagesabschlussPage() {
             />
           )}
 
-          <button
-            onClick={handleExport}
-            className="text-sm font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5"
-          >
-            <span>↓</span> PDF herunterladen
-          </button>
+          <div className="ml-auto">
+            <ExportButtons formats={['pdf']} onExport={handleExport} />
+          </div>
         </div>
       )}
 

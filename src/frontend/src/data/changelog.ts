@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.15',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Logo – SVG-Glüheffekt entfernt, der unter Linux (WebKitGTK, insbesondere Cinnamon-Desktop) fehlerhaft dargestellt wurde. Auf Windows, macOS und im Browser bereits unauffällig.' },
+      { typ: 'fix', text: 'install-linux.sh – veraltetes eingebettetes App-Icon (mit weißem Rand) durch das aktuelle transparente Icon ersetzt.' },
+      { typ: 'verbesserung', text: 'PDF-/CSV-Export-Buttons in allen Auswertungen (EÜR, UStVA, Jahres-USt, Anlage S/G, Anlagenverzeichnis, EKS, Tagesabschluss, Kontenübersicht) vereinheitlicht: gleicher Pillenbutton-Stil, immer rechtsbündig in der Filterkarte (Issue #259).' },
+    ],
+  },
+  {
     version: 'v0.4.14',
     datum: 'Juli 2026',
     eintraege: [

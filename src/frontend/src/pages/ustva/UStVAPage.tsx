@@ -6,6 +6,7 @@ import {
   type UStVAErgebnis,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 // ---------------------------------------------------------------------------
 // KZ-Metadaten – Reihenfolge wie im amtlichen Formular USt 1 A 2026
@@ -95,7 +96,6 @@ export function UStVAPage() {
   const [monat, setMonat] = useState(now.getMonth() + 1)
   const [quartal, setQuartal] = useState(Math.ceil((now.getMonth() + 1) / 3))
   const [gespeichertMeldung, setGespeichertMeldung] = useState(false)
-  const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [pdfExportiert, setPdfExportiert] = useState(false)
   // Manuelle Korrekturen für nicht-auto-berechnete KZs
@@ -132,14 +132,13 @@ export function UStVAPage() {
   })
 
   async function handlePdf() {
-    setPdfLaedt(true); setPdfFehler(null); setPdfExportiert(false)
+    setPdfFehler(null); setPdfExportiert(false)
     try {
       await openUrl(await getUStVAPdfUrl(zeitraum))
       setPdfExportiert(true)
     } catch (e: any) {
       setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
-    } finally {
-      setPdfLaedt(false) }
+    }
   }
 
   // Wert aus Ergebnis + manuelle Überschreibung
@@ -240,6 +239,18 @@ export function UStVAPage() {
           {isLoading && (
             <span className="px-4 py-1.5 text-sm text-slate-500 dark:text-slate-400">Berechne…</span>
           )}
+          {ergebnis && (
+            <div className="flex items-center gap-2 ml-auto">
+              <ExportButtons formats={['pdf']} onExport={handlePdf} />
+              {pdfExportiert && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
+              {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
+              <button type="button" onClick={() => speichernMut.mutate(alleKZ() as any)}
+                disabled={speichernMut.isPending || ergebnis.ist_kleinunternehmer}
+                className="px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">
+                {gespeichertMeldung ? '✓ Gespeichert' : 'Speichern'}
+              </button>
+            </div>
+          )}
         </div>
         {rhythmus !== modus && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
@@ -256,22 +267,7 @@ export function UStVAPage() {
 
       {ergebnis && (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-700 dark:text-slate-200">{zeitraumLabel(zeitraum)}</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={handlePdf} disabled={pdfLaedt}
-                className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-                {pdfLaedt ? '…' : '📄 PDF'}
-              </button>
-              {pdfExportiert && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
-              {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
-              <button type="button" onClick={() => speichernMut.mutate(alleKZ() as any)}
-                disabled={speichernMut.isPending || ergebnis.ist_kleinunternehmer}
-                className="px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">
-                {gespeichertMeldung ? '✓ Gespeichert' : 'Speichern'}
-              </button>
-            </div>
-          </div>
+          <h2 className="font-semibold text-slate-700 dark:text-slate-200 mb-3">{zeitraumLabel(zeitraum)}</h2>
 
           {ergebnis.hinweis && (
             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4 text-sm text-amber-800 dark:text-amber-200">

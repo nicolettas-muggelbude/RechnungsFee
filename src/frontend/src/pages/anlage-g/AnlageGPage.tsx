@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { berechneAnlageG, getAnlageGPdfUrl, isTauri, openInPdfWindow, openUrl, type AnlageGErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -69,7 +70,6 @@ export function AnlageGPage() {
   const [messbetragInput, setMessbetragInput] = useState('')
   const [hebesatzInput, setHebesatzInput] = useState('')
 
-  const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery<AnlageGErgebnis>({
@@ -94,7 +94,7 @@ export function AnlageGPage() {
   const stammdatenUnvollstaendig = data && (!data.steuernummer || !data.finanzamt || !data.art_des_gewerbes)
 
   async function handlePdf() {
-    setPdfLaedt(true); setPdfFehler(null)
+    setPdfFehler(null)
     try {
       const url = await getAnlageGPdfUrl(jahr, messbetrag, hebesatz)
       if (isTauri()) {
@@ -109,7 +109,6 @@ export function AnlageGPage() {
       }
     }
     catch (e: any) { setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen') }
-    finally { setPdfLaedt(false) }
   }
 
   return (
@@ -144,10 +143,7 @@ export function AnlageGPage() {
         {isLoading && <span className="text-sm text-slate-500 dark:text-slate-400">Berechne…</span>}
         {data && !isLoading && (
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={handlePdf} disabled={pdfLaedt}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              {pdfLaedt ? '…' : '📄 PDF'}
-            </button>
+            <ExportButtons formats={['pdf']} onExport={handlePdf} />
             {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
           </div>
         )}

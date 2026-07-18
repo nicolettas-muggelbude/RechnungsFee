@@ -5,6 +5,7 @@ import {
   getUnternehmen, openUrl,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 const KZ_META: [string, string, string, boolean][] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false],
@@ -65,7 +66,6 @@ export function JahresUStPage() {
   const now = new Date()
   const jahre = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i)
   const [jahr, setJahr] = useState(now.getFullYear() - 1)
-  const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [pdfOk, setPdfOk] = useState(false)
 
@@ -78,13 +78,13 @@ export function JahresUStPage() {
   })
 
   async function handlePdf() {
-    setPdfLaedt(true); setPdfFehler(null); setPdfOk(false)
+    setPdfFehler(null); setPdfOk(false)
     try {
       await openUrl(await getJahresUStVAPdfUrl(jahr))
       setPdfOk(true)
     } catch (e: any) {
       setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
-    } finally { setPdfLaedt(false) }
+    }
   }
 
   // KZ-Tabelle nur Zeilen ≠ 0, nach Abschnitt gruppiert
@@ -126,17 +126,14 @@ export function JahresUStPage() {
               {jahre.map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           </div>
+          {isLoading && <span className="text-sm text-slate-400 dark:text-slate-500">Berechne…</span>}
           {data && (
-            <div className="flex items-center gap-2">
-              <button onClick={handlePdf} disabled={pdfLaedt}
-                className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-                {pdfLaedt ? '…' : '📄 PDF'}
-              </button>
+            <div className="flex items-center gap-2 ml-auto">
+              <ExportButtons formats={['pdf']} onExport={handlePdf} />
               {pdfOk && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
               {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
             </div>
           )}
-          {isLoading && <span className="text-sm text-slate-400 dark:text-slate-500">Berechne…</span>}
         </div>
       </div>
 

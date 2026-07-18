@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { berechneAnlageS, getAnlageSPdfUrl, openUrl, type AnlageSErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -67,14 +68,12 @@ export function AnlageSPage() {
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
   const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
 
-  const [pdfLaedt, setPdfLaedt] = useState(false)
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
 
   async function handlePdf() {
-    setPdfLaedt(true); setPdfFehler(null)
+    setPdfFehler(null)
     try { await openUrl(await getAnlageSPdfUrl(jahr)) }
     catch (e: any) { setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen') }
-    finally { setPdfLaedt(false) }
   }
 
   const { data, isLoading, error } = useQuery<AnlageSErgebnis>({
@@ -118,10 +117,7 @@ export function AnlageSPage() {
         {isLoading && <span className="text-sm text-slate-500 dark:text-slate-400">Berechne…</span>}
         {data && !isLoading && (
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={handlePdf} disabled={pdfLaedt}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              {pdfLaedt ? '…' : '📄 PDF'}
-            </button>
+            <ExportButtons formats={['pdf']} onExport={handlePdf} />
             {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
           </div>
         )}

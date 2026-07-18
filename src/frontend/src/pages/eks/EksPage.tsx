@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { eksHalbjahr, eksHalbjahresPdf, type EksHalbjahr, type EksFeld } from '../../api/client'
 import { EksEinstellungenModal } from './EksEinstellungenModal'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { ExportButtons } from '../../components/ExportButtons'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -334,15 +335,12 @@ export function EksPage() {
 
   async function handlePdf() {
     if (!ergebnis) return
-    setLaedt(true)
     setFehler(null)
     try {
       await eksHalbjahresPdf(`${startMonat}-01`, art)
       setExportiert(true)
     } catch (e: any) {
       setFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
-    } finally {
-      setLaedt(false)
     }
   }
 
@@ -528,14 +526,7 @@ export function EksPage() {
             >
               ⚙️ Einstellungen
             </button>
-            <button
-              onClick={handlePdf}
-              disabled={laedt}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-            >
-              {laedt ? <span className="animate-spin inline-block">⏳</span> : <span>📄</span>}
-              PDF erstellen
-            </button>
+            <ExportButtons formats={['pdf']} onExport={handlePdf} />
             {exportiert && (
               <span className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
                 <span>✓</span> PDF wurde geöffnet
