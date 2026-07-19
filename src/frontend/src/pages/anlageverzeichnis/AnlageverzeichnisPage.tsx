@@ -358,7 +358,7 @@ export function AnlageverzeichnisPage() {
             <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
               <span className="text-blue-700 dark:text-blue-400 text-sm font-medium">Gesamt-AfA {jahr}</span>
               <span className="ml-auto text-blue-800 dark:text-blue-300 font-bold">{euro(gesamtAfa)}</span>
-              <span className="text-xs text-blue-500 dark:text-blue-500">→ EÜR Zeile 36</span>
+              <span className="text-xs text-blue-500 dark:text-blue-500">→ EÜR Zeile 33</span>
             </div>
           )}
         </div>

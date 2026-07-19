@@ -217,7 +217,7 @@ def abschreibungsplan(gut_id: int, db: Session = Depends(get_db)):
 
 @router.get("/zusammenfassung")
 def zusammenfassung(jahr: int = Query(...), db: Session = Depends(get_db)):
-    """Gesamt-AfA aller aktiven Güter für ein Jahr (→ EÜR Zeile 36)."""
+    """Gesamt-AfA aller aktiven Güter für ein Jahr (→ EÜR Zeile 33)."""
     gueter = db.query(Anlagegut).filter(Anlagegut.aktiv == True).all()
     einzel = []
     gesamt = ZERO
@@ -423,7 +423,7 @@ def pdf_export(jahr: int = Query(...), db: Session = Depends(get_db)):
         y = pdf.get_y()
         label_w = sum(COL_W[:-2])
         pdf.set_xy(x, y)
-        pdf.cell(label_w, 8, f"  Gesamt-AfA {jahr} (→ EÜR Zeile 36)", fill=True, align="L")
+        pdf.cell(label_w, 8, f"  Gesamt-AfA {jahr} (→ EÜR Zeile 33)", fill=True, align="L")
         pdf.set_xy(x + label_w, y)
         pdf.cell(COL_W[-2], 8, euro(gesamt_afa_jahr), fill=True, align="R")
         pdf.cell(COL_W[-1], 8, "", fill=True)

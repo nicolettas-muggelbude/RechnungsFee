@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'fix', text: 'UStVA – innergemeinschaftlicher Erwerb zu 7 % USt wurde fälschlich als Steuerbetrag in KZ 93 statt als eigene Bemessungsgrundlage geführt; zusätzlich KZ 90 (0 %) und KZ 95/98 (andere Steuersätze) ergänzt, die bisher komplett fehlten. Betrifft nur UStVA/Jahres-USt – EÜR, EKS, GuV rechnen unabhängig davon korrekt (Issue #272).' },
+      { typ: 'fix', text: 'EÜR/Anlagenverzeichnis – drei übersehene Textstellen zeigten noch „Zeile 36" statt der bei Issue #265 korrigierten Zeile 33 (Info-Hinweis in der EÜR, Badge und PDF-Export im Anlagenverzeichnis).' },
     ],
   },
   {

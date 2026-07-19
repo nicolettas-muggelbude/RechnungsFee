@@ -180,14 +180,14 @@ export function EUERPage() {
           {/* Anlage AVEÜR – AfA automatisch oder Hinweis */}
           {parseFloat(ergebnis.aveur_afa) > 0 ? (
             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
-              <strong>Anlage AVEÜR:</strong> AfA {ergebnis.jahr} ({euroFmt(ergebnis.aveur_afa)}) wurde automatisch aus dem Anlagenverzeichnis in Zeile 36 eingetragen.
+              <strong>Anlage AVEÜR:</strong> AfA {ergebnis.jahr} ({euroFmt(ergebnis.aveur_afa)}) wurde automatisch aus dem Anlagenverzeichnis in Zeile 33 eingetragen.
               {parseFloat(ergebnis.anlage_zugaenge) > 0 && (
                 <span className="ml-1">Anlagezugänge {ergebnis.jahr}: {euroFmt(ergebnis.anlage_zugaenge)}.</span>
               )}
             </div>
           ) : parseFloat(ergebnis.anlage_zugaenge) > 0 ? (
             <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
-              <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV o.ä.) – erfasse die Wirtschaftsgüter unter <strong>Auswertung → Anlage AVEÜR</strong>, damit die AfA automatisch in Zeile 36 einfließt.
+              <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV o.ä.) – erfasse die Wirtschaftsgüter unter <strong>Auswertung → Anlage AVEÜR</strong>, damit die AfA automatisch in Zeile 33 einfließt.
             </div>
           ) : null}
 
