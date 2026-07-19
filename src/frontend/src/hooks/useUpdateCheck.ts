@@ -112,6 +112,14 @@ export function useUpdateCheck(): UpdateState & UpdateActions {
             setState(s => ({ ...s, progress: pct }))
           }
         })
+
+        // Backend explizit beenden BEVOR relaunch() – sonst läuft das alte Backend
+        // ggf. noch während die neue Instanz startet und beide konkurrieren kurz um
+        // dieselbe SQLite-Datei (Issue #268). Analog zum Windows-Zweig oben.
+        setState(s => ({ ...s, downloading: false, readyToRestart: true }))
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('kill_backend').catch(() => {})
+
         const { relaunch } = await import('@tauri-apps/plugin-process')
         await relaunch()
       }

@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'EÜR/Anlagenverzeichnis – drei übersehene Textstellen zeigten noch „Zeile 36" statt der bei Issue #265 korrigierten Zeile 33 (Info-Hinweis in der EÜR, Badge und PDF-Export im Anlagenverzeichnis).' },
       { typ: 'neu', text: 'Anlagenverzeichnis – Abschreibungsplan zeigt jetzt einen Hinweis in dem Jahr, in dem bei degressiver AfA automatisch auf linear gewechselt wird (Issue #270).' },
       { typ: 'fix', text: 'Rechnungen – Button „Uneinbringlich" erschien fälschlich auch bei Eingangsrechnungen; Forderungsausfall ergibt nur bei Forderungen (Ausgangsrechnungen) Sinn, nicht bei Verbindlichkeiten (Issue #271).' },
+      { typ: 'fix', text: 'Update – Zombie-Backend-Bereinigung beim Start härter gemacht: macOS hatte gar keine (jetzt ergänzt), Linux/Windows prüften bisher nicht nach, ob der alte Prozess wirklich beendet ist, bevor das neue Backend startet. Zusätzlich beendet die App das alte Backend jetzt auch auf Linux/macOS explizit vor einem Update-Neustart, nicht nur unter Windows. Möglicher Kandidat für gelegentliches Hängenbleiben beim automatischen Neustart nach einem Update (Issue #268).' },
     ],
   },
   {

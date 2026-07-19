@@ -180,23 +180,59 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // Zombie-Backend vom letzten Absturz killen bevor ein neues gestartet wird.
-            // Schützt vor DB-Schreibsperren wenn CloseRequested nicht gefeuert hat.
+            // Zombie-Backend vom letzten Absturz ODER von einem Update-Relaunch-Race
+            // killen, bevor ein neues gestartet wird. Schützt vor DB-Schreibsperren
+            // (Issue #268: manchmal läuft nach Update+Neustart noch ein altes Backend,
+            // beide konkurrieren kurz um dieselbe SQLite-Datei → Start hängt).
+            //
+            // Wichtig: Ein einfaches "kill und weiter" reicht nicht – taskkill/pkill
+            // kehren zurück sobald das Signal geschickt wurde, nicht erst wenn der
+            // Prozess wirklich beendet ist. Daher kurz nachprüfen (max. 2 s).
             #[cfg(target_os = "windows")]
             {
                 let _ = std::process::Command::new("taskkill")
                     .args(["/F", "/IM", "backend.exe"])
                     .creation_flags(CREATE_NO_WINDOW)
                     .output();
+                for _ in 0..20 {
+                    let laeuft_noch = std::process::Command::new("tasklist")
+                        .args(["/FI", "IMAGENAME eq backend.exe", "/NH"])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .output()
+                        .map(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().contains("backend.exe"))
+                        .unwrap_or(false);
+                    if !laeuft_noch { break; }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
             }
             #[cfg(target_os = "linux")]
             {
                 // Zombie-Backends killen – Muster passt für:
                 //   AppImage:  /tmp/.mount_*/usr/bin/backend-x86_64-unknown-linux-gnu
                 //   Dev-Modus: .../src-tauri/binaries/backend-x86_64-unknown-linux-gnu
-                let _ = std::process::Command::new("pkill")
-                    .args(["-f", "backend-x86_64-unknown-linux-gnu"])
-                    .output();
+                // -9 (SIGKILL) statt Default-SIGTERM, damit nicht auf ein evtl.
+                // ignoriertes/verzögertes Signal-Handling gewartet werden muss.
+                let muster = "backend-x86_64-unknown-linux-gnu";
+                let _ = std::process::Command::new("pkill").args(["-9", "-f", muster]).output();
+                for _ in 0..20 {
+                    let laeuft_noch = std::process::Command::new("pgrep").args(["-f", muster])
+                        .output().map(|o| o.status.success()).unwrap_or(false);
+                    if !laeuft_noch { break; }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+            #[cfg(target_os = "macos")]
+            {
+                // Bisher fehlte diese Bereinigung auf macOS komplett (Issue #268).
+                // Muster passt für backend-aarch64-apple-darwin / backend-x86_64-apple-darwin.
+                let muster = "backend-.*-apple-darwin";
+                let _ = std::process::Command::new("pkill").args(["-9", "-f", muster]).output();
+                for _ in 0..20 {
+                    let laeuft_noch = std::process::Command::new("pgrep").args(["-f", muster])
+                        .output().map(|o| o.status.success()).unwrap_or(false);
+                    if !laeuft_noch { break; }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
             }
 
             let port = portpicker::pick_unused_port().expect("Kein freier Port gefunden");
