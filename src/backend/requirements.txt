@@ -2,7 +2,7 @@ fastapi==0.139.2
 uvicorn==0.41.0
 sqlalchemy==2.0.46
 aiofiles==25.1.0
-python-multipart==0.0.31
+python-multipart==0.0.32
 fpdf2
 Pillow==12.3.0
 cairosvg
