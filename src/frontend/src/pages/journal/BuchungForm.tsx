@@ -98,7 +98,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const [kmAnzahl, setKmAnzahl] = useState<string>(bearbeiten?.km_anzahl ? String(bearbeiten.km_anzahl) : '')
   const [showNeuKategorie, setShowNeuKategorie] = useState(false)
   // Refs: verhindern dass useEffects beim ersten Kategorien-Laden die bearbeiten-Werte überschreiben
-  const skipKatRef = useRef(!!bearbeiten)
+  // Issue #273: Schnellbuchungen bringen ihre eigene Kategorie mit – die darf vom
+  // Standardkategorie-Effekt nicht überschrieben/gelöscht werden, genau wie beim Bearbeiten.
+  const skipKatRef = useRef(!!bearbeiten || !!initialWerte?.kategorie_id)
   const skipUstRef = useRef(!!bearbeiten)
   const skipKmRef = useRef(!!bearbeiten)
   const skipSonderfallRef = useRef(!!bearbeiten)

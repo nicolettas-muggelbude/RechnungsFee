@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.17',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Journal – Kategorie aus einer Schnellbuchung wurde beim Öffnen des Buchungsformulars sofort wieder überschrieben bzw. bei Ausgaben gelöscht; der Standardkategorie-Effekt kannte nur den Bearbeiten-Fall als Ausnahme, nicht Schnellbuchungs-Presets (Issue #273).' },
+    ],
+  },
+  {
     version: 'v0.4.16',
     datum: 'Juli 2026',
     eintraege: [
