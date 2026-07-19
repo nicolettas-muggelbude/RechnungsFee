@@ -119,6 +119,7 @@ def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict
     max_year = bis_jahr if bis_jahr else (kauf.year + nd + 1)
 
     while restbuchwert > ZERO and year <= max_year + 1:
+        wechsel_dieses_jahr = False
         if year < ende_jahr and ist_degressiv:
             verbleibende_jahre = max(nd - (year - kauf.year), 1)
             if linear_aktiv:
@@ -128,6 +129,7 @@ def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict
                 afa_linear_rest = (restbuchwert / verbleibende_jahre).quantize(ONE_CENT, ROUND_HALF_UP)
                 if afa_linear_rest >= afa_degressiv:
                     linear_aktiv = True
+                    wechsel_dieses_jahr = True  # Issue #270: Hinweis im Plan, in welchem Jahr gewechselt wird
                     afa_jahr_voll = afa_linear_rest
                 else:
                     afa_jahr_voll = afa_degressiv
@@ -154,6 +156,7 @@ def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict
             "afa_brutto": float(afa),
             "afa_abziehbar": float(afa_abziehbar),
             "restbuchwert_ende": float(restbuchwert),
+            "wechsel_zu_linear": wechsel_dieses_jahr,
         })
         year += 1
 

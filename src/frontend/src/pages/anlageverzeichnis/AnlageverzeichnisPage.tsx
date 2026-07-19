@@ -236,6 +236,14 @@ function AfaPlanModal({ gut, onClose }: { gut: Anlagegut; onClose: () => void })
                   <td className="px-4 py-2">
                     <span className={z.jahr === AKTUELLES_JAHR ? 'font-bold text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'}>{z.jahr}</span>
                     {z.jahr === AKTUELLES_JAHR && <span className="ml-1.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full">aktuell</span>}
+                    {z.wechsel_zu_linear && (
+                      <span
+                        className="ml-1.5 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full"
+                        title="Ab hier ist linear günstiger als degressiv – automatischer Wechsel"
+                      >
+                        ↳ Wechsel zu linear
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right text-slate-700 dark:text-slate-300">{euro(z.afa_brutto)}</td>
                   {privat > 0 && <td className="px-4 py-2 text-right font-medium text-slate-800 dark:text-slate-200">{euro(z.afa_abziehbar)}</td>}

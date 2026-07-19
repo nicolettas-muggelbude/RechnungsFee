@@ -2165,6 +2165,7 @@ export type AfaPlanZeile = {
   afa_brutto: number
   afa_abziehbar: number
   restbuchwert_ende: number
+  wechsel_zu_linear: boolean
 }
 
 export const getAnlagegueter = () => request<Anlagegut[]>('/anlageverzeichnis')
