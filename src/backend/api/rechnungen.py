@@ -2206,6 +2206,12 @@ def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.typ != "ausgang":
+        raise HTTPException(
+            status_code=409,
+            detail="Uneinbringlich gilt nur für Forderungen (Ausgangsrechnungen). "
+                   "Eingangsrechnungen sind Verbindlichkeiten – dafür gibt es keinen Forderungsausfall (Issue #271).",
+        )
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Entwürfe können nicht ausgebucht werden.")
     if rechnung.storniert:

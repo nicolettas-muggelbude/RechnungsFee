@@ -1224,7 +1224,7 @@ function RechnungDetail({
             </button>
           )}
           {!rechnung.ist_entwurf && !rechnung.storniert && !zeigStornoEingabe && !zeigForderungsausfall
-            && rechnung.dokument_typ !== 'Lieferschein'
+            && rechnung.dokument_typ !== 'Lieferschein' && rechnung.typ === 'ausgang'
             && (rechnung.zahlungsstatus === 'offen' || rechnung.zahlungsstatus === 'teilweise') && (
             <button
               onClick={() => setZeigForderungsausfall(true)}
