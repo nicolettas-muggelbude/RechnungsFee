@@ -122,37 +122,46 @@
 #### **Umsätze (steuerpflichtig):**
 
 | Kz. | Beschreibung | Quelle | Berechnung |
+> **Korrektur (Issue #272, 2026-07):** Die Kennzahlen unten sind laut amtlichem
+> Vordruckmuster 2026 teils falsch. Bei **festen** Steuersätzen (19 %/7 %/0 %) gibt
+> es im Formular nur EIN Feld (Bemessungsgrundlage) – ELSTER berechnet die Steuer
+> automatisch daraus, sie wird nicht separat gemeldet. Kz. 83/88 (unten als
+> "Umsatzsteuer 19 %/7 %") sind daher **keine echten Kennzahlen** (83 gehört real
+> zu Zeile 39 „Verbleibende USt-Vorauszahlung", 88 existiert im Formular gar
+> nicht) – im Code nur noch interne Hilfsgrößen für die Zahllast, nicht mehr
+> angezeigt. Kz. 93 ist real die **Bemessungsgrundlage ig. Erwerb 7 %**, nicht
+> die Steuer aus 19 %. Korrekt: Kz. 89 (BG 19 %), Kz. 93 (BG 7 %), Kz. 90 (BG 0 %),
+> Kz. 95/98 (BG/Steuer bei anderen Sätzen). Siehe `ustva.py` KZ_META-Kommentar.
+
 |-----|--------------|--------|------------|
 | **81** | Umsätze 19% USt | Ausgangsrechnungen (Inland) | Summe Netto (USt-Satz 19%) |
-| **83** | Umsatzsteuer 19% | Auto-berechnet | Kz. 81 × 0,19 |
 | **86** | Umsätze 7% USt | Ausgangsrechnungen (Inland) | Summe Netto (USt-Satz 7%) |
-| **88** | Umsatzsteuer 7% | Auto-berechnet | Kz. 86 × 0,07 |
 | **41** | Innergemeinschaftliche Lieferungen | Ausgangsrechnungen (EU) | Summe Netto (0% USt, § 4 Nr. 1b UStG) |
 
 #### **Innergemeinschaftlicher Erwerb (EU-Einkäufe):**
 
 | Kz. | Beschreibung | Quelle | Berechnung |
 |-----|--------------|--------|------------|
-| **89** | Innergemeinschaftlicher Erwerb | Eingangsrechnungen (EU) | Summe Netto (0% von EU-Lieferant) |
-| **93** | Umsatzsteuer aus ig. Erwerb | Auto-berechnet | Kz. 89 × 0,19 (Reverse Charge) |
-| **61** | Vorsteuer aus ig. Erwerb | Auto-berechnet | = Kz. 93 (abzugsfähig) |
+| **89** | ig. Erwerb 19% – Bemessungsgrundlage | Eingangsrechnungen (EU, 19%) | Summe Netto |
+| **93** | ig. Erwerb 7% – Bemessungsgrundlage | Eingangsrechnungen (EU, 7%) | Summe Netto |
+| **90** | ig. Erwerb 0% – Bemessungsgrundlage | Eingangsrechnungen (EU, 0%) | Summe Netto |
+| **61** | Vorsteuer aus ig. Erwerb | Auto-berechnet | = tatsächliche USt aller ig.-Erwerb-Buchungen (satzunabhängig, abzugsfähig) |
 
-**Wichtig:** Kz. 93 und Kz. 61 gleichen sich aus (zahlen + abziehen) → Netto-Effekt: 0 €
+**Wichtig:** Die aus Kz. 89/93/90 resultierende Steuer und Kz. 61 gleichen sich aus (zahlen + abziehen) → Netto-Effekt: 0 €
 
 #### **Vorsteuer (abzugsfähig):**
 
 | Kz. | Beschreibung | Quelle | Berechnung |
 |-----|--------------|--------|------------|
 | **66** | Vorsteuer Inland | Eingangsrechnungen (DE) | Summe USt-Betrag (abzugsfähig) |
-| **61** | Vorsteuer aus ig. Erwerb | Eingangsrechnungen (EU) | = Kz. 93 (siehe oben) |
+| **61** | Vorsteuer aus ig. Erwerb | Eingangsrechnungen (EU) | siehe oben |
 
 #### **Zahllast/Erstattung:**
 
-| Kz. | Beschreibung | Berechnung |
-|-----|--------------|------------|
-| **83** | Summe Umsatzsteuer | Kz. 83 + Kz. 88 + ... |
-| **66** | Summe Vorsteuer | Kz. 66 + Kz. 61 |
-| **Zahllast** | **Vorauszahlung (Soll)** | **Kz. 83 + Kz. 93 - Kz. 66 - Kz. 61** |
+Intern berechnet aus: tatsächlicher USt-Betrag aller Umsätze (Inland 19%/7%, ig. Erwerb
+19%/7%/0%, §13b) minus abzugsfähiger Vorsteuer (Kz. 66 + Kz. 61 + Kz. 67). Die einzelnen
+Steuer-Zwischensummen sind – außer bei variablen Sätzen (§13b, Kz. 98) – keine eigenen
+Kennzahlen, siehe Korrekturhinweis oben.
 
 ---
 
@@ -184,11 +193,11 @@ Belgischer Lieferant               Du (Deutschland)
 Rechnung: 1.000 €
 + 0% MwSt (!)                      Du MUSST deutsche USt berechnen:
 = 1.000 € Brutto
-                                   Kz. 89: 1.000 € (Erwerb)
-Lieferant berechnet 0%,            Kz. 93: 190 € (19% USt darauf)
-weil du deutsche                   Kz. 61: 190 € (Vorsteuer abziehbar)
-USt-IdNr. hast
-                                   Netto-Effekt: 0 € (93 - 61 = 0)
+                                   Kz. 89: 1.000 € (Bemessungsgrundlage)
+Lieferant berechnet 0%,            → intern 190 € USt (19% darauf, nicht
+weil du deutsche                     separat gemeldet, ELSTER rechnet das)
+USt-IdNr. hast                     Kz. 61: 190 € (Vorsteuer abziehbar)
+                                   Netto-Effekt: 0 €
 ```
 
 **Voraussetzungen:**
@@ -202,10 +211,9 @@ USt-IdNr. hast
 - **Über 12.500 € pro Jahr:** Pflicht zum Reverse Charge
 
 **UStVA:**
-- Kz. 89: 1.000 € (Bemessungsgrundlage)
-- Kz. 93: 190 € (Steuer zahlen)
+- Kz. 89: 1.000 € (Bemessungsgrundlage 19 %)
 - Kz. 61: 190 € (Vorsteuer abziehen)
-- Zahllast: +190 € - 190 € = **0 €** ✅
+- Zahllast-Effekt: +190 € (intern aus Kz. 89 × 19 %) − 190 € (Kz. 61) = **0 €** ✅
 
 ---
 

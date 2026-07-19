@@ -7,14 +7,21 @@ Zeitraum-Formate:
   Vierteljährlich: zeitraum=2026-Q1 … 2026-Q4
 
 KZ-Mapping (konto_ust_skr03/04 → Kennziffer):
-  1776 / 3806 → KZ 81/83  (19% Ausgangsumsatz)
-  1771 / 3801 → KZ 86/88  (7%  Ausgangsumsatz)
-  1780        → KZ 89/93  (ig. Erwerb 19%)
-  1781        → KZ 96/97  (ig. Erwerb 7% – selten)
-  1583 / 1402 → KZ 61     (Vorsteuer ig. Erwerb)
+  1776 / 3806 → KZ 81      (19% Ausgangsumsatz, Bemessungsgrundlage)
+  1771 / 3801 → KZ 86      (7%  Ausgangsumsatz, Bemessungsgrundlage)
+  ust_sonderfall="ig_erwerb", je nach ust_satz → KZ 89 (19%) / 93 (7%) / 90 (0%) /
+                95+98 (andere Sätze) – jeweils Bemessungsgrundlage, außer 98 (Steuer)
+  1583 / 1402 → KZ 61     (Vorsteuer ig. Erwerb, satzunabhängig aggregiert)
   1787        → KZ 84/85  (§13b Abs. 2, Empfänger schuldet)
   1789        → KZ 46/47  (§13b Abs. 1, EU-Dienstleistungen)
   vorsteuer_betrag, art=Ausgabe, andere Konten → KZ 66 (Vorsteuer Inland)
+
+Hinweis: Bei festen Steuersätzen (19%/7%/0%) gibt es laut amtlichem Vordruckmuster
+NUR eine Bemessungsgrundlage-Kennzahl – die Steuer wird von ELSTER automatisch daraus
+berechnet, nicht separat gemeldet. Nur bei variablen Sätzen (§13b, "andere Steuersätze")
+gibt es zusätzlich eine Steuer-Kennzahl. kz_83/kz_88 (Steuer 19%/7% Inland) sind daher
+KEINE echten Kennzahlen, sondern nur interne Hilfsgrößen für die Zahllast-Berechnung
+(Issue #272).
 
 KZ 41 (EU-Lieferungen steuerfreie Einnahmen) und KZ 87 (Ausfuhr etc.)
 können nicht sicher aus dem Journal abgeleitet werden – manuelle Eingabe.
@@ -50,9 +57,7 @@ ZERO = Decimal("0.00")
 KZ_META = [
     ("A. Steuerpflichtige Ausgangsumsätze", "81",
      "Umsätze 19 % – Bemessungsgrundlage", False, True),
-    ("", "83", "Umsatzsteuer 19 %", True, True),
     ("", "86", "Umsätze 7 % – Bemessungsgrundlage", False, True),
-    ("", "88", "Umsatzsteuer 7 %", True, True),
 
     ("B. Steuerfreie Umsätze mit Vorsteuerabzug", "41",
      "Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.", False, False),
@@ -60,8 +65,11 @@ KZ_META = [
      "Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)", False, False),
 
     ("C. Innergemeinschaftliche Erwerbe", "89",
-     "Steuerpflichtige Erwerbe 19 %", False, True),
-    ("", "93", "Umsatzsteuer ig. Erwerb 19 %", True, True),
+     "Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage", False, True),
+    ("", "93", "Steuerpflichtige Erwerbe 7 % – Bemessungsgrundlage", False, True),
+    ("", "90", "Steuerpflichtige Erwerbe 0 % – Bemessungsgrundlage", False, True),
+    ("", "95", "Steuerpflichtige Erwerbe zu anderen Steuersätzen – Bemessungsgrundlage", False, True),
+    ("", "98", "Umsatzsteuer zu anderen Steuersätzen (ig. Erwerb)", True, True),
 
     ("D. Leistungsempfänger als Steuerschuldner (§13b UStG)", "46",
      "Sonstige Leistungen EU-Unternehmer (§13b Abs. 1 UStG)", False, True),
@@ -93,7 +101,10 @@ _KONTO_AUSGABE_VST: dict[str, str] = {
     "1787": "kz_67", "1789": "kz_67",   # Vorsteuer §13b
 }
 
-ALL_KZ_KEYS = [f"kz_{m[1]}" for m in KZ_META] + ["zahllast"]
+# kz_83/kz_88 sind KEINE eigenständig meldepflichtigen Kennzahlen (bei festen Steuersätzen
+# berechnet ELSTER die Steuer automatisch aus der Bemessungsgrundlage) – daher nicht in
+# KZ_META/Anzeige, aber intern für die Zahllast-Berechnung weiter benötigt.
+ALL_KZ_KEYS = [f"kz_{m[1]}" for m in KZ_META] + ["kz_83", "kz_88", "zahllast"]
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +149,10 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
     _marge_cache: dict[str, Decimal | None] = {}
 
     kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+    # Interne Hilfssumme: tatsächliche Steuer aus ig. Erwerb zu festen Sätzen (19%/7%/0%).
+    # Keine eigene Kennzahl (die Steuer wird bei festen Sätzen nicht separat gemeldet,
+    # siehe KZ_META-Kommentar) – wird nur für die Zahllast-Berechnung gebraucht (Issue #272).
+    ige_steuer_feste_saetze = ZERO
 
     for e in eintraege:
         ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
@@ -146,8 +161,23 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         sf = getattr(e, "ust_sonderfall", None) or ("ig_erwerb" if getattr(e, "ist_ig_erwerb", False) else None)
         if sf:
             if sf == "ig_erwerb":
-                kz["kz_89"] += e.netto_betrag
-                kz["kz_93"] += e.ust_betrag
+                # Bemessungsgrundlage nach TATSÄCHLICHEM Steuersatz der Buchung einsortieren –
+                # nicht mehr pauschal in kz_89 (Issue #272: 7%-Buchungen landeten fälschlich
+                # dort, mit dem Steuerbetrag statt der Bemessungsgrundlage).
+                satz_i = int(e.ust_satz) if e.ust_satz is not None else None
+                if satz_i == 19:
+                    kz["kz_89"] += e.netto_betrag
+                    ige_steuer_feste_saetze += e.ust_betrag
+                elif satz_i == 7:
+                    kz["kz_93"] += e.netto_betrag
+                    ige_steuer_feste_saetze += e.ust_betrag
+                elif satz_i == 0:
+                    kz["kz_90"] += e.netto_betrag
+                else:
+                    # Andere Steuersätze: Bemessungsgrundlage UND Steuer sind laut Formular
+                    # getrennt zu melden (KZ 95/98), da der Satz nicht fest vorgegeben ist.
+                    kz["kz_95"] += e.netto_betrag
+                    kz["kz_98"] += e.ust_betrag
                 if e.vorsteuer_betrag:
                     kz["kz_61"] += e.vorsteuer_betrag
             elif sf == "13b_abs1":
@@ -223,7 +253,11 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         if k != "zahllast":
             kz[k] = kz[k].quantize(q, ROUND_HALF_UP)
 
-    ust = kz["kz_83"] + kz["kz_88"] + kz["kz_93"] + kz["kz_47"] + kz["kz_85"]
+    # kz_98 (ig. Erwerb andere Sätze) ist eine echte Steuer-Kennzahl, kz_83/kz_88 (Inland
+    # 19%/7%) und ige_steuer_feste_saetze (ig. Erwerb 19%/7%/0%) sind interne Hilfsgrößen
+    # ohne eigene Kennzahl (siehe KZ_META-Kommentar).
+    ust = (kz["kz_83"] + kz["kz_88"] + kz["kz_98"] + kz["kz_47"] + kz["kz_85"]
+           + ige_steuer_feste_saetze.quantize(q, ROUND_HALF_UP))
     vst = kz["kz_66"] + kz["kz_61"] + kz["kz_67"]
     kz["zahllast"] = (ust - vst).quantize(q, ROUND_HALF_UP)
     return kz
@@ -409,6 +443,9 @@ class UStVAErgebnis(BaseModel):
     # C – ig. Erwerb
     kz_89: Decimal = ZERO
     kz_93: Decimal = ZERO
+    kz_90: Decimal = ZERO
+    kz_95: Decimal = ZERO
+    kz_98: Decimal = ZERO
     # D – §13b
     kz_46: Decimal = ZERO
     kz_47: Decimal = ZERO
@@ -433,6 +470,9 @@ class UStVASpeichernRequest(BaseModel):
     kz_87: Decimal = ZERO
     kz_89: Decimal = ZERO
     kz_93: Decimal = ZERO
+    kz_90: Decimal = ZERO
+    kz_95: Decimal = ZERO
+    kz_98: Decimal = ZERO
     kz_46: Decimal = ZERO
     kz_47: Decimal = ZERO
     kz_84: Decimal = ZERO
@@ -536,6 +576,7 @@ class JahresUStVAErgebnis(BaseModel):
     kz_86: Decimal = ZERO; kz_88: Decimal = ZERO
     kz_41: Decimal = ZERO; kz_87: Decimal = ZERO
     kz_89: Decimal = ZERO; kz_93: Decimal = ZERO
+    kz_90: Decimal = ZERO; kz_95: Decimal = ZERO; kz_98: Decimal = ZERO
     kz_46: Decimal = ZERO; kz_47: Decimal = ZERO
     kz_84: Decimal = ZERO; kz_85: Decimal = ZERO
     kz_66: Decimal = ZERO; kz_61: Decimal = ZERO; kz_67: Decimal = ZERO
@@ -800,7 +841,7 @@ def jahresumsatzsteuer(
 
     hat_ig = any(
         kz.get(k, ZERO) != ZERO
-        for k in ["kz_41", "kz_89", "kz_93", "kz_46", "kz_47", "kz_84", "kz_85"]
+        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85"]
     )
 
     return JahresUStVAErgebnis(
@@ -809,6 +850,7 @@ def jahresumsatzsteuer(
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
         kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
+        kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
         kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
         kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),
@@ -853,7 +895,7 @@ def jahresumsatzsteuer_pdf(
 
     hat_ig = any(
         kz.get(k, ZERO) != ZERO
-        for k in ["kz_41", "kz_89", "kz_93", "kz_46", "kz_47", "kz_84", "kz_85"]
+        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85"]
     )
 
     ergebnis = JahresUStVAErgebnis(
@@ -862,6 +904,7 @@ def jahresumsatzsteuer_pdf(
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
         kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
+        kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
         kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
         kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),

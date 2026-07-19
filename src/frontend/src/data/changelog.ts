@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'install-linux.sh – veraltetes eingebettetes App-Icon (mit weißem Rand) durch das aktuelle transparente Icon ersetzt.' },
       { typ: 'verbesserung', text: 'PDF-/CSV-Export-Buttons in allen Auswertungen (EÜR, UStVA, Jahres-USt, Anlage S/G, Anlagenverzeichnis, EKS, Tagesabschluss, Kontenübersicht) vereinheitlicht: gleicher Pillenbutton-Stil, immer rechtsbündig in der Filterkarte (Issue #259).' },
       { typ: 'fix', text: 'Linux/macOS – Backend-Prozess blieb nach Beenden der App als Waise zurück (PyInstaller-Onefile-Bootloader forkt einen Kindprozess, das bisherige Kill traf nur den Bootloader). Backend wird jetzt wie unter Windows sauber per Shutdown-Request beendet.' },
+      { typ: 'fix', text: 'UStVA – innergemeinschaftlicher Erwerb zu 7 % USt wurde fälschlich als Steuerbetrag in KZ 93 statt als eigene Bemessungsgrundlage geführt; zusätzlich KZ 90 (0 %) und KZ 95/98 (andere Steuersätze) ergänzt, die bisher komplett fehlten. Betrifft nur UStVA/Jahres-USt – EÜR, EKS, GuV rechnen unabhängig davon korrekt (Issue #272).' },
     ],
   },
   {

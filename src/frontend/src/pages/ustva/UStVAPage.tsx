@@ -15,13 +15,14 @@ import { ExportButtons } from '../../components/ExportButtons'
 type KZMeta = [string, string, string, boolean, boolean]
 const KZ_META: KZMeta[] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false, true],
-  ['', '83', 'Umsatzsteuer 19 %', true, true],
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false, true],
-  ['', '88', 'Umsatzsteuer 7 %', true, true],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.', false, true],
   ['', '87', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)', false, false],
-  ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 %', false, true],
-  ['', '93', 'Umsatzsteuer ig. Erwerb 19 %', true, true],
+  ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false, true],
+  ['', '93', 'Steuerpflichtige Erwerbe 7 % – Bemessungsgrundlage', false, true],
+  ['', '90', 'Steuerpflichtige Erwerbe 0 % – Bemessungsgrundlage', false, true],
+  ['', '95', 'Steuerpflichtige Erwerbe zu anderen Steuersätzen – Bemessungsgrundlage', false, true],
+  ['', '98', 'Umsatzsteuer zu anderen Steuersätzen (ig. Erwerb)', true, true],
   ['D. Leistungsempfänger als Steuerschuldner (§13b UStG)', '46', 'Sonstige Leistungen EU-Unternehmer (§13b Abs. 1)', false, true],
   ['', '47', 'Umsatzsteuer §13b Abs. 1', true, true],
   ['', '84', 'Andere §13b-Leistungen (Abs. 2 Nr. 1, 2, 4–12)', false, true],
@@ -157,7 +158,11 @@ export function UStVAPage() {
   }
 
   function berechneZahllast(): string {
-    const ust = ['83','88','93','47','85'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0)
+    // kz_89/93/90 sind reine Bemessungsgrundlagen (feste Sätze 19%/7%/0% – die Steuer wird
+    // bei festen Sätzen nicht separat gemeldet, siehe Backend-Kommentar). Für die Zahllast
+    // hier aus BG × Satz ableiten, analog zur Backend-Berechnung (Issue #272).
+    const steuerIge = parseFloat(kzWert('89') || '0') * 0.19 + parseFloat(kzWert('93') || '0') * 0.07
+    const ust = ['83','88','98','47','85'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0) + steuerIge
     const vst = ['66','61','67'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0)
     return (ust - vst).toFixed(2)
   }

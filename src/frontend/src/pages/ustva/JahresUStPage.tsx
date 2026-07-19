@@ -9,12 +9,13 @@ import { ExportButtons } from '../../components/ExportButtons'
 
 const KZ_META: [string, string, string, boolean][] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false],
-  ['', '83', 'Umsatzsteuer 19 %', true],
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false],
-  ['', '88', 'Umsatzsteuer 7 %', true],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b)', false],
-  ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 %', false],
-  ['', '93', 'Umsatzsteuer ig. Erwerb 19 %', true],
+  ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false],
+  ['', '93', 'Steuerpflichtige Erwerbe 7 % – Bemessungsgrundlage', false],
+  ['', '90', 'Steuerpflichtige Erwerbe 0 % – Bemessungsgrundlage', false],
+  ['', '95', 'Steuerpflichtige Erwerbe zu anderen Steuersätzen – Bemessungsgrundlage', false],
+  ['', '98', 'Umsatzsteuer zu anderen Steuersätzen (ig. Erwerb)', true],
   ['D. Leistungsempfänger als Steuerschuldner (§13b UStG)', '46', 'Sonstige Leistungen EU-Unternehmer (§13b Abs. 1)', false],
   ['', '47', 'Umsatzsteuer §13b Abs. 1', true],
   ['', '84', 'Andere §13b-Leistungen (Abs. 2 Nr. 1, 2, 4–12)', false],
