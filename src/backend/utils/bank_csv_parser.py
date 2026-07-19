@@ -282,7 +282,9 @@ def parse_camt_from_zip(raw: bytes) -> tuple[Optional[str], list[dict]]:
 
 def extract_konto_iban_camt(raw: bytes) -> Optional[str]:
     """Extrahiert die eigene Konto-IBAN aus einem CAMT.053/054-XML."""
-    import xml.etree.ElementTree as ET
+    # defusedxml statt stdlib ET: schützt vor Entity-Expansion-DoS bei präparierten
+    # Bank-Export-Dateien (externe/Nutzerdaten-Import, Bandit B314).
+    import defusedxml.ElementTree as ET
     try:
         root = ET.fromstring(raw)
         ns_match = re.match(r'\{([^}]+)\}', root.tag)
@@ -302,7 +304,9 @@ def extract_konto_iban_camt(raw: bytes) -> Optional[str]:
 
 def parse_camt(raw: bytes) -> list[dict]:
     """Parst CAMT.053/054 ISO 20022 XML und gibt normalisierte Transaktionsdicts zurück."""
-    import xml.etree.ElementTree as ET
+    # defusedxml statt stdlib ET: schützt vor Entity-Expansion-DoS bei präparierten
+    # Bank-Export-Dateien (externe/Nutzerdaten-Import, Bandit B314).
+    import defusedxml.ElementTree as ET
     from decimal import InvalidOperation as _IE
 
     try:

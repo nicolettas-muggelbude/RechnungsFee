@@ -1,10 +1,10 @@
-fastapi==0.129.2
+fastapi==0.139.2
 uvicorn==0.41.0
 sqlalchemy==2.0.46
 aiofiles==25.1.0
-python-multipart==0.0.22
+python-multipart==0.0.31
 fpdf2
-Pillow==12.1.1
+Pillow==12.3.0
 cairosvg
 segno==1.6.1
 drafthorse
@@ -19,3 +19,4 @@ markdown
 cryptography
 smbprotocol
 charset-normalizer
+defusedxml

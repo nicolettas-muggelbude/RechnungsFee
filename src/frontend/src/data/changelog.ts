@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'fix', text: 'Journal – Kategorie aus einer Schnellbuchung wurde beim Öffnen des Buchungsformulars sofort wieder überschrieben bzw. bei Ausgaben gelöscht; der Standardkategorie-Effekt kannte nur den Bearbeiten-Fall als Ausnahme, nicht Schnellbuchungs-Presets (Issue #273).' },
+      { typ: 'fix', text: 'Sicherheit – bekannte Verwundbarkeiten in Frontend- (react-router, vite u. a.), Backend- (FastAPI/starlette, python-multipart, Pillow) und Rust-Abhängigkeiten (quick-xml, rustls-webpki, tar) durch Versions-Updates geschlossen. CAMT-XML-Import im Bank-Import auf defusedxml umgestellt (Schutz vor präparierten Bank-Exportdateien). Dependabot für laufende Überwachung eingerichtet.' },
     ],
   },
   {
