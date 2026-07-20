@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.20',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Stammdaten – Bankverbindung (IBAN/BIC/Bank) stand im Tab „Funktionen" statt im Tab „Firma"; da eine IBAN aber Pflicht zum Speichern ist, scheiterte das Speichern von Firmendaten ohne ersichtlichen Grund, wenn man dort suchte. Feld wieder zurück in den Tab „Firma" verschoben.' },
+    ],
+  },
+  {
     version: 'v0.4.19',
     datum: 'Juli 2026',
     eintraege: [

@@ -356,6 +356,29 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <Field label="Registergericht">{inp('handelsregister_gericht', 'Oldenburg')}</Field>
           </div>
         </div>
+
+        <hr className="border-slate-100 dark:border-slate-700" />
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Bankverbindung</h3>
+          <Field label="IBAN *">
+            <input
+              type="text"
+              value={(form.iban as string) ?? ''}
+              onChange={ev => {
+                const raw = ev.target.value.replace(/\s/g, '').toUpperCase()
+                const formatted = raw.replace(/(.{4})/g, '$1 ').trimEnd()
+                set('iban', formatted)
+              }}
+              placeholder="DE89 3704 0044 0532 0130 00"
+              className={inputCls}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="BIC">{inp('bic', 'COBADEFFXXX')}</Field>
+            <Field label="Bank">{inp('bank_name', 'Deutsche Bank')}</Field>
+          </div>
+        </div>
       </div>
 
       {/* ── Tab: Steuer & Recht ───────────────────────────────────────── */}
@@ -615,29 +638,6 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
       <div className={isRechnungTab ? 'space-y-6' : 'hidden'}>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Bankverbindung</h3>
-          <Field label="IBAN *">
-            <input
-              type="text"
-              value={(form.iban as string) ?? ''}
-              onChange={ev => {
-                const raw = ev.target.value.replace(/\s/g, '').toUpperCase()
-                const formatted = raw.replace(/(.{4})/g, '$1 ').trimEnd()
-                set('iban', formatted)
-              }}
-              placeholder="DE89 3704 0044 0532 0130 00"
-              className={inputCls}
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="BIC">{inp('bic', 'COBADEFFXXX')}</Field>
-            <Field label="Bank">{inp('bank_name', 'Deutsche Bank')}</Field>
-          </div>
-        </div>
-
-        <hr className="border-slate-100 dark:border-slate-700" />
-
-        <div className="space-y-4">
           <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Rechnungs-PDF</h3>
 
           <label className="flex items-start gap-3 cursor-pointer">
@@ -713,7 +713,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               </p>
             </div>
             {!form.iban?.trim() && (
-              <InfoTooltip text="Bitte zuerst eine IBAN unter Bankverbindung hinterlegen." align="right" />
+              <InfoTooltip text="Bitte zuerst eine IBAN im Tab Firma unter Bankverbindung hinterlegen." align="right" />
             )}
           </label>
 
