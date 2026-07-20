@@ -121,7 +121,7 @@ jobs:
         run: npm install -g @tauri-apps/cli@^2
 
       - name: Tauri-App bauen und Release erstellen
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
