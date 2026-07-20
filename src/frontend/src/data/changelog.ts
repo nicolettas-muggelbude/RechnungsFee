@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.19',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Anlagenverzeichnis – bei degressiver AfA zeigten die Gesamt-AfA-Summe und das Detail-Panel weiterhin den linearen Betrag bzw. „Linear" an. Ursache: eine eigene, rein lineare AfA-Berechnung im Frontend statt des bereits korrekten Backend-Endpunkts. Betraf auch die Übernahme in die EÜR, bis dort zufällig ein Requery ausgelöst wurde (Issue #294).' },
+    ],
+  },
+  {
     version: 'v0.4.18',
     datum: 'Juli 2026',
     eintraege: [

@@ -6,7 +6,7 @@ import { ExportButtons } from '../../components/ExportButtons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getAnlagegueter, createAnlagegut, updateAnlagegut, deleteAnlagegut,
-  getAfaPlan, getAveurPdfUrl, openUrl,
+  getAfaPlan, getAveurPdfUrl, getAveurZusammenfassung, openUrl,
   type Anlagegut, type AnlagegutCreate, type AnlagegutTyp,
 } from '../../api/client'
 
@@ -280,51 +280,34 @@ export function AnlageverzeichnisPage() {
   const { data: gueter = [] } = useQuery({ queryKey: ['anlagegueter'], queryFn: getAnlagegueter })
   const selGut = gueter.find(g => g.id === selId)
 
-  const createMut = useMutation({ mutationFn: createAnlagegut, onSuccess: () => { qc.invalidateQueries({ queryKey: ['anlagegueter'] }); setFormModus(null) } })
-  const updateMut = useMutation({ mutationFn: ({ id, data }: { id: number; data: AnlagegutCreate }) => updateAnlagegut(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ['anlagegueter'] }); setFormModus(null) } })
-  const deleteMut = useMutation({ mutationFn: deleteAnlagegut, onSuccess: () => { qc.invalidateQueries({ queryKey: ['anlagegueter'] }); setSelId(null) } })
+  // AfA-Beträge kommen vom Backend (_afa_jahresplan) statt einer eigenen Neuberechnung im
+  // Frontend – die frühere lokale Kopie kannte nur lineare AfA und zeigte bei degressiven
+  // Wirtschaftsgütern dauerhaft den falschen (linearen) Betrag an (Issue #294).
+  const { data: zusammenfassung } = useQuery({
+    queryKey: ['aveur-zusammenfassung', jahr],
+    queryFn: () => getAveurZusammenfassung(jahr),
+  })
+  const afaById = new Map((zusammenfassung?.einzel ?? []).map(e => [e.id, e.afa_abziehbar]))
+  const gesamtAfa = zusammenfassung?.gesamt_afa ?? 0
+
+  function invalidateAfa() {
+    qc.invalidateQueries({ queryKey: ['anlagegueter'] })
+    qc.invalidateQueries({ queryKey: ['aveur-zusammenfassung'] })
+    qc.invalidateQueries({ queryKey: ['afa-plan'] })
+    // AVEÜR-AfA fließt in EÜR Zeile 33 ein – sonst bleibt die EÜR-Seite auf altem Stand,
+    // bis dort zufällig ein Requery ausgelöst wird (Issue #294)
+    qc.invalidateQueries({ queryKey: ['euer-berechnen'] })
+    qc.invalidateQueries({ queryKey: ['euer-kategorien'] })
+  }
+
+  const createMut = useMutation({ mutationFn: createAnlagegut, onSuccess: () => { invalidateAfa(); setFormModus(null) } })
+  const updateMut = useMutation({ mutationFn: ({ id, data }: { id: number; data: AnlagegutCreate }) => updateAnlagegut(id, data), onSuccess: () => { invalidateAfa(); setFormModus(null) } })
+  const deleteMut = useMutation({ mutationFn: deleteAnlagegut, onSuccess: () => { invalidateAfa(); setSelId(null) } })
 
   async function handlePdf() {
     const url = await getAveurPdfUrl(jahr)
     await openUrl(url)
   }
-
-  // AfA des aktuellen Jahres je Gut
-  function afaFuerJahr(g: Anlagegut): number {
-    const kauf = new Date(g.kaufdatum)
-    const kaufjahr = kauf.getFullYear()
-    const nd = g.nutzungsdauer_jahre
-    const preis = parseFloat(g.kaufpreis_netto)
-    const privat = parseFloat(g.privat_anteil_prozent) / 100
-    const afaVoll = preis / nd
-    const endeJahr = kaufjahr + nd
-
-    let restbuchwert = preis
-    let afaJahr = 0
-    for (let y = kaufjahr; y <= jahr; y++) {
-      let afa: number
-      if (y === kaufjahr) {
-        const monate = 12 - kauf.getMonth() // getMonth() 0-indexed, March = 2, so 12-2=10 ✓
-        afa = Math.round(afaVoll * monate / 12 * 100) / 100
-      } else if (y === endeJahr && (12 - kauf.getMonth()) < 12) {
-        const restmonate = 12 - (12 - kauf.getMonth())
-        afa = Math.round(afaVoll * restmonate / 12 * 100) / 100
-      } else if (y > endeJahr) {
-        break
-      } else {
-        afa = Math.round(afaVoll * 100) / 100
-      }
-      afa = Math.min(afa, restbuchwert)
-      restbuchwert = Math.round((restbuchwert - afa) * 100) / 100
-      if (y === jahr) {
-        afaJahr = Math.round(afa * (1 - privat) * 100) / 100
-        break
-      }
-    }
-    return afaJahr
-  }
-
-  const gesamtAfa = gueter.filter(g => g.aktiv).reduce((s, g) => s + afaFuerJahr(g), 0)
 
   const TYP_GRUPPEN: { key: AnlagegutTyp; label: string; icon: string }[] = [
     { key: 'kfz',     label: 'Kraftfahrzeuge',          icon: '🚗' },
@@ -388,7 +371,7 @@ export function AnlageverzeichnisPage() {
                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">{icon} {label}</p>
                 <div className="space-y-2">
                   {gruppe.map(g => {
-                    const afa = afaFuerJahr(g)
+                    const afa = afaById.get(g.id) ?? 0
                     const abgeschrieben = afa === 0 && new Date(g.kaufdatum).getFullYear() < jahr
                     return (
                       <div key={g.id}
@@ -465,7 +448,7 @@ export function AnlageverzeichnisPage() {
               ['Kaufdatum', fmt(selGut.kaufdatum)],
               ['Kaufpreis netto', euro(selGut.kaufpreis_netto)],
               ['Nutzungsdauer', `${selGut.nutzungsdauer_jahre} Jahre`],
-              ['AfA-Methode', 'Linear'],
+              ['AfA-Methode', selGut.afa_methode === 'degressiv' ? 'Degressiv' : 'Linear'],
               ...(parseFloat(selGut.privat_anteil_prozent) > 0 ? [['Privatanteil', `${parseFloat(selGut.privat_anteil_prozent).toFixed(0)} %`]] : []),
               ...(selGut.kennzeichen ? [['Kennzeichen', selGut.kennzeichen]] : []),
               ...(selGut.verkauft_am ? [['Verkauft am', fmt(selGut.verkauft_am)]] : []),
