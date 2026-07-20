@@ -318,6 +318,8 @@ macOS: kein Apple-Zertifikat → Hinweis `xattr -cr` in Release-Notes ergänzen.
 
 **Release-Notes Pflicht-Abschnitte nach Download-Tabelle:**
 ```markdown
+> 🐧 **Linux:** `install-linux.sh` lädt die App nicht selbst herunter – zusätzlich die AppImage in denselben Ordner legen (empfohlen: die neutrale `RechnungsFee_amd64.AppImage`, bleibt bei Updates gleich benannt). Dann `bash install-linux.sh` ausführen (kein `chmod +x` nötig – weder für das Skript noch die AppImage, das macht `install-linux.sh` selbst).
+
 > 🍎 **macOS:** Nicht signiert – beim ersten Start Rechtsklick → Öffnen, oder:
 > `xattr -cr RechnungsFee_X.X.X_aarch64.dmg`
 

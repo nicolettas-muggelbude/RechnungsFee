@@ -23,15 +23,21 @@
 | Betriebssystem | Download | Hinweis |
 |---|---|---|
 | **Windows 10/11** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `…x64-setup.exe` | NSIS-Installer, einfach ausführen |
-| **Linux (x86_64)** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `…amd64.AppImage` | Ausführbar machen + starten |
+| **Linux (x86_64)** | [→ Releases-Seite](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) → `install-linux.sh` **und** `RechnungsFee_amd64.AppImage` | Beide Dateien nötig, siehe unten |
+
+### 🐧 Linux-Installation
+
+`install-linux.sh` lädt die App **nicht selbst herunter** – zwei Dateien aus den [Releases](https://github.com/nicolettas-muggelbude/RechnungsFee/releases/latest) nötig:
+- `install-linux.sh`
+- `RechnungsFee_amd64.AppImage` (neutraler Dateiname, empfohlen – bleibt bei Updates gleich benannt)
+
+Beide Dateien in denselben Ordner legen, dann:
 
 ```bash
-# Linux: AppImage ausführbar machen und Desktop-Integration einrichten
-chmod +x RechnungsFee_*.AppImage
-bash install-linux.sh RechnungsFee_*.AppImage
+bash install-linux.sh
 ```
 
-`install-linux.sh` prüft automatisch alle Abhängigkeiten (webkit2gtk, libfuse2) und legt einen Desktop-Starter an. Kein `curl` oder `wget` nötig.
+`install-linux.sh` findet die AppImage automatisch (im selben Ordner, im Skript-Verzeichnis oder in `~/Downloads`), prüft alle Abhängigkeiten (webkit2gtk, libfuse2) und legt einen Desktop-Starter an. Kein `curl` oder `wget` nötig.
 
 > **Ubuntu 22.04–26.04**: Falls das AppImage ohne `install-linux.sh` nicht startet, fehlt `libfuse2`:
 > ```bash

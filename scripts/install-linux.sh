@@ -4,11 +4,11 @@
 # Prüft und repariert automatisch fehlende Systemabhängigkeiten.
 # Benötigt KEIN sudo für die Integration – nur optional für die Reparatur.
 #
-# Verwendung:
-#   chmod +x install-linux.sh
-#   ./install-linux.sh /pfad/zu/RechnungsFee_amd64.AppImage
+# Verwendung (kein chmod +x nötig, weder für dieses Skript noch die AppImage):
+#   bash install-linux.sh [/pfad/zu/RechnungsFee_amd64.AppImage]
 #
-# Ohne Argument wird ~/Downloads/RechnungsFee*.AppImage gesucht.
+# Ohne Argument wird zuerst im aktuellen Verzeichnis, dann im Verzeichnis
+# dieses Skripts und zuletzt in ~/Downloads nach RechnungsFee*.AppImage gesucht.
 
 set -e
 
