@@ -77,7 +77,10 @@ export function SetupWizard() {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">🧾 RechnungsFee</h1>
+          <div className="flex items-center justify-center gap-2.5">
+            <img src="/logo.svg" alt="RechnungsFee" className="w-10 h-10 shrink-0" />
+            <h1 className="text-3xl font-bold leading-tight"><span className="text-slate-800 dark:text-white">Rechnungs</span><span className="text-[#4F46E5]">Fee</span></h1>
+          </div>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Einrichtung in 4 Schritten</p>
         </div>
 

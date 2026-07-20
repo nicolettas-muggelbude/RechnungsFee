@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.18',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Setup-Wizard – Kopfzeile zeigte noch ein Emoji-Platzhalter-Logo statt des echten RechnungsFee-Logos und Schriftzugs, die überall sonst in der App (Seitenleiste, Info-Seite) verwendet werden.' },
+    ],
+  },
+  {
     version: 'v0.4.17',
     datum: 'Juli 2026',
     eintraege: [
