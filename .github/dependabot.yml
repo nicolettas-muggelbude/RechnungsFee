@@ -6,6 +6,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      frontend-production:
+        dependency-type: "production"
+      frontend-development:
+        dependency-type: "development"
 
   # Backend (FastAPI/Python)
   - package-ecosystem: "pip"
@@ -13,6 +18,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      backend-production:
+        dependency-type: "production"
+      backend-development:
+        dependency-type: "development"
 
   # Desktop-Wrapper (Tauri/Rust)
   - package-ecosystem: "cargo"
@@ -20,6 +30,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      tauri-production:
+        dependency-type: "production"
+      tauri-development:
+        dependency-type: "development"
 
   # GitHub Actions Workflows
   - package-ecosystem: "github-actions"
@@ -27,3 +42,7 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
