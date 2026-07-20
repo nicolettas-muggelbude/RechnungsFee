@@ -7,6 +7,7 @@ let v = '0.3.30'
 let downloadUrls = {
   windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
   linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+  linuxNeutral: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_amd64.AppImage`,
   linuxSh: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/install-linux.sh`,
   macosArm:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
   macosX64:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64.dmg`,
@@ -24,6 +25,7 @@ try {
     downloadUrls = {
       windows: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64-setup.exe`,
       linux:   `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_amd64.AppImage`,
+      linuxNeutral: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_amd64.AppImage`,
       linuxSh: `https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/install-linux.sh`,
       macosArm:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_aarch64.dmg`,
       macosX64:`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/RechnungsFee_${v}_x64.dmg`,
@@ -98,17 +100,26 @@ const fmt = (n: number) => n > 0 ? n.toLocaleString('de-DE') + '×' : null
       <div class="mb-6">
         <h3 class="font-semibold text-slate-800 mb-2">Option A – Installer-Skript (empfohlen)</h3>
         <p class="text-sm text-slate-600 mb-3">
-          Das Skript lädt die AppImage herunter, macht sie ausführbar, legt einen
-          Desktop-Eintrag an und bietet optional Tesseract OCR für OCR-Belegimport an.
+          Zwei Dateien nötig: das Skript richtet Desktop-Eintrag, Icon und Startmenü-Integration
+          für die AppImage ein und bietet optional Tesseract OCR für OCR-Belegimport an – die
+          AppImage selbst lädt es nicht automatisch nach.
         </p>
-        <a
-          href={downloadUrls.linuxSh}
-          class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
-        >
-          install-linux.sh herunterladen
-        </a>
+        <div class="flex flex-wrap gap-3">
+          <a
+            href={downloadUrls.linuxSh}
+            class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+          >
+            1. install-linux.sh herunterladen
+          </a>
+          <a
+            href={downloadUrls.linuxNeutral}
+            class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+          >
+            2. RechnungsFee_amd64.AppImage herunterladen
+          </a>
+        </div>
         <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono">
-          <span class="text-slate-400"># Nach dem Download ausführbar machen und starten:</span><br/>
+          <span class="text-slate-400"># Beide Dateien landen im Download-Ordner. Danach:</span><br/>
           chmod +x install-linux.sh<br/>
           ./install-linux.sh
         </div>
