@@ -160,7 +160,7 @@ def _erstelle_vollbackup_zip() -> bytes:
         if uploads_dir.exists():
             for f in sorted(uploads_dir.rglob("*")):
                 if f.is_file():
-                    zf.write(f, f"uploads/{f.relative_to(uploads_dir)}")
+                    zf.write(f, f"uploads/{f.relative_to(uploads_dir).as_posix()}")
 
     return buf.getvalue()
 
@@ -382,7 +382,12 @@ def _prüfe_wiederherstellung() -> None:
                     if uploads_dir.exists():
                         shutil.rmtree(uploads_dir)
                     for name in upload_entries:
-                        zf.extract(name, APP_DATA_DIR)
+                        # Windows-Backups koennen "\" statt "/" in Unterordnern enthalten
+                        # (Path.__str__ von WindowsPath) – hier unabhaengig vom Erstellungs-OS normalisieren.
+                        rel = name[len("uploads/"):].replace("\\", "/")
+                        ziel = uploads_dir / rel
+                        ziel.parent.mkdir(parents=True, exist_ok=True)
+                        ziel.write_bytes(zf.read(name))
                     print(f"[Wiederherstellung] {len(upload_entries)} Belege wiederhergestellt")
             marker_zip.unlink()
 

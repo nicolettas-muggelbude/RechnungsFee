@@ -43,7 +43,7 @@ def backup_download():
         if uploads_dir.exists():
             for f in sorted(uploads_dir.rglob("*")):
                 if f.is_file():
-                    zf.write(f, f"uploads/{f.relative_to(uploads_dir)}")
+                    zf.write(f, f"uploads/{f.relative_to(uploads_dir).as_posix()}")
 
     buf.seek(0)
     return StreamingResponse(

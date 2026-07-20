@@ -441,24 +441,9 @@ function WiederherstellungTab() {
   const istVerschluesselt = datei?.name.endsWith('.zip.enc') ?? false
   const kannWiederherstellen = !!datei && (!istVerschluesselt || !!passwort)
 
-  async function waehleDatei() {
-    if (isTauri()) {
-      try {
-        const { open } = await import('@tauri-apps/plugin-dialog')
-        const pfad = await open({
-          title: 'Backup wählen',
-          filters: [{ name: 'Backup', extensions: ['zip', 'zip.enc'] }],
-        })
-        if (typeof pfad === 'string' && pfad) {
-          const res = await fetch(`file://${pfad}`)
-          const blob = await res.blob()
-          const name = pfad.split(/[\\/]/).pop() ?? 'backup.zip'
-          setDatei(new File([blob], name))
-          setPasswort('')
-        }
-        return
-      } catch { /* Fallback auf normalen Input */ }
-    }
+  function waehleDatei() {
+    // Bewusst immer der native <input type="file"> – ein fruehrer Versuch, den Tauri-Dialog
+    // per fetch("file://…") auszulesen, schlug unter Linux (WebKitGTK) mit "Load failed" fehl.
     fileInputRef.current?.click()
   }
 
