@@ -106,6 +106,35 @@ Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigat
 
 ---
 
+## 🌿 Release-Strategie nach 1.0 – Stable/Beta-Trennung
+
+**Anlass:** Nach dem 1.0-Release soll die Weiterentwicklung (Beta/2.x) strikt von der stabilen 1.x-Linie getrennt werden. In der Vergangenheit gab es Testversionen (Branches `testing/backend-shutdown`, `testing/qr-code-debug`), bei denen Änderungen versehentlich im `main` landeten – das darf mit dem 1.x-Stable-Branch nicht mehr passieren, reine Disziplin/Worktree-Trennung reicht nicht (siehe auch die frühere `web`-Branch-Worktree-Verwechslung).
+
+**Entscheidung: Branch-per-Stable-Linie + technische Sperre, nicht nur Konvention.**
+
+- Bei 1.0-Release: `1.x`-Branch am Tag abzweigen. `main` wird der aktive Beta/Next-Pfad, dort läuft die freie Weiterentwicklung ohne Einschränkung.
+- **GitHub Branch-Protection auf `1.x`**: direkte Pushes serverseitig sperren, Änderungen nur per Pull Request gegen `1.x`. Das macht es technisch unmöglich, dass ein Fehlgriff (falscher Branch, falscher Worktree, KI-/Mensch-Fehler) unbemerkt in der stabilen Linie landet – im Gegensatz zu reiner Branch-Disziplin, die genau das beim `web`-Branch nicht verhindert hat.
+- `main` bleibt bewusst ohne diese Sperre.
+
+**Praktischer Ablauf für 1.x-Bugfixes:**
+1. Fix-Branch von `1.x` abzweigen (z. B. `hotfix/1.x-issue-123`)
+2. Fix committen, pushen, PR gegen `1.x` öffnen (auch als Solo-Maintainerin – die Sperre erzwingt den PR-Umweg)
+3. PR mergen → einziger Weg wie etwas auf `1.x` landet
+4. Patch-Tag von `1.x` aus setzen (`v1.0.1`, `v1.0.2`, …) – eigenes Tag-Schema getrennt von Beta-Tags (`v2.0.0-beta.N`)
+5. Falls relevant für Beta: Commit per Cherry-Pick nach `main` nachziehen
+
+Restrisiko ist nur noch Schritt 5 (vergessener Forward-Port) – harmlose Kategorie (Fix fehlt vorübergehend in Beta, auffällig) statt der vorherigen Gefahr (Test-Code landet unbemerkt in Stable).
+
+**Weitere Punkte, die bei Umsetzung zu klären sind:**
+- Tauri-Updater: eigene Update-Channels (stable/beta) nutzen, damit Beta-Releases nicht automatisch an 1.x-Nutzer verteilt werden; Beta-Releases auf GitHub als "Pre-release" markieren.
+- `build.yml`-Tag-Trigger muss Beta-Tag-Schema (`v2.0.0-beta.N`) von echten Releases unterscheiden können.
+- Schema-Migrationen (`SCHEMA_VERSION`) dürfen nicht zwischen 1.x und Beta durcheinanderlaufen – Beta-Migrationen bauen auf 1.x auf, nie umgekehrt.
+- Downloadseite (`web`-Branch) darf Beta nicht über den stabilen Download-Link schreiben.
+
+**Einordnung:** Entspricht dem Branchüblichen (Release-Branch pro stabiler Linie, z. B. Node.js LTS, Kubernetes `release-1.XX`, PostgreSQL `REL_XX_STABLE`) – kein Sonderweg. Alternative Modelle (Git Flow, Release-Trains wie Firefox/Chrome, Trunk-based+Feature-Flags) wurden verglichen und als zu schwergewichtig bzw. nicht passend für Solo-/Kleinprojekt mit unregelmäßigem Patch-Rhythmus verworfen. Diskussion 2026-07.
+
+---
+
 ## 💡 Ideen (ohne Zeitplan)
 
 - **Kalenderansicht** (Issue #198, Folge-Feature) – Vollständige Monatsansicht mit Buchungen, Steuerfristen und Feiertagen. Setzt Steuer-Fristenliste voraus. Größerer Scope, kein fester Zeitplan.
