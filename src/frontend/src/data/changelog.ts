@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'fix', text: 'Anlagenverzeichnis – bei degressiver AfA zeigten die Gesamt-AfA-Summe und das Detail-Panel weiterhin den linearen Betrag bzw. „Linear" an. Ursache: eine eigene, rein lineare AfA-Berechnung im Frontend statt des bereits korrekten Backend-Endpunkts. Betraf auch die Übernahme in die EÜR, bis dort zufällig ein Requery ausgelöst wurde (Issue #294).' },
+      { typ: 'fix', text: 'install-linux.sh – Suche nach der AppImage prüfte ausschließlich ~/Downloads; lag die Datei woanders (z. B. im selben Ordner wie das Skript), schlug die Installation mit „AppImage nicht gefunden" fehl. Sucht jetzt zusätzlich im aktuellen Verzeichnis und im Verzeichnis des Skripts selbst.' },
     ],
   },
   {

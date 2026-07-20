@@ -14,12 +14,24 @@ set -e
 
 
 # ── AppImage finden ────────────────────────────────────────────────────────────
+# Suchreihenfolge: 1) explizites Argument  2) aktuelles Verzeichnis (häufigster Fall:
+# beide Dateien liegen nebeneinander, Skript wird von dort aufgerufen)  3) Verzeichnis
+# des Skripts selbst (falls per Pfad von woanders aufgerufen)  4) ~/Downloads (Fallback,
+# z. B. Doppelklick im Dateimanager mit abweichendem Arbeitsverzeichnis).
 APPIMAGE="${1:-}"
+if [ -z "$APPIMAGE" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  APPIMAGE="$(ls -t ./RechnungsFee*.AppImage 2>/dev/null | head -1)"
+fi
+if [ -z "$APPIMAGE" ]; then
+  APPIMAGE="$(ls -t "$SCRIPT_DIR"/RechnungsFee*.AppImage 2>/dev/null | head -1)"
+fi
 if [ -z "$APPIMAGE" ]; then
   APPIMAGE="$(ls -t "$HOME/Downloads/RechnungsFee"*.AppImage 2>/dev/null | head -1)"
 fi
 if [ -z "$APPIMAGE" ] || [ ! -f "$APPIMAGE" ]; then
   echo "Fehler: AppImage nicht gefunden."
+  echo "Gesucht in: aktuellem Verzeichnis, Skript-Verzeichnis und ~/Downloads"
   echo "Verwendung: $0 /pfad/zu/RechnungsFee_amd64.AppImage"
   exit 1
 fi
