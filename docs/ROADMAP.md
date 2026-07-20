@@ -125,11 +125,16 @@ Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigat
 
 Restrisiko ist nur noch Schritt 5 (vergessener Forward-Port) – harmlose Kategorie (Fix fehlt vorübergehend in Beta, auffällig) statt der vorherigen Gefahr (Test-Code landet unbemerkt in Stable).
 
+**Feature-Übernahme von Beta nach 1.x (umgekehrte Richtung):**
+Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der ganze Beta-Branch übernommen**, sondern nur der geprüfte Feature-Commit per Cherry-Pick von `main` (Beta) nach `1.x` gezogen – andere, noch unfertige Beta-Features bleiben außen vor. `1.x` wächst so gezielt um genau das, was sich bewährt hat.
+
+**Schema-Versionsregel (kritisch, verhindert Kollisionen bei der Feature-Übernahme):**
+`SCHEMA_VERSION` muss über beide Branches hinweg eine einzige, fortlaufende Kette bleiben. Deshalb: jeder 1.x-Bugfix, der eine Migration braucht, wird **sofort** (nicht irgendwann gesammelt) per Cherry-Pick auch nach Beta vorgezogen – nicht nur "bei Gelegenheit". Nur so bleibt Betas `SCHEMA_VERSION` immer ≥ der von 1.x, und eine spätere Feature-Übernahme aus Beta kollidiert nicht mit einer inzwischen unabhängig auf 1.x vergebenen Versionsnummer.
+
 **Weitere Punkte, die bei Umsetzung zu klären sind:**
 - Tauri-Updater: eigene Update-Channels (stable/beta) nutzen, damit Beta-Releases nicht automatisch an 1.x-Nutzer verteilt werden; Beta-Releases auf GitHub als "Pre-release" markieren.
 - `build.yml`-Tag-Trigger muss Beta-Tag-Schema (`v2.0.0-beta.N`) von echten Releases unterscheiden können.
-- Schema-Migrationen (`SCHEMA_VERSION`) dürfen nicht zwischen 1.x und Beta durcheinanderlaufen – Beta-Migrationen bauen auf 1.x auf, nie umgekehrt.
-- Downloadseite (`web`-Branch) darf Beta nicht über den stabilen Download-Link schreiben.
+- Downloadseite (`web`-Branch) darf Beta nicht über den stabilen Download-Link schreiben; eigener, klar getrennter Download-Bereich für die Testgruppe.
 
 **Einordnung:** Entspricht dem Branchüblichen (Release-Branch pro stabiler Linie, z. B. Node.js LTS, Kubernetes `release-1.XX`, PostgreSQL `REL_XX_STABLE`) – kein Sonderweg. Alternative Modelle (Git Flow, Release-Trains wie Firefox/Chrome, Trunk-based+Feature-Flags) wurden verglichen und als zu schwergewichtig bzw. nicht passend für Solo-/Kleinprojekt mit unregelmäßigem Patch-Rhythmus verworfen. Diskussion 2026-07.
 
