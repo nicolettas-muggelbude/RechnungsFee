@@ -47,6 +47,10 @@ const LEER: AnlagegutCreate = {
   verkauft_am: null, notizen: null, aktiv: true,
 }
 
+// Nutzungsdauer waehrend der Eingabe auch leer erlauben (sonst springt das Feld beim
+// Loeschen auf 1 zurueck, da parseInt("") sonst per Fallback ersetzt werden muesste – Issue #294)
+type AnlagegutFormState = Omit<AnlagegutCreate, 'nutzungsdauer_jahre'> & { nutzungsdauer_jahre: number | '' }
+
 function AnlagegutFormular({
   initial, onSave, onAbbrechen,
 }: {
@@ -54,7 +58,7 @@ function AnlagegutFormular({
   onSave: (d: AnlagegutCreate) => void
   onAbbrechen: () => void
 }) {
-  const [form, setForm] = useState<AnlagegutCreate>(
+  const [form, setForm] = useState<AnlagegutFormState>(
     initial
       ? {
           bezeichnung: initial.bezeichnung,
@@ -118,7 +122,10 @@ function AnlagegutFormular({
         </div>
         <div>
           <label className={labelCls}>Nutzungsdauer (Jahre) *</label>
-          <input type="number" min="1" max="50" className={inputCls} value={form.nutzungsdauer_jahre} onChange={e => set('nutzungsdauer_jahre', parseInt(e.target.value) || 1)} />
+          <input type="number" min="1" max="50" className={inputCls} value={form.nutzungsdauer_jahre} onChange={e => {
+            const n = parseInt(e.target.value)
+            set('nutzungsdauer_jahre', Number.isNaN(n) ? '' : n)
+          }} />
           <p className="text-xs text-slate-400 mt-1">AfA-Tabelle BMF: KFZ=6, PC/Laptop=3, Büromöbel=13</p>
         </div>
       </div>
@@ -182,8 +189,13 @@ function AnlagegutFormular({
           Abbrechen
         </button>
         <button
-          onClick={() => { if (form.bezeichnung && form.kaufdatum && parseFloat(String(form.kaufpreis_netto)) > 0) onSave(form) }}
-          disabled={!form.bezeichnung || !form.kaufdatum || parseFloat(String(form.kaufpreis_netto)) <= 0}
+          onClick={() => {
+            const nd = form.nutzungsdauer_jahre
+            if (form.bezeichnung && form.kaufdatum && parseFloat(String(form.kaufpreis_netto)) > 0 && nd !== '' && nd >= 1) {
+              onSave({ ...form, nutzungsdauer_jahre: nd })
+            }
+          }}
+          disabled={!form.bezeichnung || !form.kaufdatum || parseFloat(String(form.kaufpreis_netto)) <= 0 || form.nutzungsdauer_jahre === '' || form.nutzungsdauer_jahre < 1}
           className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
         >
           {initial ? 'Speichern' : 'Anlegen'}
