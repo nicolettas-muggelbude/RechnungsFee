@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.21',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'OCR (Linux) – gescannte Belege/Kassenbons wurden trotz korrekt installiertem Tesseract nicht erkannt, ohne den „Tesseract fehlt"-Assistenten anzuzeigen. Ursache: Das gebündelte Backend (PyInstaller-Onefile) setzt zur Laufzeit LD_LIBRARY_PATH auf sein eigenes Extraktionsverzeichnis; das System-Tesseract erbte diesen Pfad beim Aufruf und versuchte, seine Bibliotheken von dort statt aus dem System zu laden. Wird jetzt vor dem Tesseract-Aufruf auf den ursprünglichen Wert zurückgesetzt.' },
+    ],
+  },
+  {
     version: 'v0.4.20',
     datum: 'Juli 2026',
     eintraege: [

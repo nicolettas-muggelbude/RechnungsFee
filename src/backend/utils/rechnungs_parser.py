@@ -811,6 +811,46 @@ def _finde_tesseract_binary() -> str | None:
     return None
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def _tesseract_subprocess_env_fix():
+    """
+    Der PyInstaller-Onefile-Bootloader setzt LD_LIBRARY_PATH auf sein
+    Extraktionsverzeichnis, damit die mitgelieferten Shared Libraries gefunden
+    werden (und sichert den ursprünglichen Wert in LD_LIBRARY_PATH_ORIG).
+    pytesseract ruft das System-Tesseract per subprocess auf und erbt dabei
+    unveraendert die komplette Prozessumgebung - das System-Binary versucht dann,
+    seine eigenen dynamischen Bibliotheken (libleptonica, libjpeg, ...) aus dem
+    PyInstaller-Temp-Verzeichnis zu laden statt aus dem System, was zu
+    Ladefehlern fuehrt (Tesseract "installiert", OCR schlaegt trotzdem fehl).
+    Empfohlener Fix laut PyInstaller-Recipe:
+    https://github.com/pyinstaller/pyinstaller/wiki/Recipe-subprocess-and-onefile-apps
+    Außerhalb eines PyInstaller-Onefile-Bundles (z.B. normaler venv-Betrieb) ist
+    LD_LIBRARY_PATH_ORIG nicht gesetzt - dann greift dieser Fix gar nicht ein.
+    """
+    import os as _os
+    key = "LD_LIBRARY_PATH"
+    orig_key = key + "_ORIG"
+    if orig_key not in _os.environ:
+        yield
+        return
+    saved = _os.environ.get(key)
+    orig = _os.environ.get(orig_key)
+    if orig:
+        _os.environ[key] = orig
+    else:
+        _os.environ.pop(key, None)
+    try:
+        yield
+    finally:
+        if saved is not None:
+            _os.environ[key] = saved
+        else:
+            _os.environ.pop(key, None)
+
+
 def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
     """
     OCR-Fallback für gescannte PDFs / Foto-Scans.
@@ -852,9 +892,10 @@ def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
         pix = page.get_pixmap(matrix=mat, alpha=False)
         img = Image.open(_io.BytesIO(pix.tobytes("png")))
         try:
-            texte.append(
-                pytesseract.image_to_string(img, lang="deu+eng", config="--psm 3")
-            )
+            with _tesseract_subprocess_env_fix():
+                texte.append(
+                    pytesseract.image_to_string(img, lang="deu+eng", config="--psm 3")
+                )
         except pytesseract.TesseractNotFoundError:
             return "", "TESSERACT_FEHLT"
         except Exception as exc:
