@@ -1,12 +1,12 @@
 fastapi==0.139.2
-uvicorn==0.41.0
-sqlalchemy==2.0.46
+uvicorn==0.51.0
+sqlalchemy==2.0.51
 aiofiles==25.1.0
-python-multipart==0.0.31
+python-multipart==0.0.32
 fpdf2
 Pillow==12.3.0
 cairosvg
-segno==1.6.1
+segno==1.6.6
 drafthorse
 factur-x
 lxml
