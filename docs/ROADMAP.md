@@ -114,6 +114,7 @@ Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigat
 
 - Bei 1.0-Release: `1.x`-Branch am Tag abzweigen. `main` wird der aktive Beta/Next-Pfad, dort läuft die freie Weiterentwicklung ohne Einschränkung.
 - **GitHub Branch-Protection auf `1.x`**: direkte Pushes serverseitig sperren, Änderungen nur per Pull Request gegen `1.x`. Das macht es technisch unmöglich, dass ein Fehlgriff (falscher Branch, falscher Worktree, KI-/Mensch-Fehler) unbemerkt in der stabilen Linie landet – im Gegensatz zu reiner Branch-Disziplin, die genau das beim `web`-Branch nicht verhindert hat.
+- **Wichtiger Fund (2026-07-21):** `main` hat bereits eine klassische Branch-Protection (Pflicht-Review + Status-Check „test (ubuntu-latest)") – aber `enforce_admins` steht auf `false`. Beim Release v0.4.20 wurde die Regel dadurch beim Push als Repo-Owner stillschweigend umgangen („Bypassed rule violations"). **Für `1.x` muss `enforce_admins: true` gesetzt werden**, sonst greift die geplante Sperre nicht einmal für die eigene Solo-Maintainerin – die ganze Garantie wäre wirkungslos.
 - `main` bleibt bewusst ohne diese Sperre.
 
 **Praktischer Ablauf für 1.x-Bugfixes:**
