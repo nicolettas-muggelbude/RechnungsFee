@@ -15,8 +15,8 @@ jobs:
   typecheck:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── Linux-Systemabhängigkeiten ──────────────────────────────────────────
       - name: Linux-Deps installieren
@@ -64,7 +64,7 @@ jobs:
 
       # ── Python / PyInstaller ────────────────────────────────────────────────
       - name: Python 3.12 einrichten
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -90,7 +90,7 @@ jobs:
 
       # ── Node.js / Frontend ──────────────────────────────────────────────────
       - name: Node.js 22 einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -121,7 +121,7 @@ jobs:
         run: npm install -g @tauri-apps/cli@^2
 
       - name: Tauri-App bauen und Release erstellen
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -389,7 +389,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: latest.json generieren und hochladen
         env:
@@ -451,7 +451,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Release Notes aus changelog.ts generieren und veröffentlichen
         env:
