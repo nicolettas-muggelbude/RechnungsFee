@@ -38,6 +38,7 @@ from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erstelle_skonto_eintrag, _partner_name, _ust_konto,
+    _verteile_nach_satz,
 )
 from .schemas import JournalEintragCreate
 
@@ -391,8 +392,8 @@ def _buche_pfad_a(
         betrag_zu_buchen = restbetrag if tx_abs > restbetrag + Decimal("0.02") else tx_abs
 
     steuerbefreiung_grund = "§19 UStG" if (unternehmen and unternehmen.ist_kleinunternehmer) else None
-    ust_satz = Decimal("0")
     kat_id = None
+    satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]  # Default: Kleinunternehmer/keine Positionen
 
     if not (unternehmen and unternehmen.ist_kleinunternehmer) and rechnung.positionen:
         gruppen_brutto: dict[int, Decimal] = {}
@@ -401,45 +402,50 @@ def _buche_pfad_a(
             s = int(pos.ust_satz_25a if pos.differenzbesteuerung and pos.ust_satz_25a else pos.ust_satz)
             gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
             kat_gruppen[pos.kategorie_id] = kat_gruppen.get(pos.kategorie_id, Decimal("0")) + pos.brutto
-        dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
-        ust_satz = Decimal(str(dom_satz))
         kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k] if k is not None else Decimal("0"))
+        gesamt_pos_brutto = sum(gruppen_brutto.values())
+        satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
 
     kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
-    konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
-    if ust_satz > 0:
-        netto = (betrag_zu_buchen * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        ust_betrag = (betrag_zu_buchen - netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    else:
-        netto = betrag_zu_buchen
-        ust_betrag = Decimal("0.00")
+    # Aufteilung nach USt-Satz-Gruppen (Issue #295: bei gemischten Saetzen darf nicht nur
+    # der dominante Satz fuer die gesamte Zahlung verwendet werden).
+    ust_gruppen = _verteile_nach_satz(betrag_zu_buchen, satz_ratios, art)
 
-    vst_abzug = art == "Ausgabe" and ust_satz > 0
-    eintrag = Journaleintrag(
-        datum=tx.datum,
-        belegnr=_naechste_belegnr(db, tx.datum),
-        beschreibung=f"Zahlung {rechnung.rechnungsnummer}: {_partner_name(rechnung)}",
-        kategorie_id=kat_id,
-        konto_skr03=kat.konto_skr03 if kat else None,
-        konto_skr04=kat.konto_skr04 if kat else None,
-        konto_ust_skr03=konto_ust_skr03,
-        konto_ust_skr04=konto_ust_skr04,
-        zahlungsart="Bank",
-        art=art,
-        netto_betrag=netto,
-        ust_satz=ust_satz,
-        ust_betrag=ust_betrag,
-        vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vst_abzug, kat),
-        brutto_betrag=betrag_zu_buchen,
-        vorsteuerabzug=vst_abzug,
-        steuerbefreiung_grund=steuerbefreiung_grund,
-        rechnung_id=rechnung.id,
-        konto_id=tx.konto_id,
-        immutable=True,
-    )
-    eintrag.signatur = signatur_journaleintrag(eintrag)
-    db.add(eintrag)
+    eintrag = None
+    for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+        if g_satz > 0:
+            g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        else:
+            g_netto, g_ust = g_betrag, Decimal("0.00")
+        g_vst_abzug = art == "Ausgabe" and g_satz > 0
+        e = Journaleintrag(
+            datum=tx.datum,
+            belegnr=_naechste_belegnr(db, tx.datum),
+            beschreibung=f"Zahlung {rechnung.rechnungsnummer}: {_partner_name(rechnung)}",
+            kategorie_id=kat_id,
+            konto_skr03=kat.konto_skr03 if kat else None,
+            konto_skr04=kat.konto_skr04 if kat else None,
+            konto_ust_skr03=g_ust_skr03,
+            konto_ust_skr04=g_ust_skr04,
+            zahlungsart="Bank",
+            art=art,
+            netto_betrag=g_netto,
+            ust_satz=g_satz,
+            ust_betrag=g_ust,
+            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, kat),
+            brutto_betrag=g_betrag,
+            vorsteuerabzug=g_vst_abzug,
+            steuerbefreiung_grund=steuerbefreiung_grund,
+            rechnung_id=rechnung.id,
+            konto_id=tx.konto_id,
+            immutable=True,
+        )
+        e.signatur = signatur_journaleintrag(e)
+        db.add(e)
+        if i == 0:
+            eintrag = e
     db.flush()
 
     # Skonto-Erkennung: Differenz zwischen Restbetrag und gebuchtem Betrag entspricht dem
@@ -449,7 +455,8 @@ def _buche_pfad_a(
         skonto_ziel = _skonto_zielbetrag(rechnung, tx.datum)
         if skonto_ziel is not None and abs(skonto_ziel - betrag_zu_buchen) <= Decimal("0.02"):
             skonto_betrag = differenz.quantize(Decimal("0.01"), ROUND_HALF_UP)
-            _erstelle_skonto_eintrag(db, rechnung, rechnung.id, tx.datum, skonto_betrag, ust_satz,
+            skonto_gruppen = _verteile_nach_satz(skonto_betrag, satz_ratios, art)
+            _erstelle_skonto_eintrag(db, rechnung, rechnung.id, tx.datum, skonto_gruppen,
                                      steuerbefreiung_grund, art)
             db.flush()
 

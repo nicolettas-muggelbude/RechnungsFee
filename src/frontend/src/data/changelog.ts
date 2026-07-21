@@ -29,6 +29,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Stammdaten – Bankverbindung (IBAN/BIC/Bank) stand im Tab „Funktionen" statt im Tab „Firma"; da eine IBAN aber Pflicht zum Speichern ist, scheiterte das Speichern von Firmendaten ohne ersichtlichen Grund, wenn man dort suchte. Feld wieder zurück in den Tab „Firma" verschoben.' },
       { typ: 'fix', text: 'Backup-Wiederherstellung (Linux) – Auswahl einer Backup-ZIP über den nativen Tauri-Dialog schlug mit „Load failed" fehl, da die Datei anschließend per fetch("file://…") gelesen wurde – unter Linux (WebKitGTK) deutlich restriktiver als unter Windows. Nutzt jetzt durchgehend den bereits vorhandenen, funktionierenden Datei-Dialog.' },
       { typ: 'fix', text: 'Backup – Belege-Pfade im ZIP wurden unter Windows mit Backslash statt Slash abgelegt; beim Wiederherstellen auf Linux/macOS landeten Belege dadurch mit falschem Dateinamen statt in der richtigen Unterordnerstruktur. Betrifft sowohl neu erstellte Backups (Pfadtrennzeichen jetzt OS-unabhängig) als auch das Wiederherstellen bereits bestehender Windows-Backups (Normalisierung beim Extrahieren).' },
+      { typ: 'fix', text: 'Skonto bei Rechnungen mit gemischten USt-Sätzen (z. B. 7 % + 19 % auf derselben Rechnung) – die Vorsteuer-/USt-Korrektur wurde komplett mit nur einem (dem umsatzstärksten) Satz berechnet statt anteilig nach dem tatsächlichen Verhältnis der Rechnungspositionen. Betraf sowohl die manuelle Zahlungsverbuchung als auch die automatische Skonto-Erkennung beim Bank-Import (Issue #295).' },
     ],
   },
   {

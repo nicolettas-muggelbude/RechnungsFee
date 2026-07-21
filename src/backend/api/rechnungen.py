@@ -1625,51 +1625,75 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 # Zahlungs-Endpunkte
 # ---------------------------------------------------------------------------
 
+def _verteile_nach_satz(
+    gesamt_betrag: Decimal, satz_ratios: list[tuple[int, Decimal]], art: str,
+) -> list[tuple[Decimal, Decimal, str | None, str | None]]:
+    """Verteilt einen Gesamtbetrag anteilig auf USt-Satz-Gruppen (Restcent auf letzte Gruppe)."""
+    ergebnis: list[tuple[Decimal, Decimal, str | None, str | None]] = []
+    rest = gesamt_betrag
+    for i, (satz, ratio) in enumerate(satz_ratios):
+        satz_d = Decimal(str(satz))
+        g_ust03, g_ust04 = _ust_konto(art, satz_d) if satz > 0 else (None, None)
+        if i == len(satz_ratios) - 1:
+            g_betrag = rest
+        else:
+            g_betrag = (gesamt_betrag * ratio).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            rest -= g_betrag
+        ergebnis.append((satz_d, g_betrag, g_ust03, g_ust04))
+    return ergebnis
+
+
 def _erstelle_skonto_eintrag(
     db: Session,
     rechnung: "Rechnung",
     rechnung_id: int,
     datum: date,
-    skonto_betrag: Decimal,
-    ust_satz: Decimal,
+    skonto_gruppen: list[tuple[Decimal, Decimal, str | None, str | None]],
     steuerbefreiung_grund: str | None,
     zahlung_art: str,
 ) -> None:
-    """Erzeugt den Skonto-Journaleintrag (Erlösschmälerung / erhaltener Skonto)."""
+    """Erzeugt die Skonto-Journaleinträge (Erlösschmälerung / erhaltener Skonto), einen je USt-Satz-Gruppe.
+
+    Bei Rechnungen mit gemischten USt-Sätzen (z.B. 7% + 19%) muss die Vorsteuer-/USt-Korrektur
+    anteilig je Satz erfolgen statt mit einem einzigen (dominanten) Satz (Issue #295).
+    """
     from database.models import Kategorie as _Kategorie
     skonto_art = "Ausgabe" if rechnung.typ == "ausgang" else "Einnahme"
-    sk_netto = (skonto_betrag * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else skonto_betrag
-    sk_ust = (skonto_betrag - sk_netto).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else Decimal("0.00")
-    sk_konto_skr03, sk_konto_skr04 = _skonto_konto(rechnung.typ, ust_satz)
-    # Ausgangsrechnung-Skonto mindert Umsatzsteuer (1776/3806), nicht Vorsteuer (1575/1406)
-    ust_art_konto = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
-    sk_ust_skr03, sk_ust_skr04 = _ust_konto(ust_art_konto, ust_satz) if ust_satz > 0 else (None, None)
     kat_name = "Gewährte Skonti" if rechnung.typ == "ausgang" else "Erhaltene Skonti"
     kat = db.query(_Kategorie).filter(_Kategorie.name == kat_name).first()
-    sk_vorsteuerabzug = (rechnung.typ == "eingang" and ust_satz > 0)
-    sk = Journaleintrag(
-        datum=datum,
-        belegnr=_naechste_belegnr_journal(db, datum),
-        beschreibung=f"Skonto {rechnung.rechnungsnummer}",
-        kategorie_id=kat.id if kat else None,
-        konto_skr03=sk_konto_skr03,
-        konto_skr04=sk_konto_skr04,
-        konto_ust_skr03=sk_ust_skr03,
-        konto_ust_skr04=sk_ust_skr04,
-        zahlungsart="Skonto",
-        art=skonto_art,
-        netto_betrag=sk_netto,
-        ust_satz=ust_satz,
-        ust_betrag=sk_ust,
-        vorsteuer_betrag=_berechne_vorsteuer(sk_ust, sk_vorsteuerabzug, kat),
-        brutto_betrag=skonto_betrag,
-        vorsteuerabzug=sk_vorsteuerabzug,
-        steuerbefreiung_grund=steuerbefreiung_grund,
-        rechnung_id=rechnung_id,
-        immutable=True,
-    )
-    sk.signatur = signatur_journaleintrag(sk)
-    db.add(sk)
+    # Ausgangsrechnung-Skonto mindert Umsatzsteuer (1776/3806), nicht Vorsteuer (1575/1406)
+    ust_art_konto = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    for ust_satz, skonto_betrag, _g_ust03, _g_ust04 in skonto_gruppen:
+        if skonto_betrag == 0:
+            continue
+        sk_netto = (skonto_betrag * 100 / (100 + ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else skonto_betrag
+        sk_ust = (skonto_betrag - sk_netto).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else Decimal("0.00")
+        sk_konto_skr03, sk_konto_skr04 = _skonto_konto(rechnung.typ, ust_satz)
+        sk_ust_skr03, sk_ust_skr04 = _ust_konto(ust_art_konto, ust_satz) if ust_satz > 0 else (None, None)
+        sk_vorsteuerabzug = (rechnung.typ == "eingang" and ust_satz > 0)
+        sk = Journaleintrag(
+            datum=datum,
+            belegnr=_naechste_belegnr_journal(db, datum),
+            beschreibung=f"Skonto {rechnung.rechnungsnummer}",
+            kategorie_id=kat.id if kat else None,
+            konto_skr03=sk_konto_skr03,
+            konto_skr04=sk_konto_skr04,
+            konto_ust_skr03=sk_ust_skr03,
+            konto_ust_skr04=sk_ust_skr04,
+            zahlungsart="Skonto",
+            art=skonto_art,
+            netto_betrag=sk_netto,
+            ust_satz=ust_satz,
+            ust_betrag=sk_ust,
+            vorsteuer_betrag=_berechne_vorsteuer(sk_ust, sk_vorsteuerabzug, kat),
+            brutto_betrag=skonto_betrag,
+            vorsteuerabzug=sk_vorsteuerabzug,
+            steuerbefreiung_grund=steuerbefreiung_grund,
+            rechnung_id=rechnung_id,
+            immutable=True,
+        )
+        sk.signatur = signatur_journaleintrag(sk)
+        db.add(sk)
 
 
 @router.post("/{rechnung_id}/zahlung-bar", response_model=BarZahlungResult, status_code=201)
@@ -1748,12 +1772,14 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     steuerbefreiung_grund = "§19 UStG" if (unternehmen and unternehmen.ist_kleinunternehmer) else None
     ust_satz = Decimal("0")
     ust_gruppen: list[tuple[Decimal, Decimal, str | None, str | None]] = []
+    skonto_gruppen: list[tuple[Decimal, Decimal, str | None, str | None]] = []
     konto_ust_skr03: str | None = None
     konto_ust_skr04: str | None = None
 
     if not ist_gutschrift:
+        satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]  # Default: Kleinunternehmer/keine Positionen
         if unternehmen and unternehmen.ist_kleinunternehmer:
-            ust_gruppen = [(Decimal("0"), betrag, None, None)]
+            pass
         elif rechnung.positionen:
             gruppen_brutto: dict[int, Decimal] = {}
             for pos in rechnung.positionen:
@@ -1776,18 +1802,11 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
             ust_satz = Decimal(str(dom_satz))
             gesamt_pos_brutto = sum(gruppen_brutto.values())
-            rest_g = betrag
-            for i, satz in enumerate(sorted(gruppen_brutto.keys())):
-                satz_d = Decimal(str(satz))
-                g_ust_skr03, g_ust_skr04 = _ust_konto(art, satz_d) if satz > 0 else (None, None)
-                if i == len(gruppen_brutto) - 1:
-                    g_betrag = rest_g
-                else:
-                    g_betrag = (betrag * gruppen_brutto[satz] / gesamt_pos_brutto).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                    rest_g -= g_betrag
-                ust_gruppen.append((satz_d, g_betrag, g_ust_skr03, g_ust_skr04))
-        else:
-            ust_gruppen = [(Decimal("0"), betrag, None, None)]
+            satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
+
+        ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
+        if data.skonto_betrag and data.skonto_betrag > 0:
+            skonto_gruppen = _verteile_nach_satz(data.skonto_betrag, satz_ratios, art)
         konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
     # §25a Marge vorberechnen (Brutto-Marge = VK_brutto − EK_netto_gesamt für §25a-Positionen)
@@ -1961,7 +1980,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     eintrag = erster_eintrag
 
     if data.skonto_betrag and data.skonto_betrag > 0:
-        _erstelle_skonto_eintrag(db, rechnung, rechnung_id, data.datum, data.skonto_betrag, ust_satz,
+        _erstelle_skonto_eintrag(db, rechnung, rechnung_id, data.datum, skonto_gruppen,
                                  steuerbefreiung_grund, art)
 
     db.flush()
