@@ -32,6 +32,9 @@ STANDARD_KATEGORIEN = [
     {"name": "Wareneinkauf EU",                "kontenart": "Aufwand", "konto_skr03": "3400", "konto_skr04": "5400", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Wareneinkauf Nicht-EU",          "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Wareneinkauf §25a (privat)",     "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # §25a Differenzbesteuerung Erlösseite – DATEV-Automatikkonto (Issue #303).
+    # Schritt 1: nur Kategorie anlegen, noch nicht mit der Buchungslogik verdrahtet.
+    {"name": "Differenzbesteuerung (§25a)",    "kontenart": "Erlös",   "konto_skr03": "8199", "konto_skr04": "4134", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Löhne & Gehälter",              "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_1",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Löhne & Gehälter Teilzeit",    "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_2",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "AG-Anteil Sozialversicherung", "kontenart": "Aufwand", "konto_skr03": "4130", "konto_skr04": "6110", "eks_kategorie": "B2_1",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
