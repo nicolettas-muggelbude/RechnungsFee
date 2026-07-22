@@ -2104,7 +2104,7 @@ def zahlung_korrigieren(
         vorsteuer_betrag=-e.vorsteuer_betrag, brutto_betrag=-e.brutto_betrag,
         vorsteuerabzug=e.vorsteuerabzug,
         ist_ig_erwerb=e.ist_ig_erwerb, ust_sonderfall=e.ust_sonderfall,
-        rechnung_id=rechnung_id, immutable=True,
+        rechnung_id=rechnung_id, gruppe_id=e.gruppe_id or e.id, immutable=True,
     )
     storno.signatur = signatur_journaleintrag(storno)
     db.add(storno)
@@ -2122,7 +2122,7 @@ def zahlung_korrigieren(
         vorsteuerabzug=e.vorsteuerabzug,
         steuerbefreiung_grund=e.steuerbefreiung_grund,
         ist_ig_erwerb=e.ist_ig_erwerb, ust_sonderfall=e.ust_sonderfall,
-        rechnung_id=rechnung_id, immutable=True,
+        rechnung_id=rechnung_id, gruppe_id=e.gruppe_id or e.id, immutable=True,
     )
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
@@ -2191,6 +2191,7 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             marge_25a_brutto=eintrag.marge_25a_brutto,
             vorsteuerabzug=False,
             steuerbefreiung_grund=None,
+            gruppe_id=eintrag.gruppe_id or eintrag.id,
             immutable=True,
         )
         gegenbuchung.signatur = signatur_journaleintrag(gegenbuchung)

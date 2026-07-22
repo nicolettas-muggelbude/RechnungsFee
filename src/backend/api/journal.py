@@ -397,13 +397,14 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
         ust_betrag=s_ust, vorsteuer_betrag=-original.vorsteuer_betrag,
         brutto_betrag=s_brutto, vorsteuerabzug=original.vorsteuerabzug,
         ist_ig_erwerb=original.ist_ig_erwerb, ust_sonderfall=original.ust_sonderfall,
+        gruppe_id=original.gruppe_id or original.id,
         immutable=True,
     )
     storno.signatur = signatur_journaleintrag(storno)
     db.add(storno)
 
     neu_belegnr = _naechste_belegnr(db, felder["datum"])
-    neu = Journaleintrag(belegnr=neu_belegnr, immutable=True, **felder)
+    neu = Journaleintrag(belegnr=neu_belegnr, gruppe_id=original.gruppe_id or original.id, immutable=True, **felder)
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
 
@@ -858,6 +859,7 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         marge_25a_brutto=original.marge_25a_brutto,
         vorsteuerabzug=original.vorsteuerabzug,
         steuerbefreiung_grund=None,
+        gruppe_id=original.gruppe_id or original.id,
         immutable=True,
     )
     storno.signatur = signatur_journaleintrag(storno)
