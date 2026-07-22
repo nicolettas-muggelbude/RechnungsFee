@@ -351,7 +351,8 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     if original.rechnung_id:
         raise HTTPException(409, "Rechnungsbuchungen können nur über die Rechnung bearbeitet werden.")
     bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.beschreibung.like(f"STORNO {original.belegnr}:%")
+        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
+        Journaleintrag.beschreibung.like("STORNO %"),
     ).first()
     if bereits_storniert:
         raise HTTPException(409, f"Diese Buchung wurde bereits storniert ({bereits_storniert.belegnr}).")
@@ -816,7 +817,8 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         raise HTTPException(status_code=409, detail="Ein Storno-Eintrag kann nicht erneut storniert werden.")
     # Bereits stornierte Buchung erkennen
     bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.beschreibung.like(f"STORNO {original.belegnr}:%")
+        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
+        Journaleintrag.beschreibung.like("STORNO %"),
     ).first()
     if bereits_storniert:
         raise HTTPException(

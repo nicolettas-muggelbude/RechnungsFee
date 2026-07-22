@@ -64,13 +64,10 @@ def _kontenuebersicht_zeilen(von: date, bis: date, db: Session) -> tuple[str, li
     # dreht sich um (s. journal.py update_eintrag). Bei einer naiven Summe ohne Art-Filter
     # würde eine stornierte Buchung doppelt statt netto null zählen – daher werden Storno-
     # Gegenbuchungen UND die dadurch stornierten Original-Buchungen ausgeschlossen.
-    storno_ziele = {
-        e.beschreibung[len("STORNO "):].split(":")[0].strip()
-        for e in eintraege if e.beschreibung.startswith("STORNO ")
-    }
+    gruppen_ids = {e.gruppe_id for e in eintraege if e.gruppe_id is not None}
     aktive = [
         e for e in eintraege
-        if not e.beschreibung.startswith("STORNO ") and e.belegnr not in storno_ziele
+        if not e.beschreibung.startswith("STORNO ") and e.id not in gruppen_ids
     ]
 
     gruppen: dict[int, dict] = {}

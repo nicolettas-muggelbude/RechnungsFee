@@ -273,13 +273,10 @@ def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
         # sonst überschreibt jede spätere Korrektur/Statusneuberechnung ein bewusst
         # rückdatiertes Zahlungsdatum wieder mit dem aktuellen Tagesdatum). Storno-Gegen-
         # buchungen UND die dadurch stornierten Original-Einträge zählen nicht mehr mit.
-        storno_ziele = {
-            e.beschreibung[len("STORNO "):].split(":")[0].strip()
-            for e in rechnung.journaleintraege if e.beschreibung.startswith("STORNO ")
-        }
+        gruppen_ids = {e.gruppe_id for e in rechnung.journaleintraege if e.gruppe_id is not None}
         echte_eintraege = [
             e for e in rechnung.journaleintraege
-            if not e.beschreibung.startswith("STORNO ") and e.belegnr not in storno_ziele
+            if not e.beschreibung.startswith("STORNO ") and e.id not in gruppen_ids
         ]
         rechnung.zahlungsdatum = max((e.datum for e in echte_eintraege), default=date.today())
         # Automatisch: verknüpfter Auftrag → abgeschlossen
