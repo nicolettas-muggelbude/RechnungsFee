@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: 'DATEV-Export – Gegenkonto-Vorschlag für „Bar (Kasse)" zeigte immer 1000 an, unabhängig vom gewählten Kontenrahmen. Bei SKR04 lautet das korrekte Kasse-Konto 1600 (Issue #301).' },
       { typ: 'fix', text: 'DATEV-Export – BU-Schlüssel für innergemeinschaftlichen Erwerb (§1a UStG) und Bauleistungen (§13b Abs. 2 Nr. 4 UStG) waren falsch: 89/93 statt 19/18 bzw. immer 94 statt 94/91 je nach USt-Satz. Zusätzlich wurde für §25a-Differenzbesteuerung fälschlich der Schlüssel „57" gesetzt – dafür gibt es bei DATEV keinen zweistelligen Schlüssel (Issue #302).' },
+      { typ: 'neu', text: 'DATEV-Export – §25a-Differenzbesteuerungsumsätze buchen jetzt auf eine eigene Kategorie mit dem korrekten DATEV-Automatikkonto (8199 SKR03 / 4134 SKR04) statt auf das normale Erlöskonto. Betrifft nur neue Rechnungen ab dieser Version, bereits gebuchte §25a-Umsätze bleiben aus GoBD-Gründen unverändert (Issue #303).' },
     ],
   },
   {
