@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.22',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'DATEV-Export – Gegenkonto-Vorschlag für „Bar (Kasse)" zeigte immer 1000 an, unabhängig vom gewählten Kontenrahmen. Bei SKR04 lautet das korrekte Kasse-Konto 1600 (Issue #301).' },
+    ],
+  },
+  {
     version: 'v0.4.21',
     datum: 'Juli 2026',
     eintraege: [

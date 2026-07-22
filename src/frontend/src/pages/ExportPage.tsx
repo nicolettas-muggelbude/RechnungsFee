@@ -359,7 +359,7 @@ export function ExportPage() {
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Gegenkonto-Nummern (Zahlungsweg → DATEV-Konto)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className={labelCls}>Bar (Kasse)</label>
-                      <input type="text" value={kontoBar} onChange={(e) => setKontoBar(e.target.value)} placeholder="1000" className={inputCls} /></div>
+                      <input type="text" value={kontoBar} onChange={(e) => setKontoBar(e.target.value)} placeholder={skr === 'SKR03' ? '1000' : '1600'} className={inputCls} /></div>
                     <div><label className={labelCls}>Bank / Überweisung</label>
                       <input type="text" value={kontoBank} onChange={(e) => setKontoBank(e.target.value)} placeholder={skr === 'SKR03' ? '1200' : '1800'} className={inputCls} /></div>
                     <div><label className={labelCls}>Karte (EC / Kredit)</label>
