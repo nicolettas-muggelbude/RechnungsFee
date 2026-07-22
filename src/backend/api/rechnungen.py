@@ -134,9 +134,22 @@ def _naechste_belegnr_journal(db: Session, datum: date) -> str:
 
 
 def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "Kategorie | None"]:
-    """Ermittelt die Erlös-Kategorie für Ausgangsrechnungen anhand des dominanten USt-Satzes."""
+    """Ermittelt die Erlös-Kategorie für Ausgangsrechnungen anhand des dominanten USt-Satzes.
+
+    Ausnahme §25a Differenzbesteuerung (Issue #303): enthält die Rechnung mindestens eine
+    §25a-Position, wird die eigene Kategorie mit DATEV-Automatikkonto 8199/4134 verwendet,
+    unabhängig vom USt-Satz. Betrifft nur NEUE Rechnungen ab diesem Release - bereits
+    gebuchte §25a-Journaleinträge laufen weiterhin über das alte Erlöskonto (Datenfix
+    für Bestandsdaten ist ein separater, späterer Schritt).
+    """
     if not rechnung.positionen:
         return None, None
+    if any(pos.differenzbesteuerung for pos in rechnung.positionen):
+        kat_25a = db.query(Kategorie).filter(
+            Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
+        ).first()
+        if kat_25a:
+            return kat_25a.id, kat_25a
     # Dominanter USt-Satz = Satz mit höchstem Netto-Anteil
     satz_summen: dict[int, Decimal] = {}
     for pos in rechnung.positionen:
