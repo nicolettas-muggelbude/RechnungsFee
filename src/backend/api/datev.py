@@ -293,8 +293,35 @@ def datev_buchungsstapel(
         if lf.kreditor_nr
     }
 
+    # Belege je Journaleintrag einmalig ermitteln (journal.beleg_id oder ueber die
+    # verknuepfte Rechnung rechnung.beleg_id) - dieselbe Zuordnung wird sowohl fuer
+    # die Beleglink-Spalte (20) der CSV als auch fuer die Datei im ZIP verwendet,
+    # damit beide immer exakt uebereinstimmen.
+    beleg_info: dict[int, tuple[Beleg, str]] = {}
+    if mit_belegen:
+        for j in eintraege:
+            beleg_id = j.beleg_id
+            if not beleg_id and j.rechnung_id:
+                rechnung_obj = db.query(Rechnung).filter(Rechnung.id == j.rechnung_id).first()
+                if rechnung_obj and rechnung_obj.beleg_id:
+                    beleg_id = rechnung_obj.beleg_id
+            if not beleg_id:
+                continue
+            beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
+            if not beleg:
+                continue
+            # Dateiname = Belegnummer (Belegfeld 1) - muss nicht sein (DATEV verknuepft
+            # ueber den Beleglink-Wert, nicht den Dateinamen), ist aber fuer Menschen
+            # nachvollziehbar und eindeutig innerhalb dieses Exports.
+            if beleg.beleg_pdfa_pfad:
+                dateiname = f"{j.belegnr}.pdf"
+            else:
+                extension = os.path.splitext(beleg.original_name)[1] or ".pdf"
+                dateiname = f"{j.belegnr}{extension}"
+            beleg_info[j.id] = (beleg, dateiname)
+
     skr = unt.kontenrahmen
-    zeilen: list[str] = [_zeile1(unt, von, bis)]
+    zeilen: list[str] = [_zeile1(unt, von, bis), ";".join(_COLS)]
     uebersprungen = 0
     leer_konto = 0
 
@@ -327,7 +354,9 @@ def datev_buchungsstapel(
                 personenkonto = kreditor_map.get(lf_id, "")
 
         leere_felder = [""] * 35    # Felder 15–49
-        leere_felder[33] = personenkonto  # Feld 48 (Index 47 gesamt → 47-14=33)
+        if j.id in beleg_info:
+            leere_felder[5] = beleg_info[j.id][1]     # Feld 20: Beleglink (Index 20-15=5)
+        leere_felder[33] = personenkonto              # Feld 48 (Index 47-14=33)
 
         row = [
             _fmt(betrag),       # 1: Umsatz
@@ -358,47 +387,33 @@ def datev_buchungsstapel(
     }
 
     if not mit_belegen:
-        dateiname = f"DATEV_Buchungsstapel_{zeitraum_suffix}.csv"
-        headers = {"Content-Disposition": f'attachment; filename="{dateiname}"', **zaehl_headers}
+        headers = {"Content-Disposition": 'attachment; filename="EXTF_Buchungsstapel.csv"', **zaehl_headers}
         return StreamingResponse(iter([data]), media_type="text/csv; charset=utf-8", headers=headers)
 
-    # Belege einsammeln: pro Journaleintrag entweder direkt (journal.beleg_id)
-    # oder ueber die verknuepfte Rechnung (rechnung.beleg_id) - wie beim GoBD-Export.
+    # ZIP schreiben: CSV + Belege-Dateien, exakt dieselbe Zuordnung wie in beleg_info
+    # (Spalte 20 der CSV) - Dateiname und Beleglink stimmen dadurch garantiert ueberein.
     belege_gefunden = 0
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("EXTF_Buchungsstapel.csv", data)
 
-        gesehen: set[int] = set()
-        for j in eintraege:
-            beleg_id = j.beleg_id
-            if not beleg_id and j.rechnung_id:
-                rechnung_obj = db.query(Rechnung).filter(Rechnung.id == j.rechnung_id).first()
-                if rechnung_obj and rechnung_obj.beleg_id:
-                    beleg_id = rechnung_obj.beleg_id
-            if not beleg_id or beleg_id in gesehen:
+        geschrieben: set[str] = set()
+        for beleg, dateiname in beleg_info.values():
+            if dateiname in geschrieben:
                 continue
-            gesehen.add(beleg_id)
-
-            beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
-            if not beleg:
-                continue
-
-            # Dateiname = Belegnummer (Belegfeld 1 der CSV) - so lassen sich Belege in
-            # DATEV ueblicherweise automatisch der passenden Buchung zuordnen.
-            extension = os.path.splitext(beleg.original_name)[1] or ".pdf"
-            zip_name = f"Belege/{j.belegnr}{extension}"
 
             if beleg.beleg_pdfa_pfad:
                 pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
                 if pdfa_pfad.exists():
-                    zf.write(str(pdfa_pfad), f"Belege/{j.belegnr}.pdf")
+                    zf.write(str(pdfa_pfad), f"Belege/{dateiname}")
+                    geschrieben.add(dateiname)
                     belege_gefunden += 1
                     continue
 
             orig_pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
             if orig_pfad.exists():
-                zf.write(str(orig_pfad), zip_name)
+                zf.write(str(orig_pfad), f"Belege/{dateiname}")
+                geschrieben.add(dateiname)
                 belege_gefunden += 1
 
     dateiname = f"DATEV_Buchungsstapel_{zeitraum_suffix}.zip"
