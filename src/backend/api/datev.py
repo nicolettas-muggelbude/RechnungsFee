@@ -106,11 +106,17 @@ def _fmt(betrag: Decimal) -> str:
 def _bu(j: Journaleintrag, skr: str, konto: Optional[str], db: Optional[Session] = None) -> str:
     sf = j.ust_sonderfall
     if sf == "ig_erwerb":
-        return "89" if int(j.ust_satz or 0) >= 19 else "93"
-    if sf in ("13b_abs1", "13b_abs2"):
+        # Innergemeinschaftlicher Erwerb §1a UStG (Issue #302)
+        return "19" if int(j.ust_satz or 0) >= 19 else "18"
+    if sf == "13b_abs2":
+        # Bauleistungen §13b Abs. 2 Nr. 4 UStG (Issue #302)
+        return "94" if int(j.ust_satz or 0) >= 19 else "91"
+    if sf == "13b_abs1":
         return "94"
     if j.marge_25a_brutto is not None:
-        return "57"
+        # §25a Differenzbesteuerung hat keinen zweistelligen BU-Schlüssel - DATEV erkennt
+        # das am Sachkonto (Automatikkonto 8199 SKR03 / 4134 SKR04, siehe Issue #303).
+        return ""
     satz = int(j.ust_satz or 0)
     # Stornobuchungen haben art=Gegenteil des Originals (art invertiert).
     # BU-Schlüssel richtet sich nach dem Original → art für BU-Berechnung zurückdrehen.
