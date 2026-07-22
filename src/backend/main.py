@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 121
+SCHEMA_VERSION = 122
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2612,6 +2612,40 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 121"))
             conn.commit()
             print("[Migration] Schema auf Version 121 (Abschreibungen (AfA): euer_zeile 36→33, Issue #265)")
+
+        if version < 122:
+            # Buchungsgruppen: gruppe_id verknuepft zusammengehoerige Original+Storno-
+            # Buchungen (und kuenftig Neubuchungen bei Korrekturen) - ersetzt an mehreren
+            # Stellen im Code das bisherige fragile Text-Parsing der Beschreibung
+            # ("STORNO {belegnr}: ..."). Reine Verknuepfungs-Metadaten, nicht Teil der
+            # GoBD-Signatur (signatur_journaleintrag() haengt nicht von gruppe_id ab).
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(journal)")).fetchall()]
+            if "gruppe_id" not in cols:
+                conn.execute(text("ALTER TABLE journal ADD COLUMN gruppe_id INTEGER REFERENCES journal(id)"))
+
+            # Backfill: bestehende Storno-Paare (Original+Storno) anhand des bisherigen
+            # Text-Musters verknuepfen. Neubuchungen bei Alt-Ketten werden bewusst NICHT
+            # rueckwirkend verknuepft (keine zuverlaessige Text-Verknuepfung vorhanden) -
+            # nur neue Korrekturen ab jetzt bekommen die volle Original+Storno+Neu-Kette.
+            stornos = conn.execute(text(
+                "SELECT id, beschreibung FROM journal WHERE beschreibung LIKE 'STORNO %'"
+            )).fetchall()
+            for storno_id, beschreibung in stornos:
+                original_belegnr = beschreibung[len("STORNO "):].split(":")[0].strip()
+                row = conn.execute(
+                    text("SELECT id, gruppe_id FROM journal WHERE belegnr = :b"),
+                    {"b": original_belegnr},
+                ).fetchone()
+                if not row:
+                    continue
+                original_id, original_gruppe_id = row
+                gruppe_id = original_gruppe_id or original_id
+                conn.execute(text("UPDATE journal SET gruppe_id = :g WHERE id = :id"), {"g": gruppe_id, "id": original_id})
+                conn.execute(text("UPDATE journal SET gruppe_id = :g WHERE id = :id"), {"g": gruppe_id, "id": storno_id})
+
+            conn.execute(text("PRAGMA user_version = 122"))
+            conn.commit()
+            print("[Migration] Schema auf Version 122 (gruppe_id fuer Buchungsgruppen, Original+Storno rueckwirkend verknuepft)")
 
 
 def _migrate_kategorien() -> None:

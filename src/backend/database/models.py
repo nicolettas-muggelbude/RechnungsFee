@@ -295,6 +295,10 @@ class Journaleintrag(Base):
     ust_sonderfall: Mapped[str | None] = mapped_column(String(20))
     # §25a Differenzbesteuerung: Brutto-Marge (VK − EK) für UStVA KZ 81/83
     marge_25a_brutto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # Verknuepft zusammengehoerige Buchungen (Original + Storno + ggf. Neubuchung einer
+    # Korrektur) - zeigt auf die id der aeltesten Buchung der Kette (Original). Reine
+    # Verknuepfungs-Metadaten, NICHT Teil der GoBD-Signatur (siehe utils/signatur.py).
+    gruppe_id: Mapped[int | None] = mapped_column(ForeignKey("journal.id"))
     # GoBD
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     signatur: Mapped[str | None] = mapped_column(String(64))
