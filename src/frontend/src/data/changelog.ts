@@ -32,6 +32,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Bank-Import – Eingangsrechnungen ohne Kategorie wurden beim automatischen und manuellen Bank-Abgleich klaglos ohne Sachkonto gebucht (DATEV-Importfehler beim späteren Export). Kategorie ist jetzt auch hier Pflicht, genau wie bei der manuellen Zahlungsverbuchung.' },
       { typ: 'neu', text: 'DATEV-Export – Belege können jetzt optional mitexportiert werden (Checkbox, standardmäßig aktiv): statt einer reinen CSV entsteht ein ZIP mit dem Buchungsstapel und einem Belege/-Ordner. Die Verknüpfung läuft über die Beleglink-Spalte (Feld 20) der CSV, die auf den passenden Dateinamen im Belege/-Ordner verweist.' },
       { typ: 'fix', text: 'DATEV-Export – die Spaltenüberschriften-Zeile fehlte in der CSV (fälschlich entfernt wegen eines von Issue #165 als nebensächlich markierten Hinweises). Wieder ergänzt, entspricht jetzt dem offiziellen DATEV-Format.' },
+      { typ: 'neu', text: 'Buchungsgruppen – zusammengehörige Buchungen (Original, Storno, ggf. korrigierte Neubuchung) sind jetzt intern robust über eine ID statt über Textvergleich verknüpft. Im Rechnungs-Detailpanel werden Korrektur-Ketten standardmäßig eingeklappt angezeigt (aufklappbar), im Journal gibt es einen „Kette anzeigen"-Link, der gezielt nur die zusammengehörigen Buchungen filtert.' },
     ],
   },
   {
