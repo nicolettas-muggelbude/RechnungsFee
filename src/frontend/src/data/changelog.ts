@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'DATEV-Export – BU-Schlüssel für innergemeinschaftlichen Erwerb (§1a UStG) und Bauleistungen (§13b Abs. 2 Nr. 4 UStG) waren falsch: 89/93 statt 19/18 bzw. immer 94 statt 94/91 je nach USt-Satz. Zusätzlich wurde für §25a-Differenzbesteuerung fälschlich der Schlüssel „57" gesetzt – dafür gibt es bei DATEV keinen zweistelligen Schlüssel (Issue #302).' },
       { typ: 'neu', text: 'DATEV-Export – §25a-Differenzbesteuerungsumsätze buchen jetzt auf eine eigene Kategorie mit dem korrekten DATEV-Automatikkonto (8199 SKR03 / 4134 SKR04) statt auf das normale Erlöskonto. Betrifft nur neue Rechnungen ab dieser Version, bereits gebuchte §25a-Umsätze bleiben aus GoBD-Gründen unverändert (Issue #303).' },
       { typ: 'fix', text: 'Bank-Import – Eingangsrechnungen ohne Kategorie wurden beim automatischen und manuellen Bank-Abgleich klaglos ohne Sachkonto gebucht (DATEV-Importfehler beim späteren Export). Kategorie ist jetzt auch hier Pflicht, genau wie bei der manuellen Zahlungsverbuchung.' },
+      { typ: 'neu', text: 'DATEV-Export – Belege können jetzt optional mitexportiert werden (Checkbox, standardmäßig aktiv): statt einer reinen CSV entsteht ein ZIP mit dem Buchungsstapel und einem Belege/-Ordner, die Dateien darin benannt nach der Belegnummer (Belegfeld 1).' },
     ],
   },
   {

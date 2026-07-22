@@ -4,15 +4,18 @@ Format: Version 700 / Buchungsstapel v9
 Modus: EÜR/Zuflussprinzip (eine Zeile pro Journaleintrag)
 
 Sonderfälle:
-  ust_sonderfall=ig_erwerb     → BU 89 (19 %) oder 93 (7 %)
-  ust_sonderfall=13b_abs1/abs2 → BU 94
-  marge_25a_brutto != NULL     → BU 57, Umsatz = Marge (§25a)
+  ust_sonderfall=ig_erwerb     → BU 19 (19 %) oder 18 (7 %)
+  ust_sonderfall=13b_abs2      → BU 94 (19 %) oder 91 (7 %); 13b_abs1 → BU 94
+  marge_25a_brutto != NULL     → kein BU-Schlüssel (Automatikkonto 8199/4134), Umsatz = Marge (§25a)
   zahlungsart='Keine'          → übersprungen (kein Gegenkonto)
   fehlendes Sachkonto          → wird exportiert (leer) → DATEV-Importfehler gewollt
   Stornobuchung (STORNO-Prefix) → BU-Schlüssel des Originals (art invertiert, vorsteuerabzug erhalten)
 """
 
+import io
+import os
 import re
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -21,8 +24,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from database.connection import get_db
-from database.models import Journaleintrag, Kategorie, Konto, Kunde, Lieferant, Rechnung, Unternehmen
+from database.connection import APP_DATA_DIR, get_db
+from database.models import Beleg, Journaleintrag, Kategorie, Konto, Kunde, Lieferant, Rechnung, Unternehmen
 
 router = APIRouter(prefix="/api/datev", tags=["DATEV"])
 
@@ -254,9 +257,11 @@ def _zeile1(unt: Unternehmen, von: date, bis: date) -> str:
 def datev_buchungsstapel(
     von: date = Query(..., description="Startdatum YYYY-MM-DD"),
     bis: date = Query(..., description="Enddatum YYYY-MM-DD"),
+    mit_belegen: bool = Query(True, description="Belege als ZIP mitexportieren (Belege/-Ordner, benannt nach Belegnummer)"),
     db: Session = Depends(get_db),
 ):
-    """DATEV EXTF Buchungsstapel für den angegebenen Zeitraum als CSV."""
+    """DATEV EXTF Buchungsstapel für den angegebenen Zeitraum als CSV (mit_belegen=false)
+    oder als ZIP mit CSV + zugehörigen Belegen im Belege/-Ordner (Standard)."""
     unt = db.query(Unternehmen).first()
     if not unt:
         raise HTTPException(status_code=404, detail="Keine Unternehmensdaten")
@@ -345,11 +350,61 @@ def datev_buchungsstapel(
     bom = b"\xef\xbb\xbf"
     data = bom + inhalt.encode("utf-8")
 
-    dateiname = f"DATEV_Buchungsstapel_{von.strftime('%Y%m%d')}_{bis.strftime('%Y%m%d')}.csv"
-    headers = {
-        "Content-Disposition": f'attachment; filename="{dateiname}"',
+    zeitraum_suffix = f"{von.strftime('%Y%m%d')}_{bis.strftime('%Y%m%d')}"
+    zaehl_headers = {
         "X-Datev-Eintraege": str(len(eintraege) - uebersprungen),
         "X-Datev-Uebersprungen": str(uebersprungen),
         "X-Datev-LeerKonto": str(leer_konto),
     }
-    return StreamingResponse(iter([data]), media_type="text/csv; charset=utf-8", headers=headers)
+
+    if not mit_belegen:
+        dateiname = f"DATEV_Buchungsstapel_{zeitraum_suffix}.csv"
+        headers = {"Content-Disposition": f'attachment; filename="{dateiname}"', **zaehl_headers}
+        return StreamingResponse(iter([data]), media_type="text/csv; charset=utf-8", headers=headers)
+
+    # Belege einsammeln: pro Journaleintrag entweder direkt (journal.beleg_id)
+    # oder ueber die verknuepfte Rechnung (rechnung.beleg_id) - wie beim GoBD-Export.
+    belege_gefunden = 0
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("EXTF_Buchungsstapel.csv", data)
+
+        gesehen: set[int] = set()
+        for j in eintraege:
+            beleg_id = j.beleg_id
+            if not beleg_id and j.rechnung_id:
+                rechnung_obj = db.query(Rechnung).filter(Rechnung.id == j.rechnung_id).first()
+                if rechnung_obj and rechnung_obj.beleg_id:
+                    beleg_id = rechnung_obj.beleg_id
+            if not beleg_id or beleg_id in gesehen:
+                continue
+            gesehen.add(beleg_id)
+
+            beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
+            if not beleg:
+                continue
+
+            # Dateiname = Belegnummer (Belegfeld 1 der CSV) - so lassen sich Belege in
+            # DATEV ueblicherweise automatisch der passenden Buchung zuordnen.
+            extension = os.path.splitext(beleg.original_name)[1] or ".pdf"
+            zip_name = f"Belege/{j.belegnr}{extension}"
+
+            if beleg.beleg_pdfa_pfad:
+                pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
+                if pdfa_pfad.exists():
+                    zf.write(str(pdfa_pfad), f"Belege/{j.belegnr}.pdf")
+                    belege_gefunden += 1
+                    continue
+
+            orig_pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+            if orig_pfad.exists():
+                zf.write(str(orig_pfad), zip_name)
+                belege_gefunden += 1
+
+    dateiname = f"DATEV_Buchungsstapel_{zeitraum_suffix}.zip"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{dateiname}"',
+        "X-Datev-Belege": str(belege_gefunden),
+        **zaehl_headers,
+    }
+    return StreamingResponse(iter([zip_buffer.getvalue()]), media_type="application/zip", headers=headers)

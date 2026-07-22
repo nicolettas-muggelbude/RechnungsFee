@@ -113,7 +113,8 @@ export function ExportPage() {
   const [datevVon, setDatevVon] = useState('')
   const [datevBis, setDatevBis] = useState('')
   const [datevLaedt, setDatevLaedt] = useState(false)
-  const [datevErgebnis, setDatevErgebnis] = useState<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number } | null>(null)
+  const [datevMitBelegen, setDatevMitBelegen] = useState(true)
+  const [datevErgebnis, setDatevErgebnis] = useState<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null } | null>(null)
   const [datevFehler, setDatevFehler] = useState<string | null>(null)
   const [konfigOffen, setKonfigOffen] = useState(false)
   const [konfigGespeichert, setKonfigGespeichert] = useState(false)
@@ -175,7 +176,7 @@ export function ExportPage() {
     setDatevLaedt(true); setDatevErgebnis(null); setDatevFehler(null)
     const [von, bis] = zeitraumZuDaten(datevZeitraum, datevJahr, datevVon, datevBis)
     if (!von || !bis) { setDatevFehler('Bitte Von- und Bis-Datum angeben'); setDatevLaedt(false); return }
-    try { setDatevErgebnis(await downloadDatevBuchungsstapel(von, bis)) }
+    try { setDatevErgebnis(await downloadDatevBuchungsstapel(von, bis, datevMitBelegen)) }
     catch (e: any) { setDatevFehler(e?.message ?? 'Unbekannter Fehler') }
     finally { setDatevLaedt(false) }
   }
@@ -309,6 +310,12 @@ export function ExportPage() {
               accent="focus:ring-emerald-500"
             />
 
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={datevMitBelegen} onChange={(e) => setDatevMitBelegen(e.target.checked)}
+                className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500" />
+              Belege mitexportieren (ZIP mit Belege/-Ordner, benannt nach Belegnummer)
+            </label>
+
             <button onClick={handleDatev} disabled={datevLaedt}
               className={`flex items-center gap-2 ${btnColor('emerald')} text-white font-medium text-sm px-5 py-2 rounded-lg transition-colors`}>
               {datevLaedt ? <><span className="animate-spin">⏳</span>Wird erstellt…</> : <><span>📊</span>DATEV exportieren</>}
@@ -320,6 +327,9 @@ export function ExportPage() {
                 <p className="mt-0.5 font-mono text-xs">{datevErgebnis.filename}</p>
                 <p className="mt-1 text-xs">
                   {datevErgebnis.eintraege} Buchung{datevErgebnis.eintraege !== 1 ? 'en' : ''} exportiert
+                  {datevErgebnis.belege !== null && (
+                    <span className="ml-2">· {datevErgebnis.belege} Beleg{datevErgebnis.belege !== 1 ? 'e' : ''} mitexportiert</span>
+                  )}
                   {datevErgebnis.uebersprungen > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-2">
                       · {datevErgebnis.uebersprungen} übersprungen (kein Zahlungskonto)
