@@ -441,6 +441,7 @@ export type JournalEintrag = {
   km_anzahl?: number | null
   ist_ig_erwerb?: boolean
   ust_sonderfall?: string | null
+  gruppe_id?: number | null
 }
 
 export type JournalEintragCreate = {
@@ -482,6 +483,7 @@ export const getJournal = (filter?: {
   kategorie_id?: number
   art?: string
   zahlungsart_typ?: 'bar' | 'unbar'
+  gruppe_id?: number
 }) => request<JournalEintrag[]>(`/journal${toQuery(filter ?? {})}`)
 export const createJournaleintrag = (data: JournalEintragCreate) =>
   request<JournalEintrag>('/journal', { method: 'POST', body: JSON.stringify(data) })
@@ -1172,6 +1174,7 @@ export type ZahlungKompakt = {
   brutto_betrag: string
   art: 'Einnahme' | 'Ausgabe'
   zahlungsart: string
+  gruppe_id?: number | null
 }
 
 export type Rechnung = {

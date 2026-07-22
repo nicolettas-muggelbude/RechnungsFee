@@ -206,6 +206,7 @@ class ZahlungKompakt(BaseModel):
     brutto_betrag: Decimal
     art: str
     zahlungsart: str
+    gruppe_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

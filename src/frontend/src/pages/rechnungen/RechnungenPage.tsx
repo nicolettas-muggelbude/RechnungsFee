@@ -16,7 +16,7 @@ import {
   uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   getBuchungsvorlage, erledigtVorlage,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
-  type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition,
+  type ArtikelSuche, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { KategorieErstellenModal } from '../../components/KategorieErstellenModal'
@@ -889,6 +889,7 @@ function RechnungDetail({
   const [korrigiereZahlungId, setKorrigiereZahlungId] = useState<number | null>(null)
   const [korrigiereDatum, setKorrigiereDatum] = useState('')
   const [korrigiereBetrag, setKorrigiereBetrag] = useState('')
+  const [aufgeklappteGruppen, setAufgeklappteGruppen] = useState<Set<number>>(new Set())
   const qc = useQueryClient()
 
   const belegUploadMutation = useMutation({
@@ -1733,9 +1734,11 @@ function RechnungDetail({
                     .filter(z => z.beschreibung.startsWith('STORNO '))
                     .map(z => z.beschreibung.slice('STORNO '.length).split(':')[0].trim())
                 )
-                return rechnung.zahlungen.map((z) => {
+                const istKorrigierbar = (z: ZahlungKompakt) =>
+                  !z.beschreibung.startsWith('STORNO ') && !stornierteBelegnrs.has(z.belegnr)
+
+                const renderZeile = (z: ZahlungKompakt) => {
                   const istStorno = z.beschreibung.startsWith('STORNO ')
-                  const istKorrigierbar = !istStorno && !stornierteBelegnrs.has(z.belegnr)
                   return (
                     <div key={z.id}>
                       <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${istStorno ? 'bg-red-50 dark:bg-red-950/30' : 'bg-slate-50 dark:bg-slate-900'}`}>
@@ -1749,7 +1752,7 @@ function RechnungDetail({
                           <span className={`font-medium ${z.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'}`}>
                             {parseFloat(z.brutto_betrag) < 0 ? '−' : (z.art === 'Ausgabe' ? '−' : '+')}{formatEuro(Math.abs(parseFloat(z.brutto_betrag)))}
                           </span>
-                          {istKorrigierbar && (
+                          {istKorrigierbar(z) && (
                             <button
                               onClick={() => { setKorrigiereZahlungId(z.id); setKorrigiereDatum(z.datum); setKorrigiereBetrag(String(Math.abs(parseFloat(z.brutto_betrag)))) }}
                               title="Zahlung korrigieren (Datum/Betrag)"
@@ -1788,6 +1791,62 @@ function RechnungDetail({
                           >
                             Abbrechen
                           </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                // Gruppierung: Original + Storno + ggf. Neu gehören zusammen (gruppe_id
+                // zeigt auf die Wurzel-id; das Original selbst hat gruppe_id=null, daher
+                // als Schlüssel z.gruppe_id ?? z.id verwenden - das Original landet dadurch
+                // automatisch in derselben Gruppe wie seine Storno-/Neu-Buchungen).
+                const gruppen = new Map<number, ZahlungKompakt[]>()
+                for (const z of rechnung.zahlungen) {
+                  const rootId = z.gruppe_id ?? z.id
+                  if (!gruppen.has(rootId)) gruppen.set(rootId, [])
+                  gruppen.get(rootId)!.push(z)
+                }
+
+                return Array.from(gruppen.entries()).map(([rootId, mitglieder]) => {
+                  if (mitglieder.length === 1) return renderZeile(mitglieder[0])
+
+                  const sortiert = [...mitglieder].sort((a, b) => a.id - b.id)
+                  const letztes = sortiert[sortiert.length - 1]
+                  const istStorniert = letztes.beschreibung.startsWith('STORNO ')
+                  const aktuell = istStorniert ? sortiert[0] : letztes
+                  const aufgeklappt = aufgeklappteGruppen.has(rootId)
+
+                  const toggle = () => setAufgeklappteGruppen(prev => {
+                    const next = new Set(prev)
+                    if (next.has(rootId)) next.delete(rootId); else next.add(rootId)
+                    return next
+                  })
+
+                  return (
+                    <div key={rootId}>
+                      <button
+                        onClick={toggle}
+                        className="w-full flex items-center justify-between text-sm rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-base text-slate-400">
+                            {aufgeklappt ? 'expand_more' : 'chevron_right'}
+                          </span>
+                          <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1">{aktuell.belegnr}</span>
+                          <span className="text-slate-600 dark:text-slate-300">{formatDatum(aktuell.datum)}</span>
+                          <span className="ml-1.5 text-xs text-slate-400 dark:text-slate-500">{aktuell.zahlungsart}</span>
+                          <span className="ml-1.5 text-xs text-slate-400 dark:text-slate-500">
+                            · {istStorniert ? 'storniert' : 'korrigiert'} ({mitglieder.length})
+                          </span>
+                        </div>
+                        <span className={`font-medium ${istStorniert ? 'text-slate-400 line-through' : aktuell.art === 'Einnahme' ? 'text-green-600' : 'text-red-600'}`}>
+                          {parseFloat(aktuell.brutto_betrag) < 0 ? '−' : (aktuell.art === 'Ausgabe' ? '−' : '+')}{formatEuro(Math.abs(parseFloat(aktuell.brutto_betrag)))}
+                        </span>
+                      </button>
+                      {aufgeklappt && (
+                        <div className="pl-5 mt-1 space-y-1">
+                          {sortiert.map(renderZeile)}
                         </div>
                       )}
                     </div>

@@ -60,6 +60,7 @@ export function JournalPage() {
 
   const [nurBebuchte, _setNurBebuchte] = useState<boolean>(() => journalFilter.nurBebuchte)
   const setNurBebuchte = (v: boolean) => { journalFilter.nurBebuchte = v; _setNurBebuchte(v) }
+  const [gruppeIdFilter, setGruppeIdFilter] = useState<number | null>(null)
   const [showBuchung, setShowBuchung] = useState(false)
   const [schnellbuchungWerte, setSchnellbuchungWerte] = useState<Schnellbuchung | null>(null)
   const [showAbschluss, setShowAbschluss] = useState(false)
@@ -148,14 +149,22 @@ export function JournalPage() {
   }
 
   const { data: eintraege, isLoading } = useQuery({
-    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis, art, kategorieId, zahlungsartTyp],
-    queryFn: () => getJournal({
-      ...filterParams,
-      art: art || undefined,
-      kategorie_id: kategorieId ? Number(kategorieId) : undefined,
-      zahlungsart_typ: zahlungsartTyp || undefined,
-    }),
+    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis, art, kategorieId, zahlungsartTyp, gruppeIdFilter],
+    queryFn: () => gruppeIdFilter
+      // Korrektur-Kette anzeigen: ignoriert Datum/Kategorie/Art-Filter bewusst, damit
+      // Original+Storno+Neu auch bei abweichendem Datum vollstaendig sichtbar sind.
+      ? getJournal({ gruppe_id: gruppeIdFilter })
+      : getJournal({
+          ...filterParams,
+          art: art || undefined,
+          kategorie_id: kategorieId ? Number(kategorieId) : undefined,
+          zahlungsart_typ: zahlungsartTyp || undefined,
+        }),
   })
+
+  const gruppenWurzeln = new Set(
+    (eintraege ?? []).map(e => e.gruppe_id).filter((g): g is number => g != null)
+  )
 
   const { data: kategorien } = useQuery({
     queryKey: ['kategorien', nurBebuchte],
@@ -409,6 +418,18 @@ export function JournalPage() {
         </div>
       )}
 
+      {gruppeIdFilter !== null && (
+        <div className="shrink-0 px-6 pb-3">
+          <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2.5 text-sm text-blue-800 dark:text-blue-300">
+            <span className="shrink-0">🔗</span>
+            <span>Zeigt nur die Korrektur-Kette dieser Buchung – andere Filter (Datum/Kategorie/Art) sind währenddessen deaktiviert.</span>
+            <button onClick={() => setGruppeIdFilter(null)} className="ml-auto text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-medium">
+              Zurücksetzen ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabelle – scrollbar */}
       <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-6">
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -463,6 +484,16 @@ export function JournalPage() {
                         )}
                         {bereitsStorniert && (
                           <span className="ml-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded px-1">storniert</span>
+                        )}
+                        {(e.gruppe_id != null || gruppenWurzeln.has(e.id)) && (
+                          <button
+                            type="button"
+                            title="Nur die Korrektur-Kette dieser Buchung anzeigen"
+                            onClick={(ev) => { ev.stopPropagation(); setGruppeIdFilter(e.gruppe_id ?? e.id) }}
+                            className="ml-2 text-xs bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                          >
+                            🔗 Kette anzeigen
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{e.zahlungsart}</td>

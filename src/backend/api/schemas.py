@@ -357,6 +357,7 @@ class JournalEintragResponse(BaseModel):
     km_anzahl: Optional[Decimal] = None
     ist_ig_erwerb: bool = False
     ust_sonderfall: Optional[str] = None
+    gruppe_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

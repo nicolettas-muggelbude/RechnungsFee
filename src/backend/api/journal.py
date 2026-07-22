@@ -199,10 +199,15 @@ def list_eintraege(
     kategorie_id: Optional[int] = None,
     art: Optional[str] = Query(None, description="Einnahme oder Ausgabe"),
     zahlungsart_typ: Optional[str] = Query(None, description="bar oder unbar"),
+    gruppe_id: Optional[int] = Query(None, description="Zeigt nur die Buchungsgruppe (Original+Storno+ggf. Neu) dieser Wurzel-id"),
     db: Session = Depends(get_db),
 ):
     """Journaleinträge mit optionalen Filtern."""
     q = db.query(Journaleintrag)
+    if gruppe_id is not None:
+        # Original selbst hat gruppe_id=NULL (GoBD: kein nachtraegliches UPDATE moeglich),
+        # daher zusaetzlich nach eigener id filtern.
+        q = q.filter((Journaleintrag.id == gruppe_id) | (Journaleintrag.gruppe_id == gruppe_id))
     if monat:
         try:
             jahr, mon = monat.split("-")
