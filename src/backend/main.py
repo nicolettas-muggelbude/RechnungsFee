@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 121
+SCHEMA_VERSION = 122
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2612,6 +2612,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 121"))
             conn.commit()
             print("[Migration] Schema auf Version 121 (Abschreibungen (AfA): euer_zeile 36→33, Issue #265)")
+
+        if version < 122:
+            # RFC 3161 Trusted Timestamping – optionale, additive Felder auf tagesabschluesse.
+            # Kein Eingriff in die SHA-256-Kette; alle Felder bleiben NULL bis ein Zeitstempel vorliegt.
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(tagesabschluesse)"))}
+            for col_name, ddl in [
+                ("tsa_zeitstempel_tsr", "BLOB"),
+                ("tsa_zeitpunkt",       "DATETIME"),
+                ("tsa_quelle",          "VARCHAR(255)"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE tagesabschluesse ADD COLUMN {col_name} {ddl}"))
+            conn.execute(text("PRAGMA user_version = 122"))
+            conn.commit()
+            print("[Migration] Schema auf Version 122 (RFC 3161 TSA-Felder auf tagesabschluesse)")
 
 
 def _migrate_kategorien() -> None:

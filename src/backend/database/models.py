@@ -8,7 +8,7 @@ GoBD-relevante Tabellen sind unveränderbar (immutable=True + Signatur).
 from datetime import date, datetime
 from decimal import Decimal
 from sqlalchemy import (
-    Boolean, Date, DateTime, ForeignKey, Integer, Numeric,
+    Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, Numeric,
     String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -326,6 +326,11 @@ class Tagesabschluss(Base):
     benutzer: Mapped[str | None] = mapped_column(String(100))
     immutable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     signatur: Mapped[str | None] = mapped_column(String(64))
+    # RFC 3161 Trusted Timestamping – optional, additiv zur SHA-256-Kette.
+    # Alle Felder NULL, wenn nicht angefordert oder TSA offline (Kette bleibt intakt).
+    tsa_zeitstempel_tsr: Mapped[bytes | None] = mapped_column(LargeBinary)  # vollständige RFC-3161-Response (.tsr)
+    tsa_zeitpunkt: Mapped[datetime | None] = mapped_column(DateTime)         # von der TSA bestätigter Zeitpunkt
+    tsa_quelle: Mapped[str | None] = mapped_column(String(255))              # TSA-Dienst, z.B. "freetsa.org"
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

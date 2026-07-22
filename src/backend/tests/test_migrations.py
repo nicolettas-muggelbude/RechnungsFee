@@ -176,7 +176,8 @@ class TestMigrationen:
         assert {"bezahlt_betrag", "zahlungsstatus", "leistung_von", "leistung_bis",
                 "ist_entwurf", "storniert", "ausgegeben"} <= get_columns(db_path, "rechnungen")
         # tagesabschluesse
-        assert {"zaehlung_json", "signatur"} <= get_columns(db_path, "tagesabschluesse")
+        assert {"zaehlung_json", "signatur",
+                "tsa_zeitstempel_tsr", "tsa_zeitpunkt", "tsa_quelle"} <= get_columns(db_path, "tagesabschluesse")
         # unternehmen
         assert {"handelsregister_nr", "handelsregister_gericht", "logo_pfad",
                 "mail_betreff_vorlage", "mail_text_vorlage",
