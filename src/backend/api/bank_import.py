@@ -408,6 +408,12 @@ def _buche_pfad_a(
 
     kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
 
+    # Kategorie ist bei Eingangsrechnungen Pflicht - sonst bucht der Bank-Import klaglos
+    # mit kategorie_id=NULL durch (kein Sachkonto, DATEV-Importfehler beim Export).
+    # Gleiche Regel wie bei der manuellen Zahlungsverbuchung (zahlung_bar_erstellen).
+    if art == "Ausgabe" and not (unternehmen and unternehmen.ist_kleinunternehmer) and kat_id is None:
+        raise HTTPException(status_code=422, detail="keine_kategorie")
+
     # Aufteilung nach USt-Satz-Gruppen (Issue #295: bei gemischten Saetzen darf nicht nur
     # der dominante Satz fuer die gesamte Zahlung verwendet werden).
     ust_gruppen = _verteile_nach_satz(betrag_zu_buchen, satz_ratios, art)
