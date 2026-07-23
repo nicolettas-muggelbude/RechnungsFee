@@ -35,7 +35,6 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Buchungsgruppen – zusammengehörige Buchungen (Original, Storno, ggf. korrigierte Neubuchung) sind jetzt intern robust über eine ID statt über Textvergleich verknüpft. Im Rechnungs-Detailpanel werden Korrektur-Ketten standardmäßig eingeklappt angezeigt (aufklappbar), im Journal gibt es einen „Kette anzeigen"-Link, der gezielt nur die zusammengehörigen Buchungen filtert.' },
       { typ: 'neu', text: 'Ersatzrechnung – aus einer stornierten Rechnung lässt sich jetzt direkt eine Ersatzrechnung erstellen (Kunde, Positionen und Texte werden übernommen, eigene Rechnungsnummer, als Entwurf zum Prüfen). Original und Ersatzrechnung sind beidseitig verknüpft (Issue #304).' },
       { typ: 'neu', text: 'Rechnungen – ein „🔗 Kette anzeigen"-Badge zeigt bei Rechnungen mit Ersatzrechnungs-Bezug die komplette Dokumentenkette (Original → Storno → Ersatzrechnung) an – unabhängig vom Zahlungsstatus, also auch bei noch unbezahlten Rechnungen.' },
-      { typ: 'fix', text: 'Buchungsgruppen – die Korrektur-Ketten-Anzeige im Rechnungs-Detailpanel hat bislang für keine Rechnung etwas eingeklappt, weil beim Aufbau der Zahlungsliste die dafür nötige Kennung nie mitgegeben wurde. Zusätzlich werden bei einer Ersatzrechnung jetzt auch dokumentübergreifend alle zusammengehörigen Buchungen (Original-Zahlung, Storno, Ersatzrechnungs-Zahlung) gemeinsam angezeigt – egal welche der Zahlungswege (Zahlung erfassen oder Bank-Import) verwendet wurde.' },
     ],
   },
   {
