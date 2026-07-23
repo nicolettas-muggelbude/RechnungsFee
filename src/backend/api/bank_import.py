@@ -37,8 +37,8 @@ from utils.bank_csv_parser import (
 from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
-    _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erstelle_skonto_eintrag, _partner_name, _ust_konto,
-    _verteile_nach_satz,
+    _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erstelle_skonto_eintrag, _kette_gruppe_id, _partner_name,
+    _ust_konto, _verteile_nach_satz,
 )
 from .schemas import JournalEintragCreate
 
@@ -445,6 +445,7 @@ def _buche_pfad_a(
             vorsteuerabzug=g_vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung.id,
+            gruppe_id=_kette_gruppe_id(rechnung, db),
             konto_id=tx.konto_id,
             immutable=True,
         )
