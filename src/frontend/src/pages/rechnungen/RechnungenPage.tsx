@@ -6,7 +6,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, getRechnung, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, createGutschrift, forderungsausbuchenRechnung,
+  stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, forderungsausbuchenRechnung,
   getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen,
@@ -855,6 +855,7 @@ function RechnungDetail({
   onEdit,
   onDelete,
   onGutschriftCreated,
+  onErsatzrechnungCreated,
   onRechnungAusLs,
   onSelectId,
   onLieferscheinAusRechnung,
@@ -866,6 +867,7 @@ function RechnungDetail({
   onEdit: () => void
   onDelete: () => void
   onGutschriftCreated?: (gs: Rechnung) => void
+  onErsatzrechnungCreated?: (er: Rechnung) => void
   onRechnungAusLs?: (id: number) => void
   onSelectId?: (id: number, isLieferschein?: boolean, filterRechnungId?: number) => void
   onLieferscheinAusRechnung?: (id: number) => void
@@ -997,6 +999,15 @@ function RechnungDetail({
     onSuccess: (gs) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       onGutschriftCreated?.(gs)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
+  const ersatzrechnungMutation = useMutation({
+    mutationFn: () => ersatzrechnungErstellen(rechnung.id),
+    onSuccess: (er) => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      onErsatzrechnungCreated?.(er)
     },
     onError: (e: Error) => setFehler(e.message),
   })
@@ -1236,6 +1247,31 @@ function RechnungDetail({
           )}
           {rechnung.zahlungsstatus === 'uneinbringlich' && rechnung.dokument_typ !== 'Lieferschein' && (
             <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Uneinbringlich ausgebucht</span>
+          )}
+          {rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ === 'Rechnung' && !rechnung.ersatzrechnung_id && (
+            <button
+              onClick={() => ersatzrechnungMutation.mutate()}
+              disabled={ersatzrechnungMutation.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-950 text-green-700 dark:text-green-400 font-medium disabled:opacity-50"
+            >
+              {ersatzrechnungMutation.isPending ? '…' : '→ Ersatzrechnung erstellen'}
+            </button>
+          )}
+          {rechnung.ersatzrechnung_id && (
+            <button
+              onClick={() => onSelectId?.(rechnung.ersatzrechnung_id!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-950 text-green-700 dark:text-green-400 font-mono"
+            >
+              → {rechnung.ersatzrechnung_nr ?? `RE #${rechnung.ersatzrechnung_id}`}
+            </button>
+          )}
+          {rechnung.ersatz_fuer_rechnung_id && (
+            <button
+              onClick={() => onSelectId?.(rechnung.ersatz_fuer_rechnung_id!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono"
+            >
+              Ersatz für {rechnung.ersatz_fuer_rechnung_nr ?? `RE #${rechnung.ersatz_fuer_rechnung_id}`}
+            </button>
           )}
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
@@ -4457,6 +4493,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
               onFinalisiert={(r) => setPendingEditRechnung(r)}
               onZahlungErfasst={(r) => { setPendingEditRechnung(r); setDetailVersion(v => v + 1) }}
               onGutschriftCreated={(gs) => { setPendingEditRechnung(gs); setSelectedId(gs.id); setFormModus('bearbeiten') }}
+              onErsatzrechnungCreated={(er) => { setPendingEditRechnung(er); setSelectedId(er.id); setFormModus('bearbeiten') }}
               onRechnungAusLs={(id) => rechnungAusLsMutation.mutate(id)}
               onSelectId={(id, isLieferschein, filterRechnungId) => {
                 // Seitenwechsel wenn Ziel auf anderer Seite liegt
