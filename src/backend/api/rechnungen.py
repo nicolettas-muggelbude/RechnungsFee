@@ -627,6 +627,35 @@ def _rechnungen_gefiltert(
     return q.order_by(Rechnung.datum.desc(), Rechnung.id.desc()).all()
 
 
+def _ersatzrechnungs_kette_ids(db: Session, start_id: int) -> list[int]:
+    """Alle Dokument-IDs der Ersatzrechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...),
+    ausgehend von einem beliebigen Mitglied der Kette (Issue #304)."""
+    start = db.query(Rechnung).filter(Rechnung.id == start_id).first()
+    if not start:
+        return [start_id]
+    wurzel = start
+    rueckwaerts_besucht = {wurzel.id}
+    while wurzel.ersatz_fuer_rechnung_id and wurzel.ersatz_fuer_rechnung_id not in rueckwaerts_besucht:
+        vor = db.query(Rechnung).filter(Rechnung.id == wurzel.ersatz_fuer_rechnung_id).first()
+        if not vor:
+            break
+        wurzel = vor
+        rueckwaerts_besucht.add(wurzel.id)
+    # Eigene besucht-Menge fuer den Vorwaertslauf (nicht mit start.id vorbelegt, sonst
+    # wuerde start uebersprungen wenn start != wurzel ist).
+    ids = [wurzel.id]
+    vorwaerts_besucht = {wurzel.id}
+    cur = wurzel
+    while cur.ersatzrechnung_id and cur.ersatzrechnung_id not in vorwaerts_besucht:
+        nxt = db.query(Rechnung).filter(Rechnung.id == cur.ersatzrechnung_id).first()
+        if not nxt:
+            break
+        ids.append(nxt.id)
+        vorwaerts_besucht.add(nxt.id)
+        cur = nxt
+    return ids
+
+
 @router.get("", response_model=list[RechnungResponse])
 def list_rechnungen(
     typ: Optional[str] = Query(None, description="eingang|ausgang"),
@@ -637,11 +666,19 @@ def list_rechnungen(
     kunde_id: Optional[int] = Query(None),
     lieferant_id: Optional[int] = Query(None),
     dokument_typ: Optional[str] = Query(None, description="Rechnung|Gutschrift|Lieferschein"),
+    kette_von_id: Optional[int] = Query(None, description="Zeigt nur die Ersatzrechnungs-Kette dieser Rechnung, ignoriert alle anderen Filter"),
     db: Session = Depends(get_db),
 ):
-    rechnungen = _rechnungen_gefiltert(
-        db, typ, zahlungsstatus, monat, datum_von, datum_bis, kunde_id, lieferant_id, dokument_typ,
-    )
+    if kette_von_id is not None:
+        ids = _ersatzrechnungs_kette_ids(db, kette_von_id)
+        rechnungen = (
+            db.query(Rechnung).filter(Rechnung.id.in_(ids))
+            .order_by(Rechnung.datum, Rechnung.id).all()
+        )
+    else:
+        rechnungen = _rechnungen_gefiltert(
+            db, typ, zahlungsstatus, monat, datum_von, datum_bis, kunde_id, lieferant_id, dokument_typ,
+        )
     return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
 
 

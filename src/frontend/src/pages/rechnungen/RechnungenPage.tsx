@@ -3690,6 +3690,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const istLieferscheinSeite = modus === 'lieferscheine'
   const lieferscheinModus = istLieferscheinSeite
   const [zahlungsstatus, setZahlungsstatus] = useState('')
+  const [ketteFilterId, setKetteFilterId] = useState<number | null>(null)
   const [lsAbrechnungFilter, setLsAbrechnungFilter] = useState<'' | 'offen' | 'entwurf' | 'abgerechnet'>('')
   const [suche, setSuche] = useState('')
   const store = istLieferscheinSeite ? lieferscheinFilter : rechnungenFilter
@@ -3850,10 +3851,14 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const lieferscheinAktiv = !!unternehmen?.lieferschein_aktiv
 
   const { data: rechnungen, isLoading } = useQuery({
-    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus],
-    queryFn: () => lieferscheinModus
-      ? getLieferscheine()
-      : getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
+    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus, ketteFilterId],
+    queryFn: () => ketteFilterId !== null
+      // Ersatzrechnungs-Kette anzeigen: ignoriert alle anderen Filter bewusst, damit die
+      // Kette auch bei abweichendem Zeitraum/Status vollstaendig sichtbar ist.
+      ? getRechnungen({ kette_von_id: ketteFilterId })
+      : lieferscheinModus
+        ? getLieferscheine()
+        : getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
   })
 
   const _fromQuery = rechnungen?.find((r) => r.id === selectedId) ?? null
@@ -4244,6 +4249,18 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
           </div>
         )}
 
+        {ketteFilterId !== null && (
+          <div className="shrink-0 px-6 pb-3">
+            <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2.5 text-sm text-blue-800 dark:text-blue-300">
+              <span className="shrink-0">🔗</span>
+              <span>Zeigt nur die Ersatzrechnungs-Kette dieser Rechnung – andere Filter sind währenddessen deaktiviert.</span>
+              <button onClick={() => setKetteFilterId(null)} className="ml-auto text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-medium">
+                Zurücksetzen ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tabelle */}
         <div ref={listContainerRef} tabIndex={0} className="flex-1 overflow-y-auto min-h-0 px-6 pb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-sm">
           {lieferscheinModus && lsFilterRechnungId != null && (
@@ -4374,6 +4391,16 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                         )}
                         {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1">Entwurf</span>}
                         {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1">Storniert</span>}
+                        {r.rechnungs_kette.length > 1 && (
+                          <button
+                            type="button"
+                            title="Nur die Ersatzrechnungs-Kette dieser Rechnung anzeigen"
+                            onClick={(ev) => { ev.stopPropagation(); setKetteFilterId(r.id) }}
+                            className="ml-1.5 text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                          >
+                            🔗 Kette anzeigen
+                          </button>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
                         {r.typ === 'ausgang'

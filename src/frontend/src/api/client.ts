@@ -1166,6 +1166,15 @@ export type RechnungspositionCreate = {
   rabatt_prozent?: number
 }
 
+export type RechnungsKettenGlied = {
+  id: number
+  rechnungsnummer: string | null
+  ist_entwurf: boolean
+  storniert: boolean
+  zahlungsstatus: string
+  ist_aktuell: boolean
+}
+
 export type ZahlungKompakt = {
   id: number
   belegnr: string
@@ -1227,6 +1236,7 @@ export type Rechnung = {
   ersatzrechnung_nr: string | null
   ersatz_fuer_rechnung_id: number | null
   ersatz_fuer_rechnung_nr: string | null
+  rechnungs_kette: RechnungsKettenGlied[]
   dokument_typ: string
   gutschrift_zu_rechnung_id: number | null
   gutschrift_zu_rechnung_nr: string | null
@@ -1353,6 +1363,7 @@ export const getRechnungen = (filter?: {
   kunde_id?: number
   lieferant_id?: number
   dokument_typ?: string
+  kette_von_id?: number
 }) => request<Rechnung[]>(`/rechnungen${toQuery(filter ?? {})}`)
 
 export const getLieferscheine = (filter?: { kunde_id?: number }) =>

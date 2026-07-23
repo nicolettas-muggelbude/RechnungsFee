@@ -197,6 +197,18 @@ class RechnungUpdate(BaseModel):
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
+# Ein Dokument in der Ersatzrechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...)
+class RechnungsKettenGlied(BaseModel):
+    id: int
+    rechnungsnummer: Optional[str] = None
+    ist_entwurf: bool
+    storniert: bool
+    zahlungsstatus: str
+    ist_aktuell: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 # Kompakte Zahlungsinfo für die Rechnung-Response
 class ZahlungKompakt(BaseModel):
     id: int
@@ -268,6 +280,7 @@ class RechnungResponse(BaseModel):
     ersatzrechnung_nr: Optional[str] = None         # wird in from_orm_extended befüllt
     ersatz_fuer_rechnung_id: Optional[int] = None   # auf Ersatzrechnung: für welche stornierte Rechnung
     ersatz_fuer_rechnung_nr: Optional[str] = None   # wird in from_orm_extended befüllt
+    rechnungs_kette: List[RechnungsKettenGlied] = []  # ganze Original+Ersatzrechnungs-Kette, wird in from_orm_extended befüllt
     dokument_typ: str = "Rechnung"
     gutschrift_zu_rechnung_id: Optional[int] = None
     gutschrift_zu_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
@@ -377,6 +390,43 @@ class RechnungResponse(BaseModel):
                                 gruppe_id=_e.gruppe_id, rechnung_id=_e.rechnung_id,
                             ))
                             vorhandene_ids.add(_e.id)
+            except Exception:
+                pass
+        # Rechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...): unabhaengig von
+        # Zahlungen/Journalbuchungen sichtbar, da die Verknuepfung ueber ersatzrechnung_id/
+        # ersatz_fuer_rechnung_id direkt auf Dokumentebene liegt (Issue #304).
+        if obj.ersatzrechnung_id or obj.ersatz_fuer_rechnung_id:
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                session = _sa_inspect(obj).session
+                if session:
+                    wurzel_doc = obj
+                    rueckwaerts_besucht = {wurzel_doc.id}
+                    while wurzel_doc.ersatz_fuer_rechnung_id and wurzel_doc.ersatz_fuer_rechnung_id not in rueckwaerts_besucht:
+                        vor = session.get(obj.__class__, wurzel_doc.ersatz_fuer_rechnung_id)
+                        if not vor:
+                            break
+                        wurzel_doc = vor
+                        rueckwaerts_besucht.add(wurzel_doc.id)
+                    # Eigene besucht-Menge fuer den Vorwaertslauf (NICHT mit obj.id vorbelegt,
+                    # sonst wuerde obj selbst uebersprungen wenn obj != wurzel_doc ist).
+                    kette_docs = [wurzel_doc]
+                    vorwaerts_besucht = {wurzel_doc.id}
+                    cur_doc = wurzel_doc
+                    while cur_doc.ersatzrechnung_id and cur_doc.ersatzrechnung_id not in vorwaerts_besucht:
+                        nxt = session.get(obj.__class__, cur_doc.ersatzrechnung_id)
+                        if not nxt:
+                            break
+                        kette_docs.append(nxt)
+                        vorwaerts_besucht.add(nxt.id)
+                        cur_doc = nxt
+                    data.rechnungs_kette = [
+                        RechnungsKettenGlied(
+                            id=d.id, rechnungsnummer=d.rechnungsnummer, ist_entwurf=d.ist_entwurf,
+                            storniert=d.storniert, zahlungsstatus=d.zahlungsstatus, ist_aktuell=(d.id == obj.id),
+                        )
+                        for d in kette_docs
+                    ]
             except Exception:
                 pass
         if obj.beleg_id and hasattr(obj, "beleg") and obj.beleg:
