@@ -258,6 +258,10 @@ class RechnungResponse(BaseModel):
     storno_grund: Optional[str] = None
     storno_datum: Optional[date] = None
     storno_rechnungsnummer: Optional[str] = None
+    ersatzrechnung_id: Optional[int] = None         # auf stornierter Rechnung: welche Ersatzrechnung entstand
+    ersatzrechnung_nr: Optional[str] = None         # wird in from_orm_extended befüllt
+    ersatz_fuer_rechnung_id: Optional[int] = None   # auf Ersatzrechnung: für welche stornierte Rechnung
+    ersatz_fuer_rechnung_nr: Optional[str] = None   # wird in from_orm_extended befüllt
     dokument_typ: str = "Rechnung"
     gutschrift_zu_rechnung_id: Optional[int] = None
     gutschrift_zu_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
@@ -464,6 +468,8 @@ class RechnungResponse(BaseModel):
         _resolve("lieferschein_zu_auftrag_id","lieferschein_zu_auftrag_nr")
         _resolve("proforma_zu_angebot_id",   "proforma_zu_angebot_nr")
         _resolve("proforma_zu_auftrag_id",   "proforma_zu_auftrag_nr")
+        _resolve("ersatzrechnung_id",        "ersatzrechnung_nr")
+        _resolve("ersatz_fuer_rechnung_id",  "ersatz_fuer_rechnung_nr")
         # Bei Auftrag: Eltern-Angebot ermitteln
         if getattr(obj, "dokument_typ", None) == "Auftrag":
             try:

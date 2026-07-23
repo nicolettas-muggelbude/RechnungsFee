@@ -1221,6 +1221,10 @@ export type Rechnung = {
   storno_grund: string | null
   storno_datum: string | null
   storno_rechnungsnummer: string | null
+  ersatzrechnung_id: number | null
+  ersatzrechnung_nr: string | null
+  ersatz_fuer_rechnung_id: number | null
+  ersatz_fuer_rechnung_nr: string | null
   dokument_typ: string
   gutschrift_zu_rechnung_id: number | null
   gutschrift_zu_rechnung_nr: string | null
@@ -1504,6 +1508,9 @@ export const forderungsausbuchenRechnung = (id: number) =>
 
 export const createGutschrift = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/gutschrift`, { method: 'POST' })
+
+export const ersatzrechnungErstellen = (id: number) =>
+  request<Rechnung>(`/rechnungen/${id}/ersatzrechnung`, { method: 'POST' })
 
 export const finalisiereRechnung = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/finalisieren`, { method: 'POST' })
