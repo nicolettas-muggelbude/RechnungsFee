@@ -207,6 +207,7 @@ class ZahlungKompakt(BaseModel):
     art: str
     zahlungsart: str
     gruppe_id: Optional[int] = None
+    rechnung_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -252,6 +253,11 @@ class RechnungResponse(BaseModel):
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
+    # Wie zahlungen, aber dokumentuebergreifend: bezieht bei einer Ersatzrechnungs-Kette
+    # auch Buchungen anderer Dokumente der Kette mit ein (z.B. Storno-Gegenbuchung ohne
+    # eigene rechnung_id, oder die Zahlung der verknuepften Ersatzrechnung). Nur fuer die
+    # Kette-Anzeige gedacht - zahlungen bleibt fuer Zaehlungen/Warnungen unveraendert.
+    zahlungen_kette: List[ZahlungKompakt] = []
     beleg: Optional[BelegResponse] = None
     immutable: bool
     storniert: bool
@@ -339,9 +345,40 @@ class RechnungResponse(BaseModel):
                 brutto_betrag=e.brutto_betrag,
                 art=e.art,
                 zahlungsart=e.zahlungsart,
+                gruppe_id=e.gruppe_id,
+                rechnung_id=e.rechnung_id,
             )
             for e in obj.journaleintraege
         ]
+        data.zahlungen_kette = list(data.zahlungen)
+        if obj.ersatzrechnung_id or obj.ersatz_fuer_rechnung_id:
+            # Ersatzrechnungs-Kette: Buchungen aller Dokumente der Kette per gruppe_id
+            # zusammenfuehren (Storno-Gegenbuchungen aus storno_rechnung() haben z.B.
+            # bewusst keine eigene rechnung_id, haengen aber ueber gruppe_id zusammen).
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                from database.models import Journaleintrag as _JE
+                session = _sa_inspect(obj).session
+                wurzel = None
+                for _e in obj.journaleintraege:
+                    wurzel = _e.gruppe_id or _e.id
+                    break
+                if session and wurzel is not None:
+                    kette = session.query(_JE).filter(
+                        (_JE.id == wurzel) | (_JE.gruppe_id == wurzel)
+                    ).order_by(_JE.id).all()
+                    vorhandene_ids = {z.id for z in data.zahlungen_kette}
+                    for _e in kette:
+                        if _e.id not in vorhandene_ids:
+                            data.zahlungen_kette.append(ZahlungKompakt(
+                                id=_e.id, belegnr=_e.belegnr, beschreibung=_e.beschreibung,
+                                datum=_e.datum, brutto_betrag=_e.brutto_betrag,
+                                art=_e.art, zahlungsart=_e.zahlungsart,
+                                gruppe_id=_e.gruppe_id, rechnung_id=_e.rechnung_id,
+                            ))
+                            vorhandene_ids.add(_e.id)
+            except Exception:
+                pass
         if obj.beleg_id and hasattr(obj, "beleg") and obj.beleg:
             data.beleg = BelegResponse.from_beleg(obj.beleg)
         if obj.gutschrift_zu_rechnung_id:

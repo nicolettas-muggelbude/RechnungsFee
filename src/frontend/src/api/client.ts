@@ -1175,6 +1175,7 @@ export type ZahlungKompakt = {
   art: 'Einnahme' | 'Ausgabe'
   zahlungsart: string
   gruppe_id?: number | null
+  rechnung_id?: number | null
 }
 
 export type Rechnung = {
@@ -1210,6 +1211,7 @@ export type Rechnung = {
   externe_belegnr: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
+  zahlungen_kette: ZahlungKompakt[]
   beleg: Beleg | null
   skonto_prozent: number | null
   skonto_tage: number | null

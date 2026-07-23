@@ -1758,7 +1758,7 @@ function RechnungDetail({
         })()}
 
         {/* Verknüpfte Zahlungen */}
-        {rechnung.zahlungen.length > 0 && (
+        {rechnung.zahlungen_kette.length > 0 && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
               Verknüpfte Journalbuchungen
@@ -1766,11 +1766,15 @@ function RechnungDetail({
             <div className="space-y-1">
               {(() => {
                 const stornierteBelegnrs = new Set(
-                  rechnung.zahlungen
+                  rechnung.zahlungen_kette
                     .filter(z => z.beschreibung.startsWith('STORNO '))
                     .map(z => z.beschreibung.slice('STORNO '.length).split(':')[0].trim())
                 )
+                // Buchungen anderer Dokumente der Ersatzrechnungs-Kette (rechnung_id
+                // weicht ab) werden nur angezeigt, nicht korrigiert - dafür das jeweils
+                // andere Dokument öffnen.
                 const istKorrigierbar = (z: ZahlungKompakt) =>
+                  z.rechnung_id === rechnung.id &&
                   !z.beschreibung.startsWith('STORNO ') && !stornierteBelegnrs.has(z.belegnr)
 
                 const renderZeile = (z: ZahlungKompakt) => {
@@ -1838,7 +1842,7 @@ function RechnungDetail({
                 // als Schlüssel z.gruppe_id ?? z.id verwenden - das Original landet dadurch
                 // automatisch in derselben Gruppe wie seine Storno-/Neu-Buchungen).
                 const gruppen = new Map<number, ZahlungKompakt[]>()
-                for (const z of rechnung.zahlungen) {
+                for (const z of rechnung.zahlungen_kette) {
                   const rootId = z.gruppe_id ?? z.id
                   if (!gruppen.has(rootId)) gruppen.set(rootId, [])
                   gruppen.get(rootId)!.push(z)

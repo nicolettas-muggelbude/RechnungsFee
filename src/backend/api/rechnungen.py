@@ -1700,10 +1700,32 @@ def _erstelle_skonto_eintrag(
             vorsteuerabzug=sk_vorsteuerabzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung_id,
+            gruppe_id=_kette_gruppe_id(rechnung, db),
             immutable=True,
         )
         sk.signatur = signatur_journaleintrag(sk)
         db.add(sk)
+
+
+def _kette_gruppe_id(rechnung: "Rechnung", db: Session) -> int | None:
+    """Ist diese Rechnung eine Ersatzrechnung (ersatz_fuer_rechnung_id gesetzt), wird die
+    gruppe_id der letzten Buchung der Original-/Vorgaenger-Rechnung uebernommen. So bilden
+    Original-Zahlung, Storno und Ersatzrechnungs-Zahlung eine gemeinsame Buchungsgruppe -
+    auch dokumentuebergreifend (Issue #304). Bei Ketten aus mehreren Ersatzrechnungen reicht
+    ein einzelner Schritt zurueck: die Vorgaenger-Rechnung hat ihre eigene gruppe_id bereits
+    beim eigenen Bezahlen auf die gleiche Weise uebernommen, die Wurzel-gruppe_id wandert so
+    transitiv durch die ganze Kette."""
+    if not rechnung.ersatz_fuer_rechnung_id:
+        return None
+    letzter = (
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.rechnung_id == rechnung.ersatz_fuer_rechnung_id)
+        .order_by(Journaleintrag.id.desc())
+        .first()
+    )
+    if not letzter:
+        return None
+    return letzter.gruppe_id or letzter.id
 
 
 @router.post("/{rechnung_id}/zahlung-bar", response_model=BarZahlungResult, status_code=201)
@@ -1832,6 +1854,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             if _ek is not None:
                 _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
     _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
+    _gruppe_id_kette = _kette_gruppe_id(rechnung, db)
 
     def _erstelle_eintrag(
         kat_id: int | None, kat: "Kategorie | None", brutto: Decimal, beschr: str,
@@ -1874,6 +1897,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             vorsteuerabzug=vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung_id,
+            gruppe_id=_gruppe_id_kette,
             immutable=True,
         )
         e.signatur = signatur_journaleintrag(e)
