@@ -646,6 +646,13 @@ class Rechnung(Base):
     rechnung_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)  # auf Auftrag: welche Rechnung entstand
     lieferschein_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     proforma_zu_auftrag_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+
+    # Ersatzrechnung (Issue #304): auf der stornierten Rechnung zeigt ersatzrechnung_id
+    # vorwaerts auf die neue Rechnung; auf der neuen Rechnung zeigt ersatz_fuer_rechnung_id
+    # zurueck auf die stornierte. Beide Felder sind reine Verknuepfungs-Metadaten.
+    ersatzrechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+    ersatz_fuer_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

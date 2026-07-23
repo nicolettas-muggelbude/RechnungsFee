@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 122
+SCHEMA_VERSION = 123
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2646,6 +2646,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 122"))
             conn.commit()
             print("[Migration] Schema auf Version 122 (gruppe_id fuer Buchungsgruppen, Original+Storno rueckwirkend verknuepft)")
+
+        if version < 123:
+            # Ersatzrechnung (Issue #304): ersatzrechnung_id auf der stornierten Rechnung
+            # (zeigt vorwaerts auf die neue Rechnung), ersatz_fuer_rechnung_id auf der
+            # neuen Rechnung (zeigt zurueck). Reine Verknuepfungs-Metadaten, kein Datenfix
+            # noetig - es gab bisher keine Ersatzrechnungs-Funktion, also nichts zum Backfillen.
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()]
+            if "ersatzrechnung_id" not in cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN ersatzrechnung_id INTEGER REFERENCES rechnungen(id)"))
+            if "ersatz_fuer_rechnung_id" not in cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN ersatz_fuer_rechnung_id INTEGER REFERENCES rechnungen(id)"))
+
+            conn.execute(text("PRAGMA user_version = 123"))
+            conn.commit()
+            print("[Migration] Schema auf Version 123 (ersatzrechnung_id / ersatz_fuer_rechnung_id fuer Ersatzrechnungen)")
 
 
 def _migrate_kategorien() -> None:
