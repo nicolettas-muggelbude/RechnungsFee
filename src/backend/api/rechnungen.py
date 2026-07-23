@@ -2226,6 +2226,93 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     return RechnungResponse.from_orm_extended(rechnung)
 
 
+@router.post("/{rechnung_id}/ersatzrechnung", response_model=RechnungResponse, status_code=201)
+def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
+    """Erstellt aus einer stornierten Ausgangsrechnung eine neue Ersatzrechnung (Entwurf).
+    Kunde, Positionen und Texte werden 1:1 übernommen (Issue #304); Zahlungsstatus und
+    Journal-Bezug werden NICHT übernommen – die Ersatzrechnung ist eine eigenständige,
+    unbezahlte neue Rechnung mit eigener Nummer. Original und Ersatz werden beidseitig über
+    ersatzrechnung_id / ersatz_fuer_rechnung_id verknüpft."""
+    original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if original.typ != "ausgang":
+        raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für Ausgangsrechnungen möglich.")
+    if original.dokument_typ != "Rechnung":
+        raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für reguläre Rechnungen möglich.")
+    if not original.storniert:
+        raise HTTPException(status_code=409, detail="Nur stornierte Rechnungen können durch eine Ersatzrechnung ersetzt werden.")
+    if original.ersatzrechnung_id:
+        raise HTTPException(status_code=409, detail="Für diese Rechnung wurde bereits eine Ersatzrechnung erstellt.")
+
+    heute = date.today()
+    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    unternehmen = db.query(Unternehmen).first()
+    zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
+    from datetime import timedelta
+    faellig_am = heute + timedelta(days=int(zahlungsziel))
+
+    ersatz = Rechnung(
+        typ="ausgang",
+        dokument_typ="Rechnung",
+        rechnungsnummer=rechnungsnummer,
+        datum=heute,
+        faellig_am=faellig_am,
+        leistung_von=original.leistung_von,
+        leistung_bis=original.leistung_bis,
+        kunde_id=original.kunde_id,
+        partner_freitext=original.partner_freitext,
+        partner_strasse=original.partner_strasse,
+        partner_hausnummer=original.partner_hausnummer,
+        partner_plz=original.partner_plz,
+        partner_ort=original.partner_ort,
+        partner_land=original.partner_land,
+        lieferadresse_id=original.lieferadresse_id,
+        kategorie_id=original.kategorie_id,
+        notizen=original.notizen,
+        einleitungstext=original.einleitungstext,
+        rabatt_prozent=original.rabatt_prozent,
+        rabatt_betrag=original.rabatt_betrag,
+        skonto_prozent=original.skonto_prozent,
+        skonto_tage=original.skonto_tage,
+        ist_entwurf=True,
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        ersatz_fuer_rechnung_id=original.id,
+        netto_gesamt=original.netto_gesamt,
+        ust_gesamt=original.ust_gesamt,
+        brutto_gesamt=original.brutto_gesamt,
+    )
+    db.add(ersatz)
+    db.flush()
+
+    for pos in sorted(original.positionen, key=lambda p: p.position_nr):
+        db.add(Rechnungsposition(
+            rechnung_id=ersatz.id,
+            artikel_id=pos.artikel_id,
+            position_nr=pos.position_nr,
+            beschreibung=pos.beschreibung,
+            menge=pos.menge,
+            einheit=pos.einheit,
+            netto=pos.netto,
+            rabatt_prozent=pos.rabatt_prozent,
+            ust_satz=pos.ust_satz,
+            ust_betrag=pos.ust_betrag,
+            brutto=pos.brutto,
+            differenzbesteuerung=pos.differenzbesteuerung,
+            ek_netto_25a=pos.ek_netto_25a,
+            ust_satz_25a=pos.ust_satz_25a,
+            kategorie_id=pos.kategorie_id,
+        ))
+
+    original.ersatzrechnung_id = ersatz.id
+    ersatz.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+    db.refresh(ersatz)
+    return RechnungResponse.from_orm_extended(ersatz)
+
+
 @router.post("/{rechnung_id}/forderungsausfall", response_model=RechnungResponse)
 def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
     """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich.
