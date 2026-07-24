@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.23',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: '⚠️ Kritischer Fix: Das Update auf v0.4.22 blieb beim Start hängen ("Backend nicht erreichbar"), wenn schon einmal eine Rechnung oder Buchung storniert wurde – betraf vermutlich die meisten aktiven Installationen. Ursache war ein Konflikt zwischen der neuen Buchungsgruppen-Migration und dem GoBD-Schutzmechanismus aus der vorherigen Version. Die Datenbank war davon nicht betroffen, kein Datenverlust. Betroffene Installationen: einfach dieses Update installieren (kein Deinstallieren nötig) – danach startet die App wieder normal.' },
+    ],
+  },
+  {
     version: 'v0.4.22',
     datum: 'Juli 2026',
     eintraege: [
