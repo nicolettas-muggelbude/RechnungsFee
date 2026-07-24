@@ -418,11 +418,32 @@ def _buche_pfad_a(
     # der dominante Satz fuer die gesamte Zahlung verwendet werden).
     ust_gruppen = _verteile_nach_satz(betrag_zu_buchen, satz_ratios, art)
 
+    # §25a Marge vorberechnen (wie im Zahlung-erfassen-Dialog): USt und Netto duerfen nicht
+    # auf den vollen Verkaufspreis, sondern nur auf die Brutto-Marge (VK - EK) berechnet
+    # werden (Issue #305). Nur fuer den einfachen Fall (genau eine Satz-Gruppe) angewendet -
+    # bei gemischten Rechnungen (§25a + normale Positionen) faellt das wie bisher auf die
+    # volle-Brutto-Berechnung zurueck.
+    _marge_25a_gesamt = Decimal("0")
+    for _pos in rechnung.positionen:
+        if _pos.differenzbesteuerung:
+            _ek = _pos.ek_netto_25a
+            if _ek is None and _pos.artikel_id:
+                from database.models import Artikel as _Artikel
+                _art = db.query(_Artikel).filter(_Artikel.id == _pos.artikel_id).first()
+                _ek = _art.ek_netto if _art else None
+            if _ek is not None:
+                _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
+    _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
+
     eintrag = None
     for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
         if g_satz > 0:
-            g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            if _marge_25a_gesamt > 0 and len(ust_gruppen) == 1:
+                g_ust = (_marge_25a_gesamt * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                g_netto = (_marge_25a_gesamt - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            else:
+                g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
         else:
             g_netto, g_ust = g_betrag, Decimal("0.00")
         g_vst_abzug = art == "Ausgabe" and g_satz > 0
