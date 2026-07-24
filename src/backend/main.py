@@ -411,6 +411,23 @@ def _run_migrations() -> None:
     if version >= SCHEMA_VERSION:
         return  # Fast-Path: DB ist aktuell
 
+    # GoBD-Trigger temporär entfernen, BEVOR irgendeine Migration laeuft: Bei einem
+    # Bestands-Update sind die Trigger aus dem vorherigen App-Start bereits aktiv (sie
+    # werden als Schema-Objekte persistiert) und blockieren jede Migration, die eine
+    # bereits immutable Zeile per UPDATE aendern muss (z.B. Migration 122 gruppe_id-
+    # Backfill auf Original-Journaleintraegen) - Absturz beim Start nach jedem Update
+    # fuer Bestandskunden, siehe Issue #268-Folgefehler. _setup_gobd_triggers() erstellt
+    # die Trigger am Ende von startup() ohnehin neu, das Entfernen hier ist folgenlos.
+    with engine.connect() as conn:
+        for trigger in [
+            "protect_journal_update",
+            "protect_journal_delete",
+            "protect_tagesabschluesse_update",
+            "protect_tagesabschluesse_delete",
+        ]:
+            conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
+        conn.commit()
+
     # Frische DB: create_all hat bereits das aktuelle Schema angelegt (journal, nicht kassenbuch).
     # user_version ist noch 0, aber die ALTER-Migrationen wären falsch → direkt auf SCHEMA_VERSION.
     with engine.connect() as conn:
