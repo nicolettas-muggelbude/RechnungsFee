@@ -37,8 +37,8 @@ from utils.bank_csv_parser import (
 from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
-    _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erstelle_skonto_eintrag, _kette_gruppe_id, _partner_name,
-    _ust_konto, _verteile_nach_satz,
+    _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
+    _erstelle_skonto_eintrag, _kette_gruppe_id, _partner_name, _ust_konto, _verteile_nach_satz,
 )
 from .schemas import JournalEintragCreate
 
@@ -392,10 +392,30 @@ def _buche_pfad_a(
         betrag_zu_buchen = restbetrag if tx_abs > restbetrag + Decimal("0.02") else tx_abs
 
     steuerbefreiung_grund = "§19 UStG" if (unternehmen and unternehmen.ist_kleinunternehmer) else None
+    ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
     kat_id = None
+    kat = None
     satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]  # Default: Kleinunternehmer/keine Positionen
+    hat_gemischte_25a = False
+    gruppen_keys: list[tuple[int, bool]] = []
+    gruppen_kategorie: dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]] = {}
+    gruppen_marge: dict[tuple[int, bool], Decimal] = {}
+    gruppen_brutto_mixed: dict[tuple[int, bool], Decimal] = {}
+    ust_satz_dom = Decimal("0")
 
-    if not (unternehmen and unternehmen.ist_kleinunternehmer) and rechnung.positionen:
+    if art == "Einnahme":
+        # Ausgangsrechnung: dieselbe Kategorie-/Margen-Ermittlung wie beim manuellen
+        # "Zahlung erfassen"-Dialog (Issue #305) - pos.kategorie_id ist bei Erloes-
+        # Positionen i.d.R. gar nicht gesetzt (Kategorie wird generisch ueber den USt-Satz
+        # bzw. bei §25a ueber die Automatikkonto-Kategorie ermittelt), anders als bei
+        # Eingangsrechnungen, wo jede Position ihre eigene Kategorie hat.
+        (
+            satz_ratios, ust_satz_dom, hat_gemischte_25a, gruppen_keys,
+            gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
+        if not hat_gemischte_25a:
+            kat_id, kat = _erloes_kategorie(db, rechnung)
+    elif not ist_ku and rechnung.positionen:
         gruppen_brutto: dict[int, Decimal] = {}
         kat_gruppen: dict[int | None, Decimal] = {}
         for pos in rechnung.positionen:
@@ -405,44 +425,53 @@ def _buche_pfad_a(
         kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k] if k is not None else Decimal("0"))
         gesamt_pos_brutto = sum(gruppen_brutto.values())
         satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
-
-    kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
+        kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
 
     # Kategorie ist bei Eingangsrechnungen Pflicht - sonst bucht der Bank-Import klaglos
     # mit kategorie_id=NULL durch (kein Sachkonto, DATEV-Importfehler beim Export).
     # Gleiche Regel wie bei der manuellen Zahlungsverbuchung (zahlung_bar_erstellen).
-    if art == "Ausgabe" and not (unternehmen and unternehmen.ist_kleinunternehmer) and kat_id is None:
+    if art == "Ausgabe" and not ist_ku and kat_id is None:
         raise HTTPException(status_code=422, detail="keine_kategorie")
 
     # Aufteilung nach USt-Satz-Gruppen (Issue #295: bei gemischten Saetzen darf nicht nur
     # der dominante Satz fuer die gesamte Zahlung verwendet werden).
     ust_gruppen = _verteile_nach_satz(betrag_zu_buchen, satz_ratios, art)
 
-    # §25a Marge vorberechnen (wie im Zahlung-erfassen-Dialog): die USt darf nicht auf den
-    # vollen Verkaufspreis, sondern nur auf die Brutto-Marge (VK - EK) berechnet werden
-    # (Issue #305). netto_betrag bleibt der volle Zahlbetrag abzueglich dieser USt - der
-    # Wareneinkauf wird separat als eigene Betriebsausgabe gebucht, nicht hier implizit
-    # abgezogen (sonst wuerde der EK bei separater Wareneinkaufsbuchung doppelt wirken).
-    # Nur fuer den einfachen Fall (genau eine Satz-Gruppe) angewendet - bei gemischten
-    # Rechnungen (§25a + normale Positionen) faellt das wie bisher auf die volle-Brutto-
-    # Berechnung zurueck.
+    # §25a Marge vorberechnen fuer den NICHT gemischten Fall (reine §25a-Rechnung, genau
+    # eine Satz-Gruppe) - bei gemischten Rechnungen liefert gruppen_marge oben bereits die
+    # korrekte, pro Gruppe zugeordnete Marge (Issue #305).
     _marge_25a_gesamt = Decimal("0")
-    for _pos in rechnung.positionen:
-        if _pos.differenzbesteuerung:
-            _ek = _pos.ek_netto_25a
-            if _ek is None and _pos.artikel_id:
-                from database.models import Artikel as _Artikel
-                _art = db.query(_Artikel).filter(_Artikel.id == _pos.artikel_id).first()
-                _ek = _art.ek_netto if _art else None
-            if _ek is not None:
-                _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
-    _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
+    if not hat_gemischte_25a:
+        for _pos in rechnung.positionen:
+            if _pos.differenzbesteuerung:
+                _ek = _pos.ek_netto_25a
+                if _ek is None and _pos.artikel_id:
+                    from database.models import Artikel as _Artikel
+                    _art = db.query(_Artikel).filter(_Artikel.id == _pos.artikel_id).first()
+                    _ek = _art.ek_netto if _art else None
+                if _ek is not None:
+                    _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
+        _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+    _gruppe_id_kette = _kette_gruppe_id(rechnung, db)
 
     eintrag = None
     for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+        if hat_gemischte_25a and i < len(gruppen_keys):
+            key = gruppen_keys[i]
+            g_kat_id, g_kat_obj = gruppen_kategorie.get(key, (kat_id, kat))
+            g_marge_gesamt = gruppen_marge.get(key)
+            g_marge = (
+                (g_marge_gesamt * g_betrag / gruppen_brutto_mixed[key]).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                if g_marge_gesamt and gruppen_brutto_mixed.get(key) else None
+            )
+        else:
+            g_kat_id, g_kat_obj = kat_id, kat
+            g_marge = _marge_25a_gesamt if _marge_25a_gesamt > 0 else None
+
         if g_satz > 0:
-            if _marge_25a_gesamt > 0 and len(ust_gruppen) == 1:
-                g_ust = (_marge_25a_gesamt * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            if g_marge is not None:
+                g_ust = (g_marge * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 g_netto = (g_betrag - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
             else:
                 g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -454,9 +483,9 @@ def _buche_pfad_a(
             datum=tx.datum,
             belegnr=_naechste_belegnr(db, tx.datum),
             beschreibung=f"Zahlung {rechnung.rechnungsnummer}: {_partner_name(rechnung)}",
-            kategorie_id=kat_id,
-            konto_skr03=kat.konto_skr03 if kat else None,
-            konto_skr04=kat.konto_skr04 if kat else None,
+            kategorie_id=g_kat_id,
+            konto_skr03=g_kat_obj.konto_skr03 if g_kat_obj else None,
+            konto_skr04=g_kat_obj.konto_skr04 if g_kat_obj else None,
             konto_ust_skr03=g_ust_skr03,
             konto_ust_skr04=g_ust_skr04,
             zahlungsart="Bank",
@@ -464,12 +493,13 @@ def _buche_pfad_a(
             netto_betrag=g_netto,
             ust_satz=g_satz,
             ust_betrag=g_ust,
-            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, kat),
+            marge_25a_brutto=g_marge,
+            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, g_kat_obj),
             brutto_betrag=g_betrag,
             vorsteuerabzug=g_vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung.id,
-            gruppe_id=_kette_gruppe_id(rechnung, db),
+            gruppe_id=_gruppe_id_kette,
             konto_id=tx.konto_id,
             immutable=True,
         )

@@ -1765,6 +1765,109 @@ def _kette_gruppe_id(rechnung: "Rechnung", db: Session) -> int | None:
     return letzter.gruppe_id or letzter.id
 
 
+def _ausgangs_buchungsgruppen(
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
+) -> tuple[
+    list[tuple[int, Decimal]], Decimal, bool, list[tuple[int, bool]],
+    dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]],
+    dict[tuple[int, bool], Decimal], dict[tuple[int, bool], Decimal],
+]:
+    """Ermittelt fuer eine Ausgangsrechnung die USt-Satz-Buchungsgruppen (satz_ratios) sowie,
+    bei gemischten Rechnungen (§25a-Position(en) UND reguläre Position(en) auf derselben
+    Rechnung, z.B. gebrauchter Artikel + Neuware + Dienstleistung), pro Gruppe die passende
+    Kategorie und §25a-Marge - damit beide Anteile nie vermischt werden, auch wenn sie
+    zufaellig denselben nominalen Steuersatz haben (Issue #305).
+
+    Gemeinsam genutzt von zahlung_bar_erstellen() und bank_import._buche_pfad_a(), damit
+    beide Buchungswege exakt dieselbe Kategorie-/Margen-Logik verwenden.
+
+    Rueckgabe: (satz_ratios, dominanter_ust_satz, ist_gemischt, gruppen_keys,
+    gruppen_kategorie, gruppen_marge, gruppen_brutto) - die letzten vier Werte sind bei
+    ist_gemischt=False leer; der Aufrufer ermittelt dann die (einzige) Kategorie selbst
+    (z.B. ueber _erloes_kategorie()), wie vor Einfuehrung dieser Funktion.
+    """
+    satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]
+    gruppen_keys: list[tuple[int, bool]] = []
+    gruppen_kategorie: dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]] = {}
+    gruppen_marge: dict[tuple[int, bool], Decimal] = {}
+    gruppen_brutto_mixed: dict[tuple[int, bool], Decimal] = {}
+    ust_satz = Decimal("0")
+
+    if ist_kleinunternehmer or not rechnung.positionen:
+        return satz_ratios, ust_satz, False, gruppen_keys, gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed
+
+    hat_25a = any(pos.differenzbesteuerung for pos in rechnung.positionen)
+    hat_normal = any(not pos.differenzbesteuerung for pos in rechnung.positionen)
+
+    if hat_25a and hat_normal:
+        kat_25a_obj = db.query(Kategorie).filter(
+            Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
+        ).first()
+        for pos in rechnung.positionen:
+            if pos.differenzbesteuerung:
+                if pos.ust_satz_25a:
+                    s = int(pos.ust_satz_25a)
+                else:
+                    s = 19
+                    if pos.artikel_id:
+                        from database.models import Artikel as _ArtM
+                        _agm = db.query(_ArtM).filter(_ArtM.id == pos.artikel_id).first()
+                        if _agm and _agm.vk_netto and _agm.vk_netto > 0 and _agm.vk_brutto:
+                            _ratiom = _agm.vk_brutto / _agm.vk_netto
+                            if abs(_ratiom - Decimal("1.07")) < Decimal("0.015"):
+                                s = 7
+                key = (s, True)
+                gruppen_kategorie[key] = (kat_25a_obj.id if kat_25a_obj else None, kat_25a_obj)
+                _ek = pos.ek_netto_25a
+                if _ek is None and pos.artikel_id:
+                    from database.models import Artikel as _ArtM2
+                    _agm2 = db.query(_ArtM2).filter(_ArtM2.id == pos.artikel_id).first()
+                    _ek = _agm2.ek_netto if _agm2 else None
+                if _ek is not None:
+                    gruppen_marge[key] = gruppen_marge.get(key, Decimal("0")) + (pos.brutto - _ek) * pos.menge
+            else:
+                s = int(pos.ust_satz)
+                key = (s, False)
+                if key not in gruppen_kategorie:
+                    namen = {19: "Betriebseinnahmen", 7: "Betriebseinnahmen (7%)", 0: "Betriebseinnahmen (0%)"}
+                    name = namen.get(s, "Betriebseinnahmen")
+                    kat_n = db.query(Kategorie).filter(Kategorie.name == name, Kategorie.aktiv == True).first()
+                    gruppen_kategorie[key] = (kat_n.id if kat_n else None, kat_n)
+            gruppen_brutto_mixed[key] = gruppen_brutto_mixed.get(key, Decimal("0")) + pos.brutto
+
+        dom_key = max(gruppen_brutto_mixed, key=lambda k: gruppen_brutto_mixed[k])
+        ust_satz = Decimal(str(dom_key[0]))
+        gesamt_pos_brutto = sum(gruppen_brutto_mixed.values())
+        gruppen_keys = sorted(gruppen_brutto_mixed.keys())
+        satz_ratios = [(k[0], gruppen_brutto_mixed[k] / gesamt_pos_brutto) for k in gruppen_keys]
+        return satz_ratios, ust_satz, True, gruppen_keys, gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed
+
+    # Nicht gemischt (rein §25a oder rein regulaer): eine gemeinsame Satz-Gruppierung.
+    gruppen_brutto: dict[int, Decimal] = {}
+    for pos in rechnung.positionen:
+        if pos.differenzbesteuerung:
+            if pos.ust_satz_25a:
+                s = int(pos.ust_satz_25a)
+            else:
+                # Fallback für Positionen ohne ust_satz_25a: aus Artikel ableiten
+                s = 19
+                if pos.artikel_id:
+                    from database.models import Artikel as _ArtG
+                    _ag = db.query(_ArtG).filter(_ArtG.id == pos.artikel_id).first()
+                    if _ag and _ag.vk_netto and _ag.vk_netto > 0 and _ag.vk_brutto:
+                        _ratio = _ag.vk_brutto / _ag.vk_netto
+                        if abs(_ratio - Decimal("1.07")) < Decimal("0.015"):
+                            s = 7
+        else:
+            s = int(pos.ust_satz)
+        gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
+    dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
+    ust_satz = Decimal(str(dom_satz))
+    gesamt_pos_brutto = sum(gruppen_brutto.values())
+    satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
+    return satz_ratios, ust_satz, False, gruppen_keys, gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed
+
+
 @router.post("/{rechnung_id}/zahlung-bar", response_model=BarZahlungResult, status_code=201)
 def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session = Depends(get_db)):
     """
@@ -1852,83 +1955,11 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     gruppen_keys: list[tuple[int, bool]] = []
 
     if not ist_gutschrift:
-        satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]  # Default: Kleinunternehmer/keine Positionen
-        if unternehmen and unternehmen.ist_kleinunternehmer:
-            pass
-        elif rechnung.positionen:
-            hat_25a = any(pos.differenzbesteuerung for pos in rechnung.positionen)
-            hat_normal = any(not pos.differenzbesteuerung for pos in rechnung.positionen)
-
-            if rechnung.typ == "ausgang" and hat_25a and hat_normal:
-                # Gemischte Rechnung (§25a-Position(en) UND reguläre Position(en) auf derselben
-                # Rechnung, z.B. gebrauchter Artikel + Neuware + Dienstleistung): beide Anteile
-                # muessen getrennt gebucht werden - auch wenn sie zufaellig denselben nominalen
-                # Steuersatz haben - sonst landet der komplette Betrag faelschlich auf einem
-                # einzigen Konto/einer einzigen Kategorie (Issue #305).
-                kat_25a_obj = db.query(Kategorie).filter(
-                    Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
-                ).first()
-                for pos in rechnung.positionen:
-                    if pos.differenzbesteuerung:
-                        if pos.ust_satz_25a:
-                            s = int(pos.ust_satz_25a)
-                        else:
-                            s = 19
-                            if pos.artikel_id:
-                                from database.models import Artikel as _ArtM
-                                _agm = db.query(_ArtM).filter(_ArtM.id == pos.artikel_id).first()
-                                if _agm and _agm.vk_netto and _agm.vk_netto > 0 and _agm.vk_brutto:
-                                    _ratiom = _agm.vk_brutto / _agm.vk_netto
-                                    if abs(_ratiom - Decimal("1.07")) < Decimal("0.015"):
-                                        s = 7
-                        key = (s, True)
-                        gruppen_kategorie[key] = (kat_25a_obj.id if kat_25a_obj else None, kat_25a_obj)
-                        _ek = pos.ek_netto_25a
-                        if _ek is None and pos.artikel_id:
-                            from database.models import Artikel as _ArtM2
-                            _agm2 = db.query(_ArtM2).filter(_ArtM2.id == pos.artikel_id).first()
-                            _ek = _agm2.ek_netto if _agm2 else None
-                        if _ek is not None:
-                            gruppen_marge[key] = gruppen_marge.get(key, Decimal("0")) + (pos.brutto - _ek) * pos.menge
-                    else:
-                        s = int(pos.ust_satz)
-                        key = (s, False)
-                        if key not in gruppen_kategorie:
-                            namen = {19: "Betriebseinnahmen", 7: "Betriebseinnahmen (7%)", 0: "Betriebseinnahmen (0%)"}
-                            name = namen.get(s, "Betriebseinnahmen")
-                            kat_n = db.query(Kategorie).filter(Kategorie.name == name, Kategorie.aktiv == True).first()
-                            gruppen_kategorie[key] = (kat_n.id if kat_n else None, kat_n)
-                    gruppen_brutto_mixed[key] = gruppen_brutto_mixed.get(key, Decimal("0")) + pos.brutto
-
-                hat_gemischte_25a = True
-                dom_key = max(gruppen_brutto_mixed, key=lambda k: gruppen_brutto_mixed[k])
-                ust_satz = Decimal(str(dom_key[0]))
-                gesamt_pos_brutto = sum(gruppen_brutto_mixed.values())
-                gruppen_keys = sorted(gruppen_brutto_mixed.keys())
-                satz_ratios = [(k[0], gruppen_brutto_mixed[k] / gesamt_pos_brutto) for k in gruppen_keys]
-            else:
-                gruppen_brutto: dict[int, Decimal] = {}
-                for pos in rechnung.positionen:
-                    if pos.differenzbesteuerung:
-                        if pos.ust_satz_25a:
-                            s = int(pos.ust_satz_25a)
-                        else:
-                            # Fallback für Positionen ohne ust_satz_25a: aus Artikel ableiten
-                            s = 19
-                            if pos.artikel_id:
-                                from database.models import Artikel as _ArtG
-                                _ag = db.query(_ArtG).filter(_ArtG.id == pos.artikel_id).first()
-                                if _ag and _ag.vk_netto and _ag.vk_netto > 0 and _ag.vk_brutto:
-                                    _ratio = _ag.vk_brutto / _ag.vk_netto
-                                    if abs(_ratio - Decimal("1.07")) < Decimal("0.015"):
-                                        s = 7
-                    else:
-                        s = int(pos.ust_satz)
-                    gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
-                dom_satz = max(gruppen_brutto, key=lambda s: gruppen_brutto[s])
-                ust_satz = Decimal(str(dom_satz))
-                gesamt_pos_brutto = sum(gruppen_brutto.values())
-                satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
+        ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
+        (
+            satz_ratios, ust_satz, hat_gemischte_25a, gruppen_keys,
+            gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
 
         ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
         if data.skonto_betrag and data.skonto_betrag > 0:
