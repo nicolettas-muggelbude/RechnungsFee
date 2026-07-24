@@ -1953,8 +1953,33 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         from collections import defaultdict
         beschreibung_gs = data.beschreibung or f"Gutschrift {rechnung.rechnungsnummer}: {partner}"
         pos_gruppen: dict[tuple, Decimal] = defaultdict(Decimal)
+        marge_gruppen: dict[tuple, Decimal] = defaultdict(Decimal)
         for pos in rechnung.positionen:
-            key = (pos.kategorie_id, int(pos.ust_satz))
+            if pos.differenzbesteuerung:
+                # §25a: Gruppierung nach dem nominalen Satz (19/7), nicht nach pos.ust_satz
+                # (das ist bei §25a immer 0, da auf der Rechnung kein USt-Ausweis erfolgt) -
+                # sonst wuerde die Gutschrift-USt auf §25a-Positionen komplett entfallen.
+                if pos.ust_satz_25a:
+                    satz_key = int(pos.ust_satz_25a)
+                else:
+                    satz_key = 19
+                    if pos.artikel_id:
+                        from database.models import Artikel as _ArtGs
+                        _ag = db.query(_ArtGs).filter(_ArtGs.id == pos.artikel_id).first()
+                        if _ag and _ag.vk_netto and _ag.vk_netto > 0 and _ag.vk_brutto:
+                            _ratio = _ag.vk_brutto / _ag.vk_netto
+                            if abs(_ratio - Decimal("1.07")) < Decimal("0.015"):
+                                satz_key = 7
+                key = (pos.kategorie_id, satz_key)
+                _ek = pos.ek_netto_25a
+                if _ek is None and pos.artikel_id:
+                    from database.models import Artikel as _ArtGs2
+                    _ag2 = db.query(_ArtGs2).filter(_ArtGs2.id == pos.artikel_id).first()
+                    _ek = _ag2.ek_netto if _ag2 else None
+                if _ek is not None:
+                    marge_gruppen[key] += (pos.brutto - _ek) * pos.menge
+            else:
+                key = (pos.kategorie_id, int(pos.ust_satz))
             pos_gruppen[key] += pos.brutto  # Gutschrift-Positionen haben bereits negative brutto-Beträge
         gesamt_pos = sum(pos_gruppen.values()) or Decimal("1")  # Division-by-zero Guard
 
@@ -1972,7 +1997,18 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             g_ust03, g_ust04 = (_ust_konto(art, satz_d) if satz_int > 0 and not steuerbefreiung_grund else (None, None))
             eff_kat_id = kat_id or rechnung.kategorie_id
             kat_obj_g = db.query(Kategorie).filter(Kategorie.id == eff_kat_id).first() if eff_kat_id else None
-            e = _erstelle_eintrag(eff_kat_id, kat_obj_g, anteil, beschreibung_gs, satz_d, g_ust03, g_ust04)
+            # §25a-Marge dieser Gruppe anteilig auf den tatsaechlich verbuchten Teilbetrag
+            # skalieren (bei Teil-Gutschrift ist |anteil| < g_brutto_pos). Skalierungsfaktor
+            # als Betrag (0..1) anwenden - g_brutto_pos ist immer positiv (Summe der
+            # Original-Bruttopreise), anteil dagegen negativ (Gutschrift-Betrag); ein
+            # signed/signed-Verhaeltnis wuerde das Vorzeichen der Marge faelschlich umdrehen.
+            g_marge_gesamt = marge_gruppen.get((kat_id, satz_int))
+            g_marge_anteil = (
+                (g_marge_gesamt * abs(anteil) / g_brutto_pos).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                if g_marge_gesamt and g_brutto_pos else None
+            )
+            e = _erstelle_eintrag(eff_kat_id, kat_obj_g, anteil, beschreibung_gs, satz_d, g_ust03, g_ust04,
+                                  marge_25a=g_marge_anteil)
             db.add(e)
             if i == 0:
                 erster_eintrag_gs = e
@@ -2005,12 +2041,17 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                 status_code=422,
                 detail=f"Split-Summe ({split_summe} €) stimmt nicht mit Zahlungsbetrag ({betrag} €) überein.",
             )
+        # §25a-Marge nur anwendbar wenn die Zahlung nicht auf mehrere Kategorien aufgeteilt
+        # wird - bei echtem Split ist nicht eindeutig, welcher Split-Betrag zur §25a-Position
+        # gehoert (Issue #305: nur der Einzel-Split-Fall wird abgedeckt).
+        split_marge_25a = _marge_25a_gesamt if (_marge_25a_gesamt > 0 and len(data.split) == 1) else None
+
         erster_eintrag = None
         for i, sp in enumerate(data.split):
             sp_kat = db.query(Kategorie).filter(Kategorie.id == sp.kategorie_id).first()
             if not sp_kat:
                 raise HTTPException(status_code=404, detail=f"Kategorie {sp.kategorie_id} nicht gefunden.")
-            e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung)
+            e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung, marge_25a=split_marge_25a)
             db.add(e)
             if i == 0:
                 erster_eintrag = e
