@@ -418,11 +418,14 @@ def _buche_pfad_a(
     # der dominante Satz fuer die gesamte Zahlung verwendet werden).
     ust_gruppen = _verteile_nach_satz(betrag_zu_buchen, satz_ratios, art)
 
-    # §25a Marge vorberechnen (wie im Zahlung-erfassen-Dialog): USt und Netto duerfen nicht
-    # auf den vollen Verkaufspreis, sondern nur auf die Brutto-Marge (VK - EK) berechnet
-    # werden (Issue #305). Nur fuer den einfachen Fall (genau eine Satz-Gruppe) angewendet -
-    # bei gemischten Rechnungen (§25a + normale Positionen) faellt das wie bisher auf die
-    # volle-Brutto-Berechnung zurueck.
+    # §25a Marge vorberechnen (wie im Zahlung-erfassen-Dialog): die USt darf nicht auf den
+    # vollen Verkaufspreis, sondern nur auf die Brutto-Marge (VK - EK) berechnet werden
+    # (Issue #305). netto_betrag bleibt der volle Zahlbetrag abzueglich dieser USt - der
+    # Wareneinkauf wird separat als eigene Betriebsausgabe gebucht, nicht hier implizit
+    # abgezogen (sonst wuerde der EK bei separater Wareneinkaufsbuchung doppelt wirken).
+    # Nur fuer den einfachen Fall (genau eine Satz-Gruppe) angewendet - bei gemischten
+    # Rechnungen (§25a + normale Positionen) faellt das wie bisher auf die volle-Brutto-
+    # Berechnung zurueck.
     _marge_25a_gesamt = Decimal("0")
     for _pos in rechnung.positionen:
         if _pos.differenzbesteuerung:
@@ -440,7 +443,7 @@ def _buche_pfad_a(
         if g_satz > 0:
             if _marge_25a_gesamt > 0 and len(ust_gruppen) == 1:
                 g_ust = (_marge_25a_gesamt * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                g_netto = (_marge_25a_gesamt - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                g_netto = (g_betrag - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
             else:
                 g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)

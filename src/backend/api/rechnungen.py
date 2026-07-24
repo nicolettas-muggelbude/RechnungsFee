@@ -1906,11 +1906,13 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         if satz > 0:
             if marge_25a is not None:
                 # §25a: USt nur auf Brutto-Marge, nicht auf vollen VK-Preis. netto_betrag
-                # muss ebenfalls aus der Marge abgeleitet werden (nicht aus dem vollen
-                # Zahlungsbetrag) - sonst zeigt die EÜR den vollen Verkaufspreis als Umsatz
-                # statt nur die Marge (Issue #305).
+                # bleibt der volle Zahlbetrag abzueglich dieser margenbasierten USt - der
+                # Wareneinkauf wird separat als eigene Betriebsausgabe gebucht (Journal),
+                # nicht hier implizit abgezogen. Wuerde man netto_betrag stattdessen auf die
+                # reine Marge reduzieren, wuerde der EK bei separater Wareneinkaufsbuchung
+                # doppelt gewinnmindernd wirken (einmal hier, einmal in der Ausgabe).
                 u = (marge_25a * satz / (100 + satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                n = (marge_25a - u).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                n = (brutto - u).quantize(Decimal("0.01"), ROUND_HALF_UP)
             else:
                 n = (brutto * 100 / (100 + satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 u = (brutto - n).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -2505,6 +2507,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
             brutto=pos.brutto,
             kategorie_id=pos.kategorie_id or original.kategorie_id,
             differenzbesteuerung=pos.differenzbesteuerung,
+            ek_netto_25a=pos.ek_netto_25a,
+            ust_satz_25a=pos.ust_satz_25a,
         )
         db.add(neue_pos)
         netto_sum += pos.netto * menge_neg
