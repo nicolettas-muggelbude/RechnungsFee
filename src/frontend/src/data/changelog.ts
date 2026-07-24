@@ -35,6 +35,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Buchungsgruppen – zusammengehörige Buchungen (Original, Storno, ggf. korrigierte Neubuchung) sind jetzt intern robust über eine ID statt über Textvergleich verknüpft. Im Rechnungs-Detailpanel werden Korrektur-Ketten standardmäßig eingeklappt angezeigt (aufklappbar), im Journal gibt es einen „Kette anzeigen"-Link, der gezielt nur die zusammengehörigen Buchungen filtert.' },
       { typ: 'neu', text: 'Ersatzrechnung – aus einer stornierten Rechnung lässt sich jetzt direkt eine Ersatzrechnung erstellen (Kunde, Positionen und Texte werden übernommen, eigene Rechnungsnummer, als Entwurf zum Prüfen). Original und Ersatzrechnung sind beidseitig verknüpft (Issue #304).' },
       { typ: 'neu', text: 'Rechnungen – ein „🔗 Kette anzeigen"-Badge zeigt bei Rechnungen mit Ersatzrechnungs-Bezug die komplette Dokumentenkette (Original → Storno → Ersatzrechnung) an – unabhängig vom Zahlungsstatus, also auch bei noch unbezahlten Rechnungen.' },
+      { typ: 'fix', text: 'Differenzbesteuerung (§25a) – die Umsatzsteuer wurde bei Gutschriften, Split-Zahlungen und Zahlungen über den Bank-Import nicht auf die Marge (Verkaufspreis − Einkaufspreis), sondern auf den vollen Verkaufspreis berechnet. Zusätzlich wurde eine Rechnung mit einem §25a-Artikel und einem regulären Artikel/einer Dienstleistung komplett fälschlich auf die §25a-Kategorie gebucht statt nur den §25a-Anteil (Issue #305).' },
+      { typ: 'fix', text: 'Bank-Import – Zahlungen auf Ausgangsrechnungen wurden generell ohne Kategorie/Sachkonto gebucht (nicht nur bei §25a), weil die Kategorie-Ermittlung dort anders lief als beim manuellen Verbuchen einer Zahlung. Jetzt vereinheitlicht (Issue #305).' },
     ],
   },
   {
