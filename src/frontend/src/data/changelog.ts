@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'fix', text: 'DATEV-Export – Belege im ZIP lagen in einem Belege/-Unterordner. DATEV lehnt beim Belegtransfer (Unternehmen online) ZIP-Archive mit Ordnern komplett ab ("Ungültiges Zip-Archiv: Ordner im Zip-Archiv sind nicht erlaubt"). Belege liegen jetzt flach im ZIP-Root, direkt neben der CSV (Issue #306).' },
+      { typ: 'fix', text: 'Rechnungen – die Zukunftsdatum-Sperre beim Finalisieren (§14 Abs. 4 UStG, Issue #253) griff nur beim Finalisieren eines bereits gespeicherten Entwurfs, nicht beim direkten Neuanlegen mit sofortigem Klick auf „Finalisieren" (ohne vorher „Entwurf speichern"). Beide Wege nutzen jetzt dieselbe Prüfung.' },
     ],
   },
   {
