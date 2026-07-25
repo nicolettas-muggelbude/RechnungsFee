@@ -861,6 +861,16 @@ def get_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=RechnungResponse, status_code=201)
 def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     """Rechnung mit Positionen anlegen. Summen werden automatisch berechnet."""
+    if not data.ist_entwurf and data.datum > date.today():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Finalisierung verweigert: Das Rechnungsdatum ({data.datum.strftime('%d.%m.%Y')}) "
+                f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
+                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+            ),
+        )
+
     unternehmen = db.query(Unternehmen).first()
     ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
 
