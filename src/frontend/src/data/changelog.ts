@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.24',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'DATEV-Export – Belege im ZIP lagen in einem Belege/-Unterordner. DATEV lehnt beim Belegtransfer (Unternehmen online) ZIP-Archive mit Ordnern komplett ab ("Ungültiges Zip-Archiv: Ordner im Zip-Archiv sind nicht erlaubt"). Belege liegen jetzt flach im ZIP-Root, direkt neben der CSV (Issue #306).' },
+    ],
+  },
+  {
     version: 'v0.4.23',
     datum: 'Juli 2026',
     eintraege: [
