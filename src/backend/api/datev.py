@@ -257,11 +257,12 @@ def _zeile1(unt: Unternehmen, von: date, bis: date) -> str:
 def datev_buchungsstapel(
     von: date = Query(..., description="Startdatum YYYY-MM-DD"),
     bis: date = Query(..., description="Enddatum YYYY-MM-DD"),
-    mit_belegen: bool = Query(True, description="Belege als ZIP mitexportieren (Belege/-Ordner, benannt nach Belegnummer)"),
+    mit_belegen: bool = Query(True, description="Belege als ZIP mitexportieren (flach im ZIP-Root, benannt nach Belegnummer)"),
     db: Session = Depends(get_db),
 ):
     """DATEV EXTF Buchungsstapel für den angegebenen Zeitraum als CSV (mit_belegen=false)
-    oder als ZIP mit CSV + zugehörigen Belegen im Belege/-Ordner (Standard)."""
+    oder als ZIP mit CSV + zugehörigen Belegen, alle Dateien flach im ZIP-Root (Standard) –
+    DATEV lehnt Unterordner im ZIP beim Belegtransfer ab (Issue #306)."""
     unt = db.query(Unternehmen).first()
     if not unt:
         raise HTTPException(status_code=404, detail="Keine Unternehmensdaten")
@@ -390,7 +391,11 @@ def datev_buchungsstapel(
         headers = {"Content-Disposition": 'attachment; filename="EXTF_Buchungsstapel.csv"', **zaehl_headers}
         return StreamingResponse(iter([data]), media_type="text/csv; charset=utf-8", headers=headers)
 
-    # ZIP schreiben: CSV + Belege-Dateien, exakt dieselbe Zuordnung wie in beleg_info
+    # ZIP schreiben: CSV + Belege-Dateien FLACH im Root, kein Unterordner - DATEV lehnt
+    # ZIPs mit Ordnern beim Belegtransfer (Unternehmen online) explizit ab ("Ungültiges
+    # Zip-Archiv: Ordner im Zip-Archiv sind nicht erlaubt") und auch der direkte Import
+    # ins Rechnungswesen-Programm verknuepft Belege nur, wenn sie im selben Verzeichnis
+    # wie die CSV liegen (Issue #306). Exakt dieselbe Zuordnung wie in beleg_info
     # (Spalte 20 der CSV) - Dateiname und Beleglink stimmen dadurch garantiert ueberein.
     belege_gefunden = 0
     zip_buffer = io.BytesIO()
@@ -405,14 +410,14 @@ def datev_buchungsstapel(
             if beleg.beleg_pdfa_pfad:
                 pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
                 if pdfa_pfad.exists():
-                    zf.write(str(pdfa_pfad), f"Belege/{dateiname}")
+                    zf.write(str(pdfa_pfad), dateiname)
                     geschrieben.add(dateiname)
                     belege_gefunden += 1
                     continue
 
             orig_pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
             if orig_pfad.exists():
-                zf.write(str(orig_pfad), f"Belege/{dateiname}")
+                zf.write(str(orig_pfad), dateiname)
                 geschrieben.add(dateiname)
                 belege_gefunden += 1
 
