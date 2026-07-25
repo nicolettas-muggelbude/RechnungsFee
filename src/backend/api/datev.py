@@ -295,9 +295,10 @@ def datev_buchungsstapel(
     }
 
     # Belege je Journaleintrag einmalig ermitteln (journal.beleg_id oder ueber die
-    # verknuepfte Rechnung rechnung.beleg_id) - dieselbe Zuordnung wird sowohl fuer
-    # die Beleglink-Spalte (20) der CSV als auch fuer die Datei im ZIP verwendet,
-    # damit beide immer exakt uebereinstimmen.
+    # verknuepfte Rechnung rechnung.beleg_id). dateiname (mit Endung) wird fuer die
+    # Datei im ZIP verwendet; die Beleglink-Spalte (20) der CSV bekommt separat nur
+    # j.belegnr ohne Endung (Issue #306 - Testkandidat, voller Dateiname verknuepfte
+    # beim direkten DATEV-Import nichts).
     beleg_info: dict[int, tuple[Beleg, str]] = {}
     if mit_belegen:
         for j in eintraege:
@@ -356,7 +357,11 @@ def datev_buchungsstapel(
 
         leere_felder = [""] * 35    # Felder 15–49
         if j.id in beleg_info:
-            leere_felder[5] = beleg_info[j.id][1]     # Feld 20: Beleglink (Index 20-15=5)
+            # Feld 20: Beleglink (Index 20-15=5) - bewusst OHNE Dateiendung (nur die
+            # Belegnummer als eindeutige ID), die Datei im ZIP behaelt ihre echte
+            # Endung. Peters Test mit vollem Dateinamen (inkl. ".pdf") verknuepfte
+            # beim direkten DATEV-Import nichts (Issue #306) - Testkandidat.
+            leere_felder[5] = j.belegnr
         leere_felder[33] = personenkonto              # Feld 48 (Index 47-14=33)
 
         row = [
