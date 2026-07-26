@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Rechnungen – die Zukunftsdatum-Sperre beim Finalisieren (§14 Abs. 4 UStG, Issue #253) griff nur beim Finalisieren eines bereits gespeicherten Entwurfs, nicht beim direkten Neuanlegen mit sofortigem Klick auf „Finalisieren" (ohne vorher „Entwurf speichern"). Beide Wege nutzen jetzt dieselbe Prüfung.' },
       { typ: 'neu', text: 'Journal – Buchungen können jetzt direkt einen Beleg (PDF/Bild) bekommen, genau wie bei Rechnungen. Nützlich z. B. für Kontoauszüge, Zinsbescheinigungen oder eigene Berechnungsnotizen (km-Pauschale, Eigenverbrauch, Kostenaufteilung), wenn man Buchhaltung ohne den Umweg über den Eingangsrechnungs-Import macht. Funktioniert bei Einzel- und Split-Buchungen (Issue #310).' },
       { typ: 'neu', text: 'DATEV- und GoBD-Export – neben Eingangsbelegen wird jetzt auch das archivierte Original-PDF eigener Ausgangsrechnungen mitexportiert (Belege-ZIP bzw. belege/-Ordner). Bisher fehlten Ausgangsrechnungen dort komplett (Issue #306).' },
+      { typ: 'fix', text: 'EÜR – Buchungen mit steuerlichem Sonderfall (§13b Reverse Charge oder innergemeinschaftlicher Erwerb) minderten den Gewinn fälschlich doppelt: die selbst geschuldete USt wurde sowohl als vermeintliches Einnahme-Storno abgezogen als auch unverändert als Vorsteuer angerechnet. Reverse Charge ist im Zu-/Abflussprinzip ergebnisneutral und fließt jetzt korrekt gar nicht mehr in die EÜR ein (die USt-VA war bereits richtig). Danke an flole für die gründliche Analyse (Issue #307).' },
     ],
   },
   {
