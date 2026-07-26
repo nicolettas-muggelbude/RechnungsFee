@@ -198,6 +198,12 @@ jobs:
             --clobber
 
       # ── Updater-Artefakte hochladen ─────────────────────────────────────────
+      # Issue: tauri-action@v0 ist eine floating Major-Version-Referenz und hat irgendwann
+      # zwischen v0.4.23 und v0.4.24 aufgehoert, die reine .exe (und bei macOS die versionierte
+      # .dmg) automatisch als Release-Asset hochzuladen - ohne dass sich hier am Workflow etwas
+      # geaendert haette. v0.4.24-Release-Notes verlinkten dadurch eine .exe die nie hochgeladen
+      # wurde (404). Deshalb ab hier alles was die Release-Notes verlinken explizit selbst hochladen,
+      # nicht auf das (sich aendernde) Standardverhalten von tauri-action verlassen.
       - name: Updater-ZIP und Signatur hochladen (Windows)
         if: matrix.platform == 'windows-2025'
         shell: pwsh
@@ -249,7 +255,7 @@ jobs:
             Remove-Item $keyFile -Force
           }
 
-          gh release upload "${{ github.ref_name }}" "$zip" "$sig" --clobber
+          gh release upload "${{ github.ref_name }}" "$exe" "$zip" "$sig" --clobber
 
       - name: Updater-TAR und Signatur hochladen (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -318,7 +324,9 @@ jobs:
           echo "=== bundle/dmg Inhalt ==="
           ls -la "$BASE/" || echo "(leer)"
           cp "$BASE/RechnungsFee_${V}_${ARCH}.dmg" "$BASE/RechnungsFee_${ARCH}.dmg"
-          gh release upload "${{ github.ref_name }}" "$BASE/RechnungsFee_${ARCH}.dmg" --clobber
+          # Beide explizit hochladen - nicht auf tauri-action verlassen (siehe Kommentar
+          # bei "Updater-Artefakte hochladen" oben, betraf zuletzt auch die versionierte .dmg)
+          gh release upload "${{ github.ref_name }}" "$BASE/RechnungsFee_${V}_${ARCH}.dmg" "$BASE/RechnungsFee_${ARCH}.dmg" --clobber
 
       # ── macOS: Updater-TAR und Signatur hochladen ───────────────────────────
       - name: Updater-TAR und Signatur hochladen (macOS)
