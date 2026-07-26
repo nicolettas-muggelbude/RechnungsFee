@@ -256,6 +256,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 121 | Datenfix: Kategorie „Abschreibungen (AfA)" euer_zeile 36→33 (AfA bewegliche WG statt GWG); Anlagenverzeichnis-AfA (`aveur_afa`) in `euer.py` ebenfalls auf Zeile 33 umgeleitet (Issue #265) |
 | 122 | journal.gruppe_id (FK → journal.id) – Buchungsgruppen: verknüpft Original+Storno+Neubuchung robust über ID statt Text-Parsing der Beschreibung; Backfill nur für bestehende Original+Storno-Paare (Neubuchungen historisch nicht zuverlässig verknüpfbar) |
 | 123 | rechnungen.ersatzrechnung_id + ersatz_fuer_rechnung_id (je FK → rechnungen.id) – Ersatzrechnung nach Storno direkt erstellbar, beidseitige Verknüpfung Original ↔ Ersatz (Issue #304) |
+| 124 | Datenfix: Reverse-Charge-Kategorien „Wareneinkauf EU"/„EU-Dienstleistungen (§13b Abs. 1)"/„Bauleistungen / §13b Abs. 2" nutzten normale Wareneingangs-/Vorsteuerkonten (SKR03 3400/3300/3610) statt DATEV-Automatikkonten → 3425/3123/3120 (SKR04 5425/5923/5920), gegengeprüft am DATEV-Kontenrahmen; respektiert user_modified_skr03/04 (Issue #308) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
