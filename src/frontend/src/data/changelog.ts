@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.25',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: '⚠️ Windows-Installer (.exe) im v0.4.24-Release war nicht erreichbar (404) – der Build-Workflow verließ sich auf das automatische Hochladen durch tauri-action, das sein Verhalten unangekündigt geändert hat. Betroffen war auch die versionierte macOS-DMG. Beide Dateien werden jetzt explizit hochgeladen. Wer v0.4.24 unter Windows nicht installieren konnte: mit diesem Release funktioniert der Download wieder.' },
+    ],
+  },
+  {
     version: 'v0.4.24',
     datum: 'Juli 2026',
     eintraege: [
