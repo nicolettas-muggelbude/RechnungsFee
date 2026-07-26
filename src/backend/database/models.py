@@ -308,6 +308,7 @@ class Journaleintrag(Base):
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="journaleintraege")
     kunde: Mapped["Kunde | None"] = relationship()
     rechnung: Mapped["Rechnung | None"] = relationship(back_populates="journaleintraege")
+    beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
 
 
 class Tagesabschluss(Base):

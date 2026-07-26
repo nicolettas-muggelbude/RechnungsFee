@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Optional, List
 from pydantic import BaseModel, field_validator, model_validator
 
+from .schemas_rechnungen import BelegResponse
+
 
 # ---------------------------------------------------------------------------
 # Unternehmen
@@ -358,12 +360,16 @@ class JournalEintragResponse(BaseModel):
     ist_ig_erwerb: bool = False
     ust_sonderfall: Optional[str] = None
     gruppe_id: Optional[int] = None
+    beleg_id: Optional[int] = None
+    beleg: Optional[BelegResponse] = None
 
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_orm_with_kunde(cls, obj) -> "JournalEintragResponse":
         data = cls.model_validate(obj)
+        if obj.beleg:
+            data.beleg = BelegResponse.from_beleg(obj.beleg)
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None

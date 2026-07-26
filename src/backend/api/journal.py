@@ -5,19 +5,24 @@ Kein PUT/DELETE – nur Storno als Gegenbuchung.
 
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Optional
 
 import csv
+import hashlib
 import io
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from sqlalchemy import func, extract, or_
 from sqlalchemy.orm import Session
 
-from database.connection import get_db
-from database.models import Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
+from database.connection import get_db, APP_DATA_DIR
+from database.models import Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
 from utils.signatur import signatur_journaleintrag
+from utils.pdfa_konverter import konvertiere_zu_pdfa
+from utils.rechnungs_parser import analysiere_datei
 from .schemas import (
     JournalEintragCreate,
     JournalEintragResponse,
@@ -25,6 +30,10 @@ from .schemas import (
     SplitBuchungCreate,
     MonatsUebersicht,
 )
+from .schemas_rechnungen import BelegResponse
+
+BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
+ERLAUBTE_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/tiff"}
 
 router = APIRouter(prefix="/api/journal", tags=["Journal"])
 
@@ -410,13 +419,169 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     db.add(storno)
 
     neu_belegnr = _naechste_belegnr(db, felder["datum"])
-    neu = Journaleintrag(belegnr=neu_belegnr, gruppe_id=original.gruppe_id or original.id, immutable=True, **felder)
+    neu = Journaleintrag(
+        belegnr=neu_belegnr, gruppe_id=original.gruppe_id or original.id, immutable=True,
+        beleg_id=original.beleg_id,  # ein evtl. angehängter Beleg wandert mit zur Korrektur-Buchung
+        **felder,
+    )
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
 
     db.commit()
     db.refresh(neu)
     return JournalEintragResponse.from_orm_with_kunde(neu)
+
+
+@router.post("/{eintrag_id}/anhang", response_model=BelegResponse, status_code=201)
+async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Dateianhang (PDF/Bild) an eine Journalbuchung hängen (Issue #310). Eigene Route
+    "/anhang" statt "/beleg" - unter "/beleg" existiert bereits der druckbare HTML-Beleg
+    (siehe get_beleg() weiter unten), das waere sonst eine Routenkollision."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag:
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
+    if eintrag.immutable:
+        # protect_journal_update-Trigger wuerde das UPDATE ohnehin ablehnen (GoBD) -
+        # hier vorab mit verstaendlicher Meldung statt rohem DB-Fehler.
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
+        )
+
+    mime = datei.content_type or ""
+    if mime not in ERLAUBTE_MIME_TYPES:
+        raise HTTPException(status_code=422, detail=f"Dateityp '{mime}' nicht erlaubt. Erlaubt: PDF, JPEG, PNG, TIFF.")
+
+    inhalt = await datei.read()
+    sha256 = hashlib.sha256(inhalt).hexdigest()
+
+    jetzt = datetime.now()
+    ziel_dir = BELEG_DIR / str(jetzt.year) / jetzt.strftime("%m")
+    ziel_dir.mkdir(parents=True, exist_ok=True)
+
+    original_name = Path(datei.filename or "beleg")
+    stem = original_name.stem[:50]
+    suffix = original_name.suffix.lower() or ".bin"
+    dateiname_lokal = f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
+    rel_pfad = f"belege/{jetzt.year}/{jetzt.strftime('%m')}/{dateiname_lokal}"
+
+    (ziel_dir / dateiname_lokal).write_bytes(inhalt)
+
+    # Alten Beleg ersetzen wenn vorhanden
+    if eintrag.beleg_id:
+        alter_beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+        if alter_beleg:
+            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
+            if alter_pfad.exists():
+                alter_pfad.unlink()
+            db.delete(alter_beleg)
+
+    pdfa_pfad_rel: str | None = None
+    if mime == "application/pdf":
+        try:
+            ergebnis = analysiere_datei(datei.filename or "", inhalt)
+            if ergebnis.format in ("zugferd", "xrechnung"):
+                pdfa_pfad_rel = rel_pfad
+        except Exception:
+            pass
+
+    beleg = Beleg(
+        dateiname=rel_pfad,
+        original_name=datei.filename or "beleg",
+        mime_type=mime,
+        dateigroesse=len(inhalt),
+        sha256=sha256,
+        beleg_pdfa_pfad=pdfa_pfad_rel,
+    )
+    db.add(beleg)
+    db.flush()
+    eintrag.beleg_id = beleg.id
+    db.commit()
+    db.refresh(beleg)
+
+    if pdfa_pfad_rel is None:
+        import threading
+        beleg_id = beleg.id
+        src_pfad = ziel_dir / dateiname_lokal
+        beleg_mime = mime
+
+        def _konvertiere_hintergrund():
+            from database.connection import SessionLocal as _Session
+            pdfa_path = konvertiere_zu_pdfa(src_pfad, beleg_mime)
+            if pdfa_path and pdfa_path.exists():
+                pfad_relativ = f"belege/{jetzt.year}/{jetzt.strftime('%m')}/{pdfa_path.name}"
+                _db = _Session()
+                try:
+                    b = _db.query(Beleg).filter(Beleg.id == beleg_id).first()
+                    if b:
+                        b.beleg_pdfa_pfad = pfad_relativ
+                        _db.commit()
+                finally:
+                    _db.close()
+
+        threading.Thread(target=_konvertiere_hintergrund, daemon=True).start()
+
+    return BelegResponse.from_beleg(beleg)
+
+
+@router.get("/{eintrag_id}/anhang")
+def download_anhang(
+    eintrag_id: int,
+    version: str = Query("original", description="'original' oder 'pdfa'"),
+    db: Session = Depends(get_db),
+):
+    """Angehängte Datei einer Journalbuchung herunterladen. Mit ?version=pdfa die PDF/A-Version."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag or not eintrag.beleg_id:
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
+    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+    if not beleg:
+        raise HTTPException(status_code=404, detail="Beleg-Datensatz nicht gefunden.")
+
+    if version == "pdfa":
+        if not beleg.beleg_pdfa_pfad:
+            raise HTTPException(status_code=404, detail="Keine PDF/A-Version verfügbar.")
+        pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad
+        if not pfad.exists():
+            raise HTTPException(status_code=404, detail="PDF/A-Datei nicht gefunden.")
+        stem = Path(beleg.original_name).stem
+        return FileResponse(
+            path=str(pfad),
+            media_type="application/pdf",
+            filename=f"{stem}_pdfa.pdf",
+            content_disposition_type="inline",
+        )
+
+    pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+    if not pfad.exists():
+        raise HTTPException(status_code=404, detail="Beleg-Datei nicht gefunden.")
+    return FileResponse(
+        path=str(pfad),
+        media_type=beleg.mime_type or "application/octet-stream",
+        filename=beleg.original_name,
+        content_disposition_type="inline",
+    )
+
+
+@router.delete("/{eintrag_id}/anhang", status_code=204)
+def delete_anhang(eintrag_id: int, db: Session = Depends(get_db)):
+    """Beleg-Anhang von einer Journalbuchung entfernen und Datei löschen."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag or not eintrag.beleg_id:
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
+    if eintrag.immutable:
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – der Beleg kann nicht mehr entfernt werden.",
+        )
+    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+    eintrag.beleg_id = None
+    if beleg:
+        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+        if pfad.exists():
+            pfad.unlink()
+        db.delete(beleg)
+    db.commit()
 
 
 @router.post("/split", response_model=list[JournalEintragResponse], status_code=201)

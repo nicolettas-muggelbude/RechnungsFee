@@ -16,6 +16,10 @@ import {
   getUnternehmen,
   getKassenstand,
   getUstSaetze,
+  uploadJournalAnhang,
+  deleteJournalAnhang,
+  getJournalAnhangUrl,
+  openUrl,
   type JournalEintrag,
 } from '../../api/client'
 
@@ -97,6 +101,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const [keineGeldbewegung, setKeineGeldbewegung] = useState(false)
   const [kmAnzahl, setKmAnzahl] = useState<string>(bearbeiten?.km_anzahl ? String(bearbeiten.km_anzahl) : '')
   const [showNeuKategorie, setShowNeuKategorie] = useState(false)
+  const [belegDatei, setBelegDatei] = useState<File | null>(null)
+  const [belegVorhanden, setBelegVorhanden] = useState(bearbeiten?.beleg ?? null)
   // Refs: verhindern dass useEffects beim ersten Kategorien-Laden die bearbeiten-Werte überschreiben
   // Issue #273: Schnellbuchungen bringen ihre eigene Kategorie mit – die darf vom
   // Standardkategorie-Effekt nicht überschrieben/gelöscht werden, genau wie beim Bearbeiten.
@@ -377,13 +383,36 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     mutationFn: bearbeiten
       ? (data: Parameters<typeof createJournaleintrag>[0]) => updateJournaleintrag(bearbeiten.id, data)
       : createJournaleintrag,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Beleg-Upload (Issue #310): erst nachdem die Buchung ihre id hat - die Buchung ist
+      // dabei noch nicht immutable (Erstellung bzw. innerhalb des 5-Minuten-Fensters),
+      // der GoBD-Trigger blockiert das UPDATE des beleg_id-Feldes daher nicht.
+      if (belegDatei) {
+        try {
+          await uploadJournalAnhang(data.id, belegDatei)
+        } catch (e) {
+          console.error('Beleg-Upload fehlgeschlagen', e)
+        }
+      }
       qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
       onSuccess(data.id)
     },
   })
+
+  const belegLoeschenMutation = useMutation({
+    mutationFn: () => deleteJournalAnhang(bearbeiten!.id),
+    onSuccess: () => {
+      setBelegVorhanden(null)
+      qc.invalidateQueries({ queryKey: ['journal'] })
+    },
+  })
+
+  async function belegAnsehen() {
+    const url = await getJournalAnhangUrl(bearbeiten!.id)
+    await openUrl(url)
+  }
 
   const splitMutation = useMutation({
     mutationFn: createSplitBuchung,
@@ -588,6 +617,45 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                 placeholder="z.B. RE-2024-00123"
                 className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
+            </div>
+
+            {/* Beleg (Issue #310) */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+              </label>
+              {belegVorhanden ? (
+                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={belegAnsehen}
+                    className="flex-1 text-left text-blue-600 dark:text-blue-400 hover:underline truncate"
+                  >
+                    📎 {belegVorhanden.original_name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => belegLoeschenMutation.mutate()}
+                    disabled={belegLoeschenMutation.isPending}
+                    title="Beleg entfernen"
+                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/tiff"
+                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
+                    className="w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-600 file:bg-white dark:file:bg-slate-700 file:text-sm hover:file:bg-slate-50 dark:hover:file:bg-slate-600"
+                  />
+                  {belegDatei && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{belegDatei.name} wird beim Speichern hochgeladen</p>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Kategorie */}

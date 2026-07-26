@@ -442,6 +442,8 @@ export type JournalEintrag = {
   ist_ig_erwerb?: boolean
   ust_sonderfall?: string | null
   gruppe_id?: number | null
+  beleg_id?: number | null
+  beleg?: Beleg | null
 }
 
 export type JournalEintragCreate = {
@@ -1065,6 +1067,29 @@ export async function getBelegPdfaUrl(rechnungId: number): Promise<string> {
 
 export const deleteBeleg = (rechnungId: number) =>
   request<void>(`/rechnungen/${rechnungId}/beleg`, { method: 'DELETE' })
+
+// --- Beleg-Anhänge am Journal (Issue #310) --- eigene Route "/anhang" statt "/beleg",
+// da unter "/journal/{id}/beleg" bereits der druckbare HTML-Beleg (getJournalBelegUrl
+// oben) liegt - das waere sonst eine Namens-/Routenkollision.
+export async function uploadJournalAnhang(eintragId: number, datei: File): Promise<Beleg> {
+  const base = await getBaseUrl()
+  const form = new FormData()
+  form.append('datei', datei)
+  const res = await fetch(`${base}/journal/${eintragId}/anhang`, { method: 'POST', body: form })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'Beleg-Upload fehlgeschlagen')
+  }
+  return res.json()
+}
+
+export async function getJournalAnhangUrl(eintragId: number): Promise<string> {
+  const base = await getBaseUrl()
+  return `${base}/journal/${eintragId}/anhang`
+}
+
+export const deleteJournalAnhang = (eintragId: number) =>
+  request<void>(`/journal/${eintragId}/anhang`, { method: 'DELETE' })
 
 export type AnalysePosition = {
   beschreibung: string
