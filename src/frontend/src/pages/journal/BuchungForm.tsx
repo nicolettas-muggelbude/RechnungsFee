@@ -108,9 +108,20 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   // Issue #273: Schnellbuchungen bringen ihre eigene Kategorie mit – die darf vom
   // Standardkategorie-Effekt nicht überschrieben/gelöscht werden, genau wie beim Bearbeiten.
   const skipKatRef = useRef(!!bearbeiten || !!initialWerte?.kategorie_id)
-  const skipUstRef = useRef(!!bearbeiten)
   const skipKmRef = useRef(!!bearbeiten)
-  const skipSonderfallRef = useRef(!!bearbeiten)
+  // USt-Satz/Vorsteuerabzug/Sonderfall aus der Kategorie ableiten: nur bei einem ECHTEN
+  // Kategoriewechsel durch die Nutzerin, nicht wenn die Kategorien-Liste beim Bearbeiten
+  // nachgeladen wird. Ein einmalig konsumierter skip-Ref reicht dafür nicht (Issue #309,
+  // Regression aus #211) - wenn z.B. `unternehmen` (istKleinunternehmer) erst nach
+  // `kategorien` laedt, feuert der Effekt ein zweites Mal und ueberschreibt den bereits
+  // korrekt geladenen Wert, ohne dass sich die Kategorie tatsaechlich geaendert hat.
+  // Beim Bearbeiten startet die Referenz auf der bereits gespeicherten Kategorie (das
+  // "Ankommen" bei diesem Wert gilt dann nie als Wechsel); bei einer neuen Buchung startet
+  // sie undefined, damit die erste Ableitung (auch bei per initialWerte vorbelegter
+  // Kategorie, z.B. Schnellbuchungen) weiterhin sofort greift.
+  const prevKategorieIdRef = useRef<string | undefined>(
+    bearbeiten ? (bearbeiten.kategorie_id ? String(bearbeiten.kategorie_id) : '') : undefined
+  )
   const [katModus, setKatModus] = useState<KontorahmenModus>(getKontorahmenModus)
 
   useEffect(() => {
@@ -233,22 +244,34 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     }
   }, [kategorien, art, istKleinunternehmer, isSplit, setValue])
 
-  // USt + Vorsteuer aus Kategorie (einfache Buchung)
+  // USt-Satz, Vorsteuerabzug und Sonderfall aus der Kategorie ableiten (einfache Buchung) -
+  // nur bei einem echten Kategoriewechsel, siehe Kommentar bei prevKategorieIdRef (Issue #309)
   useEffect(() => {
-    if (!kategorie_id || !kategorien || isSplit) return
-    if (skipUstRef.current) { skipUstRef.current = false; return }
+    if (!kategorien || isSplit) return
+    const vorherigeId = prevKategorieIdRef.current
+    const istEchterWechsel = vorherigeId === undefined || vorherigeId !== kategorie_id
+    prevKategorieIdRef.current = kategorie_id
+    if (!istEchterWechsel || !kategorie_id) return
+
     const kat = kategorien.find((k) => String(k.id) === kategorie_id)
     if (!kat) return
-    // Privat-Buchung: immer USt=0, kein Vorsteuerabzug
+
+    // Privat-Buchung: immer USt=0, kein Vorsteuerabzug, kein Sonderfall
     if (kat.kontenart === 'Privat') {
       setValue('ust_satz', '0')
       setValue('vorsteuerabzug', false)
+      setValue('ust_sonderfall', '')
       return
     }
     setValue('ust_satz', istKleinunternehmer ? '0' : String(kat.ust_satz_standard))
     if (!istKleinunternehmer) {
       setValue('vorsteuerabzug', parseFloat(kat.vorsteuer_prozent) > 0)
     }
+    const sonderfall =
+      kat.konto_skr03 === '3425' || kat.konto_skr04 === '5425' ? 'ig_erwerb' :
+      kat.konto_skr03 === '3123' || kat.konto_skr04 === '5923' ? '13b_abs1' :
+      kat.konto_skr03 === '3120' || kat.konto_skr04 === '5920' ? '13b_abs2' : null
+    setValue('ust_sonderfall', sonderfall ?? '')
   }, [kategorie_id, kategorien, isSplit, setValue, istKleinunternehmer])
 
   const gewaehlteKat = (kategorien ?? []).find((k) => String(k.id) === kategorie_id)
@@ -260,18 +283,6 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const gewaehlterKunde = (kunden ?? []).find((k) => String(k.id) === kunde_id)
   const igLieferungOhneUstIdNr = istIgLieferung && gewaehlterKunde && !gewaehlterKunde.ust_idnr
   const ust_sonderfall = watch('ust_sonderfall')
-
-  // ust_sonderfall auto-setzen basierend auf Kategorie
-  const katSonderfall =
-    gewaehlteKat?.konto_skr03 === '3425' || gewaehlteKat?.konto_skr04 === '5425' ? 'ig_erwerb' :
-    gewaehlteKat?.konto_skr03 === '3123' || gewaehlteKat?.konto_skr04 === '5923' ? '13b_abs1' :
-    gewaehlteKat?.konto_skr03 === '3120' || gewaehlteKat?.konto_skr04 === '5920' ? '13b_abs2' : null
-
-  // ust_sonderfall: auto-setzen wenn Kategorie einen Sonderfall impliziert, sonst leeren
-  useEffect(() => {
-    if (skipSonderfallRef.current) { skipSonderfallRef.current = false; return }
-    setValue('ust_sonderfall', katSonderfall ?? '')
-  }, [katSonderfall, setValue])
 
   // km-Eingabe: brutto_betrag auto-berechnen (EÜR: 0,30 €/km)
   useEffect(() => {
