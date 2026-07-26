@@ -125,10 +125,17 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
                 vz = Decimal("1")
             zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + vz * (e.netto_betrag or ZERO)
 
+        # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
+        # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
+        # (Zu-/Abflussprinzip) sind solche Buchungen deshalb neutral und dürfen weder Zeile 17
+        # noch Zeile 57 berühren. Ohne diese Ausnahme greift unten die Storno-Heuristik, weil
+        # die §13b-Konten 1787/1789 in _EINNAHME_UST_KONTEN stehen (Issue #307).
+        ist_reverse_charge = bool(e.ust_sonderfall)
+
         # Zeile 17: vereinnahmte USt – reguläre Einnahmen addieren, Storno subtrahieren.
         # Storno einer Einnahme hat art=Ausgabe + Einnahme-USt-Konto (1776/1771/…).
         # Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten USt-Betrag.
-        if e.ust_betrag and e.ust_betrag != 0:
+        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
             if e.art == "Einnahme" and e.ust_betrag > 0:
                 zeilen[17] = zeilen.get(17, ZERO) + e.ust_betrag
             elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
@@ -136,7 +143,7 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
         # Zeile 57: abziehbare Vorsteuer – Summe aller vorsteuer_betrag-Werte (ohne art-Filter).
         # Storno einer Ausgabe hat art=Einnahme mit negativem vorsteuer_betrag → subtrahiert korrekt.
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
+        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
             zeilen[57] = zeilen.get(57, ZERO) + e.vorsteuer_betrag
 
     # AVEÜR: AfA aus dem Anlagenverzeichnis automatisch in Zeile 33 eintragen
@@ -352,7 +359,10 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
             zeilen.setdefault(euer_zeile, {})
             zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * (e.netto_betrag or ZERO)
 
-        if e.ust_betrag and e.ust_betrag != 0:
+        # Reverse Charge neutral halten, siehe Kommentar in _berechne_euer (Issue #307)
+        ist_reverse_charge = bool(e.ust_sonderfall)
+
+        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
             if e.art == "Einnahme" and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
                 zeilen.setdefault(17, {})
                 zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) + e.ust_betrag
@@ -360,7 +370,7 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
                 zeilen.setdefault(17, {})
                 zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) - e.ust_betrag
 
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
+        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
             zeilen.setdefault(57, {})
             zeilen[57]["Vorsteuer"] = zeilen[57].get("Vorsteuer", ZERO) + e.vorsteuer_betrag
 
