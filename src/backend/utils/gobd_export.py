@@ -421,10 +421,12 @@ def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
     """
     Belege-Index als CSV für alle immutablen Journal-Einträge des Jahres.
 
-    Belege werden auf zwei Wegen gefunden:
+    Belege werden auf drei Wegen gefunden:
       1. journal.beleg_id  – Beleg direkt am Journaleintrag
       2. journal.rechnung_id → rechnung.beleg_id  – Beleg an der Rechnung,
          die diesem Journaleintrag zugrunde liegt (Normalfall bei Eingangsrechnungen)
+      3. journal.rechnung_id → rechnung.original_pdf_pfad – archiviertes Original-PDF
+         einer Ausgangsrechnung (kein Beleg-Datensatz, siehe pdf_kopie.py; Issue #306)
 
     Gibt (bytes, liste_von_beleg_infos) zurück.
     """
@@ -442,40 +444,59 @@ def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
     rows = []
     beleg_infos: list[dict] = []
     seen: set[int] = set()
+    seen_rechnungen: set[int] = set()
 
     for e in eintraege:
         # Weg 1: Beleg direkt am Journaleintrag
         beleg_id = e.beleg_id
 
         # Weg 2: Beleg an der verknüpften Rechnung
-        if not beleg_id and e.rechnung_id:
+        rechnung_obj = None
+        if e.rechnung_id:
             rechnung_obj = db.query(Rechnung).filter(Rechnung.id == e.rechnung_id).first()
-            if rechnung_obj and rechnung_obj.beleg_id:
+            if not beleg_id and rechnung_obj and rechnung_obj.beleg_id:
                 beleg_id = rechnung_obj.beleg_id
 
-        if not beleg_id or beleg_id in seen:
+        if beleg_id and beleg_id not in seen:
+            seen.add(beleg_id)
+            beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
+            if beleg:
+                rechnung = db.query(Rechnung).filter(Rechnung.beleg_id == beleg.id).first()
+                rechnung_id = str(rechnung.id) if rechnung else ""
+
+                rows.append([
+                    str(beleg.id),
+                    beleg.original_name,
+                    beleg.mime_type or "",
+                    str(beleg.dateigroesse or ""),
+                    beleg.sha256 or "",
+                    e.belegnr,
+                    rechnung_id,
+                    _fmt_datetime(beleg.hochgeladen_am),
+                    _fmt_bool(bool(beleg.beleg_pdfa_pfad)),
+                ])
+                beleg_infos.append({"art": "beleg", "beleg": beleg, "journal_belegnr": e.belegnr})
             continue
-        seen.add(beleg_id)
 
-        beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
-        if not beleg:
-            continue
-
-        rechnung = db.query(Rechnung).filter(Rechnung.beleg_id == beleg.id).first()
-        rechnung_id = str(rechnung.id) if rechnung else ""
-
-        rows.append([
-            str(beleg.id),
-            beleg.original_name,
-            beleg.mime_type or "",
-            str(beleg.dateigroesse or ""),
-            beleg.sha256 or "",
-            e.belegnr,
-            rechnung_id,
-            _fmt_datetime(beleg.hochgeladen_am),
-            _fmt_bool(bool(beleg.beleg_pdfa_pfad)),
-        ])
-        beleg_infos.append({"beleg": beleg, "journal_belegnr": e.belegnr})
+        # Weg 3: Ausgangsrechnung – eigenes archiviertes Original-PDF, kein Beleg-Datensatz
+        if rechnung_obj and rechnung_obj.original_pdf_pfad and rechnung_obj.id not in seen_rechnungen:
+            seen_rechnungen.add(rechnung_obj.id)
+            rows.append([
+                "",
+                f"{rechnung_obj.id}.pdf",
+                "application/pdf",
+                "",
+                "",
+                e.belegnr,
+                str(rechnung_obj.id),
+                "",
+                _fmt_bool(False),
+            ])
+            beleg_infos.append({
+                "art": "ausgang",
+                "pfad": APP_DATA_DIR / rechnung_obj.original_pdf_pfad,
+                "zip_name": f"ausgangsrechnung_{rechnung_obj.id}.pdf",
+            })
 
     return _make_csv(header, rows), beleg_infos
 
@@ -701,6 +722,13 @@ def generate_gobd_zip(db: Session, jahr: int) -> bytes:
 
         # Beleg-Dateien in belege/-Unterordner (PDF/A bevorzugt, Fallback Original)
         for info in beleg_infos:
+            if info.get("art") == "ausgang":
+                # Ausgangsrechnung: archiviertes Original-PDF (kein Beleg-Datensatz)
+                pfad = info["pfad"]
+                if pfad.exists():
+                    zf.write(str(pfad), f"belege/{info['zip_name']}")
+                continue
+
             beleg: Beleg = info["beleg"]
             zip_name = f"belege/{beleg.id}_{beleg.original_name}"
 
