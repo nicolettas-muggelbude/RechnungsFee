@@ -514,6 +514,7 @@ export type SplitBuchungCreate = {
   externe_belegnr?: string
   kunde_id?: number
   positionen: SplitPosition[]
+  beleg_id?: number
 }
 
 export const createSplitBuchung = (data: SplitBuchungCreate) =>
@@ -1086,6 +1087,20 @@ export async function uploadJournalAnhang(eintragId: number, datei: File): Promi
 export async function getJournalAnhangUrl(eintragId: number): Promise<string> {
   const base = await getBaseUrl()
   return `${base}/journal/${eintragId}/anhang`
+}
+
+// Split-Buchungen sind ab Erstellung immutable (kein 5-Minuten-Fenster) - Beleg muss daher
+// vorab hochgeladen und die zurückgegebene id beim Anlegen mitgeschickt werden.
+export async function uploadJournalAnhangVorab(datei: File): Promise<Beleg> {
+  const base = await getBaseUrl()
+  const form = new FormData()
+  form.append('datei', datei)
+  const res = await fetch(`${base}/journal/anhang-vorab`, { method: 'POST', body: form })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'Beleg-Upload fehlgeschlagen')
+  }
+  return res.json()
 }
 
 export const deleteJournalAnhang = (eintragId: number) =>

@@ -432,22 +432,9 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     return JournalEintragResponse.from_orm_with_kunde(neu)
 
 
-@router.post("/{eintrag_id}/anhang", response_model=BelegResponse, status_code=201)
-async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Dateianhang (PDF/Bild) an eine Journalbuchung hängen (Issue #310). Eigene Route
-    "/anhang" statt "/beleg" - unter "/beleg" existiert bereits der druckbare HTML-Beleg
-    (siehe get_beleg() weiter unten), das waere sonst eine Routenkollision."""
-    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
-    if not eintrag:
-        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
-    if eintrag.immutable:
-        # protect_journal_update-Trigger wuerde das UPDATE ohnehin ablehnen (GoBD) -
-        # hier vorab mit verstaendlicher Meldung statt rohem DB-Fehler.
-        raise HTTPException(
-            status_code=409,
-            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
-        )
-
+async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
+    """Speichert eine hochgeladene Datei als neuen Beleg-Datensatz (ohne Verknüpfung zu
+    einer Buchung) - gemeinsam genutzt von upload_anhang() und upload_anhang_vorab()."""
     mime = datei.content_type or ""
     if mime not in ERLAUBTE_MIME_TYPES:
         raise HTTPException(status_code=422, detail=f"Dateityp '{mime}' nicht erlaubt. Erlaubt: PDF, JPEG, PNG, TIFF.")
@@ -466,15 +453,6 @@ async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Sess
     rel_pfad = f"belege/{jetzt.year}/{jetzt.strftime('%m')}/{dateiname_lokal}"
 
     (ziel_dir / dateiname_lokal).write_bytes(inhalt)
-
-    # Alten Beleg ersetzen wenn vorhanden
-    if eintrag.beleg_id:
-        alter_beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
-        if alter_beleg:
-            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
-            if alter_pfad.exists():
-                alter_pfad.unlink()
-            db.delete(alter_beleg)
 
     pdfa_pfad_rel: str | None = None
     if mime == "application/pdf":
@@ -495,7 +473,6 @@ async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Sess
     )
     db.add(beleg)
     db.flush()
-    eintrag.beleg_id = beleg.id
     db.commit()
     db.refresh(beleg)
 
@@ -521,6 +498,49 @@ async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Sess
 
         threading.Thread(target=_konvertiere_hintergrund, daemon=True).start()
 
+    return beleg
+
+
+@router.post("/{eintrag_id}/anhang", response_model=BelegResponse, status_code=201)
+async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Dateianhang (PDF/Bild) an eine Journalbuchung hängen (Issue #310). Eigene Route
+    "/anhang" statt "/beleg" - unter "/beleg" existiert bereits der druckbare HTML-Beleg
+    (siehe get_beleg() weiter unten), das waere sonst eine Routenkollision."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag:
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
+    if eintrag.immutable:
+        # protect_journal_update-Trigger wuerde das UPDATE ohnehin ablehnen (GoBD) -
+        # hier vorab mit verstaendlicher Meldung statt rohem DB-Fehler.
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
+        )
+
+    # Alten Beleg ersetzen wenn vorhanden
+    if eintrag.beleg_id:
+        alter_beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+        if alter_beleg:
+            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
+            if alter_pfad.exists():
+                alter_pfad.unlink()
+            db.delete(alter_beleg)
+            db.flush()
+
+    beleg = await _beleg_datei_speichern(datei, db)
+    eintrag.beleg_id = beleg.id
+    db.commit()
+    return BelegResponse.from_beleg(beleg)
+
+
+@router.post("/anhang-vorab", response_model=BelegResponse, status_code=201)
+async def upload_anhang_vorab(datei: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Beleg VOR dem Anlegen einer Split-Buchung hochladen (Issue #310). Split-Buchungen
+    sind ab Erstellung immutable=True (kein 5-Minuten-Korrekturfenster wie bei
+    Einzelbuchungen) - ein Beleg muss daher schon beim Anlegen als beleg_id mitgegeben
+    werden, ein nachtraeglicher Upload wuerde der GoBD-Trigger ohnehin ablehnen. Gibt
+    die Beleg-id zurueck, die dann in SplitBuchungCreate.beleg_id mitgeschickt wird."""
+    beleg = await _beleg_datei_speichern(datei, db)
     return BelegResponse.from_beleg(beleg)
 
 
@@ -668,6 +688,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             steuerbefreiung_grund=steuerbefreiung_grund,
             ist_ig_erwerb=(pos_sf == "ig_erwerb"),
             ust_sonderfall=pos_sf,
+            beleg_id=data.beleg_id,  # muss beim Anlegen mitgegeben werden, s. SplitBuchungCreate
             immutable=True,
         )
         journaleintrag.signatur = signatur_journaleintrag(journaleintrag)

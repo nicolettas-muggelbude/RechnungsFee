@@ -409,6 +409,10 @@ class SplitBuchungCreate(BaseModel):
     externe_belegnr: Optional[str] = None
     kunde_id: Optional[int] = None
     positionen: List[SplitPosition]
+    beleg_id: Optional[int] = None  # vorab hochgeladener Beleg (Issue #310) - Split-Buchungen
+    # sind ab Erstellung immutable, ein Beleg kann daher nicht wie bei Einzelbuchungen per
+    # separatem Upload NACH der Erstellung angehaengt werden, sondern muss schon beim
+    # Anlegen mitgegeben werden.
 
     @field_validator("art")
     @classmethod

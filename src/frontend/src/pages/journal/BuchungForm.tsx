@@ -17,6 +17,7 @@ import {
   getKassenstand,
   getUstSaetze,
   uploadJournalAnhang,
+  uploadJournalAnhangVorab,
   deleteJournalAnhang,
   getJournalAnhangUrl,
   openUrl,
@@ -452,7 +453,18 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     })
   }
 
-  function onSubmitSplit(values: SplitValues) {
+  async function onSubmitSplit(values: SplitValues) {
+    // Beleg muss vor dem Anlegen hochgeladen werden - Split-Buchungen sind ab Erstellung
+    // immutable, ein nachtraeglicher Upload wie bei der Einzelbuchung ist nicht moeglich.
+    let belegId: number | undefined
+    if (belegDatei) {
+      try {
+        const beleg = await uploadJournalAnhangVorab(belegDatei)
+        belegId = beleg.id
+      } catch (e) {
+        console.error('Beleg-Upload fehlgeschlagen', e)
+      }
+    }
     splitMutation.mutate({
       datum: values.datum,
       art: values.art,
@@ -471,6 +483,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
           vorsteuerabzug: p.vorsteuerabzug,
         }
       }),
+      beleg_id: belegId,
     })
   }
 
@@ -1008,6 +1021,22 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                 placeholder="z.B. Kassenbon-Nr."
                 className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
+            </div>
+
+            {/* Beleg (Issue #310) - ein Beleg gilt fuer die gesamte Split-Buchung */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, für alle Positionen gemeinsam)</span>
+              </label>
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/tiff"
+                onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
+                className="w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-600 file:bg-white dark:file:bg-slate-700 file:text-sm hover:file:bg-slate-50 dark:hover:file:bg-slate-600"
+              />
+              {belegDatei && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{belegDatei.name} wird beim Speichern hochgeladen</p>
+              )}
             </div>
 
             {/* Kunde (nur Einnahmen) */}
