@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 123
+SCHEMA_VERSION = 124
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2679,6 +2679,32 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 123 (ersatzrechnung_id / ersatz_fuer_rechnung_id fuer Ersatzrechnungen)")
 
+        if version < 124:
+            # Issue #308: Reverse-Charge-Kategorien nutzten normale Wareneingangs-/Vorsteuer-
+            # konten statt der DATEV-Automatikkonten fuer §13b/i.g. Erwerb (gegengeprueft am
+            # offiziellen DATEV-Kontenrahmen SKR03/04, vorlagen/kategorien/*.pdf):
+            #   "Wareneinkauf EU" (ig_erwerb):        3400/5400 (normaler Wareneingang 19%) → 3425/5425
+            #   "EU-Dienstleistungen (§13b Abs. 1)":  3300/5300 (normaler Wareneingang 7%)  → 3123/5923
+            #   "Bauleistungen / §13b Abs. 2":        3610/5600 (nicht abziehbare VSt 7%)   → 3120/5920
+            reverse_charge_korrekturen = [
+                ("Wareneinkauf EU",                   "3425", "5425"),
+                ("EU-Dienstleistungen (§13b Abs. 1)",  "3123", "5923"),
+                ("Bauleistungen / §13b Abs. 2",        "3120", "5920"),
+            ]
+            for name, skr03, skr04 in reverse_charge_korrekturen:
+                conn.execute(text("""
+                    UPDATE kategorien SET
+                        konto_skr03_default = :skr03,
+                        konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :skr03 ELSE konto_skr03 END,
+                        konto_skr04_default = :skr04,
+                        konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :skr04 ELSE konto_skr04 END
+                    WHERE name = :name
+                """), {"skr03": skr03, "skr04": skr04, "name": name})
+
+            conn.execute(text("PRAGMA user_version = 124"))
+            conn.commit()
+            print("[Migration] Schema auf Version 124 (Issue #308: Reverse-Charge-Kategorien auf DATEV-Automatikkonten korrigiert)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -2794,7 +2820,7 @@ def _migrate_kategorien() -> None:
             {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
-            {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3400", "konto_skr04": "5400", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf Nicht-EU",                "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Miete Büro (0%)",                      "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 39,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "KFZ-Leasing",                          "kontenart": "Aufwand", "konto_skr03": "4570", "konto_skr04": "6560", "eks_kategorie": "B6_3",  "euer_zeile": 68,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
@@ -2853,10 +2879,14 @@ def _migrate_kategorien() -> None:
             {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # §13b Abs. 1 – EU-Dienstleistungen (Google, AWS, Beratung aus EU etc.)
             # Reverse Charge: Empfänger schuldet USt (KZ 46/47); Vorsteuer KZ 67; Rechnungsbetrag = Netto
-            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3300", "konto_skr04": "5300", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen
+            # Unternehmers 19% VSt/USt" (Issue #308, gegengeprüft am DATEV-Kontenrahmen)
+            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # §13b Abs. 2 – Bauleistungen, Gebäudereinigung, Sicherheit, Metallieferungen aus Inland/EU
             # Reverse Charge: Empfänger schuldet USt (KZ 84/85); Vorsteuer KZ 67; Rechnungsbetrag = Netto
-            {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3610", "konto_skr04": "5600", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # Konto = DATEV-Automatikkonto "Bauleistungen eines im Inland ansässigen Unternehmers
+            # 19% VSt/USt" (Issue #308, gegengeprüft am DATEV-Kontenrahmen)
+            {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3120", "konto_skr04": "5920", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # §25a Differenzbesteuerung – Ankauf von Privatpersonen oder anderen ohne USt-Ausweis
             # Keine Vorsteuer abziehbar; EK-Preis ist Basis für Margenberechnung (VK − EK)
             {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

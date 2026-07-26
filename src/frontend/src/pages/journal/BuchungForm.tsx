@@ -263,9 +263,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   // ust_sonderfall auto-setzen basierend auf Kategorie
   const katSonderfall =
-    gewaehlteKat?.konto_skr03 === '3400' || gewaehlteKat?.konto_skr04 === '5400' ? 'ig_erwerb' :
-    gewaehlteKat?.konto_skr03 === '3300' || gewaehlteKat?.konto_skr04 === '5300' ? '13b_abs1' :
-    gewaehlteKat?.konto_skr03 === '3610' || gewaehlteKat?.konto_skr04 === '5600' ? '13b_abs2' : null
+    gewaehlteKat?.konto_skr03 === '3425' || gewaehlteKat?.konto_skr04 === '5425' ? 'ig_erwerb' :
+    gewaehlteKat?.konto_skr03 === '3123' || gewaehlteKat?.konto_skr04 === '5923' ? '13b_abs1' :
+    gewaehlteKat?.konto_skr03 === '3120' || gewaehlteKat?.konto_skr04 === '5920' ? '13b_abs2' : null
 
   // ust_sonderfall: auto-setzen wenn Kategorie einen Sonderfall impliziert, sonst leeren
   useEffect(() => {
