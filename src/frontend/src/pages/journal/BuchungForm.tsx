@@ -656,18 +656,29 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                     ✕
                   </button>
                 </div>
+              ) : belegDatei ? (
+                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
+                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
+                  <button
+                    type="button"
+                    onClick={() => setBelegDatei(null)}
+                    title="Auswahl verwerfen"
+                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </div>
               ) : (
-                <>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+                  <span>📎</span>
+                  <span>PDF oder Bild anhängen</span>
                   <input
                     type="file"
                     accept="application/pdf,image/jpeg,image/png,image/tiff"
+                    className="hidden"
                     onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                    className="w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-600 file:bg-white dark:file:bg-slate-700 file:text-sm hover:file:bg-slate-50 dark:hover:file:bg-slate-600"
                   />
-                  {belegDatei && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{belegDatei.name} wird beim Speichern hochgeladen</p>
-                  )}
-                </>
+                </label>
               )}
             </div>
 
@@ -1028,14 +1039,29 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                 Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, für alle Positionen gemeinsam)</span>
               </label>
-              <input
-                type="file"
-                accept="application/pdf,image/jpeg,image/png,image/tiff"
-                onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                className="w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-600 file:bg-white dark:file:bg-slate-700 file:text-sm hover:file:bg-slate-50 dark:hover:file:bg-slate-600"
-              />
-              {belegDatei && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{belegDatei.name} wird beim Speichern hochgeladen</p>
+              {belegDatei ? (
+                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
+                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
+                  <button
+                    type="button"
+                    onClick={() => setBelegDatei(null)}
+                    title="Auswahl verwerfen"
+                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+                  <span>📎</span>
+                  <span>PDF oder Bild anhängen</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/tiff"
+                    className="hidden"
+                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
+                  />
+                </label>
               )}
             </div>
 
