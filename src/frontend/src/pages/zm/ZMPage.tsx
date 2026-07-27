@@ -145,7 +145,10 @@ export function ZMPage() {
                       <td className="px-4 py-3 font-mono text-slate-800 dark:text-slate-100">{p.ust_idnr || '—'}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.land || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold text-white ${p.kennzeichen === 'L' ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                        <span
+                          title={p.kennzeichen === 'L' ? 'L = Lieferung (Ware)' : 'D = Dienstleistung'}
+                          className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold text-white cursor-help ${p.kennzeichen === 'L' ? 'bg-blue-600' : 'bg-purple-600'}`}
+                        >
                           {p.kennzeichen}
                         </span>
                       </td>
