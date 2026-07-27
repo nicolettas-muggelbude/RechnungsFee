@@ -250,6 +250,7 @@ def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
         raise HTTPException(422, "Nur Direkt-Vorlagen können direkt gebucht werden")
 
     heute = date.today()
+    faellig_am = v.naechstes_datum  # tatsaechliches Datum der Buchung - kann in der Vergangenheit liegen
     kat = db.query(Kategorie).filter(Kategorie.id == v.kategorie_id).first() if v.kategorie_id else None
     art = v.art if v.art else "Ausgabe"
 
@@ -269,9 +270,9 @@ def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     konto_skr04 = kat.konto_skr04 if kat else None
     konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, v.ust_satz)
 
-    belegnr = _naechste_belegnr(db, heute)
+    belegnr = _naechste_belegnr(db, faellig_am)
     eintrag = Journaleintrag(
-        datum=heute,
+        datum=faellig_am,
         belegnr=belegnr,
         beschreibung=v.bezeichnung + (f" ({v.notizen})" if v.notizen else ""),
         kategorie_id=v.kategorie_id,
