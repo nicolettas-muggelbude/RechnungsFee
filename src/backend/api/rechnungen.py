@@ -2041,6 +2041,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung_id,
             gruppe_id=_gruppe_id_kette,
+            ust_sonderfall="13b_abs1" if rechnung.ist_reverse_charge else None,
             immutable=True,
         )
         e.signatur = signatur_journaleintrag(e)

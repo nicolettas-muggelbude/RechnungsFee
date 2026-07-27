@@ -208,8 +208,8 @@ def zm_berechnen(
         land = ""
         if e.rechnung_id:
             rechnung = db.query(Rechnung).filter(Rechnung.id == e.rechnung_id).first()
-            if rechnung and rechnung.kunden_id:
-                kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunden_id).first()
+            if rechnung and rechnung.kunde_id:
+                kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first()
                 if kunde:
                     ust_idnr = kunde.ust_idnr or ""
                     land = kunde.land or ""

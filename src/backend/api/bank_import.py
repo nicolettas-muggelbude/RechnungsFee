@@ -501,6 +501,7 @@ def _buche_pfad_a(
             rechnung_id=rechnung.id,
             gruppe_id=_gruppe_id_kette,
             konto_id=tx.konto_id,
+            ust_sonderfall="13b_abs1" if rechnung.ist_reverse_charge else None,
             immutable=True,
         )
         e.signatur = signatur_journaleintrag(e)
