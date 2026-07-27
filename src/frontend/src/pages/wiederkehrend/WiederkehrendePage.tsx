@@ -152,7 +152,8 @@ function PositionenTabelle({
                   placeholder="Stk." className={cellInput} />
               </td>
               <td className="px-2 py-1.5">
-                <input value={pos.einzelpreis} onChange={e => { update(i, 'einzelpreis', e.target.value); update(i, 'artikel_id', null) }}
+                <input value={pos.einzelpreis} onChange={e => onChange(positionen.map((p, idx) =>
+                    idx === i ? { ...p, einzelpreis: e.target.value, artikel_id: null } : p))}
                   type="text" placeholder="0,00" className={`${cellInput} text-right`} />
               </td>
               <td className="px-2 py-1.5">
