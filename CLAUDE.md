@@ -257,6 +257,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 122 | journal.gruppe_id (FK → journal.id) – Buchungsgruppen: verknüpft Original+Storno+Neubuchung robust über ID statt Text-Parsing der Beschreibung; Backfill nur für bestehende Original+Storno-Paare (Neubuchungen historisch nicht zuverlässig verknüpfbar) |
 | 123 | rechnungen.ersatzrechnung_id + ersatz_fuer_rechnung_id (je FK → rechnungen.id) – Ersatzrechnung nach Storno direkt erstellbar, beidseitige Verknüpfung Original ↔ Ersatz (Issue #304) |
 | 124 | Datenfix: Reverse-Charge-Kategorien „Wareneinkauf EU"/„EU-Dienstleistungen (§13b Abs. 1)"/„Bauleistungen / §13b Abs. 2" nutzten normale Wareneingangs-/Vorsteuerkonten (SKR03 3400/3300/3610) statt DATEV-Automatikkonten → 3425/3123/3120 (SKR04 5425/5923/5920), gegengeprüft am DATEV-Kontenrahmen; respektiert user_modified_skr03/04 (Issue #308) |
+| 125 | Datenfix: „Umsatzsteuer (vereinnahmt)"/„USt auf Eigenverbrauch"/„Umsatzsteuer-Zahlung FA" trugen im konto_skr04-Feld dieselbe Nummer wie konto_skr03 (1776/1780 liegen in SKR04 im Anlagevermögens-Bereich) → korrigiert auf 3806/3820, gegengeprüft am DATEV-Kontenrahmen SKR04; konto_skr03 unverändert; respektiert user_modified_skr04 (Issue #313) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
