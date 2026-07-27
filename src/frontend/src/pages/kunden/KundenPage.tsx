@@ -3,6 +3,7 @@ import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
+import { LAENDER } from '../../utils/laender'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -1070,7 +1071,9 @@ export function KundenPage() {
                     <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                     <input type="text" {...register('plz')} placeholder="PLZ" className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.plz ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
                     <input type="text" {...register('ort')} placeholder="Ort" className={`col-span-2 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 ${errors.ort ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'}`} />
-                    <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                    <select {...register('land')} className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100">
+                      {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+                    </select>
                   </div>
                   {(errors.strasse || errors.plz || errors.ort) && (
                     <p className="text-red-500 text-xs mt-0.5">Straße, PLZ und Ort sind für ZUGFeRD Pflichtfelder</p>

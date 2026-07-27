@@ -8,6 +8,7 @@ import {
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { DateInput } from '../../components/DateInput'
 import { KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
+import { LAENDER } from '../../utils/laender'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 // ---------------------------------------------------------------------------
@@ -315,6 +316,15 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <Field label="Ort *">{inp('ort', 'Berlin')}</Field>
             </div>
           </div>
+          <Field label="Land">
+            <select
+              value={(form.land as string) ?? 'DE'}
+              onChange={ev => set('land', ev.target.value)}
+              className={selectCls}
+            >
+              {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+            </select>
+          </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="E-Mail">
               <input

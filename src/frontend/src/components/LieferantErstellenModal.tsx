@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createLieferant, type Lieferant } from '../api/client'
+import { LAENDER } from '../utils/laender'
 
 const schema = z.object({
   firmenname: z.string().min(1, 'Firmenname erforderlich'),
@@ -88,7 +89,9 @@ export function LieferantErstellenModal({ onSave, onClose }: Props) {
                 <input type="text" {...register('hausnummer')} placeholder="Nr." className={inp} />
                 <input type="text" {...register('plz')} placeholder="PLZ" className={inp} />
                 <input type="text" {...register('ort')} placeholder="Ort" className={`col-span-2 ${inp}`} />
-                <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className={`col-span-3 ${inp}`} />
+                <select {...register('land')} className={`col-span-3 ${inp}`}>
+                  {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+                </select>
               </div>
             </div>
 

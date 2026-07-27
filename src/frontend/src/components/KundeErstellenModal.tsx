@@ -4,6 +4,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createKunde, type Kunde } from '../api/client'
+import { LAENDER } from '../utils/laender'
 
 const schema = z.object({
   firmenname: z.string().optional(),
@@ -117,7 +118,9 @@ export function KundeErstellenModal({ onSave, onClose }: Props) {
                 <input type="text" {...register('hausnummer')} placeholder="Nr." className={inp} />
                 <input type="text" {...register('plz')} placeholder="PLZ" className={errors.plz ? inpErr : inp} />
                 <input type="text" {...register('ort')} placeholder="Ort" className={`col-span-2 ${errors.ort ? inpErr : inp}`} />
-                <input type="text" {...register('land')} placeholder="Land (z.B. DE)" className={`col-span-3 ${inp}`} />
+                <select {...register('land')} className={`col-span-3 ${inp}`}>
+                  {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+                </select>
               </div>
               {(errors.strasse || errors.plz || errors.ort) && (
                 <p className="text-red-500 text-xs mt-0.5">Straße, PLZ und Ort sind für ZUGFeRD Pflichtfelder</p>
