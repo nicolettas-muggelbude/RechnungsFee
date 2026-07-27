@@ -504,6 +504,28 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   // Render: geteilter Inhalt je nach Modus
   // ---------------------------------------------------------------------------
 
+  // Beim Bearbeiten muessen kategorien/ustSaetze VOR dem ersten Render vorliegen, sonst
+  // fehlen den Selects fuer kategorie_id/ust_satz die passenden <option>-Elemente im DOM -
+  // React Hook Form schreibt defaultValues nur beim Mount, der Browser verwirft dann einen
+  // Wert ohne passende Option und RHF setzt ihn spaeter nicht nach (Issue #309, Nachtrag
+  // von flole: ust_sonderfall hat als einziges Feld statische Optionen und wurde daher
+  // schon durch den vorherigen Fix gerettet - kategorie_id/ust_satz nicht).
+  if (bearbeiten && (!kategorien || aktiveSaetze.length === 0)) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6">
+          <div className="flex items-center justify-center gap-3 py-8 text-slate-500 dark:text-slate-400 text-sm">
+            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+            Buchung wird geladen…
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
