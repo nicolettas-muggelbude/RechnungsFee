@@ -28,6 +28,7 @@ import { MailDialog } from '../../components/MailDialog'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
+import { istEuLand } from '../../utils/laender'
 import { rechnungenFilter, lieferscheinFilter } from '../../store/filterStore'
 
 // ---------------------------------------------------------------------------
@@ -2352,6 +2353,24 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     }
   }, [partnerId, kunden, unternehmen, initial, typ])
 
+  // Reverse Charge (§13b UStG): innergemeinschaftliche Dienstleistung an EU-Unternehmer.
+  // Auto-Vorschlag nur bei neuen Ausgangsrechnungen und solange die Nutzerin das Häkchen
+  // nicht selbst angefasst hat - danach hat die manuelle Wahl Vorrang (kein stilles Zurücksetzen
+  // beim Wechseln von Kunde/Kategorie, analog zu Issue #309).
+  const [istReverseCharge, setIstReverseCharge] = useState(initial?.ist_reverse_charge ?? false)
+  const [reverseChargeManuell, setReverseChargeManuell] = useState(false)
+  useEffect(() => {
+    if (initial || typ !== 'ausgang' || reverseChargeManuell) return
+    const kunde = kunden?.find((k: any) => String(k.id) === partnerId)
+    const vorschlag = !!(
+      unternehmen?.ust_idnr?.trim() &&
+      !istKleinunternehmer &&
+      kunde?.ust_idnr?.trim() &&
+      kunde.land && kunde.land !== 'DE' && istEuLand(kunde.land)
+    )
+    setIstReverseCharge(vorschlag)
+  }, [partnerId, kunden, unternehmen, istKleinunternehmer, initial, typ, reverseChargeManuell])
+
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
     if (!leistungManuell) setLeistungVon(datum)
@@ -2492,7 +2511,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     // §25a: kein USt-Ausweis, VK brutto = VK netto
     const istDiff = a.differenzbesteuerung
-    const ust_satz = (istKleinunternehmer || istDiff) ? '0' : String(parseInt(a.steuersatz))
+    const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge) ? '0' : String(parseInt(a.steuersatz))
     const preis = istDiff ? a.vk_brutto : (eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto)
     setPositionen((prev) => prev.map((p, idx) =>
       idx === i
@@ -2537,6 +2556,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
+      ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen –
       // aber nur wenn die Positionen noch mit dem OCR/XML-Wert übereinstimmen.
       // Hat der Nutzer Positionen manuell korrigiert (z.B. via Zusammenfassen + USt-Änderung),
@@ -2560,7 +2580,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         const ust = parseFloat(p.ust_satz) || 0
         const istDiff = p.differenzbesteuerung ?? false
         // §25a: kein USt-Ausweis; Eingabewert = Rechnungspreis → direkt als netto senden
-        const ust_satz = (istKleinunternehmer || istDiff) ? '0' : (p.ust_satz || '0')
+        const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge) ? '0' : (p.ust_satz || '0')
         const netto = (!istDiff && eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
@@ -2851,6 +2871,21 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           />
         )}
       </div>
+
+      {typ === 'ausgang' && !istKleinunternehmer && (
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={istReverseCharge}
+            onChange={(e) => { setIstReverseCharge(e.target.checked); setReverseChargeManuell(true) }}
+            className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
+          />
+          <span className="text-slate-600 dark:text-slate-300">
+            Innergemeinschaftliche Dienstleistung – Reverse Charge (§13b UStG)
+            <InfoTooltip text="Für Dienstleistungen an Unternehmer mit gültiger USt-IdNr. in einem anderen EU-Land. Die Rechnung wird ohne USt gestellt (Rechnungsbetrag = Nettobetrag), mit Hinweis auf die Steuerschuldnerschaft des Leistungsempfängers. Wird automatisch vorgeschlagen, wenn sowohl du als auch der Kunde eine USt-IdNr. hinterlegt haben und der Kunde in einem EU-Land außer Deutschland sitzt." side="bottom" />
+          </span>
+        </label>
+      )}
 
       {/* Einmalkunde-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
       {typ === 'ausgang' && !partnerId && partnerFreitext.trim() && (
@@ -3301,7 +3336,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onSaveArtikel={(neu) => {
             setShowNeuArtikel(false)
             const istDiff = neu.differenzbesteuerung
-            const ust_satz = (istKleinunternehmer || istDiff) ? '0' : String(parseInt(neu.steuersatz))
+            const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge) ? '0' : String(parseInt(neu.steuersatz))
             const preis = istDiff ? neu.vk_brutto : (eingabeModus === 'netto' ? neu.vk_netto : neu.vk_brutto)
             setPositionen(prev => {
               const letzteIdx = prev.length - 1

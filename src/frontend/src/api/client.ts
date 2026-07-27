@@ -1325,6 +1325,7 @@ export type Rechnung = {
   rabatt_prozent: string
   rabatt_betrag: string | null
   einleitungstext: string | null
+  ist_reverse_charge: boolean
 }
 
 export type RechnungCreate = {
@@ -1353,6 +1354,7 @@ export type RechnungCreate = {
   gueltig_bis?: string
   dokumentenpaket_id?: number
   lieferadresse_id?: number | null
+  ist_reverse_charge?: boolean
   positionen: RechnungspositionCreate[]
   rabatt_prozent?: number
   rabatt_betrag?: number
