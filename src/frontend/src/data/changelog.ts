@@ -32,6 +32,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Zusammenfassende Meldung – das Kennzeichen „D"/„L" in der Tabelle zeigt jetzt beim Hovern eine Erklärung an (Dienstleistung/Lieferung), statt nur den nackten Buchstaben. „D" direkt neben der Länderspalte konnte leicht mit „Deutschland" verwechselt werden.' },
       { typ: 'fix', text: 'Journal – beim Bearbeiten einer Buchung gingen Kategorie und USt-Satz verloren, wenn die entsprechenden Listen im Hintergrund noch nicht vollständig geladen waren (unabhängig vom kürzlich behobenen Sonderfall-Problem, Issue #309). Das Formular wartet jetzt kurz, bis alle nötigen Daten vorliegen, bevor es die gespeicherten Werte anzeigt.' },
       { typ: 'verbesserung', text: 'Rechnungen – die Fehlermeldung beim Finalisieren mit Zukunftsdatum (§14 Abs. 4 UStG, Issue #253) nennt jetzt auch die Handlungsalternative: als Entwurf speichern und am tatsächlichen Rechnungstag finalisieren.' },
+      { typ: 'fix', text: 'Wiederkehrende Rechnungen – der Betrag einer Position ließ sich nicht eingeben, das Feld blieb leer und die Vorlage speicherte 0,00 €. Danke an flole (Issue #312).' },
     ],
   },
   {
