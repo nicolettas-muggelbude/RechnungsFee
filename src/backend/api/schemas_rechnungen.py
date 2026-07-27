@@ -121,6 +121,7 @@ class RechnungCreate(BaseModel):
     lieferadresse_id: Optional[int] = None
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
+    ist_reverse_charge: bool = False
     positionen: List[RechnungspositionCreate]
 
     @field_validator("dokument_typ")
@@ -194,6 +195,7 @@ class RechnungUpdate(BaseModel):
     skonto_tage: Optional[int] = None
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
+    ist_reverse_charge: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
@@ -261,6 +263,7 @@ class RechnungResponse(BaseModel):
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
     ist_entwurf: bool
+    ist_reverse_charge: bool = False
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []

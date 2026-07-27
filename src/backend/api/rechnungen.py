@@ -956,6 +956,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
         dokumentenpaket_id=data.dokumentenpaket_id if data.dokument_typ == "Angebot" else None,
         angebot_status="offen" if data.dokument_typ == "Angebot" else None,
+        ist_reverse_charge=data.ist_reverse_charge,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -972,9 +973,10 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     for i, pos_data in enumerate(data.positionen, start=1):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
         # §25a: kein USt-Ausweis (ust_satz = 0 auf der Rechnung)
-        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff) else pos_data.ust_satz
+        # §13b Reverse Charge: Rechnungsbetrag ist Nettobetrag, kein USt-Ausweis (Issue EU-Dienstleistungen)
+        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or data.ist_reverse_charge) else pos_data.ust_satz
         ust_betrag, brutto, netto = _berechne_position(pos_data)
-        if ist_kleinunternehmer:
+        if ist_kleinunternehmer or data.ist_reverse_charge:
             ust_betrag = Decimal("0.00")
             brutto = netto
 
@@ -1063,7 +1065,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr",
-                  "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id"):
+                  "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
+                  "ist_reverse_charge"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
@@ -1078,9 +1081,9 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         ust_sum = Decimal("0.00")
         for i, pos_data in enumerate(data.positionen, start=1):
             ist_diff = getattr(pos_data, "differenzbesteuerung", False)
-            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff) else pos_data.ust_satz
+            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or rechnung.ist_reverse_charge) else pos_data.ust_satz
             ust_betrag, brutto, netto = _berechne_position(pos_data)
-            if ist_kleinunternehmer:
+            if ist_kleinunternehmer or rechnung.ist_reverse_charge:
                 ust_betrag = Decimal("0.00")
                 brutto = netto
             pos = Rechnungsposition(
