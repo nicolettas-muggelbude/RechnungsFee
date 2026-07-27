@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.26',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Land – bei Kunden, Lieferanten und im eigenen Unternehmensprofil ist das Land jetzt ein Dropdown mit allen EU-Ländern und der Schweiz statt eines Freitextfelds. Auf der Rechnung erscheint das Land wie bisher nur, wenn es nicht Deutschland ist.' },
+      { typ: 'neu', text: 'Rechnungen – innergemeinschaftliche Dienstleistungsrechnungen (§13b UStG, Reverse Charge) werden jetzt automatisch erkannt und korrekt gestellt: 0 % USt, Hinweis „Steuerschuldnerschaft des Leistungsempfängers" auf der Rechnung, und beim Zahlungseingang landet der Umsatz automatisch korrekt in der Zusammenfassenden Meldung. Der Vorschlag greift, wenn sowohl du als auch der Kunde eine USt-IdNr. hinterlegt haben und der Kunde in einem EU-Land außer Deutschland sitzt – lässt sich aber jederzeit manuell an- oder abwählen.' },
+      { typ: 'fix', text: 'Zusammenfassende Meldung – die Ermittlung der Kunden-USt-IdNr. für innergemeinschaftliche Dienstleistungen griff auf ein nicht existierendes Datenbankfeld zu und wäre bei der Berechnung abgestürzt, sobald ein entsprechender Umsatz vorlag.' },
+    ],
+  },
+  {
     version: 'v0.4.25',
     datum: 'Juli 2026',
     eintraege: [
