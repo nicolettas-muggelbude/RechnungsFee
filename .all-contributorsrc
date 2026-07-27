@@ -29,6 +29,17 @@
         "userTesting",
         "bug"
       ]
+    },
+    {
+      "login": "flole",
+      "name": "flole",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6204853?v=4",
+      "profile": "https://github.com/flole",
+      "contributions": [
+        "bug",
+        "userTesting",
+        "ideas"
+      ]
     }
   ],
   "commitConvention": "angular"
