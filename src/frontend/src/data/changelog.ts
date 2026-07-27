@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'neu', text: 'Rechnungen – innergemeinschaftliche Dienstleistungsrechnungen (§13b UStG, Reverse Charge) werden jetzt automatisch erkannt und korrekt gestellt: 0 % USt, Hinweis „Steuerschuldnerschaft des Leistungsempfängers" auf der Rechnung, und beim Zahlungseingang landet der Umsatz automatisch korrekt in der Zusammenfassenden Meldung. Der Vorschlag greift, wenn sowohl du als auch der Kunde eine USt-IdNr. hinterlegt haben und der Kunde in einem EU-Land außer Deutschland sitzt – lässt sich aber jederzeit manuell an- oder abwählen.' },
       { typ: 'fix', text: 'Zusammenfassende Meldung – die Ermittlung der Kunden-USt-IdNr. für innergemeinschaftliche Dienstleistungen griff auf ein nicht existierendes Datenbankfeld zu und wäre bei der Berechnung abgestürzt, sobald ein entsprechender Umsatz vorlag.' },
       { typ: 'verbesserung', text: 'Zusammenfassende Meldung – das Kennzeichen „D"/„L" in der Tabelle zeigt jetzt beim Hovern eine Erklärung an (Dienstleistung/Lieferung), statt nur den nackten Buchstaben. „D" direkt neben der Länderspalte konnte leicht mit „Deutschland" verwechselt werden.' },
+      { typ: 'fix', text: 'Journal – beim Bearbeiten einer Buchung gingen Kategorie und USt-Satz verloren, wenn die entsprechenden Listen im Hintergrund noch nicht vollständig geladen waren (unabhängig vom kürzlich behobenen Sonderfall-Problem, Issue #309). Das Formular wartet jetzt kurz, bis alle nötigen Daten vorliegen, bevor es die gespeicherten Werte anzeigt.' },
     ],
   },
   {
