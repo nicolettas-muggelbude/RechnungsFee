@@ -33,6 +33,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Journal – beim Bearbeiten einer Buchung gingen Kategorie und USt-Satz verloren, wenn die entsprechenden Listen im Hintergrund noch nicht vollständig geladen waren (unabhängig vom kürzlich behobenen Sonderfall-Problem, Issue #309). Das Formular wartet jetzt kurz, bis alle nötigen Daten vorliegen, bevor es die gespeicherten Werte anzeigt.' },
       { typ: 'verbesserung', text: 'Rechnungen – die Fehlermeldung beim Finalisieren mit Zukunftsdatum (§14 Abs. 4 UStG, Issue #253) nennt jetzt auch die Handlungsalternative: als Entwurf speichern und am tatsächlichen Rechnungstag finalisieren.' },
       { typ: 'fix', text: 'Wiederkehrende Rechnungen – der Betrag einer Position ließ sich nicht eingeben, das Feld blieb leer und die Vorlage speicherte 0,00 €. Danke an flole (Issue #312).' },
+      { typ: 'fix', text: 'DATEV-Export (SKR04) – die Kategorien „Umsatzsteuer (vereinnahmt)", „USt auf Eigenverbrauch" und „Umsatzsteuer-Zahlung FA" bebuchten ein falsches Konto (1776/1780 statt 3806/3820) – betraf nur SKR04-Nutzer. Danke an flole (Issue #313).' },
     ],
   },
   {
