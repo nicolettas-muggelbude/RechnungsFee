@@ -867,7 +867,8 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             detail=(
                 f"Finalisierung verweigert: Das Rechnungsdatum ({data.datum.strftime('%d.%m.%Y')}) "
                 f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
-                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren oder die Rechnung "
+                f"als Entwurf speichern und am tatsächlichen Rechnungstag finalisieren."
             ),
         )
 
@@ -1148,7 +1149,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 detail=(
                     f"Finalisierung verweigert: Das Rechnungsdatum ({rechnung.datum.strftime('%d.%m.%Y')}) "
                     f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
-                    f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+                    f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren oder die Rechnung "
+                f"als Entwurf speichern und am tatsächlichen Rechnungstag finalisieren."
                 ),
             )
         rechnung.ist_entwurf = data.ist_entwurf
@@ -1204,7 +1206,8 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             detail=(
                 f"Finalisierung verweigert: Das Rechnungsdatum ({rechnung.datum.strftime('%d.%m.%Y')}) "
                 f"liegt in der Zukunft. Nach § 14 Abs. 4 UStG muss das Ausstellungsdatum dem tatsächlichen "
-                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren."
+                f"Tag der Rechnungsstellung entsprechen. Bitte das Datum korrigieren oder die Rechnung "
+                f"als Entwurf speichern und am tatsächlichen Rechnungstag finalisieren."
             ),
         )
 
