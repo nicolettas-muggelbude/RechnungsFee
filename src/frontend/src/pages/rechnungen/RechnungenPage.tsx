@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -1579,8 +1579,8 @@ function RechnungDetail({
                         : (bruttoEP - effBrutto) * menge
                       : 0
                     return (
-                    <>
-                    <tr key={pos.id} className="border-t border-slate-100 dark:border-slate-700">
+                    <Fragment key={pos.id}>
+                    <tr className="border-t border-slate-100 dark:border-slate-700">
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {pos.beschreibung}
                         {pos.artikelcode && (
@@ -1619,7 +1619,7 @@ function RechnungDetail({
                         </td>
                       </tr>
                     )}
-                    </>
+                    </Fragment>
                     )
                   })}
                 </tbody>
@@ -2237,6 +2237,7 @@ function RechnungForm({
         artikel_id: p.artikel_id ?? undefined,
         kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
         differenzbesteuerung: p.differenzbesteuerung ?? false,
+        art_typ: (p.artikel_typ as ArtikelTyp | null) ?? undefined,
       }))
     }
     // Plain-PDF-Prefill: Brutto/Netto-Betrag und USt-Satz aus Texterkennung vorfüllen
