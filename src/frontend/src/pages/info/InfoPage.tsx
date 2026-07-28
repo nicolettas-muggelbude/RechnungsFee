@@ -127,54 +127,54 @@ export function InfoPage() {
             href="https://muggelbude.it/projects/rechnungsfee.html#handbuch"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">📖</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">📖</span>
             <span>Handbuch</span>
           </a>
           <a
             href="https://community.rechnungsfee.app"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">💬</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">💬</span>
             <span>Community-Forum</span>
           </a>
           <a
             href="https://github.com/nicolettas-muggelbude/RechnungsFee/issues/new"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">🐛</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">🐛</span>
             <span>Fehler melden oder Feedback geben (GitHub Issues)</span>
           </a>
           <a
             href="https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/docs/ROADMAP.md"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">🗺️</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">🗺️</span>
             <span>Roadmap – geplante Funktionen</span>
           </a>
           <a
             href="https://github.com/nicolettas-muggelbude/RechnungsFee/blob/main/LICENSE"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">📄</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">📄</span>
             <span>Lizenz: GNU AGPL-3.0</span>
           </a>
           <a
             href="https://github.com/nicolettas-muggelbude/RechnungsFee"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+            className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
           >
-            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">⭐</span>
+            <span className="w-7 h-7 bg-slate-100 dark:bg-slate-700 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950 rounded-lg flex items-center justify-center shrink-0 transition-colors">⭐</span>
             <span>Quellcode auf GitHub</span>
           </a>
         </div>
