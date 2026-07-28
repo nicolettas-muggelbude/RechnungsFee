@@ -2367,16 +2367,21 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const [istReverseCharge, setIstReverseCharge] = useState(initial?.ist_reverse_charge ?? false)
   const [istEuLieferung, setIstEuLieferung] = useState(initial?.ist_eu_lieferung ?? false)
   const [euFlagManuell, setEuFlagManuell] = useState(false)
+  // Checkboxen nur einblenden wenn Kunde + Unternehmen überhaupt für ig. Lieferung/Reverse
+  // Charge in Frage kommen (gültige USt-IdNr. beidseitig, Kunde in anderem EU-Land) - sonst
+  // sehen Nutzer:innen ohne EU-Geschäft zwei Häkchen die sie nie brauchen (Issue #316-Feedback).
+  // Ausnahme: ist eines der Flags bereits aktiv (z.B. Kunde nachträglich geändert), bleibt es
+  // sichtbar, damit man es sieht/abwählen kann statt dass es "unsichtbar" aktiv bleibt.
+  const kunde = kunden?.find((k: any) => String(k.id) === partnerId)
+  const kundeEuFaehig = !!(
+    unternehmen?.ust_idnr?.trim() &&
+    !istKleinunternehmer &&
+    kunde?.ust_idnr?.trim() &&
+    kunde.land && kunde.land !== 'DE' && istEuLand(kunde.land)
+  )
   useEffect(() => {
     if (initial || typ !== 'ausgang' || euFlagManuell) return
-    const kunde = kunden?.find((k: any) => String(k.id) === partnerId)
-    const kundeQualifiziert = !!(
-      unternehmen?.ust_idnr?.trim() &&
-      !istKleinunternehmer &&
-      kunde?.ust_idnr?.trim() &&
-      kunde.land && kunde.land !== 'DE' && istEuLand(kunde.land)
-    )
-    if (!kundeQualifiziert) {
+    if (!kundeEuFaehig) {
       setIstReverseCharge(false)
       setIstEuLieferung(false)
       return
@@ -2386,7 +2391,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     const hatDienstleistung = artikelTypen.some((t) => t === 'dienstleistung' || t === 'fremdleistung')
     setIstEuLieferung(hatWare && !hatDienstleistung)
     setIstReverseCharge(hatDienstleistung && !hatWare)
-  }, [partnerId, kunden, unternehmen, istKleinunternehmer, initial, typ, euFlagManuell, positionen])
+  }, [kundeEuFaehig, initial, typ, euFlagManuell, positionen])
 
   // Warnung bei Reverse Charge/ig. Lieferung, wenn die Artikel-Typen der Positionen nicht dazu
   // passen - nur relevant wenn eines der beiden EU-Flags aktiv ist (bei normalen Rechnungen ist
@@ -2917,7 +2922,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         )}
       </div>
 
-      {typ === 'ausgang' && !istKleinunternehmer && (
+      {typ === 'ausgang' && !istKleinunternehmer && (kundeEuFaehig || istReverseCharge || istEuLieferung) && (
         <div className="space-y-2">
           <label className="flex items-start gap-2 text-sm cursor-pointer">
             <input
