@@ -2402,6 +2402,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     (istEuLieferung && hatDienstleistungTyp && !hatWareTyp)
   )
 
+  // Positionen tragen ihren USt-Satz als eigenen State-Wert (nicht live aus istReverseCharge/
+  // istEuLieferung berechnet) - wird eine Position VOR der Auto-Erkennung ausgefüllt, steht dort
+  // noch der normale Satz. Sobald eines der beiden Flags (auch automatisch) aktiv wird, auf 0%
+  // nachziehen, damit die Live-Anzeige nicht von dem abweicht, was beim Speichern ohnehin
+  // passiert (das Backend erzwingt 0% serverseitig unabhaengig davon).
+  useEffect(() => {
+    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung)) return
+    setPositionen((prev) => {
+      const geaendert = prev.some((p) => p.ust_satz !== '0')
+      if (!geaendert) return prev
+      return prev.map((p) => (p.ust_satz === '0' ? p : { ...p, ust_satz: '0' }))
+    })
+  }, [istReverseCharge, istEuLieferung, typ])
+
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
     if (!leistungManuell) setLeistungVon(datum)
