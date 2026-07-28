@@ -141,9 +141,21 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     unabhängig vom USt-Satz. Betrifft nur NEUE Rechnungen ab diesem Release - bereits
     gebuchte §25a-Journaleinträge laufen weiterhin über das alte Erlöskonto (Datenfix
     für Bestandsdaten ist ein separater, späterer Schritt).
+
+    Ausnahme innergemeinschaftliche Lieferung (Issue #316): ist rechnung.ist_eu_lieferung
+    gesetzt, wird die Kategorie "Innergemeinschaftliche Lieferungen" (Konto 8125/3125)
+    verwendet statt der generischen 0%-USt-Satz-Kategorie "Betriebseinnahmen (0%)" - sonst
+    würde die Lieferung zwar korrekt mit 0% USt gebucht, aber mit falschem Konto und in der
+    falschen EÜR-Zeile (12 statt 16) auftauchen.
     """
     if not rechnung.positionen:
         return None, None
+    if getattr(rechnung, "ist_eu_lieferung", False):
+        kat_eu = db.query(Kategorie).filter(
+            Kategorie.name == "Innergemeinschaftliche Lieferungen", Kategorie.aktiv == True
+        ).first()
+        if kat_eu:
+            return kat_eu.id, kat_eu
     if any(pos.differenzbesteuerung for pos in rechnung.positionen):
         kat_25a = db.query(Kategorie).filter(
             Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
