@@ -2126,6 +2126,12 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
         erster_eintrag_gs = None
         rest_neg = betrag_neg
+        # Fallback-Kategorie fuer Gruppen ohne eigenes kategorie_id: pos.kategorie_id und
+        # rechnung.kategorie_id werden fuer Ausgangsrechnungen aktuell nie befuellt (keine UI
+        # dafuer) - ohne diesen Fallback wuerden solche Gutschriften komplett ohne Kategorie
+        # gebucht, insbesondere bei ist_eu_lieferung (Issue #316).
+        fallback_kat_id, _ = _erloes_kategorie(db, rechnung)
+
         gruppen_liste = list(pos_gruppen.items())
         for i, ((kat_id, satz_int, g_ist_diff), g_brutto_pos) in enumerate(gruppen_liste):
             if i < len(gruppen_liste) - 1:
@@ -2136,7 +2142,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
             satz_d = Decimal(str(satz_int)) if not steuerbefreiung_grund else Decimal("0")
             g_ust03, g_ust04 = (_ust_konto(art, satz_d) if satz_int > 0 and not steuerbefreiung_grund else (None, None))
-            eff_kat_id = kat_25a_id_gs if g_ist_diff else (kat_id or rechnung.kategorie_id)
+            eff_kat_id = kat_25a_id_gs if g_ist_diff else (kat_id or rechnung.kategorie_id or fallback_kat_id)
             kat_obj_g = db.query(Kategorie).filter(Kategorie.id == eff_kat_id).first() if eff_kat_id else None
             # §25a-Marge dieser Gruppe anteilig auf den tatsaechlich verbuchten Teilbetrag
             # skalieren (bei Teil-Gutschrift ist |anteil| < g_brutto_pos). Skalierungsfaktor
@@ -2668,6 +2674,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         skonto_prozent=None,
         skonto_tage=None,
         ist_entwurf=True,
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_eu_lieferung=original.ist_eu_lieferung,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
