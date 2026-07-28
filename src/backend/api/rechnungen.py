@@ -971,6 +971,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         angebot_status="offen" if data.dokument_typ == "Angebot" else None,
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
+        gelangensbestaetigung_vorhanden=data.gelangensbestaetigung_vorhanden,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -1081,7 +1082,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr",
                   "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
-                  "ist_reverse_charge", "ist_eu_lieferung"):
+                  "ist_reverse_charge", "ist_eu_lieferung", "gelangensbestaetigung_vorhanden"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)

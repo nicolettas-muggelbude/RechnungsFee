@@ -123,6 +123,7 @@ class RechnungCreate(BaseModel):
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: bool = False
     ist_eu_lieferung: bool = False
+    gelangensbestaetigung_vorhanden: bool = False
     positionen: List[RechnungspositionCreate]
 
     @model_validator(mode="after")
@@ -207,6 +208,7 @@ class RechnungUpdate(BaseModel):
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: Optional[bool] = None
     ist_eu_lieferung: Optional[bool] = None
+    gelangensbestaetigung_vorhanden: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
@@ -276,6 +278,7 @@ class RechnungResponse(BaseModel):
     ist_entwurf: bool
     ist_reverse_charge: bool = False
     ist_eu_lieferung: bool = False
+    gelangensbestaetigung_vorhanden: bool = False
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []
