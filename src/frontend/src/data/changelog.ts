@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.4.27',
     datum: 'Juli 2026',
     eintraege: [
+      { typ: 'neu', text: 'Rechnungen – innergemeinschaftliche Warenlieferungen (§4 Nr. 1b UStG) werden jetzt wie Reverse-Charge-Dienstleistungen automatisch erkannt und korrekt gestellt: 0 % USt, Steuerfrei-Hinweis auf der Rechnung, korrekte Kategorie beim Zahlungseingang (EÜR Zeile 16, Zusammenfassende Meldung Kennzeichen „L"). Die Checkboxen für Reverse Charge/ig. Lieferung erscheinen nur, wenn Kunde und eigenes Unternehmen dafür überhaupt in Frage kommen (beidseitig USt-IdNr., Kunde in EU-Land ≠ Deutschland) (Issue #316).' },
       { typ: 'fix', text: 'Info & Updates – die Links-Sektion (Handbuch, Community, Issues, Roadmap, Lizenz, GitHub) zeigte beim Hovern blau statt der App-Akzentfarbe. Danke an Adlerreal (Issue #317).' },
       { typ: 'verbesserung', text: 'Navigation – „Community" und „Handbuch" öffnen eine Webseite im Browser statt intern zu navigieren, das ist jetzt mit einem kleinen Symbol gekennzeichnet. Danke an Adlerreal (Issue #318).' },
     ],
