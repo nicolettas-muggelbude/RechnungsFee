@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'Juli 2026',
     eintraege: [
       { typ: 'fix', text: 'Info & Updates – die Links-Sektion (Handbuch, Community, Issues, Roadmap, Lizenz, GitHub) zeigte beim Hovern blau statt der App-Akzentfarbe. Danke an Adlerreal (Issue #317).' },
+      { typ: 'verbesserung', text: 'Navigation – „Community" und „Handbuch" öffnen eine Webseite im Browser statt intern zu navigieren, das ist jetzt mit einem kleinen Symbol gekennzeichnet. Danke an Adlerreal (Issue #318).' },
     ],
   },
   {
