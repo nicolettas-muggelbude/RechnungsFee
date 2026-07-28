@@ -476,6 +476,7 @@ function ZahlungsDialog({
       qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['auftraege'] })
       qc.invalidateQueries({ queryKey: ['vorlage-rechnungen'] })
+      qc.invalidateQueries({ queryKey: ['zm-pruefen'] })
       onSuccess(result)
     },
     onError: (e: Error) => setFehler(e.message),

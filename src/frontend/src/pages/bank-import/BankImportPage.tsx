@@ -886,6 +886,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     onSuccess: (tx, { rechnungId }) => {
       qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
       qc.invalidateQueries({ queryKey: ['ueberzahlungen'] })
+      qc.invalidateQueries({ queryKey: ['zm-pruefen'] })
       setAbgleichDialog(null)
       setBuchungTx(null)
 
