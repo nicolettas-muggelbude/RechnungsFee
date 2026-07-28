@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.27',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Info & Updates – die Links-Sektion (Handbuch, Community, Issues, Roadmap, Lizenz, GitHub) zeigte beim Hovern blau statt der App-Akzentfarbe. Danke an Adlerreal (Issue #317).' },
+    ],
+  },
+  {
     version: 'v0.4.26',
     datum: 'Juli 2026',
     eintraege: [
