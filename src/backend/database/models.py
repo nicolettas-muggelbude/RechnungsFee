@@ -592,7 +592,6 @@ class Rechnung(Base):
     land: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
     ist_eu_lieferung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ist_eu_erwerb: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gelangensbestaetigung_vorhanden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Steuerbefreiung
     steuerbefreiung_grund: Mapped[str | None] = mapped_column(String(100))
     # Reverse Charge

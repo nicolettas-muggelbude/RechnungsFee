@@ -2366,9 +2366,6 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // Zurücksetzen beim Wechseln von Kunde/Positionen, analog zu Issue #309).
   const [istReverseCharge, setIstReverseCharge] = useState(initial?.ist_reverse_charge ?? false)
   const [istEuLieferung, setIstEuLieferung] = useState(initial?.ist_eu_lieferung ?? false)
-  const [gelangensbestaetigungVorhanden, setGelangensbestaetigungVorhanden] = useState(
-    initial?.gelangensbestaetigung_vorhanden ?? false
-  )
   const [euFlagManuell, setEuFlagManuell] = useState(false)
   useEffect(() => {
     if (initial || typ !== 'ausgang' || euFlagManuell) return
@@ -2605,7 +2602,6 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
-      gelangensbestaetigung_vorhanden: typ === 'ausgang' ? gelangensbestaetigungVorhanden : undefined,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen –
       // aber nur wenn die Positionen noch mit dem OCR/XML-Wert übereinstimmen.
       // Hat der Nutzer Positionen manuell korrigiert (z.B. via Zusammenfassen + USt-Änderung),
@@ -2971,28 +2967,6 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 {' '}Bitte prüfen, ob das richtige Häkchen gesetzt ist.
               </span>
             </div>
-          )}
-          {istEuLieferung && (
-            <>
-              <label className="flex items-start gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={gelangensbestaetigungVorhanden}
-                  onChange={(e) => setGelangensbestaetigungVorhanden(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
-                />
-                <span className="text-slate-600 dark:text-slate-300">
-                  Gelangensbestätigung vorhanden
-                  <InfoTooltip text="Nachweis, dass die Ware tatsächlich in das andere EU-Land transportiert wurde (z.B. Bestätigung des Abnehmers, Spediteurbescheinigung, Tracking-Nachweis). Voraussetzung für die Steuerbefreiung nach §6a UStG – ohne diesen Nachweis kann das Finanzamt die Steuerbefreiung nachträglich versagen." side="bottom" />
-                </span>
-              </label>
-              {!gelangensbestaetigungVorhanden && (
-                <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-                  <span className="shrink-0">⚠</span>
-                  <span>Ohne Gelangensbestätigung kann das Finanzamt die Steuerbefreiung nachträglich versagen. Kein Blocker – aber bitte den Nachweis organisieren.</span>
-                </div>
-              )}
-            </>
           )}
         </div>
       )}
