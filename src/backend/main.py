@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 126
+SCHEMA_VERSION = 127
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2740,6 +2740,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 126"))
             conn.commit()
             print("[Migration] Schema auf Version 126 (Issue #316: euer_zeile fuer Innergemeinschaftliche Lieferungen ergaenzt)")
+
+        if version < 127:
+            # Issue #316: gelangensbestaetigung_vorhanden wurde waehrend der Entwicklung kurzzeitig
+            # als Spalte eingefuehrt (Checkbox-UI) und wieder verworfen, bevor ein Release damit
+            # erschien. Wer in der Zwischenzeit lokal getestet hat (Spalte kam per create_all() auf
+            # eine frisch angelegte rechnungen-Tabelle), sitzt auf einer NOT-NULL-Spalte ohne
+            # Default, die beim naechsten INSERT (Spalte fehlt im ORM-Insert) einen IntegrityError
+            # wirft - deshalb hier bereinigen statt nur im Modell zu entfernen.
+            rechnungen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "gelangensbestaetigung_vorhanden" in rechnungen_cols:
+                conn.execute(text("ALTER TABLE rechnungen DROP COLUMN gelangensbestaetigung_vorhanden"))
+                print("[Migration] rechnungen: stray 'gelangensbestaetigung_vorhanden'-Spalte entfernt")
+            conn.execute(text("PRAGMA user_version = 127"))
+            conn.commit()
+            print("[Migration] Schema auf Version 127 (Issue #316: stray gelangensbestaetigung_vorhanden-Spalte bereinigt)")
 
 
 def _migrate_kategorien() -> None:

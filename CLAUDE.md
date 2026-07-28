@@ -259,6 +259,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 124 | Datenfix: Reverse-Charge-Kategorien „Wareneinkauf EU"/„EU-Dienstleistungen (§13b Abs. 1)"/„Bauleistungen / §13b Abs. 2" nutzten normale Wareneingangs-/Vorsteuerkonten (SKR03 3400/3300/3610) statt DATEV-Automatikkonten → 3425/3123/3120 (SKR04 5425/5923/5920), gegengeprüft am DATEV-Kontenrahmen; respektiert user_modified_skr03/04 (Issue #308) |
 | 125 | Datenfix: „Umsatzsteuer (vereinnahmt)"/„USt auf Eigenverbrauch"/„Umsatzsteuer-Zahlung FA" trugen im konto_skr04-Feld dieselbe Nummer wie konto_skr03 (1776/1780 liegen in SKR04 im Anlagevermögens-Bereich) → korrigiert auf 3806/3820, gegengeprüft am DATEV-Kontenrahmen SKR04; konto_skr03 unverändert; respektiert user_modified_skr04 (Issue #313) |
 | 126 | Datenfix: Kategorie „Innergemeinschaftliche Lieferungen" hatte euer_zeile=NULL seit ihrer Einführung → Buchungen darauf fielen komplett aus der EÜR heraus statt in Zeile 16 (steuerfreie Betriebseinnahmen §4 UStG) zu erscheinen; Schritt 0 von Issue #316 |
+| 127 | Datenfix: stray `gelangensbestaetigung_vorhanden`-Spalte in `rechnungen` entfernt (Issue #316: Checkbox-Feature während der Entwicklung wieder verworfen, Spalte kam bei zwischenzeitlichen lokalen Tests per `create_all()` als NOT-NULL-Spalte ohne Default auf die Tabelle) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
