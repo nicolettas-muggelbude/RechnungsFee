@@ -2387,6 +2387,18 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     setIstReverseCharge(hatDienstleistung && !hatWare)
   }, [partnerId, kunden, unternehmen, istKleinunternehmer, initial, typ, euFlagManuell, positionen])
 
+  // Warnung bei Reverse Charge/ig. Lieferung, wenn die Artikel-Typen der Positionen nicht dazu
+  // passen - nur relevant wenn eines der beiden EU-Flags aktiv ist (bei normalen Rechnungen ist
+  // Ware+Dienstleistung mischen völlig normal, siehe Issue #316).
+  const artikelTypenAlle = positionen.map((p) => p.art_typ).filter((t): t is ArtikelTyp => !!t)
+  const hatWareTyp = artikelTypenAlle.includes('artikel')
+  const hatDienstleistungTyp = artikelTypenAlle.some((t) => t === 'dienstleistung' || t === 'fremdleistung')
+  const zeigeEuMischwarnung = (istReverseCharge || istEuLieferung) && hatWareTyp && hatDienstleistungTyp
+  const zeigeEuTypMismatch = !zeigeEuMischwarnung && (
+    (istReverseCharge && hatWareTyp && !hatDienstleistungTyp) ||
+    (istEuLieferung && hatDienstleistungTyp && !hatWareTyp)
+  )
+
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
     if (!leistungManuell) setLeistungVon(datum)
@@ -2924,6 +2936,23 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               <InfoTooltip text="Für Warenlieferungen an Unternehmer mit gültiger USt-IdNr. in einem anderen EU-Land. Die Rechnung wird ohne USt gestellt (Rechnungsbetrag = Nettobetrag). Voraussetzung ist eine Gelangensbestätigung als Nachweis, dass die Ware tatsächlich ins EU-Ausland transportiert wurde. Wird automatisch vorgeschlagen, wenn sowohl du als auch der Kunde eine USt-IdNr. hinterlegt haben, der Kunde in einem EU-Land außer Deutschland sitzt und die Positionen als Ware erkannt werden. Schließt sich mit Reverse Charge gegenseitig aus – bei gemischten Rechnungen (Ware + Dienstleistung) bitte zwei Rechnungen erstellen." side="bottom" />
             </span>
           </label>
+          {zeigeEuMischwarnung && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="shrink-0">⚠</span>
+              <span>Diese Rechnung enthält sowohl Waren als auch Dienstleistungen. Für die korrekte steuerliche Behandlung (unterschiedliche Konten und Meldungen) bitte auf zwei Rechnungen aufteilen.</span>
+            </div>
+          )}
+          {zeigeEuTypMismatch && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="shrink-0">⚠</span>
+              <span>
+                {istReverseCharge
+                  ? 'Reverse Charge ist aktiv, die Positionen scheinen aber Waren zu sein.'
+                  : 'Innergemeinschaftliche Lieferung ist aktiv, die Positionen scheinen aber Dienstleistungen zu sein.'}
+                {' '}Bitte prüfen, ob das richtige Häkchen gesetzt ist.
+              </span>
+            </div>
+          )}
         </div>
       )}
 
