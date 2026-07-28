@@ -620,6 +620,13 @@ class RechnungPDFBase(FPDF):
                             "Steuerschuldnerschaft des Leistungsempfängers (§13b UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
                             new_x="LMARGIN", new_y="NEXT")
+        # §4 Nr. 1b UStG: innergemeinschaftliche Lieferung (Ware) an Unternehmer im EU-Ausland
+        ist_eu_lieferung = bool(getattr(r, "ist_eu_lieferung", False))
+        if ist_eu_lieferung:
+            self.multi_cell(0, 4.5,
+                            "Steuerfreie innergemeinschaftliche Lieferung (§4 Nr. 1b i.V.m. §6a UStG). "
+                            "Diese Rechnung enthält keine Umsatzsteuer.",
+                            new_x="LMARGIN", new_y="NEXT")
         # §25a-Hinweis: positionsweise, wenn mindestens eine Differenzbesteuerungs-Position vorhanden
         hat_diff = any(getattr(pos, "differenzbesteuerung", False) for pos in (r.positionen or []))
         if hat_diff:
@@ -628,7 +635,7 @@ class RechnungPDFBase(FPDF):
                             "Differenzbesteuerung (Gebrauchtgegenstände). "
                             "Der Umsatzsteuerbetrag wird nicht gesondert ausgewiesen.",
                             new_x="LMARGIN", new_y="NEXT")
-        if unt.get("ist_kleinunternehmer") or ist_reverse_charge or hat_diff:
+        if unt.get("ist_kleinunternehmer") or ist_reverse_charge or ist_eu_lieferung or hat_diff:
             self.ln(self._ln_nach_19)
 
     def _render_zahlungsblock(self):

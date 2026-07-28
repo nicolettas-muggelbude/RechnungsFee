@@ -122,7 +122,17 @@ class RechnungCreate(BaseModel):
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: bool = False
+    ist_eu_lieferung: bool = False
     positionen: List[RechnungspositionCreate]
+
+    @model_validator(mode="after")
+    def check_eu_flags(self) -> "RechnungCreate":
+        if self.ist_reverse_charge and self.ist_eu_lieferung:
+            raise ValueError(
+                "Reverse Charge (Dienstleistung) und innergemeinschaftliche Lieferung (Ware) "
+                "schließen sich gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+            )
+        return self
 
     @field_validator("dokument_typ")
     @classmethod
@@ -196,6 +206,7 @@ class RechnungUpdate(BaseModel):
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: Optional[bool] = None
+    ist_eu_lieferung: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
@@ -264,6 +275,7 @@ class RechnungResponse(BaseModel):
     skonto_tage: Optional[int] = None
     ist_entwurf: bool
     ist_reverse_charge: bool = False
+    ist_eu_lieferung: bool = False
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []
