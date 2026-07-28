@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 125
+SCHEMA_VERSION = 126
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2728,6 +2728,19 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 125 (Issue #313: SKR04-Konten fuer USt-Korrekturkategorien berichtigt)")
 
+        if version < 126:
+            # Issue #316 (Schritt 0): Kategorie "Innergemeinschaftliche Lieferungen" hatte
+            # euer_zeile=NULL seit ihrer Einfuehrung - Buchungen darauf (auch bereits ueber das
+            # Journal moeglich) fielen dadurch komplett aus der EÜR heraus, statt in Zeile 16
+            # (steuerfreie Betriebseinnahmen §4 UStG) zu erscheinen.
+            conn.execute(text("""
+                UPDATE kategorien SET euer_zeile = 16
+                WHERE name = 'Innergemeinschaftliche Lieferungen' AND euer_zeile IS NULL
+            """))
+            conn.execute(text("PRAGMA user_version = 126"))
+            conn.commit()
+            print("[Migration] Schema auf Version 126 (Issue #316: euer_zeile fuer Innergemeinschaftliche Lieferungen ergaenzt)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -2899,7 +2912,7 @@ def _migrate_kategorien() -> None:
             {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0490", "konto_skr04": "0650", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # EU-Handel – innergemeinschaftliche Lieferungen (§4 Nr. 1b UStG)
             # Käufer muss gültige USt-IdNr haben; UStVA KZ 41; Zusammenfassende Meldung (ZM) nötig
-            {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # §13b Abs. 1 – EU-Dienstleistungen (Google, AWS, Beratung aus EU etc.)
             # Reverse Charge: Empfänger schuldet USt (KZ 46/47); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen
