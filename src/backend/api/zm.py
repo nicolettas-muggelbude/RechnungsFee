@@ -14,12 +14,13 @@ Rhythmus / Frist:
 """
 
 import calendar
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from database.connection import get_db
 from database.models import Journaleintrag, Rechnung, Kunde, Unternehmen
@@ -76,31 +77,67 @@ def _zeitraum_label(zeitraum: str) -> str:
     return f"{MONATE[int(m)]} {j}"
 
 
-def _ig_eintraege(von: date, bis: date, db: Session) -> list[Journaleintrag]:
-    """Alle Journal-Einträge die in die ZM gehören."""
-    return (
-        db.query(Journaleintrag)
-        .filter(
-            Journaleintrag.datum >= von,
-            Journaleintrag.datum <= bis,
-            Journaleintrag.art == "Einnahme",
-        )
-        .filter(
-            # ig. Lieferungen (KZ 41) ODER §13b Abs.1 Dienstleistungen
-            (
-                (Journaleintrag.konto_skr03.in_(["8125"])) |
-                (Journaleintrag.konto_skr04.in_(["3125"])) |
-                (Journaleintrag.ust_sonderfall == "13b_abs1")
-            )
-        )
-        .all()
-    )
-
-
 def _kennzeichen(e: Journaleintrag) -> str:
     if getattr(e, "ust_sonderfall", None) == "13b_abs1":
         return "D"
     return "L"
+
+
+@dataclass
+class _IgBuchung:
+    netto_betrag: Decimal   # vorzeichenbehaftet - Storno-Gegenbuchungen zaehlen negativ
+    kennzeichen: str        # "L" oder "D"
+    rechnung_id: int | None
+
+
+def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
+    """Alle ZM-relevanten Buchungen im Zeitraum: eigene Einnahme-Buchungen aus ig. Lieferung
+    (§4 Nr. 1b, Konto 8125/3125) oder Reverse-Charge-Dienstleistung (§13b Abs.1) UND deren
+    Storno-Gegenbuchungen.
+
+    Eine Storno-Gegenbuchung hat art="Ausgabe" (Original->Storno kehrt die Buchungsrichtung um,
+    siehe rechnungen.storno_rechnung()) und wird deshalb NICHT vom obigen Einnahme-Filter
+    erfasst - ohne Sonderbehandlung würde eine stornierte ig-Rechnung weiterhin mit vollem
+    Betrag in der ZM auftauchen. Sie wird stattdessen über gruppe_id auf ihre Original-Buchung
+    zurückverfolgt und mit negativem Betrag gezählt.
+
+    Eingangsrechnungs-seitige §13b/ig.Erwerb-Buchungen (wir als Leistungsempfänger, z.B. EU-
+    Dienstleistung eingekauft) bleiben aussen vor: deren Original-Buchung ist von Anfang an
+    art="Ausgabe" und hat daher keine per gruppe_id verknüpfte Einnahme-Wurzel."""
+    ig_filter = (
+        (Journaleintrag.konto_skr03.in_(["8125"])) |
+        (Journaleintrag.konto_skr04.in_(["3125"])) |
+        (Journaleintrag.ust_sonderfall == "13b_abs1")
+    )
+    ergebnis: list[_IgBuchung] = []
+
+    einnahmen = db.query(Journaleintrag).filter(
+        Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
+        Journaleintrag.art == "Einnahme", ig_filter,
+    ).all()
+    for e in einnahmen:
+        ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, _kennzeichen(e), e.rechnung_id))
+
+    Original = aliased(Journaleintrag)
+    stornos = (
+        db.query(Journaleintrag, Original)
+        .join(Original, Journaleintrag.gruppe_id == Original.id)
+        .filter(
+            Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
+            Journaleintrag.art == "Ausgabe",
+            Original.art == "Einnahme",
+            (
+                (Original.konto_skr03.in_(["8125"])) |
+                (Original.konto_skr04.in_(["3125"])) |
+                (Original.ust_sonderfall == "13b_abs1")
+            ),
+        )
+        .all()
+    )
+    for storno_e, orig_e in stornos:
+        ergebnis.append(_IgBuchung(-(storno_e.netto_betrag or ZERO), _kennzeichen(orig_e), orig_e.rechnung_id))
+
+    return ergebnis
 
 
 # ---------------------------------------------------------------------------
@@ -201,26 +238,27 @@ def zm_berechnen(
 
     # Gruppieren nach USt-IdNr. + Kennzeichen
     gruppen: dict[tuple[str, str, str], Decimal] = {}
-    for e in eintraege:
-        kz = _kennzeichen(e)
+    for buchung in eintraege:
         # USt-IdNr. und Land aus verlinktem Kunden holen
         ust_idnr = ""
         land = ""
-        if e.rechnung_id:
-            rechnung = db.query(Rechnung).filter(Rechnung.id == e.rechnung_id).first()
+        if buchung.rechnung_id:
+            rechnung = db.query(Rechnung).filter(Rechnung.id == buchung.rechnung_id).first()
             if rechnung and rechnung.kunde_id:
                 kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first()
                 if kunde:
                     ust_idnr = kunde.ust_idnr or ""
                     land = kunde.land or ""
 
-        key = (ust_idnr or "unbekannt", land or "?", kz)
-        gruppen[key] = gruppen.get(key, ZERO) + (e.netto_betrag or ZERO)
+        key = (ust_idnr or "unbekannt", land or "?", buchung.kennzeichen)
+        gruppen[key] = gruppen.get(key, ZERO) + buchung.netto_betrag
 
     positionen = [
         ZMPosition(ust_idnr=uid, land=land, kennzeichen=kz,
                    betrag=betrag.quantize(Decimal("0.01")))
         for (uid, land, kz), betrag in sorted(gruppen.items())
+        if betrag != 0  # vollstaendig stornierte Gruppen (z.B. eine einzelne stornierte
+                         # Rechnung) nicht als leere Position an das Finanzamt melden
     ]
     gesamt = sum(p.betrag for p in positionen)
 

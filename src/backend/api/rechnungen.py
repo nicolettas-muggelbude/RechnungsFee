@@ -2455,6 +2455,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             marge_25a_brutto=eintrag.marge_25a_brutto,
             vorsteuerabzug=False,
             steuerbefreiung_grund=None,
+            ist_ig_erwerb=eintrag.ist_ig_erwerb,
+            ust_sonderfall=eintrag.ust_sonderfall,
             gruppe_id=eintrag.gruppe_id or eintrag.id,
             immutable=True,
         )
