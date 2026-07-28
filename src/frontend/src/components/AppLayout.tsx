@@ -442,12 +442,14 @@ export function AppLayout() {
             className="flex items-center gap-3 mx-2 px-3 py-2 text-sm font-medium transition-colors rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 w-full text-left"
           >
             <NavIcon name="forum" /><span>Community</span>
+            <span className="material-symbols-outlined shrink-0 ml-auto text-slate-400 dark:text-slate-500" style={{ fontSize: '16px' }}>open_in_new</span>
           </button>
           <button
             onClick={() => openUrl('https://rechnungsfee.app/handbuch')}
             className="flex items-center gap-3 mx-2 px-3 py-2 text-sm font-medium transition-colors rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 w-full text-left"
           >
             <NavIcon name="help" /><span>Handbuch</span>
+            <span className="material-symbols-outlined shrink-0 ml-auto text-slate-400 dark:text-slate-500" style={{ fontSize: '16px' }}>open_in_new</span>
           </button>
 
         </nav>
