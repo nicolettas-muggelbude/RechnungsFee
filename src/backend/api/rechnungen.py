@@ -2062,6 +2062,30 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         satz = g_satz if g_satz is not None else ust_satz
         ust03 = g_ust_skr03 if g_satz is not None else konto_ust_skr03
         ust04 = g_ust_skr04 if g_satz is not None else konto_ust_skr04
+        # ust_sonderfall aus der gewaehlten Kategorie ableiten - analog zu journal.py
+        # _felder_aus_data() (freie Buchungen). Betrifft Eingangsrechnungen: rechnung.
+        # ist_reverse_charge ist dort nie gesetzt (nur fuer Ausgangsrechnungen gedacht),
+        # ohne diese Ableitung blieb ust_sonderfall bei einer Eingangsrechnungs-Zahlung
+        # auf einer §13b/ig.Erwerb-Kategorie IMMER None - weder USt-Sonderkonto (1780/
+        # 1787 statt normalem Vorsteuerkonto) noch UStVA-Zuordnung griffen (Issue #315-
+        # Nebenfund, entdeckt beim Pruefen des umgekehrten Falls Eingangsrechnungen).
+        konten_kat = (kat.konto_skr03, kat.konto_skr04) if kat else (None, None)
+        if "3425" in konten_kat or "5425" in konten_kat:
+            sonderfall = "ig_erwerb"
+        elif "3123" in konten_kat or "5923" in konten_kat:
+            sonderfall = "13b_abs1"
+        elif "3120" in konten_kat or "5920" in konten_kat:
+            sonderfall = "13b_abs2"
+        else:
+            sonderfall = "13b_abs1" if rechnung.ist_reverse_charge else None
+        if sonderfall and satz > 0:
+            satz_i = int(satz)
+            if sonderfall == "ig_erwerb":
+                ust03 = {19: "1780", 7: "1781"}.get(satz_i, ust03)
+                ust04 = {19: "3802", 7: "3803"}.get(satz_i, ust04)
+            elif sonderfall in ("13b_abs1", "13b_abs2"):
+                ust03 = {19: "1787", 7: "1787"}.get(satz_i, ust03)
+                ust04 = {19: "3803", 7: "3803"}.get(satz_i, ust04)
         if satz > 0:
             if marge_25a is not None:
                 # §25a: USt nur auf Brutto-Marge, nicht auf vollen VK-Preis. netto_betrag
@@ -2099,7 +2123,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung_id,
             gruppe_id=_gruppe_id_kette,
-            ust_sonderfall="13b_abs1" if rechnung.ist_reverse_charge else None,
+            ist_ig_erwerb=(sonderfall == "ig_erwerb"),
+            ust_sonderfall=sonderfall,
             immutable=True,
         )
         e.signatur = signatur_journaleintrag(e)
