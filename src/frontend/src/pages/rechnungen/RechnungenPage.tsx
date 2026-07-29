@@ -2361,7 +2361,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // Zurücksetzen beim Wechseln von Kunde/Positionen, analog zu Issue #309).
   const [istReverseCharge, setIstReverseCharge] = useState(initial?.ist_reverse_charge ?? false)
   const [istEuLieferung, setIstEuLieferung] = useState(initial?.ist_eu_lieferung ?? false)
-  const [euFlagManuell, setEuFlagManuell] = useState(false)
+  const [istDrittlandLeistung, setIstDrittlandLeistung] = useState(initial?.ist_drittland_leistung ?? false)
+  const [sonderfallManuell, setSonderfallManuell] = useState(false)
   // Checkboxen nur einblenden wenn Kunde + Unternehmen überhaupt für ig. Lieferung/Reverse
   // Charge in Frage kommen (gültige USt-IdNr. beidseitig, Kunde in anderem EU-Land) - sonst
   // sehen Nutzer:innen ohne EU-Geschäft zwei Häkchen die sie nie brauchen (Issue #316-Feedback).
@@ -2374,45 +2375,62 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     kunde?.ust_idnr?.trim() &&
     kunde.land && kunde.land !== 'DE' && istEuLand(kunde.land)
   )
+  // Drittland-Dienstleistung (§3a Abs. 2 UStG, Issue #315): anders als bei EU keine USt-IdNr./
+  // VIES-Prüfung möglich - stattdessen genügt die im Kundenstamm hinterlegte ausländische
+  // Steuer-/Unternehmens-ID (steuernummer_ausland) als Signal "Kunde ist Unternehmer".
+  const kundeDrittlandFaehig = !!(
+    !istKleinunternehmer &&
+    kunde?.steuernummer_ausland?.trim() &&
+    kunde.land && kunde.land !== 'DE' && !istEuLand(kunde.land)
+  )
   useEffect(() => {
-    if (initial || typ !== 'ausgang' || euFlagManuell) return
-    if (!kundeEuFaehig) {
-      setIstReverseCharge(false)
-      setIstEuLieferung(false)
-      return
-    }
+    if (initial || typ !== 'ausgang' || sonderfallManuell) return
     const artikelTypen = positionen.map((p) => p.art_typ).filter((t): t is ArtikelTyp => !!t)
     const hatWare = artikelTypen.includes('artikel')
     const hatDienstleistung = artikelTypen.some((t) => t === 'dienstleistung' || t === 'fremdleistung')
-    setIstEuLieferung(hatWare && !hatDienstleistung)
-    setIstReverseCharge(hatDienstleistung && !hatWare)
-  }, [kundeEuFaehig, initial, typ, euFlagManuell, positionen])
+    if (kundeEuFaehig) {
+      setIstEuLieferung(hatWare && !hatDienstleistung)
+      setIstReverseCharge(hatDienstleistung && !hatWare)
+      setIstDrittlandLeistung(false)
+      return
+    }
+    if (kundeDrittlandFaehig) {
+      setIstReverseCharge(false)
+      setIstEuLieferung(false)
+      setIstDrittlandLeistung(hatDienstleistung && !hatWare)
+      return
+    }
+    setIstReverseCharge(false)
+    setIstEuLieferung(false)
+    setIstDrittlandLeistung(false)
+  }, [kundeEuFaehig, kundeDrittlandFaehig, initial, typ, sonderfallManuell, positionen])
 
-  // Warnung bei Reverse Charge/ig. Lieferung, wenn die Artikel-Typen der Positionen nicht dazu
-  // passen - nur relevant wenn eines der beiden EU-Flags aktiv ist (bei normalen Rechnungen ist
-  // Ware+Dienstleistung mischen völlig normal, siehe Issue #316).
+  // Warnung bei Reverse Charge/ig. Lieferung/Drittland-Dienstleistung, wenn die Artikel-Typen
+  // der Positionen nicht dazu passen - nur relevant wenn eines der drei Flags aktiv ist (bei
+  // normalen Rechnungen ist Ware+Dienstleistung mischen völlig normal, siehe Issue #316).
   const artikelTypenAlle = positionen.map((p) => p.art_typ).filter((t): t is ArtikelTyp => !!t)
   const hatWareTyp = artikelTypenAlle.includes('artikel')
   const hatDienstleistungTyp = artikelTypenAlle.some((t) => t === 'dienstleistung' || t === 'fremdleistung')
-  const zeigeEuMischwarnung = (istReverseCharge || istEuLieferung) && hatWareTyp && hatDienstleistungTyp
-  const zeigeEuTypMismatch = !zeigeEuMischwarnung && (
+  const zeigeMischwarnung = (istReverseCharge || istEuLieferung || istDrittlandLeistung) && hatWareTyp && hatDienstleistungTyp
+  const zeigeTypMismatch = !zeigeMischwarnung && (
     (istReverseCharge && hatWareTyp && !hatDienstleistungTyp) ||
-    (istEuLieferung && hatDienstleistungTyp && !hatWareTyp)
+    (istEuLieferung && hatDienstleistungTyp && !hatWareTyp) ||
+    (istDrittlandLeistung && hatWareTyp && !hatDienstleistungTyp)
   )
 
   // Positionen tragen ihren USt-Satz als eigenen State-Wert (nicht live aus istReverseCharge/
-  // istEuLieferung berechnet) - wird eine Position VOR der Auto-Erkennung ausgefüllt, steht dort
-  // noch der normale Satz. Sobald eines der beiden Flags (auch automatisch) aktiv wird, auf 0%
-  // nachziehen, damit die Live-Anzeige nicht von dem abweicht, was beim Speichern ohnehin
-  // passiert (das Backend erzwingt 0% serverseitig unabhaengig davon).
+  // istEuLieferung/istDrittlandLeistung berechnet) - wird eine Position VOR der Auto-Erkennung
+  // ausgefüllt, steht dort noch der normale Satz. Sobald eines der Flags (auch automatisch)
+  // aktiv wird, auf 0% nachziehen, damit die Live-Anzeige nicht von dem abweicht, was beim
+  // Speichern ohnehin passiert (das Backend erzwingt 0% serverseitig unabhaengig davon).
   useEffect(() => {
-    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung)) return
+    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung || istDrittlandLeistung)) return
     setPositionen((prev) => {
       const geaendert = prev.some((p) => p.ust_satz !== '0')
       if (!geaendert) return prev
       return prev.map((p) => (p.ust_satz === '0' ? p : { ...p, ust_satz: '0' }))
     })
-  }, [istReverseCharge, istEuLieferung, typ])
+  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, typ])
 
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
@@ -2554,7 +2572,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     // §25a: kein USt-Ausweis, VK brutto = VK netto
     const istDiff = a.differenzbesteuerung
-    const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung) ? '0' : String(parseInt(a.steuersatz))
+    const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung) ? '0' : String(parseInt(a.steuersatz))
     const preis = istDiff ? a.vk_brutto : (eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto)
     setPositionen((prev) => prev.map((p, idx) =>
       idx === i
@@ -2602,6 +2620,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
+      ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen –
       // aber nur wenn die Positionen noch mit dem OCR/XML-Wert übereinstimmen.
       // Hat der Nutzer Positionen manuell korrigiert (z.B. via Zusammenfassen + USt-Änderung),
@@ -2625,7 +2644,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         const ust = parseFloat(p.ust_satz) || 0
         const istDiff = p.differenzbesteuerung ?? false
         // §25a: kein USt-Ausweis; Eingabewert = Rechnungspreis → direkt als netto senden
-        const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung) ? '0' : (p.ust_satz || '0')
+        const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung) ? '0' : (p.ust_satz || '0')
         const netto = (!istDiff && eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
@@ -2925,8 +2944,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               checked={istReverseCharge}
               onChange={(e) => {
                 setIstReverseCharge(e.target.checked)
-                if (e.target.checked) setIstEuLieferung(false)
-                setEuFlagManuell(true)
+                if (e.target.checked) { setIstEuLieferung(false); setIstDrittlandLeistung(false) }
+                setSonderfallManuell(true)
               }}
               className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
             />
@@ -2941,8 +2960,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               checked={istEuLieferung}
               onChange={(e) => {
                 setIstEuLieferung(e.target.checked)
-                if (e.target.checked) setIstReverseCharge(false)
-                setEuFlagManuell(true)
+                if (e.target.checked) { setIstReverseCharge(false); setIstDrittlandLeistung(false) }
+                setSonderfallManuell(true)
               }}
               className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
             />
@@ -2951,21 +2970,55 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               <InfoTooltip text="Für Warenlieferungen an Unternehmer mit gültiger USt-IdNr. in einem anderen EU-Land. Die Rechnung wird ohne USt gestellt (Rechnungsbetrag = Nettobetrag). Voraussetzung ist eine Gelangensbestätigung als Nachweis, dass die Ware tatsächlich ins EU-Ausland transportiert wurde. Wird automatisch vorgeschlagen, wenn sowohl du als auch der Kunde eine USt-IdNr. hinterlegt haben, der Kunde in einem EU-Land außer Deutschland sitzt und die Positionen als Ware erkannt werden. Schließt sich mit Reverse Charge gegenseitig aus – bei gemischten Rechnungen (Ware + Dienstleistung) bitte zwei Rechnungen erstellen." side="bottom" />
             </span>
           </label>
-          {zeigeEuMischwarnung && (
+          {zeigeMischwarnung && (
             <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
               <span className="shrink-0">⚠</span>
               <span>Diese Rechnung enthält sowohl Waren als auch Dienstleistungen. Für die korrekte steuerliche Behandlung (unterschiedliche Konten und Meldungen) bitte auf zwei Rechnungen aufteilen.</span>
             </div>
           )}
-          {zeigeEuTypMismatch && (
+          {zeigeTypMismatch && (
             <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
               <span className="shrink-0">⚠</span>
               <span>
                 {istReverseCharge
                   ? 'Reverse Charge ist aktiv, die Positionen scheinen aber Waren zu sein.'
-                  : 'Innergemeinschaftliche Lieferung ist aktiv, die Positionen scheinen aber Dienstleistungen zu sein.'}
+                  : istEuLieferung
+                  ? 'Innergemeinschaftliche Lieferung ist aktiv, die Positionen scheinen aber Dienstleistungen zu sein.'
+                  : 'Drittland-Dienstleistung ist aktiv, die Positionen scheinen aber Waren zu sein.'}
                 {' '}Bitte prüfen, ob das richtige Häkchen gesetzt ist.
               </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {typ === 'ausgang' && !istKleinunternehmer && (kundeDrittlandFaehig || istDrittlandLeistung) && (
+        <div className="space-y-2">
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={istDrittlandLeistung}
+              onChange={(e) => {
+                setIstDrittlandLeistung(e.target.checked)
+                setSonderfallManuell(true)
+              }}
+              className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
+            />
+            <span className="text-slate-600 dark:text-slate-300">
+              Drittland-Dienstleistung – nicht steuerbar (§3a Abs. 2 UStG)
+              <InfoTooltip text="Für Dienstleistungen an Unternehmer außerhalb der EU (z.B. Schweiz, Großbritannien, USA). Der Leistungsort liegt beim Empfänger - die Rechnung wird ohne USt gestellt (Rechnungsbetrag = Nettobetrag), mit Hinweis, dass der Umsatz in Deutschland nicht steuerbar ist. Anders als beim EU-Reverse-Charge-Fall gibt es keine Zusammenfassende Meldung. Gilt nur für Dienstleistungen - bei Warenlieferungen ins Drittland bitte gesondert prüfen (Ausfuhrlieferung, hier noch nicht abgebildet)." side="bottom" />
+            </span>
+          </label>
+          {zeigeMischwarnung && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="shrink-0">⚠</span>
+              <span>Diese Rechnung enthält sowohl Waren als auch Dienstleistungen. Für die korrekte steuerliche Behandlung bitte auf zwei Rechnungen aufteilen.</span>
+            </div>
+          )}
+          {zeigeTypMismatch && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="shrink-0">⚠</span>
+              <span>Drittland-Dienstleistung ist aktiv, die Positionen scheinen aber Waren zu sein. Bitte prüfen, ob das richtige Häkchen gesetzt ist.</span>
             </div>
           )}
         </div>
@@ -3420,7 +3473,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onSaveArtikel={(neu) => {
             setShowNeuArtikel(false)
             const istDiff = neu.differenzbesteuerung
-            const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung) ? '0' : String(parseInt(neu.steuersatz))
+            const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung) ? '0' : String(parseInt(neu.steuersatz))
             const preis = istDiff ? neu.vk_brutto : (eingabeModus === 'netto' ? neu.vk_netto : neu.vk_brutto)
             setPositionen(prev => {
               const letzteIdx = prev.length - 1
