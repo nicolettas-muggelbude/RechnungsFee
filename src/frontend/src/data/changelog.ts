@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: 'DATEV-Export – die Umsatz-Spalte im Buchungsstapel enthielt den Netto- statt den Bruttobetrag. DATEV rechnet die Steuer aus diesem Feld selbst heraus, wodurch alle steuerbehafteten Buchungen (Einnahmen wie Ausgaben) um den USt-Faktor zu niedrig ankamen – ohne Fehlermeldung beim Import. Danke an DonKeWu für die präzise Analyse inkl. Fix-Vorschlag (Issue #319).' },
       { typ: 'fix', text: 'Storno – die Gegenbuchung wurde immer auf das heutige Datum gebucht statt auf das Datum der Originalbuchung. Bei der EÜR zählt aber ausschließlich das Buchungsjahr: Ein Storno im laufenden Jahr ließ das Ursprungsjahr unkorrigiert und verfälschte zusätzlich das laufende Jahr. Betraf sowohl einzelne Journal-Buchungen als auch stornierte Rechnungen. Danke an DonKeWu (Issue #320).' },
+      { typ: 'verbesserung', text: 'Journal-API – GET-Endpunkte liefern jetzt mit, ob eine Buchung storniert wurde (und welche Belegnummer die Gegenbuchung hat), statt dass externe Auswertungen die Beschreibung auf den Text „STORNO " prüfen müssen. Danke an DonKeWu (Issue #321).' },
     ],
   },
   {
