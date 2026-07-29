@@ -2435,9 +2435,17 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             s_netto  = -eintrag.netto_betrag
             s_ust    = -eintrag.ust_betrag
             s_brutto = -eintrag.brutto_betrag
-        belegnr = _naechste_belegnr_journal(db, heute)
+        # Storno-Buchungsdatum: Vorgabe ist das Datum der jeweiligen Original-Zahlung, nicht
+        # heute - bei der EÜR (Zuflussprinzip) zaehlt ausschliesslich das Buchungsjahr; ein
+        # Storno im laufenden Jahr wuerde sowohl das Ursprungsjahr unkorrigiert lassen als auch
+        # das laufende Jahr um einen wirtschaftlich nicht zugehoerigen Betrag verfaelschen
+        # (Issue #320). rechnung.storno_datum (wann die Rechnung storniert wurde) bleibt davon
+        # unberuehrt auf "heute". Bei mehreren Zahlungen mit unterschiedlichem Datum bekommt
+        # jede Gegenbuchung ihr eigenes Original-Datum.
+        gb_datum = data.datum or eintrag.datum
+        belegnr = _naechste_belegnr_journal(db, gb_datum)
         gegenbuchung = Journaleintrag(
-            datum=heute,
+            datum=gb_datum,
             belegnr=belegnr,
             beschreibung=f"STORNO {eintrag.belegnr}: {re_nr} – {data.grund.strip()}",
             kategorie_id=eintrag.kategorie_id,

@@ -391,7 +391,11 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
         original.immutable = True
         original.signatur = signatur_journaleintrag(original)
 
-    storno_datum = date.today()
+    # Storno-Datum = Datum der Originalbuchung, nicht heute: dieser Pfad korrigiert nur
+    # nachtraeglich eine fehlerhafte Erfassung (kein echter Geldfluss heute) - ein Storno im
+    # laufenden Jahr wuerde sowohl das Ursprungsjahr unkorrigiert lassen als auch das laufende
+    # Jahr um einen wirtschaftlich nicht zugehoerigen Betrag verfaelschen (Issue #320).
+    storno_datum = original.datum
     storno_belegnr = _naechste_belegnr(db, storno_datum)
     if original.brutto_betrag >= 0:
         s_art = "Ausgabe" if original.art == "Einnahme" else "Einnahme"
@@ -1022,7 +1026,12 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     # Hatte das Original einen positiven Betrag (Normalfall): entgegengesetzte Art, gleicher Betrag.
     # Hatte das Original einen negativen Betrag (z. B. Gutschrift = Einnahme −x):
     #   → gleiche Art, negativer Betrag (= positive Zahl) → Gutschrift-Storno erscheint als Einnahme +x.
-    storno_datum = date.today()
+    # Storno-Datum: Vorgabe ist das Datum der Originalbuchung, nicht heute - bei der EÜR
+    # (Zuflussprinzip) zaehlt ausschliesslich das Buchungsjahr; ein Storno im laufenden Jahr
+    # verfaelscht sowohl das Ursprungsjahr (bleibt unkorrigiert) als auch das laufende Jahr
+    # (bekommt einen wirtschaftlich nicht zugehoerigen Betrag) (Issue #320). Ausnahme: eine
+    # tatsaechliche Rueckabwicklung mit echtem Geldfluss heute kann explizit data.datum setzen.
+    storno_datum = data.datum or original.datum
     belegnr = _naechste_belegnr(db, storno_datum)
     if original.brutto_betrag >= 0:
         storno_art = "Ausgabe" if original.art == "Einnahme" else "Einnahme"
@@ -1054,6 +1063,8 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
         marge_25a_brutto=original.marge_25a_brutto,
         vorsteuerabzug=original.vorsteuerabzug,
         steuerbefreiung_grund=None,
+        ist_ig_erwerb=original.ist_ig_erwerb,
+        ust_sonderfall=original.ust_sonderfall,
         gruppe_id=original.gruppe_id or original.id,
         immutable=True,
     )

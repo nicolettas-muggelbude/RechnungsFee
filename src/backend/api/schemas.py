@@ -383,6 +383,7 @@ class JournalEintragResponse(BaseModel):
 
 class StornoRequest(BaseModel):
     grund: str
+    datum: Optional[date] = None  # Storno-Buchungsdatum - Vorgabe: Datum der Originalbuchung (Issue #320)
 
 
 class SplitPosition(BaseModel):
