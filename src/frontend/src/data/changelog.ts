@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.4.28',
+    datum: 'Juli 2026',
+    eintraege: [
+      { typ: 'fix', text: 'DATEV-Export – die Umsatz-Spalte im Buchungsstapel enthielt den Netto- statt den Bruttobetrag. DATEV rechnet die Steuer aus diesem Feld selbst heraus, wodurch alle steuerbehafteten Buchungen (Einnahmen wie Ausgaben) um den USt-Faktor zu niedrig ankamen – ohne Fehlermeldung beim Import. Danke an DonKeWu für die präzise Analyse inkl. Fix-Vorschlag (Issue #319).' },
+    ],
+  },
+  {
     version: 'v0.4.27',
     datum: 'Juli 2026',
     eintraege: [
