@@ -346,7 +346,7 @@ def datev_buchungsstapel(
             konto = ""
             leer_konto += 1
 
-        betrag = j.marge_25a_brutto if j.marge_25a_brutto is not None else j.netto_betrag
+        betrag = j.marge_25a_brutto if j.marge_25a_brutto is not None else j.brutto_betrag
         sh = "H" if j.art == "Einnahme" else "S"
         belegfeld1 = (j.externe_belegnr or j.belegnr)[:12]
         buchungstext = j.beschreibung[:60]
