@@ -147,6 +147,10 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     verwendet statt der generischen 0%-USt-Satz-Kategorie "Betriebseinnahmen (0%)" - sonst
     würde die Lieferung zwar korrekt mit 0% USt gebucht, aber mit falschem Konto und in der
     falschen EÜR-Zeile (12 statt 16) auftauchen.
+
+    Ausnahme Drittland-Dienstleistung (Issue #315): ist rechnung.ist_drittland_leistung
+    gesetzt, wird die Kategorie "Nicht steuerbare Auslandsumsätze (Drittland)"
+    (Konto 8338/4338) verwendet - aus demselben Grund wie bei der ig. Lieferung.
     """
     if not rechnung.positionen:
         return None, None
@@ -156,6 +160,12 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
         ).first()
         if kat_eu:
             return kat_eu.id, kat_eu
+    if getattr(rechnung, "ist_drittland_leistung", False):
+        kat_drittland = db.query(Kategorie).filter(
+            Kategorie.name == "Nicht steuerbare Auslandsumsätze (Drittland)", Kategorie.aktiv == True
+        ).first()
+        if kat_drittland:
+            return kat_drittland.id, kat_drittland
     if any(pos.differenzbesteuerung for pos in rechnung.positionen):
         kat_25a = db.query(Kategorie).filter(
             Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
