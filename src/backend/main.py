@@ -2928,6 +2928,13 @@ def _migrate_kategorien() -> None:
             # EU-Handel – innergemeinschaftliche Lieferungen (§4 Nr. 1b UStG)
             # Käufer muss gültige USt-IdNr haben; UStVA KZ 41; Zusammenfassende Meldung (ZM) nötig
             {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Drittland-Dienstleistungen (§3a Abs. 2 UStG) - z.B. Schweiz, GB, USA (Issue #315)
+            # Leistungsort beim Empfaenger, nicht steuerbar in Deutschland - anders als beim
+            # EU-Fall oben KEINE Zusammenfassende Meldung (die ist EU-exklusiv) und kein
+            # UStVA-Feld (nicht steuerbare Umsaetze gehoeren dort nicht rein). Konto =
+            # DATEV-Automatikkonto "Erloese aus im Drittland steuerbaren Leistungen, im
+            # Inland nicht steuerbare Umsaetze", gegengeprueft am DATEV-Kontenrahmen.
+            {"name": "Nicht steuerbare Auslandsumsätze (Drittland)", "kontenart": "Erlös", "konto_skr03": "8338", "konto_skr04": "4338", "eks_kategorie": "A1", "euer_zeile": 16, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             # §13b Abs. 1 – EU-Dienstleistungen (Google, AWS, Beratung aus EU etc.)
             # Reverse Charge: Empfänger schuldet USt (KZ 46/47); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen
