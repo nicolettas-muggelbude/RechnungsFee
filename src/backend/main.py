@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 127
+SCHEMA_VERSION = 128
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2755,6 +2755,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 127"))
             conn.commit()
             print("[Migration] Schema auf Version 127 (Issue #316: stray gelangensbestaetigung_vorhanden-Spalte bereinigt)")
+
+        if version < 128:
+            # Issue #315: Drittland-Dienstleistung (§3a Abs. 2 UStG) - eigenes Flag, analog zu
+            # ist_reverse_charge/ist_eu_lieferung, aber ohne Zusammenfassende Meldung (EU-exklusiv).
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "ist_drittland_leistung" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN ist_drittland_leistung BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            conn.execute(text("PRAGMA user_version = 128"))
+            conn.commit()
+            print("[Migration] Schema auf Version 128 (Issue #315: rechnungen.ist_drittland_leistung ergaenzt)")
 
 
 def _migrate_kategorien() -> None:

@@ -596,6 +596,8 @@ class Rechnung(Base):
     steuerbefreiung_grund: Mapped[str | None] = mapped_column(String(100))
     # Reverse Charge
     ist_reverse_charge: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Drittland-Dienstleistung (§3a Abs. 2 UStG) - z.B. Schweiz, GB, USA (Issue #315)
+    ist_drittland_leistung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Dateianhang
     datei_pfad: Mapped[str | None] = mapped_column(String(500))
     datei_name: Mapped[str | None] = mapped_column(String(200))

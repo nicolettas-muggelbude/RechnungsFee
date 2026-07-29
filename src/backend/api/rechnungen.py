@@ -971,6 +971,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         angebot_status="offen" if data.dokument_typ == "Angebot" else None,
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
+        ist_drittland_leistung=data.ist_drittland_leistung,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -986,12 +987,13 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
 
     for i, pos_data in enumerate(data.positionen, start=1):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
-        ist_steuerfrei_eu = data.ist_reverse_charge or data.ist_eu_lieferung
+        ist_steuerfrei_ausland = data.ist_reverse_charge or data.ist_eu_lieferung or data.ist_drittland_leistung
         # §25a: kein USt-Ausweis (ust_satz = 0 auf der Rechnung)
-        # §13b Reverse Charge / §4 Nr.1b ig. Lieferung: Rechnungsbetrag ist Nettobetrag, kein USt-Ausweis
-        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_eu) else pos_data.ust_satz
+        # §13b Reverse Charge / §4 Nr.1b ig. Lieferung / Drittland-Dienstleistung: Rechnungsbetrag
+        # ist Nettobetrag, kein USt-Ausweis
+        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
         ust_betrag, brutto, netto = _berechne_position(pos_data)
-        if ist_kleinunternehmer or ist_steuerfrei_eu:
+        if ist_kleinunternehmer or ist_steuerfrei_ausland:
             ust_betrag = Decimal("0.00")
             brutto = netto
 
@@ -1081,18 +1083,19 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr",
                   "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
-                  "ist_reverse_charge", "ist_eu_lieferung"):
+                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
 
-    if rechnung.ist_reverse_charge and rechnung.ist_eu_lieferung:
+    if sum([rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung, rechnung.ist_drittland_leistung]) > 1:
         raise HTTPException(status_code=422, detail=(
-            "Reverse Charge (Dienstleistung) und innergemeinschaftliche Lieferung (Ware) "
-            "schließen sich gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+            "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware) und "
+            "Drittland-Dienstleistung schließen sich gegenseitig aus - bei gemischten Rechnungen "
+            "bitte zwei Rechnungen erstellen."
         ))
 
-    ist_steuerfrei_eu = rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung
+    ist_steuerfrei_ausland = rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung or rechnung.ist_drittland_leistung
 
     if data.positionen is not None:
         # Bestehende Positionen löschen und neu anlegen
@@ -1104,9 +1107,9 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         ust_sum = Decimal("0.00")
         for i, pos_data in enumerate(data.positionen, start=1):
             ist_diff = getattr(pos_data, "differenzbesteuerung", False)
-            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_eu) else pos_data.ust_satz
+            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
             ust_betrag, brutto, netto = _berechne_position(pos_data)
-            if ist_kleinunternehmer or ist_steuerfrei_eu:
+            if ist_kleinunternehmer or ist_steuerfrei_ausland:
                 ust_betrag = Decimal("0.00")
                 brutto = netto
             pos = Rechnungsposition(
@@ -2692,6 +2695,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         ist_entwurf=True,
         ist_reverse_charge=original.ist_reverse_charge,
         ist_eu_lieferung=original.ist_eu_lieferung,
+        ist_drittland_leistung=original.ist_drittland_leistung,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",

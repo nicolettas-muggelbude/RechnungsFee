@@ -123,14 +123,16 @@ class RechnungCreate(BaseModel):
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: bool = False
     ist_eu_lieferung: bool = False
+    ist_drittland_leistung: bool = False
     positionen: List[RechnungspositionCreate]
 
     @model_validator(mode="after")
     def check_eu_flags(self) -> "RechnungCreate":
-        if self.ist_reverse_charge and self.ist_eu_lieferung:
+        if sum([self.ist_reverse_charge, self.ist_eu_lieferung, self.ist_drittland_leistung]) > 1:
             raise ValueError(
-                "Reverse Charge (Dienstleistung) und innergemeinschaftliche Lieferung (Ware) "
-                "schließen sich gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+                "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware) und "
+                "Drittland-Dienstleistung schließen sich gegenseitig aus - bei gemischten Rechnungen "
+                "bitte zwei Rechnungen erstellen."
             )
         return self
 
@@ -207,6 +209,7 @@ class RechnungUpdate(BaseModel):
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: Optional[bool] = None
     ist_eu_lieferung: Optional[bool] = None
+    ist_drittland_leistung: Optional[bool] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
 
@@ -280,6 +283,7 @@ class RechnungResponse(BaseModel):
     ist_entwurf: bool
     ist_reverse_charge: bool = False
     ist_eu_lieferung: bool = False
+    ist_drittland_leistung: bool = False
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []

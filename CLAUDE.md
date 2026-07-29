@@ -260,6 +260,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 125 | Datenfix: „Umsatzsteuer (vereinnahmt)"/„USt auf Eigenverbrauch"/„Umsatzsteuer-Zahlung FA" trugen im konto_skr04-Feld dieselbe Nummer wie konto_skr03 (1776/1780 liegen in SKR04 im Anlagevermögens-Bereich) → korrigiert auf 3806/3820, gegengeprüft am DATEV-Kontenrahmen SKR04; konto_skr03 unverändert; respektiert user_modified_skr04 (Issue #313) |
 | 126 | Datenfix: Kategorie „Innergemeinschaftliche Lieferungen" hatte euer_zeile=NULL seit ihrer Einführung → Buchungen darauf fielen komplett aus der EÜR heraus statt in Zeile 16 (steuerfreie Betriebseinnahmen §4 UStG) zu erscheinen; Schritt 0 von Issue #316 |
 | 127 | Datenfix: stray `gelangensbestaetigung_vorhanden`-Spalte in `rechnungen` entfernt (Issue #316: Checkbox-Feature während der Entwicklung wieder verworfen, Spalte kam bei zwischenzeitlichen lokalen Tests per `create_all()` als NOT-NULL-Spalte ohne Default auf die Tabelle) |
+| 128 | rechnungen.ist_drittland_leistung BOOLEAN – Drittland-Dienstleistung (§3a Abs. 2 UStG, z.B. Schweiz/GB/USA), analog zu ist_reverse_charge/ist_eu_lieferung aber ohne Zusammenfassende Meldung (Issue #315) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
