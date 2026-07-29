@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 128
+SCHEMA_VERSION = 129
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2767,6 +2767,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 128"))
             conn.commit()
             print("[Migration] Schema auf Version 128 (Issue #315: rechnungen.ist_drittland_leistung ergaenzt)")
+
+        if version < 129:
+            # Issue #315: eigenes Feld fuer Drittland-Steuer-/Unternehmens-ID (z.B. Schweizer UID) -
+            # bewusst getrennt von kunden.ust_idnr, das fuer die EU-USt-IdNr. reserviert bleibt.
+            kunden_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "steuernummer_ausland" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN steuernummer_ausland VARCHAR(50)"))
+            conn.execute(text("PRAGMA user_version = 129"))
+            conn.commit()
+            print("[Migration] Schema auf Version 129 (Issue #315: kunden.steuernummer_ausland ergaenzt)")
 
 
 def _migrate_kategorien() -> None:

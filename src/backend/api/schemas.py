@@ -507,6 +507,7 @@ class KundeBase(BaseModel):
     ort: Optional[str] = None
     land: str = "DE"
     ust_idnr: Optional[str] = None
+    steuernummer_ausland: Optional[str] = None
     email: Optional[str] = None
     telefon: Optional[str] = None
     ist_verein: bool = False

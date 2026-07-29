@@ -3,7 +3,7 @@ import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
-import { LAENDER } from '../../utils/laender'
+import { LAENDER, istEuLand } from '../../utils/laender'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -716,6 +716,7 @@ const schema = z.object({
   ort: z.string().optional(),
   land: z.string().optional(),
   ust_idnr: z.string().optional(),
+  steuernummer_ausland: z.string().optional(),
   email: z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon: z.string().optional(),
   kundennummer: z.string().optional(),
@@ -738,7 +739,7 @@ type FormValues = z.infer<typeof schema>
 
 const EMPTY: FormValues = {
   firmenname: '', vorname: '', nachname: '', strasse: '', hausnummer: '',
-  plz: '', ort: '', land: 'DE', ust_idnr: '', email: '', telefon: '',
+  plz: '', ort: '', land: 'DE', ust_idnr: '', steuernummer_ausland: '', email: '', telefon: '',
   kundennummer: '', z_hd: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
   skonto_prozent: null, skonto_tage: null,
 }
@@ -793,8 +794,16 @@ export function KundenPage() {
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
   const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
+  const watchLand = useWatch({ control, name: 'land' })
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
   const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim())
+  // Drittland: weder Deutschland noch EU-Mitglied (Issue #315) - dort gilt keine USt-IdNr.,
+  // sondern je nach Land eine andere Steuer-/Unternehmens-ID
+  const istDrittland = !!watchLand && watchLand !== 'DE' && !istEuLand(watchLand)
+  const steuernummerAuslandLabel =
+    watchLand === 'CH' ? 'Schweizer UID-Nr.' :
+    watchLand === 'GB' ? 'UK VAT-Nr.' :
+    'Steuernummer / Unternehmens-ID (Ausland)'
 
   useEffect(() => {
     if (zugferdAutoAktiv) setValue('zugferd_aktiv', true)
@@ -807,7 +816,7 @@ export function KundenPage() {
     reset({
       firmenname: k.firmenname ?? '', vorname: k.vorname ?? '', nachname: k.nachname ?? '',
       strasse: k.strasse ?? '', hausnummer: k.hausnummer ?? '', plz: k.plz ?? '',
-      ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '',
+      ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '', steuernummer_ausland: k.steuernummer_ausland ?? '',
       email: k.email ?? '', telefon: k.telefon ?? '', kundennummer: k.kundennummer ?? '',
       z_hd: k.z_hd ?? '', notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
       zugferd_aktiv: k.zugferd_aktiv ?? false,
@@ -970,6 +979,14 @@ export function KundenPage() {
                                   <span className="text-slate-700 dark:text-slate-200 font-mono">{k.ust_idnr}</span>
                                 </div>
                               )}
+                              {k.steuernummer_ausland && (
+                                <div>
+                                  <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">
+                                    {k.land === 'CH' ? 'Schweizer UID-Nr.' : k.land === 'GB' ? 'UK VAT-Nr.' : 'Steuernummer (Ausland)'}
+                                  </span>
+                                  <span className="text-slate-700 dark:text-slate-200 font-mono">{k.steuernummer_ausland}</span>
+                                </div>
+                              )}
                               {k.kundennummer && (
                                 <div>
                                   <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">Kundennr.</span>
@@ -1096,6 +1113,12 @@ export function KundenPage() {
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
                   <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
+                {istDrittland && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{steuernummerAuslandLabel}</label>
+                    <input type="text" {...register('steuernummer_ausland')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                  </div>
+                )}
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">z.Hd. von</label>
                   <input type="text" {...register('z_hd')} placeholder="z.B. Max Mustermann oder Buchhaltung" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />

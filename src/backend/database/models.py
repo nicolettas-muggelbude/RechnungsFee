@@ -354,6 +354,9 @@ class Kunde(Base):
     ust_idnr: Mapped[str | None] = mapped_column(String(20))
     ust_idnr_validiert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ust_idnr_validierung_datum: Mapped[date | None] = mapped_column(Date)
+    # Steuer-/Unternehmens-ID für Drittland-Kunden (z.B. Schweizer UID CHE-xxx.xxx.xxx MWST) -
+    # bewusst getrennt von ust_idnr, das für die EU-USt-IdNr. reserviert bleibt (Issue #315)
+    steuernummer_ausland: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(200))
     telefon: Mapped[str | None] = mapped_column(String(50))
     # Vereins-spezifisch (Issue #14)

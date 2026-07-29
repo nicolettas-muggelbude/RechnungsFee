@@ -674,6 +674,7 @@ export type Kunde = {
   ort?: string
   land: string
   ust_idnr?: string
+  steuernummer_ausland?: string
   email?: string
   telefon?: string
   ist_verein: boolean
