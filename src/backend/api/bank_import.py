@@ -1107,7 +1107,18 @@ def journal_verknuepfen(
     if not tx:
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden.")
     if tx.journal_id:
-        raise HTTPException(status_code=409, detail="bereits_verknuepft")
+        # Umhaengen erlauben, wenn die aktuell verknuepfte Buchung inzwischen storniert wurde
+        # (Issue #322) - sonst bleibt die Bank-Zeile dauerhaft an einer toten Buchung haengen,
+        # ohne Weg zurueck ueber die API (die gueltige Neubuchung landet i.d.R. bereits ueber
+        # update_eintrag() automatisch hier, das deckt aber nicht storno_eintrag()/
+        # storno_rechnung(), wo es keine automatische Nachfolgebuchung gibt).
+        alt = db.query(Journaleintrag).filter(Journaleintrag.id == tx.journal_id).first()
+        alt_ist_storniert = alt and db.query(Journaleintrag).filter(
+            Journaleintrag.gruppe_id == (alt.gruppe_id or alt.id),
+            Journaleintrag.beschreibung.like("STORNO %"),
+        ).first() is not None
+        if not alt_ist_storniert:
+            raise HTTPException(status_code=409, detail="bereits_verknuepft")
 
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == data.journal_id).first()
     if not eintrag:

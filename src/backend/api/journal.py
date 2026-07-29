@@ -19,7 +19,7 @@ from sqlalchemy import func, extract, or_
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
+from database.models import BankTransaktion, Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
 from utils.signatur import signatur_journaleintrag
 from utils.pdfa_konverter import konvertiere_zu_pdfa
 from utils.rechnungs_parser import analysiere_datei
@@ -489,6 +489,14 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     )
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
+    db.flush()  # neu.id wird fuer die Bank-Verknuepfung unten benoetigt
+
+    # Bank-Verknuepfung wandert mit auf die Neubuchung (Issue #322) - sonst zeigt
+    # BankTransaktion.journal_id dauerhaft auf die stornierte, wirtschaftlich nicht mehr
+    # existierende Buchung, waehrend die gueltige Neubuchung ohne Bankbezug bleibt.
+    db.query(BankTransaktion).filter(BankTransaktion.journal_id == original.id).update(
+        {"journal_id": neu.id}
+    )
 
     db.commit()
     db.refresh(neu)
