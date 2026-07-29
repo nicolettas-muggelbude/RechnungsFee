@@ -362,6 +362,12 @@ class JournalEintragResponse(BaseModel):
     gruppe_id: Optional[int] = None
     beleg_id: Optional[int] = None
     beleg: Optional[BelegResponse] = None
+    # Storno-Status (Issue #321) - bisher nur ueber String-Praefix "STORNO " in der
+    # Beschreibung erkennbar; wird jetzt vom Server ausgewertet und mitgeliefert.
+    storniert: bool = False               # True wenn eine Gegenbuchung existiert
+    storno_belegnr: Optional[str] = None  # Belegnr der Gegenbuchung, falls storniert
+    ist_storno: bool = False              # True wenn dieser Eintrag selbst eine Gegenbuchung ist
+    storno_von_belegnr: Optional[str] = None  # Belegnr der Originalbuchung, falls ist_storno
 
     model_config = {"from_attributes": True}
 

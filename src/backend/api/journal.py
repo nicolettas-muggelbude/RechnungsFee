@@ -59,6 +59,60 @@ def _belegnr_aus_format(format_str: str, datum: date, nr: int) -> str:
     return _re.sub(r"#+", _pad, result)
 
 
+def _storno_infos(db: Session, eintraege: list[Journaleintrag]) -> dict[int, dict]:
+    """Ermittelt fuer eine Liste von Journaleintraegen den Storno-Status in konstant zwei
+    Zusatzabfragen (unabhaengig von der Listengroesse) - liefert je Eintrag-id ein Dict mit
+    storniert/storno_belegnr (Gegenbuchung existiert) und ist_storno/storno_von_belegnr
+    (dieser Eintrag ist selbst eine Gegenbuchung). Nutzt dieselbe Erkennung (Beschreibungs-
+    Praefix "STORNO " + gruppe_id-Wurzel) wie die bestehende bereits_storniert-Pruefung beim
+    Stornieren selbst - macht sie fuer Lese-Endpunkte nutzbar statt sie clientseitig fragil
+    nachzubauen (Issue #321).
+
+    Bekannte Einschraenkung: gruppe_id gruppiert die gesamte Korrekturkette unter der
+    Wurzel-id, nicht das einzelne Kettenglied - bei mehr als einer Korrektur derselben
+    Buchung (Original -> Storno -> Neu -> erneut storniert -> ...) markiert dieses Ergebnis
+    alle Nicht-Storno-Mitglieder der Kette als storniert, sobald irgendein Storno in der
+    Kette existiert. Deckt den weit ueberwiegenden Fall (eine Korrektur) exakt ab."""
+    wurzel_ids = {e.gruppe_id or e.id for e in eintraege}
+    stornos = db.query(Journaleintrag).filter(
+        Journaleintrag.beschreibung.like("STORNO %"),
+        Journaleintrag.gruppe_id.in_(wurzel_ids),
+    ).all() if wurzel_ids else []
+    storno_je_wurzel: dict[int, str] = {s.gruppe_id: s.belegnr for s in stornos if s.gruppe_id}
+
+    original_ids = {s.gruppe_id for s in stornos if s.gruppe_id}
+    originale = db.query(Journaleintrag.id, Journaleintrag.belegnr).filter(
+        Journaleintrag.id.in_(original_ids)
+    ).all() if original_ids else []
+    belegnr_je_original_id: dict[int, str] = dict(originale)
+
+    ergebnis: dict[int, dict] = {}
+    for e in eintraege:
+        info = {"storniert": False, "storno_belegnr": None, "ist_storno": False, "storno_von_belegnr": None}
+        # gruppe_id kann nicht über JournalEintragCreate gesetzt werden - stammt ausschließlich
+        # von der Storno-Erstellung selbst. Beschreibungs-Praefix ALLEIN wuerde faelschlich auch
+        # eine eigene Buchung erfassen, deren Text zufaellig mit "STORNO " beginnt (Issue #321).
+        ist_storno = e.gruppe_id is not None and e.beschreibung.startswith("STORNO ")
+        if ist_storno:
+            info["ist_storno"] = True
+            info["storno_von_belegnr"] = belegnr_je_original_id.get(e.gruppe_id)
+        else:
+            wurzel = e.gruppe_id or e.id
+            if wurzel in storno_je_wurzel:
+                info["storniert"] = True
+                info["storno_belegnr"] = storno_je_wurzel[wurzel]
+        ergebnis[e.id] = info
+    return ergebnis
+
+
+def _mit_storno_info(response: "JournalEintragResponse", info: dict) -> "JournalEintragResponse":
+    response.storniert = info["storniert"]
+    response.storno_belegnr = info["storno_belegnr"]
+    response.ist_storno = info["ist_storno"]
+    response.storno_von_belegnr = info["storno_von_belegnr"]
+    return response
+
+
 def _naechste_belegnr(db: Session, datum: date) -> str:
     """Liest den Journal-Nummernkreis, generiert die nächste Belegnummer
     und speichert den inkrementierten Zähler (atomar im selben Commit)."""
@@ -242,7 +296,11 @@ def list_eintraege(
     elif zahlungsart_typ == "unbar":
         q = q.filter(Journaleintrag.zahlungsart != "Bar")
     eintraege = q.order_by(Journaleintrag.datum.desc(), Journaleintrag.id.desc()).all()
-    return [JournalEintragResponse.from_orm_with_kunde(e) for e in eintraege]
+    storno_infos = _storno_infos(db, eintraege)
+    return [
+        _mit_storno_info(JournalEintragResponse.from_orm_with_kunde(e), storno_infos[e.id])
+        for e in eintraege
+    ]
 
 
 def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
@@ -1000,7 +1058,8 @@ def get_eintrag(eintrag_id: int, db: Session = Depends(get_db)):
     journaleintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not journaleintrag:
         raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
-    return JournalEintragResponse.from_orm_with_kunde(journaleintrag)
+    info = _storno_infos(db, [journaleintrag])[journaleintrag.id]
+    return _mit_storno_info(JournalEintragResponse.from_orm_with_kunde(journaleintrag), info)
 
 
 @router.post("/{eintrag_id}/storno", response_model=JournalEintragResponse, status_code=201)
