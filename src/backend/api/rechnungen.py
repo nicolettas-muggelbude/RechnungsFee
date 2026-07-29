@@ -151,6 +151,10 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     Ausnahme Drittland-Dienstleistung (Issue #315): ist rechnung.ist_drittland_leistung
     gesetzt, wird die Kategorie "Nicht steuerbare Auslandsumsätze (Drittland)"
     (Konto 8338/4338) verwendet - aus demselben Grund wie bei der ig. Lieferung.
+
+    Ausnahme Ausfuhrlieferung (Issue #323): ist rechnung.ist_ausfuhrlieferung gesetzt,
+    wird die Kategorie "Steuerfreie Ausfuhrlieferungen (Drittland)" (Konto 8120/4120)
+    verwendet - aus demselben Grund.
     """
     if not rechnung.positionen:
         return None, None
@@ -166,6 +170,12 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
         ).first()
         if kat_drittland:
             return kat_drittland.id, kat_drittland
+    if getattr(rechnung, "ist_ausfuhrlieferung", False):
+        kat_ausfuhr = db.query(Kategorie).filter(
+            Kategorie.name == "Steuerfreie Ausfuhrlieferungen (Drittland)", Kategorie.aktiv == True
+        ).first()
+        if kat_ausfuhr:
+            return kat_ausfuhr.id, kat_ausfuhr
     if any(pos.differenzbesteuerung for pos in rechnung.positionen):
         kat_25a = db.query(Kategorie).filter(
             Kategorie.name == "Differenzbesteuerung (§25a)", Kategorie.aktiv == True
@@ -982,6 +992,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
         ist_drittland_leistung=data.ist_drittland_leistung,
+        ist_ausfuhrlieferung=data.ist_ausfuhrlieferung,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -997,10 +1008,13 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
 
     for i, pos_data in enumerate(data.positionen, start=1):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
-        ist_steuerfrei_ausland = data.ist_reverse_charge or data.ist_eu_lieferung or data.ist_drittland_leistung
+        ist_steuerfrei_ausland = (
+            data.ist_reverse_charge or data.ist_eu_lieferung
+            or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        )
         # §25a: kein USt-Ausweis (ust_satz = 0 auf der Rechnung)
-        # §13b Reverse Charge / §4 Nr.1b ig. Lieferung / Drittland-Dienstleistung: Rechnungsbetrag
-        # ist Nettobetrag, kein USt-Ausweis
+        # §13b Reverse Charge / §4 Nr.1b ig. Lieferung / Drittland-Dienstleistung / Ausfuhrlieferung:
+        # Rechnungsbetrag ist Nettobetrag, kein USt-Ausweis
         ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
         ust_betrag, brutto, netto = _berechne_position(pos_data)
         if ist_kleinunternehmer or ist_steuerfrei_ausland:
@@ -1093,19 +1107,25 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr",
                   "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
-                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung"):
+                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
 
-    if sum([rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung, rechnung.ist_drittland_leistung]) > 1:
+    if sum([
+        rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,
+        rechnung.ist_drittland_leistung, rechnung.ist_ausfuhrlieferung,
+    ]) > 1:
         raise HTTPException(status_code=422, detail=(
-            "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware) und "
-            "Drittland-Dienstleistung schließen sich gegenseitig aus - bei gemischten Rechnungen "
-            "bitte zwei Rechnungen erstellen."
+            "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware), "
+            "Drittland-Dienstleistung und Ausfuhrlieferung (Drittland-Ware) schließen sich "
+            "gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
         ))
 
-    ist_steuerfrei_ausland = rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung or rechnung.ist_drittland_leistung
+    ist_steuerfrei_ausland = (
+        rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung
+        or rechnung.ist_drittland_leistung or rechnung.ist_ausfuhrlieferung
+    )
 
     if data.positionen is not None:
         # Bestehende Positionen löschen und neu anlegen
@@ -2706,6 +2726,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         ist_reverse_charge=original.ist_reverse_charge,
         ist_eu_lieferung=original.ist_eu_lieferung,
         ist_drittland_leistung=original.ist_drittland_leistung,
+        ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",

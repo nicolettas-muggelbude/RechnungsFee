@@ -262,6 +262,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 127 | Datenfix: stray `gelangensbestaetigung_vorhanden`-Spalte in `rechnungen` entfernt (Issue #316: Checkbox-Feature während der Entwicklung wieder verworfen, Spalte kam bei zwischenzeitlichen lokalen Tests per `create_all()` als NOT-NULL-Spalte ohne Default auf die Tabelle) |
 | 128 | rechnungen.ist_drittland_leistung BOOLEAN – Drittland-Dienstleistung (§3a Abs. 2 UStG, z.B. Schweiz/GB/USA), analog zu ist_reverse_charge/ist_eu_lieferung aber ohne Zusammenfassende Meldung (Issue #315) |
 | 129 | kunden.steuernummer_ausland VARCHAR(50) – Steuer-/Unternehmens-ID für Drittland-Kunden (z.B. Schweizer UID CHE-xxx.xxx.xxx MWST), getrennt von ust_idnr (bleibt EU-USt-IdNr.) (Issue #315) |
+| 130 | rechnungen.ist_ausfuhrlieferung BOOLEAN – Ausfuhrlieferung (§4 Nr. 1a i.V.m. §6 UStG), Warenlieferung ins Drittland, analog zu ist_eu_lieferung/ist_drittland_leistung (Issue #323) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

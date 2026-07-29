@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
 
-SCHEMA_VERSION = 129
+SCHEMA_VERSION = 130
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -2778,6 +2778,18 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 129 (Issue #315: kunden.steuernummer_ausland ergaenzt)")
 
+        if version < 130:
+            # Issue #323: Ausfuhrlieferung (§4 Nr. 1a i.V.m. §6 UStG) - eigenes Flag, analog zu
+            # ist_eu_lieferung/ist_drittland_leistung, fuer Warenlieferungen ins Drittland.
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "ist_ausfuhrlieferung" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN ist_ausfuhrlieferung BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            conn.execute(text("PRAGMA user_version = 130"))
+            conn.commit()
+            print("[Migration] Schema auf Version 130 (Issue #323: rechnungen.ist_ausfuhrlieferung ergaenzt)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -2957,6 +2969,12 @@ def _migrate_kategorien() -> None:
             # DATEV-Automatikkonto "Erloese aus im Drittland steuerbaren Leistungen, im
             # Inland nicht steuerbare Umsaetze", gegengeprueft am DATEV-Kontenrahmen.
             {"name": "Nicht steuerbare Auslandsumsätze (Drittland)", "kontenart": "Erlös", "konto_skr03": "8338", "konto_skr04": "4338", "eks_kategorie": "A1", "euer_zeile": 16, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
+            # Ausfuhrlieferung - Warenlieferung ins Drittland (§4 Nr. 1a i.V.m. §6 UStG, Issue #323)
+            # Anders als bei der ig. Lieferung (EU) gilt hier KEINE Unternehmer-Voraussetzung -
+            # auch Privatkunden im Drittland koennen steuerfrei beliefert werden, wenn ein
+            # Ausfuhrnachweis (Zollanmeldung/Ausgangsvermerk) vorliegt. Konto = DATEV-Automatikkonto
+            # "Steuerfreie Umsaetze nach §4 Nr. 1a UStG", gegengeprueft am DATEV-Kontenrahmen.
+            {"name": "Steuerfreie Ausfuhrlieferungen (Drittland)", "kontenart": "Erlös", "konto_skr03": "8120", "konto_skr04": "4120", "eks_kategorie": "A1", "euer_zeile": 16, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             # §13b Abs. 1 – EU-Dienstleistungen (Google, AWS, Beratung aus EU etc.)
             # Reverse Charge: Empfänger schuldet USt (KZ 46/47); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen

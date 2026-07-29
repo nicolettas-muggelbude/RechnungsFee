@@ -635,6 +635,13 @@ class RechnungPDFBase(FPDF):
                             "Nicht steuerbar in Deutschland - Leistungsort im Drittland (§3a Abs. 2 UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
                             new_x="LMARGIN", new_y="NEXT")
+        # §4 Nr. 1a i.V.m. §6 UStG: Ausfuhrlieferung (Ware) ins Drittland (Issue #323)
+        ist_ausfuhrlieferung = bool(getattr(r, "ist_ausfuhrlieferung", False))
+        if ist_ausfuhrlieferung:
+            self.multi_cell(0, 4.5,
+                            "Steuerfreie Ausfuhrlieferung (§4 Nr. 1a i.V.m. §6 UStG). "
+                            "Diese Rechnung enthält keine Umsatzsteuer.",
+                            new_x="LMARGIN", new_y="NEXT")
         # §25a-Hinweis: positionsweise, wenn mindestens eine Differenzbesteuerungs-Position vorhanden
         hat_diff = any(getattr(pos, "differenzbesteuerung", False) for pos in (r.positionen or []))
         if hat_diff:
@@ -643,7 +650,7 @@ class RechnungPDFBase(FPDF):
                             "Differenzbesteuerung (Gebrauchtgegenstände). "
                             "Der Umsatzsteuerbetrag wird nicht gesondert ausgewiesen.",
                             new_x="LMARGIN", new_y="NEXT")
-        if unt.get("ist_kleinunternehmer") or ist_reverse_charge or ist_eu_lieferung or ist_drittland_leistung or hat_diff:
+        if unt.get("ist_kleinunternehmer") or ist_reverse_charge or ist_eu_lieferung or ist_drittland_leistung or ist_ausfuhrlieferung or hat_diff:
             self.ln(self._ln_nach_19)
 
     def _render_zahlungsblock(self):

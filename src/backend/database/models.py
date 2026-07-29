@@ -601,6 +601,8 @@ class Rechnung(Base):
     ist_reverse_charge: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Drittland-Dienstleistung (§3a Abs. 2 UStG) - z.B. Schweiz, GB, USA (Issue #315)
     ist_drittland_leistung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Ausfuhrlieferung - Warenlieferung ins Drittland (§4 Nr. 1a i.V.m. §6 UStG, Issue #323)
+    ist_ausfuhrlieferung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Dateianhang
     datei_pfad: Mapped[str | None] = mapped_column(String(500))
     datei_name: Mapped[str | None] = mapped_column(String(200))
