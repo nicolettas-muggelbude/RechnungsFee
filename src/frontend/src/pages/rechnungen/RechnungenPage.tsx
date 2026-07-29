@@ -1767,20 +1767,14 @@ function RechnungDetail({
             </p>
             <div className="space-y-1">
               {(() => {
-                const stornierteBelegnrs = new Set(
-                  rechnung.zahlungen_kette
-                    .filter(z => z.beschreibung.startsWith('STORNO '))
-                    .map(z => z.beschreibung.slice('STORNO '.length).split(':')[0].trim())
-                )
                 // Buchungen anderer Dokumente der Ersatzrechnungs-Kette (rechnung_id
                 // weicht ab) werden nur angezeigt, nicht korrigiert - dafür das jeweils
                 // andere Dokument öffnen.
                 const istKorrigierbar = (z: ZahlungKompakt) =>
-                  z.rechnung_id === rechnung.id &&
-                  !z.beschreibung.startsWith('STORNO ') && !stornierteBelegnrs.has(z.belegnr)
+                  z.rechnung_id === rechnung.id && !z.ist_storno && !z.storniert
 
                 const renderZeile = (z: ZahlungKompakt) => {
-                  const istStorno = z.beschreibung.startsWith('STORNO ')
+                  const istStorno = !!z.ist_storno
                   return (
                     <div key={z.id}>
                       <div className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${istStorno ? 'bg-red-50 dark:bg-red-950/30' : 'bg-slate-50 dark:bg-slate-900'}`}>
@@ -1855,7 +1849,7 @@ function RechnungDetail({
 
                   const sortiert = [...mitglieder].sort((a, b) => a.id - b.id)
                   const letztes = sortiert[sortiert.length - 1]
-                  const istStorniert = letztes.beschreibung.startsWith('STORNO ')
+                  const istStorniert = !!letztes.ist_storno
                   const aktuell = istStorniert ? sortiert[0] : letztes
                   const aufgeklappt = aufgeklappteGruppen.has(rootId)
 

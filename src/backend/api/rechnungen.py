@@ -2466,6 +2466,12 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
             ist_ig_erwerb=eintrag.ist_ig_erwerb,
             ust_sonderfall=eintrag.ust_sonderfall,
             gruppe_id=eintrag.gruppe_id or eintrag.id,
+            # rechnung_id setzen, damit die Gegenbuchung ueberhaupt in
+            # rechnung.zahlungen_kette auftaucht (Issue #321-Fortsetzung) - vorher nur
+            # sichtbar, wenn zusaetzlich der Ersatzrechnungs-Zweig griff. Unbedenklich fuer
+            # _aktualisiere_zahlungsstatus(), da storno_rechnung() diese Funktion nie selbst
+            # aufruft und alle anderen Aufrufer vorher bereits auf rechnung.storniert prüfen.
+            rechnung_id=rechnung_id,
             immutable=True,
         )
         gegenbuchung.signatur = signatur_journaleintrag(gegenbuchung)

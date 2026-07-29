@@ -185,13 +185,6 @@ export function JournalPage() {
     setDatumBis(heuteIso())
   }
 
-  // Belegnummern die bereits storniert wurden (aus der geladenen Liste ableiten)
-  const bereitsStornieterteBelegnrn = new Set(
-    (eintraege ?? [])
-      .filter((e) => e.beschreibung.startsWith('STORNO '))
-      .map((e) => e.beschreibung.split(':')[0].replace('STORNO ', '').trim())
-  )
-
   function toggleEintrag(id: number) {
     setAktiverEintragId((prev) => (prev === id ? null : id))
   }
@@ -452,8 +445,8 @@ export function JournalPage() {
             <tbody>
               {eintraege.map((e) => {
                 const istAktiv = aktiverEintragId === e.id
-                const bereitsStorniert = bereitsStornieterteBelegnrn.has(e.belegnr)
-                const istStorno = e.beschreibung.startsWith('STORNO ')
+                const bereitsStorniert = !!e.storniert
+                const istStorno = !!e.ist_storno
                 const hatUst = parseFloat(e.ust_betrag) > 0
                 const rowClass = `border-b border-slate-100 dark:border-slate-700 cursor-pointer select-none transition-colors ${
                   istAktiv ? 'bg-blue-50 dark:bg-blue-950' : istStorno ? 'hover:bg-slate-50 dark:hover:bg-slate-700 opacity-60' : 'hover:bg-slate-50 dark:hover:bg-slate-700'

@@ -75,7 +75,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
     },
   })
 
-  const istStorno = e.beschreibung.startsWith('STORNO ')
+  const istStorno = !!e.ist_storno
   const istRechnungsBuchung = !!e.rechnung_id
   const kannStorniert = !istStorno && !bereitsStorniert && !istRechnungsBuchung
   const datum = e.datum.split('-').reverse().join('.')

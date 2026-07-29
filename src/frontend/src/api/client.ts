@@ -444,6 +444,10 @@ export type JournalEintrag = {
   gruppe_id?: number | null
   beleg_id?: number | null
   beleg?: Beleg | null
+  storniert?: boolean
+  storno_belegnr?: string | null
+  ist_storno?: boolean
+  storno_von_belegnr?: string | null
 }
 
 export type JournalEintragCreate = {
@@ -1225,6 +1229,8 @@ export type ZahlungKompakt = {
   zahlungsart: string
   gruppe_id?: number | null
   rechnung_id?: number | null
+  storniert?: boolean
+  ist_storno?: boolean
 }
 
 export type Rechnung = {

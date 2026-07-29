@@ -233,6 +233,10 @@ class ZahlungKompakt(BaseModel):
     zahlungsart: str
     gruppe_id: Optional[int] = None
     rechnung_id: Optional[int] = None
+    # Storno-Status (Issue #321-Fortsetzung) - analog zu JournalEintragResponse, damit das
+    # Frontend nicht mehr auf beschreibung.startsWith('STORNO ') angewiesen ist.
+    storniert: bool = False
+    ist_storno: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -407,6 +411,17 @@ class RechnungResponse(BaseModel):
                             vorhandene_ids.add(_e.id)
             except Exception:
                 pass
+        # Storno-Status je Zahlung (Issue #321-Fortsetzung): "STORNO "-Praefix + gesetztes
+        # gruppe_id (laesst sich clientseitig nicht setzen, siehe journal.py._storno_infos)
+        # statt reiner Beschreibungs-Textpruefung im Frontend.
+        _storno_wurzeln: set[int] = set()
+        for _z in data.zahlungen_kette:
+            _z.ist_storno = _z.gruppe_id is not None and _z.beschreibung.startswith("STORNO ")
+            if _z.ist_storno:
+                _storno_wurzeln.add(_z.gruppe_id)
+        for _z in data.zahlungen_kette:
+            if not _z.ist_storno:
+                _z.storniert = (_z.gruppe_id or _z.id) in _storno_wurzeln
         # Rechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...): unabhaengig von
         # Zahlungen/Journalbuchungen sichtbar, da die Verknuepfung ueber ersatzrechnung_id/
         # ersatz_fuer_rechnung_id direkt auf Dokumentebene liegt (Issue #304).
