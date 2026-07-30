@@ -2398,13 +2398,19 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const lieferant = lieferanten?.find((l: any) => String(l.id) === partnerId)
   const lieferantLand = typ === 'eingang' ? (partnerId ? lieferant?.land : partnerLand) : undefined
   const lieferantDrittland = !!(lieferantLand && lieferantLand !== 'DE' && !istEuLand(lieferantLand))
-  const positionenOhneDrittlandKat = positionen.some((p) => {
+  const positionenMitUnspezifischerKat = positionen.some((p) => {
     if (!p.beschreibung.trim()) return false
     if (!p.kategorie_id) return true
     const kat = (kategorien ?? []).find((k) => String(k.id) === p.kategorie_id)
     return !!kat && ['Wareneinkauf', 'Wareneinkauf (7%)', 'Wareneinkauf Nicht-EU'].includes(kat.name)
   })
-  const zeigeDrittlandHinweis = typ === 'eingang' && lieferantDrittland && positionenOhneDrittlandKat
+  const zeigeDrittlandHinweis = typ === 'eingang' && lieferantDrittland && positionenMitUnspezifischerKat
+  // EU-Hinweis (Issue #325): Pendant zum Drittland-Hinweis. Auch hier kein Auto-Switch -
+  // ob der ig. Erwerb (Wareneinkauf EU) zutrifft, hängt zusätzlich von der USt-IdNr des
+  // Lieferanten ab, die nur bei einem Stammdatensatz bekannt ist (Freitext-Modus: unklar).
+  const lieferantEuLand = !!(lieferantLand && lieferantLand !== 'DE' && istEuLand(lieferantLand))
+  const lieferantUstIdnr = partnerId ? lieferant?.ust_idnr?.trim() : undefined
+  const zeigeEuHinweis = typ === 'eingang' && lieferantEuLand && positionenMitUnspezifischerKat
   // Warnung: Zoll/Einfuhrumsatzsteuer-Position gemeinsam mit einer andersartigen Position
   // auf derselben Rechnung. Die Zahlungsbuchung gruppiert Positionen nur nach USt-Satz, nicht
   // nach Kategorie (außer bei §25a-Mischrechnungen) - bei gleichem Satz (meist 0 %) würde die
@@ -3264,6 +3270,19 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             <span className="shrink-0">⚠</span>
             <span>
               Lieferant sitzt außerhalb der EU. Prüfe, ob eine der Kategorien „Wareneinkauf Drittland (USt bereits in Rechnung)", „Wareneinkauf Drittland (ohne USt)" oder „Einfuhrumsatzsteuer (Zoll/DHL)" besser passt als die aktuelle Auswahl – je nachdem ob die Rechnung schon USt ausweist.
+            </span>
+          </div>
+        )}
+
+        {zeigeEuHinweis && (
+          <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <span className="shrink-0">⚠</span>
+            <span>
+              {partnerId && !lieferantUstIdnr ? (
+                <>Lieferant sitzt in der EU, hat aber keine USt-IdNr hinterlegt. Der innergemeinschaftliche Erwerb (§1a UStG, Kategorie „Wareneinkauf EU") setzt eine gültige USt-IdNr beim Verkäufer voraus – prüfe, ob stattdessen „Wareneinkauf EU (ohne USt-IdNr)" zutrifft (ausländische USt, in Deutschland nicht abziehbar).</>
+              ) : (
+                <>Lieferant sitzt in der EU. Prüfe, ob die Kategorie „Wareneinkauf EU" (innergemeinschaftlicher Erwerb) besser passt als die aktuelle Auswahl – hat der Lieferant keine USt-IdNr, ist stattdessen „Wareneinkauf EU (ohne USt-IdNr)" richtig.</>
+              )}
             </span>
           </div>
         )}

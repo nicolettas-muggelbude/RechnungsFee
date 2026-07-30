@@ -30,6 +30,12 @@ STANDARD_KATEGORIEN = [
     {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
     {"name": "Wareneinkauf EU",                "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige USt-IdNr
+    # beim Verkäufer voraus. Ohne USt-IdNr (EU-Kleinunternehmer-Äquivalent, Privatperson)
+    # stellt der Verkäufer brutto mit ausländischer USt - die ist in Deutschland nicht
+    # abziehbar. Bewusst NICHT Konto 3425 (das triggert die ig_erwerb-Sonderbehandlung).
+    {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+     "beschreibung": "EU-Lieferant ohne USt-IdNr (z. B. EU-Kleinunternehmer-Äquivalent, Privatperson) – Rechnung enthält ausländische USt, die in Deutschland nicht als Vorsteuer abziehbar ist. Kein innergemeinschaftlicher Erwerb (§1a UStG setzt gültige USt-IdNr beim Verkäufer voraus)."},
     {"name": "Wareneinkauf Nicht-EU",          "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     # Drittland-Warenkäufe (Alibaba/Amazon/Ebay etc., Issue #315-Folgethema): zwei Fälle je
     # nachdem ob die USt beim Kauf schon im Preis steckte (Marktplatz als "deemed supplier",

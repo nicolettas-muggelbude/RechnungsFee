@@ -1352,9 +1352,35 @@ export function Dashboard() {
   return (
     <div className={`p-6 max-w-4xl ${mxAuto}`}>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dashboard</h2>
+          {/* Konfigurieren */}
+          <button onClick={() => setKonfModus(true)} title="Dashboard konfigurieren"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>settings</span>
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+          <div className="flex items-center gap-2">
+            {filterModus === 'monat' && (
+              <input type="month" value={monat} onChange={(e) => setMonat(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
+            )}
+            {filterModus === 'datum' && (
+              <DateInput value={datum} onChange={setDatum}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
+            )}
+            {filterModus === 'zeitraum' && (
+              <div className="flex items-center gap-2">
+                <DateInput value={datumVon} onChange={setDatumVon}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
+                <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
+                <DateInput value={datumBis} min={datumVon} onChange={setDatumBis}
+                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
+              </div>
+            )}
+          </div>
           {/* Zeitfilter */}
           <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
             {(['monat', 'datum', 'zeitraum', 'alle'] as FilterModus[]).map((m) => (
@@ -1364,28 +1390,6 @@ export function Dashboard() {
               </button>
             ))}
           </div>
-          {filterModus === 'monat' && (
-            <input type="month" value={monat} onChange={(e) => setMonat(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
-          )}
-          {filterModus === 'datum' && (
-            <DateInput value={datum} onChange={setDatum}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
-          )}
-          {filterModus === 'zeitraum' && (
-            <div className="flex items-center gap-2">
-              <DateInput value={datumVon} onChange={setDatumVon}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
-              <span className="text-slate-400 dark:text-slate-500 text-sm">bis</span>
-              <DateInput value={datumBis} min={datumVon} onChange={setDatumBis}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
-            </div>
-          )}
-          {/* Konfigurieren */}
-          <button onClick={() => setKonfModus(true)} title="Dashboard konfigurieren"
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-            <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>settings</span>
-          </button>
         </div>
       </div>
 
