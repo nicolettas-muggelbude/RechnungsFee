@@ -332,12 +332,24 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs1"})
             elif "3120" in konten or "5920" in konten:
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs2"})
+            elif "1588" in konten or "1433" in konten:
+                data = data.model_copy(update={"ust_sonderfall": "einfuhr_ust"})
 
     ust_sonderfall = data.ust_sonderfall
     if not ust_sonderfall and data.ist_ig_erwerb:
         ust_sonderfall = "ig_erwerb"
 
-    if ust_sonderfall and ust_satz > 0:
+    if ust_sonderfall == "einfuhr_ust":
+        # Einfuhrumsatzsteuer (DHL/Zoll): der eingegebene Betrag IST bereits die Steuer,
+        # kein Nettoanteil (anders als bei ig. Erwerb/§13b, wo der Betrag der Nettopreis ist).
+        # ust_satz hat hier keine Bedeutung (kein Satz-basierter Split) - immer auf 0 zwingen,
+        # sonst würde unten faelschlich ein USt-Gegenkonto für einen nie berechneten Split gesetzt.
+        ust_satz = Decimal("0")
+        netto = Decimal("0.00")
+        ust_betrag = data.brutto_betrag
+        brutto_stored = data.brutto_betrag
+        vorsteuerabzug = True
+    elif ust_sonderfall and ust_satz > 0:
         netto = data.brutto_betrag
         ust_betrag = (netto * ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
         brutto_stored = netto

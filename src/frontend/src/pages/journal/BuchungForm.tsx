@@ -270,7 +270,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     const sonderfall =
       kat.konto_skr03 === '3425' || kat.konto_skr04 === '5425' ? 'ig_erwerb' :
       kat.konto_skr03 === '3123' || kat.konto_skr04 === '5923' ? '13b_abs1' :
-      kat.konto_skr03 === '3120' || kat.konto_skr04 === '5920' ? '13b_abs2' : null
+      kat.konto_skr03 === '3120' || kat.konto_skr04 === '5920' ? '13b_abs2' :
+      kat.konto_skr03 === '1588' || kat.konto_skr04 === '1433' ? 'einfuhr_ust' : null
     setValue('ust_sonderfall', sonderfall ?? '')
   }, [kategorie_id, kategorien, isSplit, setValue, istKleinunternehmer])
 
@@ -283,6 +284,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const gewaehlterKunde = (kunden ?? []).find((k) => String(k.id) === kunde_id)
   const igLieferungOhneUstIdNr = istIgLieferung && gewaehlterKunde && !gewaehlterKunde.ust_idnr
   const ust_sonderfall = watch('ust_sonderfall')
+  const istEinfuhrUst = ust_sonderfall === 'einfuhr_ust'
 
   // km-Eingabe: brutto_betrag auto-berechnen (EÜR: 0,30 €/km)
   useEffect(() => {
@@ -302,7 +304,12 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const eingabeWert = parseFloat(bruttoStr) || 0
   const ustSatz = parseFloat(ustSatzStr) || 0
   let brutto: number, netto: number, ustBetrag: number
-  if (eingabeModus === 'netto') {
+  if (istEinfuhrUst) {
+    // Einfuhrumsatzsteuer: der eingegebene Betrag IST bereits die Steuer, kein Netto-Anteil.
+    brutto = eingabeWert
+    netto = 0
+    ustBetrag = eingabeWert
+  } else if (eingabeModus === 'netto') {
     netto = eingabeWert
     ustBetrag = ustSatz > 0 ? netto * ustSatz / 100 : 0
     brutto = netto + ustBetrag
@@ -830,9 +837,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    {eingabeModus === 'brutto' ? 'Brutto-Betrag (€)' : 'Netto-Betrag (€)'}
+                    {istEinfuhrUst ? 'Einfuhrumsatzsteuer-Betrag (€)' : eingabeModus === 'brutto' ? 'Brutto-Betrag (€)' : 'Netto-Betrag (€)'}
                   </label>
-                  {!istKleinunternehmer && (
+                  {!istKleinunternehmer && !istEinfuhrUst && (
                     <button
                       type="button"
                       onClick={toggleEingabeModus}
@@ -865,12 +872,12 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                 </label>
                 <select
                   {...register('ust_satz')}
-                  disabled={istKleinunternehmer || istPrivatKategorie || ist25aAnkauf}
+                  disabled={istKleinunternehmer || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
-                  {istKleinunternehmer || istPrivatKategorie || ist25aAnkauf ? (
+                  {istKleinunternehmer || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst ? (
                     <option value="0">
-                      {istKleinunternehmer ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : '0 % (§25a – kein VSt-Abzug)'}
+                      {istKleinunternehmer ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : istEinfuhrUst ? 'entfällt (voller Betrag = Steuer)' : '0 % (§25a – kein VSt-Abzug)'}
                     </option>
                   ) : (
                     aktiveSaetze.map((s) => {
@@ -883,7 +890,13 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             </div>
 
             {/* USt-Vorschau */}
-            {ustSatz > 0 && eingabeWert > 0 && (
+            {istEinfuhrUst && eingabeWert > 0 && (
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-300">
+                <span className="block text-slate-400 dark:text-slate-500">Einfuhrumsatzsteuer (100 % abziehbar, KZ 62)</span>
+                {ustBetrag.toFixed(2)} €
+              </div>
+            )}
+            {!istEinfuhrUst && ustSatz > 0 && eingabeWert > 0 && (
               <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-300 grid grid-cols-3 gap-2">
                 <div>
                   <span className="block text-slate-400 dark:text-slate-500">Netto</span>
@@ -928,8 +941,13 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                   <option value="ig_erwerb">Innergemeinschaftlicher Erwerb §1a UStG → KZ 89/93/61</option>
                   <option value="13b_abs1">§13b Abs. 1 – EU-Dienstleistungen → KZ 46/47/67</option>
                   <option value="13b_abs2">§13b Abs. 2 – Bauleistungen/Reinigung etc. → KZ 84/85/67</option>
+                  <option value="einfuhr_ust">Einfuhrumsatzsteuer (Zoll/DHL-Nachforderung) → KZ 62</option>
                 </select>
-                {ust_sonderfall && (
+                {istEinfuhrUst ? (
+                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                    ℹ️ Trage den vollen von DHL/Zoll verlangten Einfuhrumsatzsteuer-Betrag ein – er wird komplett als Vorsteuer abgezogen (KZ 62), keine Aufteilung nötig. Einen Zollanteil (falls vorhanden) getrennt über die Kategorie „Zoll / Einfuhrabgaben" buchen.
+                  </p>
+                ) : ust_sonderfall && (
                   <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
                     ℹ️ Rechnungsbetrag = Nettobetrag. USt ({ustSatzStr} %) wird additiv berechnet und separat in der UStVA deklariert. Vorsteuer wird automatisch geltend gemacht.
                   </p>

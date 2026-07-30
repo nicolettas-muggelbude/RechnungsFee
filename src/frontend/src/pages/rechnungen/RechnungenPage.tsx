@@ -28,7 +28,7 @@ import { MailDialog } from '../../components/MailDialog'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
-import { istEuLand } from '../../utils/laender'
+import { istEuLand, LAENDER } from '../../utils/laender'
 import { rechnungenFilter, lieferscheinFilter } from '../../store/filterStore'
 
 // ---------------------------------------------------------------------------
@@ -2391,6 +2391,39 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     !istKleinunternehmer &&
     kunde?.land && kunde.land !== 'DE' && !istEuLand(kunde.land)
   )
+  // Drittland-Hinweis bei Eingangsrechnungen (Issue #315-Folgethema): kein automatisches
+  // Umschalten der Kategorie (aus dem Land allein lässt sich nicht ableiten ob USt im
+  // Kaufpreis steckt, z.B. Amazon/Ebay-IOSS vs. Alibaba-Direktimport) - nur ein Hinweis,
+  // solange noch eine der unspezifischen Standard-Wareneinkauf-Kategorien gewählt ist.
+  const lieferant = lieferanten?.find((l: any) => String(l.id) === partnerId)
+  const lieferantLand = typ === 'eingang' ? (partnerId ? lieferant?.land : partnerLand) : undefined
+  const lieferantDrittland = !!(lieferantLand && lieferantLand !== 'DE' && !istEuLand(lieferantLand))
+  const positionenOhneDrittlandKat = positionen.some((p) => {
+    if (!p.beschreibung.trim()) return false
+    if (!p.kategorie_id) return true
+    const kat = (kategorien ?? []).find((k) => String(k.id) === p.kategorie_id)
+    return !!kat && ['Wareneinkauf', 'Wareneinkauf (7%)', 'Wareneinkauf Nicht-EU'].includes(kat.name)
+  })
+  const zeigeDrittlandHinweis = typ === 'eingang' && lieferantDrittland && positionenOhneDrittlandKat
+  // Warnung: Zoll/Einfuhrumsatzsteuer-Position gemeinsam mit einer andersartigen Position
+  // auf derselben Rechnung. Die Zahlungsbuchung gruppiert Positionen nur nach USt-Satz, nicht
+  // nach Kategorie (außer bei §25a-Mischrechnungen) - bei gleichem Satz (meist 0 %) würde die
+  // Einfuhr-Position sonst stillschweigend unter der anderen Kategorie mitgebucht und ihr
+  // Betrag ginge unter. Zoll/DHL gehört ohnehin auf eine eigene Rechnung (eigener Lieferant).
+  const ZOLL_EINFUHR_KAT_NAMEN = new Set(['Zoll / Einfuhrabgaben', 'Einfuhrumsatzsteuer (Zoll/DHL)'])
+  const zeigeZollMischWarnung = (() => {
+    if (typ !== 'eingang') return false
+    const befuellte = positionen.filter((p) => p.beschreibung.trim() && p.kategorie_id)
+    const zollPositionen = befuellte.filter((p) => {
+      const kat = (kategorien ?? []).find((k) => String(k.id) === p.kategorie_id)
+      return !!kat && ZOLL_EINFUHR_KAT_NAMEN.has(kat.name)
+    })
+    if (zollPositionen.length === 0) return false
+    return befuellte.some((p) =>
+      !zollPositionen.includes(p) &&
+      zollPositionen.some((zp) => zp.ust_satz === p.ust_satz && zp.kategorie_id !== p.kategorie_id)
+    )
+  })()
   useEffect(() => {
     if (initial || typ !== 'ausgang' || sonderfallManuell) return
     const artikelTypen = positionen.map((p) => p.art_typ).filter((t): t is ArtikelTyp => !!t)
@@ -2542,7 +2575,18 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   }
 
   function updatePosition(i: number, field: keyof Positionszeile, value: string) {
-    setPositionen((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)))
+    setPositionen((prev) => prev.map((p, idx) => {
+      if (idx !== i) return p
+      const next = { ...p, [field]: value }
+      // Kategoriewechsel schlägt den hinterlegten USt-Satz der Kategorie vor (z. B. 0 % bei
+      // "Wareneinkauf Drittland (ohne USt)") - sonst bleibt der zuvor gewählte Satz stehen,
+      // auch wenn er zur neuen Kategorie nicht mehr passt.
+      if (field === 'kategorie_id' && !istKleinunternehmer) {
+        const kat = (kategorien ?? []).find((k) => String(k.id) === value)
+        if (kat) next.ust_satz = String(kat.ust_satz_standard)
+      }
+      return next
+    }))
   }
 
   function zusammenfassenNachSteuersatz() {
@@ -3069,10 +3113,14 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
-      {/* Einmalkunde-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
-      {typ === 'ausgang' && !partnerId && partnerFreitext.trim() && (
+      {/* Einmalkunde/Freitext-Lieferant-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
+      {!partnerId && partnerFreitext.trim() && (
         <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-3 space-y-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400">Adresse des Einmalkunden (optional – erscheint im PDF)</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {typ === 'ausgang'
+              ? 'Adresse des Einmalkunden (optional – erscheint im PDF)'
+              : 'Adresse des Lieferanten (optional – Land wichtig für die richtige Buchungskategorie bei Auslandslieferanten)'}
+          </p>
           <div className="flex gap-2">
             <div className="flex-1">
               <input
@@ -3112,15 +3160,14 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
-            <div className="w-20">
-              <input
-                type="text"
-                value={partnerLand}
-                onChange={e => setPartnerLand(e.target.value.toUpperCase().slice(0, 2))}
-                placeholder="DE"
-                maxLength={2}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 uppercase"
-              />
+            <div className="w-40">
+              <select
+                value={partnerLand || 'DE'}
+                onChange={e => setPartnerLand(e.target.value)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+              >
+                {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+              </select>
             </div>
           </div>
         </div>
@@ -3211,6 +3258,24 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             )}
           </div>
         </div>
+
+        {zeigeDrittlandHinweis && (
+          <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <span className="shrink-0">⚠</span>
+            <span>
+              Lieferant sitzt außerhalb der EU. Prüfe, ob eine der Kategorien „Wareneinkauf Drittland (USt bereits in Rechnung)", „Wareneinkauf Drittland (ohne USt)" oder „Einfuhrumsatzsteuer (Zoll/DHL)" besser passt als die aktuelle Auswahl – je nachdem ob die Rechnung schon USt ausweist.
+            </span>
+          </div>
+        )}
+
+        {zeigeZollMischWarnung && (
+          <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <span className="shrink-0">⚠</span>
+            <span>
+              „Zoll / Einfuhrabgaben" bzw. „Einfuhrumsatzsteuer (Zoll/DHL)" zusammen mit einer anderen Kategorie beim gleichen USt-Satz auf dieser Rechnung – beim Bezahlen würden beide Beträge in einer Buchung zusammengefasst. DHL/Zoll-Rechnungen gehören als eigene Eingangsrechnung erfasst (eigener Lieferant, eigenes Datum), nicht als Position auf der Warenrechnung.
+            </span>
+          </div>
+        )}
 
         {/* Schnellmodus (nur Eingang) */}
         {typ === 'eingang' && schnellmodus ? (

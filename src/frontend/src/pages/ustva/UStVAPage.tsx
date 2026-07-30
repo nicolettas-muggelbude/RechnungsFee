@@ -29,6 +29,7 @@ const KZ_META: KZMeta[] = [
   ['', '85', 'Umsatzsteuer §13b Abs. 2', true, true],
   ['F. Abziehbare Vorsteuerbeträge', '66', 'Vorsteuer aus Rechnungen (§15 Abs. 1 Satz 1 Nr. 1 UStG)', false, true],
   ['', '61', 'Vorsteuer ig. Erwerb (§15 Abs. 1 Satz 1 Nr. 3 UStG)', false, true],
+  ['', '62', 'Entstandene Einfuhrumsatzsteuer (§15 Abs. 1 Satz 1 Nr. 2 UStG)', false, true],
   ['', '67', 'Vorsteuer aus §13b-Leistungen (§15 Abs. 1 Satz 1 Nr. 4 UStG)', false, true],
 ]
 

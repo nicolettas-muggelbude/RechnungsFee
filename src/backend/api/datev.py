@@ -118,6 +118,10 @@ def _bu(j: Journaleintrag, skr: str, konto: Optional[str], db: Optional[Session]
         return "94" if int(j.ust_satz or 0) >= 19 else "91"
     if sf == "13b_abs1":
         return "94"
+    if sf == "einfuhr_ust":
+        # Entstandene Einfuhrumsatzsteuer (Konto 1588/1433) ist bereits ein reines
+        # Vorsteuer-Konto - kein BU-Schlüssel nötig, DATEV bucht den vollen Betrag direkt.
+        return ""
     if j.marge_25a_brutto is not None:
         # §25a Differenzbesteuerung hat keinen zweistelligen BU-Schlüssel - DATEV erkennt
         # das am Sachkonto (Automatikkonto 8199 SKR03 / 4134 SKR04, siehe Issue #303).

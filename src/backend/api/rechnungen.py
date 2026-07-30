@@ -2076,9 +2076,11 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             sonderfall = "13b_abs1"
         elif "3120" in konten_kat or "5920" in konten_kat:
             sonderfall = "13b_abs2"
+        elif "1588" in konten_kat or "1433" in konten_kat:
+            sonderfall = "einfuhr_ust"
         else:
             sonderfall = "13b_abs1" if rechnung.ist_reverse_charge else None
-        if sonderfall and satz > 0:
+        if sonderfall and sonderfall != "einfuhr_ust" and satz > 0:
             satz_i = int(satz)
             if sonderfall == "ig_erwerb":
                 ust03 = {19: "1780", 7: "1781"}.get(satz_i, ust03)
@@ -2086,7 +2088,13 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             elif sonderfall in ("13b_abs1", "13b_abs2"):
                 ust03 = {19: "1787", 7: "1787"}.get(satz_i, ust03)
                 ust04 = {19: "3803", 7: "3803"}.get(satz_i, ust04)
-        if satz > 0:
+        if sonderfall == "einfuhr_ust":
+            # Einfuhrumsatzsteuer (DHL/Zoll): der Zahlbetrag IST bereits die Steuer, kein
+            # Netto-Anteil - analog zu journal.py _felder_aus_data(). kat.konto_skr03/04
+            # (1588/1433) ist bereits das Vorsteuerkonto selbst, kein separates USt-Gegenkonto
+            # noetig (ust03/ust04 bleiben unveraendert, siehe Bedingung oben).
+            n, u = Decimal("0.00"), brutto
+        elif satz > 0:
             if marge_25a is not None:
                 # §25a: USt nur auf Brutto-Marge, nicht auf vollen VK-Preis. netto_betrag
                 # bleibt der volle Zahlbetrag abzueglich dieser margenbasierten USt - der
@@ -2101,7 +2109,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                 u = (brutto - n).quantize(Decimal("0.01"), ROUND_HALF_UP)
         else:
             n, u = brutto, Decimal("0.00")
-        vst_abzug = (art == "Ausgabe" and satz > 0)
+        vst_abzug = (art == "Ausgabe" and (satz > 0 or sonderfall == "einfuhr_ust"))
         e = Journaleintrag(
             datum=data.datum,
             belegnr=_naechste_belegnr_journal(db, data.datum),
@@ -2256,7 +2264,15 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             sp_kat = db.query(Kategorie).filter(Kategorie.id == sp.kategorie_id).first()
             if not sp_kat:
                 raise HTTPException(status_code=404, detail=f"Kategorie {sp.kategorie_id} nicht gefunden.")
-            e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung, marge_25a=split_marge_25a)
+            # Jede Split-Zeile bekommt den USt-Satz IHRER eigenen Kategorie, nicht den
+            # dominanten Satz der Gesamtrechnung (sonst würde z.B. eine 0%-Kategorie wie
+            # "Zoll / Einfuhrabgaben" fälschlich mit dem Satz einer anderen Position der
+            # Rechnung aufgesplittet - genau der Grund für Split-Zahlungen ist ja, Positionen
+            # mit unterschiedlichen Sätzen/Kategorien sauber zu trennen).
+            sp_satz = Decimal("0") if steuerbefreiung_grund else Decimal(str(sp_kat.ust_satz_standard))
+            sp_ust03, sp_ust04 = (_ust_konto(art, sp_satz) if sp_satz > 0 else (None, None))
+            e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung,
+                                  sp_satz, sp_ust03, sp_ust04, marge_25a=split_marge_25a)
             db.add(e)
             if i == 0:
                 erster_eintrag = e

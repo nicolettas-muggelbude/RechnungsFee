@@ -14,6 +14,8 @@ KZ-Mapping (konto_ust_skr03/04 → Kennziffer):
   1583 / 1402 → KZ 61     (Vorsteuer ig. Erwerb, satzunabhängig aggregiert)
   1787        → KZ 84/85  (§13b Abs. 2, Empfänger schuldet)
   1789        → KZ 46/47  (§13b Abs. 1, EU-Dienstleistungen)
+  ust_sonderfall="einfuhr_ust" (Konto 1588/1433) → KZ 62 (Einfuhrumsatzsteuer,
+                voller Buchungsbetrag = Vorsteuer, kein Netto-/Steuersplit)
   vorsteuer_betrag, art=Ausgabe, andere Konten → KZ 66 (Vorsteuer Inland)
 
 Hinweis: Bei festen Steuersätzen (19%/7%/0%) gibt es laut amtlichem Vordruckmuster
@@ -82,6 +84,8 @@ KZ_META = [
      "Vorsteuer aus Rechnungen (§15 Abs. 1 Satz 1 Nr. 1 UStG)", False, True),
     ("", "61",
      "Vorsteuer ig. Erwerb (§15 Abs. 1 Satz 1 Nr. 3 UStG)", False, True),
+    ("", "62",
+     "Entstandene Einfuhrumsatzsteuer (§15 Abs. 1 Satz 1 Nr. 2 UStG)", False, True),
     ("", "67",
      "Vorsteuer aus §13b-Leistungen (§15 Abs. 1 Satz 1 Nr. 4 UStG)", False, True),
 ]
@@ -190,6 +194,11 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                 kz["kz_85"] += e.ust_betrag
                 if e.vorsteuer_betrag:
                     kz["kz_67"] += e.vorsteuer_betrag
+            elif sf == "einfuhr_ust":
+                # Entstandene Einfuhrumsatzsteuer: kein Bemessungsgrundlage/Steuer-Paar wie bei
+                # den anderen Sonderfällen, nur der abziehbare Vorsteuerbetrag selbst (KZ 62).
+                if e.vorsteuer_betrag:
+                    kz["kz_62"] += e.vorsteuer_betrag
             continue  # nicht in reguläre USt/VSt-Erkennung
 
         if e.art == "Einnahme" and e.ust_betrag and e.ust_betrag != 0:
@@ -253,7 +262,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
     # ohne eigene Kennzahl (siehe KZ_META-Kommentar).
     ust = (kz["kz_83"] + kz["kz_88"] + kz["kz_98"] + kz["kz_47"] + kz["kz_85"]
            + ige_steuer_feste_saetze.quantize(q, ROUND_HALF_UP))
-    vst = kz["kz_66"] + kz["kz_61"] + kz["kz_67"]
+    vst = kz["kz_66"] + kz["kz_61"] + kz["kz_62"] + kz["kz_67"]
     kz["zahllast"] = (ust - vst).quantize(q, ROUND_HALF_UP)
     return kz
 
@@ -449,6 +458,7 @@ class UStVAErgebnis(BaseModel):
     # F – Vorsteuer
     kz_66: Decimal = ZERO
     kz_61: Decimal = ZERO
+    kz_62: Decimal = ZERO
     kz_67: Decimal = ZERO
     zahllast: Decimal = ZERO
     ist_kleinunternehmer: bool = False
@@ -474,6 +484,7 @@ class UStVASpeichernRequest(BaseModel):
     kz_85: Decimal = ZERO
     kz_66: Decimal = ZERO
     kz_61: Decimal = ZERO
+    kz_62: Decimal = ZERO
     kz_67: Decimal = ZERO
     zahllast: Decimal = ZERO
 
@@ -574,7 +585,7 @@ class JahresUStVAErgebnis(BaseModel):
     kz_90: Decimal = ZERO; kz_95: Decimal = ZERO; kz_98: Decimal = ZERO
     kz_46: Decimal = ZERO; kz_47: Decimal = ZERO
     kz_84: Decimal = ZERO; kz_85: Decimal = ZERO
-    kz_66: Decimal = ZERO; kz_61: Decimal = ZERO; kz_67: Decimal = ZERO
+    kz_66: Decimal = ZERO; kz_61: Decimal = ZERO; kz_62: Decimal = ZERO; kz_67: Decimal = ZERO
     zahllast: Decimal = ZERO
     # §19 Kleinunternehmer: Brutto-Umsätze ohne USt-Ausweis (Zeile 23)
     kz_48: Decimal = ZERO
@@ -786,7 +797,7 @@ def _generate_pdf_jahres(jahr: int, ergebnis: JahresUStVAErgebnis, unt: Unterneh
         "Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
         "Übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie deinem Steuerberater. "
         "Grundlage: Journalbuchungen nach Ist-Versteuerung (Zahlungsdatum). "
-        "Nicht abgedeckt: KZ 62 (Einfuhrumsatzsteuer), KZ 50 (unterjähriger KU-Wechsel), "
+        "Nicht abgedeckt: KZ 50 (unterjähriger KU-Wechsel), "
         "Reiseleistungen §25 UStG, Durchschnittssatz §23/23a UStG.",
         fill=True, align="L")
 
@@ -849,7 +860,7 @@ def jahresumsatzsteuer(
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
         kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
         kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),
-        kz_67=kz.get("kz_67", ZERO),
+        kz_62=kz.get("kz_62", ZERO), kz_67=kz.get("kz_67", ZERO),
         zahllast=jahressteuer,
         kz_48=kz_48,
         summe_vorauszahlungen=summe_voa,
@@ -903,7 +914,7 @@ def jahresumsatzsteuer_pdf(
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
         kz_84=kz.get("kz_84", ZERO), kz_85=kz.get("kz_85", ZERO),
         kz_66=kz.get("kz_66", ZERO), kz_61=kz.get("kz_61", ZERO),
-        kz_67=kz.get("kz_67", ZERO),
+        kz_62=kz.get("kz_62", ZERO), kz_67=kz.get("kz_67", ZERO),
         zahllast=jahressteuer, kz_48=kz_48,
         summe_vorauszahlungen=summe_voa,
         restschuld=(jahressteuer - summe_voa).quantize(q, ROUND_HALF_UP),

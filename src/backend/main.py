@@ -2991,6 +2991,16 @@ def _migrate_kategorien() -> None:
             # §25a Differenzbesteuerung Erlösseite – DATEV-Automatikkonto (Issue #303).
             # Schritt 1: nur Kategorie anlegen, noch nicht mit der Buchungslogik verdrahtet.
             {"name": "Differenzbesteuerung (§25a)",           "kontenart": "Erlös",   "konto_skr03": "8199", "konto_skr04": "4134", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Drittland-Warenkäufe (Alibaba/Amazon/Ebay etc.): USt schon in Rechnung (IOSS)
+            # vs. ohne USt (Direktimport, ggf. DHL-Nachforderung Zoll + Einfuhrumsatzsteuer)
+            {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+             "beschreibung": "z. B. Amazon/Ebay-Bestellungen aus Drittländern (China etc.) – USt steht schon auf der Rechnung/Bestellbestätigung (IOSS), ganz normal als Vorsteuer abziehbar."},
+            {"name": "Wareneinkauf Drittland (ohne USt)", "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "z. B. Alibaba-Direktkauf beim Hersteller – keine USt auf der Rechnung. Kommt später eine DHL-Nachforderung, diese getrennt über 'Zoll / Einfuhrabgaben' bzw. 'Einfuhrumsatzsteuer' buchen."},
+            {"name": "Zoll / Einfuhrabgaben", "kontenart": "Aufwand", "konto_skr03": "3850", "konto_skr04": "5840", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "Zollanteil einer DHL-Nachforderung – nicht als Vorsteuer abziehbar, reine Wareneinkaufs-Nebenkosten. Bei Kleinsendungen bis 150 € meist 0 €."},
+            {"name": "Einfuhrumsatzsteuer (Zoll/DHL)", "kontenart": "Aufwand", "konto_skr03": "1588", "konto_skr04": "1433", "eks_kategorie": None, "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 0,
+             "beschreibung": "EUSt-Anteil einer DHL-Nachforderung – zu 100 % als Vorsteuer abziehbar (§15 Abs. 1 Nr. 2 UStG, KZ 62). Vollen von DHL verlangten EUSt-Betrag eintragen, keine Aufteilung nötig."},
         ]
         for data in neue:
             if not db.query(Kategorie).filter(Kategorie.name == data["name"]).first():
