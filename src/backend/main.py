@@ -2980,6 +2980,14 @@ def _migrate_kategorien() -> None:
             # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen
             # Unternehmers 19% VSt/USt" (Issue #308, gegengeprüft am DATEV-Kontenrahmen)
             {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # §13b Abs. 1 – Drittland-Dienstleistungen (z.B. Anthropic/Claude, OpenAI, US-SaaS)
+            # Gleicher Reverse-Charge-Mechanismus + gleiche UStVA-KZ (46/47/67) wie bei der
+            # EU-Variante - das amtliche Formular unterscheidet hier nicht zwischen EU- und
+            # Drittland-Anbietern, nur der DATEV-Kontenrahmen führt getrennte Sachkonten.
+            # Konto = DATEV-Automatikkonto "Leistungen eines im Ausland ansässigen Unternehmers
+            # 19% VSt/USt" (gegengeprüft am DATEV-Kontenrahmen, Pendant zu 3123/5923)
+            {"name": "Drittland-Dienstleistungen (§13b Abs. 1)", "kontenart": "Aufwand", "konto_skr03": "3125", "konto_skr04": "5925", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+             "beschreibung": "z. B. Anthropic/Claude, OpenAI, andere US-SaaS-Anbieter. Reverse Charge: Du schuldest die USt (KZ 46/47) und kannst sie als Vorsteuer (KZ 67) abziehen. Rechnungsbetrag = Nettobetrag."},
             # §13b Abs. 2 – Bauleistungen, Gebäudereinigung, Sicherheit, Metallieferungen aus Inland/EU
             # Reverse Charge: Empfänger schuldet USt (KZ 84/85); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Bauleistungen eines im Inland ansässigen Unternehmers

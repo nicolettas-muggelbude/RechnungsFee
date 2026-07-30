@@ -328,7 +328,7 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
             konten = (kat.konto_skr03, kat.konto_skr04)
             if "3425" in konten or "5425" in konten:
                 data = data.model_copy(update={"ust_sonderfall": "ig_erwerb"})
-            elif "3123" in konten or "5923" in konten:
+            elif "3123" in konten or "5923" in konten or "3125" in konten or "5925" in konten:
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs1"})
             elif "3120" in konten or "5920" in konten:
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs2"})

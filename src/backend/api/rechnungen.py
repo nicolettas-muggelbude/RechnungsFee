@@ -2072,7 +2072,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         konten_kat = (kat.konto_skr03, kat.konto_skr04) if kat else (None, None)
         if "3425" in konten_kat or "5425" in konten_kat:
             sonderfall = "ig_erwerb"
-        elif "3123" in konten_kat or "5923" in konten_kat:
+        elif "3123" in konten_kat or "5923" in konten_kat or "3125" in konten_kat or "5925" in konten_kat:
             sonderfall = "13b_abs1"
         elif "3120" in konten_kat or "5920" in konten_kat:
             sonderfall = "13b_abs2"
