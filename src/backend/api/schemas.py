@@ -533,10 +533,19 @@ class KundeResponse(KundeBase):
     id: int
     ust_idnr_validiert: bool
     aktiv: bool
+    mahnung_gesperrt: bool
+    mahnung_warnung: bool
+    mahnsperre_bis: Optional[date] = None
+    mahnsperre_grund: Optional[str] = None
     erstellt_am: datetime
     aktualisiert_am: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MahnsperreSetzenRequest(BaseModel):
+    bis: date
+    grund: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -717,3 +726,216 @@ class ImportMappingVorlageResponse(ImportMappingVorlageCreate):
     erstellt_am: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Mahnwesen (docs/plan-mahnwesen.md, Abschnitt A)
+# ---------------------------------------------------------------------------
+
+class MahnstufeBase(BaseModel):
+    stufe: int
+    bezeichnung: str = "Zahlungserinnerung"
+    tage_nach_faelligkeit: int = 7
+    tage_nach_vorheriger: int = 14
+    betreff_vorlage: Optional[str] = None
+    text_vorlage: Optional[str] = None
+    mahngebuehr_aktiv: bool = False
+    mahngebuehr_privat: Decimal = Decimal("5.00")
+    mahngebuehr_gewerblich: Decimal = Decimal("40.00")
+    aktiv: bool = True
+    anhang_rechnung: bool = False
+    anhang_bisherige_mahnungen: bool = False
+    anhang_kontokorrent: bool = False
+
+
+class MahnstufeCreate(MahnstufeBase):
+    pass
+
+
+class MahnstufeUpdate(BaseModel):
+    stufe: Optional[int] = None
+    bezeichnung: Optional[str] = None
+    tage_nach_faelligkeit: Optional[int] = None
+    tage_nach_vorheriger: Optional[int] = None
+    betreff_vorlage: Optional[str] = None
+    text_vorlage: Optional[str] = None
+    mahngebuehr_aktiv: Optional[bool] = None
+    mahngebuehr_privat: Optional[Decimal] = None
+    mahngebuehr_gewerblich: Optional[Decimal] = None
+    aktiv: Optional[bool] = None
+    anhang_rechnung: Optional[bool] = None
+    anhang_bisherige_mahnungen: Optional[bool] = None
+    anhang_kontokorrent: Optional[bool] = None
+
+
+class MahnstufeResponse(MahnstufeBase):
+    id: int
+    loeschbar: bool = True  # False sobald mind. eine Mahnung diese Stufe per FK referenziert
+
+    model_config = {"from_attributes": True}
+
+
+class MahnwesenEinstellungenBase(BaseModel):
+    aktiv: bool = False
+    automation_modus: str = "halb"           # manuell | halb | voll
+    versand_mail: bool = True
+    versand_pdf: bool = False
+    konsolidiert_ab_stufe: int = 2
+    kundensperrung_aktiv: bool = False
+    # Zweistufig statt eine Schwelle + ein Modus: Warnung ab einer (niedrigeren) Stufe, harte
+    # Sperre erst ab einer weiteren (höheren) Stufe - beide unabhängig voneinander optional.
+    kundensperrung_warnung_ab_stufe: Optional[int] = None
+    kundensperrung_sperrung_ab_stufe: Optional[int] = None
+    verzugszinsen_aktiv: bool = False
+    verzugszinsen_ab_stufe: int = 2
+    basiszinssatz: Decimal = Decimal("2.12")
+    verzugszinsen_aufschlag_privat: Decimal = Decimal("5.0")
+    verzugszinsen_aufschlag_gewerblich: Decimal = Decimal("9.0")
+
+    @field_validator("automation_modus")
+    @classmethod
+    def check_automation_modus(cls, v: str) -> str:
+        if v not in ("manuell", "halb", "voll"):
+            raise ValueError("automation_modus muss manuell, halb oder voll sein")
+        return v
+
+
+class MahnwesenEinstellungenUpdate(MahnwesenEinstellungenBase):
+    pass
+
+
+class MahnwesenEinstellungenResponse(MahnwesenEinstellungenBase):
+    id: int
+    mahnstufen: List[MahnstufeResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class MahnungFaelligItem(BaseModel):
+    rechnung_id: int
+    rechnungsnummer: Optional[str] = None
+    kunde_id: Optional[int] = None
+    kunde_name: str
+    faellig_am: Optional[date] = None
+    offener_betrag: Decimal
+    mahnstufe_aktuell: int
+    empfohlene_stufe: int
+    empfohlene_stufe_bezeichnung: str
+
+
+class MahnungVorschauRequest(BaseModel):
+    rechnung_ids: List[int] = []
+    kunde_id: Optional[int] = None  # nur bei rechnung_ids=[] - reine Gebühren-Eskalation ohne Rechnung
+    stufe: Optional[int] = None
+
+
+class MahnungVorschauPosition(BaseModel):
+    rechnung_id: int
+    rechnungsnummer: Optional[str] = None
+    offener_betrag: Decimal
+    tage_ueberfaellig: int
+
+
+class MahnungVorschauResponse(BaseModel):
+    kunde_id: Optional[int] = None
+    kunde_name: str
+    stufe: int
+    bezeichnung: str
+    positionen: List[MahnungVorschauPosition]
+    offener_betrag_gesamt: Decimal
+    mahngebuehr: Decimal
+    verzugszinsen: Decimal
+    gebuehr_vorperioden: Decimal = Decimal("0")
+    gesamtforderung: Decimal
+
+
+class MahnungErstellenRequest(BaseModel):
+    rechnung_ids: List[int] = []
+    kunde_id: Optional[int] = None  # nur bei rechnung_ids=[] - reine Gebühren-Eskalation ohne Rechnung
+    stufe: Optional[int] = None
+
+
+class KundenGebuehrZahlungRequest(BaseModel):
+    betrag: Decimal
+    datum: date
+    zahlungsart: str
+
+
+class MahnungZahlungRequest(BaseModel):
+    betrag: Decimal
+    datum: date
+    zahlungsart: str = "Bank"
+
+
+class MahnungZahlungPosition(BaseModel):
+    rechnung_id: int
+    rechnungsnummer: Optional[str] = None
+    betrag: Decimal
+
+
+class MahnungZahlungResponse(BaseModel):
+    verteilung: List[MahnungZahlungPosition] = []
+    gebuehr_verrechnet: Decimal = Decimal("0")
+    kundenguthaben: Decimal = Decimal("0")
+
+
+class MahnungResponse(BaseModel):
+    id: int
+    mahnnummer: Optional[str] = None
+    kunde_id: Optional[int] = None
+    stufe: int
+    bezeichnung: Optional[str] = None
+    erstellt_am: datetime
+    versendet_am: Optional[datetime] = None
+    mahngebuehr: Decimal
+    verzugszinsen: Decimal
+    mahngebuehr_bezahlt: Decimal = Decimal("0")
+    verzugszinsen_bezahlt: Decimal = Decimal("0")
+    uebernommene_gebuehr_vorperioden: Decimal = Decimal("0")
+    uebertragen_in_mahnung_id: Optional[int] = None
+    offener_betrag_gesamt: Optional[Decimal] = None
+    status: str
+    rechnung_ids: List[int] = []
+
+    model_config = {"from_attributes": True}
+
+
+class MahnungHistorieItem(MahnungResponse):
+    kunde_name: str
+    kunde_email: Optional[str] = None
+    rechnungsnummern: str
+
+
+class MahnwesenRechnungMini(BaseModel):
+    rechnung_id: int
+    rechnungsnummer: Optional[str] = None
+    faellig_am: Optional[date] = None
+    offener_betrag: Decimal
+    mahnstufe_aktuell: int
+    zahlungserinnerung_faellig: bool  # Stufe 1 (immer 1:1 zur Rechnung) ist jetzt fällig
+    letzter_mahnung_status: Optional[str] = None  # entwurf | versendet | None (nie gemahnt)
+
+
+class MahnwesenKundeUebersicht(BaseModel):
+    kunde_id: int
+    kunde_name: str
+    anzahl_offene_rechnungen: int
+    aeltestes_faellig_am: Optional[date] = None
+    offener_betrag_gesamt: Decimal
+    aktionsfaellig: bool  # ob JETZT eine echte Mahnstufe (>= konsolidiert_ab_stufe) ansteht
+    naechste_stufe: Optional[int] = None
+    naechste_stufe_bezeichnung: Optional[str] = None
+    # Aufschlüsselung über alle Rechnungen des Kunden - ein Kunde kann mehrere dieser
+    # Zustände gleichzeitig haben (z.B. 1 versendet, 1 Entwurf, 2 fällig), ein einzelnes
+    # "Status"-Label würde das verfälschen (Nutzer-Feedback 2026-08-01).
+    anzahl_zahlungserinnerung_faellig: int = 0
+    anzahl_entwurf: int = 0
+    anzahl_versendet: int = 0
+    anzahl_offen: int = 0
+    mahnsperre_bis: Optional[date] = None
+    mahnsperre_grund: Optional[str] = None
+    rechnungen: List[MahnwesenRechnungMini] = []
+    # Kunde hat keine offene Rechnung mehr, aber noch offene Mahngebühr/Verzugszinsen aus
+    # früheren Mahnungen (Kontokorrent-Konsistenz, Abschnitt E) - offener_betrag_gesamt trägt
+    # in diesem Fall die offene Gebühr/Zinsen-Summe statt einer Rechnungssumme, rechnungen ist leer.
+    nur_offene_gebuehr: bool = False

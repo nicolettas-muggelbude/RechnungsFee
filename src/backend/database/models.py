@@ -373,6 +373,10 @@ class Kunde(Base):
     zugferd_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     skonto_prozent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     skonto_tage: Mapped[int | None] = mapped_column(Integer)
+    mahnung_gesperrt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mahnung_warnung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mahnsperre_bis: Mapped[date | None] = mapped_column(Date)
+    mahnsperre_grund: Mapped[str | None] = mapped_column(String(500))
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -624,6 +628,7 @@ class Rechnung(Base):
     immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     storniert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ueberzahlung_anerkannt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mahnstufe_aktuell: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     storno_grund: Mapped[str | None] = mapped_column(String(500))
     storno_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     storno_rechnungsnummer: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -894,6 +899,102 @@ class Forderung(Base):
     notiz: Mapped[str | None] = mapped_column(Text, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+
+# ---------------------------------------------------------------------------
+# Mahnwesen
+# ---------------------------------------------------------------------------
+
+class MahnwesenEinstellungen(Base):
+    """Globale Mahnwesen-Konfiguration (Singleton id=1)."""
+    __tablename__ = "mahnwesen_einstellungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    automation_modus: Mapped[str] = mapped_column(String(10), default="halb", nullable=False)  # manuell|halb|voll
+    versand_mail: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    versand_pdf: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    konsolidiert_ab_stufe: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    kundensperrung_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    kundensperrung_warnung_ab_stufe: Mapped[int | None] = mapped_column(Integer)
+    kundensperrung_sperrung_ab_stufe: Mapped[int | None] = mapped_column(Integer)
+    verzugszinsen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verzugszinsen_ab_stufe: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    basiszinssatz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("2.12"), nullable=False)
+    verzugszinsen_aufschlag_privat: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5.0"), nullable=False)
+    verzugszinsen_aufschlag_gewerblich: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("9.0"), nullable=False)
+
+
+class Mahnstufe(Base):
+    """Konfigurierbare Mahnstufe (z. B. Zahlungserinnerung, 1./2. Mahnung)."""
+    __tablename__ = "mahnstufen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stufe: Mapped[int] = mapped_column(Integer, nullable=False)
+    bezeichnung: Mapped[str] = mapped_column(String(100), default="Zahlungserinnerung", nullable=False)
+    tage_nach_faelligkeit: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    tage_nach_vorheriger: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    betreff_vorlage: Mapped[str | None] = mapped_column(Text)
+    text_vorlage: Mapped[str | None] = mapped_column(Text)
+    mahngebuehr_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mahngebuehr_privat: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5.00"), nullable=False)
+    mahngebuehr_gewerblich: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("40.00"), nullable=False)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Zusätzliche Dokumentanhänge beim Mail-Versand dieser Mahnstufe (Migration 137, Nutzer-
+    # Feedback: "Unter Einstellungen will ich für jede Mahnstufe festlegen können welche
+    # Dokumente ich anhängen möchte"). Bewusst je Stufe konfigurierbar, nicht global - eine
+    # Zahlungserinnerung braucht i.d.R. keinen Kontokorrent-Auszug, eine letzte Mahnung schon.
+    anhang_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anhang_bisherige_mahnungen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anhang_kontokorrent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Migration 138, Nutzer-Feedback 2026-08-02: "nur neu hinzugefügte Mahnstufen löschbar machen,
+    # alle anderen sind nicht löschbar" - die vier Standard-Stufen aus dem Seed sind system_stufe=1
+    # und damit nie löschbar (nur deaktivierbar); über "+ Neue Stufe" angelegte Stufen sind
+    # system_stufe=0 und damit löschbar, solange sie noch keine Mahnung referenziert.
+    system_stufe: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class Mahnung(Base):
+    """Mahnhistorie – eine Mahnung auf einer bestimmten Stufe, ggf. konsolidiert über mehrere Rechnungen."""
+    __tablename__ = "mahnungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    mahnnummer: Mapped[str | None] = mapped_column(String(50))
+    kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id", ondelete="CASCADE"))
+    mahnstufe_id: Mapped[int | None] = mapped_column(ForeignKey("mahnstufen.id", ondelete="SET NULL"))
+    stufe: Mapped[int] = mapped_column(Integer, nullable=False)          # Snapshot beim Erstellen
+    bezeichnung: Mapped[str | None] = mapped_column(String(100))          # Snapshot beim Erstellen
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    versendet_am: Mapped[datetime | None] = mapped_column(DateTime)
+    versand_mail: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    versand_pdf: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mahngebuehr: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    verzugszinsen: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    # Bereits durch eine Zahlung verrechneter Anteil (Migration 134) - getrennt statt einem
+    # Summenfeld, damit die Verrechnung je Kategorie (Mahngebühren/Verzugszinsen (Einnahme))
+    # korrekt gebucht werden kann, siehe utils/mahngebuehr_verrechnung.py.
+    mahngebuehr_bezahlt: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    verzugszinsen_bezahlt: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    # Kundenweite Übernahme offener Gebühr/Zinsen aus älteren Mahnungen (Migration 135) - zeigt
+    # auf die NEUE Mahnung, die die (dann nicht mehr separat offene) Gebühr/Zinsen dieser Mahnung
+    # übernommen hat. uebernommene_gebuehr_vorperioden ist rein informativ für PDF/Audit (wie viel
+    # von mahngebuehr+verzugszinsen dieser Mahnung selbst aus einer Vorperiode stammt) - die
+    # eigentliche Zahlungsverrechnung läuft unverändert über mahngebuehr_bezahlt/verzugszinsen_bezahlt,
+    # da der übernommene Betrag direkt in mahngebuehr/verzugszinsen mit eingerechnet wird.
+    uebertragen_in_mahnung_id: Mapped[int | None] = mapped_column(ForeignKey("mahnungen.id", ondelete="SET NULL"))
+    uebernommene_gebuehr_vorperioden: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    offener_betrag_gesamt: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    journal_id: Mapped[int | None] = mapped_column(ForeignKey("journal.id", ondelete="SET NULL"))
+    pdf_pfad: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="entwurf", nullable=False)  # entwurf|versendet|storniert
+
+
+class MahnungRechnung(Base):
+    """M:N Mahnung <-> Rechnung(en) – für konsolidierte Mahnungen über mehrere offene Rechnungen."""
+    __tablename__ = "mahnungen_rechnungen"
+
+    mahnung_id: Mapped[int] = mapped_column(ForeignKey("mahnungen.id", ondelete="CASCADE"), primary_key=True)
+    rechnung_id: Mapped[int] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), primary_key=True)
+    offener_betrag: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # Snapshot beim Erstellen
 
 
 # ---------------------------------------------------------------------------

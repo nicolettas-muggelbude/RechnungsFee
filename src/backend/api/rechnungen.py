@@ -22,10 +22,11 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
-    Beleg, Kunde, Lieferant, Rechnung, Rechnungsposition, Journaleintrag,
+    Beleg, Forderung, Kunde, Lieferant, Rechnung, Rechnungsposition, Journaleintrag,
     Kategorie, Unternehmen, Nummernkreis, Artikel,
 )
 from utils.signatur import signatur_journaleintrag
+from utils.mahngebuehr_verrechnung import offene_mahngebuehr_summe, verrechne_mahngebuehren
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
@@ -311,6 +312,20 @@ def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
             if not e.beschreibung.startswith("STORNO ") and e.id not in gruppen_ids
         ]
         rechnung.zahlungsdatum = max((e.datum for e in echte_eintraege), default=date.today())
+
+        # Verzugszinsen einer offenen (nicht konsolidierten) Mahnung dieser Rechnung auf den
+        # tatsächlichen Zahlungstag einfrieren, statt auf dem Tag der Mahnungs-Erstellung stehen
+        # zu bleiben - §288 BGB: Zinsen laufen bis zur tatsächlichen Zahlung (Nutzer-Vorgabe).
+        try:
+            from sqlalchemy import inspect as _sa_inspect2
+            _session2 = _sa_inspect2(rechnung).session
+            if _session2:
+                from api.mahnwesen import finalisiere_verzugszinsen_bei_zahlung
+                finalisiere_verzugszinsen_bei_zahlung(_session2, rechnung, rechnung.zahlungsdatum)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Verzugszinsen-Einfrierung fehlgeschlagen")
+
         # Automatisch: verknüpfter Auftrag → abgeschlossen
         # Pfad 1: Rechnung direkt aus Auftrag (rechnung_zu_auftrag_id)
         # Pfad 2: Auftrag → Proforma → Rechnung (proforma_zu_auftrag_id + rechnung_zu_proforma_id)
@@ -818,6 +833,9 @@ def liste_auftraege(db: Session = Depends(get_db)):
 @router.post("/auftraege", response_model=RechnungResponse, status_code=201)
 def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     """Erstellt einen neuen Auftrag ohne Angebot-Quelle."""
+    from api.mahnwesen import pruefe_kundensperre
+    pruefe_kundensperre(db, data.kunde_id, "ausgang")
+
     heute = date.today()
     auftragsnummer = _naechste_auftragsnummer(heute, db)
     auftrag = Rechnung(
@@ -893,6 +911,13 @@ def get_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=RechnungResponse, status_code=201)
 def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     """Rechnung mit Positionen anlegen. Summen werden automatisch berechnet."""
+    # Kundensperrung (Abschnitt E): deckt Rechnung/Angebot/Lieferschein/Proforma ab (alle
+    # laufen über diesen Endpunkt, unterschieden per dokument_typ) - Gutschrift und Storno
+    # bewusst ausgenommen, die mindern eine Forderung statt neue zu schaffen.
+    if data.dokument_typ not in ("Gutschrift",):
+        from api.mahnwesen import pruefe_kundensperre
+        pruefe_kundensperre(db, data.kunde_id, data.typ)
+
     if not data.ist_entwurf and data.datum > date.today():
         raise HTTPException(
             status_code=409,
@@ -1954,7 +1979,16 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
     restbetrag = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
-    if abs(restbetrag) <= Decimal("0.004"):
+    # Normalerweise blockiert eine bereits vollständig bezahlte Rechnung jede weitere Buchung -
+    # Ausnahme: die Rechnung selbst ist beglichen, aber aus einer Mahnung dieser (Ausgangs-)
+    # Rechnung ist noch Mahngebühr/Verzugszinsen offen. Der Dialog bleibt dann nutzbar, bucht
+    # aber ausschließlich gegen die offene Gebühr/Zinsen (kein Rechnungsanteil mehr, restbetrag
+    # ist ja bereits 0) - schließt die zuvor dokumentierte Lücke "Rechnung bezahlt, Gebühr nicht
+    # separat nachbuchbar".
+    offene_mg_bei_bezahlter_rechnung = Decimal("0")
+    if abs(restbetrag) <= Decimal("0.004") and not ist_gutschrift and rechnung.typ == "ausgang":
+        offene_mg_bei_bezahlter_rechnung = offene_mahngebuehr_summe(db, rechnung_id)
+    if abs(restbetrag) <= Decimal("0.004") and offene_mg_bei_bezahlter_rechnung <= Decimal("0.004"):
         raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt/verbucht.")
 
     # -----------------------------------------------------------------------
@@ -1985,9 +2019,22 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         betrag = data.betrag if data.betrag is not None else (
             restbetrag - data.skonto_betrag if data.skonto_betrag else restbetrag
         )
+        # Überschuss über den Restbetrag hinaus: bei Ausgangsrechnungen erst gegen offene
+        # Mahngebühr/Verzugszinsen verrechnen (Abschnitt E Mahnwesen), der danach verbleibende
+        # Rest wird als Kundenguthaben erfasst statt die Buchung zu blockieren - analog zum
+        # bereits bestehenden Verhalten beim Bank-Import (_buche_pfad_a). Eingangsrechnungen
+        # bleiben unverändert strikt auf den Restbetrag begrenzt (kein Mahnwesen für Lieferanten).
+        mahngebuehr_ueberschuss = Decimal("0")
+        kundenguthaben_ueberschuss = Decimal("0")
         if betrag > restbetrag:
-            raise HTTPException(status_code=422,
-                detail=f"Betrag ({betrag}) übersteigt den Restbetrag ({restbetrag}).")
+            if rechnung.typ != "ausgang":
+                raise HTTPException(status_code=422,
+                    detail=f"Betrag ({betrag}) übersteigt den Restbetrag ({restbetrag}).")
+            gesamt_ueberschuss = betrag - restbetrag
+            offene_mg = offene_mahngebuehr_summe(db, rechnung_id)
+            mahngebuehr_ueberschuss = min(gesamt_ueberschuss, offene_mg)
+            kundenguthaben_ueberschuss = gesamt_ueberschuss - mahngebuehr_ueberschuss
+            betrag = restbetrag
         if data.skonto_betrag and data.skonto_betrag > 0:
             total = (betrag + data.skonto_betrag).quantize(Decimal("0.01"), ROUND_HALF_UP)
             if total > restbetrag.quantize(Decimal("0.01"), ROUND_HALF_UP) + Decimal("0.01"):
@@ -2069,14 +2116,22 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # auf einer §13b/ig.Erwerb-Kategorie IMMER None - weder USt-Sonderkonto (1780/
         # 1787 statt normalem Vorsteuerkonto) noch UStVA-Zuordnung griffen (Issue #315-
         # Nebenfund, entdeckt beim Pruefen des umgekehrten Falls Eingangsrechnungen).
-        konten_kat = (kat.konto_skr03, kat.konto_skr04) if kat else (None, None)
-        if "3425" in konten_kat or "5425" in konten_kat:
+        # WICHTIG: SKR03- und SKR04-Konto GETRENNT prüfen (nicht als gemeinsames Tupel) -
+        # Kontonummern sind zwischen den beiden Kontenrahmen nicht eindeutig. Z.B. hat
+        # "Innergemeinschaftliche Lieferungen" konto_skr04="3125", während "Drittland-
+        # Dienstleistungen (§13b Abs. 1)" konto_skr03="3125" hat - eine gemischte Prüfung
+        # "3125" in (skr03, skr04) trifft auf beide Kategorien zu und stufte eine Zahlung auf
+        # ig. Lieferungen faelschlich als 13b_abs1 ein (KZ 46 statt KZ 41 in der USt-VA,
+        # Issue #326 - identischer Fehler wie in journal.py _felder_aus_data()).
+        skr03_kat = kat.konto_skr03 if kat else None
+        skr04_kat = kat.konto_skr04 if kat else None
+        if skr03_kat == "3425" or skr04_kat == "5425":
             sonderfall = "ig_erwerb"
-        elif "3123" in konten_kat or "5923" in konten_kat or "3125" in konten_kat or "5925" in konten_kat:
+        elif skr03_kat in ("3123", "3125") or skr04_kat in ("5923", "5925"):
             sonderfall = "13b_abs1"
-        elif "3120" in konten_kat or "5920" in konten_kat:
+        elif skr03_kat == "3120" or skr04_kat == "5920":
             sonderfall = "13b_abs2"
-        elif "1588" in konten_kat or "1433" in konten_kat:
+        elif skr03_kat == "1588" or skr04_kat == "1433":
             sonderfall = "einfuhr_ust"
         else:
             sonderfall = "13b_abs1" if rechnung.ist_reverse_charge else None
@@ -2281,6 +2336,19 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                     rechnung.kategorie_id = sp.kategorie_id
         db.flush()
         _aktualisiere_zahlungsstatus(rechnung)
+
+        if mahngebuehr_ueberschuss > 0:
+            verrechne_mahngebuehren(
+                db, rechnung_id, mahngebuehr_ueberschuss, data.datum, data.zahlungsart,
+                _naechste_belegnr_journal,
+            )
+        if kundenguthaben_ueberschuss > 0:
+            db.add(Forderung(
+                typ="kundenguthaben", betrag=kundenguthaben_ueberschuss, partner_typ="kunde",
+                partner_id=rechnung.kunde_id, rechnung_id=rechnung.id, journal_id=erster_eintrag.id,
+                notiz=f"Überzahlung: {partner} · {kundenguthaben_ueberschuss:.2f} €",
+            ))
+
         db.commit()
         db.refresh(rechnung)
         db.refresh(erster_eintrag)
@@ -2309,25 +2377,28 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
     erster_eintrag = None
     marge_25a_arg = _marge_25a_gesamt if _marge_25a_gesamt > 0 else None
-    for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
-        # Bei gemischten Rechnungen (§25a + regulär) bekommt jede Gruppe ihre eigene
-        # Kategorie und Marge statt der einen Rechnungs-weiten Kategorie/Marge (Issue #305).
-        if hat_gemischte_25a and i < len(gruppen_keys):
-            key = gruppen_keys[i]
-            g_kat_id, g_kat_obj = gruppen_kategorie.get(key, (kategorie_id, kat_obj))
-            g_marge_gesamt = gruppen_marge.get(key)
-            g_marge_anteil = (
-                (g_marge_gesamt * g_betrag / gruppen_brutto_mixed[key]).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                if g_marge_gesamt and gruppen_brutto_mixed.get(key) else None
-            )
-        else:
-            g_kat_id, g_kat_obj = kategorie_id, kat_obj
-            g_marge_anteil = marge_25a_arg
-        e = _erstelle_eintrag(g_kat_id, g_kat_obj, g_betrag, beschreibung, g_satz, g_ust_skr03, g_ust_skr04,
-                              marge_25a=g_marge_anteil)
-        db.add(e)
-        if i == 0:
-            erster_eintrag = e
+    # Restbetrag der Rechnung selbst kann 0 sein, wenn nur noch offene Mahngebühr/Verzugszinsen
+    # nachgebucht wird (siehe Lücke oben) - dann keinen sinnlosen 0-€-Journaleintrag erzeugen.
+    if betrag > Decimal("0.004"):
+        for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+            # Bei gemischten Rechnungen (§25a + regulär) bekommt jede Gruppe ihre eigene
+            # Kategorie und Marge statt der einen Rechnungs-weiten Kategorie/Marge (Issue #305).
+            if hat_gemischte_25a and i < len(gruppen_keys):
+                key = gruppen_keys[i]
+                g_kat_id, g_kat_obj = gruppen_kategorie.get(key, (kategorie_id, kat_obj))
+                g_marge_gesamt = gruppen_marge.get(key)
+                g_marge_anteil = (
+                    (g_marge_gesamt * g_betrag / gruppen_brutto_mixed[key]).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                    if g_marge_gesamt and gruppen_brutto_mixed.get(key) else None
+                )
+            else:
+                g_kat_id, g_kat_obj = kategorie_id, kat_obj
+                g_marge_anteil = marge_25a_arg
+            e = _erstelle_eintrag(g_kat_id, g_kat_obj, g_betrag, beschreibung, g_satz, g_ust_skr03, g_ust_skr04,
+                                  marge_25a=g_marge_anteil)
+            db.add(e)
+            if i == 0:
+                erster_eintrag = e
     eintrag = erster_eintrag
 
     if data.skonto_betrag and data.skonto_betrag > 0:
@@ -2336,9 +2407,30 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
     db.flush()
     _aktualisiere_zahlungsstatus(rechnung)
+
+    mahngebuehr_journal_ids: list[int] = []
+    if mahngebuehr_ueberschuss > 0:
+        _, mahngebuehr_journal_ids = verrechne_mahngebuehren(
+            db, rechnung_id, mahngebuehr_ueberschuss, data.datum, data.zahlungsart,
+            _naechste_belegnr_journal,
+        )
+    if kundenguthaben_ueberschuss > 0:
+        db.add(Forderung(
+            typ="kundenguthaben", betrag=kundenguthaben_ueberschuss, partner_typ="kunde",
+            partner_id=rechnung.kunde_id, rechnung_id=rechnung.id,
+            journal_id=eintrag.id if eintrag else (mahngebuehr_journal_ids[0] if mahngebuehr_journal_ids else None),
+            notiz=f"Überzahlung: {partner} · {kundenguthaben_ueberschuss:.2f} €",
+        ))
+
+    # War der Rechnungsanteil 0 (reine Mahngebühr-Nachzahlung), gibt es keinen "eintrag" -
+    # dann die erste Mahngebühr-Buchung als Referenz für die Antwort verwenden.
+    if eintrag is None and mahngebuehr_journal_ids:
+        eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == mahngebuehr_journal_ids[0]).first()
+
     db.commit()
     db.refresh(rechnung)
-    db.refresh(eintrag)
+    if eintrag:
+        db.refresh(eintrag)
 
     return BarZahlungResult(
         journaleintrag_id=eintrag.id,
@@ -3879,3 +3971,33 @@ def sammelrechnung_erstellen(data: SammelrechnungCreate, db: Session = Depends(g
         db=db,
     )
     return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.get("/{rechnung_id}/mahnungen")
+def rechnung_mahnungen(rechnung_id: int, db: Session = Depends(get_db)):
+    """Mahnhistorie einer Rechnung (docs/plan-mahnwesen.md, Abschnitt B)."""
+    from database.models import Mahnung, MahnungRechnung
+    from .schemas import MahnungResponse
+
+    rows = (
+        db.query(Mahnung)
+        .join(MahnungRechnung, MahnungRechnung.mahnung_id == Mahnung.id)
+        .filter(MahnungRechnung.rechnung_id == rechnung_id)
+        .order_by(Mahnung.erstellt_am.desc())
+        .all()
+    )
+    ergebnis = []
+    for m in rows:
+        alle_rechnung_ids = [
+            rid for (rid,) in db.query(MahnungRechnung.rechnung_id).filter(MahnungRechnung.mahnung_id == m.id).all()
+        ]
+        ergebnis.append(MahnungResponse(
+            id=m.id, mahnnummer=m.mahnnummer, kunde_id=m.kunde_id, stufe=m.stufe,
+            bezeichnung=m.bezeichnung, erstellt_am=m.erstellt_am, versendet_am=m.versendet_am,
+            mahngebuehr=m.mahngebuehr, verzugszinsen=m.verzugszinsen,
+            mahngebuehr_bezahlt=m.mahngebuehr_bezahlt, verzugszinsen_bezahlt=m.verzugszinsen_bezahlt,
+            uebernommene_gebuehr_vorperioden=m.uebernommene_gebuehr_vorperioden,
+            uebertragen_in_mahnung_id=m.uebertragen_in_mahnung_id,
+            offener_betrag_gesamt=m.offener_betrag_gesamt, status=m.status, rechnung_ids=alle_rechnung_ids,
+        ))
+    return ergebnis

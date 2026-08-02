@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, openUrl, isTauri, type EntwurfErgebnis } from '../api/client'
+import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, openUrl, isTauri, type EntwurfErgebnis } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useAnsicht } from '../hooks/useAnsicht'
@@ -62,6 +62,7 @@ const einstellungenNav = [
   { to: '/kategorien',       label: 'Kategorien',        icon: 'label' },
   { to: '/nummernkreise',    label: 'Nummernkreise',     icon: 'pin' },
   { to: '/ust-saetze',       label: 'Steuersätze',       icon: 'percent' },
+  { to: '/mahnwesen-einstellungen', label: 'Mahnwesen',  icon: 'gavel' },
   { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: 'file_copy' },
   { to: '/unternehmen',      label: 'Unternehmen',       icon: 'business' },
 ]
@@ -310,10 +311,21 @@ export function AppLayout() {
     enabled: !unt?.ist_kleinunternehmer,
   })
 
+  const { data: mahnwesenEinst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+
   const untDef = unt ?? undefined
   const navKontext: NavKontext = { unt: untDef, zm: zmPruefung }
   const auswertungNav = auswertungNavAlle.filter(n => n.zeigen(navKontext))
-  const fakturierungNav = fakturierungAlleItems.filter(n => n.zeigen(untDef))
+  const fakturierungNav = [
+    ...fakturierungAlleItems.filter(n => n.zeigen(untDef)),
+    // Eigene Tabelle (mahnwesen_einstellungen), nicht Teil von Unternehmen - daher hier
+    // separat angehängt statt über die zeigen(u: Unternehmen)-Signatur oben.
+    ...(mahnwesenEinst?.aktiv ? [{ to: '/mahnwesen', label: 'Mahnwesen', icon: 'gavel', bald: false }] : []),
+  ]
   const buchhaltungNav = [
     ...buchhaltungNavBase,
     ...(untDef?.buchungsvorlagen_aktiv ? [{ to: '/buchungsvorlagen', label: 'Buchungsvorlagen', icon: 'repeat' }] : []),

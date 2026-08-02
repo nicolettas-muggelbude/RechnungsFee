@@ -6,7 +6,7 @@ Startwerte für die Datenbank:
 
 import json
 from sqlalchemy.orm import Session
-from .models import Kategorie, EuLand, Nummernkreis, BankTemplate
+from .models import Kategorie, EuLand, Nummernkreis, BankTemplate, Mahnstufe
 
 
 STANDARD_KATEGORIEN = [
@@ -19,6 +19,11 @@ STANDARD_KATEGORIEN = [
     {"name": "Eigenverbrauch von Waren (7%)",  "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
     {"name": "USt auf Eigenverbrauch",         "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Mahnwesen (docs/plan-mahnwesen.md): Mahngebühren gelten steuerlich als Schadensersatz
+    # (§288 BGB), Verzugszinsen als Zinsertrag - beides nicht umsatzsteuerbar, daher getrennt
+    # von den umsatzsteuerpflichtigen Betriebseinnahmen. euer_zeile noch offen (TODO im Plan).
+    {"name": "Mahngebühren",                   "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Verzugszinsen (Einnahme)",       "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Zuwendungen von Dritten",        "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # Privateinlage ist kein EKS-Feld (nicht im offiziellen Formular)
     {"name": "Privateinlage",                  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": None,    "euer_zeile": 107,  "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -189,6 +194,8 @@ def seed_nummernkreise(db: Session) -> None:
         neue.append(Nummernkreis(bezeichnung="Gutschriften", typ="gutschrift", format="GS-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "stornorechnung" not in typen:
         neue.append(Nummernkreis(bezeichnung="Stornorechnungen", typ="stornorechnung", format="STORNO-JJNNNN", naechste_nr=1, reset_jaehrlich=True))
+    if "mahnung" not in typen:
+        neue.append(Nummernkreis(bezeichnung="Mahnungen", typ="mahnung", format="MHN-YY####", naechste_nr=1, reset_jaehrlich=True))
     if neue:
         for nk in neue:
             db.add(nk)
@@ -495,9 +502,30 @@ def seed_bank_templates(db: Session) -> None:
     db.commit()
 
 
+def seed_mahnstufen(db: Session) -> None:
+    """Standard-Mahnstufen (docs/plan-mahnwesen.md) – nur anlegen falls noch keine existieren,
+    damit individuelle Anpassungen der Nutzerin bei einem Neustart nicht überschrieben werden."""
+    if db.query(Mahnstufe).count() > 0:
+        return
+    standard = [
+        {"stufe": 1, "bezeichnung": "Zahlungserinnerung", "tage_nach_faelligkeit": 7, "tage_nach_vorheriger": 14,
+         "mahngebuehr_aktiv": False, "mahngebuehr_privat": "0.00", "mahngebuehr_gewerblich": "0.00", "system_stufe": True},
+        {"stufe": 2, "bezeichnung": "1. Mahnung", "tage_nach_faelligkeit": 7, "tage_nach_vorheriger": 14,
+         "mahngebuehr_aktiv": True, "mahngebuehr_privat": "5.00", "mahngebuehr_gewerblich": "40.00", "system_stufe": True},
+        {"stufe": 3, "bezeichnung": "2. Mahnung", "tage_nach_faelligkeit": 7, "tage_nach_vorheriger": 14,
+         "mahngebuehr_aktiv": True, "mahngebuehr_privat": "5.00", "mahngebuehr_gewerblich": "40.00", "system_stufe": True},
+        {"stufe": 4, "bezeichnung": "Letzte Mahnung vor Inkasso", "tage_nach_faelligkeit": 7, "tage_nach_vorheriger": 10,
+         "mahngebuehr_aktiv": True, "mahngebuehr_privat": "5.00", "mahngebuehr_gewerblich": "40.00", "system_stufe": True},
+    ]
+    for data in standard:
+        db.add(Mahnstufe(**data))
+    db.commit()
+
+
 def run_all_seeds(db: Session) -> None:
     seed_kategorien(db)
     seed_eu_laender(db)
     seed_nummernkreise(db)
     seed_ust_saetze(db)
     seed_bank_templates(db)
+    seed_mahnstufen(db)

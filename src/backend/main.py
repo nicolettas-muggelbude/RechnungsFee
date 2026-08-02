@@ -31,9 +31,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 130
+SCHEMA_VERSION = 138
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -91,6 +91,7 @@ app.include_router(auto_filter.router)
 app.include_router(forderungen.router)
 app.include_router(cockpit.router)
 app.include_router(datenmigration.router)
+app.include_router(mahnwesen.router)
 
 
 @app.post("/api/shutdown")
@@ -2790,6 +2791,221 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 130 (Issue #323: rechnungen.ist_ausfuhrlieferung ergaenzt)")
 
+        if version < 131:
+            # Mahnwesen (docs/plan-mahnwesen.md, Abschnitt A) - optionales Modul, per
+            # mahnwesen_einstellungen.aktiv standardmaessig aus (analog Lieferscheine/
+            # Angebote/Bank-Import etc.), fuer Nutzer:innen die nur auf Vorkasse arbeiten.
+            tables = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+            if "mahnwesen_einstellungen" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE mahnwesen_einstellungen (
+                        id INTEGER PRIMARY KEY DEFAULT 1,
+                        aktiv BOOLEAN NOT NULL DEFAULT 0,
+                        automation_modus TEXT NOT NULL DEFAULT 'halb',
+                        versand_mail BOOLEAN NOT NULL DEFAULT 1,
+                        versand_pdf BOOLEAN NOT NULL DEFAULT 0,
+                        konsolidiert_ab_stufe INTEGER NOT NULL DEFAULT 2,
+                        kundensperrung_aktiv BOOLEAN NOT NULL DEFAULT 0,
+                        kundensperrung_ab_stufe INTEGER NOT NULL DEFAULT 3,
+                        kundensperrung_modus TEXT NOT NULL DEFAULT 'warnung',
+                        verzugszinsen_aktiv BOOLEAN NOT NULL DEFAULT 0,
+                        verzugszinsen_ab_stufe INTEGER NOT NULL DEFAULT 2,
+                        basiszinssatz NUMERIC(5,2) NOT NULL DEFAULT 2.12,
+                        verzugszinsen_aufschlag_privat NUMERIC(5,2) NOT NULL DEFAULT 5.0,
+                        verzugszinsen_aufschlag_gewerblich NUMERIC(5,2) NOT NULL DEFAULT 9.0
+                    )
+                """))
+            if "mahnstufen" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE mahnstufen (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        stufe INTEGER NOT NULL,
+                        bezeichnung TEXT NOT NULL DEFAULT 'Zahlungserinnerung',
+                        tage_nach_faelligkeit INTEGER NOT NULL DEFAULT 7,
+                        tage_nach_vorheriger INTEGER NOT NULL DEFAULT 14,
+                        betreff_vorlage TEXT,
+                        text_vorlage TEXT,
+                        mahngebuehr_aktiv BOOLEAN NOT NULL DEFAULT 0,
+                        mahngebuehr_privat NUMERIC(12,2) NOT NULL DEFAULT 5.00,
+                        mahngebuehr_gewerblich NUMERIC(12,2) NOT NULL DEFAULT 40.00,
+                        aktiv BOOLEAN NOT NULL DEFAULT 1
+                    )
+                """))
+            if "mahnungen" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE mahnungen (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        mahnnummer TEXT,
+                        kunde_id INTEGER REFERENCES kunden(id) ON DELETE CASCADE,
+                        mahnstufe_id INTEGER REFERENCES mahnstufen(id) ON DELETE SET NULL,
+                        stufe INTEGER NOT NULL,
+                        bezeichnung TEXT,
+                        erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        versendet_am DATETIME,
+                        versand_mail BOOLEAN NOT NULL DEFAULT 0,
+                        versand_pdf BOOLEAN NOT NULL DEFAULT 0,
+                        mahngebuehr NUMERIC(12,2) NOT NULL DEFAULT 0,
+                        verzugszinsen NUMERIC(12,2) NOT NULL DEFAULT 0,
+                        offener_betrag_gesamt NUMERIC(12,2),
+                        journal_id INTEGER REFERENCES journal(id) ON DELETE SET NULL,
+                        pdf_pfad TEXT,
+                        status TEXT NOT NULL DEFAULT 'entwurf'
+                    )
+                """))
+            if "mahnungen_rechnungen" not in tables:
+                conn.execute(text("""
+                    CREATE TABLE mahnungen_rechnungen (
+                        mahnung_id INTEGER NOT NULL REFERENCES mahnungen(id) ON DELETE CASCADE,
+                        rechnung_id INTEGER NOT NULL REFERENCES rechnungen(id) ON DELETE CASCADE,
+                        offener_betrag NUMERIC(12,2),
+                        PRIMARY KEY (mahnung_id, rechnung_id)
+                    )
+                """))
+            kunden_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "mahnung_gesperrt" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN mahnung_gesperrt BOOLEAN NOT NULL DEFAULT 0"))
+            rechnungen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "mahnstufe_aktuell" not in rechnungen_cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN mahnstufe_aktuell INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 131"))
+            conn.commit()
+            print("[Migration] Schema auf Version 131 (Mahnwesen: 4 neue Tabellen + kunden.mahnung_gesperrt + rechnungen.mahnstufe_aktuell)")
+
+        if version < 132:
+            # Manuelle, datierte Mahnsperre pro Kunde (z.B. Kunde ruft an, zahlt in einer
+            # Woche) - bewusst getrennt von kunden.mahnung_gesperrt (Migration 131): das ist
+            # die AUTOMATISCHE Kundensperrung ab kundensperrung_ab_stufe (noch nicht
+            # implementiert, Abschnitt E), hier geht es um einen manuell gesetzten, befristeten
+            # Aufschub ohne Bezug zur Mahnstufe.
+            kunden_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "mahnsperre_bis" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN mahnsperre_bis DATE"))
+            if "mahnsperre_grund" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN mahnsperre_grund VARCHAR(500)"))
+            conn.execute(text("PRAGMA user_version = 132"))
+            conn.commit()
+            print("[Migration] Schema auf Version 132 (kunden.mahnsperre_bis + mahnsperre_grund)")
+
+        if version < 133:
+            # Kundensperrung zweistufig statt "eine Schwelle + ein Modus" (Nutzer-Vorgabe: "Wenn
+            # ich für eine Mahnstufe erst eine Warnung haben möchte, möchte ich vielleicht bei der
+            # nächsten Mahnstufe eine Kundensperre") - zwei unabhängige, jeweils optionale
+            # Schwellenwerte statt kundensperrung_ab_stufe + kundensperrung_modus.
+            einst_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(mahnwesen_einstellungen)")).fetchall()}
+            # Alte Einzelspalten (kundensperrung_ab_stufe/-modus) nur übernehmen, wenn sie
+            # tatsächlich existieren: bei einer Neuinstallation legt Base.metadata.create_all()
+            # die Tabelle VOR den Migrationen bereits mit dem aktuellen (zweistufigen) Schema an -
+            # dort gab es die alten Spalten nie, ein SELECT darauf würde die komplette Migration
+            # zum Absturz bringen (kaputte Neuinstallationen, entdeckt bei Issue #326 Nebenrecherche).
+            hatte_alte_spalten = "kundensperrung_ab_stufe" in einst_cols
+            if "kundensperrung_warnung_ab_stufe" not in einst_cols:
+                conn.execute(text("ALTER TABLE mahnwesen_einstellungen ADD COLUMN kundensperrung_warnung_ab_stufe INTEGER"))
+            if "kundensperrung_sperrung_ab_stufe" not in einst_cols:
+                conn.execute(text("ALTER TABLE mahnwesen_einstellungen ADD COLUMN kundensperrung_sperrung_ab_stufe INTEGER"))
+            # Bestehende Konfiguration sinnvoll übernehmen: der alte modus entscheidet, welche der
+            # beiden neuen Stufen mit dem alten Schwellenwert befüllt wird.
+            if hatte_alte_spalten:
+                row = conn.execute(text(
+                    "SELECT kundensperrung_ab_stufe, kundensperrung_modus FROM mahnwesen_einstellungen WHERE id = 1"
+                )).fetchone()
+                if row is not None:
+                    alte_stufe, alter_modus = row
+                    if alter_modus == "sperrung":
+                        conn.execute(text(
+                            "UPDATE mahnwesen_einstellungen SET kundensperrung_sperrung_ab_stufe = :s WHERE id = 1"
+                        ), {"s": alte_stufe})
+                    else:
+                        conn.execute(text(
+                            "UPDATE mahnwesen_einstellungen SET kundensperrung_warnung_ab_stufe = :s WHERE id = 1"
+                        ), {"s": alte_stufe})
+            # Zweiter, unabhängiger Zustand pro Kunde: "nur gewarnt" vs. "hart gesperrt"
+            # (kunden.mahnung_gesperrt aus Migration 131 bleibt die harte Sperre).
+            kunden_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "mahnung_warnung" not in kunden_cols:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN mahnung_warnung BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 133"))
+            conn.commit()
+            print("[Migration] Schema auf Version 133 (Kundensperrung zweistufig: warnung_ab_stufe + sperrung_ab_stufe, kunden.mahnung_warnung)")
+
+        if version < 134:
+            # Mahngebühr/Verzugszinsen-Verrechnung (Abschnitt E): trackt je Mahnung, wieviel von
+            # mahngebuehr/verzugszinsen bereits durch eine Zahlung (manuell oder Bankabgleich)
+            # verrechnet wurde - getrennte Felder statt einem Summenfeld, damit die Verrechnung
+            # je Kategorie (Mahngebühren vs. Verzugszinsen (Einnahme)) korrekt gebucht werden kann.
+            mahnungen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(mahnungen)")).fetchall()}
+            if "mahngebuehr_bezahlt" not in mahnungen_cols:
+                conn.execute(text("ALTER TABLE mahnungen ADD COLUMN mahngebuehr_bezahlt NUMERIC(12,2) NOT NULL DEFAULT 0"))
+            if "verzugszinsen_bezahlt" not in mahnungen_cols:
+                conn.execute(text("ALTER TABLE mahnungen ADD COLUMN verzugszinsen_bezahlt NUMERIC(12,2) NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 134"))
+            conn.commit()
+            print("[Migration] Schema auf Version 134 (mahnungen.mahngebuehr_bezahlt/verzugszinsen_bezahlt)")
+
+        if version < 135:
+            # Kundenweite Übernahme offener Mahngebühr/Verzugszinsen (Abschnitt E, Nutzer-Vorgabe:
+            # "Solange offene Beträge vorhanden sind muss es auch in die nächste Mahnstufe gehen...
+            # sonst gibt es keine Übereinstimmung mit dem Kontokorrent"): wird eine neue Mahnung für
+            # einen Kunden erstellt, übernimmt sie automatisch noch offene Gebühr/Zinsen aus älteren,
+            # noch nicht übertragenen Mahnungen desselben Kunden (auch wenn deren ursprüngliche
+            # Rechnung inzwischen bezahlt ist) - siehe _offene_gebuehr_vorperioden_kunde().
+            mahnungen_cols2 = {r[1] for r in conn.execute(text("PRAGMA table_info(mahnungen)")).fetchall()}
+            if "uebertragen_in_mahnung_id" not in mahnungen_cols2:
+                conn.execute(text("ALTER TABLE mahnungen ADD COLUMN uebertragen_in_mahnung_id INTEGER REFERENCES mahnungen(id) ON DELETE SET NULL"))
+            if "uebernommene_gebuehr_vorperioden" not in mahnungen_cols2:
+                conn.execute(text("ALTER TABLE mahnungen ADD COLUMN uebernommene_gebuehr_vorperioden NUMERIC(12,2) NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 135"))
+            conn.commit()
+            print("[Migration] Schema auf Version 135 (mahnungen.uebertragen_in_mahnung_id/uebernommene_gebuehr_vorperioden)")
+
+        if version < 136:
+            # Datenfix: "Letzte Mahnung vor Klage" ist juristisch ungenau - vor einer Klage muss
+            # erst das gerichtliche Mahnverfahren durchlaufen werden (Frist verstrichen oder
+            # Widerspruch des Schuldners), das eigentlich nächste Praxis-Vorgehen ist die Übergabe
+            # an ein Inkassobüro. Nur die Standard-Bezeichnung ersetzen, nicht falls die Nutzerin
+            # sie bereits selbst umbenannt hat - und NICHT die bezeichnung-Snapshots bereits
+            # versendeter Mahnung-Datensätze (die spiegeln, was tatsächlich verschickt wurde).
+            conn.execute(text(
+                "UPDATE mahnstufen SET bezeichnung = 'Letzte Mahnung vor Inkasso' "
+                "WHERE bezeichnung = 'Letzte Mahnung vor Klage'"
+            ))
+            conn.execute(text("PRAGMA user_version = 136"))
+            conn.commit()
+            print('[Migration] Schema auf Version 136 (Mahnstufe „Letzte Mahnung vor Klage" -> „...vor Inkasso")')
+
+        if version < 137:
+            # Konfigurierbare Dokumentanhänge pro Mahnstufe (Abschnitt E, zurückgestellter
+            # Nutzer-Feedback-Punkt 12 vom 2026-08-01): welche Zusatzdokumente beim Mail-Versand
+            # dieser Stufe mitgeschickt werden. Default False - rein opt-in, ändert nichts am
+            # bestehenden Versandverhalten, bis die Nutzerin es bewusst aktiviert.
+            mahnstufen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(mahnstufen)")).fetchall()}
+            for spalte in ("anhang_rechnung", "anhang_bisherige_mahnungen", "anhang_kontokorrent"):
+                if spalte not in mahnstufen_cols:
+                    conn.execute(text(f"ALTER TABLE mahnstufen ADD COLUMN {spalte} BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 137"))
+            conn.commit()
+            print("[Migration] Schema auf Version 137 (mahnstufen.anhang_rechnung/anhang_bisherige_mahnungen/anhang_kontokorrent)")
+
+        if version < 138:
+            # Löschschutz für Mahnstufen (Nutzer-Feedback 2026-08-02: "nur neu hinzugefügte
+            # Mahnstufen löschbar machen, alle anderen sind nicht löschbar"). system_stufe=1
+            # markiert die vier Standard-Stufen aus dem Seed als dauerhaft nicht löschbar (nur
+            # deaktivierbar); alles was die Nutzerin selbst über "+ Neue Stufe" anlegt bekommt
+            # system_stufe=0 und bleibt löschbar, solange noch keine Mahnung darauf verweist.
+            # Bestandsdatenbanken: die vier Standard-Bezeichnungen (falls nicht umbenannt) werden
+            # als system_stufe markiert - alles andere (bereits vorhandene, selbst angelegte
+            # Zusatzstufen) bleibt bewusst löschbar, das entspricht genau der neuen Regel.
+            mahnstufen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(mahnstufen)")).fetchall()}
+            if "system_stufe" not in mahnstufen_cols:
+                conn.execute(text("ALTER TABLE mahnstufen ADD COLUMN system_stufe BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text(
+                "UPDATE mahnstufen SET system_stufe = 1 WHERE bezeichnung IN "
+                "('Zahlungserinnerung', '1. Mahnung', '2. Mahnung', "
+                "'Letzte Mahnung vor Inkasso', 'Letzte Mahnung vor Klage')"
+            ))
+            conn.execute(text("PRAGMA user_version = 138"))
+            conn.commit()
+            print("[Migration] Schema auf Version 138 (mahnstufen.system_stufe - Löschschutz für Standard-Stufen)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -2918,6 +3134,13 @@ def _migrate_kategorien() -> None:
             {"name": "Eigenverbrauch von Waren (7%)",        "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
             {"name": "USt auf Eigenverbrauch",               "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Mahnwesen (docs/plan-mahnwesen.md): Mahngebühren = Schadensersatz (§288 BGB),
+            # Verzugszinsen = Zinsertrag - beides nicht umsatzsteuerbar. eks_kategorie A3
+            # (Sonstige Einnahmen): echter Geldzufluss, keine der engen SGB-II-Ausnahmen
+            # nach §11a Abs. 1 SGB II (Grundrente, Entschädigungen n. BEG/IfSG etc.) greift.
+            # euer_zeile noch offen (TODO im Plan).
+            {"name": "Mahngebühren",                         "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Verzugszinsen (Einnahme)",             "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer (vereinnahmt)",           "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Erstattung FA",           "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -3200,6 +3423,12 @@ def startup():
             _wi(db)
         except Exception as _e:
             logging.getLogger(__name__).warning("Wiederkehrende Rechnungen: %s", _e)
+        # Mahnwesen-Automatik (Abschnitt F, opt-in über automation_modus halb/voll) - blockiert Startup nie
+        try:
+            from api.mahnwesen import automatik_lauf as _ma
+            _ma(db)
+        except Exception as _e:
+            logging.getLogger(__name__).warning("Mahnwesen-Automatik: %s", _e)
     finally:
         db.close()
 

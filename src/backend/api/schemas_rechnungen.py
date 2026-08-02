@@ -273,6 +273,7 @@ class RechnungResponse(BaseModel):
     bezahlt_betrag: Decimal
     zahlungsstatus: str
     zahlungsdatum: Optional[date]
+    mahnstufe_aktuell: int = 0
     notizen: Optional[str]
     einleitungstext: Optional[str] = None
     externe_belegnr: Optional[str]

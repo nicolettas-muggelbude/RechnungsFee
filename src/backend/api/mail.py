@@ -38,6 +38,7 @@ class MailSendenRequest(BaseModel):
     text: str
     rechnung_id: Optional[int] = None
     dokumentenpaket_id: Optional[int] = None
+    mahnung_id: Optional[int] = None
 
 
 class TestMailRequest(BaseModel):
@@ -215,6 +216,19 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
     if req.rechnung_id:
         pdf_bytes, dateiname = _pdf_bytes_fuer(req.rechnung_id, db)
         attachments.append((pdf_bytes, dateiname))
+
+    if req.mahnung_id:
+        from database.models import Mahnung
+        from api.mahnwesen import mahnung_pdf_bytes, sammle_mahnung_anhaenge
+        mahnung = db.query(Mahnung).filter(Mahnung.id == req.mahnung_id).first()
+        if not mahnung:
+            raise HTTPException(404, "Mahnung nicht gefunden")
+        pdf_bytes, dateiname = mahnung_pdf_bytes(db, mahnung)
+        attachments.append((pdf_bytes, dateiname))
+        # Konfigurierbare Zusatzanhänge je Mahnstufe (Rechnung/bisherige Mahnungen/Kontokorrent,
+        # Migration 137) - gilt für manuellen wie automatischen Versand gleichermaßen, da beide
+        # über diesen Endpunkt laufen.
+        attachments.extend(sammle_mahnung_anhaenge(db, mahnung))
 
     if req.dokumentenpaket_id:
         paket = db.query(DokumentenPaket).filter(DokumentenPaket.id == req.dokumentenpaket_id).first()

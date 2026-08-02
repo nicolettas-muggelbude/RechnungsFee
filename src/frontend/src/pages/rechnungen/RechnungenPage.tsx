@@ -15,6 +15,7 @@ import {
   getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   getBuchungsvorlage, erledigtVorlage,
+  getMahnwesenEinstellungen, getRechnungMahnungen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
 } from '../../api/client'
@@ -404,23 +405,30 @@ type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string }
 
 function ZahlungsDialog({
   rechnung,
+  offeneMahngebuehr = 0,
   onClose,
   onSuccess,
 }: {
   rechnung: Rechnung
+  offeneMahngebuehr?: number
   onClose: () => void
   onSuccess: (result: BarZahlungResult) => void
 }) {
   const qc = useQueryClient()
   const istGutschrift = rechnung.dokument_typ === 'Gutschrift'
   const restbetrag = parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)
+  // Rechnung selbst ist beglichen, aber aus einer Mahnung ist noch Gebühr/Zinsen offen - der
+  // Dialog bucht dann ausschließlich dagegen (kein Rechnungsanteil mehr).
+  const nurMahngebuehr = !istGutschrift && Math.abs(restbetrag) <= 0.004 && offeneMahngebuehr > 0.004
   const [katModus, setKatModus] = useState<KontorahmenModus>(getKontorahmenModus)
   useEffect(() => {
     const h = (e: StorageEvent) => { if (e.key === KONTORAHMEN_LS_KEY) setKatModus((e.newValue ?? '') as KontorahmenModus) }
     window.addEventListener('storage', h)
     return () => window.removeEventListener('storage', h)
   }, [])
-  const [betrag, setBetrag] = useState(Math.abs(restbetrag).toFixed(2).replace('.', ','))
+  const [betrag, setBetrag] = useState(
+    (nurMahngebuehr ? offeneMahngebuehr : Math.abs(restbetrag)).toFixed(2).replace('.', ',')
+  )
   const [datum, setDatum] = useState(heuteIso())
   const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bar')
   const [beschreibung, setBeschreibung] = useState('')
@@ -546,7 +554,9 @@ function ZahlungsDialog({
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-            {istGutschrift ? 'Rückerstattung buchen' : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
+            {istGutschrift ? 'Rückerstattung buchen'
+              : nurMahngebuehr ? 'Mahngebühr/Verzugszinsen nachbuchen'
+              : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
         </div>
@@ -572,7 +582,20 @@ function ZahlungsDialog({
               <span className="text-slate-600 dark:text-slate-300">Restbetrag</span>
               <span className="dark:text-slate-100">{formatEuro(restbetrag)}</span>
             </div>
+            {nurMahngebuehr && (
+              <div className="flex justify-between text-amber-700 dark:text-amber-400 pt-1">
+                <span>Offene Mahngebühr/Zinsen</span>
+                <span>{formatEuro(offeneMahngebuehr)}</span>
+              </div>
+            )}
           </div>
+
+          {nurMahngebuehr && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 -mt-2">
+              Die Rechnung selbst ist beglichen – dieser Betrag wird ausschließlich gegen die
+              offene Mahngebühr/Verzugszinsen verrechnet.
+            </p>
+          )}
 
           {/* Betrag */}
           <div>
@@ -851,6 +874,60 @@ function ZahlungsDialog({
 // Rechnungs-Detail
 // ---------------------------------------------------------------------------
 
+function RechnungMahnungenSection({ rechnung, navigate }: { rechnung: Rechnung; navigate: ReturnType<typeof useNavigate> }) {
+  const { data: einst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: mahnungen = [] } = useQuery({
+    queryKey: ['rechnung-mahnungen', rechnung.id],
+    queryFn: () => getRechnungMahnungen(rechnung.id),
+    enabled: !!einst?.aktiv,
+  })
+
+  if (!einst?.aktiv) return null
+  const istOffen = rechnung.zahlungsstatus === 'offen' || rechnung.zahlungsstatus === 'teilweise'
+  if (mahnungen.length === 0 && !istOffen) return null
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Mahnstatus</p>
+      <div className="space-y-1.5">
+        {mahnungen.map((m) => {
+          const gebuehrOffen = m.status === 'versendet' && !m.uebertragen_in_mahnung_id
+            ? parseFloat(m.mahngebuehr) + parseFloat(m.verzugszinsen) - parseFloat(m.mahngebuehr_bezahlt) - parseFloat(m.verzugszinsen_bezahlt)
+            : 0
+          return (
+            <div key={m.id} className="flex items-center justify-between text-sm rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900">
+              <div>
+                <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-2">{m.mahnnummer ?? '–'}</span>
+                <span className="text-slate-600 dark:text-slate-300">{m.bezeichnung ?? ''}</span>
+                <span className="ml-1.5 text-xs text-slate-400 dark:text-slate-500">{formatDatum(m.erstellt_am)}</span>
+                {gebuehrOffen > 0.004 && (
+                  <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    · {formatEuro(gebuehrOffen)} Gebühr/Zinsen offen
+                  </span>
+                )}
+              </div>
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 shrink-0">
+                {m.status === 'entwurf' ? 'Entwurf' : m.status === 'versendet' ? 'Versendet' : m.status}
+              </span>
+            </div>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => navigate('/mahnwesen')}
+          className="w-full text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left px-3 py-1.5"
+        >
+          → Zum Mahnwesen{mahnungen.length === 0 ? ' (Mahnung erstellen)' : ''}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function RechnungDetail({
   rechnung,
   onClose,
@@ -936,7 +1013,22 @@ function RechnungDetail({
     ? Math.min((Math.abs(parseFloat(rechnung.bezahlt_betrag)) / Math.abs(parseFloat(rechnung.brutto_gesamt))) * 100, 100)
     : 0
 
-  const hatZahlungsoption = Math.abs(restbetrag) > 0.004 && !rechnung.storniert && !rechnung.ist_entwurf
+  // Rechnung kann bereits beglichen sein, aber aus einer Mahnung noch Gebühr/Zinsen offen haben -
+  // dieselbe React-Query-Cache-Instanz wie RechnungMahnungenSection (gleicher Key), kein Extra-Request.
+  const { data: rechnungMahnungenFuerZahlung = [] } = useQuery({
+    queryKey: ['rechnung-mahnungen', rechnung.id],
+    queryFn: () => getRechnungMahnungen(rechnung.id),
+    enabled: rechnung.typ === 'ausgang',
+  })
+  const offeneMahngebuehr = rechnungMahnungenFuerZahlung
+    .filter((m) => m.status === 'versendet' && !m.uebertragen_in_mahnung_id)
+    .reduce((sum, m) =>
+      sum + parseFloat(m.mahngebuehr) + parseFloat(m.verzugszinsen)
+          - parseFloat(m.mahngebuehr_bezahlt) - parseFloat(m.verzugszinsen_bezahlt),
+      0)
+
+  const hatZahlungsoption = (Math.abs(restbetrag) > 0.004 || offeneMahngebuehr > 0.004)
+    && !rechnung.storniert && !rechnung.ist_entwurf
     && rechnung.zahlungsstatus !== 'uneinbringlich'
     && rechnung.dokument_typ !== 'Lieferschein'
 
@@ -1730,6 +1822,11 @@ function RechnungDetail({
           </div>
         </div>}
 
+        {/* Mahnungen */}
+        {rechnung.typ === 'ausgang' && rechnung.dokument_typ !== 'Lieferschein' && !rechnung.ist_entwurf && (
+          <RechnungMahnungenSection rechnung={rechnung} navigate={navigate} />
+        )}
+
         {/* Kunden-/Lieferantenguthaben verrechnen */}
         {hatZahlungsoption && (() => {
           const fmt = (v: string | number) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(v)))
@@ -1982,8 +2079,11 @@ function RechnungDetail({
             onClick={() => setZahlungsDialog(true)}
             className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
           >
-            {rechnung.dokument_typ === 'Gutschrift' ? 'Rückerstattung buchen' : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
+            {rechnung.dokument_typ === 'Gutschrift' ? 'Rückerstattung buchen'
+              : Math.abs(restbetrag) <= 0.004 ? 'Mahngebühr/Zinsen nachbuchen'
+              : rechnung.typ === 'ausgang' ? 'Zahlung kassieren' : 'Zahlung buchen'}
             {rechnung.zahlungsstatus === 'teilweise' && ` (Restbetrag ${formatEuro(Math.abs(restbetrag))})`}
+            {Math.abs(restbetrag) <= 0.004 && offeneMahngebuehr > 0.004 && ` (${formatEuro(offeneMahngebuehr)} offen)`}
           </button>
         )}
         {rechnung.ist_entwurf && (
@@ -2007,6 +2107,7 @@ function RechnungDetail({
       {zahlungsDialog && (
         <ZahlungsDialog
           rechnung={rechnung}
+          offeneMahngebuehr={offeneMahngebuehr}
           onClose={() => setZahlungsDialog(false)}
           onSuccess={(result) => { setZahlungsDialog(false); onZahlungErfasst?.(result.rechnung) }}
         />
@@ -2287,6 +2388,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   )
 
   const partnerListe = typ === 'ausgang' ? (kunden ?? []) : (lieferanten ?? [])
+  const ausgewaehlterKunde = typ === 'ausgang' && !!partnerId
+    ? kunden?.find((k) => String(k.id) === partnerId)
+    : undefined
+  const ausgewaehlterKundeGesperrt = !!ausgewaehlterKunde?.mahnung_gesperrt
+  const ausgewaehlterKundeWarnung = !ausgewaehlterKundeGesperrt && !!ausgewaehlterKunde?.mahnung_warnung
 
   // Lieferant aus Analyse-Prefill setzen:
   // 1. Backend-Vorschlag (lieferant_vorschlaege[0]) hat Vorrang – das Backend normalisiert
@@ -2976,6 +3082,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
             {typ === 'ausgang' ? 'Bitte einen Kunden auswählen oder einen Namen eingeben.' : 'Bitte einen Lieferanten auswählen oder einen Namen eingeben.'}
           </p>
+        )}
+        {typ === 'ausgang' && ausgewaehlterKundeGesperrt && (
+          <div className="mt-2 flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            <span className="shrink-0">🔒</span>
+            <span>
+              Dieser Kunde ist wegen ausstehender Mahnungen gesperrt. Neue Dokumente können erst nach Entsperren (Kundenstamm) angelegt werden.
+            </span>
+          </div>
+        )}
+        {typ === 'ausgang' && ausgewaehlterKundeWarnung && (
+          <div className="mt-2 flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            <span className="shrink-0">⚠️</span>
+            <span>
+              Dieser Kunde hat ausstehende Mahnungen. Neue Dokumente sind weiterhin möglich, bitte offene Mahnungen prüfen.
+            </span>
+          </div>
         )}
         {showNeuLieferant && (
           <LieferantErstellenModal
@@ -4151,6 +4273,14 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const lieferscheinAktiv = !!unternehmen?.lieferschein_aktiv
 
+  const { data: mahnwesenEinst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const mahnstufeBezeichnung = (stufe: number): string =>
+    mahnwesenEinst?.mahnstufen.find((s) => s.stufe === stufe)?.bezeichnung ?? `Mahnstufe ${stufe}`
+
   const { data: rechnungen, isLoading } = useQuery({
     queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus, ketteFilterId],
     queryFn: () => ketteFilterId !== null
@@ -4725,7 +4855,13 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                               }`}>
                                 {formatDatum(r.faellig_am)}
                                 {r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
-                                  <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>
+                                  mahnwesenEinst?.aktiv && r.mahnstufe_aktuell > 0 ? (
+                                    <span className="ml-1.5 text-[10px] bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded px-1">
+                                      {mahnstufeBezeichnung(r.mahnstufe_aktuell)}
+                                    </span>
+                                  ) : (
+                                    <span className="ml-1.5 text-[10px] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1">Überfällig</span>
+                                  )
                                 )}
                               </span>
                             ) : <span className="text-slate-300 dark:text-slate-600">—</span>}

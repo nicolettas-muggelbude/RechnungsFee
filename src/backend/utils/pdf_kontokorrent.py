@@ -54,6 +54,8 @@ _TYP_LABEL = {
     "zahlung":   "Zahlung",
     "gutschrift": "Gutschrift",
     "storno":    "Storno",
+    "mahngebuehr": "Mahngebühr",
+    "verzugszinsen": "Verzugszinsen",
 }
 
 # Spaltenbreiten (Summe = ca. 170 mm bei 20 mm Rand je Seite)

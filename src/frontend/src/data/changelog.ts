@@ -23,6 +23,22 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.0',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Mahnwesen – komplett neues, optionales Modul für Freiberufler und Kleinunternehmer, die nicht ausschließlich auf Vorkasse arbeiten. Frei konfigurierbare Mahnstufen (Bezeichnung, Fristen, Betreff-/Textvorlagen mit Platzhaltern) inkl. Mahngebühren und Verzugszinsen nach §288 BGB. Bleibt komplett ausgeblendet, solange nicht aktiviert.' },
+      { typ: 'neu', text: 'Mahnwesen – mehrere offene Rechnungen desselben Kunden werden ab einer konfigurierbaren Stufe automatisch in einer gemeinsamen Mahnung zusammengefasst statt einzeln zu mahnen. Solange noch Mahngebühr oder Verzugszinsen offen sind, läuft die Eskalation konsequent weiter – auch wenn zwischenzeitlich keine Rechnung mehr offen ist.' },
+      { typ: 'neu', text: 'Mahnwesen – optionale Kundensperrung in zwei unabhängigen Stufen (erst Warnung, dann harte Sperre), jeweils ab einer frei wählbaren Mahnstufe. Zusätzlich eine manuell setzbare, datierte Mahnsperre pro Kunde für individuelle Absprachen („zahlt in einer Woche").' },
+      { typ: 'neu', text: 'Mahnwesen – Inkasso-Paket als ZIP (Deckblatt, Kontokorrent, offene Rechnungs-PDFs, alle versendeten Mahnungen) für die Übergabe an ein Inkassobüro nach der letzten Mahnstufe.' },
+      { typ: 'neu', text: 'Mahnwesen – Automatisierung in drei Stufen: manuell, Halbautomatik (legt Entwürfe automatisch an) oder Vollautomatik (versendet zusätzlich automatisch per Mail, nur aktivierbar wenn SMTP eingerichtet ist).' },
+      { typ: 'neu', text: 'Mahnwesen – Zahlungseingänge, die die Gesamtforderung einer aus mehreren Rechnungen zusammengefassten Mahnung decken, werden automatisch verteilt (älteste Rechnung zuerst, danach offene Mahngebühr/Verzugszinsen, ein Rest als Kundenguthaben) – manuell erfassbar oder automatisch erkannt, wenn die Mahnungsnummer im Verwendungszweck einer Bank-Transaktion steht.' },
+      { typ: 'neu', text: 'Mahnwesen – konfigurierbare Zusatzanhänge je Mahnstufe beim Mail-Versand (Rechnung, bisherige Mahnungen, Kontokorrent seit der ersten Mahnung).' },
+      { typ: 'fix', text: 'UStVA – Buchungen auf die Kategorie „Innergemeinschaftliche Lieferungen" landeten fälschlich in Kennziffer 46 (Reverse-Charge-Dienstleistung) statt Kennziffer 41 (ig. Lieferung), weil zwei Kategorien zufällig dieselbe Kontonummer in unterschiedlichen Kontenrahmen (SKR03/SKR04) verwendeten und die Prüfung beide Kontenrahmen vermischte. Danke an Peter1061 für den Report inkl. Screenshots (Issue #326).' },
+      { typ: 'fix', text: 'Neuinstallation – eine komplett neue Datenbank brach beim allerersten Start mit einem Datenbankfehler ab, weil eine Migration auf eine Spalte zugriff, die bei einer frischen Installation nie angelegt wurde. Nebenfund bei der Recherche zu Issue #326.' },
+      { typ: 'neu', text: 'DATEV-Export – fehlen Berater- oder Mandantennummer in der DATEV-Konfiguration, weist RechnungsFee vor dem Export jetzt darauf hin (sonst werden stillschweigend die DATEV-Standardwerte 1001/1 verwendet) und bietet an, direkt zur Konfiguration zu springen. Danke an Peter1061 für den Vorschlag (Issue #328).' },
+    ],
+  },
+  {
     version: 'v0.4.28',
     datum: 'Juli 2026',
     eintraege: [

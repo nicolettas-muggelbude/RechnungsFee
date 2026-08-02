@@ -15,6 +15,8 @@ import {
   getLieferadressen, createLieferadresse, updateLieferadresse, deleteLieferadresse,
   getKundeBelege, uploadKundeBeleg, deleteKundeBeleg, updateKundeBeleg, getKundeBelegDownloadUrl,
   getKontokorrentKunde, downloadKontokorrentPdf, sendeKontokorrentMail, getNaechsteDebitorNr,
+  getMahnwesenEinstellungen, getKundeMahnungen, getMahnungPdfUrl, openUrl, getMahnwesenKundenUebersicht,
+  kundensperrungAufheben,
   type Kunde, type AnonymisierungResult, type Rechnung, type KundeLieferadresse, type KundeBeleg, type KontokorrentBewegung,
 } from '../../api/client'
 
@@ -149,6 +151,50 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
 // Kontokorrent-Tab (Abschnitt 2: Nummernfeld + Lock; Bewegungsliste folgt in A3)
 // ---------------------------------------------------------------------------
 
+function KundeMahnstatus({ kundeId }: { kundeId: number }) {
+  const { data: einst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: mahnungen = [] } = useQuery({
+    queryKey: ['kunde-mahnungen', kundeId],
+    queryFn: () => getKundeMahnungen(kundeId),
+    enabled: !!einst?.aktiv,
+  })
+
+  if (!einst?.aktiv) return null
+  const offene = mahnungen.filter(m => m.status !== 'storniert')
+  if (offene.length === 0) return null
+
+  return (
+    <div className="mb-3">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+        Mahnstatus – {offene.length === 1 ? '1 Mahnung' : `${offene.length} Mahnungen`}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {offene.map(m => {
+          const gebuehrOffen = m.status === 'versendet' && !m.uebertragen_in_mahnung_id
+            ? parseFloat(m.mahngebuehr) + parseFloat(m.verzugszinsen) - parseFloat(m.mahngebuehr_bezahlt) - parseFloat(m.verzugszinsen_bezahlt)
+            : 0
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={async () => { const url = await getMahnungPdfUrl(m.id); await openUrl(url) }}
+              title={`${m.mahnnummer ?? ''} – ${formatDatum(m.erstellt_am.slice(0, 10))}`}
+              className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
+            >
+              {m.bezeichnung ?? `Stufe ${m.stufe}`} {m.status === 'entwurf' ? '(Entwurf)' : m.status === 'versendet' ? '(versendet)' : ''}
+              {gebuehrOffen > 0.004 && ` · ${gebuehrOffen.toFixed(2).replace('.', ',')} € Gebühr/Zinsen offen`}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDebitorEdit, qc }: {
   kunde: Kunde
   debitorNr: string
@@ -200,16 +246,21 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
 
   const typLabel: Record<string, string> = {
     rechnung: 'Rechnung', zahlung: 'Zahlung', gutschrift: 'Gutschrift', storno: 'Storno',
+    mahngebuehr: 'Mahngebühr', verzugszinsen: 'Verzugszinsen',
   }
   const typFarbe: Record<string, string> = {
     rechnung: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
     zahlung: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
     gutschrift: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
     storno: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+    mahngebuehr: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800',
+    verzugszinsen: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800',
   }
 
   return (
     <div className="space-y-4">
+      {kunde.id != null && <KundeMahnstatus kundeId={kunde.id} />}
+
       {/* Nummernfeld */}
       <div>
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Debitorennummer</p>
@@ -750,6 +801,7 @@ const EMPTY: FormValues = {
 
 export function KundenPage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('kunden', 33)
@@ -765,6 +817,19 @@ export function KundenPage() {
 
   const { data: kunden, isLoading } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
 
+  const { data: mahnwesenEinst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: mahnwesenUebersicht } = useQuery({
+    queryKey: ['mahnwesen-kunden'],
+    queryFn: getMahnwesenKundenUebersicht,
+    enabled: !!mahnwesenEinst?.aktiv,
+    staleTime: 1000 * 30,
+  })
+  const mahnwesenByKundeId = new Map((mahnwesenUebersicht ?? []).map((k) => [k.kunde_id, k]))
+
   const createMutation = useMutation({
     mutationFn: createKunde,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['kunden'] }); closeForm() },
@@ -777,6 +842,14 @@ export function KundenPage() {
     mutationFn: (k: Kunde) => deleteKunde(k.id!),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['kunden'] }); setSelected(null) },
     onError: (_err: Error, k: Kunde) => { setDeleteFehlgeschlagen(true); openEdit(k) },
+  })
+  const kundensperrungAufhebenMut = useMutation({
+    mutationFn: (id: number) => kundensperrungAufheben(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kunden'] })
+      qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+      if (editKunde) setEditKunde({ ...editKunde, mahnung_gesperrt: false, mahnung_warnung: false })
+    },
   })
   const anonymisierungMutation = useMutation({
     mutationFn: (id: number) => anonymisiereKunde(id),
@@ -916,6 +989,7 @@ export function KundenPage() {
               <tbody>
                 {gefiltert.map((k) => {
                   const isSelected = selected?.id === k.id
+                  const mw = k.id != null ? mahnwesenByKundeId.get(k.id) : undefined
                   return (
                     <>
                       <tr
@@ -928,6 +1002,26 @@ export function KundenPage() {
                         <td className={`px-4 py-2.5 font-medium ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100'}`}>
                           <span className="mr-1 text-slate-400">{isSelected ? '▼' : '▶'}</span>
                           {kundeName(k)}
+                          {mw?.mahnsperre_bis && (
+                            <span title={mw.mahnsperre_grund ?? undefined} className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 align-middle">
+                              ⏸ pausiert
+                            </span>
+                          )}
+                          {!mw?.mahnsperre_bis && mw && (mw.aktionsfaellig || mw.anzahl_zahlungserinnerung_faellig > 0) && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 align-middle">
+                              ⚠ überfällig
+                            </span>
+                          )}
+                          {k.mahnung_gesperrt && (
+                            <span title="Wegen ausstehender Mahnungen gesperrt – neue Dokumente werden blockiert" className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 align-middle">
+                              🔒 Kundensperrung
+                            </span>
+                          )}
+                          {k.mahnung_warnung && (
+                            <span title="Wegen ausstehender Mahnungen mit Warnhinweis versehen" className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 align-middle">
+                              ⚠️ Mahnwarnung
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs">
                           {[k.strasse && k.hausnummer ? `${k.strasse} ${k.hausnummer}` : k.strasse, k.plz && k.ort ? `${k.plz} ${k.ort}` : k.ort].filter(Boolean).join(', ') || '—'}
@@ -944,6 +1038,45 @@ export function KundenPage() {
                       {isSelected && (
                         <tr key={`${k.id}-detail`} className="bg-blue-50 dark:bg-blue-950 border-b border-slate-200 dark:border-slate-700">
                           <td colSpan={5} className="px-6 py-4">
+                            {mw && (mw.mahnsperre_bis || mw.aktionsfaellig || mw.anzahl_zahlungserinnerung_faellig > 0 || mw.anzahl_entwurf > 0 || mw.anzahl_versendet > 0) && (
+                              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                  <span className="font-medium text-slate-500 dark:text-slate-400 mr-1">Mahnstatus:</span>
+                                  {mw.mahnsperre_bis && (
+                                    <span title={mw.mahnsperre_grund ?? undefined} className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                                      ⏸ pausiert bis {formatDatum(mw.mahnsperre_bis)}
+                                    </span>
+                                  )}
+                                  {mw.aktionsfaellig && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
+                                      {mw.naechste_stufe_bezeichnung} fällig
+                                    </span>
+                                  )}
+                                  {mw.anzahl_zahlungserinnerung_faellig > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
+                                      {mw.anzahl_zahlungserinnerung_faellig} fällig
+                                    </span>
+                                  )}
+                                  {mw.anzahl_entwurf > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+                                      {mw.anzahl_entwurf} Entwurf
+                                    </span>
+                                  )}
+                                  {mw.anzahl_versendet > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300">
+                                      {mw.anzahl_versendet} versendet
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); navigate('/mahnwesen') }}
+                                  className="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                  → Zum Mahnwesen
+                                </button>
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs">
                               {(k.vorname || k.nachname) && (
                                 <div>
@@ -1054,8 +1187,34 @@ export function KundenPage() {
       {showForm && (
         <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {editKunde ? 'Kunde bearbeiten' : 'Neuer Kunde'}
+              {editKunde?.mahnung_gesperrt && (
+                <span
+                  title="Wegen ausstehender Mahnungen gesperrt – neue Angebote/Aufträge/Lieferscheine/Proforma/Rechnungen werden blockiert"
+                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
+                >
+                  🔒 Kundensperrung
+                </span>
+              )}
+              {editKunde?.mahnung_warnung && (
+                <span
+                  title="Wegen ausstehender Mahnungen mit Warnhinweis versehen – neue Dokumente sind weiterhin möglich"
+                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
+                >
+                  ⚠️ Mahnwarnung
+                </span>
+              )}
+              {(editKunde?.mahnung_gesperrt || editKunde?.mahnung_warnung) && (
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm(`Kundensperrung/-warnung für ${kundeName(editKunde)} manuell aufheben?`)) kundensperrungAufhebenMut.mutate(editKunde!.id!) }}
+                  disabled={kundensperrungAufhebenMut.isPending}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                >
+                  Entsperren
+                </button>
+              )}
             </h3>
             <button onClick={closeForm} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl leading-none">×</button>
           </div>

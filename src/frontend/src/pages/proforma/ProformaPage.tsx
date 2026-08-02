@@ -241,6 +241,10 @@ function ProformaFormular({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unternehmen, datum])
 
+  const ausgewaehlterKunde = partnerId ? kunden?.find((k) => String(k.id) === partnerId) : undefined
+  const ausgewaehlterKundeGesperrt = !!ausgewaehlterKunde?.mahnung_gesperrt
+  const ausgewaehlterKundeWarnung = !ausgewaehlterKundeGesperrt && !!ausgewaehlterKunde?.mahnung_warnung
+
   const ustSaetzeListe = ustSaetze?.filter(u => u.ist_aktiv) ?? []
   const defaultSatz = ustSaetze?.find(u => u.ist_default)?.satz
     ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
@@ -382,6 +386,22 @@ function ProformaFormular({
               setPartnerFreitext(neu.firmenname ?? [neu.vorname, neu.nachname].filter(Boolean).join(' '))
             }}
           />
+        )}
+        {ausgewaehlterKundeGesperrt && (
+          <div className="mt-2 flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            <span className="shrink-0">🔒</span>
+            <span>
+              Dieser Kunde ist wegen ausstehender Mahnungen gesperrt. Neue Dokumente können erst nach Entsperren (Kundenstamm) angelegt werden.
+            </span>
+          </div>
+        )}
+        {ausgewaehlterKundeWarnung && (
+          <div className="mt-2 flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            <span className="shrink-0">⚠️</span>
+            <span>
+              Dieser Kunde hat ausstehende Mahnungen. Neue Dokumente sind weiterhin möglich, bitte offene Mahnungen prüfen.
+            </span>
+          </div>
         )}
       </div>
 

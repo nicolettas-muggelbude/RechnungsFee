@@ -688,6 +688,8 @@ export type Kunde = {
   skonto_tage?: number | null
   ust_idnr_validiert?: boolean
   aktiv?: boolean
+  mahnung_gesperrt?: boolean
+  mahnung_warnung?: boolean
 }
 export const getKunden = () => request<Kunde[]>('/kunden')
 export const createKunde = (data: Omit<Kunde, 'id' | 'aktiv' | 'ust_idnr_validiert'>) =>
@@ -1262,6 +1264,7 @@ export type Rechnung = {
   bezahlt: boolean
   bezahlt_betrag: string
   zahlungsstatus: 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'
+  mahnstufe_aktuell: number
   zahlungsdatum: string | null
   notizen: string | null
   externe_belegnr: string | null
@@ -2059,6 +2062,7 @@ export type MailSendenRequest = {
   text: string
   rechnung_id?: number
   dokumentenpaket_id?: number
+  mahnung_id?: number
 }
 
 export const sendeMailMitAnhang = (data: MailSendenRequest) =>
@@ -2811,3 +2815,215 @@ export const saveMappingVorlage = (data: Omit<ImportMappingVorlage, 'id' | 'erst
 
 export const deleteMappingVorlage = (id: number) =>
   request<void>(`/datenmigration/mapping-vorlagen/${id}`, { method: 'DELETE' })
+
+// --- Mahnwesen (docs/plan-mahnwesen.md) ---
+export type Mahnstufe = {
+  id: number
+  stufe: number
+  bezeichnung: string
+  tage_nach_faelligkeit: number
+  tage_nach_vorheriger: number
+  betreff_vorlage: string | null
+  text_vorlage: string | null
+  mahngebuehr_aktiv: boolean
+  mahngebuehr_privat: string
+  mahngebuehr_gewerblich: string
+  aktiv: boolean
+  anhang_rechnung: boolean
+  anhang_bisherige_mahnungen: boolean
+  anhang_kontokorrent: boolean
+  loeschbar: boolean
+}
+
+export type MahnstufeCreate = Omit<Mahnstufe, 'id' | 'loeschbar'>
+export type MahnstufeUpdate = Partial<MahnstufeCreate>
+
+export type MahnwesenEinstellungen = {
+  id: number
+  aktiv: boolean
+  automation_modus: 'manuell' | 'halb' | 'voll'
+  versand_mail: boolean
+  versand_pdf: boolean
+  konsolidiert_ab_stufe: number
+  kundensperrung_aktiv: boolean
+  kundensperrung_warnung_ab_stufe: number | null
+  kundensperrung_sperrung_ab_stufe: number | null
+  verzugszinsen_aktiv: boolean
+  verzugszinsen_ab_stufe: number
+  basiszinssatz: string
+  verzugszinsen_aufschlag_privat: string
+  verzugszinsen_aufschlag_gewerblich: string
+  mahnstufen: Mahnstufe[]
+}
+
+export type MahnwesenEinstellungenUpdate = Partial<Omit<MahnwesenEinstellungen, 'id' | 'mahnstufen'>>
+
+export type MahnungFaelligItem = {
+  rechnung_id: number
+  rechnungsnummer: string | null
+  kunde_id: number | null
+  kunde_name: string
+  faellig_am: string | null
+  offener_betrag: string
+  mahnstufe_aktuell: number
+  empfohlene_stufe: number
+  empfohlene_stufe_bezeichnung: string
+}
+
+export type MahnungVorschauPosition = {
+  rechnung_id: number
+  rechnungsnummer: string | null
+  offener_betrag: string
+  tage_ueberfaellig: number
+}
+
+export type MahnungVorschau = {
+  kunde_id: number | null
+  kunde_name: string
+  stufe: number
+  bezeichnung: string
+  positionen: MahnungVorschauPosition[]
+  offener_betrag_gesamt: string
+  mahngebuehr: string
+  verzugszinsen: string
+  gebuehr_vorperioden: string
+  gesamtforderung: string
+}
+
+export type Mahnung = {
+  id: number
+  mahnnummer: string | null
+  kunde_id: number | null
+  stufe: number
+  bezeichnung: string | null
+  erstellt_am: string
+  versendet_am: string | null
+  mahngebuehr: string
+  verzugszinsen: string
+  mahngebuehr_bezahlt: string
+  verzugszinsen_bezahlt: string
+  uebernommene_gebuehr_vorperioden: string
+  uebertragen_in_mahnung_id: number | null
+  offener_betrag_gesamt: string | null
+  status: 'entwurf' | 'versendet' | 'storniert'
+  rechnung_ids: number[]
+}
+
+export type MahnungHistorieItem = Mahnung & {
+  kunde_name: string
+  kunde_email: string | null
+  rechnungsnummern: string
+}
+
+export type MahnwesenRechnungMini = {
+  rechnung_id: number
+  rechnungsnummer: string | null
+  faellig_am: string | null
+  offener_betrag: string
+  mahnstufe_aktuell: number
+  zahlungserinnerung_faellig: boolean
+  letzter_mahnung_status: 'entwurf' | 'versendet' | null
+}
+
+export type MahnwesenKundeUebersicht = {
+  kunde_id: number
+  kunde_name: string
+  anzahl_offene_rechnungen: number
+  aeltestes_faellig_am: string | null
+  offener_betrag_gesamt: string
+  aktionsfaellig: boolean
+  naechste_stufe: number | null
+  naechste_stufe_bezeichnung: string | null
+  anzahl_zahlungserinnerung_faellig: number
+  anzahl_entwurf: number
+  anzahl_versendet: number
+  anzahl_offen: number
+  mahnsperre_bis: string | null
+  mahnsperre_grund: string | null
+  rechnungen: MahnwesenRechnungMini[]
+  nur_offene_gebuehr: boolean
+}
+
+export const getMahnwesenEinstellungen = () =>
+  request<MahnwesenEinstellungen>('/mahnwesen/einstellungen')
+export const updateMahnwesenEinstellungen = (data: MahnwesenEinstellungenUpdate) =>
+  request<MahnwesenEinstellungen>('/mahnwesen/einstellungen', { method: 'PUT', body: JSON.stringify(data) })
+export const createMahnstufe = (data: MahnstufeCreate) =>
+  request<Mahnstufe>('/mahnwesen/mahnstufen', { method: 'POST', body: JSON.stringify(data) })
+export const updateMahnstufe = (id: number, data: MahnstufeUpdate) =>
+  request<Mahnstufe>(`/mahnwesen/mahnstufen/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+// Nur löschbar solange noch nie eine Mahnung diese Stufe verwendet hat (stufe.loeschbar) - sonst
+// nur über updateMahnstufe(..., { aktiv: false }) deaktivierbar. Server lehnt es zur Sicherheit
+// auch selbst ab, siehe mahnstufe_delete().
+export const deleteMahnstufe = (id: number) =>
+  request<void>(`/mahnwesen/mahnstufen/${id}`, { method: 'DELETE' })
+export const getMahnungenFaellig = () =>
+  request<MahnungFaelligItem[]>('/mahnwesen/faellig')
+export const getMahnwesenKundenUebersicht = () =>
+  request<MahnwesenKundeUebersicht[]>('/mahnwesen/kunden')
+export const setMahnsperre = (kundeId: number, bis: string, grund?: string) =>
+  request<void>(`/mahnwesen/kunden/${kundeId}/sperre`, { method: 'PUT', body: JSON.stringify({ bis, grund: grund || undefined }) })
+export const clearMahnsperre = (kundeId: number) =>
+  request<void>(`/mahnwesen/kunden/${kundeId}/sperre`, { method: 'DELETE' })
+export const kundensperrungAufheben = (kundeId: number) =>
+  request<void>(`/mahnwesen/kunden/${kundeId}/entsperren`, { method: 'POST' })
+export const mahnungVorschau = (rechnung_ids: number[], stufe?: number) =>
+  request<MahnungVorschau>('/mahnwesen/vorschau', { method: 'POST', body: JSON.stringify({ rechnung_ids, stufe }) })
+export const mahnungErstellen = (rechnung_ids: number[], stufe?: number) =>
+  request<Mahnung>('/mahnwesen/erstellen', { method: 'POST', body: JSON.stringify({ rechnung_ids, stufe }) })
+/** Reine Gebühren-Eskalation ohne Rechnung (Kunde hat keine offene Rechnung mehr, aber noch
+ *  offene Mahngebühr/Verzugszinsen - Kontokorrent-Konsistenz). */
+export const mahnungVorschauGebuehr = (kundeId: number, stufe?: number) =>
+  request<MahnungVorschau>('/mahnwesen/vorschau', { method: 'POST', body: JSON.stringify({ rechnung_ids: [], kunde_id: kundeId, stufe }) })
+export const mahnungErstellenGebuehr = (kundeId: number, stufe?: number) =>
+  request<Mahnung>('/mahnwesen/erstellen', { method: 'POST', body: JSON.stringify({ rechnung_ids: [], kunde_id: kundeId, stufe }) })
+export const bezahleMahngebuehrKunde = (kundeId: number, betrag: string, datum: string, zahlungsart: string) =>
+  request<{ verrechnet: string; kundenguthaben: string }>(`/mahnwesen/kunden/${kundeId}/gebuehr-zahlung`, {
+    method: 'POST', body: JSON.stringify({ betrag, datum, zahlungsart }),
+  })
+export type MahnungZahlungPosition = { rechnung_id: number; rechnungsnummer: string | null; betrag: string }
+export type MahnungZahlungResult = { verteilung: MahnungZahlungPosition[]; gebuehr_verrechnet: string; kundenguthaben: string }
+/** Verteilt einen Zahlungseingang auf die Rechnungen einer (ggf. konsolidierten) Mahnung -
+ *  älteste fällige Rechnung zuerst voll auffüllen, Rest gegen offene Mahngebühr/Verzugszinsen
+ *  des Kunden, danach verbleibender Überschuss als Kundenguthaben. */
+export const mahnungZahlungErfassen = (mahnungId: number, betrag: string, datum: string, zahlungsart: string) =>
+  request<MahnungZahlungResult>(`/mahnwesen/${mahnungId}/zahlung`, {
+    method: 'POST', body: JSON.stringify({ betrag, datum, zahlungsart }),
+  })
+export const deleteMahnung = (mahnungId: number) =>
+  request<void>(`/mahnwesen/${mahnungId}`, { method: 'DELETE' })
+export const getMahnungenHistorie = (status?: string) =>
+  request<MahnungHistorieItem[]>(`/mahnwesen/mahnungen${status ? `?status=${status}` : ''}`)
+export const getRechnungMahnungen = (rechnungId: number) =>
+  request<Mahnung[]>(`/rechnungen/${rechnungId}/mahnungen`)
+export const getKundeMahnungen = (kundeId: number) =>
+  request<MahnungHistorieItem[]>(`/kunden/${kundeId}/mahnungen`)
+export const getMahnungPdfUrl = async (mahnungId: number, nurAnsehen = false): Promise<string> => {
+  const base = await getBaseUrl()
+  return `${base}/mahnwesen/${mahnungId}/pdf${nurAnsehen ? '?nur_ansehen=true' : ''}`
+}
+/** Lädt das Inkasso-Paket (ZIP: Deckblatt, Kontokorrent, Rechnungs-/Mahnungs-PDFs) eines Kunden herunter. */
+export async function downloadInkassoPaket(kundeId: number): Promise<void> {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/mahnwesen/kunden/${kundeId}/inkasso-paket`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(String(err.detail ?? 'Inkasso-Paket fehlgeschlagen'))
+  }
+  const blob = await res.blob()
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
+  _triggerBlobDownload(blob, match?.[1]?.trim() ?? `Inkasso_Kunde_${kundeId}.zip`)
+}
+
+/** Lädt eine Mahnungs-PDF als Datei herunter (kein Viewer) - Mail-Fallback ohne SMTP,
+ *  analog downloadPdfForMail(). Zählt wie Drucken/SMTP-Versand als "verlässt das Haus". */
+export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void> {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/mahnwesen/${mahnungId}/pdf?download=true`)
+  if (!res.ok) throw new Error(`PDF-Download fehlgeschlagen: ${res.status}`)
+  const blob = await res.blob()
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
+  _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
+}

@@ -322,17 +322,23 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
             vorsteuerabzug = False
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
-        if kat.konto_skr03 in ("8125", "3125") and not steuerbefreiung_grund:
+        if (kat.konto_skr03 == "8125" or kat.konto_skr04 == "3125") and not steuerbefreiung_grund:
             steuerbefreiung_grund = "§4 Nr. 1b UStG"
         if not data.ust_sonderfall and not data.ist_ig_erwerb:
-            konten = (kat.konto_skr03, kat.konto_skr04)
-            if "3425" in konten or "5425" in konten:
+            # WICHTIG: SKR03- und SKR04-Konto je Kategorie GETRENNT prüfen (nicht als
+            # gemeinsames Tupel) - Kontonummern sind zwischen den beiden Kontenrahmen nicht
+            # eindeutig. Z.B. hat "Innergemeinschaftliche Lieferungen" konto_skr04="3125",
+            # während "Drittland-Dienstleistungen (§13b Abs. 1)" konto_skr03="3125" hat - eine
+            # gemischte Prüfung "3125" in (skr03, skr04) trifft auf beide Kategorien zu und
+            # stufte ig. Lieferungen faelschlich als 13b_abs1 ein (KZ 46 statt KZ 41 in der
+            # USt-VA, Issue #326).
+            if kat.konto_skr03 == "3425" or kat.konto_skr04 == "5425":
                 data = data.model_copy(update={"ust_sonderfall": "ig_erwerb"})
-            elif "3123" in konten or "5923" in konten or "3125" in konten or "5925" in konten:
+            elif kat.konto_skr03 in ("3123", "3125") or kat.konto_skr04 in ("5923", "5925"):
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs1"})
-            elif "3120" in konten or "5920" in konten:
+            elif kat.konto_skr03 == "3120" or kat.konto_skr04 == "5920":
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs2"})
-            elif "1588" in konten or "1433" in konten:
+            elif kat.konto_skr03 == "1588" or kat.konto_skr04 == "1433":
                 data = data.model_copy(update={"ust_sonderfall": "einfuhr_ust"})
 
     ust_sonderfall = data.ust_sonderfall

@@ -26,9 +26,9 @@ Laufendes Konto pro Geschäftspartner: alle Vorgänge (Rechnungen, Zahlungen, Gu
 Vollständige Übersicht und Verwaltung offener Forderungen gegenüber Kunden und Verbindlichkeiten gegenüber Lieferanten – über den bereits vorhandenen Guthaben-Mechanismus hinaus.
 
 ### Offene Forderungen (Ausgangsrechnungen)
-- [ ] Mahnwesen: Mahnstufen (1. / 2. / 3. Mahnung) mit konfigurierbaren Mahngebühren und Verzugszinsen (§ 288 BGB: 5 % über Basiszinssatz)
-- [ ] Mahnschreiben als PDF (eigene Vorlage, Mahngebühr + Zinsen ausgewiesen)
-- [ ] Übersicht „Offene Forderungen": alle unbezahlten Ausgangsrechnungen mit Alter (30/60/90 Tage-Ampel)
+- [x] Mahnwesen: frei konfigurierbare Mahnstufen mit Mahngebühren und Verzugszinsen (§288 BGB), Kundensperrung, Halb-/Vollautomatik, Inkasso-Paket, Zahlungsverteilung bei konsolidierten Mahnungen (siehe [docs/plan-mahnwesen.md](plan-mahnwesen.md))
+- [x] Mahnschreiben als PDF (eigene Vorlage, Mahngebühr + Zinsen ausgewiesen)
+- [x] Übersicht „Offene Forderungen" – Mahnwesen-Seite zeigt alle Kunden mit offenen Rechnungen/Mahngebühr, Filter nach Status
 
 ### Verbindlichkeiten (Eingangsrechnungen)
 - [ ] Übersicht „Offene Verbindlichkeiten": alle unbezahlten Eingangsrechnungen mit Fälligkeit und Skonto-Frist

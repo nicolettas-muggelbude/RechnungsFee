@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Beleg, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Rechnung, Nummernkreis, Unternehmen
+from database.models import Beleg, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Mahnung, Rechnung, Nummernkreis, Unternehmen
 from .schemas import KundeCreate, KundeUpdate, KundeResponse
 from .schemas_rechnungen import BelegResponse
 from utils.pdf_dsgvo import generate_dsgvo_pdf
@@ -275,6 +275,38 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.get("/{kunde_id}/mahnungen")
+def kunde_mahnungen(kunde_id: int, db: Session = Depends(get_db)):
+    """Alle Mahnungen eines Kunden, auch konsolidierte über mehrere Rechnungen (Abschnitt B)."""
+    from database.models import Mahnung, MahnungRechnung, Rechnung
+    from .schemas import MahnungHistorieItem
+
+    kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
+    rows = db.query(Mahnung).filter(Mahnung.kunde_id == kunde_id).order_by(Mahnung.erstellt_am.desc()).all()
+    kunde_name = (
+        (kunde.firmenname or f"{kunde.vorname or ''} {kunde.nachname or ''}".strip() or "-") if kunde else "-"
+    )
+    ergebnis = []
+    for m in rows:
+        rechnung_ids = [
+            rid for (rid,) in db.query(MahnungRechnung.rechnung_id).filter(MahnungRechnung.mahnung_id == m.id).all()
+        ]
+        nummern = ", ".join(
+            nr for (nr,) in db.query(Rechnung.rechnungsnummer).filter(Rechnung.id.in_(rechnung_ids)).all() if nr
+        )
+        ergebnis.append(MahnungHistorieItem(
+            id=m.id, mahnnummer=m.mahnnummer, kunde_id=m.kunde_id, stufe=m.stufe,
+            bezeichnung=m.bezeichnung, erstellt_am=m.erstellt_am, versendet_am=m.versendet_am,
+            mahngebuehr=m.mahngebuehr, verzugszinsen=m.verzugszinsen,
+            mahngebuehr_bezahlt=m.mahngebuehr_bezahlt, verzugszinsen_bezahlt=m.verzugszinsen_bezahlt,
+            uebernommene_gebuehr_vorperioden=m.uebernommene_gebuehr_vorperioden,
+            uebertragen_in_mahnung_id=m.uebertragen_in_mahnung_id,
+            offener_betrag_gesamt=m.offener_betrag_gesamt, status=m.status, rechnung_ids=rechnung_ids,
+            kunde_name=kunde_name, kunde_email=kunde.email if kunde else None, rechnungsnummern=nummern,
+        ))
+    return ergebnis
+
+
 # ---------------------------------------------------------------------------
 # Lieferadressen
 # ---------------------------------------------------------------------------
@@ -496,13 +528,74 @@ def delete_kunde_beleg(kunde_id: int, kb_id: int, db: Session = Depends(get_db))
     db.commit()
 
 
+# Sortier-Tiebreaker bei gleichem Datum: Forderungen (Rechnung/Gebühr/Zinsen) vor Ausgleichs-
+# Zeilen (Zahlung/Gutschrift/Storno) - sonst kann bei Buchungen am selben Tag eine Zahlung vor
+# der Forderung erscheinen, die sie ausgleicht (Saldo-Endstand bleibt korrekt, Zwischenstand wirkt
+# aber falsch).
+_TYP_SORT_PRIO = {"rechnung": 0, "mahngebuehr": 0, "verzugszinsen": 0, "zahlung": 1, "gutschrift": 1, "storno": 1}
+
+
 class KontokorrentBewegung(BaseModel):
     datum: str
-    typ: str          # rechnung | zahlung | gutschrift | storno
+    typ: str          # rechnung | zahlung | gutschrift | storno | mahngebuehr | verzugszinsen
     belegnr: str
     beschreibung: str
     betrag: float     # positiv = Forderung, negativ = Ausgleich
     saldo: float
+
+
+def _mahngebuehr_bewegungen(kunde_id: int, db: Session) -> list[dict]:
+    """Erhobene Mahngebühr/Verzugszinsen als eigene Forderungs-Zeilen (Datum = Versand der
+    Mahnung) PLUS die dazugehörigen Verrechnungs-Zahlungen (utils/mahngebuehr_verrechnung.py).
+
+    Beide werden hier explizit über kunde_id/Kategorie geholt statt über die normale
+    rechnung_id-basierte Zahlungen-Query weiter unten - die Verrechnungs-Buchungen tragen
+    bewusst KEINE rechnung_id (sonst würde eine spätere Neuberechnung von
+    rechnung.bezahlt_betrag, z.B. bei einer Zahlungskorrektur, die Mahngebühr fälschlich als
+    Teilzahlung der Rechnung selbst mitzählen, siehe Kommentar in mahngebuehr_verrechnung.py).
+    Ohne die Forderungs-Zeile hier würde eine Mahngebühr-Zahlung den Saldo mindern, ohne dass
+    die Gebühr je als Forderung erschienen ist - der Saldo wäre falsch."""
+    from database.models import Kategorie
+
+    mahnungen = (
+        db.query(Mahnung)
+        .filter(Mahnung.kunde_id == kunde_id, Mahnung.status == "versendet")
+        .all()
+    )
+    raw: list[dict] = []
+    for m in mahnungen:
+        datum = (m.versendet_am or m.erstellt_am).date()
+        if m.mahngebuehr and m.mahngebuehr > 0:
+            raw.append({
+                "datum": str(datum), "typ": "mahngebuehr",
+                "belegnr": m.mahnnummer or str(m.id),
+                "beschreibung": f"Mahngebühr {m.mahnnummer or ''}".strip(),
+                "betrag": float(m.mahngebuehr),
+            })
+        if m.verzugszinsen and m.verzugszinsen > 0:
+            raw.append({
+                "datum": str(datum), "typ": "verzugszinsen",
+                "belegnr": m.mahnnummer or str(m.id),
+                "beschreibung": f"Verzugszinsen {m.mahnnummer or ''}".strip(),
+                "betrag": float(m.verzugszinsen),
+            })
+
+    zahlungen = (
+        db.query(Journaleintrag)
+        .join(Kategorie, Kategorie.id == Journaleintrag.kategorie_id)
+        .filter(
+            Journaleintrag.kunde_id == kunde_id,
+            Kategorie.name.in_(["Mahngebühren", "Verzugszinsen (Einnahme)"]),
+        )
+        .all()
+    )
+    for j in zahlungen:
+        raw.append({
+            "datum": str(j.datum), "typ": "zahlung",
+            "belegnr": j.belegnr, "beschreibung": j.beschreibung,
+            "betrag": -float(j.brutto_betrag),
+        })
+    return raw
 
 
 @router.get("/{kunde_id}/kontokorrent", response_model=list[KontokorrentBewegung])
@@ -563,7 +656,8 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
             "betrag": -float(j.brutto_betrag),
         })
 
-    bewegungen.sort(key=lambda b: b["datum"])
+    bewegungen.extend(_mahngebuehr_bewegungen(kunde_id, db))
+    bewegungen.sort(key=lambda b: (b["datum"], _TYP_SORT_PRIO.get(b["typ"], 0)))
 
     saldo = 0.0
     ergebnis: list[KontokorrentBewegung] = []
@@ -633,7 +727,11 @@ def _kontokorrent_bewegungen(
             "betrag": -float(j.brutto_betrag),
         })
 
-    raw.sort(key=lambda b: b["datum"])
+    for mb in _mahngebuehr_bewegungen(kunde_id, db):
+        if von <= _date.fromisoformat(mb["datum"]) <= bis:
+            raw.append(mb)
+
+    raw.sort(key=lambda b: (b["datum"], _TYP_SORT_PRIO.get(b["typ"], 0)))
     saldo = 0.0
     bewegungen: list[dict] = []
     for b in raw:

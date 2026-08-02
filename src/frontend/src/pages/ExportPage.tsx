@@ -173,6 +173,17 @@ export function ExportPage() {
   }
 
   async function handleDatev() {
+    // Ohne Berater-/Mandantennummer verwendet der Export DATEV-Standardwerte (1001/1) - vor dem
+    // ersten Export nachfragen, damit das nicht unbemerkt durchrutscht und der Steuerberater
+    // später von Hand nacharbeiten muss (Issue #328).
+    if (!unt?.datev_beraternummer || !unt?.datev_mandantennummer) {
+      const jetztKonfigurieren = window.confirm(
+        'In der DATEV-Konfiguration sind noch keine Berater-/Mandantennummer hinterlegt - ' +
+        'ohne diese Angaben verwendet der Export die DATEV-Standardwerte (Beraternummer 1001, Mandant 1).\n\n' +
+        'Jetzt konfigurieren? (Abbrechen exportiert trotzdem mit den Standardwerten)'
+      )
+      if (jetztKonfigurieren) { oeffneKonfig(); return }
+    }
     setDatevLaedt(true); setDatevErgebnis(null); setDatevFehler(null)
     const [von, bis] = zeitraumZuDaten(datevZeitraum, datevJahr, datevVon, datevBis)
     if (!von || !bis) { setDatevFehler('Bitte Von- und Bis-Datum angeben'); setDatevLaedt(false); return }

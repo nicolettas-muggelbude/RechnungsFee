@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, getCockpit, type Rechnung, type Forderung, type CockpitDaten } from '../../api/client'
+import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, getCockpit, getMahnwesenEinstellungen, getMahnungenFaellig, type Rechnung, type Forderung, type CockpitDaten } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { dashboardFilter } from '../../store/filterStore'
 import { useMxAuto } from '../../hooks/useAnsicht'
@@ -275,6 +275,72 @@ function UeberzahlungWidget() {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Mahnwesen-Widget – nur relevant wenn das Modul aktiviert ist
+// ---------------------------------------------------------------------------
+
+function MahnungenFaelligWidget() {
+  const navigate = useNavigate()
+  const { data: einst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: faellig } = useQuery({
+    queryKey: ['mahnwesen-faellig'],
+    queryFn: getMahnungenFaellig,
+    staleTime: 1000 * 60 * 5,
+    enabled: !!einst?.aktiv,
+  })
+
+  if (!einst?.aktiv || !faellig || faellig.length === 0) return null
+
+  const fmt = (v: string | number) =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(
+      typeof v === 'string' ? parseFloat(v) : v
+    )
+  const ANGEZEIGT = 5
+  const rest = faellig.length - ANGEZEIGT
+
+  return (
+    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+          {faellig.length === 1 ? '1 Mahnung fällig' : `${faellig.length} Mahnungen fällig`}
+        </p>
+        <button onClick={() => navigate('/mahnwesen')} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+          Zum Mahnwesen →
+        </button>
+      </div>
+      <div className="space-y-2">
+        {faellig.slice(0, ANGEZEIGT).map(f => (
+          <button
+            key={f.rechnung_id}
+            onClick={() => navigate('/mahnwesen')}
+            className="w-full flex items-center justify-between gap-2 text-xs text-left"
+          >
+            <div className="min-w-0">
+              <span className="font-medium text-amber-800 dark:text-amber-300 truncate">{f.kunde_name}</span>
+              <span className="text-amber-600 dark:text-amber-500 ml-1.5">{f.rechnungsnummer}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 text-[10px] font-medium">
+                {f.empfohlene_stufe_bezeichnung}
+              </span>
+              <span className="font-medium text-amber-800 dark:text-amber-300">{fmt(f.offener_betrag)}</span>
+            </div>
+          </button>
+        ))}
+        {rest > 0 && (
+          <button onClick={() => navigate('/mahnwesen')} className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+            + {rest} weitere
+          </button>
+        )}
       </div>
     </div>
   )
@@ -687,7 +753,7 @@ interface DashboardConfig {
   quicklinks: DashboardQuicklink[]
 }
 
-const WIDGET_DEFS: Array<{ id: string; label: string; warnung: boolean; nurTransferleistungen?: boolean }> = [
+const WIDGET_DEFS: Array<{ id: string; label: string; warnung: boolean; nurTransferleistungen?: boolean; nurMahnwesen?: boolean }> = [
   { id: 'buchfuehrung',        label: 'Buchführungspflicht-Warnung',        warnung: true },
   { id: 'ueberzahlung',        label: 'Überzahlung',                        warnung: false },
   { id: 'lieferantenguthaben', label: 'Lieferantenguthaben',                warnung: false },
@@ -696,6 +762,7 @@ const WIDGET_DEFS: Array<{ id: string; label: string; warnung: boolean; nurTrans
   { id: 'fristen',             label: 'Steuer-Fristen',                     warnung: true },
   { id: 'quicklinks',          label: 'Schnellzugriff',                     warnung: false },
   { id: 'zufluss_monitor',     label: 'Zufluss-Monitor (Transferleistungen)', warnung: false, nurTransferleistungen: true },
+  { id: 'mahnwesen_faellig',   label: 'Mahnungen fällig',                   warnung: false, nurMahnwesen: true },
   { id: 'cockpit_widget',      label: 'Cockpit (Monatsvergleich)',          warnung: false },
   { id: 'kacheln',             label: 'Einnahmen / Ausgaben / Saldo',       warnung: false },
   { id: 'faellige',            label: 'Fällige Rechnungen',                 warnung: false },
@@ -708,7 +775,7 @@ const DEFAULT_CONFIG: DashboardConfig = {
   widget_order: WIDGET_DEFS.map(w => w.id),
   widget_visibility: {
     ueberzahlung: true, lieferantenguthaben: true, lager: true,
-    quicklinks: true, zufluss_monitor: true, faellige: true, letzte_buchungen: true,
+    quicklinks: true, zufluss_monitor: true, mahnwesen_faellig: true, faellige: true, letzte_buchungen: true,
   },
   quicklinks: [],
 }
@@ -778,12 +845,14 @@ function DashboardKonfigModal({
   onClose,
   saving,
   hatTransferleistungen,
+  hatMahnwesen,
 }: {
   config: DashboardConfig
   onSave: (c: DashboardConfig) => void
   onClose: () => void
   saving: boolean
   hatTransferleistungen: boolean
+  hatMahnwesen: boolean
 }) {
   const [order, setOrder] = useState(config.widget_order)
   const [visibility, setVisibility] = useState(config.widget_visibility)
@@ -964,6 +1033,7 @@ function DashboardKonfigModal({
                 const def = WIDGET_DEFS.find(w => w.id === id)
                 if (!def) return null
                 if (def.nurTransferleistungen && !hatTransferleistungen) return null
+                if (def.nurMahnwesen && !hatMahnwesen) return null
                 const canHide = !NON_HIDEABLE.has(id)
                 const isVisible = canHide ? (visibility[id] ?? true) : true
                 return (
@@ -1236,6 +1306,12 @@ export function Dashboard() {
   const loaded = eintraege !== undefined
   const hatPrivatbuchungen = privat.length > 0
   const zeigeZuflussMonitor = unternehmen?.bezieht_transferleistungen === true
+  const { data: mahnwesenEinst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const zeigeMahnwesen = mahnwesenEinst?.aktiv === true
 
   function renderWidget(id: string) {
     const vis = konfig.widget_visibility
@@ -1251,6 +1327,9 @@ export function Dashboard() {
         return (vis.quicklinks ?? true) && konfig.quicklinks.length > 0
           ? <QuicklinksWidget key="quicklinks" links={konfig.quicklinks} />
           : null
+      case 'mahnwesen_faellig':
+        if (!zeigeMahnwesen) return null
+        return (vis.mahnwesen_faellig ?? true) ? <MahnungenFaelligWidget key="mahnwesen_faellig" /> : null
       case 'zufluss_monitor':
         if (!zeigeZuflussMonitor) return null
         if (!(vis.zufluss_monitor ?? true)) return null
@@ -1406,6 +1485,7 @@ export function Dashboard() {
           onClose={() => setKonfModus(false)}
           saving={konfSaving}
           hatTransferleistungen={zeigeZuflussMonitor}
+          hatMahnwesen={zeigeMahnwesen}
         />
       )}
     </div>

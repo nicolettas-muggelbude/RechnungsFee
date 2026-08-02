@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import (
     BankImport, BankTemplate, BankTransaktion, Forderung, Journaleintrag,
-    Kategorie, Konto, Kunde, Lieferant, Rechnung, Unternehmen,
+    Kategorie, Konto, Kunde, Lieferant, Mahnung, Rechnung, Unternehmen,
 )
 from utils.bank_csv_parser import (
     detect_delimiter,
@@ -35,6 +35,7 @@ from utils.bank_csv_parser import (
     parse_csv_mit_template,
 )
 from utils.signatur import signatur_journaleintrag
+from utils.mahngebuehr_verrechnung import verrechne_mahngebuehren
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
@@ -253,6 +254,31 @@ def _nummer_match(rechnung: Rechnung, verwendungszweck: str | None, buchungstext
         if m and m.group() in st_norm:
             return True
     return False
+
+
+def _match_mahnung(db: Session, tx: BankTransaktion) -> Optional[Mahnung]:
+    """Sucht eine versendete (ggf. konsolidierte) Mahnung, deren Mahnnummer im Verwendungszweck
+    oder Buchungstext der Transaktion vorkommt (Format MHN-YY####, Nummernkreis-Seed).
+
+    Nutzer-Vorgabe 2026-08-02 (Abschnitt E, "Zahlungsverteilung bei konsolidierten Mahnungen"):
+    Bank-Import soll Mahnungsnummern automatisch erkennen, damit ein Zahlungseingang der die
+    Gesamtforderung einer konsolidierten Mahnung deckt nicht mehr manuell pro Rechnung
+    abgeglichen werden muss. Nur für eingehende Zahlungen relevant (Mahnungen sind stets
+    Ausgangsrechnungen); die Rechnungsnummer-Prüfung (_nummer_match) bleibt unverändert davor
+    ungenutzt, falls der Kunde stattdessen die Rechnungsnummer nennt.
+    """
+    if tx.betrag <= 0:
+        return None
+    suchtext = ' '.join(filter(None, [tx.verwendungszweck, tx.buchungstext]))
+    if not suchtext:
+        return None
+    st_norm = _norm(suchtext)
+    kandidaten = db.query(Mahnung).filter(Mahnung.status == "versendet", Mahnung.mahnnummer.isnot(None)).all()
+    for m in kandidaten:
+        m_norm = _norm(m.mahnnummer)
+        if m_norm and m_norm in st_norm:
+            return m
+    return None
 
 
 def _name_match(partner_rechnung: str, partner_tx: str | None) -> bool:
@@ -526,9 +552,17 @@ def _buche_pfad_a(
     tx.journal_id = eintrag.id
     _aktualisiere_zahlungsstatus(rechnung)
 
+    # Überschuss zuerst gegen offene Mahngebühr/Verzugszinsen verrechnen (Abschnitt E Mahnwesen,
+    # nur Ausgangsrechnungen - Mahnwesen gilt nur für Kunden), erst der danach verbleibende Rest
+    # wird als Guthaben erfasst.
+    surplus = tx_abs - betrag_zu_buchen
+    if surplus > Decimal("0.02") and rechnung.typ == "ausgang":
+        surplus, _ = verrechne_mahngebuehren(
+            db, rechnung.id, surplus, tx.datum, "Bank", _naechste_belegnr, konto_id=tx.konto_id,
+        )
+
     # Guthaben bei Überzahlung: Lieferantenguthaben (Eingang) oder Kundenguthaben (Ausgang)
     forderung = None
-    surplus = tx_abs - betrag_zu_buchen
     if surplus > Decimal("0.02"):
         if rechnung.typ == "eingang":
             forderung = Forderung(
@@ -882,6 +916,22 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
 
     for tx in pending:
         try:
+            # Mahnungsnummer im Verwendungszweck erkannt? Geht VOR die normale 1:1-Rechnungs-
+            # Zuordnung, da eine (ggf. konsolidierte) Mahnung mehrere Rechnungen gleichzeitig
+            # abdecken kann - verteile_mahnung_zahlung() übernimmt Rechnungen, Mahngebühr/
+            # Verzugszinsen und Kundenguthaben in einem Rutsch (Abschnitt E).
+            mahnung_treffer = _match_mahnung(db, tx)
+            if mahnung_treffer:
+                from api.mahnwesen import verteile_mahnung_zahlung
+                ergebnis = verteile_mahnung_zahlung(db, mahnung_treffer, tx.betrag, tx.datum, "Bank")
+                if ergebnis["journal_ids"]:
+                    tx.journal_id = ergebnis["journal_ids"][0]
+                gebucht += 1
+                if ergebnis["kundenguthaben"] > Decimal("0.004"):
+                    forderungen += 1
+                    logger.info("auto_buchen: Mahnung %s → Kundenguthaben %s", mahnung_treffer.mahnnummer, ergebnis["kundenguthaben"])
+                continue
+
             # Ausgehende Zahlung: Kundenguthaben-Rückerstattung erkennen
             guthaben = _match_kundenguthaben(db, tx)
             if guthaben:
