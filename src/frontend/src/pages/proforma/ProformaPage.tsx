@@ -1085,10 +1085,10 @@ export function ProformaPage() {
                     </td>
                     <td className="px-5 py-3 text-center">
                       {p.rechnung_zu_proforma_id
-                        ? <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">Abgerechnet</span>
+                        ? <span title="Aus dieser Proforma-Rechnung wurde bereits eine echte Rechnung erstellt." className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">Abgerechnet</span>
                         : ueberfaellig
-                          ? <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{tageOffen}d offen</span>
-                          : <span className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Offen</span>
+                          ? <span title={`Seit ${tageOffen} Tagen offen, noch nicht in eine Rechnung umgewandelt (ab 14 Tagen hervorgehoben). Kein Zusammenhang mit dem Mahnwesen.`} className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{tageOffen}d offen</span>
+                          : <span title="Noch nicht in eine Rechnung umgewandelt (weniger als 14 Tage seit dem Proforma-Datum)." className="inline-block text-xs font-medium px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Offen</span>
                       }
                     </td>
                   </tr>

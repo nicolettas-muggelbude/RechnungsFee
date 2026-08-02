@@ -70,7 +70,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 116` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 138` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -263,6 +263,14 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 128 | rechnungen.ist_drittland_leistung BOOLEAN – Drittland-Dienstleistung (§3a Abs. 2 UStG, z.B. Schweiz/GB/USA), analog zu ist_reverse_charge/ist_eu_lieferung aber ohne Zusammenfassende Meldung (Issue #315) |
 | 129 | kunden.steuernummer_ausland VARCHAR(50) – Steuer-/Unternehmens-ID für Drittland-Kunden (z.B. Schweizer UID CHE-xxx.xxx.xxx MWST), getrennt von ust_idnr (bleibt EU-USt-IdNr.) (Issue #315) |
 | 130 | rechnungen.ist_ausfuhrlieferung BOOLEAN – Ausfuhrlieferung (§4 Nr. 1a i.V.m. §6 UStG), Warenlieferung ins Drittland, analog zu ist_eu_lieferung/ist_drittland_leistung (Issue #323) |
+| 131 | Mahnwesen (Abschnitt A–B): 4 neue Tabellen (mahnwesen_einstellungen, mahnstufen, mahnungen, mahnungen_rechnungen) + kunden.mahnung_gesperrt + rechnungen.mahnstufe_aktuell |
+| 132 | kunden.mahnsperre_bis + mahnsperre_grund – manuelle, datierte Mahnsperre pro Kunde (unabhängig von der automatischen Kundensperrung) |
+| 133 | Kundensperrung zweistufig statt „eine Schwelle + ein Modus": mahnwesen_einstellungen.kundensperrung_warnung_ab_stufe + kundensperrung_sperrung_ab_stufe, kunden.mahnung_warnung; Datenfix übernimmt alte Konfiguration in die passende neue Stufe |
+| 134 | mahnungen.mahngebuehr_bezahlt/verzugszinsen_bezahlt – getrennte Verrechnungs-Felder statt Summenfeld, für kategoriengenaue Zahlungsverrechnung |
+| 135 | mahnungen.uebertragen_in_mahnung_id (FK, SET NULL) + uebernommene_gebuehr_vorperioden – kundenweite Übernahme offener Gebühr/Zinsen aus Vorperioden in die neueste Mahnung |
+| 136 | Datenfix: Mahnstufe „Letzte Mahnung vor Klage" → „Letzte Mahnung vor Inkasso" (Deutschland: vor einer Klage muss erst das gerichtliche Mahnverfahren durchlaufen werden, tatsächliches Praxis-Vorgehen ist Übergabe ans Inkassobüro); nur Standard-Bezeichnung, nicht bereits versendete Mahnung-Snapshots |
+| 137 | mahnstufen.anhang_rechnung/anhang_bisherige_mahnungen/anhang_kontokorrent – konfigurierbare Zusatzanhänge je Mahnstufe beim Mail-Versand |
+| 138 | mahnstufen.system_stufe BOOLEAN – Löschschutz: die vier Standard-Mahnstufen aus dem Seed sind nie löschbar (nur deaktivierbar), selbst angelegte Stufen bleiben löschbar solange ungenutzt |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
