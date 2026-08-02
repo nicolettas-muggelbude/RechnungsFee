@@ -139,8 +139,12 @@ export function ExportPage() {
   const skr = unt?.kontenrahmen ?? 'SKR04'
 
   function oeffneKonfig() {
-    setBeraternr(unt?.datev_beraternummer ?? '')
-    setMandantennr(unt?.datev_mandantennummer ?? '')
+    // Nicht leer vorbefüllen, sondern mit den DATEV-Standardwerten (1001/1) - sonst gibt es keine
+    // Möglichkeit, "ja, Standardwerte sind ok" mit einem Klick auf Speichern zu bestätigen; leere
+    // Felder werden beim Speichern als null abgelegt und der Hinweis erscheint dann bei jedem
+    // weiteren Export erneut, obwohl der Nutzer die Defaults bewusst akzeptiert hat (Issue #328).
+    setBeraternr(unt?.datev_beraternummer ?? '1001')
+    setMandantennr(unt?.datev_mandantennummer ?? '1')
     setKontoBar(unt?.datev_konto_bar ?? '')
     setKontoBank(unt?.datev_konto_bank ?? '')
     setKontoKarte(unt?.datev_konto_karte ?? '')
