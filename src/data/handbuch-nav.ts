@@ -7,6 +7,7 @@ export const HANDBUCH_NAV: NavGroup[] = [
     items: [
       { label: 'Erste Schritte', slug: 'erste-schritte' },
       { label: 'Unternehmen einrichten', slug: 'unternehmen-einrichten' },
+      { label: 'Dashboard', slug: 'dashboard' },
     ],
   },
   {
@@ -27,22 +28,27 @@ export const HANDBUCH_NAV: NavGroup[] = [
     heading: 'Buchhaltung',
     items: [
       { label: 'Journal & Buchungen', slug: 'journal-und-buchungen' },
+      { label: 'Bank CSV-Import', slug: 'bank-import' },
       { label: 'Buchungsvorlagen', slug: 'buchungsvorlagen' },
+      { label: 'Mahnwesen', slug: 'mahnwesen' },
     ],
   },
   {
     heading: 'Stammdaten & Einstellungen',
     items: [
       { label: 'Stammdaten', slug: 'stammdaten' },
+      { label: 'Datenübernahme', slug: 'datenuebernahme' },
+      { label: 'Kontokorrent', slug: 'kontokorrent' },
       { label: 'Kategorien', slug: 'kategorien' },
     ],
   },
   {
     heading: 'Auswertungen',
     items: [
+      { label: 'Unternehmer-Cockpit', slug: 'cockpit' },
+      { label: 'Steuer-Fristenliste', slug: 'steuer-fristenliste' },
       { label: 'Auswertungen & Export', slug: 'auswertungen-und-export' },
       { label: 'Anlage AVEÜR', slug: 'anlage-aveür' },
-      { label: 'Steuer-Fristenliste', slug: 'steuer-fristenliste' },
     ],
   },
   {
