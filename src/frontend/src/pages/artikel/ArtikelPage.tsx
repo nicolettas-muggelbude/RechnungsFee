@@ -38,7 +38,7 @@ const GRUPPE_LABELS: Record<ArtikelTyp, string> = {
 }
 
 function hatEK(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'fremdleistung' }
-function hatLieferant(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'dienstleistung' || typ === 'fremdleistung' }
+function hatLieferant(typ: ArtikelTyp) { return typ === 'artikel' || typ === 'fremdleistung' }
 function hatHersteller(typ: ArtikelTyp) { return typ === 'artikel' }
 
 // ---------------------------------------------------------------------------

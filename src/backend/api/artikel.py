@@ -146,8 +146,9 @@ def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
         vk_netto=vk_netto,
         ek_netto=data.ek_netto,
         ek_brutto=ek_brutto,
-        lieferant_id=data.lieferant_id,
-        lieferanten_artikelnr=data.lieferanten_artikelnr,
+        # Dienstleistung = eigene Leistung, kein Einkauf bei einem Lieferanten (Issue #334)
+        lieferant_id=data.lieferant_id if data.typ != "dienstleistung" else None,
+        lieferanten_artikelnr=data.lieferanten_artikelnr if data.typ != "dienstleistung" else None,
         hersteller=data.hersteller,
         artikelcode=data.artikelcode,
         beschreibung=data.beschreibung,
@@ -181,6 +182,12 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
     update = data.model_dump(exclude_unset=True)
 
     differenzbesteuerung = update.get("differenzbesteuerung", artikel.differenzbesteuerung)
+
+    # Dienstleistung = eigene Leistung, kein Einkauf bei einem Lieferanten (Issue #334) - greift
+    # auch wenn nur der Typ gewechselt wird, ohne dass lieferant_id im Request enthalten ist.
+    if update.get("typ", artikel.typ) == "dienstleistung":
+        update["lieferant_id"] = None
+        update["lieferanten_artikelnr"] = None
 
     if "steuersatz" in update and not differenzbesteuerung:
         _prüfe_steuersatz(update["steuersatz"], db)

@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 140
+SCHEMA_VERSION = 141
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3045,6 +3045,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 140"))
             conn.commit()
             print("[Migration] Schema auf Version 140 (artikel.vk_netto - 4 Nachkommastellen statt Rundung, Issue #332)")
+
+        if version < 141:
+            # Issue #334: Dienstleistung = eigene Leistung, kein Einkauf bei einem Lieferanten -
+            # das Formular zeigte Lieferant/Lieferanten-ArtNr. fälschlich auch für Dienstleistungen
+            # an. Datenfix: bei bestehenden Dienstleistungen versehentlich gesetzte Werte entfernen.
+            conn.execute(text(
+                "UPDATE artikel SET lieferant_id = NULL, lieferanten_artikelnr = NULL "
+                "WHERE typ = 'dienstleistung' AND (lieferant_id IS NOT NULL OR lieferanten_artikelnr IS NOT NULL)"
+            ))
+            conn.execute(text("PRAGMA user_version = 141"))
+            conn.commit()
+            print("[Migration] Schema auf Version 141 (Datenfix: Lieferant bei Dienstleistungen entfernt, Issue #334)")
 
 
 def _migrate_kategorien() -> None:
