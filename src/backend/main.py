@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 141
+SCHEMA_VERSION = 143
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3057,6 +3057,28 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 141"))
             conn.commit()
             print("[Migration] Schema auf Version 141 (Datenfix: Lieferant bei Dienstleistungen entfernt, Issue #334)")
+
+        if version < 142:
+            # Issue #336: Opt-in um bei SMTP-Versand ein selbstsigniertes/nicht vertrauenswürdiges
+            # Zertifikat zu akzeptieren (z.B. TLS-Interception durch lokale Security-Software) -
+            # standardmäßig aus, Verbindung bleibt verschlüsselt, aber ohne Server-Authentifizierung.
+            unternehmen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "smtp_zertifikat_ignorieren" not in unternehmen_cols:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN smtp_zertifikat_ignorieren BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 142"))
+            conn.commit()
+            print("[Migration] Schema auf Version 142 (unternehmen.smtp_zertifikat_ignorieren, Issue #336)")
+
+        if version < 143:
+            # Issue #336 Folgefix: Trust-on-First-Use statt dauerhaftem CERT_NONE - der
+            # Fingerabdruck des beim ersten Verbindungsaufbau akzeptierten Zertifikats wird
+            # gespeichert; jede weitere Verbindung muss exakt dieses Zertifikat zeigen.
+            unternehmen_cols2 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "smtp_zertifikat_fingerprint" not in unternehmen_cols2:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN smtp_zertifikat_fingerprint VARCHAR(64)"))
+            conn.execute(text("PRAGMA user_version = 143"))
+            conn.commit()
+            print("[Migration] Schema auf Version 143 (unternehmen.smtp_zertifikat_fingerprint - TOFU-Pinning, Issue #336)")
 
 
 def _migrate_kategorien() -> None:

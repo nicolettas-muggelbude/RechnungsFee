@@ -264,6 +264,8 @@ export type Unternehmen = {
   smtp_user?: string | null
   smtp_passwort?: string | null
   smtp_von_adresse?: string | null
+  smtp_zertifikat_ignorieren?: boolean
+  smtp_zertifikat_fingerprint?: string | null
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
   standard_zahlungsziel?: number

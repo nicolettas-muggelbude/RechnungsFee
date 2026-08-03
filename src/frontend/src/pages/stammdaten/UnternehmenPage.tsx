@@ -1097,6 +1097,12 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
   const [user, setUser] = useState(data.smtp_user ?? '')
   const [passwort, setPasswort] = useState(data.smtp_passwort ?? '')
   const [von, setVon] = useState(data.smtp_von_adresse ?? '')
+  const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.smtp_zertifikat_ignorieren ?? false)
+  const fingerprint = data.smtp_zertifikat_fingerprint
+  const zertifikatZuruecksetzenMut = useMutation({
+    mutationFn: () => updateUnternehmen({ smtp_zertifikat_fingerprint: null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
+  })
   const [testMail, setTestMail] = useState('')
   const [gespeichert, setGespeichert] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
@@ -1112,6 +1118,7 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
       smtp_user: user || null,
       smtp_passwort: passwort || null,
       smtp_von_adresse: von || null,
+      smtp_zertifikat_ignorieren: zertifikatIgnorieren,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unternehmen'] })
@@ -1180,6 +1187,38 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
           <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300">
             <strong>Gmail:</strong> Nutze ein App-Passwort (Google-Konto → Sicherheit → 2-FA → App-Passwörter). Host: smtp.gmail.com, Port: 587 (STARTTLS).
           </div>
+
+          <div className="flex items-start gap-3">
+            <input type="checkbox" id="smtp-zertifikat-ignorieren" checked={zertifikatIgnorieren}
+              onChange={e => setZertifikatIgnorieren(e.target.checked)} className="rounded mt-0.5" />
+            <label htmlFor="smtp-zertifikat-ignorieren" className="text-sm text-slate-600 dark:text-slate-300">
+              Selbstsigniertes Zertifikat akzeptieren
+              <span className="block text-xs text-slate-400 dark:text-slate-500 font-normal mt-0.5">
+                Nur aktivieren, wenn der Testversand mit „Zertifikatsprüfung fehlgeschlagen" abbricht, obwohl der
+                Server vertrauenswürdig ist (z. B. durch Sicherheitssoftware, die den Datenverkehr lokal prüft).
+                Beim nächsten Versand wird das Zertifikat einmalig gemerkt („Trust on First Use") – zeigt der
+                Server danach jemals ein anderes Zertifikat, bricht RechnungsFee sicherheitshalber ab, bevor
+                Zugangsdaten gesendet werden.
+              </span>
+            </label>
+          </div>
+
+          {zertifikatIgnorieren && (
+            <div className="ml-7 text-xs">
+              {fingerprint ? (
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                  <span>Akzeptiertes Zertifikat: <span className="font-mono">{fingerprint.slice(0, 16)}…</span></span>
+                  <button type="button" onClick={() => zertifikatZuruecksetzenMut.mutate()}
+                    disabled={zertifikatZuruecksetzenMut.isPending}
+                    className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50">
+                    Zurücksetzen
+                  </button>
+                </div>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500">Noch kein Zertifikat gemerkt – wird beim nächsten Testversand/Senden akzeptiert.</span>
+              )}
+            </div>
+          )}
 
         </div>
       )}

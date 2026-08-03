@@ -76,6 +76,8 @@ class UnternehmenBase(BaseModel):
     smtp_user: Optional[str] = None
     smtp_passwort: Optional[str] = None
     smtp_von_adresse: Optional[str] = None
+    smtp_zertifikat_ignorieren: bool = False
+    smtp_zertifikat_fingerprint: Optional[str] = None
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
     standard_zahlungsziel: int = 14

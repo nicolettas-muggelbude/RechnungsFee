@@ -119,6 +119,13 @@ class Unternehmen(Base):
     smtp_user: Mapped[str | None] = mapped_column(String(200))
     smtp_passwort: Mapped[str | None] = mapped_column(String(500))
     smtp_von_adresse: Mapped[str | None] = mapped_column(String(200))
+    # Opt-in für selbstsignierte/nicht vertrauenswürdige Zertifikate (z.B. TLS-Interception durch
+    # Security-Software) - Verbindung bleibt verschlüsselt, nur die Zertifikatsprüfung entfällt,
+    # daher weiterhin angreifbar bei aktivem Man-in-the-Middle (Issue #336)
+    smtp_zertifikat_ignorieren: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Trust-on-First-Use: SHA-256-Fingerabdruck des beim ersten Verbindungsaufbau akzeptierten
+    # Zertifikats (nur relevant/gesetzt wenn smtp_zertifikat_ignorieren aktiv ist, Issue #336)
+    smtp_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
     unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
     unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     standard_zahlungsziel: Mapped[int] = mapped_column(Integer, default=14, server_default="14")

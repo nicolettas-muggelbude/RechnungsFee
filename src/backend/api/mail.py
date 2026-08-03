@@ -1,6 +1,8 @@
 """
 Mail-Versand via SMTP – Rechnungen, Angebote, Proforma, Aufträge.
 """
+import hashlib
+import socket
 import ssl
 import smtplib
 import logging
@@ -178,12 +180,47 @@ def _build_message(
     return msg
 
 
-def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str]) -> None:
+def _zertifikat_fingerprint(sock) -> str:
+    der = sock.getpeercert(binary_form=True)
+    return hashlib.sha256(der).hexdigest()
+
+
+def _pruefe_gepinntes_zertifikat(u: Unternehmen, srv, db: Session) -> None:
+    """Trust-on-First-Use (Issue #336): Bei der ersten Verbindung mit aktivem
+    smtp_zertifikat_ignorieren wird der Fingerabdruck des präsentierten Zertifikats gespeichert.
+    Jede weitere Verbindung muss GENAU dieses Zertifikat zeigen - andernfalls wird abgebrochen,
+    BEVOR Zugangsdaten gesendet werden. So bleibt "einmal akzeptieren" auch wirklich sicher:
+    ein späterer Man-in-the-Middle-Angriff mit einem anderen (auch selbstsignierten) Zertifikat
+    wird erkannt und blockiert, statt wie bei bloßem CERT_NONE unbemerkt durchgelassen zu werden."""
+    fp = _zertifikat_fingerprint(srv.sock)
+    if not u.smtp_zertifikat_fingerprint:
+        u.smtp_zertifikat_fingerprint = fp
+        db.commit()
+    elif fp != u.smtp_zertifikat_fingerprint:
+        raise HTTPException(
+            400,
+            "Das Zertifikat des Mailservers hat sich geändert! Das kann eine legitime "
+            "Zertifikatserneuerung sein - oder ein Angriff auf die Verbindung. Zur Sicherheit "
+            "wurde der Versand abgebrochen, bevor Zugangsdaten gesendet wurden. Bitte in den "
+            "SMTP-Einstellungen das neue Zertifikat bewusst zurücksetzen (nur wenn du dir "
+            "sicher bist, dass die Änderung erwartet ist) und den Versand erneut versuchen.",
+        )
+
+
+def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
     port = u.smtp_port or 587
     ctx = ssl.create_default_context()
+    if u.smtp_zertifikat_ignorieren:
+        # Opt-in (Issue #336, z.B. TLS-Interception durch lokale Security-Software mit
+        # selbstsigniertem Zertifikat) - die CA-Kettenprüfung entfällt, dafür übernimmt
+        # _pruefe_gepinntes_zertifikat() unten die eigentliche Sicherheitsprüfung (TOFU-Pinning).
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     try:
         if u.smtp_ssl:
             with smtplib.SMTP_SSL(u.smtp_host, port, context=ctx, timeout=15) as srv:
+                if u.smtp_zertifikat_ignorieren:
+                    _pruefe_gepinntes_zertifikat(u, srv, db)
                 srv.login(u.smtp_user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
@@ -191,6 +228,8 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str]) -> None:
                 srv.ehlo()
                 srv.starttls(context=ctx)
                 srv.ehlo()
+                if u.smtp_zertifikat_ignorieren:
+                    _pruefe_gepinntes_zertifikat(u, srv, db)
                 srv.login(u.smtp_user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
     except smtplib.SMTPAuthenticationError:
@@ -199,6 +238,43 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str]) -> None:
         raise HTTPException(400, f"Verbindung zu {u.smtp_host}:{port} fehlgeschlagen")
     except smtplib.SMTPException as e:
         raise HTTPException(400, f"SMTP-Fehler: {e}")
+    # Ab hier: technische OSError-Unterklassen, die von smtplib unverändert durchgereicht werden
+    # (z.B. "[Error 11001] getaddrinfo failed" unter Windows) - für Fehlersuche unverständlich,
+    # deshalb vor dem generischen OSError-Fallback in verständliche Meldungen übersetzt (Issue #336).
+    # ssl.SSLCertVerificationError ist eine Unterklasse von ssl.SSLError, die wiederum eine
+    # Unterklasse von OSError ist - muss deshalb vor den allgemeineren Fällen geprüft werden.
+    except ssl.SSLCertVerificationError as e:
+        selbstsigniert = "self-signed certificate" in str(e)
+        grund = "ein selbstsigniertes Zertifikat" if selbstsigniert else "ein nicht vertrauenswürdiges Zertifikat"
+        raise HTTPException(
+            400,
+            f'Zertifikatsprüfung fehlgeschlagen: Der SMTP-Server „{u.smtp_host}" verwendet {grund}, '
+            "dem RechnungsFee nicht automatisch vertraut - auch wenn dein E-Mail-Programm oder "
+            "Windows die Verbindung akzeptiert (z. B. weil das Zertifikat dort manuell als "
+            "vertrauenswürdig hinterlegt wurde). Das kommt häufiger bei einem eigenen/internen "
+            "Mailserver vor. Bitte beim E-Mail-Anbieter bzw. der IT nachfragen, ob stattdessen "
+            "ein gültiges Zertifikat einer öffentlichen Zertifizierungsstelle verwendet werden kann.",
+        )
+    except ssl.SSLError as e:
+        raise HTTPException(400, f"TLS/SSL-Fehler bei der Verbindung zu {u.smtp_host}:{port}: {e}")
+    except socket.gaierror:
+        raise HTTPException(
+            400,
+            f'SMTP-Server „{u.smtp_host}" konnte nicht gefunden werden. Bitte den Servernamen '
+            "prüfen (z. B. smtp.gmail.com) sowie die Internetverbindung kontrollieren.",
+        )
+    except (TimeoutError, socket.timeout):
+        raise HTTPException(
+            400,
+            f"Zeitüberschreitung bei der Verbindung zu {u.smtp_host}:{port}. Bitte Servername, "
+            "Port und Firewall/Internetverbindung prüfen.",
+        )
+    except ConnectionRefusedError:
+        raise HTTPException(
+            400,
+            f"Verbindung zu {u.smtp_host}:{port} wurde abgelehnt. Bitte den Port und die "
+            "SSL/TLS-Einstellung prüfen (z. B. Port 465 mit SSL oder 587 mit STARTTLS).",
+        )
     except OSError as e:
         raise HTTPException(400, f"Netzwerkfehler: {e}")
 
@@ -243,7 +319,7 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         empfaenger.append(req.cc)
 
     msg = _build_message(u, req.an, req.cc, req.betreff, req.text, attachments)
-    _sende(u, msg, empfaenger)
+    _sende(u, msg, empfaenger, db)
     return {"ok": True}
 
 
@@ -256,5 +332,5 @@ def test_mail(req: TestMailRequest, db: Session = Depends(get_db)):
         "Diese Nachricht bestätigt, dass dein SMTP-Versand funktioniert.",
         [],
     )
-    _sende(u, msg, [req.an])
+    _sende(u, msg, [req.an], db)
     return {"ok": True}
