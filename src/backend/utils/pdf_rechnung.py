@@ -75,7 +75,7 @@ class RechnungPDF(RechnungPDFBase):
         self.ln()
 
         ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
-        _sign = -1.0 if ist_storno else 1.0
+        _sign = Decimal("-1") if ist_storno else Decimal("1")
 
         self.set_font("DejaVu", "", 8.5)
         self.set_text_color(*TEXT_DUNKEL)
@@ -104,17 +104,20 @@ class RechnungPDF(RechnungPDFBase):
                                 new_x="LMARGIN", new_y="NEXT")
                 self.ln(1.5)
                 continue
+            # Anzeige-Werte für den "vor Rabatt"-Referenzpreis (Einzelpreis-Spalte) und die
+            # Rabatt-Unterzeile - rein informell, fließt nicht in rechnung.netto_gesamt/brutto_gesamt
+            # ein (die kommen unverändert aus der einen Berechnung, siehe rechnungen.py
+            # _berechne_rechnung(), Issue #332). Mit Decimal statt float für exakte Centbeträge.
             if self._ist_netto:
-                netto_ges_vor = float(str(pos.netto)) * menge * _sign
-                netto_ges_eff = (float(str(pos.brutto)) - float(str(pos.ust_betrag))) * menge * _sign
+                netto_ges_vor = pos.netto * pos.menge * _sign
+                netto_ges_eff = (pos.brutto - pos.ust_betrag) * _sign
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(pos.netto), align="R")
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label, align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
-                ust_satz = float(str(pos.ust_satz))
-                ep_brutto = float(str(pos.netto)) * (1 + ust_satz / 100)
-                brutto_ges_vor = ep_brutto * menge * _sign
-                brutto_ges_eff = float(str(pos.brutto)) * menge * _sign
+                ep_brutto = pos.netto * (1 + pos.ust_satz / 100)
+                brutto_ges_vor = ep_brutto * pos.menge * _sign
+                brutto_ges_eff = pos.brutto * _sign
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(ep_brutto), align="R")
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(brutto_ges_vor), align="R")

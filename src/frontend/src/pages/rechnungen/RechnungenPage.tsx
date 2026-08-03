@@ -18,7 +18,9 @@ import {
   getMahnwesenEinstellungen, getRechnungMahnungen,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
+  type RechnungVorschauRequest,
 } from '../../api/client'
+import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { KategorieErstellenModal } from '../../components/KategorieErstellenModal'
 import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
@@ -2320,14 +2322,10 @@ function RechnungForm({
         beschreibung: p.beschreibung,
         menge: String(parseFloat(p.menge)),
         einheit: p.einheit,
-        netto: (() => {
-          // Form startet immer im Brutto-Modus → Brutto-Wert rekonstruieren.
-          // Differenzbesteuerung / 0%-USt: brutto = netto (keine USt-Aufschlag).
-          const n = Math.abs(parseFloat(p.netto))  // pos.netto = Original-EP vor Rabatt; abs() für alte Gutschrift-Einträge
-          const u = parseFloat(p.ust_satz) || 0
-          const showBrutto = !p.differenzbesteuerung && u > 0
-          return (showBrutto ? n * (1 + u / 100) : n).toFixed(2).replace('.', ',')
-        })(),
+        // p.netto = Original-Einzelpreis vor Rabatt, so wie ursprünglich eingegeben - Bedeutung
+        // (Netto oder Brutto) richtet sich nach initial.eingabemodus. Kein eigener Umrechnungs-
+        // schritt mehr (Issue #332: Formular zeigt nur noch, was gespeichert ist).
+        netto: Math.abs(parseFloat(p.netto)).toFixed(2).replace('.', ','),  // abs() für alte Gutschrift-Einträge
         ust_satz: String(parseFloat(p.ust_satz)),
         rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
         artikel_id: p.artikel_id ?? undefined,
@@ -2343,11 +2341,13 @@ function RechnungForm({
     return [pos]
   })
   const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>(
-    prefillFromAnalyse?.positionen_modus === 'brutto'
-      ? 'brutto'
-      : prefillFromAnalyse?.positionen?.length
-        ? 'netto'
-        : pf?.gesamt_netto && !pf?.gesamt_brutto ? 'netto' : 'brutto'
+    initial?.eingabemodus
+      ? initial.eingabemodus
+      : prefillFromAnalyse?.positionen_modus === 'brutto'
+        ? 'brutto'
+        : prefillFromAnalyse?.positionen?.length
+          ? 'netto'
+          : pf?.gesamt_netto && !pf?.gesamt_brutto ? 'netto' : 'brutto'
   )
   const dokumentTyp: 'Rechnung' | 'Lieferschein' =
     (initial?.dokument_typ === 'Lieferschein' ? 'Lieferschein' : initialDokumentTyp) ?? 'Rechnung'
@@ -2611,57 +2611,58 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
 
-  // Summenberechnung — reagiert auf eingabeModus und Positionsrabatt
-  const summen = positionen.reduce(
-    (acc, p) => {
-      const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
-      const menge = parseFloat(p.menge.replace(',', '.')) || 1
-      const ust = parseFloat(p.ust_satz) || 0
-      const posRabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
-      const r4 = (v: number) => Math.round(v * 10000) / 10000  // 4-stellige Zwischenrundung (analog Backend _Q4)
-      let netto: number, ustBetrag: number, brutto: number
-      if (eingabeModus === 'brutto') {
-        const nettoEinzel = ust > 0 ? (eingabe * 100) / (100 + ust) : eingabe
-        const nettoNachRabatt = r4(nettoEinzel * (1 - posRabatt / 100))
-        netto = nettoNachRabatt * menge
-        const ustPerEinheit = r4(nettoNachRabatt * ust / 100)
-        ustBetrag = ustPerEinheit * menge
-        brutto = netto + ustBetrag
-      } else {
-        const nettoNachRabatt = r4(eingabe * (1 - posRabatt / 100))
-        netto = nettoNachRabatt * menge
-        const ustPerEinheit = r4(nettoNachRabatt * ust / 100)
-        ustBetrag = ustPerEinheit * menge
-        brutto = netto + ustBetrag
-      }
-      return { netto: acc.netto + netto, ust: acc.ust + ustBetrag, brutto: acc.brutto + brutto }
-    },
-    { netto: 0, ust: 0, brutto: 0 }
-  )
-  // Rechnungsrabatt anwenden
+  // Summenberechnung (Issue #332): das Formular rechnet nicht mehr selbst, sondern fragt beim
+  // Backend dieselbe Berechnung ab die auch beim Speichern läuft (debounced) - siehe
+  // useRechnungVorschau(). Positions-/USt-/Kleinunternehmer-Sonderfälle laufen dadurch exakt
+  // gleich wie in rechnungen.py::_berechne_rechnung(), nicht in einer zweiten, eigenen JS-Kopie.
   const rechnungRabattNum = parseFloat(rechnungRabatt.replace(',', '.')) || 0
-  const summenNachRabatt = rechnungRabattNum > 0
-    ? rechnungRabattModus === 'betrag'
-      ? (() => {
-          const faktor = summen.brutto > 0 ? 1 - rechnungRabattNum / summen.brutto : 1
-          return { netto: summen.netto * faktor, ust: summen.ust * faktor, brutto: summen.brutto - rechnungRabattNum }
-        })()
-      : {
-          netto: summen.netto * (1 - rechnungRabattNum / 100),
-          ust: summen.ust * (1 - rechnungRabattNum / 100),
-          brutto: summen.brutto * (1 - rechnungRabattNum / 100),
-        }
-    : summen
+  const vorschauPositionenGueltig = positionen.some((p) => p.beschreibung.trim())
+  const vorschauRequest: RechnungVorschauRequest | null = vorschauPositionenGueltig ? {
+    positionen: positionen.map((p) => ({
+      beschreibung: p.beschreibung || '-',
+      menge: p.menge || '1',
+      einheit: p.einheit || 'Stück',
+      netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
+      ust_satz: p.ust_satz || '0',
+      differenzbesteuerung: p.differenzbesteuerung ?? false,
+      rabatt_prozent: parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || undefined,
+    })),
+    eingabemodus: eingabeModus,
+    rabatt_prozent: rechnungRabattNum > 0 && rechnungRabattModus === 'prozent' ? rechnungRabattNum : undefined,
+    rabatt_betrag: rechnungRabattNum > 0 && rechnungRabattModus === 'betrag' ? rechnungRabattNum : undefined,
+    ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
+    ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
+    ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
+    ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
+  } : null
+  const { vorschau } = useRechnungVorschau(vorschauRequest)
+
+  const summenAusBackend = vorschau
+    ? { netto: parseFloat(vorschau.netto_gesamt), ust: parseFloat(vorschau.ust_gesamt), brutto: parseFloat(vorschau.brutto_gesamt) }
+    : { netto: 0, ust: 0, brutto: 0 }
+  // "Zwischensumme" vor Rechnungsrabatt für die Anzeige - Summe der vom Backend bereits fertig
+  // berechneten Positionswerte (nicht neu berechnet, nur aufaddiert, analog zur PDF-Anzeige).
+  // vp.netto_eff/.ust_betrag/.brutto sind bereits fertige Positionssummen (inkl. Menge, Issue #332).
+  const summen = vorschau
+    ? vorschau.positionen.reduce(
+        (acc, vp) => ({
+          netto: acc.netto + parseFloat(vp.netto_eff),
+          ust: acc.ust + parseFloat(vp.ust_betrag),
+          brutto: acc.brutto + parseFloat(vp.brutto),
+        }),
+        { netto: 0, ust: 0, brutto: 0 }
+      )
+    : { netto: 0, ust: 0, brutto: 0 }
 
   // Im Import-Modus: Gesamtbeträge aus dem XML nur anzeigen solange Positionen unverändert.
-  // Hat der Nutzer Positionen korrigiert (Abweichung > 1 Cent), live aus Positionen rechnen.
+  // Hat der Nutzer Positionen korrigiert (Abweichung > 1 Cent), zeigt die Backend-Vorschau greift.
   const pfN = prefillFromAnalyse?.felder?.gesamt_netto
   const pfU = prefillFromAnalyse?.felder?.gesamt_ust
   const pfB = prefillFromAnalyse?.felder?.gesamt_brutto
-  const overridePasst = pfB != null && Math.abs(summenNachRabatt.brutto - Number(pfB)) <= 0.01
+  const overridePasst = pfB != null && Math.abs(summenAusBackend.brutto - Number(pfB)) <= 0.01
   const anzeigeSummen = (pfN && pfU && pfB && overridePasst)
     ? { netto: parseFloat(String(pfN)), ust: parseFloat(String(pfU)), brutto: parseFloat(String(pfB)) }
-    : summenNachRabatt
+    : summenAusBackend
 
   function toggleEingabeModus() {
     setEingabeModus((prev) => {
@@ -2790,37 +2791,31 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
       ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
       ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
-      // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen –
-      // aber nur wenn die Positionen noch mit dem OCR/XML-Wert übereinstimmen.
-      // Hat der Nutzer Positionen manuell korrigiert (z.B. via Zusammenfassen + USt-Änderung),
-      // weicht die berechnete Summe ab → Override verwerfen, Positionen sind maßgeblich.
-      ...(() => {
-        const pfN = prefillFromAnalyse?.felder?.gesamt_netto
-        const pfU = prefillFromAnalyse?.felder?.gesamt_ust
-        const pfB = prefillFromAnalyse?.felder?.gesamt_brutto
-        if (!pfN || !pfU || !pfB) return {}
-        const calcBrutto = positionen.reduce((sum, p) => {
-          const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
-          const ust = parseFloat(p.ust_satz) || 0
-          const netto = (eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
-          return sum + (netto + netto * ust / 100) * (parseFloat(p.menge) || 1)
-        }, 0)
-        if (Math.abs(calcBrutto - Number(pfB)) > 0.01) return {}
-        return { netto_gesamt_override: pfN, ust_gesamt_override: pfU, brutto_gesamt_override: pfB }
-      })(),
+      eingabemodus: eingabeModus,
+      // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen – aber nur wenn die
+      // Positionen noch mit dem OCR/XML-Wert übereinstimmen (overridePasst, oben aus der
+      // Backend-Vorschau abgeleitet). Hat der Nutzer Positionen manuell korrigiert, weicht die
+      // Vorschau ab → Override verwerfen, Positionen sind maßgeblich.
+      ...(prefillFromAnalyse?.felder?.gesamt_netto && prefillFromAnalyse?.felder?.gesamt_ust
+          && prefillFromAnalyse?.felder?.gesamt_brutto && overridePasst
+        ? {
+            netto_gesamt_override: prefillFromAnalyse.felder.gesamt_netto,
+            ust_gesamt_override: prefillFromAnalyse.felder.gesamt_ust,
+            brutto_gesamt_override: prefillFromAnalyse.felder.gesamt_brutto,
+          }
+        : {}),
+      // Eingabewert wird unverändert gesendet (Bedeutung durch eingabemodus festgelegt) - das
+      // Backend rechnet Netto/Brutto/USt einmal, zentral, in derselben Funktion wie die Vorschau
+      // oben (Issue #332: keine zweite, abweichende Umrechnung mehr im Frontend).
       positionen: positionen.map((p) => {
-        const eingabe = parseFloat(p.netto.replace(',', '.')) || 0
-        const ust = parseFloat(p.ust_satz) || 0
         const istDiff = p.differenzbesteuerung ?? false
-        // §25a: kein USt-Ausweis; Eingabewert = Rechnungspreis → direkt als netto senden
         const ust_satz = (istKleinunternehmer || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : (p.ust_satz || '0')
-        const netto = (!istDiff && eingabeModus === 'brutto' && ust > 0) ? (eingabe * 100) / (100 + ust) : eingabe
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung,
           menge: p.menge || '1',
           einheit: p.einheit || 'Stück',
-          netto: netto.toFixed(4),
+          netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
           ust_satz,
           artikel_id: p.artikel_id,
           kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,

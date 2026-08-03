@@ -476,7 +476,8 @@ def _buche_pfad_a(
                     _art = db.query(_Artikel).filter(_Artikel.id == _pos.artikel_id).first()
                     _ek = _art.ek_netto if _art else None
                 if _ek is not None:
-                    _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
+                    # _pos.brutto ist bereits die Positionssumme (inkl. Menge, Issue #332)
+                    _marge_25a_gesamt += (_pos.brutto - _ek * _pos.menge)
         _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
 
     _gruppe_id_kette = _kette_gruppe_id(rechnung, db)

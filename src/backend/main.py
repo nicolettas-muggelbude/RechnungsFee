@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 138
+SCHEMA_VERSION = 140
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3005,6 +3005,46 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 138"))
             conn.commit()
             print("[Migration] Schema auf Version 138 (mahnstufen.system_stufe - Löschschutz für Standard-Stufen)")
+
+        if version < 139:
+            # Issue #332: Rechnungssummen liefen intern über mehrere unabhängige, potenziell
+            # abweichende Rundungswege (Formular-Vorschau, Rechnung-Summenberechnung, PDF).
+            # Fix: EINE gemeinsame Berechnung mit zwei Richtungen (Netto- vs. Brutto-Rechnung).
+            # eingabemodus haelt fest, welche Richtung fuer diese Rechnung gilt - u.a. damit beim
+            # spaeteren Bearbeiten eines Entwurfs klar ist, wie der gespeicherte Original-
+            # Einzelpreis (rechnungspositionen.netto) zu interpretieren ist (als Netto- oder
+            # Bruttopreis vor Positionsrabatt).
+            rechnungen_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "eingabemodus" not in rechnungen_cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN eingabemodus VARCHAR(10) NOT NULL DEFAULT 'netto'"))
+            conn.execute(text("PRAGMA user_version = 139"))
+            conn.commit()
+            print("[Migration] Schema auf Version 139 (rechnungen.eingabemodus - Issue #332 Rundungskonsistenz)")
+
+        if version < 140:
+            # Issue #332 Folgefehler: artikel.vk_netto wurde aus vk_brutto abgeleitet und auf 2
+            # Nachkommastellen gerundet gespeichert (z.B. 3,50€ brutto -> 2,94€ netto statt exakt
+            # 2,9412€). Bei Rechnungen mit diesem Artikel führte das zu spürbaren Centabweichungen
+            # zwischen Netto- und Brutto-Rechnung, vor allem bei größeren Mengen. vk_netto wird
+            # jetzt mit 4 Nachkommastellen gespeichert (wie rechnungspositionen.netto) - bestehende
+            # Artikel werden hier einmalig aus ihrem vk_brutto neu abgeleitet. Bei Differenz-
+            # besteuerung (§25a) bleibt vk_netto = vk_brutto unverändert.
+            from decimal import Decimal as _Dec140, ROUND_HALF_UP as _RHU140
+            artikel_rows = conn.execute(text(
+                "SELECT id, vk_brutto, steuersatz, differenzbesteuerung FROM artikel"
+            )).fetchall()
+            for _art_id, _vk_brutto, _steuersatz, _ist_diff in artikel_rows:
+                if _ist_diff:
+                    continue
+                _faktor = 1 + _Dec140(str(_steuersatz)) / 100
+                _neuer_netto = (_Dec140(str(_vk_brutto)) / _faktor).quantize(_Dec140("0.0001"), _RHU140)
+                conn.execute(
+                    text("UPDATE artikel SET vk_netto = :n WHERE id = :id"),
+                    {"n": str(_neuer_netto), "id": _art_id},
+                )
+            conn.execute(text("PRAGMA user_version = 140"))
+            conn.commit()
+            print("[Migration] Schema auf Version 140 (artikel.vk_netto - 4 Nachkommastellen statt Rundung, Issue #332)")
 
 
 def _migrate_kategorien() -> None:

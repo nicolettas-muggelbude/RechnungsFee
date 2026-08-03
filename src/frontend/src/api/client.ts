@@ -1334,6 +1334,7 @@ export type Rechnung = {
   aktualisiert_am: string
   rabatt_prozent: string
   rabatt_betrag: string | null
+  eingabemodus: 'netto' | 'brutto'
   einleitungstext: string | null
   ist_reverse_charge: boolean
   ist_eu_lieferung: boolean
@@ -1374,6 +1375,7 @@ export type RechnungCreate = {
   positionen: RechnungspositionCreate[]
   rabatt_prozent?: number
   rabatt_betrag?: number
+  eingabemodus?: 'netto' | 'brutto'
   netto_gesamt_override?: string
   ust_gesamt_override?: string
   brutto_gesamt_override?: string
@@ -1552,6 +1554,34 @@ export const getPaketDateiUrl = async (paketId: number, eintragId: number): Prom
 }
 
 export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
+
+// Vorschau (Issue #332): berechnet Positions-/Kopfsummen ohne zu speichern - nutzt im Backend
+// exakt dieselbe Funktion wie createRechnung/updateRechnung. Das Formular soll selbst nicht mehr
+// rechnen, nur noch anzeigen was der Server zurückgibt.
+export type RechnungVorschauRequest = {
+  positionen: RechnungspositionCreate[]
+  eingabemodus: 'netto' | 'brutto'
+  rabatt_prozent?: number
+  rabatt_betrag?: number
+  ist_reverse_charge?: boolean
+  ist_eu_lieferung?: boolean
+  ist_drittland_leistung?: boolean
+  ist_ausfuhrlieferung?: boolean
+}
+export type RechnungVorschauPosition = {
+  ust_satz: string
+  ust_betrag: string
+  brutto: string
+  netto_eff: string
+}
+export type RechnungVorschau = {
+  positionen: RechnungVorschauPosition[]
+  netto_gesamt: string
+  ust_gesamt: string
+  brutto_gesamt: string
+}
+export const rechnungVorschau = (data: RechnungVorschauRequest) =>
+  request<RechnungVorschau>('/rechnungen/vorschau', { method: 'POST', body: JSON.stringify(data) })
 
 export const createRechnung = (data: RechnungCreate) =>
   request<Rechnung>('/rechnungen', { method: 'POST', body: JSON.stringify(data) })

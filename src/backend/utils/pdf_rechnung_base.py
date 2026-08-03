@@ -112,11 +112,11 @@ def _ust_aufschluesselung(positionen) -> list[tuple[int, Decimal, Decimal]]:
     ust_by:   dict[int, Decimal] = {}
     for pos in positionen:
         satz  = int(Decimal(str(pos.ust_satz)))
-        menge = Decimal(str(pos.menge))
-        # pos.brutto − pos.ust_betrag = effektiver Netto-Einzelpreis (nach Positionsrabatt)
+        # pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (Einzelpreis x Menge,
+        # nach Positionsrabatt) - keine Stückpreise, keine Multiplikation mit Menge mehr (Issue #332).
         netto_eff = Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag))
-        netto_by[satz] = netto_by.get(satz, Decimal("0")) + netto_eff * menge
-        ust_by[satz]   = ust_by.get(satz, Decimal("0"))   + Decimal(str(pos.ust_betrag)) * menge
+        netto_by[satz] = netto_by.get(satz, Decimal("0")) + netto_eff
+        ust_by[satz]   = ust_by.get(satz, Decimal("0"))   + Decimal(str(pos.ust_betrag))
     return sorted([(s, netto_by[s], ust_by[s]) for s in netto_by], key=lambda x: x[0])
 
 
@@ -559,11 +559,11 @@ class RechnungPDFBase(FPDF):
             _Q4 = Decimal("0.0001")
             _Q2 = Decimal("0.01")
             pos_netto_sum = sum(
-                (Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag))) * Decimal(str(pos.menge))
+                (Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag)))
                 for pos in r.positionen
             ).quantize(_Q4)
             pos_ust_sum   = sum(
-                Decimal(str(pos.ust_betrag)) * Decimal(str(pos.menge))
+                Decimal(str(pos.ust_betrag))
                 for pos in r.positionen
             ).quantize(_Q4)
             pos_brutto_sum = (pos_netto_sum + pos_ust_sum).quantize(_Q4)

@@ -24,6 +24,12 @@ def _berechne_preise(
     Bei Differenzbesteuerung (§25a UStG) wird keine USt separat ausgewiesen –
     VK-Brutto ist gleichzeitig der Rechnungspreis (ohne USt-Aufschlag).
     ek_brutto = ek_netto (Ankauf von Privatperson, kein USt-Abzug).
+
+    vk_netto wird NICHT auf 2 Nachkommastellen gerundet (Issue #332 Folgefehler): der Artikelstamm
+    fragt nur den Brutto-VK ab, vk_netto ist rein abgeleitet. Würde man hier auf den Cent runden
+    (z.B. 3,50€ / 1,19 = 2,9412€ -> 2,94€), würde eine daraus erstellte Netto-Rechnung bei größeren
+    Mengen spürbar vom tatsächlich eingegebenen Brutto-Preis abweichen (2,94€ x 1,19 = 3,4986€,
+    nicht 3,50€). vk_netto behält deshalb 4 Nachkommastellen (wie rechnungspositionen.netto).
     """
     if differenzbesteuerung:
         # §25a: kein USt-Aufschlag auf den Rechnungspreis
@@ -32,7 +38,7 @@ def _berechne_preise(
         return vk_netto, ek_brutto
 
     faktor = 1 + steuersatz / 100
-    vk_netto = (vk_brutto / faktor).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    vk_netto = (vk_brutto / faktor).quantize(Decimal("0.0001"), ROUND_HALF_UP)
     ek_brutto = None
     if ek_netto is not None:
         ek_brutto = (ek_netto * faktor).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -213,13 +219,16 @@ def get_artikel_rechnungen(artikel_id: int, db: Session = Depends(get_db)):
     for pos in positionen:
         rechnung = pos.rechnung
         kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first() if rechnung.kunde_id else None
+        # pos.brutto ist die Positionssumme (Einzelpreis x Menge, Issue #332) - für die Anzeige
+        # "zu welchem Stückpreis wurde der Artikel verkauft" durch die Menge zurückrechnen.
+        vk_brutto_stueck = (pos.brutto / pos.menge).quantize(Decimal("0.01"), ROUND_HALF_UP) if pos.menge else pos.brutto
         result.append(ArtikelRechnungKurz(
             rechnung_id=rechnung.id,
             rechnungsnummer=rechnung.rechnungsnummer,
             datum=str(rechnung.datum),
             menge=pos.menge,
             einheit=pos.einheit,
-            vk_brutto=pos.brutto,
+            vk_brutto=vk_brutto_stueck,
             kunde_id=rechnung.kunde_id,
             kunde_name=" ".join(p for p in [kunde.firmenname, kunde.vorname, kunde.nachname] if p) or None if kunde else None,
         ))

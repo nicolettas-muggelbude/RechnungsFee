@@ -361,7 +361,7 @@ export function MahnwesenEinstellungenPage() {
                 </div>
                 <div>
                   <label className={labelCls}>
-                    Basiszinssatz (%) – <a href="https://www.bundesbank.de/de/aufgaben/geldpolitik/zinssaetze/basiszinssatz-607820" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">aktueller Wert bei der Bundesbank</a>
+                    Basiszinssatz (%) – <a href="https://www.bundesbank.de/de/bundesbank/organisation/agb-und-regelungen/basiszinssatz-607820" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">aktueller Wert bei der Bundesbank</a>
                   </label>
                   <input className={`${inputCls} w-32`} value={einst.basiszinssatz} onChange={(e) => patchMut.mutate({ basiszinssatz: e.target.value })} />
                 </div>

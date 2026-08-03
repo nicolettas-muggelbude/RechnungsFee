@@ -15,6 +15,8 @@ import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { KundeErstellenModal } from '../../components/KundeErstellenModal'
+import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
+import type { RechnungVorschauRequest } from '../../api/client'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -75,12 +77,6 @@ function leerePos(): Pos {
 
 type EingabeModus = 'brutto' | 'netto'
 
-function nettoProStueck(pos: Pos, modus: EingabeModus): number {
-  const ep  = parseFloat(pos.einzelpreis.replace(',', '.')) || 0
-  const ust = parseFloat(pos.ust_satz) || 0
-  return modus === 'brutto' ? ep / (1 + ust / 100) : ep
-}
-
 function stepFuerEinheit(einheit: string | undefined | null): number {
   const e = (einheit ?? '').trim().toLowerCase()
   return /^(kg|g|mg|t|l|ml|dl|cl|m[²³]|m|cm|mm)$/.test(e) ? 0.001 : 1
@@ -92,31 +88,19 @@ function adjustMenge(current: string, step: number): string {
   return r % 1 === 0 ? String(r) : String(r).replace('.', ',')
 }
 
-function berechnePos(pos: Pos, modus: EingabeModus) {
-  const menge = parseFloat(pos.menge) || 0
-  const ust   = parseFloat(pos.ust_satz) || 0
-  const netto = nettoProStueck(pos, modus) * menge
-  const ustBet = (netto * ust) / 100
-  return { netto, ustBet, brutto: netto + ustBet }
-}
-
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
   ustSaetze: { satz: string }[]
   onArtikelWahl: (i: number, a: ArtikelSuche) => void
   eingabeModus: EingabeModus
+  summen: { netto: number; ust: number; brutto: number }
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
   }
-
-  const gesamt = positionen.reduce((acc, p) => {
-    const { netto, ustBet, brutto } = berechnePos(p, eingabeModus)
-    return { netto: acc.netto + netto, ust: acc.ust + ustBet, brutto: acc.brutto + brutto }
-  }, { netto: 0, ust: 0, brutto: 0 })
 
   const cellInput = "w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
 
@@ -190,19 +174,19 @@ function PositionenTabelle({
               Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
             </td>
             <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
-              {gesamt.netto.toFixed(2).replace('.', ',')} €
+              {summen.netto.toFixed(2).replace('.', ',')} €
             </td>
           </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
             <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
             <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
-              {gesamt.ust.toFixed(2).replace('.', ',')} €
+              {summen.ust.toFixed(2).replace('.', ',')} €
             </td>
           </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
-              {gesamt.brutto.toFixed(2).replace('.', ',')} €
+              {summen.brutto.toFixed(2).replace('.', ',')} €
             </td>
           </tr>
         </tfoot>
@@ -246,11 +230,13 @@ function AngebotFormular({
   const [gueltigBis, setGueltigBis] = useState(initial?.gueltig_bis ?? inXTagen(30))
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
   const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
-  const [eingabeModus, setEingabeModus] = useState<EingabeModus>('brutto')
+  const [eingabeModus, setEingabeModus] = useState<EingabeModus>(initial?.eingabemodus ?? 'brutto')
 
-  // Automatisch auf Netto wechseln wenn eine Firma (B2B) gewählt wird
+  // Automatisch auf Netto wechseln wenn eine Firma (B2B) gewählt wird - nur bei neuen
+  // Angeboten, nicht beim Bearbeiten (sonst würde das Öffnen zum Editieren still die
+  // Berechnungsgrundlage wechseln, siehe Issue #332)
   useEffect(() => {
-    if (!partnerId || !kunden) return
+    if (initial || !partnerId || !kunden) return
     const k = kunden.find(k => String(k.id) === partnerId)
     if (k) setEingabeModus(k.firmenname?.trim() ? 'netto' : 'brutto')
   }, [partnerId, kunden])
@@ -284,11 +270,34 @@ function AngebotFormular({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ustSaetze])
 
+  // Summen kommen ausschließlich vom Backend (Issue #332) - das Formular rechnet nicht selbst
+  const vorschauRequest: RechnungVorschauRequest | null = positionen.some(p => p.beschreibung.trim() && p.einzelpreis.trim())
+    ? {
+        eingabemodus: eingabeModus,
+        positionen: positionen
+          .filter(p => p.einzelpreis.trim())
+          .map(p => ({
+            beschreibung: p.beschreibung || '-',
+            menge: String(parseFloat(p.menge.replace(',', '.')) || 1),
+            einheit: p.einheit || 'Stk.',
+            netto: p.einzelpreis.replace(',', '.'),
+            ust_satz: String(parseFloat(p.ust_satz) || 0),
+            artikel_id: p.artikel_id,
+          })),
+      }
+    : null
+  const { vorschau } = useRechnungVorschau(vorschauRequest)
+  const summen = vorschau
+    ? { netto: parseFloat(vorschau.netto_gesamt), ust: parseFloat(vorschau.ust_gesamt), brutto: parseFloat(vorschau.brutto_gesamt) }
+    : { netto: 0, ust: 0, brutto: 0 }
+
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     const ust_satz = a.differenzbesteuerung ? '0'
       : (ustSaetze?.find(u => parseFloat(u.satz) === parseFloat(a.steuersatz))?.satz ?? a.steuersatz)
+    // vk_netto NICHT auf 2 Nachkommastellen runden (Issue #332) - der Artikel-Bruttopreis ist
+    // die eingegebene Wahrheit, vk_netto ist nur mit 4 Nachkommastellen exakt reproduzierbar.
     const preis = eingabeModus === 'netto'
-      ? parseFloat(a.vk_netto).toFixed(2)
+      ? a.vk_netto
       : parseFloat(a.vk_brutto).toFixed(2)
     setPositionen(prev => prev.map((p, idx) =>
       idx !== i ? p : {
@@ -312,12 +321,11 @@ function AngebotFormular({
     setFehler(null)
     try {
       const posPayload = positionen.map((p) => {
-        const nettoEinzel = nettoProStueck(p, eingabeModus)
         return {
           beschreibung: p.beschreibung.trim(),
           menge: String(parseFloat(p.menge) || 1),
           einheit: p.einheit || 'Stk.',
-          netto: String(nettoEinzel),
+          netto: p.einzelpreis.replace(',', '.') || '0',
           ust_satz: String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
         }
@@ -338,6 +346,7 @@ function AngebotFormular({
         dokument_typ: 'Angebot' as const,
         dokumentenpaket_id: paketId ? parseInt(paketId) : undefined,
         ist_entwurf: istEntwurf,
+        eingabemodus: eingabeModus,
         positionen: posPayload,
       }
 
@@ -478,6 +487,7 @@ function AngebotFormular({
           ustSaetze={ustSaetzeListe}
           onArtikelWahl={fillPositionFromArtikel}
           eingabeModus={eingabeModus}
+          summen={summen}
         />
       </div>
 

@@ -35,6 +35,7 @@ from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stem
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
+    RechnungVorschauRequest, RechnungVorschauResponse, RechnungVorschauPosition,
 )
 from .schemas import StornoRequest
 
@@ -273,21 +274,137 @@ def _absender_snapshot(db: Session) -> str:
     }, ensure_ascii=False)
 
 
-def _berechne_position(pos_data) -> tuple[Decimal, Decimal, Decimal]:
-    """Gibt (ust_betrag, brutto, eff_netto) zurück – nach Positionsrabatt.
-    Bei Differenzbesteuerung (§25a) wird keine USt separat ausgewiesen –
-    brutto = netto = netto-Eingabe (Preis ist der Rechnungspreis).
-    Zwischenberechnungen auf 4 Stellen; finale Rundung auf 2 obliegt dem Aufrufer.
+class _PositionsErgebnis:
+    """Fertig berechnete Werte EINER POSITIONSZEILE (Einzelpreis × Menge, nach Positionsrabatt) –
+    schon auf Cent gerundet, bereit zum Speichern. KEINE Stückpreise mehr (siehe _berechne_rechnung)."""
+    __slots__ = ("ust_satz", "ust_betrag", "brutto", "netto_eff")
+
+    def __init__(self, ust_satz: Decimal, ust_betrag: Decimal, brutto: Decimal, netto_eff: Decimal):
+        self.ust_satz = ust_satz
+        self.ust_betrag = ust_betrag
+        self.brutto = brutto
+        self.netto_eff = netto_eff  # Positionssumme nach Positionsrabatt (Einzelpreis x Menge)
+
+
+class RechnungSummen:
+    """Ergebnis von `_berechne_rechnung()` – Positionswerte + Kopfsummen in einem Rechenweg."""
+    __slots__ = ("positionen", "netto_gesamt", "ust_gesamt", "brutto_gesamt")
+
+    def __init__(self, positionen: list[_PositionsErgebnis], netto_gesamt: Decimal, ust_gesamt: Decimal, brutto_gesamt: Decimal):
+        self.positionen = positionen
+        self.netto_gesamt = netto_gesamt
+        self.ust_gesamt = ust_gesamt
+        self.brutto_gesamt = brutto_gesamt
+
+
+def _berechne_rechnung(
+    positionen_data,
+    eingabemodus: str,
+    rabatt_prozent: Decimal,
+    rabatt_betrag: Decimal | None,
+    ist_kleinunternehmer: bool,
+    ist_steuerfrei_ausland: bool,
+) -> RechnungSummen:
+    """EINE Berechnung für Positionswerte + Rechnungssummen (Issue #332).
+
+    Vorher gab es für dieselbe Rechnung mehrere unabhängige Rundungswege (Formular-Vorschau,
+    Speichern, PDF), die bei Menge>1/Rabatt/gemischten USt-Sätzen leicht unterschiedliche
+    Cent-Beträge lieferten. Jetzt: intern wird mit 4 Nachkommastellen gerechnet, aber JEDE
+    Position wird sofort am Ende ihrer eigenen Berechnung auf Cent gerundet (nicht erst die
+    Rechnungssumme) - Rechnungsdetails/PDF übernehmen diese Werte danach nur noch unverändert,
+    ohne eigene Berechnung.
+
+    WICHTIG: gerundet wird auf POSITIONSEBENE (Einzelpreis × Menge), nicht pro Stück. Würde man
+    stattdessen den USt-Betrag für ein einzelnes Stück runden und danach mit der Menge
+    multiplizieren, vervielfacht sich der Rundungsfehler mit der Menge - bei z.B. 30 Stück kann
+    das mehrere Cent Abweichung von "Netto-Summe × Satz" ergeben (Issue #332, Folgefehler aus dem
+    ersten Fix-Durchgang: 30×2,94€ + 30×0,84€ ergab 21,60€ USt statt korrekt 21,55€, weil
+    2,94€×19%=0,5586€ pro Stück auf 0,56€ gerundet und erst dann ×30 gerechnet wurde). Deshalb
+    liefert diese Funktion pro Position bereits FERTIGE POSITIONSSUMMEN (inkl. Menge) zurück -
+    KEINE Stückpreise mehr. `Rechnungsposition.ust_betrag`/`.brutto` speichern entsprechend die
+    Positionssumme, nicht den Stückpreis (nur `netto` bleibt der eingegebene Einzelpreis).
+
+    Zwei Richtungen, je nach `eingabemodus`:
+    - "netto": Netto-Positionssumme (Einzelpreis × Menge, nach Positionsrabatt) ist der Anker, auf
+      Cent gerundet. USt wird UNABHÄNGIG DAVON aus derselben ungerundeten Positionssumme berechnet
+      und gerundet (nicht aus dem bereits gerundeten Netto-Anker - sonst würde die zweite Rundung
+      den Fehler der ersten verstärken/"Doppelrundung"). Brutto = Netto + USt (reine Summe, kein
+      eigener Rundungsschritt) - Netto+USt=Brutto ist dadurch trotzdem exakt.
+    - "brutto": Brutto-Positionssumme (Einzelpreis × Menge, nach Positionsrabatt) ist der Anker,
+      auf Cent gerundet. Netto wird ebenso unabhängig aus der ungerundeten Positionssumme
+      zurückgerechnet und gerundet (nicht aus dem gerundeten Brutto-Anker). USt = Brutto − Netto
+      (Rest, kein eigener Rundungsschritt) - dieselbe Exaktheit, nur umgekehrt aufgezäumt.
+      Ohne diese Trennung (z.B. bei einem aus einem Brutto-Artikelpreis abgeleiteten Netto-
+      Einzelpreis) könnte eine Netto-Rechnung um einen Cent von der rechnerisch gleichwertigen
+      Brutto-Rechnung abweichen, obwohl beide von exakt denselben Ausgangspreisen ausgehen.
+
+    Bei Differenzbesteuerung (§25a), Kleinunternehmer (§19) oder steuerfreiem Auslandsgeschäft:
+    kein USt-Ausweis, Netto=Brutto, unabhängig vom eingabemodus.
+
+    Rechnungsrabatt (Kopf-Ebene) wird als Faktor auf die bereits gerundeten Positionssummen
+    angewendet - bei Brutto-Richtung wird USt danach wieder als Rest (Brutto−Netto) gebildet,
+    damit die Exaktheit erhalten bleibt.
     """
-    netto = pos_data.netto.quantize(_Q4, ROUND_HALF_UP)
-    rabatt = getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0")
-    if rabatt:
-        netto = (netto * (1 - rabatt / 100)).quantize(_Q4, ROUND_HALF_UP)
-    if getattr(pos_data, "differenzbesteuerung", False) or pos_data.ust_satz == 0:
-        return Decimal("0.00"), netto, netto
-    ust_betrag = (netto * pos_data.ust_satz / 100).quantize(_Q4, ROUND_HALF_UP)
-    brutto = (netto + ust_betrag).quantize(_Q4, ROUND_HALF_UP)
-    return ust_betrag, brutto, netto
+    positionen: list[_PositionsErgebnis] = []
+    netto_sum = Decimal("0.00")
+    ust_sum = Decimal("0.00")
+    brutto_sum = Decimal("0.00")
+
+    for pos_data in positionen_data:
+        ist_diff = getattr(pos_data, "differenzbesteuerung", False)
+        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
+
+        einzelpreis = pos_data.netto.quantize(_Q4, ROUND_HALF_UP)  # Original-Einzelpreis, Bedeutung je nach eingabemodus
+        rabatt_pos = getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+        if rabatt_pos:
+            einzelpreis = (einzelpreis * (1 - rabatt_pos / 100)).quantize(_Q4, ROUND_HALF_UP)
+
+        # Positionssumme (Einzelpreis x Menge) VOR der Cent-Rundung bilden - sonst vervielfacht
+        # sich ein Rundungsfehler beim Aufsummieren mit der Menge (siehe Docstring oben).
+        positionssumme = (einzelpreis * pos_data.menge).quantize(_Q4, ROUND_HALF_UP)
+
+        if ust_satz == 0:
+            # §25a / Kleinunternehmer / steuerfreies Ausland: kein USt-Ausweis
+            netto_pos = positionssumme.quantize(_Q2, ROUND_HALF_UP)
+            ust_pos = Decimal("0.00")
+            brutto_pos = netto_pos
+        elif eingabemodus == "brutto":
+            # Sowohl der gerundete Anker (brutto_pos) als auch die abgeleitete Gegenseite (netto_pos)
+            # werden aus der noch UNGERUNDETEN Positionssumme berechnet, nicht aus dem bereits auf
+            # Cent gerundeten Anker - sonst würde die zweite Rundung den Rundungsfehler der ersten
+            # verstärken (Doppelrundung). Brutto=Netto+USt bleibt trotzdem exakt, weil beide Werte
+            # unabhängig voneinander berechnet und erst danach addiert/subtrahiert werden.
+            brutto_pos = positionssumme.quantize(_Q2, ROUND_HALF_UP)
+            netto_pos = (positionssumme * 100 / (100 + ust_satz)).quantize(_Q2, ROUND_HALF_UP)
+            ust_pos = brutto_pos - netto_pos
+        else:
+            netto_pos = positionssumme.quantize(_Q2, ROUND_HALF_UP)
+            ust_pos = (positionssumme * ust_satz / 100).quantize(_Q2, ROUND_HALF_UP)
+            brutto_pos = netto_pos + ust_pos
+
+        positionen.append(_PositionsErgebnis(ust_satz, ust_pos, brutto_pos, netto_pos))
+        netto_sum += netto_pos
+        ust_sum += ust_pos
+        brutto_sum += brutto_pos
+
+    if rabatt_betrag:
+        gesamt_brutto = netto_sum + ust_sum
+        faktor = (1 - rabatt_betrag / gesamt_brutto) if gesamt_brutto else Decimal("1")
+    elif rabatt_prozent:
+        faktor = 1 - rabatt_prozent / 100
+    else:
+        faktor = Decimal("1")
+
+    if eingabemodus == "brutto":
+        brutto_gesamt = (brutto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        ust_gesamt = brutto_gesamt - netto_gesamt
+    else:
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        ust_gesamt = (ust_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        brutto_gesamt = netto_gesamt + ust_gesamt
+
+    return RechnungSummen(positionen, netto_gesamt, ust_gesamt, brutto_gesamt)
 
 
 def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
@@ -864,35 +981,41 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     )
     db.add(auftrag)
     db.flush()
-    # Positionen
-    netto_sum = Decimal("0.00")
-    ust_sum = Decimal("0.00")
-    for i, pos_data in enumerate(data.positionen or [], start=1):
-        netto_ep = Decimal(str(pos_data.netto)).quantize(_Q4, ROUND_HALF_UP)
-        ust_satz = Decimal(str(pos_data.ust_satz))
-        ust_ep = (netto_ep * ust_satz / 100).quantize(_Q4, ROUND_HALF_UP)
-        brutto_ep = (netto_ep + ust_ep).quantize(_Q4, ROUND_HALF_UP)
-        menge = Decimal(str(pos_data.menge))
+
+    unternehmen = db.query(Unternehmen).first()
+    ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
+    ist_steuerfrei_ausland = (
+        data.ist_reverse_charge or data.ist_eu_lieferung
+        or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+    )
+    auftrag.eingabemodus = data.eingabemodus
+    auftrag.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+    auftrag.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
+    summen = _berechne_rechnung(
+        data.positionen or [], data.eingabemodus, auftrag.rabatt_prozent, auftrag.rabatt_betrag,
+        ist_kleinunternehmer, ist_steuerfrei_ausland,
+    )
+    auftrag.netto_gesamt  = summen.netto_gesamt
+    auftrag.ust_gesamt    = summen.ust_gesamt
+    auftrag.brutto_gesamt = summen.brutto_gesamt
+
+    for i, (pos_data, erg) in enumerate(zip(data.positionen or [], summen.positionen), start=1):
         pos = Rechnungsposition(
             rechnung_id=auftrag.id,
             position_nr=i,
             beschreibung=pos_data.beschreibung,
-            menge=menge,
+            menge=pos_data.menge,
             einheit=pos_data.einheit or "Stk.",
-            netto=netto_ep.quantize(_Q2, ROUND_HALF_UP),
-            ust_satz=ust_satz,
-            ust_betrag=ust_ep.quantize(_Q2, ROUND_HALF_UP),
-            brutto=brutto_ep.quantize(_Q2, ROUND_HALF_UP),
+            netto=pos_data.netto,      # Original-Einzelpreis (Bedeutung je nach eingabemodus)
+            rabatt_prozent=getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0"),
+            ust_satz=erg.ust_satz,
+            ust_betrag=erg.ust_betrag,
+            brutto=erg.brutto,
+            differenzbesteuerung=getattr(pos_data, "differenzbesteuerung", False),
             artikel_id=pos_data.artikel_id,
             kategorie_id=pos_data.kategorie_id,
         )
         db.add(pos)
-        netto_sum += netto_ep * menge
-        ust_sum += ust_ep * menge
-    Q = Decimal("0.01")
-    auftrag.netto_gesamt = netto_sum.quantize(Q, ROUND_HALF_UP)
-    auftrag.ust_gesamt = ust_sum.quantize(Q, ROUND_HALF_UP)
-    auftrag.brutto_gesamt = (auftrag.netto_gesamt + auftrag.ust_gesamt).quantize(Q, ROUND_HALF_UP)
     if not data.ist_entwurf:
         auftrag.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -906,6 +1029,35 @@ def get_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     return RechnungResponse.from_orm_extended(r)
+
+
+@router.post("/vorschau", response_model=RechnungVorschauResponse)
+def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_db)):
+    """Berechnet Positions-/Rechnungssummen OHNE zu speichern - nutzt exakt dieselbe Funktion
+    wie create_rechnung()/update_rechnung() (Issue #332: Formular-Vorschau darf nicht mehr selbst
+    rechnen, sondern muss dieselbe, einzige Berechnung wie beim Speichern abfragen)."""
+    unternehmen = db.query(Unternehmen).first()
+    ist_kleinunternehmer = unternehmen.ist_kleinunternehmer if unternehmen else False
+    ist_steuerfrei_ausland = (
+        data.ist_reverse_charge or data.ist_eu_lieferung
+        or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+    )
+    summen = _berechne_rechnung(
+        data.positionen, data.eingabemodus, data.rabatt_prozent, data.rabatt_betrag,
+        ist_kleinunternehmer, ist_steuerfrei_ausland,
+    )
+    return RechnungVorschauResponse(
+        positionen=[
+            RechnungVorschauPosition(
+                ust_satz=erg.ust_satz, ust_betrag=erg.ust_betrag,
+                brutto=erg.brutto, netto_eff=erg.netto_eff,
+            )
+            for erg in summen.positionen
+        ],
+        netto_gesamt=summen.netto_gesamt,
+        ust_gesamt=summen.ust_gesamt,
+        brutto_gesamt=summen.brutto_gesamt,
+    )
 
 
 @router.post("", response_model=RechnungResponse, status_code=201)
@@ -1028,23 +1180,40 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     db.add(rechnung)
     db.flush()  # ID erzeugen
 
-    netto_sum = Decimal("0.00")
-    ust_sum = Decimal("0.00")
+    rechnung.eingabemodus = data.eingabemodus
+    rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+    rechnung.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
 
-    for i, pos_data in enumerate(data.positionen, start=1):
-        ist_diff = getattr(pos_data, "differenzbesteuerung", False)
+    if data.netto_gesamt_override is not None:
+        # XML-Import: Positionswerte trotzdem über die gemeinsame Berechnung ermitteln (für
+        # konsistente Positions-/PDF-Darstellung), nur die Kopfsummen werden überschrieben.
+        Q = Decimal("0.01")
         ist_steuerfrei_ausland = (
             data.ist_reverse_charge or data.ist_eu_lieferung
             or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
         )
-        # §25a: kein USt-Ausweis (ust_satz = 0 auf der Rechnung)
-        # §13b Reverse Charge / §4 Nr.1b ig. Lieferung / Drittland-Dienstleistung / Ausfuhrlieferung:
-        # Rechnungsbetrag ist Nettobetrag, kein USt-Ausweis
-        ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
-        ust_betrag, brutto, netto = _berechne_position(pos_data)
-        if ist_kleinunternehmer or ist_steuerfrei_ausland:
-            ust_betrag = Decimal("0.00")
-            brutto = netto
+        summen = _berechne_rechnung(
+            data.positionen, data.eingabemodus, Decimal("0"), None,
+            ist_kleinunternehmer, ist_steuerfrei_ausland,
+        )
+        rechnung.netto_gesamt  = data.netto_gesamt_override.quantize(Q, ROUND_HALF_UP)
+        rechnung.ust_gesamt    = (data.ust_gesamt_override or Decimal("0")).quantize(Q, ROUND_HALF_UP)
+        rechnung.brutto_gesamt = (data.brutto_gesamt_override or rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+    else:
+        ist_steuerfrei_ausland = (
+            data.ist_reverse_charge or data.ist_eu_lieferung
+            or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        )
+        summen = _berechne_rechnung(
+            data.positionen, data.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
+            ist_kleinunternehmer, ist_steuerfrei_ausland,
+        )
+        rechnung.netto_gesamt  = summen.netto_gesamt
+        rechnung.ust_gesamt    = summen.ust_gesamt
+        rechnung.brutto_gesamt = summen.brutto_gesamt
+
+    for i, (pos_data, erg) in enumerate(zip(data.positionen, summen.positionen), start=1):
+        ist_diff = getattr(pos_data, "differenzbesteuerung", False)
 
         # §25a: EK + nominalen USt-Satz zum Buchungszeitpunkt speichern
         ek_netto_25a = None
@@ -1065,41 +1234,16 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             beschreibung=pos_data.beschreibung,
             menge=pos_data.menge,
             einheit=pos_data.einheit,
-            netto=pos_data.netto,          # Original-Einzelpreis (vor Positionsrabatt)
+            netto=pos_data.netto,          # Original-Einzelpreis (vor Positionsrabatt, Bedeutung je nach eingabemodus)
             rabatt_prozent=getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0"),
-            ust_satz=ust_satz,
-            ust_betrag=ust_betrag.quantize(_Q2, ROUND_HALF_UP),
-            brutto=brutto.quantize(_Q2, ROUND_HALF_UP),
+            ust_satz=erg.ust_satz,
+            ust_betrag=erg.ust_betrag,
+            brutto=erg.brutto,
             differenzbesteuerung=ist_diff,
             ek_netto_25a=ek_netto_25a,
             ust_satz_25a=ust_satz_25a,
         )
         db.add(pos)
-        netto_sum += netto * pos_data.menge   # netto = eff_netto nach Positionsrabatt; 4-stellig akkumulieren
-        ust_sum += ust_betrag * pos_data.menge
-
-    Q = Decimal("0.01")
-    rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
-    rechnung.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
-    if data.netto_gesamt_override is not None:
-        rechnung.netto_gesamt  = data.netto_gesamt_override.quantize(Q, ROUND_HALF_UP)
-        rechnung.ust_gesamt    = (data.ust_gesamt_override or Decimal("0")).quantize(Q, ROUND_HALF_UP)
-        rechnung.brutto_gesamt = (data.brutto_gesamt_override or rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
-    else:
-        if rechnung.rabatt_betrag:
-            # Festbetrag-Rabatt: proportional auf netto + ust verteilen
-            brutto_sum = netto_sum + ust_sum
-            faktor = (1 - rechnung.rabatt_betrag / brutto_sum) if brutto_sum else Decimal("1")
-            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q, ROUND_HALF_UP)
-            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q, ROUND_HALF_UP)
-        elif rechnung.rabatt_prozent:
-            faktor = 1 - rechnung.rabatt_prozent / 100
-            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q, ROUND_HALF_UP)
-            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q, ROUND_HALF_UP)
-        else:
-            rechnung.netto_gesamt  = netto_sum.quantize(Q, ROUND_HALF_UP)
-            rechnung.ust_gesamt    = ust_sum.quantize(Q, ROUND_HALF_UP)
-        rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
 
     # Lagerführung: direkt finalisierte Rechnungen (ist_entwurf=False) buchen den Bestand sofort ab.
     # Entwürfe holen den Abgang über /finalisieren nach.
@@ -1132,7 +1276,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr",
                   "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
-                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung"):
+                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
+                  "eingabemodus"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
@@ -1158,15 +1303,18 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
             db.delete(pos)
         db.flush()
 
-        netto_sum = Decimal("0.00")
-        ust_sum = Decimal("0.00")
-        for i, pos_data in enumerate(data.positionen, start=1):
+        rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
+        rechnung.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
+        summen = _berechne_rechnung(
+            data.positionen, rechnung.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
+            ist_kleinunternehmer, ist_steuerfrei_ausland,
+        )
+        rechnung.netto_gesamt  = summen.netto_gesamt
+        rechnung.ust_gesamt    = summen.ust_gesamt
+        rechnung.brutto_gesamt = summen.brutto_gesamt
+
+        for i, (pos_data, erg) in enumerate(zip(data.positionen, summen.positionen), start=1):
             ist_diff = getattr(pos_data, "differenzbesteuerung", False)
-            ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
-            ust_betrag, brutto, netto = _berechne_position(pos_data)
-            if ist_kleinunternehmer or ist_steuerfrei_ausland:
-                ust_betrag = Decimal("0.00")
-                brutto = netto
             pos = Rechnungsposition(
                 rechnung_id=rechnung.id,
                 position_nr=i,
@@ -1175,33 +1323,14 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 beschreibung=pos_data.beschreibung,
                 menge=pos_data.menge,
                 einheit=pos_data.einheit,
-                netto=pos_data.netto,      # Original-Einzelpreis
+                netto=pos_data.netto,      # Original-Einzelpreis (Bedeutung je nach eingabemodus)
                 rabatt_prozent=getattr(pos_data, "rabatt_prozent", Decimal("0")) or Decimal("0"),
-                ust_satz=ust_satz,
-                ust_betrag=ust_betrag.quantize(_Q2, ROUND_HALF_UP),
-                brutto=brutto.quantize(_Q2, ROUND_HALF_UP),
+                ust_satz=erg.ust_satz,
+                ust_betrag=erg.ust_betrag,
+                brutto=erg.brutto,
                 differenzbesteuerung=ist_diff,
             )
             db.add(pos)
-            netto_sum += netto * pos_data.menge   # netto = eff_netto nach Positionsrabatt; 4-stellig akkumulieren
-            ust_sum += ust_betrag * pos_data.menge
-
-        Q2 = Decimal("0.01")
-        rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
-        rechnung.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
-        if rechnung.rabatt_betrag:
-            brutto_sum = netto_sum + ust_sum
-            faktor = (1 - rechnung.rabatt_betrag / brutto_sum) if brutto_sum else Decimal("1")
-            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q2, ROUND_HALF_UP)
-            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q2, ROUND_HALF_UP)
-        elif rechnung.rabatt_prozent:
-            faktor = 1 - rechnung.rabatt_prozent / 100
-            rechnung.netto_gesamt = (netto_sum * faktor).quantize(Q2, ROUND_HALF_UP)
-            rechnung.ust_gesamt   = (ust_sum * faktor).quantize(Q2, ROUND_HALF_UP)
-        else:
-            rechnung.netto_gesamt = netto_sum.quantize(Q2, ROUND_HALF_UP)
-            rechnung.ust_gesamt = ust_sum.quantize(Q2, ROUND_HALF_UP)
-        rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q2, ROUND_HALF_UP)
 
         # Gutschrift: Betrag darf den noch verbleibenden Restbetrag nicht überschreiten
         if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
@@ -1920,7 +2049,9 @@ def _ausgangs_buchungsgruppen(
                     _agm2 = db.query(_ArtM2).filter(_ArtM2.id == pos.artikel_id).first()
                     _ek = _agm2.ek_netto if _agm2 else None
                 if _ek is not None:
-                    gruppen_marge[key] = gruppen_marge.get(key, Decimal("0")) + (pos.brutto - _ek) * pos.menge
+                    # pos.brutto ist bereits die Positionssumme (inkl. Menge, Issue #332) - _ek ist
+                    # der Einkaufspreis pro Stück und muss dafür erst mit der Menge multipliziert werden.
+                    gruppen_marge[key] = gruppen_marge.get(key, Decimal("0")) + (pos.brutto - _ek * pos.menge)
             else:
                 s = int(pos.ust_satz)
                 key = (s, False)
@@ -2095,7 +2226,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                 _art = db.query(_Artikel).filter(_Artikel.id == _pos.artikel_id).first()
                 _ek = _art.ek_netto if _art else None
             if _ek is not None:
-                _marge_25a_gesamt += (_pos.brutto - _ek) * _pos.menge
+                # _pos.brutto ist bereits die Positionssumme (inkl. Menge, Issue #332)
+                _marge_25a_gesamt += (_pos.brutto - _ek * _pos.menge)
     _marge_25a_gesamt = _marge_25a_gesamt.quantize(Decimal("0.01"), ROUND_HALF_UP)
     _gruppe_id_kette = _kette_gruppe_id(rechnung, db)
 
@@ -2235,7 +2367,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                     _ag2 = db.query(_ArtGs2).filter(_ArtGs2.id == pos.artikel_id).first()
                     _ek = _ag2.ek_netto if _ag2 else None
                 if _ek is not None:
-                    marge_gruppen[key] += (pos.brutto - _ek) * pos.menge
+                    # pos.brutto ist bereits die Positionssumme (inkl. Menge, Issue #332)
+                    marge_gruppen[key] += (pos.brutto - _ek * pos.menge)
             else:
                 # Normale Positionen behalten ihr eigenes kategorie_id in der Gruppierung
                 # (z.B. Wareneinkauf + Versandkosten als getrennte Kategorien in einer
@@ -2876,9 +3009,11 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     for nr_pos, pos in enumerate(
         sorted(original.positionen, key=lambda p: p.position_nr), start=1
     ):
-        # pos.netto / pos.ust_betrag / pos.brutto sind Einzelpreise (per Unit).
-        # Nur menge negieren – Einzelpreise bleiben positiv, damit die PDF-Gesamtspalte
-        # (netto * menge) das richtige Vorzeichen trägt und Summen korrekt sind.
+        # pos.netto ist der Einzelpreis (bleibt positiv, Menge trägt das Vorzeichen für die
+        # PDF-Gesamtspalte netto*menge). pos.ust_betrag/.brutto sind bereits fertige
+        # Positionssummen (inkl. Menge, Issue #332) - beim Kopieren auf die Gutschrift-Position
+        # (negative Menge) müssen sie mit umgedrehtem Vorzeichen übernommen werden, sonst
+        # widersprechen sie der eigenen (negativen) Menge dieser Zeile.
         menge_neg = -(pos.menge)
 
         neue_pos = Rechnungsposition(
@@ -2890,8 +3025,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
             einheit=pos.einheit,
             netto=pos.netto,
             ust_satz=pos.ust_satz,
-            ust_betrag=pos.ust_betrag,
-            brutto=pos.brutto,
+            ust_betrag=-pos.ust_betrag,
+            brutto=-pos.brutto,
             kategorie_id=pos.kategorie_id or original.kategorie_id,
             differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a,
@@ -2899,7 +3034,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         )
         db.add(neue_pos)
         netto_sum += pos.netto * menge_neg
-        ust_sum += pos.ust_betrag * menge_neg
+        ust_sum += -pos.ust_betrag
 
     gutschrift.netto_gesamt = netto_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
     gutschrift.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -3123,6 +3258,7 @@ def _lieferschein_zu_rechnung_konvertieren(
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
+        eingabemodus=lieferscheine[0].eingabemodus,
         netto_gesamt=Decimal("0.00"),
         ust_gesamt=Decimal("0.00"),
         brutto_gesamt=Decimal("0.00"),
@@ -3130,6 +3266,10 @@ def _lieferschein_zu_rechnung_konvertieren(
     db.add(rechnung)
     db.flush()
 
+    # Aufsummierung aus den bereits fertig berechneten Positionswerten (brutto - ust_betrag =
+    # netto_eff nach Positionsrabatt) - nicht aus pos.netto (Original-Einzelpreis vor Rabatt),
+    # sonst würde ein evtl. gewährter Positionsrabatt hier stillschweigend verloren gehen
+    # (Issue #332 - dieselbe Konsistenz-Regel wie bei allen anderen Berechnungen).
     netto_sum = Decimal("0.00")
     ust_sum = Decimal("0.00")
     pos_nr = 1
@@ -3144,6 +3284,7 @@ def _lieferschein_zu_rechnung_konvertieren(
                 menge=pos.menge,
                 einheit=pos.einheit,
                 netto=pos.netto,
+                rabatt_prozent=pos.rabatt_prozent,
                 ust_satz=pos.ust_satz,
                 ust_betrag=pos.ust_betrag,
                 brutto=pos.brutto,
@@ -3152,8 +3293,10 @@ def _lieferschein_zu_rechnung_konvertieren(
                 ust_satz_25a=pos.ust_satz_25a,
             )
             db.add(neue_pos)
-            netto_sum += pos.netto * pos.menge
-            ust_sum += pos.ust_betrag * pos.menge
+            # pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (inkl. Menge, Issue #332)
+            netto_eff = pos.brutto - pos.ust_betrag
+            netto_sum += netto_eff
+            ust_sum += pos.ust_betrag
             pos_nr += 1
 
     Q = Decimal("0.01")
@@ -3268,26 +3411,18 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
-        netto_gesamt=Decimal("0.00"),
-        ust_gesamt=Decimal("0.00"),
-        brutto_gesamt=Decimal("0.00"),
+        eingabemodus=r.eingabemodus,
+        rabatt_prozent=r.rabatt_prozent,
+        rabatt_betrag=r.rabatt_betrag,
+        # Werte werden mittransportiert (nicht angezeigt) - der Lieferschein kann später zu einer
+        # Rechnung werden und braucht dann die korrekten, bereits berechneten Preise (Issue #332).
+        netto_gesamt=r.netto_gesamt,
+        ust_gesamt=r.ust_gesamt,
+        brutto_gesamt=r.brutto_gesamt,
     )
     db.add(ls)
     db.flush()
-
-    for nr, pos in enumerate(r.positionen, start=1):
-        db.add(Rechnungsposition(
-            rechnung_id=ls.id,
-            artikel_id=pos.artikel_id,
-            position_nr=nr,
-            beschreibung=pos.beschreibung,
-            menge=pos.menge,
-            einheit=pos.einheit,
-            netto=Decimal("0.00"),
-            ust_satz=Decimal("0.00"),
-            ust_betrag=Decimal("0.00"),
-            brutto=Decimal("0.00"),
-        ))
+    _kopiere_positionen(r, ls, db)
 
     ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -3326,26 +3461,18 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
-        netto_gesamt=Decimal("0.00"),
-        ust_gesamt=Decimal("0.00"),
-        brutto_gesamt=Decimal("0.00"),
+        eingabemodus=angebot.eingabemodus,
+        rabatt_prozent=angebot.rabatt_prozent,
+        rabatt_betrag=angebot.rabatt_betrag,
+        # Werte werden mittransportiert (nicht angezeigt) - der Lieferschein kann später zu einer
+        # Rechnung werden und braucht dann die korrekten, bereits berechneten Preise (Issue #332).
+        netto_gesamt=angebot.netto_gesamt,
+        ust_gesamt=angebot.ust_gesamt,
+        brutto_gesamt=angebot.brutto_gesamt,
     )
     db.add(ls)
     db.flush()
-
-    for nr, pos in enumerate(angebot.positionen, start=1):
-        db.add(Rechnungsposition(
-            rechnung_id=ls.id,
-            artikel_id=pos.artikel_id,
-            position_nr=nr,
-            beschreibung=pos.beschreibung,
-            menge=pos.menge,
-            einheit=pos.einheit,
-            netto=Decimal("0.00"),
-            ust_satz=Decimal("0.00"),
-            ust_betrag=Decimal("0.00"),
-            brutto=Decimal("0.00"),
-        ))
+    _kopiere_positionen(angebot, ls, db)
 
     angebot.lieferschein_zu_angebot_id = ls.id
     ls.absender_snapshot = _absender_snapshot(db)
@@ -3400,28 +3527,16 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
+        eingabemodus=angebot.eingabemodus,
+        rabatt_prozent=angebot.rabatt_prozent,
+        rabatt_betrag=angebot.rabatt_betrag,
         netto_gesamt=angebot.netto_gesamt,
         ust_gesamt=angebot.ust_gesamt,
         brutto_gesamt=angebot.brutto_gesamt,
     )
     db.add(rechnung)
     db.flush()
-
-    for pos in angebot.positionen:
-        neue_pos = Rechnungsposition(
-            rechnung_id=rechnung.id,
-            position_nr=pos.position_nr,
-            beschreibung=pos.beschreibung,
-            menge=pos.menge,
-            einheit=pos.einheit,
-            netto=pos.netto,
-            ust_satz=pos.ust_satz,
-            ust_betrag=pos.ust_betrag,
-            brutto=pos.brutto,
-            artikel_id=pos.artikel_id,
-            kategorie_id=pos.kategorie_id,
-        )
-        db.add(neue_pos)
+    _kopiere_positionen(angebot, rechnung, db)
 
     angebot.rechnung_zu_angebot_id = rechnung.id
     angebot.angebot_status = "akzeptiert"
@@ -3474,27 +3589,16 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
+        eingabemodus=angebot.eingabemodus,
+        rabatt_prozent=angebot.rabatt_prozent,
+        rabatt_betrag=angebot.rabatt_betrag,
         netto_gesamt=angebot.netto_gesamt,
         ust_gesamt=angebot.ust_gesamt,
         brutto_gesamt=angebot.brutto_gesamt,
     )
     db.add(proforma)
     db.flush()
-
-    for pos in angebot.positionen:
-        db.add(Rechnungsposition(
-            rechnung_id=proforma.id,
-            position_nr=pos.position_nr,
-            beschreibung=pos.beschreibung,
-            menge=pos.menge,
-            einheit=pos.einheit,
-            netto=pos.netto,
-            ust_satz=pos.ust_satz,
-            ust_betrag=pos.ust_betrag,
-            brutto=pos.brutto,
-            artikel_id=pos.artikel_id,
-            kategorie_id=pos.kategorie_id,
-        ))
+    _kopiere_positionen(angebot, proforma, db)
 
     angebot.proforma_zu_angebot_id = proforma.id
     proforma.absender_snapshot = _absender_snapshot(db)
@@ -3546,27 +3650,16 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
+        eingabemodus=proforma.eingabemodus,
+        rabatt_prozent=proforma.rabatt_prozent,
+        rabatt_betrag=proforma.rabatt_betrag,
         netto_gesamt=proforma.netto_gesamt,
         ust_gesamt=proforma.ust_gesamt,
         brutto_gesamt=proforma.brutto_gesamt,
     )
     db.add(rechnung)
     db.flush()
-
-    for pos in proforma.positionen:
-        db.add(Rechnungsposition(
-            rechnung_id=rechnung.id,
-            position_nr=pos.position_nr,
-            beschreibung=pos.beschreibung,
-            menge=pos.menge,
-            einheit=pos.einheit,
-            netto=pos.netto,
-            ust_satz=pos.ust_satz,
-            ust_betrag=pos.ust_betrag,
-            brutto=pos.brutto,
-            artikel_id=pos.artikel_id,
-            kategorie_id=pos.kategorie_id,
-        ))
+    _kopiere_positionen(proforma, rechnung, db)
     db.flush()
 
     # Journaleinträge anlegen (je USt-Gruppe wie beim kassieren-Endpoint)
@@ -3728,6 +3821,9 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         ist_entwurf=False,
         dokument_typ="Auftrag",
         auftrag_status="offen",
+        eingabemodus=angebot.eingabemodus,
+        rabatt_prozent=angebot.rabatt_prozent,
+        rabatt_betrag=angebot.rabatt_betrag,
         netto_gesamt=angebot.netto_gesamt,
         ust_gesamt=angebot.ust_gesamt,
         brutto_gesamt=angebot.brutto_gesamt,
@@ -3786,6 +3882,9 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
+        eingabemodus=auftrag.eingabemodus,
+        rabatt_prozent=auftrag.rabatt_prozent,
+        rabatt_betrag=auftrag.rabatt_betrag,
         netto_gesamt=auftrag.netto_gesamt,
         ust_gesamt=auftrag.ust_gesamt,
         brutto_gesamt=auftrag.brutto_gesamt,
@@ -3846,6 +3945,9 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         notizen=auftrag.notizen,
         ist_entwurf=False,
         dokument_typ="Lieferschein",
+        eingabemodus=auftrag.eingabemodus,
+        rabatt_prozent=auftrag.rabatt_prozent,
+        rabatt_betrag=auftrag.rabatt_betrag,
         netto_gesamt=auftrag.netto_gesamt,
         ust_gesamt=auftrag.ust_gesamt,
         brutto_gesamt=auftrag.brutto_gesamt,
@@ -3904,6 +4006,9 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         notizen=auftrag.notizen,
         ist_entwurf=False,
         dokument_typ="Proforma",
+        eingabemodus=auftrag.eingabemodus,
+        rabatt_prozent=auftrag.rabatt_prozent,
+        rabatt_betrag=auftrag.rabatt_betrag,
         netto_gesamt=auftrag.netto_gesamt,
         ust_gesamt=auftrag.ust_gesamt,
         brutto_gesamt=auftrag.brutto_gesamt,

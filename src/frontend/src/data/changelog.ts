@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.1',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'DATEV-Export – der Hinweis-Dialog auf fehlende Berater-/Mandantennummer (Issue #328) ließ sich nicht durch einfaches Bestätigen mit den DATEV-Standardwerten dauerhaft loswerden: Die Felder waren leer vorbefüllt, ein Klick auf „Speichern" ohne Eintippen speicherte leere Werte statt der Standardwerte 1001/1, wodurch der Hinweis beim nächsten Export erneut erschien. Die Felder sind jetzt mit den echten Standardwerten vorbefüllt – „Speichern" reicht jetzt aus, um sie zu übernehmen. Danke an Peter1061 fürs Nachtesten (Issue #328).' },
+      { typ: 'fix', text: 'Mahnwesen – der Link „aktueller Wert bei der Bundesbank" beim Basiszinssatz (Verzugszinsen §288 BGB) führte ins Leere, die Bundesbank hat die Seite unter einer neuen URL verschoben. Danke an Peter1061 (Issue #331).' },
+      { typ: 'fix', text: 'Rundungsfehler bei Rechnungen – ein eingegebener Preis konnte in der Rechnungsvorschau, in den Rechnungsdetails und auf dem PDF voneinander abweichen, weil Formular, Speichern und PDF unabhängig voneinander rundeten; bei größeren Stückzahlen konnte das sogar mehrere Cent ausmachen, weil die USt pro Stück statt pro Position gerundet wurde. Jetzt gibt es nur noch eine Berechnung auf Positionsebene: Netto-Rechnungen summieren die Netto-Positionssummen (Einzelpreis × Menge) und leiten die USt daraus ab, Brutto-Rechnungen summieren die Brutto-Positionssummen und leiten die USt als Differenz ab – Vorschau, Speichern und PDF verwenden garantiert dieselben Werte, in Rechnung, Angebot, Auftrag und Proforma. Zusätzlich rundet der Artikelstamm den aus dem Brutto-Verkaufspreis abgeleiteten Netto-Preis nicht mehr auf den Cent, und USt/Netto werden aus der ungerundeten Positionssumme statt aus dem bereits gerundeten Betrag abgeleitet – eine Netto-Rechnung mit Artikeln ergibt jetzt exakt denselben Betrag wie die entsprechende Brutto-Rechnung. Danke an gitmacer (Issue #332).' },
+    ],
+  },
+  {
     version: 'v0.5.0',
     datum: 'August 2026',
     eintraege: [

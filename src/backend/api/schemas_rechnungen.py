@@ -125,7 +125,15 @@ class RechnungCreate(BaseModel):
     ist_eu_lieferung: bool = False
     ist_drittland_leistung: bool = False
     ist_ausfuhrlieferung: bool = False
+    eingabemodus: str = "netto"  # netto|brutto - siehe Rechnung.eingabemodus (Issue #332)
     positionen: List[RechnungspositionCreate]
+
+    @field_validator("eingabemodus")
+    @classmethod
+    def check_eingabemodus(cls, v: str) -> str:
+        if v not in ("netto", "brutto"):
+            raise ValueError("eingabemodus muss 'netto' oder 'brutto' sein")
+        return v
 
     @model_validator(mode="after")
     def check_eu_flags(self) -> "RechnungCreate":
@@ -212,7 +220,54 @@ class RechnungUpdate(BaseModel):
     ist_eu_lieferung: Optional[bool] = None
     ist_drittland_leistung: Optional[bool] = None
     ist_ausfuhrlieferung: Optional[bool] = None
+    eingabemodus: Optional[str] = None  # netto|brutto - siehe Rechnung.eingabemodus (Issue #332)
     positionen: Optional[List[RechnungspositionCreate]] = None
+
+    @field_validator("eingabemodus")
+    @classmethod
+    def check_eingabemodus(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("netto", "brutto"):
+            raise ValueError("eingabemodus muss 'netto' oder 'brutto' sein")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Vorschau (Issue #332) – Frontend fragt die tatsächliche Berechnung beim Backend ab,
+# statt sie selbst nachzubauen. Nimmt bewusst nur die für die Berechnung nötigen Felder
+# entgegen (kein Kunde/Datum/Notizen etc.) - die Vorschau soll bei jeder Positions-/
+# Rabatt-Änderung im Formular unkompliziert (debounced) aufrufbar sein.
+# ---------------------------------------------------------------------------
+
+class RechnungVorschauRequest(BaseModel):
+    positionen: List[RechnungspositionCreate]
+    eingabemodus: str = "netto"
+    rabatt_prozent: Decimal = Decimal("0")
+    rabatt_betrag: Optional[Decimal] = None
+    ist_reverse_charge: bool = False
+    ist_eu_lieferung: bool = False
+    ist_drittland_leistung: bool = False
+    ist_ausfuhrlieferung: bool = False
+
+    @field_validator("eingabemodus")
+    @classmethod
+    def check_eingabemodus_vorschau(cls, v: str) -> str:
+        if v not in ("netto", "brutto"):
+            raise ValueError("eingabemodus muss 'netto' oder 'brutto' sein")
+        return v
+
+
+class RechnungVorschauPosition(BaseModel):
+    ust_satz: Decimal
+    ust_betrag: Decimal
+    brutto: Decimal
+    netto_eff: Decimal  # Positionssumme (Einzelpreis x Menge, nach Positionsrabatt) - keine Stückpreise
+
+
+class RechnungVorschauResponse(BaseModel):
+    positionen: List[RechnungVorschauPosition]
+    netto_gesamt: Decimal
+    ust_gesamt: Decimal
+    brutto_gesamt: Decimal
 
 
 # Ein Dokument in der Ersatzrechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...)
@@ -281,6 +336,7 @@ class RechnungResponse(BaseModel):
     leistung_bis: Optional[date]
     rabatt_prozent: Decimal = Decimal("0")
     rabatt_betrag: Optional[Decimal] = None
+    eingabemodus: str = "netto"
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
     ist_entwurf: bool
