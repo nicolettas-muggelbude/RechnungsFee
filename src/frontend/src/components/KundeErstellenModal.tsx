@@ -4,7 +4,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createKunde, type Kunde } from '../api/client'
-import { LAENDER } from '../utils/laender'
+import { LAENDER, istEuLand } from '../utils/laender'
 
 const schema = z.object({
   firmenname: z.string().optional(),
@@ -61,8 +61,14 @@ export function KundeErstellenModal({ onSave, onClose }: Props) {
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
   const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
+  const watchLand = useWatch({ control, name: 'land' })
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
   const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim())
+  // EU-Ausland (nicht DE): ust_idnr fließt unverändert in die Zusammenfassende Meldung (zm.py) -
+  // dort MUSS eine syntaktisch gültige EU-USt-IdNr. stehen, keine Steuernummer (Issue #335).
+  const istEuAusland = !!watchLand && watchLand !== 'DE' && istEuLand(watchLand)
+  const ustIdnrLabel = istEuAusland ? 'USt-IdNr.' : 'USt-IdNr. / Steuernummer'
+  const ustIdnrPlaceholder = istEuAusland ? 'z.B. DE123456789' : 'DE123456789 oder 12/345/67890'
 
   useEffect(() => {
     if (zugferdAutoAktiv) setValue('zugferd_aktiv', true)
@@ -142,8 +148,11 @@ export function KundeErstellenModal({ onSave, onClose }: Props) {
               <input type="text" {...register('kundennummer')} placeholder="Wird automatisch vergeben" className={inp} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
-              <input type="text" {...register('ust_idnr')} className={inp} />
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{ustIdnrLabel}</label>
+              <input type="text" {...register('ust_idnr')} placeholder={ustIdnrPlaceholder} className={inp} />
+              {istEuAusland && (
+                <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5">Für ig. Lieferungen/Zusammenfassende Meldung erforderlich – keine Steuernummer.</p>
+              )}
             </div>
 
             <div className="col-span-2">

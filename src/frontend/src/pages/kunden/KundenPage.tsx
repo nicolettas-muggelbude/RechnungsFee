@@ -877,6 +877,12 @@ export function KundenPage() {
     watchLand === 'CH' ? 'Schweizer UID-Nr.' :
     watchLand === 'GB' ? 'UK VAT-Nr.' :
     'Steuernummer / Unternehmens-ID (Ausland)'
+  // EU-Ausland (nicht DE): ust_idnr fließt unverändert in die Zusammenfassende Meldung (zm.py,
+  // ig. Lieferung/§13b) - dort MUSS eine syntaktisch gültige EU-USt-IdNr. stehen, keine
+  // Steuernummer. Nur für DE/Drittland ist das Feld gefahrlos als Steuernummer nutzbar (Issue #335).
+  const istEuAusland = !!watchLand && watchLand !== 'DE' && istEuLand(watchLand)
+  const ustIdnrLabel = istEuAusland ? 'USt-IdNr.' : 'USt-IdNr. / Steuernummer'
+  const ustIdnrPlaceholder = istEuAusland ? 'z.B. DE123456789' : 'DE123456789 oder 12/345/67890'
 
   useEffect(() => {
     if (zugferdAutoAktiv) setValue('zugferd_aktiv', true)
@@ -1269,8 +1275,11 @@ export function KundenPage() {
                   <input type="text" {...register('kundennummer')} placeholder="Wird automatisch vergeben" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
-                  <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{ustIdnrLabel}</label>
+                  <input type="text" {...register('ust_idnr')} placeholder={ustIdnrPlaceholder} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                  {istEuAusland && (
+                    <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5">Für ig. Lieferungen/Zusammenfassende Meldung erforderlich – keine Steuernummer.</p>
+                  )}
                 </div>
                 {istDrittland && (
                   <div>
@@ -1316,7 +1325,7 @@ export function KundenPage() {
                     <span>
                       ZUGFeRD / E-Rechnung
                       {zugferdAutoAktiv
-                        ? <span className="ml-1 text-xs text-blue-500 dark:text-blue-400">(automatisch aktiv – Firma + USt-IdNr. vorhanden)</span>
+                        ? <span className="ml-1 text-xs text-blue-500 dark:text-blue-400">(automatisch aktiv – Firma + USt-IdNr./Steuernummer vorhanden)</span>
                         : <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">PDF enthält maschinenlesbares XML für B2B-Empfänger</span>
                       }
                     </span>
