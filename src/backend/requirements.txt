@@ -5,7 +5,7 @@ aiofiles==25.1.0
 python-multipart==0.0.31
 fpdf2
 Pillow==12.3.0
-cairosvg
+resvg_py
 segno==1.6.1
 drafthorse
 factur-x
@@ -18,5 +18,10 @@ ocrmypdf
 markdown
 cryptography
 smbprotocol
+# --no-binary erzwingt die reine Python-Variante: das vorkompilierte mypyc-Wheel bringt ein
+# Modul mit hash-basiertem Namen mit (z.B. "ada92cb5d92a588d1b93__mypyc"), das PyInstaller
+# nicht findet und JEDEN Build (Windows/Linux/macOS) beim Start mit ModuleNotFoundError
+# abstürzen lässt (ausgelöst über utils/bank_csv_parser.py -> api/bank_import.py)
+--no-binary charset-normalizer
 charset-normalizer
 defusedxml

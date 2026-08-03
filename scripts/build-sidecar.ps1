@@ -86,6 +86,7 @@ try {
         --collect-all saxonche `
         --collect-all pdfplumber `
         --collect-all fitz `
+        --collect-all resvg_py `
         --hidden-import pytesseract `
         --hidden-import utils.rechnungs_parser `
         --hidden-import utils.pdfa_konverter `

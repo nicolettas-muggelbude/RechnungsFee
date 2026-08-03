@@ -129,7 +129,7 @@ def _person_bezeichnung(rechtsform: str) -> str:
     return "Inh.:"
 
 
-def _logo_abmessungen(pfad: str, max_h: float = 18.0, max_w: float = 55.0) -> tuple[float, float]:
+def _logo_abmessungen(pfad: str, max_h: float = 25.0, max_w: float = 55.0) -> tuple[float, float]:
     try:
         from PIL import Image as PilImage
         with PilImage.open(pfad) as img:

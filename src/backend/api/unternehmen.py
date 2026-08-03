@@ -4,6 +4,7 @@ Es gibt immer genau einen Datensatz (id=1).
 """
 
 import os
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -65,6 +66,51 @@ def update_unternehmen(data: UnternehmenUpdate, db: Session = Depends(get_db)):
 # Logo-Endpunkte
 # ---------------------------------------------------------------------------
 
+# CSS-Referenz: 96px = 1in (https://www.w3.org/TR/css-values-3/#absolute-lengths)
+_SVG_EINHEIT_ZU_PX = {
+    "": 1.0, "px": 1.0, "in": 96.0, "cm": 96.0 / 2.54, "mm": 96.0 / 25.4,
+    "pt": 96.0 / 72.0, "pc": 16.0,
+}
+
+
+def _svg_ohne_ungueltige_groesse(svg_text: str) -> str:
+    """Normalisiert width/height am Wurzel-<svg>-Element für resvg.
+
+    resvg lehnt eine SVG mit width/height <= 0 mit "SVG has an invalid size" ab, selbst wenn
+    ein gültiges viewBox vorhanden ist - die ungültige Quellgröße wird zuerst geprüft. Manche
+    Export-Tools legen aber genau solche Platzhalter-Nullen an. Wird das Attribut entfernt,
+    fällt resvg auf das viewBox zurück (oder eine Standardgröße, falls auch das fehlt).
+
+    Zusätzlich unterstützt resvg_py physische Einheiten wie "25mm" offenbar nicht direkt -
+    selbst ein gültiger positiver Wert scheitert dann mit derselben Fehlermeldung. Solche Werte
+    werden deshalb in eine einheitenlose Pixelzahl umgerechnet (96-DPI-Referenz nach
+    CSS-Spezifikation) statt nur entfernt - das erhält den beabsichtigten Maßstab relativ zu
+    einem eventuell vorhandenen viewBox, statt ihn wegzuwerfen (Windows-11-Meldung 2026-08-04,
+    Folgefehler: „mit dem was 25mm hoch ist funktioniert es nicht")."""
+    def _px_wert(rohwert: str) -> float | None:
+        m = re.match(r"\s*(-?[\d.]+)\s*([a-zA-Z%]*)\s*$", rohwert)
+        if not m:
+            return None  # kein erkennbares Zahlenformat - lieber unangetastet lassen
+        einheit = m.group(2).lower()
+        if einheit not in _SVG_EINHEIT_ZU_PX:
+            return None  # z.B. "%", em, ex - keine verlässliche absolute Umrechnung, unangetastet
+        return float(m.group(1)) * _SVG_EINHEIT_ZU_PX[einheit]
+
+    def _repl(m: re.Match) -> str:
+        tag = m.group(0)
+        for attr in ("width", "height"):
+            am = re.search(rf'\s{attr}\s*=\s*["\']([^"\']*)["\']', tag)
+            if not am:
+                continue
+            px = _px_wert(am.group(1))
+            if px is None:
+                continue
+            ersatz = "" if px <= 0 else f' {attr}="{px:.4f}"'
+            tag = tag[:am.start()] + ersatz + tag[am.end():]
+        return tag
+    return re.sub(r"<svg\b[^>]*>", _repl, svg_text, count=1)
+
+
 @router.post("/logo", response_model=UnternehmenResponse)
 async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Lädt ein Firmenlogo hoch (PNG/JPEG/WEBP, max 2 MB)."""
@@ -95,11 +141,17 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     if content_type not in ERLAUBTE_TYPEN:
         raise HTTPException(status_code=400, detail="Nur PNG, JPEG, WEBP und SVG sind erlaubt.")
 
-    # SVG → PNG konvertieren (cairosvg, 300 DPI – unterstützt Gradienten, Clipping, Raster)
+    # SVG → PNG konvertieren (resvg_py, Zoom entspricht 300 DPI – unterstützt Gradienten,
+    # Clipping, eingebettete Raster). Vorher cairosvg: brauchte auf Windows eine separat zu
+    # installierende libcairo-2.dll (GTK3-Runtime), die im PyInstaller-Build fehlte und den
+    # Upload mit "no library called libcairo-2.dll was found" scheitern ließ (Windows 11,
+    # gemeldet 2026-08-04). resvg_py bindet die Rust-Bibliothek statisch ins Wheel ein -
+    # keine externen DLLs nötig, funktioniert plattformübergreifend ohne Zusatzinstallation.
     if content_type == "image/svg+xml":
         try:
-            import cairosvg
-            inhalt = cairosvg.svg2png(bytestring=inhalt, dpi=300)
+            import resvg_py
+            svg_text = _svg_ohne_ungueltige_groesse(inhalt.decode("utf-8"))
+            inhalt = bytes(resvg_py.svg_to_bytes(svg_string=svg_text, zoom=300 / 96))
             content_type = "image/png"
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"SVG-Konvertierung fehlgeschlagen: {e}")
