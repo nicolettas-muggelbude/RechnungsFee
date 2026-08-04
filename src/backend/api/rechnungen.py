@@ -1694,12 +1694,13 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             )
         # Fallback wenn Datei fehlt: frisch generieren (ohne Kopie-Stempel)
 
-    # Netto- oder Bruttorechnung: B2B-Kunden (zugferd_aktiv) → Nettorechnung
-    ist_netto = (
-        rechnung.typ == "ausgang"
-        and rechnung.kunde is not None
-        and rechnung.kunde.zugferd_aktiv
-    )
+    # Netto- oder Bruttorechnung: entscheidet rechnung.eingabemodus (Issue #332) - NICHT
+    # kunde.zugferd_aktiv. Das war vor der eingabemodus-Einführung derselbe Schalter, seitdem
+    # kann eine Rechnung unabhängig vom ZUGFeRD-Status des Kunden in Netto oder Brutto erfasst
+    # sein; sonst interpretiert das PDF den gespeicherten Einzelpreis falsch (z.B. wird ein
+    # bereits brutto erfasster Preis nochmal mit dem USt-Satz hochgerechnet - Nutzer-Feedback
+    # 2026-08-04: 3,50€ brutto erschien im PDF als 4,17€).
+    ist_netto = rechnung.typ == "ausgang" and rechnung.eingabemodus == "netto"
 
     # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen
     kunde_zugferd = (

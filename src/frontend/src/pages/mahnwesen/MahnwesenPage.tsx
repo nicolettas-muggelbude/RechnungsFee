@@ -668,10 +668,14 @@ export function MahnwesenPage() {
   const gefiltert = kunden.filter((k) => ALLE_STATUS.some((s) => statusFilter.has(s) && kundeHatStatus(k, s)))
   const ausgewaehlt = kunden.find((k) => k.kunde_id === ausgewaehltKundeId) ?? null
 
+  // Summe der tatsächlichen Rechnungen/Mahnungen, nicht der Kunden mit diesem Status - sonst
+  // zeigt die Kennzahl z.B. "1" obwohl ein einzelner Kunde 5 fällige Mahnungen hat (Nutzer-
+  // Feedback 2026-08-04). aktionsfaellig hat keinen eigenen Rechnungs-Zähler (eine konsolidierte
+  // Mahnung deckt mehrere Rechnungen als EINE Aktion ab) - zählt deshalb als 1 pro Kunde dazu.
   const anzahl = {
-    faellig: kunden.filter((k) => kundeHatStatus(k, 'faellig')).length,
-    entwurf: kunden.filter((k) => kundeHatStatus(k, 'entwurf')).length,
-    versendet: kunden.filter((k) => kundeHatStatus(k, 'versendet')).length,
+    faellig: kunden.reduce((sum, k) => sum + k.anzahl_zahlungserinnerung_faellig + (k.aktionsfaellig ? 1 : 0), 0),
+    entwurf: kunden.reduce((sum, k) => sum + k.anzahl_entwurf, 0),
+    versendet: kunden.reduce((sum, k) => sum + k.anzahl_versendet, 0),
   }
 
   return (

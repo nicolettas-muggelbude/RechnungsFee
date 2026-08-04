@@ -1652,26 +1652,34 @@ function RechnungDetail({
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Einzelpreis</th>
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">USt</th>
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">
-                        {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv ? 'Netto' : 'Brutto'}
+                        {rechnung.eingabemodus === 'netto' ? 'Netto' : 'Brutto'}
                       </th>
                     </>}
                   </tr>
                 </thead>
                 <tbody>
                   {rechnung.positionen.map((pos) => {
-                    const istNetto = rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv
+                    // eingabemodus (Issue #332) entscheidet, wie der gespeicherte Einzelpreis
+                    // (pos.netto) zu interpretieren ist - NICHT kunde_zugferd_aktiv (das ist ein
+                    // unabhängiges Kundenmerkmal). Sonst wird ein bereits brutto erfasster Preis
+                    // hier nochmal mit dem USt-Satz hochgerechnet (Nutzer-Feedback 2026-08-04).
+                    const istNetto = rechnung.eingabemodus === 'netto'
                     const posRabatt = parseFloat(pos.rabatt_prozent ?? '0') || 0
                     const menge = parseFloat(pos.menge)
+                    // pos.netto ist bereits der eingegebene Einzelpreis passend zum jeweiligen
+                    // Modus (netto ODER brutto, je nach eingabemodus) - keine Umrechnung mit dem
+                    // USt-Satz nötig, in beiden Fällen reine Datenübernahme.
                     const nettoEP = parseFloat(pos.netto)
-                    const ustSatz = parseFloat(pos.ust_satz)
-                    const bruttoEP = nettoEP * (1 + ustSatz / 100)
-                    const ep = istNetto ? nettoEP : bruttoEP
+                    const ep = nettoEP
                     const gesamtVorRabatt = ep * menge
+                    // pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (inkl. Menge,
+                    // nach Positionsrabatt - Issue #332), keine Stückpreise mehr - keine weitere
+                    // Multiplikation mit menge nötig, gesamtVorRabatt hat die Menge schon oben.
                     const effBrutto = parseFloat(pos.brutto)
                     const rabattAbs = posRabatt > 0
                       ? istNetto
-                        ? (nettoEP - (effBrutto - parseFloat(pos.ust_betrag))) * menge
-                        : (bruttoEP - effBrutto) * menge
+                        ? gesamtVorRabatt - (effBrutto - parseFloat(pos.ust_betrag))
+                        : gesamtVorRabatt - effBrutto
                       : 0
                     return (
                     <Fragment key={pos.id}>
@@ -1719,12 +1727,13 @@ function RechnungDetail({
                   })}
                 </tbody>
                 {rechnung.dokument_typ !== 'Lieferschein' && (() => {
-                  const istNetto = rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv
+                  const istNetto = rechnung.eingabemodus === 'netto'
                   const reRabattProz = parseFloat(String(rechnung.rabatt_prozent ?? '0')) || 0
                   const reRabattBetrag = rechnung.rabatt_betrag ? parseFloat(String(rechnung.rabatt_betrag)) : null
                   const hatRabatt = reRabattBetrag != null ? reRabattBetrag > 0 : reRabattProz > 0
-                  const posSumNetto = rechnung.positionen.reduce((s, p) => s + (parseFloat(p.brutto) - parseFloat(p.ust_betrag)) * parseFloat(p.menge), 0)
-                  const posSumBrutto = rechnung.positionen.reduce((s, p) => s + parseFloat(p.brutto) * parseFloat(p.menge), 0)
+                  // pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (inkl. Menge) - Issue #332
+                  const posSumNetto = rechnung.positionen.reduce((s, p) => s + (parseFloat(p.brutto) - parseFloat(p.ust_betrag)), 0)
+                  const posSumBrutto = rechnung.positionen.reduce((s, p) => s + parseFloat(p.brutto), 0)
                   const rabattLbl = reRabattBetrag != null ? 'Abzug' : `Rabatt ${reRabattProz} %`
                   const rabattNetto = reRabattBetrag != null
                     ? posSumNetto - parseFloat(rechnung.netto_gesamt)

@@ -115,7 +115,11 @@ class RechnungPDF(RechnungPDFBase):
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label, align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
-                ep_brutto = pos.netto * (1 + pos.ust_satz / 100)
+                # pos.netto ist bei eingabemodus="brutto" bereits der eingegebene Brutto-
+                # Einzelpreis (Issue #332) - KEINE Umrechnung mit dem USt-Satz mehr nötig/zulässig,
+                # sonst wird ein bereits brutto erfasster Preis nochmal hochgerechnet (Nutzer-
+                # Feedback 2026-08-04: 3,50€ erschien als 4,17€).
+                ep_brutto = pos.netto
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(ep_brutto), align="R")

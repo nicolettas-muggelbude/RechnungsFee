@@ -82,7 +82,9 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         ).first()
         r._quell_angebot_nr = angebot.rechnungsnummer if angebot else None
 
-    ist_netto = r.typ == "ausgang" and r.kunde is not None and r.kunde.zugferd_aktiv
+    # Netto- oder Bruttorechnung: entscheidet r.eingabemodus (Issue #332), nicht kunde.zugferd_aktiv
+    # - sonst interpretiert das PDF den gespeicherten Einzelpreis falsch (siehe rechnungen.py).
+    ist_netto = r.typ == "ausgang" and r.eingabemodus == "netto"
     kunde_zugferd = (
         not r.ist_entwurf and ist_netto and _dok == "Rechnung"
         and u and (u.steuernummer or u.ust_idnr)

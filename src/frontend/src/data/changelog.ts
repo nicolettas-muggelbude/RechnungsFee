@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.2',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Mahnwesen – die Kennzahlen „Fällig", „Entwürfe" und „Versendet" oben in der Übersicht zeigten die Anzahl der betroffenen Kunden statt der tatsächlichen Rechnungen/Mahnungen. Hatte z. B. ein einzelner Kunde 5 Mahnungs-Entwürfe, stand oben nur „1 Entwurf", während die Kundenzeile selbst korrekt „5 Entwurf" auswies. Die Kennzahlen summieren jetzt die echten Anzahlen pro Kunde.' },
+      { typ: 'fix', text: 'Rechnungsdetails – bei Positionen mit Rabatt und einer Menge größer 1 zeigte die Zwischensumme sowie der Rabattbetrag stark überhöhte bzw. unsinnige Werte (z. B. 899,10 € statt 89,91 €, oder ein negativer Rabatt). Ursache: eine Restberechnung aus der Zeit vor dem Rundungsfix (Issue #332) multiplizierte die bereits fertige Positionssumme nochmal mit der Menge. Die Rechnungsdetails übernehmen die gespeicherten Werte jetzt unverändert, wie in Formular und PDF.' },
+      { typ: 'fix', text: 'Rechnungsdetails und PDF – bei einer Brutto-Rechnung (Eingabe in Brutto-Preisen) wurde der eingegebene Einzelpreis fälschlich nochmal mit dem USt-Satz hochgerechnet, z. B. erschien ein eingegebener Preis von 3,50 € als 4,17 €. Ursache: die Anzeige entschied „Netto- oder Brutto-Darstellung" anhand des ZUGFeRD-Merkmals des Kunden statt anhand des tatsächlich für die Rechnung gewählten Eingabemodus (Netto/Brutto, Issue #332) – beide sind unabhängig voneinander wählbar. Betrifft beide PDF-Vorlagen und die Rechnungsdetails-Ansicht; die Gesamtsumme unten war davon nicht betroffen, nur die Positionszeilen.' },
+    ],
+  },
+  {
     version: 'v0.5.1',
     datum: 'August 2026',
     eintraege: [

@@ -160,7 +160,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
                 self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
-                ep_brutto = pos.netto * (1 + pos.ust_satz / 100)
+                # pos.netto ist bei eingabemodus="brutto" bereits der eingegebene Brutto-
+                # Einzelpreis (Issue #332) - keine Umrechnung mit dem USt-Satz mehr nötig.
+                ep_brutto = pos.netto
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
                 menge_disp = f"-{menge:g}" if ist_storno else f"{menge:g}"
