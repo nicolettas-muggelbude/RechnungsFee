@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.3',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'PDF und Rechnungsdetails einer Brutto-Rechnung zeigten in der Summenzeile nur den Bruttogesamtbetrag, aber keinen expliziten Nettobetrag – nach §14 Abs. 4 UStG ist das Entgelt je Steuersatz auch auf einer Brutto-Rechnung Pflichtangabe. Vor dem Gesamtbetrag stehen jetzt Nettobetrag (bei mehreren Steuersätzen nach Satz aufgeschlüsselt in einer Zeile, z. B. „Netto 19 %: 88,24 € | 7 %: 25,21 €") und die enthaltene USt.' },
+      { typ: 'fix', text: 'Artikelstamm – beim Anlegen zeigte die Netto-Vorschau den aus dem Brutto-Preis abgeleiteten Wert auf 2 Nachkommastellen gerundet (z. B. 2,94 €), obwohl im Hintergrund bereits der exakte Wert mit 4 Nachkommastellen (2,9412 €) gespeichert wurde – sichtbar erst beim späteren Bearbeiten. Dadurch wirkte eine Netto-Rechnung mit diesem Artikel bei größeren Mengen wie ein Rechenfehler (z. B. 100 Stück à „2,94 €" = 294,12 € statt scheinbar 294,00 €). Die Vorschau zeigt jetzt von Anfang an die tatsächliche Präzision – die 4 Nachkommastellen bleiben bewusst erhalten, damit Netto- und Brutto-Rechnung mit demselben Artikel exakt auf denselben Bruttobetrag kommen (Issue #332).' },
+      { typ: 'fix', text: 'Artikelstamm – wurde beim Anlegen direkt der Netto-Preis eingetragen (z. B. 2,94 €), rechnete das Formular korrekt den passenden Brutto-Preis aus (3,50 €). Beim erneuten Bearbeiten wurde der Netto-Preis aber immer wieder frisch aus dem Brutto-Preis abgeleitet statt beibehalten zu werden, wodurch aus 2,94 € plötzlich 2,9412 € wurden. Der Artikelstamm merkt sich jetzt, welcher der beiden Preise ursprünglich eingegeben wurde – der eingegebene Preis bleibt danach unverändert erhalten, nur der jeweils andere wird berechnet. Dabei wird der abgeleitete Preis (in diesem Beispiel der Brutto-Preis) ebenfalls nicht auf den Cent gerundet gespeichert, sonst würde eine Netto-Rechnung und eine Brutto-Rechnung mit demselben Artikel bei größeren Mengen leicht auseinanderlaufen (z. B. 100 Stück netto 294,00 € / brutto 349,86 € gegenüber fälschlich 350,00 € brutto).' },
+    ],
+  },
+  {
     version: 'v0.5.2',
     datum: 'August 2026',
     eintraege: [

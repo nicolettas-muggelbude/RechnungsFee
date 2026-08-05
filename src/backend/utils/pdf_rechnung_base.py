@@ -593,17 +593,20 @@ class RechnungPDFBase(FPDF):
             if hat_rabatt:
                 _sum_row("Zwischensumme", _fmt_euro(pos_brutto_sum * _s))
                 _sum_row(rabatt_lbl, f"- {_fmt_euro(rabatt_brutto)}", grau=True)
-            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt * _s), bold=True, trenn=True)
             if not unt.get("ist_kleinunternehmer"):
-                saetze_mit_ust = [(satz, ust_sum) for satz, _, ust_sum in aufschluesselung if satz > 0]
-                if len(saetze_mit_ust) > 1:
-                    ust_lbl = "  |  ".join(
-                        f"{satz} %: {_fmt_euro(ust_sum * _s)}" for satz, ust_sum in saetze_mit_ust
+                # Netto nach Steuersatz + Nettobetrag + USt - auch auf einer Bruttorechnung
+                # Pflichtangabe (§14 Abs. 4 Nr. 7/8 UStG: Entgelt je Steuersatz, Steuersatz,
+                # Steuerbetrag), vor dem Gesamtbetrag (Nutzer-Feedback 2026-08-05).
+                saetze_mit_werten = [(satz, netto_sum, ust_sum) for satz, netto_sum, ust_sum in aufschluesselung if satz > 0]
+                if len(saetze_mit_werten) > 1:
+                    netto_lbl = "  |  ".join(
+                        f"{satz} %: {_fmt_euro(netto_sum * _s)}" for satz, netto_sum, _ in saetze_mit_werten
                     )
-                    _sum_row(f"enthaltene USt {ust_lbl}", _fmt_euro(r.ust_gesamt * _s), grau=True)
-                elif saetze_mit_ust:
-                    satz, _ = saetze_mit_ust[0]
-                    _sum_row(f"enthaltene USt {satz} %", _fmt_euro(r.ust_gesamt * _s), grau=True)
+                    _sum_row(f"Netto {netto_lbl}", _fmt_euro(r.netto_gesamt * _s), grau=True)
+                else:
+                    _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt * _s), grau=True)
+                _sum_row("enthaltene USt", _fmt_euro(r.ust_gesamt * _s), grau=True)
+            _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt * _s), bold=True, trenn=True)
 
     def _render_19_hinweis(self):
         unt = self._unt

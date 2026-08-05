@@ -487,8 +487,12 @@ class Artikel(Base):
     bezeichnung: Mapped[str] = mapped_column(String(200), nullable=False)
     einheit: Mapped[str] = mapped_column(String(50), nullable=False, default="Stück")
     steuersatz: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=19)
-    vk_brutto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # 4 statt 2 Nachkommastellen: ist vk_eingabe="netto", ist vk_brutto der abgeleitete Wert und
+    # darf nicht auf den Cent gerundet werden - sonst weicht eine Brutto-Rechnung mit diesem
+    # Artikel von einer Netto-Rechnung mit demselben Artikel ab (Issue #332/#344, analog vk_netto).
+    vk_brutto: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     vk_netto: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)  # aus vk_brutto abgeleitet, nicht auf Cent gerundet (Issue #332)
+    vk_eingabe: Mapped[str] = mapped_column(String(10), nullable=False, default="brutto")  # netto|brutto - welcher der beiden Preise die eingegebene Wahrheit ist, der andere wird daraus abgeleitet
     ek_netto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     ek_brutto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     lieferant_id: Mapped[int | None] = mapped_column(ForeignKey("lieferanten.id"))

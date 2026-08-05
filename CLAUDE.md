@@ -70,7 +70,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 143` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 144` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -276,6 +276,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 141 | Datenfix Issue #334: Dienstleistung (eigene Leistung) hatte fälschlich Lieferant/Lieferanten-ArtNr. im Formular (`hatLieferant()` in ArtikelPage.tsx enthielt `dienstleistung` – jetzt nur noch `artikel`/`fremdleistung`, analog zu `hatEK()`); bestehende Dienstleistungen mit versehentlich gesetztem lieferant_id/lieferanten_artikelnr werden bereinigt; Backend (create_artikel/update_artikel) setzt beide Felder jetzt zusätzlich hart auf NULL bei typ='dienstleistung', auch bei reinem Typwechsel ohne lieferant_id im Request |
 | 142 | unternehmen.smtp_zertifikat_ignorieren BOOLEAN DEFAULT 0 – Issue #336: Opt-in um bei SMTP-Versand ein selbstsigniertes/nicht vertrauenswürdiges Zertifikat zu akzeptieren (z.B. TLS-Interception durch lokale Security-Software); setzt `ctx.check_hostname=False`/`ctx.verify_mode=ssl.CERT_NONE` (CA-Kettenprüfung entfällt, tatsächliche Absicherung übernimmt Migration 143); zusätzlich `_sende()` (api/mail.py) fängt jetzt `ssl.SSLCertVerificationError`/`ssl.SSLError`/`socket.gaierror`/`TimeoutError`/`ConnectionRefusedError` einzeln ab und übersetzt sie in verständliche Meldungen statt roher OSError-Texte wie „[Error 11001] getaddrinfo failed" |
 | 143 | unternehmen.smtp_zertifikat_fingerprint VARCHAR(64) – Issue #336 Folgefix: Trust-on-First-Use statt dauerhaftem CERT_NONE. Bei smtp_zertifikat_ignorieren=1 wird bei der ersten Verbindung der SHA-256-Fingerabdruck des präsentierten Zertifikats gespeichert (`_pruefe_gepinntes_zertifikat()`); jede weitere Verbindung muss exakt dasselbe Zertifikat zeigen, sonst bricht der Versand ab bevor Zugangsdaten gesendet werden – reines CERT_NONE würde jedes beliebige (auch später untergeschobene) Zertifikat unbemerkt akzeptieren. Zurücksetzen über Einstellungen → Unternehmen → SMTP („Zurücksetzen"-Link neben dem angezeigten Fingerabdruck) |
+| 144 | artikel.vk_eingabe VARCHAR(10) DEFAULT 'brutto' – merkt sich ob Netto- oder Brutto-Preis die eingegebene Wahrheit ist; bisher wurde vk_netto bei jedem Speichern immer aus vk_brutto neu abgeleitet, auch wenn der Nutzer direkt den Netto-Preis eingetragen hatte (2,94€ netto → 3,50€ brutto → beim nächsten Speichern wieder zurückgerechnet zu 2,9412€ statt der ursprünglich eingegebenen 2,94€). `_berechne_preise()` in api/artikel.py leitet jetzt je nach vk_eingabe nur noch den jeweils anderen Preis ab, der eingegebene bleibt exakt erhalten. Symmetrisch dazu: artikel.vk_brutto NUMERIC(12,2)→NUMERIC(12,4) (kein ALTER nötig, SQLite erzwingt keine Skala) – ist vk_eingabe="netto", ist vk_brutto der abgeleitete Wert und wird ebenfalls nicht auf den Cent gerundet, sonst liefen Netto- und Brutto-Rechnung mit demselben Artikel bei größeren Mengen wieder auseinander (100 Stück: 294,00€/349,86€ vs. fälschlich 350,00€) (Nutzer-Feedback 2026-08-05) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

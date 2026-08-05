@@ -1661,6 +1661,7 @@ export type Artikel = {
   steuersatz: string
   vk_brutto: string
   vk_netto: string
+  vk_eingabe: string
   ek_netto: string | null
   ek_brutto: string | null
   lieferant_id: number | null
@@ -1716,6 +1717,8 @@ export type ArtikelCreate = {
   einheit: string
   steuersatz: string
   vk_brutto: string
+  vk_netto?: string
+  vk_eingabe?: string
   ek_netto?: string
   lieferant_id?: number
   lieferanten_artikelnr?: string

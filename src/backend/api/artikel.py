@@ -15,34 +15,50 @@ router = APIRouter(prefix="/api/artikel", tags=["Artikel"])
 
 def _berechne_preise(
     vk_brutto: Decimal,
+    vk_netto: Optional[Decimal],
+    vk_eingabe: str,
     ek_netto: Optional[Decimal],
     steuersatz: Decimal,
     differenzbesteuerung: bool = False,
 ):
-    """Berechnet vk_netto und ek_brutto aus den Eingabewerten.
+    """Berechnet vk_brutto und vk_netto - je nachdem welcher der beiden Preise laut vk_eingabe
+    die vom Nutzer eingegebene Wahrheit ist, wird der jeweils andere daraus abgeleitet. Gibt
+    (vk_brutto, vk_netto, ek_brutto) zurück.
+
+    Ohne diese Unterscheidung ging beim Runden Präzision verloren: wer 2,94€ netto einträgt,
+    bekommt korrekt 3,50€ brutto (2,94 x 1,19 = 3,4986€ -> 3,50€) - eine Rückrechnung
+    3,50€ / 1,19 ergibt aber 2,9412€ statt der ursprünglich eingegebenen 2,94€. Beim nächsten
+    Speichern "wanderte" der Netto-Preis dadurch vom eingegebenen Wert weg (Nutzer-Feedback
+    2026-08-05).
 
     Bei Differenzbesteuerung (§25a UStG) wird keine USt separat ausgewiesen –
     VK-Brutto ist gleichzeitig der Rechnungspreis (ohne USt-Aufschlag).
     ek_brutto = ek_netto (Ankauf von Privatperson, kein USt-Abzug).
 
-    vk_netto wird NICHT auf 2 Nachkommastellen gerundet (Issue #332 Folgefehler): der Artikelstamm
-    fragt nur den Brutto-VK ab, vk_netto ist rein abgeleitet. Würde man hier auf den Cent runden
-    (z.B. 3,50€ / 1,19 = 2,9412€ -> 2,94€), würde eine daraus erstellte Netto-Rechnung bei größeren
-    Mengen spürbar vom tatsächlich eingegebenen Brutto-Preis abweichen (2,94€ x 1,19 = 3,4986€,
-    nicht 3,50€). vk_netto behält deshalb 4 Nachkommastellen (wie rechnungspositionen.netto).
+    Der jeweils ABGELEITETE Preis wird NICHT auf 2 Nachkommastellen gerundet, sondern behält
+    4 Nachkommastellen (wie rechnungspositionen.netto): würde z.B. bei vk_eingabe="brutto" der
+    daraus abgeleitete Netto-Preis auf den Cent gerundet (3,50€ / 1,19 = 2,9412€ -> 2,94€), würde
+    eine daraus erstellte Netto-Rechnung bei größeren Mengen spürbar vom eingegebenen Brutto-Preis
+    abweichen (2,94€ x 1,19 = 3,4986€, nicht 3,50€). Symmetrisch dazu wird bei vk_eingabe="netto"
+    der abgeleitete Brutto-Preis ebenfalls nicht gerundet - sonst weicht umgekehrt eine
+    Brutto-Rechnung mit diesem Artikel von einer Netto-Rechnung ab (z.B. 2,94€ netto x 1,19 würde
+    auf 3,50€ gerundet, eine Brutto-Rechnung mit 100 Stück ergäbe dann 350,00€ statt der zur
+    Netto-Rechnung passenden 349,86€ - Issue #332/#344).
     """
-    if differenzbesteuerung:
-        # §25a: kein USt-Aufschlag auf den Rechnungspreis
-        vk_netto = vk_brutto
-        ek_brutto = ek_netto  # Ankauf typischerweise ohne USt
-        return vk_netto, ek_brutto
-
-    faktor = 1 + steuersatz / 100
-    vk_netto = (vk_brutto / faktor).quantize(Decimal("0.0001"), ROUND_HALF_UP)
     ek_brutto = None
     if ek_netto is not None:
-        ek_brutto = (ek_netto * faktor).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    return vk_netto, ek_brutto
+        ek_brutto = (ek_netto * (1 + steuersatz / 100)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+    if differenzbesteuerung:
+        # §25a: kein USt-Aufschlag auf den Rechnungspreis
+        return vk_brutto, vk_brutto, ek_brutto
+
+    faktor = 1 + steuersatz / 100
+    if vk_eingabe == "netto" and vk_netto is not None:
+        vk_brutto = (vk_netto * faktor).quantize(Decimal("0.0001"), ROUND_HALF_UP)
+    else:
+        vk_netto = (vk_brutto / faktor).quantize(Decimal("0.0001"), ROUND_HALF_UP)
+    return vk_brutto, vk_netto, ek_brutto
 
 
 def _naechste_artikelnummer(db: Session) -> str:
@@ -132,8 +148,8 @@ def _prüfe_steuersatz(satz: Decimal, db: Session) -> None:
 def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
     if not data.differenzbesteuerung:
         _prüfe_steuersatz(data.steuersatz, db)
-    vk_netto, ek_brutto = _berechne_preise(
-        data.vk_brutto, data.ek_netto, data.steuersatz, data.differenzbesteuerung
+    vk_brutto, vk_netto, ek_brutto = _berechne_preise(
+        data.vk_brutto, data.vk_netto, data.vk_eingabe, data.ek_netto, data.steuersatz, data.differenzbesteuerung
     )
     artikelnummer = _naechste_artikelnummer(db)
     artikel = Artikel(
@@ -142,8 +158,9 @@ def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
         bezeichnung=data.bezeichnung,
         einheit=data.einheit,
         steuersatz=data.steuersatz,
-        vk_brutto=data.vk_brutto,
+        vk_brutto=vk_brutto,
         vk_netto=vk_netto,
+        vk_eingabe=data.vk_eingabe,
         ek_netto=data.ek_netto,
         ek_brutto=ek_brutto,
         # Dienstleistung = eigene Leistung, kein Einkauf bei einem Lieferanten (Issue #334)
@@ -192,12 +209,18 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
     if "steuersatz" in update and not differenzbesteuerung:
         _prüfe_steuersatz(update["steuersatz"], db)
 
-    # Preise neu berechnen wenn vk_brutto, steuersatz oder differenzbesteuerung geändert wurde
-    vk_brutto = update.get("vk_brutto", artikel.vk_brutto)
+    # Preise neu berechnen wenn vk_brutto, vk_netto, steuersatz oder differenzbesteuerung geändert wurde
+    vk_brutto_in = update.get("vk_brutto", artikel.vk_brutto)
+    vk_netto_in = update.get("vk_netto", None)
+    vk_eingabe = update.get("vk_eingabe", artikel.vk_eingabe)
     steuersatz = update.get("steuersatz", artikel.steuersatz)
     ek_netto = update.get("ek_netto", artikel.ek_netto)
-    vk_netto, ek_brutto = _berechne_preise(vk_brutto, ek_netto, steuersatz, differenzbesteuerung)
+    vk_brutto, vk_netto, ek_brutto = _berechne_preise(
+        vk_brutto_in, vk_netto_in, vk_eingabe, ek_netto, steuersatz, differenzbesteuerung
+    )
+    update["vk_brutto"] = vk_brutto
     update["vk_netto"] = vk_netto
+    update["vk_eingabe"] = vk_eingabe
     if ek_brutto is not None or "ek_netto" in update:
         update["ek_brutto"] = ek_brutto
 

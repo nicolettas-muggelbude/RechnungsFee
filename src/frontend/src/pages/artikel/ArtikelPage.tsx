@@ -362,11 +362,19 @@ export function ArtikelFormModal({
   const [vkNetto, setVkNetto] = useState(
     initial?.vk_netto ? String(parseFloat(initial.vk_netto)) : ''
   )
+  // Merkt sich welcher der beiden Preise die eingegebene Wahrheit ist - der andere wird daraus
+  // abgeleitet. Ohne diese Unterscheidung "wanderte" ein direkt eingegebener Netto-Preis beim
+  // nächsten Speichern weg, weil er aus dem gerundeten Brutto-Preis neu berechnet wurde
+  // (Nutzer-Feedback 2026-08-05).
+  const [vkEingabe, setVkEingabe] = useState<'netto' | 'brutto'>(
+    (initial?.vk_eingabe as 'netto' | 'brutto') ?? 'brutto'
+  )
   const [ekBrutto, setEkBrutto] = useState(
     initial?.ek_brutto ? String(parseFloat(initial.ek_brutto)) : ''
   )
   useEffect(() => {
     setVkNetto(initial?.vk_netto ? String(parseFloat(initial.vk_netto)) : '')
+    setVkEingabe((initial?.vk_eingabe as 'netto' | 'brutto') ?? 'brutto')
     setEkBrutto(initial?.ek_brutto ? String(parseFloat(initial.ek_brutto)) : '')
   }, [initial?.id])
 
@@ -381,20 +389,29 @@ export function ArtikelFormModal({
 
   function bruttoAusNetto(netto: number) {
     if (differenzbesteuerung) return netto  // §25a: Brutto = Netto (kein USt-Aufschlag)
-    return Math.round(netto * (1 + steuersatz / 100) * 100) / 100
+    // 4 Nachkommastellen wie beim Speichern (_berechne_preise in api/artikel.py) - sonst weicht
+    // eine Brutto-Rechnung mit diesem Artikel von einer Netto-Rechnung ab (Nutzer-Feedback
+    // 2026-08-05: 2,94€ netto x 1,19 auf 2 Stellen gerundet ergibt bei 100 Stück 350,00€ brutto
+    // statt der zur Netto-Rechnung passenden 349,86€).
+    return Math.round(netto * (1 + steuersatz / 100) * 10000) / 10000
   }
   function nettoAusBrutto(brutto: number) {
     if (differenzbesteuerung) return brutto  // §25a: Netto = Brutto
-    return Math.round(brutto / (1 + steuersatz / 100) * 100) / 100
+    // 4 Nachkommastellen wie beim Speichern (_berechne_preise in api/artikel.py) - sonst zeigt
+    // die Live-Vorschau beim Anlegen "2,94€", während tatsächlich "2,9412€" gespeichert wird
+    // und in Angebot/Rechnung verwendet wird (Nutzer-Feedback 2026-08-05).
+    return Math.round(brutto / (1 + steuersatz / 100) * 10000) / 10000
   }
 
   function onVkNettoChange(val: string) {
     setVkNetto(val)
+    setVkEingabe('netto')
     const n = parseFloat(val)
     if (!isNaN(n) && n > 0) setValue('vk_brutto', String(bruttoAusNetto(n)), { shouldValidate: true })
   }
   function onVkBruttoChange(val: string) {
     setValue('vk_brutto', val, { shouldValidate: true })
+    setVkEingabe('brutto')
     const b = parseFloat(val)
     if (!isNaN(b) && b > 0) setVkNetto(String(nettoAusBrutto(b)))
     else setVkNetto('')
@@ -421,6 +438,10 @@ export function ArtikelFormModal({
         // §25a: Steuersatz 0 senden, da keine USt ausgewiesen wird
         steuersatz: v.differenzbesteuerung ? '0' : v.steuersatz,
         vk_brutto: v.vk_brutto,
+        // Welcher der beiden Preise die eingegebene Wahrheit ist (der andere wird daraus
+        // abgeleitet) - bei §25a sind Netto=Brutto ohnehin identisch, daher immer 'brutto'.
+        vk_eingabe: v.differenzbesteuerung ? 'brutto' : vkEingabe,
+        vk_netto: !v.differenzbesteuerung && vkEingabe === 'netto' && vkNetto ? vkNetto : undefined,
         ek_netto: hatEK(v.typ) && v.ek_netto ? v.ek_netto : undefined,
         lieferant_id: hatLieferant(v.typ) && v.lieferant_id ? Number(v.lieferant_id) : undefined,
         lieferanten_artikelnr: hatLieferant(v.typ) ? v.lieferanten_artikelnr || undefined : undefined,

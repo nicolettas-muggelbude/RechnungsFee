@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 143
+SCHEMA_VERSION = 144
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3079,6 +3079,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 143"))
             conn.commit()
             print("[Migration] Schema auf Version 143 (unternehmen.smtp_zertifikat_fingerprint - TOFU-Pinning, Issue #336)")
+
+        if version < 144:
+            # Artikelstamm: bisher wurde vk_netto bei jedem Speichern immer aus vk_brutto neu
+            # abgeleitet, egal ob der Nutzer den Netto- oder den Brutto-Preis eingegeben hatte.
+            # Wer 2,94€ netto eintrug bekam korrekt 3,50€ brutto - aber beim nächsten Bearbeiten
+            # wurde daraus wieder 2,9412€ netto berechnet, der ursprünglich eingegebene Wert ging
+            # verloren. vk_eingabe merkt sich jetzt welcher Preis die eingegebene Wahrheit ist;
+            # bestehende Artikel liefen bisher ausschließlich über den Brutto-Preis (Nutzer-Feedback
+            # 2026-08-05).
+            artikel_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(artikel)")).fetchall()}
+            if "vk_eingabe" not in artikel_cols:
+                conn.execute(text("ALTER TABLE artikel ADD COLUMN vk_eingabe VARCHAR(10) NOT NULL DEFAULT 'brutto'"))
+            conn.execute(text("PRAGMA user_version = 144"))
+            conn.commit()
+            print("[Migration] Schema auf Version 144 (artikel.vk_eingabe - Netto/Brutto-Eingaberichtung)")
 
 
 def _migrate_kategorien() -> None:

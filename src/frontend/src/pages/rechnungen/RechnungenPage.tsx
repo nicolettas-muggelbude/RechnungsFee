@@ -1742,6 +1742,20 @@ function RechnungDetail({
                     ? reRabattBetrag
                     : posSumBrutto * reRabattProz / 100
                   const ustGesamt = parseFloat(rechnung.ust_gesamt)
+                  // Netto/USt je Steuersatz gruppiert (Positionssummen, Issue #332) - für die
+                  // Netto-nach-Satz-Zeile der Bruttorechnung (Nutzer-Feedback 2026-08-05).
+                  const saetzeMitWerten = Object.values(
+                    rechnung.positionen.reduce((acc, p) => {
+                      const satz = Math.round(parseFloat(String(p.ust_satz)))
+                      const brutto = parseFloat(p.brutto)
+                      const ust = parseFloat(p.ust_betrag)
+                      const eintrag = acc[satz] ?? { satz, netto: 0, ust: 0 }
+                      eintrag.netto += brutto - ust
+                      eintrag.ust += ust
+                      acc[satz] = eintrag
+                      return acc
+                    }, {} as Record<number, { satz: number; netto: number; ust: number }>)
+                  ).filter(e => e.satz > 0).sort((a, b) => a.satz - b.satz)
                   return (
                   <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                     {istNetto ? <>
@@ -1784,16 +1798,31 @@ function RechnungDetail({
                           <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">− {formatEuro(rabattBrutto.toFixed(2))}</td>
                         </tr>
                       )}
+                      {!unternehmen?.ist_kleinunternehmer && (
+                        <>
+                          {/* Netto nach Steuersatz + Nettobetrag + enthaltene USt - auch auf einer
+                              Bruttorechnung Pflichtangabe (§14 Abs. 4 Nr. 7/8 UStG), vor dem
+                              Gesamtbetrag (Nutzer-Feedback 2026-08-05). */}
+                          <tr>
+                            <td colSpan={4} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                              {saetzeMitWerten.length > 1
+                                ? `Netto ${saetzeMitWerten.map(e => `${e.satz} %: ${formatEuro(e.netto.toFixed(2))}`).join('  |  ')}`
+                                : 'Nettobetrag'}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{formatEuro(rechnung.netto_gesamt)}</td>
+                          </tr>
+                          {ustGesamt !== 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">enthaltene USt</td>
+                              <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{formatEuro(rechnung.ust_gesamt)}</td>
+                            </tr>
+                          )}
+                        </>
+                      )}
                       <tr>
                         <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamtbetrag</td>
                         <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(rechnung.brutto_gesamt)}</td>
                       </tr>
-                      {ustGesamt !== 0 && !unternehmen?.ist_kleinunternehmer && (
-                        <tr>
-                          <td colSpan={4} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">enthaltene USt</td>
-                          <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{formatEuro(rechnung.ust_gesamt)}</td>
-                        </tr>
-                      )}
                     </>}
                   </tfoot>
                   )

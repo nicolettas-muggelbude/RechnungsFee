@@ -303,11 +303,11 @@ function VorlageFormular({
 
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     const ust_satz = ustSaetze?.find(u => parseFloat(u.satz) === parseFloat(a.steuersatz))?.satz ?? a.steuersatz
-    // vk_netto NICHT auf 2 Nachkommastellen runden (Issue #332) - der Artikel-Bruttopreis ist
-    // die eingegebene Wahrheit, vk_netto ist nur mit 4 Nachkommastellen exakt reproduzierbar.
-    const preis = eingabeModus === 'netto'
-      ? a.vk_netto
-      : parseFloat(a.vk_brutto).toFixed(2)
+    // Weder vk_netto noch vk_brutto auf 2 Nachkommastellen runden (Issue #332/#344) - je nachdem
+    // welcher der beiden Preise beim Artikel die eingegebene Wahrheit war, ist der jeweils andere
+    // nur mit 4 Nachkommastellen exakt reproduzierbar (sonst weicht eine Netto-Rechnung von einer
+    // Brutto-Rechnung mit demselben Artikel ab).
+    const preis = eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto
     setPositionen(prev => prev.map((p, idx) =>
       idx !== i ? p : { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, einzelpreis: preis, ust_satz, artikel_id: a.id }
     ))

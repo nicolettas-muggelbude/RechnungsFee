@@ -15,6 +15,8 @@ class ArtikelCreate(BaseModel):
     einheit: str = "Stück"
     steuersatz: Decimal = Decimal("19")
     vk_brutto: Decimal
+    vk_netto: Optional[Decimal] = None
+    vk_eingabe: str = "brutto"  # netto|brutto - welcher der beiden Preise die eingegebene Wahrheit ist
     ek_netto: Optional[Decimal] = None
     lieferant_id: Optional[int] = None
     lieferanten_artikelnr: Optional[str] = None
@@ -43,6 +45,13 @@ class ArtikelCreate(BaseModel):
             raise ValueError("vk_brutto muss positiv sein")
         return v
 
+    @field_validator("vk_eingabe")
+    @classmethod
+    def check_vk_eingabe(cls, v: str) -> str:
+        if v not in ("netto", "brutto"):
+            raise ValueError("vk_eingabe muss 'netto' oder 'brutto' sein")
+        return v
+
     @model_validator(mode="after")
     def check_fremdleistung(self) -> "ArtikelCreate":
         if self.typ == "fremdleistung" and not self.lieferant_id:
@@ -56,6 +65,8 @@ class ArtikelUpdate(BaseModel):
     einheit: Optional[str] = None
     steuersatz: Optional[Decimal] = None
     vk_brutto: Optional[Decimal] = None
+    vk_netto: Optional[Decimal] = None
+    vk_eingabe: Optional[str] = None  # netto|brutto
     ek_netto: Optional[Decimal] = None
     lieferant_id: Optional[int] = None
     lieferanten_artikelnr: Optional[str] = None
@@ -76,6 +87,13 @@ class ArtikelUpdate(BaseModel):
     def check_typ(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in GUELTIGE_TYPEN:
             raise ValueError(f"typ muss einer von {sorted(GUELTIGE_TYPEN)} sein")
+        return v
+
+    @field_validator("vk_eingabe")
+    @classmethod
+    def check_vk_eingabe(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("netto", "brutto"):
+            raise ValueError("vk_eingabe muss 'netto' oder 'brutto' sein")
         return v
 
 
@@ -101,6 +119,7 @@ class ArtikelResponse(BaseModel):
     steuersatz: Decimal
     vk_brutto: Decimal
     vk_netto: Decimal
+    vk_eingabe: str = "brutto"
     ek_netto: Optional[Decimal] = None
     ek_brutto: Optional[Decimal] = None
     lieferant_id: Optional[int] = None
