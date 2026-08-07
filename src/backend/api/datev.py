@@ -165,7 +165,32 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = Non
     if za == "Keine":
         return None
     if za == "Skonto":
-        za = "Bank"
+        # Ein Skonto-Journaleintrag ist keine eigene Zahlung, sondern eine Umbuchung zwischen
+        # Erlöskonto/Aufwandskonto und dem Erlösschmälerungs-/Skontokonto - es fliesst dabei kein
+        # zusätzliches Geld über die Bank. Gegenkonto muss deshalb das Erlös-/Aufwandskonto der
+        # zugehörigen Rechnung sein, nicht die Bank - sonst zieht DATEV das Skonto zusätzlich von
+        # der Bank ab (der tatsächliche Zahlungsbetrag nach Skonto ist bereits vollständig in der
+        # Hauptbuchung verbucht), und das Erlöskonto kommt nur mit dem bereits geminderten Betrag
+        # an statt mit dem vollen Rechnungsbetrag (Issue #343).
+        if db is not None and j.rechnung_id:
+            ziel_art = "Ausgabe" if j.art == "Einnahme" else "Einnahme"
+            sibling = (
+                db.query(Journaleintrag)
+                .filter(
+                    Journaleintrag.rechnung_id == j.rechnung_id,
+                    Journaleintrag.art == ziel_art,
+                    Journaleintrag.ust_satz == j.ust_satz,
+                    Journaleintrag.zahlungsart != "Skonto",
+                    ~Journaleintrag.beschreibung.like("STORNO %"),
+                )
+                .order_by(Journaleintrag.id)
+                .first()
+            )
+            if sibling:
+                konto = sibling.konto_skr03 if unt.kontenrahmen == "SKR03" else sibling.konto_skr04
+                if konto:
+                    return konto
+        za = "Bank"  # Fallback falls keine passende Hauptbuchung gefunden wird
 
     # Bankkonto mit eigener DATEV-Kontonummer hat Vorrang vor globalem datev_konto_bank
     if za == "Bank" and j.konto_id and db is not None:

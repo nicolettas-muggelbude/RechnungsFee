@@ -20,12 +20,15 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
     Beleg, Forderung, Kunde, Lieferant, Rechnung, Rechnungsposition, Journaleintrag,
-    Kategorie, Unternehmen, Nummernkreis, Artikel,
+    Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch,
 )
-from utils.signatur import signatur_journaleintrag
+from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
+from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 from utils.mahngebuehr_verrechnung import offene_mahngebuehr_summe, verrechne_mahngebuehren
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
@@ -208,13 +211,120 @@ def _ust_konto(art: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     return skr03, skr04
 
 
-def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat) -> Decimal:
-    """Tatsächlich abziehbarer Vorsteuer-Betrag (berücksichtigt kat.vorsteuer_prozent)."""
+def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat, ist_reverse_charge: bool = False) -> Decimal:
+    """Tatsächlich abziehbarer Vorsteuer-Betrag (berücksichtigt kat.vorsteuer_prozent).
+    Bei ist_reverse_charge=True (ig. Erwerb/§13b/Einfuhrumsatzsteuer) greift §15 Abs. 1 Nr. 3/4
+    UStG unabhängig vom Kategorie-Wert - eine 0%-Kategorie beschreibt nur den inländischen
+    Normalfall, nicht den Reverse-Charge-Sonderfall (Issue #339)."""
     if not vorsteuerabzug or ust_betrag == 0:
         return Decimal("0.00")
+    if ist_reverse_charge:
+        return ust_betrag
     if kat is not None and int(kat.vorsteuer_prozent) < 100:
         return (ust_betrag * kat.vorsteuer_prozent / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
     return ust_betrag
+
+
+def _klassifiziere_sonderfall(
+    kat: "Kategorie | None",
+    ist_reverse_charge: bool,
+    satz: Decimal,
+    ust03_default: str | None,
+    ust04_default: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Leitet ust_sonderfall (ig_erwerb|13b_abs1|13b_abs2|einfuhr_ust|None) aus der Kategorie ab
+    und liefert ggf. abweichende USt-Sonderkonten. Ausgelagert aus _erstelle_eintrag()
+    (Zahlungsbuchung), damit Zahlungspfad und Finalisierungspfad (vorsteuer_ansprueche,
+    Issue #338) garantiert identisch klassifizieren - siehe Issue #315/#326 im Code, wie leicht
+    das bei dupliziertem Code auseinanderläuft.
+
+    WICHTIG: SKR03- und SKR04-Konto GETRENNT prüfen (nicht als gemeinsames Tupel) - Kontonummern
+    sind zwischen den beiden Kontenrahmen nicht eindeutig (Issue #326).
+    """
+    skr03_kat = kat.konto_skr03 if kat else None
+    skr04_kat = kat.konto_skr04 if kat else None
+    if skr03_kat == "3425" or skr04_kat == "5425":
+        sonderfall = "ig_erwerb"
+    elif skr03_kat in ("3123", "3125") or skr04_kat in ("5923", "5925"):
+        sonderfall = "13b_abs1"
+    elif skr03_kat == "3120" or skr04_kat == "5920":
+        sonderfall = "13b_abs2"
+    elif skr03_kat == "1588" or skr04_kat == "1433":
+        sonderfall = "einfuhr_ust"
+    else:
+        sonderfall = "13b_abs1" if ist_reverse_charge else None
+
+    ust03, ust04 = ust03_default, ust04_default
+    if sonderfall and sonderfall != "einfuhr_ust" and satz > 0:
+        satz_i = int(satz)
+        if sonderfall == "ig_erwerb":
+            ust03 = {19: "1780", 7: "1781"}.get(satz_i, ust03)
+            ust04 = {19: "3802", 7: "3803"}.get(satz_i, ust04)
+        elif sonderfall in ("13b_abs1", "13b_abs2"):
+            ust03 = {19: "1787", 7: "1787"}.get(satz_i, ust03)
+            ust04 = {19: "3803", 7: "3803"}.get(satz_i, ust04)
+    return sonderfall, ust03, ust04
+
+
+def _vorsteuer_kategorie_fehlt(rechnung: "Rechnung") -> bool:
+    """Prüft ob für mind. eine Position keine Kategorie ermittelbar ist (Position eigene
+    kategorie_id ODER rechnung.kategorie_id als Fallback) - Vorsteuer-Klassifikation
+    (Satz/Sonderfall/reduzierte Quote) braucht ab CUTOVER_DATUM_VORSTEUER bereits bei
+    Finalisierung eine Kategorie, nicht erst bei Zahlung (Issue #338)."""
+    if not rechnung.positionen:
+        return True
+    return any(pos.kategorie_id is None and rechnung.kategorie_id is None for pos in rechnung.positionen)
+
+
+def _erzeuge_vorsteuer_ansprueche(rechnung: "Rechnung", db: Session) -> None:
+    """Erzeugt Vorsteuer-Anspruch-Zeilen (Soll-Prinzip §15 UStG, Issue #338) bei Finalisierung
+    einer Eingangsrechnung mit rechnung.datum >= CUTOVER_DATUM_VORSTEUER - eine Zeile je
+    (Kategorie, USt-Satz)-Gruppe, analog zur Kategorie-Gruppierung im Gutschrift-Zahlungspfad
+    (pos.kategorie_id mit rechnung.kategorie_id als Fallback). datum wird aus rechnung.datum
+    eingefroren (Snapshot) - eine spätere Änderung der Kategorie darf eine bereits gemeldete
+    Periode nicht rückwirkend verändern.
+
+    Muss nach _vorsteuer_kategorie_fehlt()-Prüfung aufgerufen werden (jede Position hat dann
+    eine ermittelbare Kategorie)."""
+    netto_gruppen: dict[tuple[int | None, int], Decimal] = defaultdict(lambda: Decimal("0"))
+    ust_gruppen: dict[tuple[int | None, int], Decimal] = defaultdict(lambda: Decimal("0"))
+    for pos in rechnung.positionen:
+        satz = int(pos.ust_satz)
+        kat_id = pos.kategorie_id or rechnung.kategorie_id
+        key = (kat_id, satz)
+        netto_gruppen[key] += (pos.brutto - pos.ust_betrag)
+        ust_gruppen[key] += pos.ust_betrag
+
+    for key, ust_betrag in ust_gruppen.items():
+        kat_id, satz = key
+        netto_betrag = netto_gruppen[key]
+        if netto_betrag == 0 and ust_betrag == 0:
+            continue
+        kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
+        satz_d = Decimal(str(satz))
+        ust03_default, ust04_default = _ust_konto("Ausgabe", satz_d) if satz > 0 else (None, None)
+        sonderfall, ust03, ust04 = _klassifiziere_sonderfall(
+            kat, rechnung.ist_reverse_charge, satz_d, ust03_default, ust04_default
+        )
+        vst_abzug = satz > 0 or sonderfall == "einfuhr_ust"
+        va = VorsteuerAnspruch(
+            rechnung_id=rechnung.id,
+            datum=rechnung.datum,
+            kategorie_id=kat_id,
+            konto_skr03=kat.konto_skr03 if kat else None,
+            konto_skr04=kat.konto_skr04 if kat else None,
+            konto_ust_skr03=ust03,
+            konto_ust_skr04=ust04,
+            netto_betrag=netto_betrag,
+            ust_satz=satz_d,
+            ust_betrag=ust_betrag,
+            vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vst_abzug, kat, bool(sonderfall)),
+            ust_sonderfall=sonderfall,
+            typ="anspruch",
+            immutable=True,
+        )
+        va.signatur = signatur_vorsteueranspruch(va)
+        db.add(va)
 
 
 def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
@@ -1438,6 +1548,22 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
                     ),
                 )
 
+    # Vorsteuerabzug nach Soll-Prinzip (§15 UStG, Issue #338): ab CUTOVER_DATUM_VORSTEUER
+    # braucht eine Eingangsrechnung bereits bei Finalisierung eine Kategorie je Position (oder
+    # rechnung.kategorie_id als Fallback) - vorher wurde die Kategorie erst bei Zahlung verlangt,
+    # aber die Vorsteuer-Klassifikation (Satz/Sonderfall/reduzierte Quote) muss jetzt schon hier
+    # feststehen, da die Vorsteuer unabhängig vom späteren Zahlungszeitpunkt gilt.
+    ist_soll_vorsteuer = rechnung.typ == "eingang" and rechnung.datum >= CUTOVER_DATUM_VORSTEUER
+    if ist_soll_vorsteuer and _vorsteuer_kategorie_fehlt(rechnung):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Bitte eine Kategorie auswählen (je Position oder als Hauptkategorie). "
+                "Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht "
+                "dafür eine Kategorie."
+            ),
+        )
+
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -1452,6 +1578,9 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 
     # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung)
     _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+
+    if ist_soll_vorsteuer:
+        _erzeuge_vorsteuer_ansprueche(rechnung, db)
 
     db.commit()
     db.refresh(rechnung)
@@ -2240,8 +2369,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         marge_25a: Decimal | None = None,
     ) -> Journaleintrag:
         satz = g_satz if g_satz is not None else ust_satz
-        ust03 = g_ust_skr03 if g_satz is not None else konto_ust_skr03
-        ust04 = g_ust_skr04 if g_satz is not None else konto_ust_skr04
+        ust03_default = g_ust_skr03 if g_satz is not None else konto_ust_skr03
+        ust04_default = g_ust_skr04 if g_satz is not None else konto_ust_skr04
         # ust_sonderfall aus der gewaehlten Kategorie ableiten - analog zu journal.py
         # _felder_aus_data() (freie Buchungen). Betrifft Eingangsrechnungen: rechnung.
         # ist_reverse_charge ist dort nie gesetzt (nur fuer Ausgangsrechnungen gedacht),
@@ -2249,39 +2378,27 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # auf einer §13b/ig.Erwerb-Kategorie IMMER None - weder USt-Sonderkonto (1780/
         # 1787 statt normalem Vorsteuerkonto) noch UStVA-Zuordnung griffen (Issue #315-
         # Nebenfund, entdeckt beim Pruefen des umgekehrten Falls Eingangsrechnungen).
-        # WICHTIG: SKR03- und SKR04-Konto GETRENNT prüfen (nicht als gemeinsames Tupel) -
-        # Kontonummern sind zwischen den beiden Kontenrahmen nicht eindeutig. Z.B. hat
-        # "Innergemeinschaftliche Lieferungen" konto_skr04="3125", während "Drittland-
-        # Dienstleistungen (§13b Abs. 1)" konto_skr03="3125" hat - eine gemischte Prüfung
-        # "3125" in (skr03, skr04) trifft auf beide Kategorien zu und stufte eine Zahlung auf
-        # ig. Lieferungen faelschlich als 13b_abs1 ein (KZ 46 statt KZ 41 in der USt-VA,
-        # Issue #326 - identischer Fehler wie in journal.py _felder_aus_data()).
-        skr03_kat = kat.konto_skr03 if kat else None
-        skr04_kat = kat.konto_skr04 if kat else None
-        if skr03_kat == "3425" or skr04_kat == "5425":
-            sonderfall = "ig_erwerb"
-        elif skr03_kat in ("3123", "3125") or skr04_kat in ("5923", "5925"):
-            sonderfall = "13b_abs1"
-        elif skr03_kat == "3120" or skr04_kat == "5920":
-            sonderfall = "13b_abs2"
-        elif skr03_kat == "1588" or skr04_kat == "1433":
-            sonderfall = "einfuhr_ust"
-        else:
-            sonderfall = "13b_abs1" if rechnung.ist_reverse_charge else None
-        if sonderfall and sonderfall != "einfuhr_ust" and satz > 0:
-            satz_i = int(satz)
-            if sonderfall == "ig_erwerb":
-                ust03 = {19: "1780", 7: "1781"}.get(satz_i, ust03)
-                ust04 = {19: "3802", 7: "3803"}.get(satz_i, ust04)
-            elif sonderfall in ("13b_abs1", "13b_abs2"):
-                ust03 = {19: "1787", 7: "1787"}.get(satz_i, ust03)
-                ust04 = {19: "3803", 7: "3803"}.get(satz_i, ust04)
+        sonderfall, ust03, ust04 = _klassifiziere_sonderfall(
+            kat, rechnung.ist_reverse_charge, satz, ust03_default, ust04_default
+        )
         if sonderfall == "einfuhr_ust":
             # Einfuhrumsatzsteuer (DHL/Zoll): der Zahlbetrag IST bereits die Steuer, kein
             # Netto-Anteil - analog zu journal.py _felder_aus_data(). kat.konto_skr03/04
             # (1588/1433) ist bereits das Vorsteuerkonto selbst, kein separates USt-Gegenkonto
             # noetig (ust03/ust04 bleiben unveraendert, siehe Bedingung oben).
             n, u = Decimal("0.00"), brutto
+        elif sonderfall and satz > 0:
+            # Reverse Charge (ig. Erwerb/§13b): der Zahlbetrag IST bereits der Nettobetrag -
+            # der auslaendische Lieferant weist keine deutsche USt aus, es fliesst also nie
+            # ein Bruttobetrag inkl. USt. Die USt wird additiv aufgeschlagen statt aus dem
+            # Zahlbetrag herausgerechnet zu werden, analog zu journal.py _felder_aus_data()
+            # (Issue #339-Folgefund: die Herausrechnung unterschaetzte sowohl Netto- als auch
+            # USt-/Vorsteuer-Basis, z.B. 128,38 € → faelschlich 107,88 €/20,50 € statt korrekt
+            # 128,38 €/24,39 €). brutto_betrag (unten) bleibt bewusst brutto=n, da real kein
+            # zusaetzliches Geld fliesst - die USt ist ein durchlaufender Posten (KZ 46/47 vs.
+            # KZ 61/67 gleichen sich aus).
+            n = brutto
+            u = (n * satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
         elif satz > 0:
             if marge_25a is not None:
                 # §25a: USt nur auf Brutto-Marge, nicht auf vollen VK-Preis. netto_betrag
@@ -2312,7 +2429,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             netto_betrag=n,
             ust_satz=satz,
             ust_betrag=u,
-            vorsteuer_betrag=_berechne_vorsteuer(u, vst_abzug, kat),
+            vorsteuer_betrag=_berechne_vorsteuer(u, vst_abzug, kat, bool(sonderfall)),
             brutto_betrag=brutto,
             marge_25a_brutto=marge_25a,
             vorsteuerabzug=vst_abzug,
@@ -2647,7 +2764,7 @@ def zahlung_korrigieren(
                 neuer_netto, neuer_ust = -neuer_netto, -neuer_ust
         else:
             neuer_netto, neuer_ust = neuer_brutto, Decimal("0.00")
-        neue_vorsteuer = _berechne_vorsteuer(neuer_ust, e.vorsteuerabzug, e.kategorie)
+        neue_vorsteuer = _berechne_vorsteuer(neuer_ust, e.vorsteuerabzug, e.kategorie, bool(e.ust_sonderfall))
     else:
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
 
@@ -2776,6 +2893,40 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
         )
         gegenbuchung.signatur = signatur_journaleintrag(gegenbuchung)
         db.add(gegenbuchung)
+
+    # Vorsteuer-Ansprüche (Soll-Prinzip, Issue #338) unabhängig korrigieren - läuft auch für
+    # nie bezahlte Rechnungen (dort ist die Journal-Schleife oben leer). Korrektur wird auf
+    # HEUTE datiert (nicht rechnung.datum wie beim Original) - §17 Abs. 1 Satz 2 UStG verlangt
+    # Berichtigung im Voranmeldungszeitraum der Änderung, nicht rückwirkend. Bewusst unabhängig
+    # von der Journal-Gegenbuchung oben (die für EÜR weiterhin am Original-Zahlungsdatum bucht).
+    for anspruch in list(rechnung.vorsteuer_ansprueche):
+        if anspruch.typ != "anspruch":
+            continue
+        bereits_korrigiert = db.query(VorsteuerAnspruch).filter(
+            VorsteuerAnspruch.bezug_id == anspruch.id
+        ).first()
+        if bereits_korrigiert:
+            continue
+        korrektur = VorsteuerAnspruch(
+            rechnung_id=rechnung_id,
+            datum=heute,
+            kategorie_id=anspruch.kategorie_id,
+            konto_skr03=anspruch.konto_skr03,
+            konto_skr04=anspruch.konto_skr04,
+            konto_ust_skr03=anspruch.konto_ust_skr03,
+            konto_ust_skr04=anspruch.konto_ust_skr04,
+            netto_betrag=-anspruch.netto_betrag,
+            ust_satz=anspruch.ust_satz,
+            ust_betrag=-anspruch.ust_betrag,
+            vorsteuer_betrag=-anspruch.vorsteuer_betrag,
+            ust_sonderfall=anspruch.ust_sonderfall,
+            typ="korrektur",
+            bezug_id=anspruch.id,
+            korrektur_grund=data.grund.strip(),
+            immutable=True,
+        )
+        korrektur.signatur = signatur_vorsteueranspruch(korrektur)
+        db.add(korrektur)
 
     # Storno-Nummer aus eigenem Nummernkreis
     nk_storno = db.query(Nummernkreis).filter(Nummernkreis.typ == "stornorechnung").first()

@@ -10,7 +10,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from database.models import Journaleintrag, Tagesabschluss
+    from database.models import Journaleintrag, Tagesabschluss, VorsteuerAnspruch
 
 
 def berechne_signatur(felder: dict) -> str:
@@ -38,6 +38,23 @@ def signatur_journaleintrag(e: "Journaleintrag") -> str:
         "vorsteuerabzug": bool(e.vorsteuerabzug),
         "zahlungsart": str(e.zahlungsart),
         "km_anzahl": str(e.km_anzahl) if e.km_anzahl is not None else "",
+    })
+
+
+def signatur_vorsteueranspruch(v: "VorsteuerAnspruch") -> str:
+    """Signatur über alle buchungsrelevanten Felder eines Vorsteuer-Anspruchs."""
+    return berechne_signatur({
+        "rechnung_id": str(v.rechnung_id),
+        "datum": str(v.datum),
+        "kategorie_id": str(v.kategorie_id) if v.kategorie_id is not None else "",
+        "netto_betrag": str(v.netto_betrag),
+        "ust_satz": str(v.ust_satz),
+        "ust_betrag": str(v.ust_betrag),
+        "vorsteuer_betrag": str(v.vorsteuer_betrag),
+        "ust_sonderfall": v.ust_sonderfall or "",
+        "typ": str(v.typ),
+        "bezug_id": str(v.bezug_id) if v.bezug_id is not None else "",
+        "korrektur_grund": v.korrektur_grund or "",
     })
 
 

@@ -148,12 +148,19 @@ def _berechne_ust(brutto: Decimal, ust_satz: Decimal) -> tuple[Decimal, Decimal]
     return netto, ust_betrag
 
 
-def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat) -> Decimal:
+def _berechne_vorsteuer(ust_betrag: Decimal, vorsteuerabzug: bool, kat, ist_reverse_charge: bool = False) -> Decimal:
     """Tatsächlich abziehbarer Vorsteuer-Betrag.
-    Berücksichtigt kat.vorsteuer_prozent (z.B. 70 bei Bewirtungskosten → 70% von ust_betrag).
+    Berücksichtigt kat.vorsteuer_prozent (z.B. 70% bei nicht vollständig abzugsfähigen Kosten).
+    Bei ist_reverse_charge=True (ig. Erwerb/§13b/Einfuhrumsatzsteuer) greift stattdessen §15
+    Abs. 1 Nr. 3/4 UStG unabhängig vom Kategorie-Wert: eine Kategorie mit vorsteuer_prozent=0
+    trifft nur eine Aussage über den *inländischen Normalfall* (z.B. inländisch steuerfreie
+    Bankgebühren, §4 Nr. 8 UStG) - beim Reverse Charge ist die Vorsteuer trotzdem in voller
+    Höhe abziehbar, da sie die selbst geschuldete USt exakt spiegelt (Issue #339).
     Storno-Einträge übergeben -ust_betrag damit sich Originalwert und Storno aufheben."""
     if not vorsteuerabzug or ust_betrag == 0:
         return Decimal("0.00")
+    if ist_reverse_charge:
+        return ust_betrag
     if kat is not None and int(kat.vorsteuer_prozent) < 100:
         return (ust_betrag * kat.vorsteuer_prozent / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
     return ust_betrag
@@ -390,7 +397,7 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
         netto_betrag=netto,
         ust_satz=ust_satz,
         ust_betrag=ust_betrag,
-        vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, kat),
+        vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, kat, bool(ust_sonderfall)),
         brutto_betrag=brutto_stored,
         vorsteuerabzug=vorsteuerabzug,
         steuerbefreiung_grund=steuerbefreiung_grund,
@@ -772,7 +779,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             netto_betrag=netto,
             ust_satz=ust_satz,
             ust_betrag=ust_betrag,
-            vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, split_kat),
+            vorsteuer_betrag=_berechne_vorsteuer(ust_betrag, vorsteuerabzug, split_kat, bool(pos_sf)),
             brutto_betrag=brutto_stored,
             vorsteuerabzug=vorsteuerabzug,
             steuerbefreiung_grund=steuerbefreiung_grund,

@@ -44,7 +44,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport
+from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport, Rechnung, VorsteuerAnspruch
+from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 
 router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
 
@@ -142,12 +143,77 @@ def _zeitraum_grenzen(zeitraum: str) -> tuple[date, date, str]:
             raise HTTPException(422, f"Ungültiges Zeitraum-Format: '{zeitraum}'")
 
 
+def _addiere_sonderfall_kz(
+    kz: dict[str, Decimal],
+    sonderfall: str,
+    netto_betrag: Decimal,
+    ust_betrag: Decimal,
+    vorsteuer_betrag: Decimal,
+    satz: Decimal | None,
+) -> Decimal:
+    """Ordnet einen Reverse-Charge-Sonderfall (ig_erwerb/13b_abs1/13b_abs2/einfuhr_ust) den
+    passenden Bemessungsgrundlage- UND Vorsteuer-Kennziffern zu. Gemeinsam genutzt vom
+    Journal-Pfad (Zahlungsdatum) und vom vorsteuer_ansprueche-Pfad (Rechnungsdatum,
+    Issue #338) - Bemessungsgrundlage und Vorsteuer müssen bei Sonderfällen immer in derselben
+    Periode landen, dürfen also nie über zwei unterschiedliche Quellen auseinanderfallen (anders
+    als beim Standardfall KZ 66, wo es keine separat zu meldende Bemessungsgrundlage gibt).
+
+    Gibt den Anteil an ige_steuer_feste_saetze zurück (interne Zahllast-Hilfsgröße, Issue #272) -
+    der Aufrufer summiert das selbst auf, da es keine eigene Kennzahl ist.
+    """
+    ige_delta = ZERO
+    if sonderfall == "ig_erwerb":
+        # Bemessungsgrundlage nach TATSÄCHLICHEM Steuersatz einsortieren (Issue #272).
+        satz_i = int(satz) if satz is not None else None
+        if satz_i == 19:
+            kz["kz_89"] += netto_betrag
+            ige_delta = ust_betrag
+        elif satz_i == 7:
+            kz["kz_93"] += netto_betrag
+            ige_delta = ust_betrag
+        elif satz_i == 0:
+            kz["kz_90"] += netto_betrag
+        else:
+            kz["kz_95"] += netto_betrag
+            kz["kz_98"] += ust_betrag
+        if vorsteuer_betrag:
+            kz["kz_61"] += vorsteuer_betrag
+    elif sonderfall == "13b_abs1":
+        kz["kz_46"] += netto_betrag
+        kz["kz_47"] += ust_betrag
+        if vorsteuer_betrag:
+            kz["kz_67"] += vorsteuer_betrag
+    elif sonderfall == "13b_abs2":
+        kz["kz_84"] += netto_betrag
+        kz["kz_85"] += ust_betrag
+        if vorsteuer_betrag:
+            kz["kz_67"] += vorsteuer_betrag
+    elif sonderfall == "einfuhr_ust":
+        # Entstandene Einfuhrumsatzsteuer: kein Bemessungsgrundlage/Steuer-Paar wie bei den
+        # anderen Sonderfällen, nur der abziehbare Vorsteuerbetrag selbst (KZ 62).
+        if vorsteuer_betrag:
+            kz["kz_62"] += vorsteuer_betrag
+    return ige_delta
+
+
 def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
     eintraege = (
         db.query(Journaleintrag)
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
         .all()
     )
+
+    # Eingangsrechnungen ab CUTOVER_DATUM_VORSTEUER: deren Vorsteuer läuft über
+    # vorsteuer_ansprueche (Rechnungsdatum, Issue #338), nicht mehr über den
+    # Zahlungs-Journaleintrag - sonst würde sie doppelt gezählt. Nur die VORSTEUER-Zuordnung
+    # dieser Journaleinträge wird unten übersprungen, alle anderen Kennziffern (z.B. eine
+    # etwaige Ausgangsumsatz-Zuordnung) bleiben unberührt, da Ausgabe-Journaleinträge dort
+    # ohnehin nie einsortiert werden (deren Konten kommen in _KONTO_EINNAHME nicht vor).
+    _soll_vorsteuer_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id)
+        .filter(Rechnung.typ == "eingang", Rechnung.datum >= CUTOVER_DATUM_VORSTEUER)
+        .all()
+    }
 
     # Lookup-Cache: Original-id (gruppe_id) → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
     _marge_cache: dict[int, Decimal | None] = {}
@@ -164,41 +230,13 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         # Reverse-Charge-Sonderfälle: separat behandeln, nicht in reguläre KZs
         sf = getattr(e, "ust_sonderfall", None) or ("ig_erwerb" if getattr(e, "ist_ig_erwerb", False) else None)
         if sf:
-            if sf == "ig_erwerb":
-                # Bemessungsgrundlage nach TATSÄCHLICHEM Steuersatz der Buchung einsortieren –
-                # nicht mehr pauschal in kz_89 (Issue #272: 7%-Buchungen landeten fälschlich
-                # dort, mit dem Steuerbetrag statt der Bemessungsgrundlage).
-                satz_i = int(e.ust_satz) if e.ust_satz is not None else None
-                if satz_i == 19:
-                    kz["kz_89"] += e.netto_betrag
-                    ige_steuer_feste_saetze += e.ust_betrag
-                elif satz_i == 7:
-                    kz["kz_93"] += e.netto_betrag
-                    ige_steuer_feste_saetze += e.ust_betrag
-                elif satz_i == 0:
-                    kz["kz_90"] += e.netto_betrag
-                else:
-                    # Andere Steuersätze: Bemessungsgrundlage UND Steuer sind laut Formular
-                    # getrennt zu melden (KZ 95/98), da der Satz nicht fest vorgegeben ist.
-                    kz["kz_95"] += e.netto_betrag
-                    kz["kz_98"] += e.ust_betrag
-                if e.vorsteuer_betrag:
-                    kz["kz_61"] += e.vorsteuer_betrag
-            elif sf == "13b_abs1":
-                kz["kz_46"] += e.netto_betrag
-                kz["kz_47"] += e.ust_betrag
-                if e.vorsteuer_betrag:
-                    kz["kz_67"] += e.vorsteuer_betrag
-            elif sf == "13b_abs2":
-                kz["kz_84"] += e.netto_betrag
-                kz["kz_85"] += e.ust_betrag
-                if e.vorsteuer_betrag:
-                    kz["kz_67"] += e.vorsteuer_betrag
-            elif sf == "einfuhr_ust":
-                # Entstandene Einfuhrumsatzsteuer: kein Bemessungsgrundlage/Steuer-Paar wie bei
-                # den anderen Sonderfällen, nur der abziehbare Vorsteuerbetrag selbst (KZ 62).
-                if e.vorsteuer_betrag:
-                    kz["kz_62"] += e.vorsteuer_betrag
+            # Eingangsrechnungen ab CUTOVER_DATUM_VORSTEUER: Bemessungsgrundlage UND Vorsteuer
+            # dieses Sonderfalls laufen bereits vollständig über vorsteuer_ansprueche (unten) -
+            # hier komplett überspringen, sonst würde die Bemessungsgrundlage doppelt gezählt.
+            if e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
+                ige_steuer_feste_saetze += _addiere_sonderfall_kz(
+                    kz, sf, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag, e.ust_satz
+                )
             continue  # nicht in reguläre USt/VSt-Erkennung
 
         if e.art == "Einnahme" and e.ust_betrag and e.ust_betrag != 0:
@@ -238,19 +276,38 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                 and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
             kz["kz_41"] += e.netto_betrag
 
-        # Ausgabe-Vorsteuer → KZ 66/61/67.
-        # Storno einer Einnahme hat ebenfalls art=Ausgabe, aber konto_ust ist ein Einnahme-Konto
-        # → ausschließen, damit kein falscher Vorsteuer-Eintrag entsteht.
+        # Ausgabe-Vorsteuer → KZ 66/61/67. Storno einer Einnahme hat ebenfalls art=Ausgabe, aber
+        # konto_ust ist ein Einnahme-Konto → ausschließen, damit kein falscher Vorsteuer-Eintrag
+        # entsteht. Eingangsrechnungen ab CUTOVER_DATUM_VORSTEUER laufen bereits vollständig
+        # über vorsteuer_ansprueche (unten) → hier ebenfalls ausschließen (Issue #338).
         if e.art == "Ausgabe" and e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
-            if not _KONTO_EINNAHME.get(ust_konto):
+            if not _KONTO_EINNAHME.get(ust_konto) and e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
                 vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
                 kz[vst_kz] += e.vorsteuer_betrag
 
         # Storno einer Ausgabe: art ist "Einnahme" (umgekehrt), vorsteuer_betrag ist negativ.
         # Muss Vorsteuer (KZ 66 etc.) reduzieren – sonst bleibt die Original-Vorsteuer stehen.
-        if e.art == "Einnahme" and e.vorsteuer_betrag and e.vorsteuer_betrag < 0:
+        if e.art == "Einnahme" and e.vorsteuer_betrag and e.vorsteuer_betrag < 0 and e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
             vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
             kz[vst_kz] += e.vorsteuer_betrag  # negativer Wert → reduziert KZ
+
+    # Vorsteuer nach Soll-Prinzip (Rechnungsdatum statt Zahlungsdatum, Issue #338): Eingangs-
+    # rechnungen ab CUTOVER_DATUM_VORSTEUER wurden oben aus der Journal-Aggregation
+    # ausgeschlossen und laufen stattdessen hier über ihren bei Finalisierung eingefrorenen
+    # Snapshot. typ='korrektur'-Zeilen (Storno) sind bereits mit negierten Beträgen gespeichert,
+    # tragen also automatisch korrekt zur jeweiligen Korrekturperiode bei.
+    ansprueche = (
+        db.query(VorsteuerAnspruch)
+        .filter(VorsteuerAnspruch.datum >= von, VorsteuerAnspruch.datum <= bis)
+        .all()
+    )
+    for va in ansprueche:
+        if va.ust_sonderfall:
+            ige_steuer_feste_saetze += _addiere_sonderfall_kz(
+                kz, va.ust_sonderfall, va.netto_betrag, va.ust_betrag, va.vorsteuer_betrag, va.ust_satz
+            )
+        elif va.vorsteuer_betrag:
+            kz["kz_66"] += va.vorsteuer_betrag
 
     q = Decimal("0.01")
     for k in kz:
@@ -407,8 +464,10 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
     pdf.multi_cell(170, 5,
         "Hinweis: Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
         "Bitte übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie "
-        "deinem Steuerberater. Grundlage: Journalbuchungen nach Ist-Versteuerung "
-        "(Zahlungsdatum). Bei Soll-Versteuerung ggf. abweichend. "
+        "deinem Steuerberater. Umsatzsteuer auf eigene Umsätze: Journalbuchungen nach "
+        "Ist-Versteuerung (Zahlungsdatum). Vorsteuer aus Eingangsrechnungen mit Rechnungsdatum "
+        f"ab {CUTOVER_DATUM_VORSTEUER.strftime('%d.%m.%Y')}: nach Soll-Prinzip (§15 UStG, "
+        "Rechnungsdatum statt Zahlungsdatum), davor weiterhin Zahlungsdatum. "
         "Nicht automatisch berechnete Felder (z.B. EU-Lieferungen KZ 41) müssen "
         "manuell eingetragen werden.",
         fill=True, align="L"
@@ -796,7 +855,10 @@ def _generate_pdf_jahres(jahr: int, ergebnis: JahresUStVAErgebnis, unt: Unterneh
     pdf.multi_cell(170, 5,
         "Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
         "Übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie deinem Steuerberater. "
-        "Grundlage: Journalbuchungen nach Ist-Versteuerung (Zahlungsdatum). "
+        "Umsatzsteuer auf eigene Umsätze: Journalbuchungen nach Ist-Versteuerung (Zahlungsdatum). "
+        "Vorsteuer aus Eingangsrechnungen mit Rechnungsdatum ab "
+        f"{CUTOVER_DATUM_VORSTEUER.strftime('%d.%m.%Y')}: nach Soll-Prinzip (§15 UStG, "
+        "Rechnungsdatum statt Zahlungsdatum), davor weiterhin Zahlungsdatum. "
         "Nicht abgedeckt: KZ 50 (unterjähriger KU-Wechsel), "
         "Reiseleistungen §25 UStG, Durchschnittssatz §23/23a UStG.",
         fill=True, align="L")

@@ -64,6 +64,7 @@ interface Pos {
   einheit: string
   einzelpreis: string
   ust_satz: string
+  rabatt_prozent?: string
   artikel_id?: number
   art_lager_aktiv?: boolean
   art_bestand?: string
@@ -114,6 +115,7 @@ function PositionenTabelle({
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
               {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
             </th>
+            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Rabatt %</th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
             <th className="px-3 py-2 w-8" />
           </tr>
@@ -151,6 +153,10 @@ function PositionenTabelle({
                   type="text" placeholder="0,00" className={`${cellInput} text-right`} />
               </td>
               <td className="px-2 py-1.5">
+                <input value={pos.rabatt_prozent ?? ''} onChange={e => update(i, 'rabatt_prozent', e.target.value)}
+                  type="text" placeholder="0" className={`${cellInput} text-right`} />
+              </td>
+              <td className="px-2 py-1.5">
                 <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
                   className={`${cellInput} text-right`}>
                   {ustSaetze.map(u => (
@@ -169,7 +175,7 @@ function PositionenTabelle({
         </tbody>
         <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
           <tr>
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+            <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
               Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
             </td>
             <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
@@ -177,13 +183,13 @@ function PositionenTabelle({
             </td>
           </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+            <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
             <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
               {summen.ust.toFixed(2).replace('.', ',')} €
             </td>
           </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
+            <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
               {summen.brutto.toFixed(2).replace('.', ',')} €
             </td>
@@ -229,6 +235,17 @@ function AuftragFormular({
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
   const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>(initial?.eingabemodus ?? 'brutto')
+  const [rabattModus, setRabattModus] = useState<'prozent' | 'betrag'>(
+    initial?.rabatt_betrag && parseFloat(String(initial.rabatt_betrag)) > 0 ? 'betrag' : 'prozent'
+  )
+  const [rabatt, setRabatt] = useState<string>(
+    initial?.rabatt_betrag && parseFloat(String(initial.rabatt_betrag)) > 0
+      ? String(parseFloat(String(initial.rabatt_betrag)))
+      : initial?.rabatt_prozent && parseFloat(String(initial.rabatt_prozent)) > 0
+        ? String(parseFloat(String(initial.rabatt_prozent)))
+        : ''
+  )
+  const rabattNum = parseFloat(rabatt.replace(',', '.')) || 0
 
   // Automatisch auf Netto wechseln wenn eine Firma (B2B) gewählt wird - nur bei neuen
   // Aufträgen, nicht beim Bearbeiten (sonst würde das Öffnen zum Editieren still die
@@ -256,6 +273,7 @@ function AuftragFormular({
         einheit: p.einheit,
         einzelpreis: String(p.netto),
         ust_satz: String(p.ust_satz),
+        rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
       }))
     }
     return [leerePos()]
@@ -282,7 +300,10 @@ function AuftragFormular({
             netto: p.einzelpreis.replace(',', '.'),
             ust_satz: String(parseFloat(p.ust_satz) || 0),
             artikel_id: p.artikel_id,
+            rabatt_prozent: parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || undefined,
           })),
+        rabatt_prozent: rabattNum > 0 && rabattModus === 'prozent' ? rabattNum : undefined,
+        rabatt_betrag: rabattNum > 0 && rabattModus === 'betrag' ? rabattNum : undefined,
       }
     : null
   const { vorschau } = useRechnungVorschau(vorschauRequest)
@@ -322,6 +343,7 @@ function AuftragFormular({
     setFehler(null)
     try {
       const posPayload = positionen.map((p) => {
+        const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung.trim(),
           menge: String(parseFloat(p.menge) || 1),
@@ -329,6 +351,7 @@ function AuftragFormular({
           netto: p.einzelpreis.replace(',', '.') || '0',
           ust_satz: String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
+          rabatt_prozent: rabatt > 0 ? rabatt : undefined,
         }
       })
 
@@ -347,6 +370,8 @@ function AuftragFormular({
         dokumentenpaket_id: paketId ? parseInt(paketId) : undefined,
         ist_entwurf: istEntwurf,
         eingabemodus: eingabeModus,
+        rabatt_prozent: rabattNum > 0 && rabattModus === 'prozent' ? rabattNum : undefined,
+        rabatt_betrag: rabattNum > 0 && rabattModus === 'betrag' ? rabattNum : undefined,
         positionen: posPayload,
       }
 
@@ -499,6 +524,34 @@ function AuftragFormular({
             </div>
           )
         })()}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            Rabatt{' '}<span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auf Gesamtbetrag)</span>
+          </label>
+          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-600 text-xs">
+            <button type="button"
+              onClick={() => { setRabattModus('prozent'); setRabatt('') }}
+              className={`px-2 py-1 ${rabattModus === 'prozent' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600'}`}
+            >%</button>
+            <button type="button"
+              onClick={() => { setRabattModus('betrag'); setRabatt('') }}
+              className={`px-2 py-1 border-l border-slate-300 dark:border-slate-600 ${rabattModus === 'betrag' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600'}`}
+            >€</button>
+          </div>
+        </div>
+        <input
+          type="text"
+          inputMode="decimal"
+          max={rabattModus === 'prozent' ? 100 : undefined}
+          step={rabattModus === 'prozent' ? 0.5 : 0.01}
+          value={rabatt}
+          onChange={(e) => setRabatt(e.target.value)}
+          placeholder={rabattModus === 'prozent' ? 'z. B. 5' : 'z. B. 50,00'}
+          className={inputCls}
+        />
       </div>
 
       <div>
@@ -880,11 +933,16 @@ function AuftragDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {auftrag.positionen.map((pos, i) => (
+                  {auftrag.positionen.map((pos, i) => {
+                    const posRabatt = parseFloat(pos.rabatt_prozent ?? '0') || 0
+                    return (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {pos.menge !== '1' && <span className="text-slate-400 dark:text-slate-500 mr-1">{pos.menge}×</span>}
                         {pos.beschreibung}
+                        {posRabatt > 0 && (
+                          <span className="text-slate-400 dark:text-slate-500 text-xs ml-1">(− {posRabatt} %)</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
                         {(parseFloat(pos.netto as any) || 0).toFixed(2).replace('.', ',')} €
@@ -896,9 +954,31 @@ function AuftragDetail({
                         {(parseFloat(pos.brutto as any) || 0).toFixed(2).replace('.', ',')} €
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                  {(() => {
+                    const reRabattProz = parseFloat(String(auftrag.rabatt_prozent ?? '0')) || 0
+                    const reRabattBetrag = auftrag.rabatt_betrag ? parseFloat(String(auftrag.rabatt_betrag)) : null
+                    const hatRabatt = reRabattBetrag != null ? reRabattBetrag > 0 : reRabattProz > 0
+                    if (!hatRabatt) return null
+                    const zwischensumme = auftrag.positionen.reduce((s, p) => s + (parseFloat(p.brutto as any) || 0), 0)
+                    const rabattLbl = reRabattBetrag != null ? 'Abzug' : `Rabatt ${reRabattProz} %`
+                    const rabattBetrag = reRabattBetrag != null ? reRabattBetrag : zwischensumme * reRabattProz / 100
+                    return (
+                      <>
+                        <tr>
+                          <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">Zwischensumme</td>
+                          <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{zwischensumme.toFixed(2).replace('.', ',')} €</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{rabattLbl}</td>
+                          <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">− {rabattBetrag.toFixed(2).replace('.', ',')} €</td>
+                        </tr>
+                      </>
+                    )
+                  })()}
                   <tr>
                     <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamt</td>
                     <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">

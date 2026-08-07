@@ -352,10 +352,17 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
         ? k.name === 'Kleinunternehmer-Einnahmen'
         : k.name !== 'Kleinunternehmer-Einnahmen')
   )
-  const einlageKat = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privateinlage')
+  // Einlage/Entnahme über euer_zeile unterscheiden statt über den exakten Namen - sonst
+  // fallen eigene Privat-Kategorien (z.B. "Privateinlage Gesellschafter A" bei Personen-
+  // gesellschaften mit getrennten Konten je Gesellschafter) komplett aus der Auswahl heraus,
+  // da Kategorienamen eindeutig sein müssen (Issue #341). Kategorien ohne euer_zeile 106/107
+  // (z.B. weil beim Anlegen nicht gesetzt) erscheinen bewusst in beiden Gruppen statt gar
+  // nicht - reine Namensprüfung würde sie sonst unsichtbar und damit unbuchbar machen.
+  const privatKat = alle.filter((k) => k.kontenart === 'Privat')
+  const einlageKat = privatKat.filter((k) => k.euer_zeile !== 106)
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat = alle.filter((k) => k.kontenart === 'Anlage')
-  const entnahmeKat = alle.filter((k) => k.kontenart === 'Privat' && k.name === 'Privatentnahme')
+  const entnahmeKat = privatKat.filter((k) => k.euer_zeile !== 107)
 
   function renderKategorieOptgroups(artWert: string) {
     return artWert === 'Einnahme' ? (

@@ -481,6 +481,37 @@ SYSTEM_BANK_TEMPLATES = [
         },
         "erkennungs_spalten": ["Completed date", "Counterparty name", "Reference", "Payment amount", "Payment currency"],
     },
+    {
+        # Finom (PNL Fintech B.V.) - Issue #342. Nur der CSV-Export wird unterstützt; Finom
+        # bietet denselben Kontoauszug wahlweise auch als MT940 (.txt) an, dafür gibt es in
+        # RechnungsFee aktuell keinen SWIFT-Tag-Parser (das "MT940" bei anderen Templates ist
+        # nur ein Label für eine bereits CSV-konvertierte Bank-Datei, kein echter :61:/:86:-
+        # Parser). Wallet-IBAN (eigenes Konto) und Wallet-Saldo werden bewusst nicht auf
+        # partner_iban gemappt. "N/A" statt leerer Felder (Verwendungszweck/Tags bei Karten-
+        # zahlungen) wird generisch in bank_csv_parser.parse_csv() als leer behandelt.
+        "id": "finom",
+        "name": "Finom",
+        "bank": "Finom",
+        "format": "Standard",
+        "delimiter": ",",
+        "encoding": "UTF-8",
+        "decimal_separator": ".",
+        "date_format": "%d.%m.%Y",
+        "skip_rows": 0,
+        "column_mapping": {
+            "Buchungsdatum":               "datum",
+            "Transaktionsart":             "buchungstext",
+            "Auftraggeber/Empfänger":      "partner_name",
+            "Counterparty BIC":            "partner_bic",
+            "Counterparty IBAN":           "partner_iban",
+            "Verwendungszweck":            "verwendungszweck",
+            "Zahlungswährung":             "waehrung",
+            "Zahlungsbetrag":              "betrag",
+            "Wallet-Saldo nach Transaktion": "saldo",
+            "Transaktions-ID":             "referenz",
+        },
+        "erkennungs_spalten": ["Buchungsdatum", "Zahlungsbetrag", "Zahlungswährung", "Wallet-Saldo nach Transaktion", "Wallet-IBAN", "Zahlungsfreigeber"],
+    },
 ]
 
 

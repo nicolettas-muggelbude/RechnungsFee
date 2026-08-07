@@ -187,6 +187,11 @@ def parse_csv(
             # csv.DictReader füllt zu kurze Zeilen mit None statt "" auf (restval) –
             # row.get(..., "") hilft dort nicht, da der Schlüssel existiert, nur der Wert None ist (Issue #247)
             wert = (row.get(csv_spalte) or "").strip()
+            # Manche Banken (z.B. Finom) schreiben "N/A" statt eines leeren Felds, u.a. bei
+            # Kartenzahlungen ohne Verwendungszweck - ohne diese Normalisierung landet der
+            # Literal-String "N/A" in der Buchung (Issue #342).
+            if wert.upper() == "N/A":
+                wert = ""
             if not wert:
                 continue
 

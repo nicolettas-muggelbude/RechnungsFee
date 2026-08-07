@@ -500,6 +500,13 @@ def _buche_pfad_a(
             if g_marge is not None:
                 g_ust = (g_marge * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 g_netto = (g_betrag - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            elif rechnung.ist_reverse_charge:
+                # Reverse Charge (§13b): der Zahlbetrag IST bereits der Nettobetrag - der
+                # auslaendische Lieferant weist keine deutsche USt aus. USt wird additiv
+                # aufgeschlagen statt aus dem Zahlbetrag herausgerechnet zu werden, analog
+                # zu rechnungen.py._erstelle_eintrag() (Issue #339-Folgefund).
+                g_netto = g_betrag
+                g_ust = (g_netto * g_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
             else:
                 g_netto = (g_betrag * 100 / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -521,7 +528,7 @@ def _buche_pfad_a(
             ust_satz=g_satz,
             ust_betrag=g_ust,
             marge_25a_brutto=g_marge,
-            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, g_kat_obj),
+            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, g_kat_obj, bool(rechnung.ist_reverse_charge)),
             brutto_betrag=g_betrag,
             vorsteuerabzug=g_vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,

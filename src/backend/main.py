@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 144
+SCHEMA_VERSION = 146
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3095,6 +3095,63 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 144 (artikel.vk_eingabe - Netto/Brutto-Eingaberichtung)")
 
+        if version < 145:
+            # Issue #338: Vorsteuerabzug nach Soll-Prinzip (§15 UStG) - Vorsteuer aus
+            # Eingangsrechnungen ist rechtlich bereits mit Rechnungseingang abzugsfähig, nicht
+            # erst mit Zahlung. Bisher wurde vorsteuer_betrag ausschließlich in journal beim
+            # Bezahlen gebucht (Zahlungsdatum) - eine unbezahlte Eingangsrechnung hatte damit
+            # nirgendwo einen Vorsteuerbetrag. Neue eigene Tabelle statt Wiederverwendung von
+            # journal, damit journal.vorsteuer_betrag unverändert zahlungsdatumsbasiert bleibt
+            # (korrekt für EÜR/Zuflussprinzip §11 EStG und DATEV). Kein Backfill für bestehende
+            # Rechnungen - alte Zahlungs-Kategorisierungen lassen sich nicht zuverlässig auf
+            # Rechnungsebene rekonstruieren; Altrechnungen bleiben dauerhaft auf dem
+            # Zahlungsdatum-Pfad (siehe CUTOVER_DATUM in api/ustva.py).
+            tables145 = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+            if "vorsteuer_ansprueche" not in tables145:
+                conn.execute(text("""
+                    CREATE TABLE vorsteuer_ansprueche (
+                        id INTEGER PRIMARY KEY,
+                        rechnung_id INTEGER NOT NULL REFERENCES rechnungen(id),
+                        datum DATE NOT NULL,
+                        kategorie_id INTEGER REFERENCES kategorien(id),
+                        konto_skr03 TEXT,
+                        konto_skr04 TEXT,
+                        konto_ust_skr03 TEXT,
+                        konto_ust_skr04 TEXT,
+                        netto_betrag NUMERIC(12,2) NOT NULL,
+                        ust_satz NUMERIC(5,2) NOT NULL DEFAULT 0,
+                        ust_betrag NUMERIC(12,2) NOT NULL DEFAULT 0,
+                        vorsteuer_betrag NUMERIC(12,2) NOT NULL DEFAULT 0,
+                        ust_sonderfall TEXT,
+                        typ TEXT NOT NULL,
+                        bezug_id INTEGER REFERENCES vorsteuer_ansprueche(id),
+                        korrektur_grund TEXT,
+                        immutable BOOLEAN NOT NULL DEFAULT 1,
+                        signatur TEXT,
+                        erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            conn.execute(text("PRAGMA user_version = 145"))
+            conn.commit()
+            print("[Migration] Schema auf Version 145 (vorsteuer_ansprueche - Vorsteuerabzug nach Soll-Prinzip, Issue #338)")
+
+        if version < 146:
+            # Issue #340: "EU-Dienstleistungen (§13b Abs. 1)" und "Drittland-Dienstleistungen
+            # (§13b Abs. 1)" lagen faelschlich auf euer_zeile=27 (Waren, Rohstoffe, Hilfsstoffe)
+            # statt 60 (Sonstige Betriebsausgaben) - beide erfassen sonstige Leistungen, keine
+            # Waren. "Bauleistungen / §13b Abs. 2" (ebenfalls Dienstleistung, ebenfalls Reverse
+            # Charge) stand von Anfang an korrekt auf 60. Guard "WHERE euer_zeile = 27": es gibt
+            # kein user_modified-Flag fuer euer_zeile (anders als bei konto_skr03/04) - der Guard
+            # verhindert, dass eine bereits manuell abweichend gesetzte Zeile ueberschrieben wird.
+            conn.execute(text("""
+                UPDATE kategorien SET euer_zeile = 60
+                WHERE euer_zeile = 27
+                AND name IN ('EU-Dienstleistungen (§13b Abs. 1)', 'Drittland-Dienstleistungen (§13b Abs. 1)')
+            """))
+            conn.execute(text("PRAGMA user_version = 146"))
+            conn.commit()
+            print("[Migration] Schema auf Version 146 (Issue #340: euer_zeile fuer §13b-Abs.-1-Dienstleistungskategorien 27→60)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -3296,14 +3353,19 @@ def _migrate_kategorien() -> None:
             # Reverse Charge: Empfänger schuldet USt (KZ 46/47); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Sonstige Leistungen eines im anderen EU-Land ansässigen
             # Unternehmers 19% VSt/USt" (Issue #308, gegengeprüft am DATEV-Kontenrahmen)
-            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            # euer_zeile=60 (Sonstige Betriebsausgaben) - Dienstleistung, keine Ware (Zeile 27
+            # ist Waren/Rohstoffe/Hilfsstoffe); analog zu "Bauleistungen / §13b Abs. 2" unten
+            # (Issue #340, war fälschlich 27).
+            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # §13b Abs. 1 – Drittland-Dienstleistungen (z.B. Anthropic/Claude, OpenAI, US-SaaS)
             # Gleicher Reverse-Charge-Mechanismus + gleiche UStVA-KZ (46/47/67) wie bei der
             # EU-Variante - das amtliche Formular unterscheidet hier nicht zwischen EU- und
             # Drittland-Anbietern, nur der DATEV-Kontenrahmen führt getrennte Sachkonten.
             # Konto = DATEV-Automatikkonto "Leistungen eines im Ausland ansässigen Unternehmers
             # 19% VSt/USt" (gegengeprüft am DATEV-Kontenrahmen, Pendant zu 3123/5923)
-            {"name": "Drittland-Dienstleistungen (§13b Abs. 1)", "kontenart": "Aufwand", "konto_skr03": "3125", "konto_skr04": "5925", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+            # euer_zeile=60 (Sonstige Betriebsausgaben) - Dienstleistung, keine Ware (Issue #340,
+            # war fälschlich 27, siehe Kommentar bei der EU-Variante oben).
+            {"name": "Drittland-Dienstleistungen (§13b Abs. 1)", "kontenart": "Aufwand", "konto_skr03": "3125", "konto_skr04": "5925", "eks_kategorie": "B1", "euer_zeile": 60, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
              "beschreibung": "z. B. Anthropic/Claude, OpenAI, andere US-SaaS-Anbieter. Reverse Charge: Du schuldest die USt (KZ 46/47) und kannst sie als Vorsteuer (KZ 67) abziehen. Rechnungsbetrag = Nettobetrag."},
             # §13b Abs. 2 – Bauleistungen, Gebäudereinigung, Sicherheit, Metallieferungen aus Inland/EU
             # Reverse Charge: Empfänger schuldet USt (KZ 84/85); Vorsteuer KZ 67; Rechnungsbetrag = Netto
@@ -3486,6 +3548,24 @@ def _setup_gobd_triggers() -> None:
         BEGIN
             SELECT RAISE(ABORT,
                 'GoBD-Verstoß: Tagesabschlüsse können nicht gelöscht werden (immutable=1).');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_vorsteuer_ansprueche_update
+        BEFORE UPDATE ON vorsteuer_ansprueche
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Vorsteuer-Ansprüche sind unveränderbar (immutable=1).');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_vorsteuer_ansprueche_delete
+        BEFORE DELETE ON vorsteuer_ansprueche
+        WHEN OLD.immutable = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Vorsteuer-Ansprüche können nicht gelöscht werden (immutable=1).');
         END
         """,
     ]

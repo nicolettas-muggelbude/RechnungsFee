@@ -221,6 +221,8 @@ class RechnungUpdate(BaseModel):
     ist_drittland_leistung: Optional[bool] = None
     ist_ausfuhrlieferung: Optional[bool] = None
     eingabemodus: Optional[str] = None  # netto|brutto - siehe Rechnung.eingabemodus (Issue #332)
+    rabatt_prozent: Optional[Decimal] = None
+    rabatt_betrag: Optional[Decimal] = None
     positionen: Optional[List[RechnungspositionCreate]] = None
 
     @field_validator("eingabemodus")

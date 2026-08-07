@@ -690,6 +690,7 @@ class Rechnung(Base):
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
     positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan")
     journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="rechnung")
+    vorsteuer_ansprueche: Mapped[list["VorsteuerAnspruch"]] = relationship(back_populates="rechnung")
 
 
 class Rechnungsposition(Base):
@@ -720,6 +721,53 @@ class Rechnungsposition(Base):
     __table_args__ = (
         UniqueConstraint("rechnung_id", "position_nr", name="uq_rechnung_position"),
     )
+
+
+class VorsteuerAnspruch(Base):
+    """
+    Vorsteuer-Anspruch nach Soll-Prinzip (§15 UStG) - GoBD-unveränderbar.
+
+    Vorsteuer ist rechtlich bereits mit Rechnungseingang (Leistungsbezug + ordnungsgemäße
+    Rechnung) abzugsfähig, unabhängig vom Zahlungsdatum und unabhängig davon, ob das eigene
+    Unternehmen für seine Ausgangsumsätze Ist- oder Soll-versteuert (§20 UStG betrifft nur die
+    eigene USt-Schuld, nicht den Vorsteuerabzug). journal.vorsteuer_betrag bleibt davon getrennt
+    und weiterhin zahlungsdatumsbasiert - das ist für EÜR (Zufluss-/Abflussprinzip §11 EStG) und
+    DATEV korrekt und wird durch diese Tabelle nicht berührt (Issue #338).
+
+    'datum' wird bei Finalisierung der Eingangsrechnung aus rechnung.datum eingefroren (Snapshot,
+    analog rechnung.absender_snapshot) - eine spätere Änderung der Kategorie/vorsteuer_prozent
+    darf eine bereits gemeldete Periode nicht rückwirkend verändern.
+
+    typ='anspruch': ursprünglicher Vorsteuer-Anspruch bei Finalisierung.
+    typ='korrektur': Storno-Gegenbuchung, datiert auf den Tag des Stornos (nicht rechnung.datum) -
+    §17 Abs. 1 Satz 2 UStG verlangt Berichtigung im Voranmeldungszeitraum der Änderung, nicht
+    rückwirkend (analog zur Journal-Storno-Konvention in storno_rechnung()).
+    """
+    __tablename__ = "vorsteuer_ansprueche"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rechnung_id: Mapped[int] = mapped_column(ForeignKey("rechnungen.id"), nullable=False)
+    datum: Mapped[date] = mapped_column(Date, nullable=False)
+    kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
+    # Kontonummern-Snapshot (aus Kategorie zum Zeitpunkt der Finalisierung - unveränderbar)
+    konto_skr03: Mapped[str | None] = mapped_column(String(10))
+    konto_skr04: Mapped[str | None] = mapped_column(String(10))
+    konto_ust_skr03: Mapped[str | None] = mapped_column(String(10))
+    konto_ust_skr04: Mapped[str | None] = mapped_column(String(10))
+    netto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
+    ust_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    vorsteuer_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    ust_sonderfall: Mapped[str | None] = mapped_column(String(20))  # ig_erwerb|13b_abs1|13b_abs2|einfuhr_ust|NULL
+    typ: Mapped[str] = mapped_column(String(20), nullable=False)  # anspruch|korrektur
+    bezug_id: Mapped[int | None] = mapped_column(ForeignKey("vorsteuer_ansprueche.id"))  # bei typ=korrektur: Original
+    korrektur_grund: Mapped[str | None] = mapped_column(String(500))
+    immutable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    signatur: Mapped[str | None] = mapped_column(String(64))
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    rechnung: Mapped["Rechnung"] = relationship(back_populates="vorsteuer_ansprueche")
+    kategorie: Mapped["Kategorie | None"] = relationship()
 
 
 # ---------------------------------------------------------------------------
