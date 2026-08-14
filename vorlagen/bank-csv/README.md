@@ -22,6 +22,8 @@ Dieser Ordner enthält Beispiel-CSVs verschiedener Banken für die Import-Funkti
 - [x] **Targobank** ✅
 - [x] **Sparda-Bank West eG** ✅
 - [x] **GLS Gemeinschaftsbank eG** - Sozial-ökologische Bank ✅
+- [x] **Vivid** - Neobank ✅
+- [x] **Finom** - Fintech/Geschäftskonto ✅
 
 ### Später:
 
@@ -59,6 +61,8 @@ bank-csv/
 ├── sparda-bank-west.csv                   # ✅ Sparda-Bank West eG - CSV-Export
 ├── gls-bank.csv                           # ✅ GLS Gemeinschaftsbank eG - CSV-Export
 ├── postbank.csv                           # ✅ Postbank - Umsatzübersicht
+├── vivid.csv                              # ✅ Vivid - CSV-Export
+├── finom.csv                              # ✅ Finom - CSV-Export
 ├── volksbank.csv                          # (noch nicht vorhanden)
 ├── n26.csv                                # (noch nicht vorhanden)
 └── ...
@@ -352,9 +356,39 @@ def test_sparkasse_import():
   - Beträge ohne Anführungszeichen
   - Kartenzahlungen mit ausführlichen Details (Folgenummer, Verfalldatum)
 
+### Vivid
+**Datei:** `vivid.csv`
+
+- **Trennzeichen:** `,` (Komma)
+- **Encoding:** UTF-8
+- **Dezimaltrennzeichen:** `.` (Punkt)
+- **Datumsformat:** DD.MM.YYYY
+- **Spalten:** Completed date, Counterparty name, Reference, Payment amount, Payment currency
+- **Besonderheiten:**
+  - Nur 5 Spalten, kein Saldo, keine IBAN/BIC der Gegenseite
+  - Dezimalpunkt statt Komma trotz deutschsprachiger Nutzerbasis (Issue #248)
+
+### Finom
+**Datei:** `finom.csv`
+
+- **Trennzeichen:** `,` (Komma)
+- **Encoding:** UTF-8 ohne BOM
+- **Dezimaltrennzeichen:** `.` (Punkt)
+- **Datumsformat:** DD.MM.YYYY
+- **Spalten (20):** Buchungsdatum, Time completed, Status, Transaktionsart, Auftraggeber/Empfänger, Counterparty BIC, Counterparty IBAN, Verwendungszweck, Tags, Zahlungsfreigeber, Kartennummer, Ursprungswährung, Ursprungsbetrag, Zahlungswährung, Zahlungsbetrag, Wallet-Saldo nach Transaktion, Wallet-Name, Wallet-IBAN, Begleitende Dokumente, Transaktions-ID
+- **Besonderheiten:**
+  - Leere Felder stehen als `N/A` statt leer (Verwendungszweck/BIC/IBAN bei Kartenzahlungen) – wird generisch im Parser als leer behandelt (Issue #342)
+  - `Wallet-IBAN` ist das eigene Konto, nicht die Gegenseite – bewusst nicht gemappt
+  - Finom bietet denselben Kontoauszug auch als MT940 (`.txt`) an – dafür gibt es aktuell keinen SWIFT-Tag-Parser, nur der CSV-Export wird unterstützt
+  - Ein Feld kann eingebettete Kommas enthalten und ist dann gequotet (z.B. Jahresgebühr)
+
 ---
 
 ## 📊 Status-Übersicht
+
+> ⚠️ Diese Tabelle wird nicht bei jeder neuen Bank zuverlässig mitgepflegt (z.B. PayPal, DKB
+> und ING sind in Wirklichkeit längst implementiert, stehen hier aber noch auf ❌). Verlässliche
+> Quelle für den tatsächlichen Stand ist `src/backend/database/seed.py` (SYSTEM_BANK_TEMPLATES).
 
 | Bank/Dienst | Format | Datei vorhanden | Parser implementiert | Getestet |
 |-------------|--------|-----------------|----------------------|----------|
@@ -375,6 +409,8 @@ def test_sparkasse_import():
 | Sparda-Bank West eG | CSV-Export | ✅ | ❌ | ❌ |
 | GLS Gemeinschaftsbank eG | CSV-Export | ✅ | ❌ | ❌ |
 | Postbank | Umsatzübersicht CSV | ✅ | ❌ | ❌ |
+| Vivid | CSV-Export | ✅ | ✅ | ✅ |
+| Finom | CSV-Export | ✅ | ✅ | ✅ |
 | Volksbank | - | ❌ | ❌ | ❌ |
 | N26 | - | ❌ | ❌ | ❌ |
 

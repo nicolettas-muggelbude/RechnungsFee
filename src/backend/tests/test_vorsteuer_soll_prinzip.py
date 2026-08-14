@@ -275,3 +275,63 @@ def test_euer_bleibt_zahlungsdatumsbasiert_auch_ab_cutover(db):
     # unveraendert durch Issue #338 (EÜR folgt zurecht dem Zufluss-/Abflussprinzip §11 EStG).
     euer = _berechne_euer(2020, db)
     assert euer["zeilen"].get(57, Decimal("0")) == Decimal("19.00")
+
+
+# ---------------------------------------------------------------------------
+# Issue #343-Folgefund: Vorsteuer-Anspruch fehlte, wenn eine Eingangsrechnung NICHT ueber
+# finalisiere_rechnung() finalisiert wird, sondern direkt ueber create_rechnung()
+# (ist_entwurf=False beim Anlegen) oder update_rechnung() (Entwurf -> "Speichern & Finalisieren").
+# Beide Wege riefen die Vorsteuer-Soll-Logik bisher gar nicht auf - kein Fehler, einfach
+# stillschweigend kein Vorsteuer-Anspruch.
+# ---------------------------------------------------------------------------
+
+def test_create_rechnung_direkt_finalisiert_erzeugt_vorsteuer_anspruch(db):
+    from api.rechnungen import create_rechnung
+    from api.schemas_rechnungen import RechnungCreate, RechnungspositionCreate
+
+    kat = _kategorie(db)
+    payload = RechnungCreate(
+        typ="eingang", datum=date(2020, 3, 5), partner_freitext="Test",
+        ist_entwurf=False, eingabemodus="brutto",
+        positionen=[RechnungspositionCreate(
+            beschreibung="Ware", menge=Decimal("1"), einheit="Stk.",
+            netto="119.00", ust_satz="19", kategorie_id=kat.id,
+        )],
+    )
+    resp = create_rechnung(payload, db)
+    assert resp.ist_entwurf is False
+
+    ansprueche = db.query(VorsteuerAnspruch).filter(VorsteuerAnspruch.rechnung_id == resp.id).all()
+    assert len(ansprueche) == 1
+    assert ansprueche[0].vorsteuer_betrag == Decimal("19.00")
+
+
+def test_create_rechnung_direkt_finalisiert_ohne_kategorie_wird_verweigert(db):
+    from api.rechnungen import create_rechnung
+    from api.schemas_rechnungen import RechnungCreate, RechnungspositionCreate
+
+    payload = RechnungCreate(
+        typ="eingang", datum=date(2020, 3, 5), partner_freitext="Test",
+        ist_entwurf=False, eingabemodus="brutto",
+        positionen=[RechnungspositionCreate(
+            beschreibung="Ware", menge=Decimal("1"), einheit="Stk.",
+            netto="119.00", ust_satz="19",
+        )],
+    )
+    with pytest.raises(Exception) as exc_info:
+        create_rechnung(payload, db)
+    assert "422" in str(exc_info.value) or "Kategorie" in str(exc_info.value)
+
+
+def test_update_rechnung_entwurf_zu_final_erzeugt_vorsteuer_anspruch(db):
+    from api.rechnungen import update_rechnung
+    from api.schemas_rechnungen import RechnungUpdate
+
+    kat = _kategorie(db)
+    rechnung = _eingangsrechnung_entwurf(db, date(2020, 3, 5), kategorie_id=kat.id)
+
+    update_rechnung(rechnung.id, RechnungUpdate(ist_entwurf=False), db)
+
+    ansprueche = db.query(VorsteuerAnspruch).filter(VorsteuerAnspruch.rechnung_id == rechnung.id).all()
+    assert len(ansprueche) == 1
+    assert ansprueche[0].vorsteuer_betrag == Decimal("19.00")

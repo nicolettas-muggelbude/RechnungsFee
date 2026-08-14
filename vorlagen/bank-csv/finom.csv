@@ -1,0 +1,6 @@
+Buchungsdatum,Time completed,Status,Transaktionsart,Auftraggeber/Empfänger,Counterparty BIC,Counterparty IBAN,Verwendungszweck,Tags,Zahlungsfreigeber,Kartennummer,Ursprungswährung,Ursprungsbetrag,Zahlungswährung,Zahlungsbetrag,Wallet-Saldo nach Transaktion,Wallet-Name,Wallet-IBAN,Begleitende Dokumente,Transaktions-ID
+03.03.2026,03.03.2026 10:15:00,Completed,Transfer,Max Mustermann,GENODEF1XXX,DE62370400440532013001,Rechnung 2026-001,N/A,N/A,N/A,EUR,500.00,EUR,500.00,500.00,Hauptkonto,DE00000000000000000000,N/A,TX-001
+04.03.2026,04.03.2026 12:00:00,Completed,Card,SumUp  *Haendler GmbH,N/A,N/A,N/A,N/A,aGVsbG8rd29ybGQ9/,**** 1234,EUR,-20.00,EUR,-20.00,480.00,Hauptkonto,DE00000000000000000000,N/A,TX-002
+05.03.2026,05.03.2026 00:00:00,Completed,FeeByOption,PNL Fintech B.V.,N/A,NL00PNLF0000000000,"Jahresgebühr, Kontoführung (incl. VAT)",N/A,N/A,N/A,EUR,-9.00,EUR,-9.00,471.00,Hauptkonto,DE00000000000000000000,N/A,TX-003
+06.03.2026,06.03.2026 09:30:00,Completed,Transfer,Lieferant GmbH,GENODEF1XXX,DE62370400440532013002,Rechnung Nr. 2026-045,N/A,N/A,N/A,EUR,-119.00,EUR,-119.00,352.00,Hauptkonto,DE00000000000000000000,Rechnung Nr. 2026-045,TX-004
+07.03.2026,07.03.2026 08:00:00,Completed,Card,Onlineshop XY,N/A,N/A,N/A,N/A,bXktdG9rZW4tdmFsdWU9,**** 5678,EUR,-14.99,EUR,-14.99,337.01,Hauptkonto,DE00000000000000000000,N/A,TX-005

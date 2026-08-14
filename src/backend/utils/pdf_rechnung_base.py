@@ -181,7 +181,7 @@ def _adresszeilen(obj) -> list[str]:
 
 class RechnungPDFBase(FPDF):
 
-    _faellig_label      = "Fällig am"
+    _faellig_label      = "Fällig bis"
     _ln_nach_positionen = 3
     _ln_nach_summen     = 6
     _ln_nach_19         = 2

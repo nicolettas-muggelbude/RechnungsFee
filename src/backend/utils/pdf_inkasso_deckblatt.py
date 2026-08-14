@@ -129,7 +129,7 @@ def erstelle_inkasso_deckblatt_pdf(
     pdf.set_fill_color(220, 220, 220)
     pdf.cell(RE_COL_NR,      6, "Rechnungsnr.", fill=True)
     pdf.cell(RE_COL_DATUM,   6, "Datum",        fill=True)
-    pdf.cell(RE_COL_FAELLIG, 6, "Fällig am",    fill=True)
+    pdf.cell(RE_COL_FAELLIG, 6, "Fällig bis",   fill=True)
     pdf.cell(RE_COL_BRUTTO,  6, "Brutto",       fill=True, align="R")
     pdf.cell(RE_COL_OFFEN,   6, "Offen",        fill=True, align="R")
     pdf.cell(RE_COL_TAGE,    6, "Tage überf.",  fill=True, align="R", ln=True)

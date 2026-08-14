@@ -327,6 +327,30 @@ def _erzeuge_vorsteuer_ansprueche(rechnung: "Rechnung", db: Session) -> None:
         db.add(va)
 
 
+def _pruefe_und_erzeuge_vorsteuer_soll(rechnung: "Rechnung", db: Session) -> None:
+    """Kategorie-Pflicht-Check + Vorsteuer-Anspruch-Erzeugung (Soll-Prinzip §15 UStG,
+    Issue #338) - EINZIGER Aufrufpunkt für alle drei Wege, wie eine Eingangsrechnung von
+    Entwurf zu finalisiert wechseln kann: create_rechnung() (direkt mit ist_entwurf=False
+    angelegt), update_rechnung() (Entwurf bearbeiten + "Speichern & Finalisieren") und
+    finalisiere_rechnung() (dedizierter Endpunkt, Button "Finalisieren" bei bereits
+    gespeichertem Entwurf). Ursprünglich nur in finalisiere_rechnung() verankert - eine
+    direkt als final angelegte oder aus dem Bearbeiten-Dialog finalisierte Eingangsrechnung
+    bekam dadurch nie einen Vorsteuer-Anspruch, ohne dass irgendwo ein Fehler auftrat
+    (Issue #343-Folgefund, von Peter1061 aufgedeckt)."""
+    if not (rechnung.typ == "eingang" and rechnung.datum >= CUTOVER_DATUM_VORSTEUER):
+        return
+    if _vorsteuer_kategorie_fehlt(rechnung):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Bitte eine Kategorie auswählen (je Position oder als Hauptkategorie). "
+                "Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht "
+                "dafür eine Kategorie."
+            ),
+        )
+    _erzeuge_vorsteuer_ansprueche(rechnung, db)
+
+
 def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     """Gibt (konto_skr03, konto_skr04) für die Skonto-Gegenbuchung zurück."""
     satz = int(ust_satz)
@@ -1010,7 +1034,7 @@ def rechnungen_export(
         writer = csv.writer(out, delimiter=";")
         writer.writerow(["Filter:", filter_zeile])
         writer.writerow([])
-        writer.writerow(["Rechnungsnr.", "Datum", "Fällig am", "Debitor-/Kreditor-Nr.", "Partner", "Status", "Betrag (EUR)", "Offen (EUR)"])
+        writer.writerow(["Rechnungsnr.", "Datum", "Fällig bis", "Debitor-/Kreditor-Nr.", "Partner", "Status", "Betrag (EUR)", "Offen (EUR)"])
         for z in zeilen:
             r = z["resp"]
             partner = r.kunde_name or r.lieferant_name or r.partner_freitext or "—"
@@ -1362,6 +1386,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
         _lager_buchen(rechnung, db, faktor=Decimal("-1"))
         rechnung.absender_snapshot = _absender_snapshot(db)
+        _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
     db.refresh(rechnung)
@@ -1479,6 +1504,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
             db.expire(rechnung, ["positionen"])  # SQLAlchemy-Cache war [] nach delete+flush; fresh load erzwingen
             _lager_buchen(rechnung, db, faktor=Decimal("-1"))
             rechnung.absender_snapshot = _absender_snapshot(db)
+            _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
     db.refresh(rechnung)
@@ -1548,22 +1574,6 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
                     ),
                 )
 
-    # Vorsteuerabzug nach Soll-Prinzip (§15 UStG, Issue #338): ab CUTOVER_DATUM_VORSTEUER
-    # braucht eine Eingangsrechnung bereits bei Finalisierung eine Kategorie je Position (oder
-    # rechnung.kategorie_id als Fallback) - vorher wurde die Kategorie erst bei Zahlung verlangt,
-    # aber die Vorsteuer-Klassifikation (Satz/Sonderfall/reduzierte Quote) muss jetzt schon hier
-    # feststehen, da die Vorsteuer unabhängig vom späteren Zahlungszeitpunkt gilt.
-    ist_soll_vorsteuer = rechnung.typ == "eingang" and rechnung.datum >= CUTOVER_DATUM_VORSTEUER
-    if ist_soll_vorsteuer and _vorsteuer_kategorie_fehlt(rechnung):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Bitte eine Kategorie auswählen (je Position oder als Hauptkategorie). "
-                "Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht "
-                "dafür eine Kategorie."
-            ),
-        )
-
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -1578,9 +1588,7 @@ def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 
     # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung)
     _lager_buchen(rechnung, db, faktor=Decimal("-1"))
-
-    if ist_soll_vorsteuer:
-        _erzeuge_vorsteuer_ansprueche(rechnung, db)
+    _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
     db.refresh(rechnung)

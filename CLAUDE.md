@@ -70,7 +70,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 146` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 147` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -279,6 +279,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 144 | artikel.vk_eingabe VARCHAR(10) DEFAULT 'brutto' – merkt sich ob Netto- oder Brutto-Preis die eingegebene Wahrheit ist; bisher wurde vk_netto bei jedem Speichern immer aus vk_brutto neu abgeleitet, auch wenn der Nutzer direkt den Netto-Preis eingetragen hatte (2,94€ netto → 3,50€ brutto → beim nächsten Speichern wieder zurückgerechnet zu 2,9412€ statt der ursprünglich eingegebenen 2,94€). `_berechne_preise()` in api/artikel.py leitet jetzt je nach vk_eingabe nur noch den jeweils anderen Preis ab, der eingegebene bleibt exakt erhalten. Symmetrisch dazu: artikel.vk_brutto NUMERIC(12,2)→NUMERIC(12,4) (kein ALTER nötig, SQLite erzwingt keine Skala) – ist vk_eingabe="netto", ist vk_brutto der abgeleitete Wert und wird ebenfalls nicht auf den Cent gerundet, sonst liefen Netto- und Brutto-Rechnung mit demselben Artikel bei größeren Mengen wieder auseinander (100 Stück: 294,00€/349,86€ vs. fälschlich 350,00€) (Nutzer-Feedback 2026-08-05) |
 | 145 | vorsteuer_ansprueche-Tabelle (GoBD-immutable, eigene Trigger) – Issue #338: Vorsteuerabzug nach Soll-Prinzip (§15 UStG), unabhängig von Zahlungsdatum und von der eigenen Ist-/Soll-Versteuerung (§20 UStG betrifft nur die eigene USt-Schuld). Bisher wurde Vorsteuer ausschließlich in journal beim Bezahlen gebucht – eine unbezahlte Eingangsrechnung hatte nirgendwo einen Vorsteuerbetrag. journal.vorsteuer_betrag bleibt unverändert zahlungsdatumsbasiert (korrekt für EÜR/Zuflussprinzip §11 EStG + DATEV), vorsteuer_ansprueche ist die neue, unabhängige Quelle für UStVA KZ 66/61/62/67 ab CUTOVER_DATUM (fest im Code, api/ustva.py – Desktop-App mit einer DB pro Installation, kein gemeinsamer Deploy-Zeitpunkt). Kein Backfill – Rechnungen vor dem Cutover bleiben dauerhaft auf dem alten Zahlungsdatum-Pfad. Siehe docs für den vollständigen Umsetzungsplan (Kategorie-Pflicht bei Finalisierung ab Cutover, Storno-Korrektur am Stornodatum statt rückwirkend) |
 | 146 | Datenfix Issue #340: Kategorien „EU-Dienstleistungen (§13b Abs. 1)" + „Drittland-Dienstleistungen (§13b Abs. 1)" euer_zeile 27 (Waren, Rohstoffe, Hilfsstoffe) → 60 (Sonstige Betriebsausgaben) – beide erfassen sonstige Leistungen, keine Waren, analog zu „Bauleistungen / §13b Abs. 2" (stand von Anfang an korrekt auf 60). Guard „WHERE euer_zeile = 27" – kein user_modified-Flag für euer_zeile, manuell abweichend gesetzte Werte bleiben unangetastet |
+| 147 | Datenfix Issue #341-Folgefund: sechs „Absetzungen vom Einkommen"-Privatkategorien (ESt-Vorauszahlung, KV/PV/RV, Riester, Sonstige Absetzungen) euer_zeile NULL → 106 (Privatentnahme, Hinweiszeile) – wirtschaftlich Privatentnahmen; ohne gesetzte euer_zeile erschienen sie im Buchungsformular fälschlich sowohl unter „Einnahme" als auch „Ausgabe". Guard „WHERE euer_zeile IS NULL" |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

@@ -294,7 +294,7 @@ def erstelle_mahnung_pdf(
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(COL_RENR,   ROW_H, "Rechnung",       border=0, fill=True)
     pdf.cell(COL_RDAT,   ROW_H, "Datum",          border=0, fill=True)
-    pdf.cell(COL_FAELL,  ROW_H, "Fällig am",      border=0, fill=True)
+    pdf.cell(COL_FAELL,  ROW_H, "Fällig bis",     border=0, fill=True)
     pdf.cell(COL_BETRAG, ROW_H, "Offener Betrag", border=0, align="R", fill=True, new_x="LMARGIN", new_y="NEXT")
     pdf.set_draw_color(180, 180, 180)
     pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + TAB_W, pdf.get_y())

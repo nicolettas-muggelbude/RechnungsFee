@@ -234,8 +234,17 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
             # dieses Sonderfalls laufen bereits vollständig über vorsteuer_ansprueche (unten) -
             # hier komplett überspringen, sonst würde die Bemessungsgrundlage doppelt gezählt.
             if e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
+                # Storno-Vorzeichen aus art ableiten, analog zum regulären Zweig unten (Issue
+                # #344): der Storno-Endpunkt legt sein Vorzeichen nur in art ab (invertiert) und
+                # in vorsteuer_betrag (direkt negiert) - netto_betrag/ust_betrag bleiben beide
+                # positiv. Ohne diese Ableitung addierten sich Original und Storno statt sich
+                # aufzuheben, waehrend nur KZ 67 (aus vorsteuer_betrag) korrekt verschwand. Ein
+                # Sonderfall ist konstruktionsbedingt immer eine Ausgabe (das Formular bietet ihn
+                # nur bei art='Ausgabe' an) - art='Einnahme' mit gesetztem Sonderfall kann daher
+                # nur eine Storno-Gegenbuchung sein.
+                vz = -1 if e.art == "Einnahme" else 1
                 ige_steuer_feste_saetze += _addiere_sonderfall_kz(
-                    kz, sf, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag, e.ust_satz
+                    kz, sf, vz * e.netto_betrag, vz * e.ust_betrag, e.vorsteuer_betrag, e.ust_satz
                 )
             continue  # nicht in reguläre USt/VSt-Erkennung
 

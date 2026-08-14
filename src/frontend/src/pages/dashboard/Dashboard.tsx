@@ -701,7 +701,7 @@ function FaelligeKachel({ rechnungen }: { rechnungen: Rechnung[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500">
-              <th className="pb-1.5 text-left font-medium">Fällig am</th>
+              <th className="pb-1.5 text-left font-medium">Fällig bis</th>
               <th className="pb-1.5 text-left font-medium">Typ</th>
               <th className="pb-1.5 text-left font-medium">Partner</th>
               <th className="pb-1.5 text-left font-medium">Rg.-Nr.</th>

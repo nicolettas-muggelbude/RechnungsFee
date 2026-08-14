@@ -984,7 +984,7 @@ type VorlagenTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag'
 const VORLAGEN_DEFAULT: Record<VorlagenTyp, { betreff: string; text: string }> = {
   Rechnung: {
     betreff: 'Rechnung {rechnungsnummer}',
-    text: 'Hallo {kunde},\n\nanbei findest du die Rechnung {rechnungsnummer} vom {datum}.\n\nBetrag: {betrag}\nFällig am: {faellig_am}\n\nBitte überweise den Betrag auf das angegebene Konto.\n\nViele Grüße\n{firmenname}',
+    text: 'Hallo {kunde},\n\nanbei findest du die Rechnung {rechnungsnummer} vom {datum}.\n\nBetrag: {betrag}\nFällig bis: {faellig_am}\n\nBitte überweise den Betrag auf das angegebene Konto.\n\nViele Grüße\n{firmenname}',
   },
   Angebot: {
     betreff: 'Angebot {rechnungsnummer}',

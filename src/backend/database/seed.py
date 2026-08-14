@@ -115,14 +115,17 @@ STANDARD_KATEGORIEN = [
     {"name": "Gewährte Skonti",                  "kontenart": "Erlös",   "konto_skr03": "8736", "konto_skr04": "4310", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
     {"name": "Erhaltene Skonti",                 "kontenart": "Aufwand", "konto_skr03": "2401", "konto_skr04": "3401", "eks_kategorie": "B1",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     # ── Tabelle C: Absetzungen vom Einkommen ─────────────────────────────
-    {"name": "Einkommensteuer-Vorauszahlung", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # euer_zeile=106 (Privatentnahme, Hinweiszeile) - wirtschaftlich verlassen alle sechs
+    # Positionen den Betrieb fuer private Zwecke; ohne gesetzte euer_zeile erschienen sie im
+    # Buchungsformular sowohl unter "Einnahme" als auch "Ausgabe" (Issue #341-Folgefund).
+    {"name": "Einkommensteuer-Vorauszahlung", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",    "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Gewerbesteuer",                 "kontenart": "Aufwand", "konto_skr03": "4320", "konto_skr04": "7610", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Krankenversicherung (Pflicht)", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Krankenversicherung (Pflicht)", "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # Pflegeversicherung fließt in C2 (offizielles Formular fasst KV/PV/RV-Pflicht zusammen)
-    {"name": "Pflegeversicherung (Pflicht)",  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Rentenversicherung (freiwillig)","kontenart": "Privat", "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Riester-Beiträge",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C9",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Sonstige Absetzungen",          "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Pflegeversicherung (Pflicht)",  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Rentenversicherung (freiwillig)","kontenart": "Privat", "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",    "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Riester-Beiträge",              "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C9",    "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Sonstige Absetzungen",          "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": 106, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
 ]
 
 EU_LAENDER = [

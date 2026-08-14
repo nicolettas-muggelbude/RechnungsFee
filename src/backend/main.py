@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 146
+SCHEMA_VERSION = 147
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3151,6 +3151,28 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 146"))
             conn.commit()
             print("[Migration] Schema auf Version 146 (Issue #340: euer_zeile fuer §13b-Abs.-1-Dienstleistungskategorien 27→60)")
+
+        if version < 147:
+            # Issue #341-Folgefund: die sechs "Absetzungen vom Einkommen"-Privatkategorien
+            # (ESt-Vorauszahlung, KV/PV/RV, Riester, Sonstige Absetzungen) hatten euer_zeile=NULL
+            # - wirtschaftlich sind es Privatentnahmen (Zeile 106, Hinweiszeile). Ohne gesetzte
+            # euer_zeile erschienen sie im Buchungsformular sowohl unter "Einnahme" als auch
+            # "Ausgabe" (Nebenwirkung des #341-Fixes: Privat-Kategorien ohne euer_zeile 106/107
+            # werden dort bewusst in beiden Gruppen angezeigt statt gar nicht). Guard "WHERE
+            # euer_zeile IS NULL": kein user_modified-Flag fuer euer_zeile, verhindert dass eine
+            # bereits manuell gesetzte Zeile ueberschrieben wird.
+            conn.execute(text("""
+                UPDATE kategorien SET euer_zeile = 106
+                WHERE euer_zeile IS NULL
+                AND name IN (
+                    'Einkommensteuer-Vorauszahlung', 'Krankenversicherung (Pflicht)',
+                    'Pflegeversicherung (Pflicht)', 'Rentenversicherung (freiwillig)',
+                    'Riester-Beiträge', 'Sonstige Absetzungen'
+                )
+            """))
+            conn.execute(text("PRAGMA user_version = 147"))
+            conn.commit()
+            print("[Migration] Schema auf Version 147 (Issue #341-Folgefund: euer_zeile=106 fuer sechs Privatentnahme-Kategorien)")
 
 
 def _migrate_kategorien() -> None:

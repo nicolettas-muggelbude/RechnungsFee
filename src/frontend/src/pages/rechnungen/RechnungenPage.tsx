@@ -444,7 +444,7 @@ function ZahlungsDialog({
         return d.toISOString().slice(0, 10)
       })()
     : null
-  const skontoVerfuegbar = !istGutschrift && rechnung.typ === 'ausgang' && skontoFrist !== null && datum <= skontoFrist
+  const skontoVerfuegbar = !istGutschrift && skontoFrist !== null && datum <= skontoFrist
   const berechneterSkontoBetrag = skontoVerfuegbar
     ? Math.round(parseFloat(rechnung.brutto_gesamt) * rechnung.skonto_prozent! / 100 * 100) / 100
     : 0
@@ -1577,7 +1577,7 @@ function RechnungDetail({
           </div>
           {rechnung.faellig_am && !rechnung.storniert && (
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-slate-400">Fällig am</span>
+              <span className="text-slate-500 dark:text-slate-400">Fällig bis</span>
               <span className={
                 rechnung.zahlungsstatus !== 'bezahlt' && rechnung.faellig_am < heuteIso()
                   ? 'text-red-600 font-medium'
@@ -2968,7 +2968,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           )}
         </div>
         {!leistungZeitraum && <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig am</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig bis</label>
           <div className={pfRing('faellig_am')}>
             <DateInput
               value={faelligAm}
@@ -2981,7 +2981,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       </div>
       {leistungZeitraum && (
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig am</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Fällig bis</label>
           <div className={pfRing('faellig_am')}>
             <DateInput
               value={faelligAm}
@@ -3026,8 +3026,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
-      {/* Skonto – nur Ausgangsrechnungen */}
-      {typ === 'ausgang' && (
+      {/* Skonto – Ausgangs- und Eingangsrechnungen (Issue #343-Folgefund: Skonto war im
+          Zahlungsdialog nur für Ausgangsrechnungen verfügbar, obwohl das Backend eigene
+          "Erhaltene Skonti"-Konten für Eingangsrechnungen längst unterstützt) */}
+      {dokumentTyp !== 'Lieferschein' && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
@@ -4078,7 +4080,7 @@ function ImportDialog({
                   )}
                   {felder.faellig_am && (
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500 dark:text-slate-400">Fällig am</span>
+                      <span className="text-slate-500 dark:text-slate-400">Fällig bis</span>
                       <div className="flex items-center gap-1.5">
                         <KonfidenzDot level={felder.konfidenz?.faellig_am} />
                         <span className="font-medium dark:text-slate-200">{formatDatum(felder.faellig_am)}</span>
@@ -4793,7 +4795,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                           className="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200"
                           onClick={() => setSortFaellig(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc')}
                         >
-                          Fällig am {sortFaellig === 'asc' ? '↑' : sortFaellig === 'desc' ? '↓' : ''}
+                          Fällig bis {sortFaellig === 'asc' ? '↑' : sortFaellig === 'desc' ? '↓' : ''}
                         </th>
                         <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
                       </>

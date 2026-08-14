@@ -90,7 +90,7 @@ export async function openUrl(url: string) {
     const cd = res.headers.get('Content-Disposition') ?? ''
     const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
     const ext = url.includes('format=csv') ? '.csv' : '.zip'
-    _triggerBlobDownload(blob, match?.[1]?.trim() ?? `export${ext}`)
+    await _triggerBlobDownload(blob, match?.[1]?.trim() ?? `export${ext}`)
     return
   }
   if (isTauri()) {
@@ -906,7 +906,7 @@ export async function downloadGobdExport(jahr: number): Promise<string> {
   if (!res.ok) throw new Error('Export fehlgeschlagen')
   const blob = await res.blob()
   const filename = `gobd_export_${jahr}.zip`
-  _triggerBlobDownload(blob, filename)
+  await _triggerBlobDownload(blob, filename)
   return filename
 }
 
@@ -922,7 +922,7 @@ export async function downloadBuchhalterCsv(
   const cd = res.headers.get('Content-Disposition') ?? ''
   const match = cd.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] ?? `Buchhalter_CSV_${von}_${bis}.csv`
-  _triggerBlobDownload(blob, filename)
+  await _triggerBlobDownload(blob, filename)
   return { filename, eintraege }
 }
 
@@ -943,7 +943,7 @@ export async function downloadDatevBuchungsstapel(
   const cd = res.headers.get('Content-Disposition') ?? ''
   const match = cd.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] ?? `DATEV_Buchungsstapel_${von}_${bis}.${mitBelegen ? 'zip' : 'csv'}`
-  _triggerBlobDownload(blob, filename)
+  await _triggerBlobDownload(blob, filename)
   return { filename, eintraege, uebersprungen, leer_konto, belege }
 }
 
@@ -970,7 +970,7 @@ export async function downloadBackup(): Promise<string> {
     return savePath.split(/[\\/]/).pop() ?? filename
   }
 
-  _triggerBlobDownload(blob, filename)
+  await _triggerBlobDownload(blob, filename)
   return filename
 }
 
@@ -1000,7 +1000,26 @@ export const wiederherstellenLokal = (dateiname: string) =>
     body: JSON.stringify({ dateiname }),
   })
 
-function _triggerBlobDownload(blob: Blob, filename: string) {
+/** Speichert einen Blob als Datei - unter Tauri über den nativen Speichern-Dialog
+ *  (@tauri-apps/plugin-dialog + write_bytes_to_path), sonst über <a download>.
+ *  Der <a download>-Weg ist unter Linux (WebKitGTK) nicht zuverlässig verdrahtet - der Klick
+ *  löst dort keinen sichtbaren Download aus (unter Windows/WebView2 schon), deshalb der
+ *  Tauri-Zweig für alle Plattformen einheitlich über den nativen Dialog. */
+async function _triggerBlobDownload(blob: Blob, filename: string) {
+  if (isTauri()) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const { invoke } = await import('@tauri-apps/api/core')
+    const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : undefined
+    const savePath = await save({
+      defaultPath: filename,
+      filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined,
+    })
+    if (!savePath) return // Abgebrochen
+    const data = Array.from(new Uint8Array(await blob.arrayBuffer()))
+    await invoke('write_bytes_to_path', { path: savePath, data })
+    return
+  }
+
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -1020,7 +1039,7 @@ export async function downloadPdfForMail(rechnungId: number): Promise<void> {
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
-  _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'rechnung.pdf')
+  await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'rechnung.pdf')
 }
 
 // --- Nummernkreise ---
@@ -3048,7 +3067,7 @@ export async function downloadInkassoPaket(kundeId: number): Promise<void> {
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
-  _triggerBlobDownload(blob, match?.[1]?.trim() ?? `Inkasso_Kunde_${kundeId}.zip`)
+  await _triggerBlobDownload(blob, match?.[1]?.trim() ?? `Inkasso_Kunde_${kundeId}.zip`)
 }
 
 /** Lädt eine Mahnungs-PDF als Datei herunter (kein Viewer) - Mail-Fallback ohne SMTP,
@@ -3060,5 +3079,5 @@ export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
-  _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
+  await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
 }
