@@ -306,7 +306,7 @@ async def backup_wiederherstellen(
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Ungültige ZIP-Datei (oder falsches Passwort)")
 
-    RESTORE_MARKER.write_bytes(content)
+    RESTORE_MARKER_ZIP.write_bytes(content)
     return {"ok": True, "neustart_erforderlich": True}
 
 

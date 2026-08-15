@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.6',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Backup-Wiederherstellung aus ZIP-Dateien war komplett unbenutzbar – jeder Versuch brach mit „Failed to fetch" bzw. einem internen Serverfehler ab. Ursache: ein Tippfehler auf eine nie definierte Variable, seit sehr langer Zeit im Code vorhanden. Die Wiederherstellung aus einem lokal gewählten Backup (ZIP, auch verschlüsselt als .zip.enc) funktioniert jetzt wieder zuverlässig. Danke an gitmacer für den Report inkl. Log-Datei (Issue #347).' },
+      { typ: 'fix', text: 'App-Zoom (Strg+Mausrad / Strg+/-) hat in der echten Desktop-App gar nicht mehr funktioniert. Ursache Nummer eins: der dafür nötigen Tauri-Berechtigung „Webview-Zoom setzen" fehlte der Freigabe-Eintrag, wodurch der Aufruf lautlos abgewiesen wurde. Ursache Nummer zwei: selbst mit Freigabe wäre der Zoom nie über einen einzelnen Schritt hinausgekommen, weil der aktuelle Zoomstand beim Nachlesen aus einer CSS-Eigenschaft gelesen wurde, die die Desktop-App gar nicht mehr befüllt (seit der Umstellung auf den nativen Zoom-Mechanismus). Zusätzlich scrollte während des Zoomens der Inhalt darunter mit, weil ein separater Mausrad-Handler (Linux-Scroll-Workaround) Strg+Mausrad nicht von normalem Scrollen unterschied. Alle drei Ursachen behoben.' },
+    ],
+  },
+  {
     version: 'v0.5.5',
     datum: 'August 2026',
     eintraege: [

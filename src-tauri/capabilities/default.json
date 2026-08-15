@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "core:webview:allow-create-webview-window",
+    "core:webview:allow-set-webview-zoom",
     "shell:allow-execute",
     "shell:allow-open",
     "updater:default",

@@ -191,6 +191,10 @@ export default function App() {
   // elementFromPoint liefert immer das Element unter dem Cursor.
   useEffect(() => {
     const handler = (e: WheelEvent) => {
+      // Strg+Mausrad ist der App-Zoom (AppLayout.tsx), kein Scroll-Wunsch - sonst
+      // scrollt der Inhalt waehrend des Zoomens zusaetzlich mit, da preventDefault()
+      // im Zoom-Handler diesen unabhaengigen Listener auf demselben Target nicht stoppt.
+      if (e.ctrlKey) return
       let el = (document.elementFromPoint(e.clientX, e.clientY) ?? e.target) as HTMLElement | null
       while (el && el !== document.documentElement) {
         const oy = window.getComputedStyle(el).overflowY

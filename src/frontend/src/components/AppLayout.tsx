@@ -245,8 +245,15 @@ export function AppLayout() {
     const STEP = 0.1
     const MIN = 0.5
     const MAX = 2.0
+    // Aktuellen Zoomstand in einer eigenen Variable verfolgen statt aus
+    // document.documentElement.style.zoom auszulesen - die wird nur im Nicht-Tauri-
+    // Fallback tatsaechlich gesetzt. In der echten App (isTauri()) schreibt setZoom()
+    // dort nichts hinein, wodurch "current" immer 1.0 gelesen wurde und sich der Zoom
+    // nie ueber einen einzelnen Schritt hinaus aufaddieren konnte (Nutzer-Feedback).
+    let current = parseFloat(localStorage.getItem('appZoom') ?? '1')
     const applyZoom = async (z: number) => {
       const clamped = Math.round(Math.min(MAX, Math.max(MIN, z)) * 10) / 10
+      current = clamped
       if (isTauri()) {
         const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow')
         getCurrentWebviewWindow().setZoom(clamped)
@@ -255,17 +262,15 @@ export function AppLayout() {
       }
       localStorage.setItem('appZoom', String(clamped))
     }
-    applyZoom(parseFloat(localStorage.getItem('appZoom') ?? '1'))
+    applyZoom(current)
 
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      const current = parseFloat(document.documentElement.style.zoom || '1')
       applyZoom(current + (e.deltaY < 0 ? STEP : -STEP))
     }
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return
-      const current = parseFloat(document.documentElement.style.zoom || '1')
       if (e.key === '+' || e.key === '=') { e.preventDefault(); applyZoom(current + STEP) }
       else if (e.key === '-')             { e.preventDefault(); applyZoom(current - STEP) }
       else if (e.key === '0')             { e.preventDefault(); applyZoom(1) }
