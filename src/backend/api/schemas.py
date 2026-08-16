@@ -96,6 +96,8 @@ class UnternehmenBase(BaseModel):
     backup_extern_passwort: Optional[str] = None
     backup_smb_benutzer:    Optional[str] = None
     backup_smb_passwort:    Optional[str] = None
+    backup_extern_pfad_1_lokal_ok: bool = False
+    backup_extern_pfad_2_lokal_ok: bool = False
     datev_beraternummer:    Optional[str] = None
     datev_mandantennummer:  Optional[str] = None
     datev_konto_bar:        Optional[str] = None

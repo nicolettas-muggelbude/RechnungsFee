@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 
 from collections import defaultdict
@@ -876,7 +876,7 @@ def get_offene_rechnungen(db: Session = Depends(get_db)):
 def _rechnungen_gefiltert(
     db: Session,
     typ: Optional[str] = None,
-    zahlungsstatus: Optional[str] = None,
+    zahlungsstatus: Optional[List[str]] = None,
     monat: Optional[str] = None,
     datum_von: Optional[date] = None,
     datum_bis: Optional[date] = None,
@@ -897,14 +897,24 @@ def _rechnungen_gefiltert(
         if typ not in ("eingang", "ausgang"):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
         q = q.filter(Rechnung.typ == typ)
-    if zahlungsstatus == "entwurf":
-        q = q.filter(Rechnung.ist_entwurf == True)
-    elif zahlungsstatus == "storniert":
-        q = q.filter(Rechnung.storniert == True)
-    elif zahlungsstatus:
-        q = q.filter(Rechnung.zahlungsstatus == zahlungsstatus)
-        q = q.filter(Rechnung.storniert == False)
-        q = q.filter(Rechnung.ist_entwurf == False)
+    if zahlungsstatus:
+        # entwurf/storniert sind keine echten zahlungsstatus-Werte, sondern eigene Flags -
+        # deshalb pro gewähltem Status eine eigene Bedingung, dann per OR verknüpft (Issue #351:
+        # mehrere Status gleichzeitig auswählbar, z.B. "offen" + "teilweise bezahlt").
+        bedingungen = []
+        echte_stati = [s for s in zahlungsstatus if s not in ("entwurf", "storniert")]
+        if "entwurf" in zahlungsstatus:
+            bedingungen.append(Rechnung.ist_entwurf == True)
+        if "storniert" in zahlungsstatus:
+            bedingungen.append(Rechnung.storniert == True)
+        if echte_stati:
+            bedingungen.append(
+                (Rechnung.zahlungsstatus.in_(echte_stati))
+                & (Rechnung.storniert == False)
+                & (Rechnung.ist_entwurf == False)
+            )
+        if bedingungen:
+            q = q.filter(or_(*bedingungen))
     if monat:
         try:
             jahr, mon = monat.split("-")
@@ -957,7 +967,7 @@ def _ersatzrechnungs_kette_ids(db: Session, start_id: int) -> list[int]:
 @router.get("", response_model=list[RechnungResponse])
 def list_rechnungen(
     typ: Optional[str] = Query(None, description="eingang|ausgang"),
-    zahlungsstatus: Optional[str] = Query(None, description="offen|teilweise|bezahlt|entwurf|storniert"),
+    zahlungsstatus: Optional[List[str]] = Query(None, description="offen|teilweise|bezahlt|entwurf|storniert (mehrfach möglich)"),
     monat: Optional[str] = Query(None, description="YYYY-MM"),
     datum_von: Optional[date] = Query(None, description="YYYY-MM-DD"),
     datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
@@ -980,10 +990,29 @@ def list_rechnungen(
     return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
 
 
+def _status_anzeige(r: "RechnungResponse") -> str:
+    """Anzeige-Status für den Rechnungslisten-Export (PDF/CSV). r.zahlungsstatus bleibt nach
+    einem Storno auf dem Stand vor dem Storno stehen - storniert ist ein eigenes Flag, keine
+    zahlungsstatus-Ausprägung -, sonst würde eine stornierte Rechnung dort fälschlich weiterhin
+    als "offen" auftauchen (Issue #352). Entwurf ebenso, da zahlungsstatus bei der Erstellung
+    bereits auf "offen" gesetzt wird."""
+    if r.storniert:
+        return "storniert"
+    if r.ist_entwurf:
+        return "entwurf"
+    return r.zahlungsstatus
+
+
+def _offen_betrag(r: "RechnungResponse") -> Decimal:
+    if r.storniert or r.ist_entwurf or r.zahlungsstatus not in ("offen", "teilweise"):
+        return Decimal("0")
+    return r.brutto_gesamt - r.bezahlt_betrag
+
+
 @router.get("/export")
 def rechnungen_export(
     typ: Optional[str] = Query(None, description="eingang|ausgang"),
-    zahlungsstatus: Optional[str] = Query(None, description="offen|teilweise|bezahlt|entwurf|storniert"),
+    zahlungsstatus: Optional[List[str]] = Query(None, description="offen|teilweise|bezahlt|entwurf|storniert (mehrfach möglich)"),
     monat: Optional[str] = Query(None, description="YYYY-MM"),
     datum_von: Optional[date] = Query(None, description="YYYY-MM-DD"),
     datum_bis: Optional[date] = Query(None, description="YYYY-MM-DD"),
@@ -1001,13 +1030,16 @@ def rechnungen_export(
     for r in rechnungen:
         resp = RechnungResponse.from_orm_extended(r)
         partner_nr = (r.kunde.debitor_nr if r.kunde else None) or (r.lieferant.kreditor_nr if r.lieferant else None)
-        zeilen.append({"resp": resp, "partner_nr": partner_nr or ""})
+        zeilen.append({
+            "resp": resp, "partner_nr": partner_nr or "",
+            "status_anzeige": _status_anzeige(resp), "offen_betrag": _offen_betrag(resp),
+        })
 
     filter_teile = []
     if typ:
         filter_teile.append("Eingangsrechnungen" if typ == "eingang" else "Ausgangsrechnungen")
     if zahlungsstatus:
-        filter_teile.append(f"Status: {zahlungsstatus.capitalize()}")
+        filter_teile.append(f"Status: {', '.join(s.capitalize() for s in zahlungsstatus)}")
     if kunde_id is not None:
         kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
         filter_teile.append(f"Kunde: {kunde.firmenname if kunde else kunde_id}")
@@ -1038,11 +1070,10 @@ def rechnungen_export(
         for z in zeilen:
             r = z["resp"]
             partner = r.kunde_name or r.lieferant_name or r.partner_freitext or "—"
-            offen = (r.brutto_gesamt - r.bezahlt_betrag) if r.zahlungsstatus in ("offen", "teilweise") else Decimal("0")
             writer.writerow([
                 r.rechnungsnummer or "", str(r.datum), str(r.faellig_am) if r.faellig_am else "",
-                z["partner_nr"], partner, r.zahlungsstatus,
-                f"{r.brutto_gesamt:.2f}".replace(".", ","), f"{offen:.2f}".replace(".", ","),
+                z["partner_nr"], partner, z["status_anzeige"],
+                f"{r.brutto_gesamt:.2f}".replace(".", ","), f"{z['offen_betrag']:.2f}".replace(".", ","),
             ])
         csv_bytes = ("﻿" + out.getvalue()).encode("utf-8")
         return Response(

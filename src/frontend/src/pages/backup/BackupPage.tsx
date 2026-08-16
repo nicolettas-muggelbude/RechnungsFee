@@ -54,6 +54,8 @@ function ExterneBackupEinstellungen() {
 
   const [pfad1, setPfad1] = useState<string>('')
   const [pfad2, setPfad2] = useState<string>('')
+  const [pfad1LokalOk, setPfad1LokalOk] = useState(false)
+  const [pfad2LokalOk, setPfad2LokalOk] = useState(false)
   const [passwort, setPasswort] = useState<string>('')
   const [zeigPasswort, setZeigPasswort] = useState(false)
   const [smbBenutzer, setSmbBenutzer] = useState<string>('')
@@ -65,6 +67,8 @@ function ExterneBackupEinstellungen() {
     if (!data) return
     setPfad1(data.backup_extern_pfad_1 ?? '')
     setPfad2(data.backup_extern_pfad_2 ?? '')
+    setPfad1LokalOk(data.backup_extern_pfad_1_lokal_ok ?? false)
+    setPfad2LokalOk(data.backup_extern_pfad_2_lokal_ok ?? false)
     setPasswort(data.backup_extern_passwort ?? '')
     setSmbBenutzer(data.backup_smb_benutzer ?? '')
     setSmbPasswort(data.backup_smb_passwort ?? '')
@@ -96,7 +100,12 @@ function ExterneBackupEinstellungen() {
   function speichern() {
     if (!kannSpeichern) return
     setStatus('saving')
-    mutation.mutate({ ...data!, backup_extern_pfad_1: pfad1 || null, backup_extern_pfad_2: pfad2 || null, backup_extern_passwort: passwort || null, backup_smb_benutzer: smbBenutzer || null, backup_smb_passwort: smbPasswort || null })
+    mutation.mutate({
+      ...data!,
+      backup_extern_pfad_1: pfad1 || null, backup_extern_pfad_2: pfad2 || null,
+      backup_extern_pfad_1_lokal_ok: pfad1LokalOk, backup_extern_pfad_2_lokal_ok: pfad2LokalOk,
+      backup_extern_passwort: passwort || null, backup_smb_benutzer: smbBenutzer || null, backup_smb_passwort: smbPasswort || null,
+    })
   }
 
   return (
@@ -123,9 +132,19 @@ function ExterneBackupEinstellungen() {
               )}
             </div>
             {istSystemlaufwerk(pfad1) && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Systemlaufwerk – Backup wird beim Beenden übersprungen. Bitte ein externes Laufwerk, NAS oder SMB-Pfad verwenden.
-              </p>
+              <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1.5 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5">
+                <p>
+                  Systemlaufwerk – wird beim Beenden übersprungen, außer du bestätigst unten bewusst, dass
+                  der Ordner trotzdem extern gesichert wird (z. B. automatisch per Sync-Client wie Dropbox,
+                  Google Drive oder Proton Drive). Prüfe dabei den Datenschutz des jeweiligen Anbieters –
+                  es handelt sich um GoBD-relevante Geschäftsdaten.
+                </p>
+                <label className="flex items-start gap-2 cursor-pointer font-medium">
+                  <input type="checkbox" className="mt-0.5" checked={pfad1LokalOk}
+                    onChange={e => setPfad1LokalOk(e.target.checked)} />
+                  <span>Dieser Ordner wird extern gesichert (z. B. per Sync-Client) – trotzdem verwenden</span>
+                </label>
+              </div>
             )}
           </div>
           <div className="space-y-1">
@@ -144,9 +163,19 @@ function ExterneBackupEinstellungen() {
               )}
             </div>
             {istSystemlaufwerk(pfad2) && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Systemlaufwerk – Backup wird beim Beenden übersprungen. Bitte ein externes Laufwerk, NAS oder SMB-Pfad verwenden.
-              </p>
+              <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1.5 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5">
+                <p>
+                  Systemlaufwerk – wird beim Beenden übersprungen, außer du bestätigst unten bewusst, dass
+                  der Ordner trotzdem extern gesichert wird (z. B. automatisch per Sync-Client wie Dropbox,
+                  Google Drive oder Proton Drive). Prüfe dabei den Datenschutz des jeweiligen Anbieters –
+                  es handelt sich um GoBD-relevante Geschäftsdaten.
+                </p>
+                <label className="flex items-start gap-2 cursor-pointer font-medium">
+                  <input type="checkbox" className="mt-0.5" checked={pfad2LokalOk}
+                    onChange={e => setPfad2LokalOk(e.target.checked)} />
+                  <span>Dieser Ordner wird extern gesichert (z. B. per Sync-Client) – trotzdem verwenden</span>
+                </label>
+              </div>
             )}
           </div>
         </div>

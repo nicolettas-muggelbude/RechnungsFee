@@ -23,6 +23,18 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.7',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Backup beim Beenden – lokale Ordner sind jetzt möglich, wenn sie per Sync-Client (Dropbox, Google Drive, Proton Drive o. ä.) automatisch extern gesichert werden. Bisher lehnte RechnungsFee jeden Pfad auf dem Systemlaufwerk pauschal ab, mit Verweis auf externes Laufwerk/NAS/SMB. Neue Bestätigungs-Checkbox direkt bei der Warnung: „Dieser Ordner wird extern gesichert (z. B. per Sync-Client) – trotzdem verwenden" – die Systemlaufwerk-Prüfung greift ohne diese bewusste Bestätigung weiterhin wie bisher. Danke an CodeBrauer für den Vorschlag (Issue #348).' },
+      { typ: 'fix', text: 'macOS speicherte Datenbank, Belege und Backups am falschen Ort – statt der macOS-üblichen `~/Library/Application Support/RechnungsFee/` wurde fälschlich die Linux-Konvention `~/.local/share/RechnungsFee/` verwendet. Bestehende macOS-Installationen werden beim ersten Start mit diesem Update automatisch und einmalig in den korrekten Ordner umgezogen (nur wenn dort noch keine Datenbank liegt) – keine Daten gehen dabei verloren. Danke an CodeBrauer fürs Auffallen (Issue #348).' },
+      { typ: 'verbesserung', text: 'Eingangsrechnung ohne Kategorie finalisieren – vorher warnt jetzt ein Hinweisfenster, statt es kommentarlos zuzulassen. Ab dem 01.10.2026 braucht der Vorsteuerabzug nach Soll-Prinzip bereits bei der Finalisierung eine Kategorie; fehlt sie, taucht die Rechnung sonst nicht in der UStVA auf und lässt sich nachträglich nicht mehr korrigieren, da finalisierte Rechnungen GoBD-bedingt unveränderbar sind. Danke an Peter1061 für den Vorschlag (Issue #343-Folgefund).' },
+      { typ: 'verbesserung', text: 'USA zur Länderauswahl bei Kunden, Lieferanten und Rechnungen hinzugefügt – bisher war die Liste auf die EU-Staaten plus Schweiz, Vereinigtes Königreich und China begrenzt. Danke an gitmacer für den Vorschlag (Issue #350).' },
+      { typ: 'verbesserung', text: 'Status-Filter bei Rechnungen/Lieferscheinen erlaubt jetzt Mehrfachauswahl statt nur eines einzelnen Status – z. B. „Offen" und „Teilweise bezahlt" lassen sich jetzt gleichzeitig anzeigen, auch im PDF-/CSV-Export. Danke an gitmacer für den Vorschlag (Issue #351).' },
+      { typ: 'fix', text: 'Rechnungslisten-Export (PDF und CSV, „Offene-Posten-Liste") führte stornierte Rechnungen weiterhin als „offen" inkl. offenem Betrag auf, statt als storniert – der Export las nur den Zahlungsstatus, der nach einem Storno unverändert auf dem alten Stand stehen bleibt. Betraf ebenso Entwürfe. Danke an gitmacer für den Report (Issue #352).' },
+    ],
+  },
+  {
     version: 'v0.5.6',
     datum: 'August 2026',
     eintraege: [

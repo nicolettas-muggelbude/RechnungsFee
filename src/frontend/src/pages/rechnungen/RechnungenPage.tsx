@@ -399,6 +399,80 @@ function StatusBadge({ status }: { status: 'offen' | 'teilweise' | 'bezahlt' | '
   )
 }
 
+const ZAHLUNGSSTATUS_OPTIONEN: { value: string; label: string }[] = [
+  { value: 'offen', label: 'Offen' },
+  { value: 'teilweise', label: 'Teilweise bezahlt' },
+  { value: 'bezahlt', label: 'Bezahlt' },
+  { value: 'uneinbringlich', label: 'Uneinbringlich' },
+  { value: 'entwurf', label: 'Entwurf' },
+  { value: 'storniert', label: 'Storniert' },
+]
+
+/** Mehrfachauswahl für den Status-Filter (Issue #351: z.B. "Offen" + "Teilweise bezahlt"
+ * gleichzeitig anzeigen können, statt nur einen Status pro Auswahl). */
+function StatusMultiSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [offen, setOffen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOffen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function toggle(v: string) {
+    onChange(value.includes(v) ? value.filter((s) => s !== v) : [...value, v])
+  }
+
+  const label = value.length === 0
+    ? 'Alle Status'
+    : value.length === 1
+      ? (ZAHLUNGSSTATUS_OPTIONEN.find((o) => o.value === value[0])?.label ?? 'Alle Status')
+      : `${value.length} Status ausgewählt`
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOffen((o) => !o)}
+        className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 flex items-center gap-2 min-w-[11rem] justify-between"
+      >
+        <span>{label}</span>
+        <span className="text-slate-400 text-xs">{offen ? '▲' : '▼'}</span>
+      </button>
+      {offen && (
+        <div className="absolute z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 min-w-[12rem]">
+          {value.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700"
+            >
+              Alle zurücksetzen
+            </button>
+          )}
+          {ZAHLUNGSSTATUS_OPTIONEN.map((o) => (
+            <label
+              key={o.value}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={value.includes(o.value)}
+                onChange={() => toggle(o.value)}
+                className="rounded border-slate-300 dark:border-slate-600"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Zahlungs-Dialog
 // ---------------------------------------------------------------------------
@@ -1540,7 +1614,13 @@ function RechnungDetail({
               <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
             </span>
             <button
-              onClick={() => finalisiereMutation.mutate()}
+              onClick={() => {
+                const kategorieFehlt = rechnung.typ === 'eingang' && !rechnung.kategorie_id && !alleKategorienGesetzt
+                if (kategorieFehlt && !window.confirm(
+                  'Für mindestens eine Position ist keine Kategorie gesetzt. Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht dafür eine Kategorie – ohne sie taucht diese Rechnung nicht in der UStVA auf, und eine finalisierte Rechnung lässt sich nachträglich nicht mehr ändern.\n\nTrotzdem jetzt finalisieren?'
+                )) return
+                finalisiereMutation.mutate()
+              }}
               disabled={finalisiereMutation.isPending}
               className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 shrink-0"
             >
@@ -2875,6 +2955,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       setZeigeValidierung(true)
       return
     }
+    if (!istEntwurf && typ === 'eingang' && !kategorieId &&
+        positionen.some((p) => p.beschreibung.trim() && !p.kategorie_id)) {
+      if (!window.confirm(
+        'Für mindestens eine Position ist keine Kategorie gesetzt. Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht dafür eine Kategorie – ohne sie taucht diese Rechnung nicht in der UStVA auf, und eine finalisierte Rechnung lässt sich nachträglich nicht mehr ändern.\n\nTrotzdem jetzt finalisieren?'
+      )) return
+    }
     onSave(buildData(istEntwurf))
   }
 
@@ -4147,7 +4233,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
   const istLieferscheinSeite = modus === 'lieferscheine'
   const lieferscheinModus = istLieferscheinSeite
-  const [zahlungsstatus, setZahlungsstatus] = useState('')
+  const [zahlungsstatus, setZahlungsstatus] = useState<string[]>([])
   const [ketteFilterId, setKetteFilterId] = useState<number | null>(null)
   const [lsAbrechnungFilter, setLsAbrechnungFilter] = useState<'' | 'offen' | 'entwurf' | 'abgerechnet'>('')
   const [suche, setSuche] = useState('')
@@ -4297,7 +4383,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     setExportLaedt(true)
     try {
       const url = await getRechnungenExportUrl({
-        typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams, format,
+        typ, zahlungsstatus: zahlungsstatus.length ? zahlungsstatus : undefined, ...filterParams, format,
       })
       await openUrl(url)
     } finally {
@@ -4324,7 +4410,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
       ? getRechnungen({ kette_von_id: ketteFilterId })
       : lieferscheinModus
         ? getLieferscheine()
-        : getRechnungen({ typ, zahlungsstatus: zahlungsstatus || undefined, ...filterParams }),
+        : getRechnungen({ typ, zahlungsstatus: zahlungsstatus.length ? zahlungsstatus : undefined, ...filterParams }),
   })
 
   const _fromQuery = rechnungen?.find((r) => r.id === selectedId) ?? null
@@ -4649,19 +4735,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                 <option value="abgerechnet">Abgerechnet</option>
               </select>
             ) : (
-              <select
-                value={zahlungsstatus}
-                onChange={(e) => setZahlungsstatus(e.target.value)}
-                className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-              >
-                <option value="">Alle Status</option>
-                <option value="offen">Offen</option>
-                <option value="teilweise">Teilweise bezahlt</option>
-                <option value="bezahlt">Bezahlt</option>
-                <option value="uneinbringlich">Uneinbringlich</option>
-                <option value="entwurf">Entwurf</option>
-                <option value="storniert">Storniert</option>
-              </select>
+              <StatusMultiSelect value={zahlungsstatus} onChange={setZahlungsstatus} />
             )}
           </div>
 

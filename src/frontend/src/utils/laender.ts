@@ -1,5 +1,5 @@
 /**
- * EU-Mitgliedstaaten (2026, 27 Länder) + Schweiz, Vereinigtes Königreich und China für
+ * EU-Mitgliedstaaten (2026, 27 Länder) + Schweiz, Vereinigtes Königreich, China und USA für
  * Land-Dropdowns. Reihenfolge: Deutschland zuerst, dann alphabetisch nach ISO-Code.
  */
 
@@ -34,10 +34,13 @@ export const LAENDER: { code: string; name: string }[] = [
   { code: 'SE', name: 'Schweden' },
   { code: 'SI', name: 'Slowenien' },
   { code: 'SK', name: 'Slowakei' },
+  { code: 'US', name: 'USA' },
 ]
 
+const NICHT_EU_CODES = new Set(['CH', 'GB', 'CN', 'US'])
+
 export const EU_LAENDER_CODES = new Set(
-  LAENDER.filter((l) => l.code !== 'CH' && l.code !== 'GB' && l.code !== 'CN').map((l) => l.code)
+  LAENDER.filter((l) => !NICHT_EU_CODES.has(l.code)).map((l) => l.code)
 )
 
 export function istEuLand(code: string | null | undefined): boolean {

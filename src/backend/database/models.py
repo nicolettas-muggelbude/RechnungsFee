@@ -137,6 +137,11 @@ class Unternehmen(Base):
     backup_extern_passwort: Mapped[str | None] = mapped_column(Text)
     backup_smb_benutzer:   Mapped[str | None] = mapped_column(Text)
     backup_smb_passwort:   Mapped[str | None] = mapped_column(Text)
+    # Nutzer bestätigt bewusst, dass Pfad 1/2 auf dem Systemlaufwerk liegt (z.B. ein per
+    # Sync-Client wie Dropbox/Proton Drive extern gesicherter lokaler Ordner) - ohne diese
+    # Bestätigung blockt _ist_systemlaufwerk() den Pfad beim Backup weiterhin (Issue #348).
+    backup_extern_pfad_1_lokal_ok: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    backup_extern_pfad_2_lokal_ok: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # DATEV-Konfiguration
     datev_beraternummer:   Mapped[str | None] = mapped_column(String(10))
     datev_mandantennummer: Mapped[str | None] = mapped_column(String(10))

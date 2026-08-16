@@ -284,6 +284,8 @@ export type Unternehmen = {
   backup_extern_passwort?: string | null
   backup_smb_benutzer?: string | null
   backup_smb_passwort?: string | null
+  backup_extern_pfad_1_lokal_ok?: boolean
+  backup_extern_pfad_2_lokal_ok?: boolean
   datev_beraternummer?: string | null
   datev_mandantennummer?: string | null
   datev_konto_bar?: string | null
@@ -476,12 +478,17 @@ export type MonatsUebersicht = {
   anzahl_buchungen: number
 }
 
-function toQuery(params: Record<string, string | number | undefined | null>): string {
-  const q = Object.entries(params)
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-    .join('&')
-  return q ? `?${q}` : ''
+function toQuery(params: Record<string, string | number | string[] | undefined | null>): string {
+  const teile: string[] = []
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue
+    if (Array.isArray(v)) {
+      for (const eintrag of v) teile.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(eintrag))}`)
+    } else {
+      teile.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    }
+  }
+  return teile.length ? `?${teile.join('&')}` : ''
 }
 
 export const getJournal = (filter?: {
@@ -583,7 +590,7 @@ export const korrigiereZahlung = (
 export const getRechnungenExportUrl = async (
   params: {
     typ?: string
-    zahlungsstatus?: string
+    zahlungsstatus?: string[]
     monat?: string
     datum_von?: string
     datum_bis?: string
@@ -596,7 +603,7 @@ export const getRechnungenExportUrl = async (
   const base = await getApiBase()
   const p = new URLSearchParams()
   if (params.typ) p.set('typ', params.typ)
-  if (params.zahlungsstatus) p.set('zahlungsstatus', params.zahlungsstatus)
+  for (const s of params.zahlungsstatus ?? []) p.append('zahlungsstatus', s)
   if (params.monat) p.set('monat', params.monat)
   if (params.datum_von) p.set('datum_von', params.datum_von)
   if (params.datum_bis) p.set('datum_bis', params.datum_bis)
@@ -1437,7 +1444,7 @@ export type BarZahlungResult = {
 
 export const getRechnungen = (filter?: {
   typ?: 'eingang' | 'ausgang'
-  zahlungsstatus?: string
+  zahlungsstatus?: string[]
   monat?: string
   datum_von?: string
   datum_bis?: string

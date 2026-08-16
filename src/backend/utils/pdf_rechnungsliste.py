@@ -123,7 +123,7 @@ def erstelle_rechnungsliste_pdf(unternehmen: dict, zeilen: list, filter_zeile: s
         r = z["resp"]
         partner = r.kunde_name or r.lieferant_name or r.partner_freitext or "—"
         betrag = Decimal(str(r.brutto_gesamt))
-        offen = (betrag - Decimal(str(r.bezahlt_betrag))) if r.zahlungsstatus in ("offen", "teilweise") else Decimal("0")
+        offen = z["offen_betrag"]
         summe_betrag += betrag
         summe_offen += offen
         fill = i % 2 == 0
@@ -134,7 +134,7 @@ def erstelle_rechnungsliste_pdf(unternehmen: dict, zeilen: list, filter_zeile: s
             _fmt_datum(r.faellig_am),
             z["partner_nr"][:12],
             partner[:32],
-            r.zahlungsstatus,
+            z["status_anzeige"],
             _fmt_euro(betrag),
             _fmt_euro(offen) if offen else "",
             fill=fill,

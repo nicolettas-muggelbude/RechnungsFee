@@ -70,7 +70,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 147` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 148` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -280,6 +280,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 145 | vorsteuer_ansprueche-Tabelle (GoBD-immutable, eigene Trigger) – Issue #338: Vorsteuerabzug nach Soll-Prinzip (§15 UStG), unabhängig von Zahlungsdatum und von der eigenen Ist-/Soll-Versteuerung (§20 UStG betrifft nur die eigene USt-Schuld). Bisher wurde Vorsteuer ausschließlich in journal beim Bezahlen gebucht – eine unbezahlte Eingangsrechnung hatte nirgendwo einen Vorsteuerbetrag. journal.vorsteuer_betrag bleibt unverändert zahlungsdatumsbasiert (korrekt für EÜR/Zuflussprinzip §11 EStG + DATEV), vorsteuer_ansprueche ist die neue, unabhängige Quelle für UStVA KZ 66/61/62/67 ab CUTOVER_DATUM (fest im Code, api/ustva.py – Desktop-App mit einer DB pro Installation, kein gemeinsamer Deploy-Zeitpunkt). Kein Backfill – Rechnungen vor dem Cutover bleiben dauerhaft auf dem alten Zahlungsdatum-Pfad. Siehe docs für den vollständigen Umsetzungsplan (Kategorie-Pflicht bei Finalisierung ab Cutover, Storno-Korrektur am Stornodatum statt rückwirkend) |
 | 146 | Datenfix Issue #340: Kategorien „EU-Dienstleistungen (§13b Abs. 1)" + „Drittland-Dienstleistungen (§13b Abs. 1)" euer_zeile 27 (Waren, Rohstoffe, Hilfsstoffe) → 60 (Sonstige Betriebsausgaben) – beide erfassen sonstige Leistungen, keine Waren, analog zu „Bauleistungen / §13b Abs. 2" (stand von Anfang an korrekt auf 60). Guard „WHERE euer_zeile = 27" – kein user_modified-Flag für euer_zeile, manuell abweichend gesetzte Werte bleiben unangetastet |
 | 147 | Datenfix Issue #341-Folgefund: sechs „Absetzungen vom Einkommen"-Privatkategorien (ESt-Vorauszahlung, KV/PV/RV, Riester, Sonstige Absetzungen) euer_zeile NULL → 106 (Privatentnahme, Hinweiszeile) – wirtschaftlich Privatentnahmen; ohne gesetzte euer_zeile erschienen sie im Buchungsformular fälschlich sowohl unter „Einnahme" als auch „Ausgabe". Guard „WHERE euer_zeile IS NULL" |
+| 148 | unternehmen.backup_extern_pfad_1/2_lokal_ok BOOLEAN – Issue #348: Opt-in pro Backup-Zielpfad, um die Systemlaufwerk-Prüfung (`_ist_systemlaufwerk()`) gezielt zu übergehen, z. B. für einen lokal per Sync-Client (Dropbox/Proton Drive) extern gesicherten Ordner. Default weiterhin sicher (Prüfung greift ohne Bestätigung). Zusätzlich (kein Schema-Change): `database/connection.py` unterschied APP_DATA_DIR bisher nur Windows vs. „alles andere" – macOS lief fälschlich über die Linux-XDG-Konvention (`~/.local/share/`) statt `~/Library/Application Support/`; bestehende macOS-Installationen werden beim ersten Start mit dem Fix einmalig automatisch in den korrekten Ordner verschoben (nur wenn dort noch keine DB liegt) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

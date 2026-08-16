@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 147
+SCHEMA_VERSION = 148
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -232,7 +232,8 @@ def backup_erstellen():
         with engine.connect() as conn:
             row = conn.execute(text(
                 "SELECT backup_extern_pfad_1, backup_extern_pfad_2, backup_extern_passwort, "
-                "backup_smb_benutzer, backup_smb_passwort "
+                "backup_smb_benutzer, backup_smb_passwort, "
+                "backup_extern_pfad_1_lokal_ok, backup_extern_pfad_2_lokal_ok "
                 "FROM unternehmen WHERE id=1"
             )).fetchone()
     except Exception:
@@ -241,7 +242,7 @@ def backup_erstellen():
     if not row:
         return {"ok": True}
 
-    pfad1, pfad2, passwort, smb_benutzer, smb_passwort = row
+    pfad1, pfad2, passwort, smb_benutzer, smb_passwort, pfad1_lokal_ok, pfad2_lokal_ok = row
     extern_konfiguriert = bool(passwort and (pfad1 or pfad2))
     if not extern_konfiguriert:
         print("[Backup] Externe Ziele übersprungen: kein Verschlüsselungs-Passwort gesetzt")
@@ -258,8 +259,12 @@ def backup_erstellen():
 
     fehler = []
     uebersprungen = []
-    for pfad in filter(None, [pfad1, pfad2]):
-        if _ist_systemlaufwerk(pfad):
+    for pfad, lokal_ok in ((pfad1, pfad1_lokal_ok), (pfad2, pfad2_lokal_ok)):
+        if not pfad:
+            continue
+        # Systemlaufwerk-Warnung nur, wenn der Pfad NICHT explizit als bewusst lokal
+        # (z.B. per Sync-Client extern gesichert) bestätigt wurde (Issue #348).
+        if not lokal_ok and _ist_systemlaufwerk(pfad):
             uebersprungen.append(pfad)
             print(f"[Backup] Systemlaufwerk übersprungen: {pfad}")
             continue
@@ -3173,6 +3178,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 147"))
             conn.commit()
             print("[Migration] Schema auf Version 147 (Issue #341-Folgefund: euer_zeile=106 fuer sechs Privatentnahme-Kategorien)")
+
+        if version < 148:
+            # Issue #348: "Backup beim Beenden" lehnte externe Pfade 1/2 pauschal ab, wenn sie
+            # auf dem Systemlaufwerk lagen (_ist_systemlaufwerk()) - auch wenn der Ordner in
+            # Wirklichkeit per Sync-Client (Dropbox/Proton Drive/...) extern gesichert wird.
+            # Neue Bestaetigungs-Flags pro Pfad: nur wenn gesetzt, wird die Systemlaufwerk-
+            # Pruefung fuer genau diesen Pfad uebersprungen (Opt-in, Default weiterhin sicher).
+            cols148 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "backup_extern_pfad_1_lokal_ok" not in cols148:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN backup_extern_pfad_1_lokal_ok BOOLEAN NOT NULL DEFAULT 0"))
+            if "backup_extern_pfad_2_lokal_ok" not in cols148:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN backup_extern_pfad_2_lokal_ok BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 148"))
+            conn.commit()
+            print("[Migration] Schema auf Version 148 (Issue #348: backup_extern_pfad_1/2_lokal_ok)")
 
 
 def _migrate_kategorien() -> None:
