@@ -1615,7 +1615,8 @@ function RechnungDetail({
             </span>
             <button
               onClick={() => {
-                const kategorieFehlt = rechnung.typ === 'eingang' && !rechnung.kategorie_id && !alleKategorienGesetzt
+                const kategorieFehlt = rechnung.typ === 'eingang' && !rechnung.kategorie_id &&
+                  !rechnung.positionen.every((p) => p.kategorie_id != null)
                 if (kategorieFehlt && !window.confirm(
                   'Für mindestens eine Position ist keine Kategorie gesetzt. Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht dafür eine Kategorie – ohne sie taucht diese Rechnung nicht in der UStVA auf, und eine finalisierte Rechnung lässt sich nachträglich nicht mehr ändern.\n\nTrotzdem jetzt finalisieren?'
                 )) return

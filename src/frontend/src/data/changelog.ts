@@ -23,7 +23,7 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
-    version: 'v0.5.7',
+    version: 'v0.5.8',
     datum: 'August 2026',
     eintraege: [
       { typ: 'neu', text: 'Backup beim Beenden – lokale Ordner sind jetzt möglich, wenn sie per Sync-Client (Dropbox, Google Drive, Proton Drive o. ä.) automatisch extern gesichert werden. Bisher lehnte RechnungsFee jeden Pfad auf dem Systemlaufwerk pauschal ab, mit Verweis auf externes Laufwerk/NAS/SMB. Neue Bestätigungs-Checkbox direkt bei der Warnung: „Dieser Ordner wird extern gesichert (z. B. per Sync-Client) – trotzdem verwenden" – die Systemlaufwerk-Prüfung greift ohne diese bewusste Bestätigung weiterhin wie bisher. Danke an CodeBrauer für den Vorschlag (Issue #348).' },
