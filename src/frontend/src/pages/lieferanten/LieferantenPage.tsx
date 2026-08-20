@@ -3,8 +3,9 @@ import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { LAENDER } from '../../utils/laender'
+import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -25,6 +26,8 @@ const schema = z.object({
   ort: z.string().optional(),
   land: z.string().optional(),
   ust_idnr: z.string().optional(),
+  ust_idnr_validiert: z.boolean().optional(),
+  ust_idnr_validierung_datum: z.string().nullable().optional(),
   email: z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon: z.string().optional(),
   lieferantennummer: z.string().optional(),
@@ -36,7 +39,8 @@ type FormValues = z.infer<typeof schema>
 
 const EMPTY: FormValues = {
   firmenname: '', vorname: '', nachname: '', strasse: '', hausnummer: '',
-  plz: '', ort: '', land: 'DE', ust_idnr: '', email: '', telefon: '',
+  plz: '', ort: '', land: 'DE', ust_idnr: '', ust_idnr_validiert: false, ust_idnr_validierung_datum: null,
+  email: '', telefon: '',
   lieferantennummer: '', z_hd: '', notizen: '',
 }
 
@@ -421,10 +425,14 @@ export function LieferantenPage() {
     },
   })
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: EMPTY,
   })
+  const watchLand = useWatch({ control, name: 'land' })
+  const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
+  const watchUstIdnrValidiert = useWatch({ control, name: 'ust_idnr_validiert' })
+  const watchUstIdnrValidierungDatum = useWatch({ control, name: 'ust_idnr_validierung_datum' })
 
   function openCreate() {
     setEditLieferant(null)
@@ -441,6 +449,7 @@ export function LieferantenPage() {
       firmenname: l.firmenname, vorname: l.vorname ?? '', nachname: l.nachname ?? '',
       strasse: l.strasse ?? '', hausnummer: l.hausnummer ?? '', plz: l.plz ?? '',
       ort: l.ort ?? '', land: l.land, ust_idnr: l.ust_idnr ?? '',
+      ust_idnr_validiert: l.ust_idnr_validiert ?? false, ust_idnr_validierung_datum: l.ust_idnr_validierung_datum ?? null,
       email: l.email ?? '', telefon: l.telefon ?? '',
       lieferantennummer: l.lieferantennummer ?? '', z_hd: l.z_hd ?? '', notizen: l.notizen ?? '',
     })
@@ -676,6 +685,17 @@ export function LieferantenPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">USt-IdNr.</label>
                   <input type="text" {...register('ust_idnr')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                  <UstIdnrPruefung
+                    aktiv
+                    land={watchLand ?? 'DE'}
+                    ustIdnr={watchUstIdnr ?? ''}
+                    validiert={watchUstIdnrValidiert ?? false}
+                    validierungDatum={watchUstIdnrValidierungDatum}
+                    onValidiertChange={(v) => {
+                      setValue('ust_idnr_validiert', v)
+                      setValue('ust_idnr_validierung_datum', v ? new Date().toISOString().slice(0, 10) : null)
+                    }}
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">z.Hd. von</label>

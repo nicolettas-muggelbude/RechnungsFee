@@ -511,6 +511,8 @@ class KundeBase(BaseModel):
     ort: Optional[str] = None
     land: str = "DE"
     ust_idnr: Optional[str] = None
+    ust_idnr_validiert: bool = False
+    ust_idnr_validierung_datum: Optional[date] = None
     steuernummer_ausland: Optional[str] = None
     email: Optional[str] = None
     telefon: Optional[str] = None
@@ -535,7 +537,6 @@ class KundeUpdate(KundeBase):
 
 class KundeResponse(KundeBase):
     id: int
-    ust_idnr_validiert: bool
     aktiv: bool
     mahnung_gesperrt: bool
     mahnung_warnung: bool
@@ -566,6 +567,8 @@ class LieferantBase(BaseModel):
     ort: Optional[str] = None
     land: str = "DE"
     ust_idnr: Optional[str] = None
+    ust_idnr_validiert: bool = False
+    ust_idnr_validierung_datum: Optional[date] = None
     email: Optional[str] = None
     telefon: Optional[str] = None
     lieferantennummer: Optional[str] = None

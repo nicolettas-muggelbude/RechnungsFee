@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getJournal, getKategorien, getKassenbuchExportUrl, getJournalExportUrl, openUrl, type JournalEintrag, type Schnellbuchung } from '../../api/client'
@@ -71,6 +71,24 @@ export function JournalPage() {
   const [csvErfolg, setCsvErfolg] = useState<string | null>(null)
 
   const aktivesJahr = new Date().getFullYear()
+
+  // "+" öffnet "Neue Buchung" ohne Maus (Issue #356) - nur wenn kein Eingabefeld fokussiert
+  // ist (sonst würde z.B. eine "+" im Notizfeld ungewollt den Dialog öffnen) und kein anderer
+  // Dialog bereits offen ist.
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key !== '+') return
+      if (showBuchung || showAbschluss || bearbeitenEintrag || aktiverEintragId !== null) return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      e.preventDefault()
+      setSchnellbuchungWerte(null)
+      setBearbeitenEintrag(null)
+      setShowBuchung(true)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showBuchung, showAbschluss, bearbeitenEintrag, aktiverEintragId])
 
   function handleSchnellbuchung(preset: Schnellbuchung) {
     setSchnellbuchungWerte(preset)
@@ -161,6 +179,19 @@ export function JournalPage() {
           zahlungsart_typ: zahlungsartTyp || undefined,
         }),
   })
+
+  // Datum-Sortierung (Issue #357) - Standard "desc" entspricht der bisherigen Backend-
+  // Sortierung (neueste oben); "asc" für den Vergleich mit Kontoauszügen, die chronologisch
+  // aufsteigend sortiert sind. Sekundär nach id sortiert, damit die Reihenfolge bei gleichem
+  // Datum stabil bleibt (spiegelt die Backend-Sortierung Journaleintrag.id.desc()).
+  const [sortDatum, setSortDatum] = useState<'asc' | 'desc'>('desc')
+  const eintraegeSortiert = eintraege
+    ? [...eintraege].sort((a, b) => {
+        const cmp = a.datum.localeCompare(b.datum)
+        const richtung = sortDatum === 'asc' ? 1 : -1
+        return cmp !== 0 ? cmp * richtung : (a.id - b.id) * richtung
+      })
+    : eintraege
 
   const gruppenWurzeln = new Set(
     (eintraege ?? []).map(e => e.gruppe_id).filter((g): g is number => g != null)
@@ -434,7 +465,13 @@ export function JournalPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-28">Datum</th>
+                <th
+                  className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-28 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200"
+                  onClick={() => setSortDatum(s => s === 'asc' ? 'desc' : 'asc')}
+                  title="Nach Datum sortieren"
+                >
+                  Datum {sortDatum === 'asc' ? '↑' : '↓'}
+                </th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-36">Belegnr.</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Beschreibung</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-24">Zahlung</th>
@@ -443,7 +480,7 @@ export function JournalPage() {
               </tr>
             </thead>
             <tbody>
-              {eintraege.map((e) => {
+              {eintraegeSortiert!.map((e) => {
                 const istAktiv = aktiverEintragId === e.id
                 const bereitsStorniert = !!e.storniert
                 const istStorno = !!e.ist_storno

@@ -3,6 +3,7 @@ import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
+import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { LAENDER, istEuLand } from '../../utils/laender'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
@@ -767,6 +768,8 @@ const schema = z.object({
   ort: z.string().optional(),
   land: z.string().optional(),
   ust_idnr: z.string().optional(),
+  ust_idnr_validiert: z.boolean().optional(),
+  ust_idnr_validierung_datum: z.string().nullable().optional(),
   steuernummer_ausland: z.string().optional(),
   email: z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon: z.string().optional(),
@@ -790,7 +793,8 @@ type FormValues = z.infer<typeof schema>
 
 const EMPTY: FormValues = {
   firmenname: '', vorname: '', nachname: '', strasse: '', hausnummer: '',
-  plz: '', ort: '', land: 'DE', ust_idnr: '', steuernummer_ausland: '', email: '', telefon: '',
+  plz: '', ort: '', land: 'DE', ust_idnr: '', ust_idnr_validiert: false, ust_idnr_validierung_datum: null,
+  steuernummer_ausland: '', email: '', telefon: '',
   kundennummer: '', z_hd: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
   skonto_prozent: null, skonto_tage: null,
 }
@@ -868,6 +872,8 @@ export function KundenPage() {
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
   const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
   const watchLand = useWatch({ control, name: 'land' })
+  const watchUstIdnrValidiert = useWatch({ control, name: 'ust_idnr_validiert' })
+  const watchUstIdnrValidierungDatum = useWatch({ control, name: 'ust_idnr_validierung_datum' })
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
   const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim())
   // Drittland: weder Deutschland noch EU-Mitglied (Issue #315) - dort gilt keine USt-IdNr.,
@@ -895,7 +901,9 @@ export function KundenPage() {
     reset({
       firmenname: k.firmenname ?? '', vorname: k.vorname ?? '', nachname: k.nachname ?? '',
       strasse: k.strasse ?? '', hausnummer: k.hausnummer ?? '', plz: k.plz ?? '',
-      ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '', steuernummer_ausland: k.steuernummer_ausland ?? '',
+      ort: k.ort ?? '', land: k.land, ust_idnr: k.ust_idnr ?? '',
+      ust_idnr_validiert: k.ust_idnr_validiert ?? false, ust_idnr_validierung_datum: k.ust_idnr_validierung_datum ?? null,
+      steuernummer_ausland: k.steuernummer_ausland ?? '',
       email: k.email ?? '', telefon: k.telefon ?? '', kundennummer: k.kundennummer ?? '',
       z_hd: k.z_hd ?? '', notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
       zugferd_aktiv: k.zugferd_aktiv ?? false,
@@ -1280,6 +1288,17 @@ export function KundenPage() {
                   {istEuAusland && (
                     <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5">Für ig. Lieferungen/Zusammenfassende Meldung erforderlich – keine Steuernummer.</p>
                   )}
+                  <UstIdnrPruefung
+                    aktiv={istEuAusland}
+                    land={watchLand ?? 'DE'}
+                    ustIdnr={watchUstIdnr ?? ''}
+                    validiert={watchUstIdnrValidiert ?? false}
+                    validierungDatum={watchUstIdnrValidierungDatum}
+                    onValidiertChange={(v) => {
+                      setValue('ust_idnr_validiert', v)
+                      setValue('ust_idnr_validierung_datum', v ? new Date().toISOString().slice(0, 10) : null)
+                    }}
+                  />
                 </div>
                 {istDrittland && (
                   <div>

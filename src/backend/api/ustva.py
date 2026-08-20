@@ -150,6 +150,8 @@ def _addiere_sonderfall_kz(
     ust_betrag: Decimal,
     vorsteuer_betrag: Decimal,
     satz: Decimal | None,
+    posten: dict[str, list[dict]] | None = None,
+    quelle: dict | None = None,
 ) -> Decimal:
     """Ordnet einen Reverse-Charge-Sonderfall (ig_erwerb/13b_abs1/13b_abs2/einfuhr_ust) den
     passenden Bemessungsgrundlage- UND Vorsteuer-Kennziffern zu. Gemeinsam genutzt vom
@@ -158,45 +160,71 @@ def _addiere_sonderfall_kz(
     Periode landen, dürfen also nie über zwei unterschiedliche Quellen auseinanderfallen (anders
     als beim Standardfall KZ 66, wo es keine separat zu meldende Bemessungsgrundlage gibt).
 
+    posten/quelle (Issue #353, optional): sammelt für die Posten-Aufschlüsselung parallel zur
+    Summenbildung den exakt selben Betrag, der gerade in kz[...] einfließt - single source of
+    truth, damit Summe und Aufschlüsselung nie auseinanderlaufen können.
+
     Gibt den Anteil an ige_steuer_feste_saetze zurück (interne Zahllast-Hilfsgröße, Issue #272) -
     der Aufrufer summiert das selbst auf, da es keine eigene Kennzahl ist.
     """
+    def _add(nr: str, betrag: Decimal) -> None:
+        if posten is not None and quelle is not None and betrag:
+            posten[nr].append({**quelle, "betrag": betrag})
+
     ige_delta = ZERO
     if sonderfall == "ig_erwerb":
         # Bemessungsgrundlage nach TATSÄCHLICHEM Steuersatz einsortieren (Issue #272).
         satz_i = int(satz) if satz is not None else None
         if satz_i == 19:
             kz["kz_89"] += netto_betrag
+            _add("kz_89", netto_betrag)
             ige_delta = ust_betrag
         elif satz_i == 7:
             kz["kz_93"] += netto_betrag
+            _add("kz_93", netto_betrag)
             ige_delta = ust_betrag
         elif satz_i == 0:
             kz["kz_90"] += netto_betrag
+            _add("kz_90", netto_betrag)
         else:
             kz["kz_95"] += netto_betrag
+            _add("kz_95", netto_betrag)
             kz["kz_98"] += ust_betrag
+            _add("kz_98", ust_betrag)
         if vorsteuer_betrag:
             kz["kz_61"] += vorsteuer_betrag
+            _add("kz_61", vorsteuer_betrag)
     elif sonderfall == "13b_abs1":
         kz["kz_46"] += netto_betrag
+        _add("kz_46", netto_betrag)
         kz["kz_47"] += ust_betrag
+        _add("kz_47", ust_betrag)
         if vorsteuer_betrag:
             kz["kz_67"] += vorsteuer_betrag
+            _add("kz_67", vorsteuer_betrag)
     elif sonderfall == "13b_abs2":
         kz["kz_84"] += netto_betrag
+        _add("kz_84", netto_betrag)
         kz["kz_85"] += ust_betrag
+        _add("kz_85", ust_betrag)
         if vorsteuer_betrag:
             kz["kz_67"] += vorsteuer_betrag
+            _add("kz_67", vorsteuer_betrag)
     elif sonderfall == "einfuhr_ust":
         # Entstandene Einfuhrumsatzsteuer: kein Bemessungsgrundlage/Steuer-Paar wie bei den
         # anderen Sonderfällen, nur der abziehbare Vorsteuerbetrag selbst (KZ 62).
         if vorsteuer_betrag:
             kz["kz_62"] += vorsteuer_betrag
+            _add("kz_62", vorsteuer_betrag)
     return ige_delta
 
 
-def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
+def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal], dict[str, list[dict]]]:
+    """Gibt (kz, posten) zurück - posten (Issue #353) enthält pro Kennziffer die Liste der
+    einzelnen Journaleinträge/Vorsteuer-Ansprüche, die zu ihrer Summe beigetragen haben (für
+    die Anzeigehilfe-Aufschlüsselung /posten). Wird immer mitberechnet (keine Zusatzabfrage,
+    nur zusätzliche Listen-Einträge während der ohnehin laufenden Schleife) - Aufrufer, die
+    nur die Summen brauchen, ignorieren den zweiten Rückgabewert einfach."""
     eintraege = (
         db.query(Journaleintrag)
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
@@ -219,6 +247,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
     _marge_cache: dict[int, Decimal | None] = {}
 
     kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+    posten: dict[str, list[dict]] = {k: [] for k in ALL_KZ_KEYS}
     # Interne Hilfssumme: tatsächliche Steuer aus ig. Erwerb zu festen Sätzen (19%/7%/0%).
     # Keine eigene Kennzahl (die Steuer wird bei festen Sätzen nicht separat gemeldet,
     # siehe KZ_META-Kommentar) – wird nur für die Zahllast-Berechnung gebraucht (Issue #272).
@@ -226,6 +255,14 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
 
     for e in eintraege:
         ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
+        quelle = {
+            "quelle": "journal",
+            "quelle_id": e.id,
+            "datum": e.datum,
+            "referenz": e.belegnr,
+            "beschreibung": e.beschreibung,
+            "rechnung_id": e.rechnung_id,
+        }
 
         # Reverse-Charge-Sonderfälle: separat behandeln, nicht in reguläre KZs
         sf = getattr(e, "ust_sonderfall", None) or ("ig_erwerb" if getattr(e, "ist_ig_erwerb", False) else None)
@@ -244,7 +281,8 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                 # nur eine Storno-Gegenbuchung sein.
                 vz = -1 if e.art == "Einnahme" else 1
                 ige_steuer_feste_saetze += _addiere_sonderfall_kz(
-                    kz, sf, vz * e.netto_betrag, vz * e.ust_betrag, e.vorsteuer_betrag, e.ust_satz
+                    kz, sf, vz * e.netto_betrag, vz * e.ust_betrag, e.vorsteuer_betrag, e.ust_satz,
+                    posten, quelle,
                 )
             continue  # nicht in reguläre USt/VSt-Erkennung
 
@@ -253,8 +291,11 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
             if mapping:
                 # §25a: Bemessungsgrundlage = Netto-Marge (Brutto-Marge − USt), nicht Netto-VK
                 marge = getattr(e, "marge_25a_brutto", None)
-                kz[mapping[0]] += (marge - e.ust_betrag) if marge is not None else e.netto_betrag
+                bg_delta = (marge - e.ust_betrag) if marge is not None else e.netto_betrag
+                kz[mapping[0]] += bg_delta
+                posten[mapping[0]].append({**quelle, "betrag": bg_delta})
                 kz[mapping[1]] += e.ust_betrag
+                posten[mapping[1]].append({**quelle, "betrag": e.ust_betrag})
 
         # Storno einer Einnahme: art ist "Ausgabe" (umgekehrt), konto_ust_skr ist Einnahme-Konto.
         # Muss Ausgangsumsätze (KZ 81/83 etc.) reduzieren – sonst bleibt der Original-Umsatz
@@ -276,14 +317,19 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
                         orig = db.query(Journaleintrag).filter(Journaleintrag.id == e.gruppe_id).first()
                         _marge_cache[e.gruppe_id] = getattr(orig, "marge_25a_brutto", None) if orig else None
                     marge_st = _marge_cache[e.gruppe_id]
-                kz[mapping[0]] -= marge_st if marge_st else e.netto_betrag
-                kz[mapping[1]] -= e.ust_betrag
+                bg_delta = -(marge_st if marge_st else e.netto_betrag)
+                kz[mapping[0]] += bg_delta
+                posten[mapping[0]].append({**quelle, "betrag": bg_delta})
+                ust_delta = -e.ust_betrag
+                kz[mapping[1]] += ust_delta
+                posten[mapping[1]].append({**quelle, "betrag": ust_delta})
 
         # KZ 41 – ig. Lieferungen: 0% USt, Erkennung via konto_skr03 8125/3125
         if (e.art == "Einnahme"
                 and (e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
                 and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
             kz["kz_41"] += e.netto_betrag
+            posten["kz_41"].append({**quelle, "betrag": e.netto_betrag})
 
         # Ausgabe-Vorsteuer → KZ 66/61/67. Storno einer Einnahme hat ebenfalls art=Ausgabe, aber
         # konto_ust ist ein Einnahme-Konto → ausschließen, damit kein falscher Vorsteuer-Eintrag
@@ -293,12 +339,14 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
             if not _KONTO_EINNAHME.get(ust_konto) and e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
                 vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
                 kz[vst_kz] += e.vorsteuer_betrag
+                posten[vst_kz].append({**quelle, "betrag": e.vorsteuer_betrag})
 
         # Storno einer Ausgabe: art ist "Einnahme" (umgekehrt), vorsteuer_betrag ist negativ.
         # Muss Vorsteuer (KZ 66 etc.) reduzieren – sonst bleibt die Original-Vorsteuer stehen.
         if e.art == "Einnahme" and e.vorsteuer_betrag and e.vorsteuer_betrag < 0 and e.rechnung_id not in _soll_vorsteuer_rechnung_ids:
             vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
             kz[vst_kz] += e.vorsteuer_betrag  # negativer Wert → reduziert KZ
+            posten[vst_kz].append({**quelle, "betrag": e.vorsteuer_betrag})
 
     # Vorsteuer nach Soll-Prinzip (Rechnungsdatum statt Zahlungsdatum, Issue #338): Eingangs-
     # rechnungen ab CUTOVER_DATUM_VORSTEUER wurden oben aus der Journal-Aggregation
@@ -311,12 +359,26 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
         .all()
     )
     for va in ansprueche:
+        quelle_va = {
+            "quelle": "vorsteuer_anspruch",
+            "quelle_id": va.id,
+            "datum": va.datum,
+            "referenz": va.rechnung.rechnungsnummer if va.rechnung else None,
+            "beschreibung": (
+                (va.rechnung.lieferant.firmenname if va.rechnung and va.rechnung.lieferant else None)
+                or (va.rechnung.partner_freitext if va.rechnung else None)
+                or "Eingangsrechnung"
+            ),
+            "rechnung_id": va.rechnung_id,
+        }
         if va.ust_sonderfall:
             ige_steuer_feste_saetze += _addiere_sonderfall_kz(
-                kz, va.ust_sonderfall, va.netto_betrag, va.ust_betrag, va.vorsteuer_betrag, va.ust_satz
+                kz, va.ust_sonderfall, va.netto_betrag, va.ust_betrag, va.vorsteuer_betrag, va.ust_satz,
+                posten, quelle_va,
             )
         elif va.vorsteuer_betrag:
             kz["kz_66"] += va.vorsteuer_betrag
+            posten["kz_66"].append({**quelle_va, "betrag": va.vorsteuer_betrag})
 
     q = Decimal("0.01")
     for k in kz:
@@ -330,7 +392,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> dict[str, Decimal]:
            + ige_steuer_feste_saetze.quantize(q, ROUND_HALF_UP))
     vst = kz["kz_66"] + kz["kz_61"] + kz["kz_62"] + kz["kz_67"]
     kz["zahllast"] = (ust - vst).quantize(q, ROUND_HALF_UP)
-    return kz
+    return kz, posten
 
 
 def _zeitraum_label(zeitraum: str) -> str:
@@ -557,6 +619,17 @@ class UStVASpeichernRequest(BaseModel):
     zahllast: Decimal = ZERO
 
 
+class UStVAPostenItem(BaseModel):
+    """Einzelner Beitrag zu einer Kennziffer (Issue #353 – Anzeigehilfe aufschlüsseln)."""
+    quelle: str            # "journal" | "vorsteuer_anspruch"
+    quelle_id: int
+    datum: date
+    referenz: Optional[str] = None       # Belegnr. (Journal) bzw. Rechnungsnummer
+    beschreibung: str
+    betrag: Decimal
+    rechnung_id: Optional[int] = None
+
+
 # ---------------------------------------------------------------------------
 # Endpunkte
 # ---------------------------------------------------------------------------
@@ -579,7 +652,7 @@ def ustva_berechnen(
                    "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne "
                    "Vorsteuerabzug eingetragen – nur einmal jährlich in der Jahressteuererklärung.")
     else:
-        kz = _berechne_kz(von, bis, db)
+        kz, _ = _berechne_kz(von, bis, db)
         hinweis = None
 
     return UStVAErgebnis(
@@ -588,6 +661,23 @@ def ustva_berechnen(
         **{k: v for k, v in kz.items() if k != "zahllast"},
         zahllast=kz["zahllast"],
     )
+
+
+@router.get("/posten", response_model=list[UStVAPostenItem])
+def ustva_posten(
+    zeitraum: str = Query(..., description="YYYY-MM oder YYYY-QN"),
+    kz: str = Query(..., description="Kennziffer, z.B. '66' oder 'kz_66'"),
+    db: Session = Depends(get_db),
+):
+    """Einzelposten hinter einer Kennziffer (Issue #353) – Abstimm-/Prüfhilfe zur
+    Anzeigehilfe: welche Journaleinträge/Vorsteuer-Ansprüche stecken in dieser Summe."""
+    von, bis, _ = _zeitraum_grenzen(zeitraum)
+    nr = kz if kz.startswith("kz_") else f"kz_{kz}"
+    if nr not in ALL_KZ_KEYS:
+        raise HTTPException(422, f"Unbekannte Kennziffer: {kz}")
+    _, posten = _berechne_kz(von, bis, db)
+    eintraege = sorted(posten.get(nr, []), key=lambda p: p["datum"])
+    return [UStVAPostenItem(**p) for p in eintraege]
 
 
 @router.post("/speichern")
@@ -627,7 +717,7 @@ def ustva_pdf(
     if not unt:
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
     von, bis, _ = _zeitraum_grenzen(zeitraum)
-    kz = _berechne_kz(von, bis, db)
+    kz, _ = _berechne_kz(von, bis, db)
     pdf_bytes = _generate_pdf(zeitraum, kz, unt)
     return StreamingResponse(
         BytesIO(pdf_bytes),
@@ -903,7 +993,7 @@ def jahresumsatzsteuer(
         kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
-        kz = _berechne_kz(von, bis, db)
+        kz, _ = _berechne_kz(von, bis, db)
 
     # Gespeicherte Voranmeldungen für Vorauszahlungsanrechnung
     voranmeldungen = (
@@ -959,7 +1049,7 @@ def jahresumsatzsteuer_pdf(
         kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
-        kz = _berechne_kz(von, bis, db)
+        kz, _ = _berechne_kz(von, bis, db)
 
     voranmeldungen = (
         db.query(UstvaExport)

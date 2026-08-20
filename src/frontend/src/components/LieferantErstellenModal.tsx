@@ -48,7 +48,7 @@ export function LieferantErstellenModal({ onSave, onClose }: Props) {
     mutationFn: (values: FormValues) => {
       const clean = Object.fromEntries(
         Object.entries(values).map(([k, v]) => [k, v === '' ? undefined : v])
-      ) as Omit<Lieferant, 'id' | 'aktiv'>
+      ) as Omit<Lieferant, 'id' | 'aktiv' | 'ust_idnr_validiert' | 'ust_idnr_validierung_datum'>
       return createLieferant({ ...clean, firmenname: values.firmenname, land: values.land ?? 'DE' })
     },
     onSuccess: (neu) => {

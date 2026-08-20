@@ -149,7 +149,7 @@ def test_unbezahlte_rechnung_erscheint_in_ustva(db):
     finalisiere_rechnung(rechnung.id, db)
     # bewusst NICHT bezahlt
 
-    kz = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
+    kz, _ = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
     assert kz["kz_66"] == Decimal("19.00")
 
 
@@ -168,8 +168,8 @@ def test_keine_doppelzaehlung_bei_zahlung_in_spaeterer_periode(db):
         db,
     )
 
-    kz_maerz = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
-    kz_mai = ustva_api._berechne_kz(date(2020, 5, 1), date(2020, 5, 31), db)
+    kz_maerz, _ = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
+    kz_mai, _ = ustva_api._berechne_kz(date(2020, 5, 1), date(2020, 5, 31), db)
 
     assert kz_maerz["kz_66"] == Decimal("19.00"), "Vorsteuer muss in der Rechnungsdatum-Periode stehen"
     assert kz_mai["kz_66"] == Decimal("0.00"), "Vorsteuer darf in der Zahlungsperiode NICHT nochmal auftauchen"
@@ -186,8 +186,8 @@ def test_rechnung_vor_cutover_bleibt_auf_zahlungsdatum_pfad(db):
         db,
     )
 
-    kz_maerz = ustva_api._berechne_kz(date(2019, 3, 1), date(2019, 3, 31), db)
-    kz_mai = ustva_api._berechne_kz(date(2020, 5, 1), date(2020, 5, 31), db)
+    kz_maerz, _ = ustva_api._berechne_kz(date(2019, 3, 1), date(2019, 3, 31), db)
+    kz_mai, _ = ustva_api._berechne_kz(date(2020, 5, 1), date(2020, 5, 31), db)
 
     assert kz_maerz["kz_66"] == Decimal("0.00"), "vor Cutover: keine Vorsteuer zum Rechnungsdatum"
     assert kz_mai["kz_66"] == Decimal("19.00"), "vor Cutover: Vorsteuer weiterhin zum Zahlungsdatum"
@@ -211,10 +211,10 @@ def test_storno_unbezahlter_rechnung_korrigiert_in_aktueller_periode(db, monkeyp
     assert korrekturen[0].datum == date.today(), "Korrektur muss auf heute datiert sein, nicht rechnung.datum"
     assert korrekturen[0].vorsteuer_betrag == Decimal("-19.00")
 
-    kz_maerz = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
+    kz_maerz, _ = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
     assert kz_maerz["kz_66"] == Decimal("19.00"), "März (Rechnungsdatum-Periode) bleibt unveraendert"
 
-    kz_heute = ustva_api._berechne_kz(date.today().replace(day=1), date.today(), db)
+    kz_heute, _ = ustva_api._berechne_kz(date.today().replace(day=1), date.today(), db)
     assert kz_heute["kz_66"] == Decimal("-19.00"), "Korrektur zaehlt in der aktuellen Periode"
 
 
@@ -251,7 +251,7 @@ def test_gemischte_ust_saetze_erzeugen_getrennte_anspruch_zeilen(db):
     saetze = sorted(a.ust_satz for a in ansprueche)
     assert saetze == [Decimal("7.00"), Decimal("19.00")]
 
-    kz = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
+    kz, _ = ustva_api._berechne_kz(date(2020, 3, 1), date(2020, 3, 31), db)
     assert kz["kz_66"] == Decimal("26.00")
 
 

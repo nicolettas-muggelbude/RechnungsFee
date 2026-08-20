@@ -8,6 +8,7 @@ import {
   getBuchungsvorlagen, createBuchungsvorlage, updateBuchungsvorlage,
   deleteBuchungsvorlage, buchungAusfuehren,
   uploadBuchungsvorlageBeleg, deleteBuchungsvorlageBeleg,
+  uploadJournalAnhangVorab,
   analysiereRechnung,
   getKategorien, getLieferanten, getKonten,
   type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
@@ -410,6 +411,36 @@ function VorlageKarte({ vorlage, onBuchen, onEingangsrechnung }: {
   )
 }
 
+/** Beleg-Auswahl für den Buchen-Bestätigungsdialog (Issue #355) - gleiches Aussehen wie der
+ * Beleg-Anhang bei Eingangsrechnungen. Die Datei wird erst beim Bestätigen hochgeladen
+ * (siehe handleBuchenBestaetigen), da der Journal-Eintrag noch nicht existiert. */
+function BelegDropzone({ datei, onChange }: { datei: File | null; onChange: (f: File | null) => void }) {
+  return (
+    <div className="mt-3">
+      {datei ? (
+        <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-slate-700">
+          <span className="text-sm text-slate-600 dark:text-slate-300 truncate">📎 {datei.name}</span>
+          <button type="button" onClick={() => onChange(null)}
+            className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300" title="Entfernen">
+            🗑
+          </button>
+        </div>
+      ) : (
+        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+          <span>📎</span>
+          <span>Beleg anhängen (optional)</span>
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/tiff"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f); e.target.value = '' }}
+          />
+        </label>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Detail-Panel
 // ---------------------------------------------------------------------------
@@ -592,6 +623,8 @@ export default function BuchungsvorlagenPage() {
   const [aktivFilter, setAktivFilter] = useState<'alle' | 'aktiv' | 'inaktiv'>('aktiv')
   const [modusFilter, setModusFilter] = useState<'' | 'direkt' | 'beleg'>('')
   const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string } | null>(null)
+  const [buchenBelegDatei, setBuchenBelegDatei] = useState<File | null>(null)
+  const [buchenBelegHochladen, setBuchenBelegHochladen] = useState(false)
 
   const { data: vorlagen = [] } = useQuery({ queryKey: ['buchungsvorlagen'], queryFn: getBuchungsvorlagen })
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
@@ -631,9 +664,26 @@ export default function BuchungsvorlagenPage() {
     onSuccess: () => { invalidieren(); setSelId(null) },
   })
   const buchenMut = useMutation({
-    mutationFn: buchungAusfuehren,
+    mutationFn: ({ id, belegId }: { id: number; belegId?: number }) => buchungAusfuehren(id, belegId),
     onSuccess: () => invalidieren(),
   })
+
+  async function handleBuchenBestaetigen(id: number) {
+    let belegId: number | undefined
+    if (buchenBelegDatei) {
+      setBuchenBelegHochladen(true)
+      try {
+        const beleg = await uploadJournalAnhangVorab(buchenBelegDatei)
+        belegId = beleg.id
+      } catch (e) {
+        console.error('Beleg-Upload fehlgeschlagen', e)
+      }
+      setBuchenBelegHochladen(false)
+    }
+    buchenMut.mutate({ id, belegId })
+    setBuchungsBestaetigung(null)
+    setBuchenBelegDatei(null)
+  }
   const belegUploadMut = useMutation({
     mutationFn: ({ id, datei }: { id: number; datei: File }) => uploadBuchungsvorlageBeleg(id, datei),
     onSuccess: () => invalidieren(),
@@ -651,6 +701,7 @@ export default function BuchungsvorlagenPage() {
   function handleBuchen(id: number) {
     const v = vorlagen.find(v => v.id === id)
     if (!v) return
+    setBuchenBelegDatei(null)
     setBuchungsBestaetigung({ id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung })
   }
 
@@ -789,31 +840,33 @@ export default function BuchungsvorlagenPage() {
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Trotzdem jetzt buchen?</p>
                   </div>
                 </div>
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setBuchungsBestaetigung(null)}
+                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <div className="flex gap-3 justify-end mt-4">
+                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                     Abbrechen
                   </button>
-                  <button onClick={() => { buchenMut.mutate(buchungsBestaetigung.id); setBuchungsBestaetigung(null) }}
-                    className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 font-medium">
-                    Trotzdem buchen
+                  <button onClick={() => handleBuchenBestaetigen(buchungsBestaetigung.id)} disabled={buchenBelegHochladen}
+                    className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 font-medium disabled:opacity-50">
+                    {buchenBelegHochladen ? 'Beleg wird hochgeladen…' : 'Trotzdem buchen'}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <p className="font-semibold text-slate-800 dark:text-slate-100 mb-2">Jetzt buchen?</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
                   Erstellt einen Journal-Eintrag für <span className="font-medium">„{buchungsBestaetigung.bezeichnung}"</span> und rückt das Datum um ein Intervall vor.
                 </p>
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setBuchungsBestaetigung(null)}
+                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <div className="flex gap-3 justify-end mt-4">
+                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                     Abbrechen
                   </button>
-                  <button onClick={() => { buchenMut.mutate(buchungsBestaetigung.id); setBuchungsBestaetigung(null) }}
-                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">
-                    Jetzt buchen
+                  <button onClick={() => handleBuchenBestaetigen(buchungsBestaetigung.id)} disabled={buchenBelegHochladen}
+                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50">
+                    {buchenBelegHochladen ? 'Beleg wird hochgeladen…' : 'Jetzt buchen'}
                   </button>
                 </div>
               </>

@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen
 
-SCHEMA_VERSION = 148
+SCHEMA_VERSION = 149
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3193,6 +3193,22 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 148"))
             conn.commit()
             print("[Migration] Schema auf Version 148 (Issue #348: backup_extern_pfad_1/2_lokal_ok)")
+
+        if version < 149:
+            # Issue #358: USt-IdNr-Formatcheck + "über BZSt bestätigt"-Markierung. Kunde hatte
+            # ust_idnr_validiert/ust_idnr_validierung_datum bereits als ungenutzte Altlast aus
+            # einem frueheren, nie fertiggestellten Feature - lieferanten fehlten sie komplett.
+            cols149_kunden = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            if "ust_idnr_validierung_datum" not in cols149_kunden:
+                conn.execute(text("ALTER TABLE kunden ADD COLUMN ust_idnr_validierung_datum DATE"))
+            cols149_lieferanten = {r[1] for r in conn.execute(text("PRAGMA table_info(lieferanten)")).fetchall()}
+            if "ust_idnr_validiert" not in cols149_lieferanten:
+                conn.execute(text("ALTER TABLE lieferanten ADD COLUMN ust_idnr_validiert BOOLEAN NOT NULL DEFAULT 0"))
+            if "ust_idnr_validierung_datum" not in cols149_lieferanten:
+                conn.execute(text("ALTER TABLE lieferanten ADD COLUMN ust_idnr_validierung_datum DATE"))
+            conn.execute(text("PRAGMA user_version = 149"))
+            conn.commit()
+            print("[Migration] Schema auf Version 149 (Issue #358: ust_idnr_validiert/-datum für Lieferanten, Datum-Spalte für Kunden)")
 
 
 def _migrate_kategorien() -> None:

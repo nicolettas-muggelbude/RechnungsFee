@@ -78,7 +78,7 @@ export function KundeErstellenModal({ onSave, onClose }: Props) {
     mutationFn: (values: FormValues) => {
       const clean = Object.fromEntries(
         Object.entries(values).map(([k, v]) => [k, v === '' ? undefined : v])
-      ) as Omit<Kunde, 'id' | 'aktiv' | 'ust_idnr_validiert'>
+      ) as Omit<Kunde, 'id' | 'aktiv' | 'ust_idnr_validiert' | 'ust_idnr_validierung_datum'>
       return createKunde({
         ...clean,
         land: values.land ?? 'DE',

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  berechneUStVA, speichereUStVA, getUStVAHistorie, getUStVAPdfUrl,
+  berechneUStVA, speichereUStVA, getUStVAHistorie, getUStVAPdfUrl, getUStVAPosten,
   getUnternehmen, openUrl,
   type UStVAErgebnis,
 } from '../../api/client'
@@ -56,21 +57,80 @@ function kzKey(nr: string): keyof UStVAErgebnis {
   return `kz_${nr}` as keyof UStVAErgebnis
 }
 
-function KZZeile({ kz, label, wert, istSteuer = false, bold = false }:
-  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean }) {
+function formatDatumKurz(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+/** Aufklappbare KZ-Zeile (Issue #353) - zeigt bei Klick die einzelnen Journaleinträge/
+ * Vorsteuer-Ansprüche, die zur Summe beigetragen haben. Nur aufklappbar wenn ein zeitraum
+ * mitgegeben wurde (Zahllast-Zeile z.B. hat keine eigene KZ und bleibt starr). */
+function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum }:
+  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean; zeitraum?: string }) {
+  const navigate = useNavigate()
+  const [offen, setOffen] = useState(false)
   const n = parseFloat(wert)
   const negativ = n < 0
+  const aufklappbar = !!zeitraum && kz !== '—' && n !== 0
+
+  const { data: posten, isLoading } = useQuery({
+    queryKey: ['ustva-posten', zeitraum, kz],
+    queryFn: () => getUStVAPosten(zeitraum!, kz),
+    enabled: offen && aufklappbar,
+  })
+
   return (
-    <div className={`flex items-center gap-3 py-2 ${bold ? 'border-t border-slate-200 dark:border-slate-600 mt-1 pt-3' : ''}`}>
-      <span className={`shrink-0 inline-flex items-center justify-center w-9 h-6 rounded text-xs font-bold text-white ${bold ? 'bg-slate-700 dark:bg-slate-500' : 'bg-blue-600 dark:bg-blue-700'}`}>
-        {kz}
-      </span>
-      <span className={`flex-1 text-sm ${istSteuer ? 'text-slate-500 dark:text-slate-400 text-xs' : bold ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}`}>
-        {label}
-      </span>
-      <span className={`tabular-nums text-sm font-medium ${negativ ? 'text-green-600 dark:text-green-400' : bold ? 'text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}`}>
-        {n === 0 ? <span className="text-slate-300 dark:text-slate-600">—</span> : euroFmt(wert)}
-      </span>
+    <div>
+      <div
+        onClick={() => aufklappbar && setOffen(o => !o)}
+        className={`flex items-center gap-3 py-2 ${bold ? 'border-t border-slate-200 dark:border-slate-600 mt-1 pt-3' : ''} ${aufklappbar ? 'cursor-pointer select-none' : ''}`}
+      >
+        <span className={`shrink-0 inline-flex items-center justify-center w-9 h-6 rounded text-xs font-bold text-white ${bold ? 'bg-slate-700 dark:bg-slate-500' : 'bg-blue-600 dark:bg-blue-700'}`}>
+          {kz}
+        </span>
+        <span className={`flex-1 text-sm flex items-center gap-1.5 ${istSteuer ? 'text-slate-500 dark:text-slate-400 text-xs' : bold ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}`}>
+          {label}
+          {aufklappbar && <span className="text-slate-300 dark:text-slate-600 text-xs">{offen ? '▾' : '▸'}</span>}
+        </span>
+        <span className={`tabular-nums text-sm font-medium ${negativ ? 'text-green-600 dark:text-green-400' : bold ? 'text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}`}>
+          {n === 0 ? <span className="text-slate-300 dark:text-slate-600">—</span> : euroFmt(wert)}
+        </span>
+      </div>
+      {offen && aufklappbar && (
+        <div className="pb-2 pl-12 pr-1 space-y-1">
+          {isLoading ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Lade Posten…</p>
+          ) : !posten?.length ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Keine Einzelposten gefunden.</p>
+          ) : (
+            posten.map((p) => (
+              <div
+                key={`${p.quelle}-${p.quelle_id}`}
+                className="flex items-center justify-between gap-2 text-xs bg-slate-50 dark:bg-slate-900 rounded-lg px-2.5 py-1.5"
+              >
+                <div className="min-w-0 truncate">
+                  <span className="text-slate-400 dark:text-slate-500 mr-2 tabular-nums">{formatDatumKurz(p.datum)}</span>
+                  <span className="text-slate-600 dark:text-slate-300">{p.beschreibung}</span>
+                  {p.referenz && <span className="text-slate-400 dark:text-slate-500 ml-1">({p.referenz})</span>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="tabular-nums text-slate-700 dark:text-slate-200 font-medium">{euroFmt(p.betrag)}</span>
+                  {p.rechnung_id != null && (
+                    <button
+                      type="button"
+                      title="Zur Rechnung springen"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/rechnungen?open=${p.rechnung_id}`) }}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      ↗
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -290,7 +350,7 @@ export function UStVAPage() {
                 <Abschnitt key={abschnitt} titel={abschnitt}>
                   {zeilen.map(([, nr, bezeichnung, istSteuer]) => (
                     <KZZeile key={nr} kz={nr} label={bezeichnung}
-                      wert={kzWert(nr)} istSteuer={istSteuer} />
+                      wert={kzWert(nr)} istSteuer={istSteuer} zeitraum={zeitraum} />
                   ))}
                 </Abschnitt>
               ))}

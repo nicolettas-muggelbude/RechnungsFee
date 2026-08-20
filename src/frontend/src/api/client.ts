@@ -696,12 +696,13 @@ export type Kunde = {
   skonto_prozent?: number | null
   skonto_tage?: number | null
   ust_idnr_validiert?: boolean
+  ust_idnr_validierung_datum?: string | null
   aktiv?: boolean
   mahnung_gesperrt?: boolean
   mahnung_warnung?: boolean
 }
 export const getKunden = () => request<Kunde[]>('/kunden')
-export const createKunde = (data: Omit<Kunde, 'id' | 'aktiv' | 'ust_idnr_validiert'>) =>
+export const createKunde = (data: Omit<Kunde, 'id' | 'aktiv' | 'ust_idnr_validiert' | 'ust_idnr_validierung_datum'>) =>
   request<Kunde>('/kunden', { method: 'POST', body: JSON.stringify(data) })
 export const updateKunde = (id: number, data: Partial<Kunde>) =>
   request<Kunde>(`/kunden/${id}`, { method: 'PUT', body: JSON.stringify(data) })
@@ -842,6 +843,8 @@ export type Lieferant = {
   ort?: string
   land: string
   ust_idnr?: string
+  ust_idnr_validiert?: boolean
+  ust_idnr_validierung_datum?: string | null
   email?: string
   telefon?: string
   lieferantennummer?: string
@@ -851,7 +854,7 @@ export type Lieferant = {
   aktiv?: boolean
 }
 export const getLieferanten = () => request<Lieferant[]>('/lieferanten')
-export const createLieferant = (data: Omit<Lieferant, 'id' | 'aktiv'>) =>
+export const createLieferant = (data: Omit<Lieferant, 'id' | 'aktiv' | 'ust_idnr_validiert' | 'ust_idnr_validierung_datum'>) =>
   request<Lieferant>('/lieferanten', { method: 'POST', body: JSON.stringify(data) })
 export const updateLieferant = (id: number, data: Partial<Lieferant>) =>
   request<Lieferant>(`/lieferanten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
@@ -1941,6 +1944,19 @@ export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
 }
 
+export type UStVAPosten = {
+  quelle: 'journal' | 'vorsteuer_anspruch'
+  quelle_id: number
+  datum: string
+  referenz: string | null
+  beschreibung: string
+  betrag: string
+  rechnung_id: number | null
+}
+
+export const getUStVAPosten = (zeitraum: string, kz: string) =>
+  request<UStVAPosten[]>(`/ustva/posten${toQuery({ zeitraum, kz })}`)
+
 export type JahresUStVAErgebnis = {
   jahr: number
   von: string
@@ -2272,8 +2288,8 @@ export const updateBuchungsvorlage = (id: number, data: Partial<BuchungsvorlageC
   request<Buchungsvorlage>(`/buchungsvorlagen/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteBuchungsvorlage = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}`, { method: 'DELETE' })
-export const buchungAusfuehren = (id: number) =>
-  request<unknown>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST' })
+export const buchungAusfuehren = (id: number, belegId?: number) =>
+  request<unknown>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
 export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)

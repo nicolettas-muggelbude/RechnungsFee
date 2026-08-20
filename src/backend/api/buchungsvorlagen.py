@@ -60,6 +60,10 @@ class BuchungsvorlageCreate(BaseModel):
     notizen: Optional[str] = None
 
 
+class BuchenRequest(BaseModel):
+    beleg_id: Optional[int] = None
+
+
 class BuchungsvorlageUpdate(BaseModel):
     bezeichnung: Optional[str] = None
     lieferant_id: Optional[int] = None
@@ -241,8 +245,12 @@ def loesche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/{vorlage_id}/buchen", status_code=201)
-def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
-    """Legt einen Journal-Eintrag aus der Vorlage an und rückt das Datum vor."""
+def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Session = Depends(get_db)):
+    """Legt einen Journal-Eintrag aus der Vorlage an und rückt das Datum vor.
+
+    data.beleg_id (optional): Issue #355 - Beleg wird analog zur Split-Buchung (Issue #310)
+    vorab über POST /journal/anhang-vorab hochgeladen, da der Journal-Eintrag ab Erstellung
+    immutable ist und ein nachträglicher Upload wie bei Eingangsrechnungen nicht möglich ist."""
     v = db.query(Buchungsvorlage).filter(Buchungsvorlage.id == vorlage_id).first()
     if not v:
         raise HTTPException(404, "Vorlage nicht gefunden")
@@ -289,6 +297,7 @@ def buche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
         konto_ust_skr03=konto_ust_skr03 if v.ust_satz > 0 else None,
         konto_ust_skr04=konto_ust_skr04 if v.ust_satz > 0 else None,
         buchungsvorlage_id=v.id,
+        beleg_id=data.beleg_id,
         immutable=True,
     )
     eintrag.signatur = signatur_journaleintrag(eintrag)

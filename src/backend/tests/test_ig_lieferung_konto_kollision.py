@@ -68,7 +68,7 @@ def test_ig_lieferung_bekommt_keinen_ust_sonderfall_und_kz41(db):
     assert eintrag.ust_sonderfall is None
     assert eintrag.steuerbefreiung_grund == "§4 Nr. 1b UStG"
 
-    kz = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
+    kz, _ = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
     assert kz["kz_41"] == Decimal("119.00")
     assert kz["kz_46"] == Decimal("0")
     assert kz["kz_47"] == Decimal("0")

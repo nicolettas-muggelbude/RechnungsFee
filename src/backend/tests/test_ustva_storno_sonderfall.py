@@ -52,7 +52,7 @@ def test_13b_abs1_storno_hebt_kz_46_47_67_vollstaendig_auf(db):
         db,
     )
 
-    kz_vor_storno = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
+    kz_vor_storno, _ = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
     assert kz_vor_storno["kz_46"] == Decimal("128.38")
     assert kz_vor_storno["kz_47"] == Decimal("24.39")
     assert kz_vor_storno["kz_67"] == Decimal("24.39")
@@ -60,7 +60,7 @@ def test_13b_abs1_storno_hebt_kz_46_47_67_vollstaendig_auf(db):
 
     storno_eintrag(eintrag.id, StornoRequest(grund="Testkorrektur"), db)
 
-    kz_nach_storno = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
+    kz_nach_storno, _ = _berechne_kz(date(2026, 1, 1), date(2026, 1, 31), db)
     assert kz_nach_storno["kz_46"] == Decimal("0.00")
     assert kz_nach_storno["kz_47"] == Decimal("0.00")
     assert kz_nach_storno["kz_67"] == Decimal("0.00")
@@ -86,7 +86,7 @@ def test_13b_abs2_storno_hebt_kz_84_85_auf(db):
     )
     storno_eintrag(eintrag.id, StornoRequest(grund="Testkorrektur"), db)
 
-    kz = _berechne_kz(date(2026, 2, 1), date(2026, 2, 28), db)
+    kz, _ = _berechne_kz(date(2026, 2, 1), date(2026, 2, 28), db)
     assert kz["kz_84"] == Decimal("0.00")
     assert kz["kz_85"] == Decimal("0.00")
     assert kz["kz_67"] == Decimal("0.00")
@@ -112,7 +112,7 @@ def test_ig_erwerb_storno_hebt_kz_89_und_kz_61_auf(db):
     )
     storno_eintrag(eintrag.id, StornoRequest(grund="Testkorrektur"), db)
 
-    kz = _berechne_kz(date(2026, 3, 1), date(2026, 3, 31), db)
+    kz, _ = _berechne_kz(date(2026, 3, 1), date(2026, 3, 31), db)
     assert kz["kz_89"] == Decimal("0.00")
     assert kz["kz_61"] == Decimal("0.00")
     assert kz["zahllast"] == Decimal("0.00")
@@ -147,7 +147,7 @@ def test_zwei_sonderfall_buchungen_nur_eine_storniert(db):
     )
     storno_eintrag(eintrag1.id, StornoRequest(grund="Testkorrektur"), db)
 
-    kz = _berechne_kz(date(2026, 4, 1), date(2026, 4, 30), db)
+    kz, _ = _berechne_kz(date(2026, 4, 1), date(2026, 4, 30), db)
     assert kz["kz_46"] == Decimal("50.00")
     assert kz["kz_47"] == Decimal("9.50")
     assert kz["kz_67"] == Decimal("9.50")

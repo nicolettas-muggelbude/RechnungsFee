@@ -450,6 +450,8 @@ class Lieferant(Base):
     ort: Mapped[str | None] = mapped_column(String(100))
     land: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
     ust_idnr: Mapped[str | None] = mapped_column(String(20))
+    ust_idnr_validiert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ust_idnr_validierung_datum: Mapped[date | None] = mapped_column(Date)
     email: Mapped[str | None] = mapped_column(String(200))
     telefon: Mapped[str | None] = mapped_column(String(50))
     lieferantennummer: Mapped[str | None] = mapped_column(String(50))

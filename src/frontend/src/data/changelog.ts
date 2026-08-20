@@ -23,6 +23,19 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.9',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Backup wiederherstellen – der Unterschied zwischen „Lokales Backup wiederherstellen" (Snapshot, schnell, kein Passwort/Upload nötig) und „ZIP-Backup hochladen" (vollständig inkl. Belege, z. B. nach Hardware-Wechsel) steht jetzt direkt im Fenster, plus Link zum passenden Handbuch-Abschnitt (Issue #354).' },
+      { typ: 'verbesserung', text: 'Buchungsvorlagen – beim direkten „Jetzt buchen" (Dauerauftrag/SEPA) lässt sich jetzt optional ein Beleg anhängen (z. B. Kontoauszug-Ausschnitt), genau wie bei jeder anderen Journalbuchung. Bisher entstand dabei ein Journal-Eintrag komplett ohne Beleg-Möglichkeit. Danke an gitmacer für den Vorschlag (Issue #355).' },
+      { typ: 'verbesserung', text: 'Journal – Taste „+" öffnet jetzt „Neue Buchung", ganz ohne Maus (solange kein Eingabefeld fokussiert ist). Danke an Peter1061 für den Vorschlag (Issue #356).' },
+      { typ: 'verbesserung', text: 'Journal – Spaltenüberschrift „Datum" ist jetzt klickbar und wechselt zwischen absteigend (neueste oben, Standard) und aufsteigend (älteste oben, wie ein Kontoauszug) – erleichtert den Abgleich mit Bankunterlagen. Danke an Peter1061 für den Vorschlag (Issue #357).' },
+      { typ: 'neu', text: 'UStVA – Anzeigehilfe aufschlüsselbar: Jede Kennziffer mit Wert lässt sich jetzt aufklappen und zeigt die einzelnen Journaleinträge bzw. Vorsteuer-Ansprüche, aus denen sich die Summe zusammensetzt – inkl. Link direkt zur verknüpften Rechnung. Erleichtert Abstimm- und Prüfarbeiten erheblich. Danke an gitmacer für den Vorschlag (Issue #353).' },
+      { typ: 'neu', text: 'USt-IdNr.-Prüfung bei Kunden und Lieferanten: Warnung bei einem Format, das nicht zum gewählten Land passt, plus Link zur BZSt-eVatR-Online-Abfrage und eine „Über BZSt bestätigt"-Markierung mit Datum. Danke an Peter1061 für den Vorschlag (Issue #358).' },
+      { typ: 'fix', text: 'EÜR-Berechnung: Buchungen in den Kategorien "Fortbildung & Fachliteratur" (Zeile 45), "Reparatur Anlagevermögen" (Zeile 48) und "Software & Abonnements" (Zeile 50) wurden falsch summiert – eine versehentlich als Einnahme statt Ausgabe gebuchte Position wurde addiert statt gegengerechnet, und der Zeilenbetrag fehlte komplett in der Summe Betriebsausgaben. Ursache: diese drei Zeilennummern fehlten in der internen Bezeichnungs-Tabelle, wodurch weder die Vorzeichen-Korrektur nach Buchungsart noch die Summenbildung griff. Danke an l1fecoach für den sehr präzisen Report mit Reproduktionsschritten (Issue #362).' },
+    ],
+  },
+  {
     version: 'v0.5.8',
     datum: 'August 2026',
     eintraege: [

@@ -44,6 +44,7 @@ Label **`awaiting-response`** auf ein Issue setzen → schließt sich automatisc
 |--------|--------|-----------------|
 | Strg + F | Suchfeld fokussieren (wenn Seite eine Suche hat) | `AppLayout.tsx` keydown-Handler → `[data-search-input]` fokussieren |
 | Strg + Shift + E | Direkt zu Eingangsrechnungen | `AppLayout.tsx` keydown-Handler → `/rechnungen?typ=eingang`; `RechnungenPage` liest `?typ=`-Parameter |
+| + | Journal: „Neue Buchung"-Fenster öffnen | `JournalPage.tsx` keydown-Handler → `setShowBuchung(true)`; nur wenn kein Eingabefeld fokussiert und kein anderer Dialog offen ist |
 
 ---
 
@@ -70,7 +71,7 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 148` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 149` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -281,6 +282,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 146 | Datenfix Issue #340: Kategorien „EU-Dienstleistungen (§13b Abs. 1)" + „Drittland-Dienstleistungen (§13b Abs. 1)" euer_zeile 27 (Waren, Rohstoffe, Hilfsstoffe) → 60 (Sonstige Betriebsausgaben) – beide erfassen sonstige Leistungen, keine Waren, analog zu „Bauleistungen / §13b Abs. 2" (stand von Anfang an korrekt auf 60). Guard „WHERE euer_zeile = 27" – kein user_modified-Flag für euer_zeile, manuell abweichend gesetzte Werte bleiben unangetastet |
 | 147 | Datenfix Issue #341-Folgefund: sechs „Absetzungen vom Einkommen"-Privatkategorien (ESt-Vorauszahlung, KV/PV/RV, Riester, Sonstige Absetzungen) euer_zeile NULL → 106 (Privatentnahme, Hinweiszeile) – wirtschaftlich Privatentnahmen; ohne gesetzte euer_zeile erschienen sie im Buchungsformular fälschlich sowohl unter „Einnahme" als auch „Ausgabe". Guard „WHERE euer_zeile IS NULL" |
 | 148 | unternehmen.backup_extern_pfad_1/2_lokal_ok BOOLEAN – Issue #348: Opt-in pro Backup-Zielpfad, um die Systemlaufwerk-Prüfung (`_ist_systemlaufwerk()`) gezielt zu übergehen, z. B. für einen lokal per Sync-Client (Dropbox/Proton Drive) extern gesicherten Ordner. Default weiterhin sicher (Prüfung greift ohne Bestätigung). Zusätzlich (kein Schema-Change): `database/connection.py` unterschied APP_DATA_DIR bisher nur Windows vs. „alles andere" – macOS lief fälschlich über die Linux-XDG-Konvention (`~/.local/share/`) statt `~/Library/Application Support/`; bestehende macOS-Installationen werden beim ersten Start mit dem Fix einmalig automatisch in den korrekten Ordner verschoben (nur wenn dort noch keine DB liegt) |
+| 149 | lieferanten.ust_idnr_validiert BOOLEAN + ust_idnr_validierung_datum DATE (neu, analog zu den bei Kunden bereits vorhandenen, bis dahin aber ungenutzten Feldern); kunden.ust_idnr_validierung_datum DATE (fehlte bislang, `ust_idnr_validiert` gab es schon) – Issue #358: „Über BZSt bestätigt"-Checkbox samt Datum in Kunden-/Lieferantenstammdaten; dazu client-seitiger USt-IdNr-Formatcheck je EU-Land (`utils/laender.ts`, Muster aus `EU_LAENDER`/seed.py übernommen) und Link zur BZSt-eVatR-Abfrage. Beim Kunden nur aktiv wenn `istEuAusland` (Land ≠ DE und EU-Mitglied) – das Feld ist für DE/Drittland weiterhin auch als normale Steuernummer nutzbar (Issue #335), ein Formatcheck dagegen würde dort falsche Warnungen erzeugen |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
