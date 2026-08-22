@@ -1641,6 +1641,18 @@ export const forderungsausbuchenRechnung = (id: number) =>
 export const createGutschrift = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/gutschrift`, { method: 'POST' })
 
+export type GutschriftVerrechnenResult = {
+  gutschrift: Rechnung
+  rechnung: Rechnung
+  betrag: string
+}
+
+export const gutschriftVerrechnen = (gutschriftId: number, rechnungId: number) =>
+  request<GutschriftVerrechnenResult>(`/rechnungen/${gutschriftId}/verrechnen`, {
+    method: 'POST',
+    body: JSON.stringify({ rechnung_id: rechnungId }),
+  })
+
 export const ersatzrechnungErstellen = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ersatzrechnung`, { method: 'POST' })
 

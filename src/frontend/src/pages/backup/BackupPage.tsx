@@ -508,15 +508,13 @@ function WiederherstellungTab() {
             Aus einem automatisch erstellten Snapshot – für die schnelle Wiederherstellung nach einem Fehler.
             Kein Passwort, kein Datei-Upload nötig.
           </p>
-          <a
-            href="https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Backup#aus-lokalem-snapshot"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
             onClick={() => import('../../api/client').then(m => m.openUrl('https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Backup#aus-lokalem-snapshot'))}
             className="inline-block text-orange-100 text-xs underline mt-1.5 hover:text-white"
           >
             Mehr dazu im Handbuch →
-          </a>
+          </button>
         </div>
         <div className="p-6 space-y-4">
           {neustartBereit ? (
@@ -550,15 +548,13 @@ function WiederherstellungTab() {
             Aus einer Backup-Datei (.zip oder verschlüsselt .zip.enc) – für die vollständige Wiederherstellung
             inkl. Belege, z. B. nach einem Hardware-Wechsel oder Totalverlust.
           </p>
-          <a
-            href="https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Backup#aus-manuellem-zip-backup"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
             onClick={() => import('../../api/client').then(m => m.openUrl('https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Backup#aus-manuellem-zip-backup'))}
             className="inline-block text-blue-600 dark:text-blue-400 text-xs underline mt-1.5 hover:text-blue-800 dark:hover:text-blue-300"
           >
             Mehr dazu im Handbuch →
-          </a>
+          </button>
         </div>
         <div className="p-6 space-y-5">
           <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3 flex gap-3">

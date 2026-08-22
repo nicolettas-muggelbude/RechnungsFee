@@ -23,6 +23,7 @@ from database.connection import get_db
 from database.models import (
     Kunde, Mahnstufe, Mahnung, MahnungRechnung, MahnwesenEinstellungen, Nummernkreis, Rechnung, Unternehmen,
 )
+from .rechnungen import gutschrift_verrechnen, GutschriftVerrechnenRequest
 from utils.pdf_inkasso_deckblatt import erstelle_inkasso_deckblatt_pdf
 from utils.pdf_kontokorrent import erstelle_kontokorrent_pdf
 from utils.pdf_mahnung import erstelle_mahnung_pdf
@@ -881,6 +882,67 @@ def _berechne_mahnung_gebuehr_only(
     return kunde, stufe, vorperioden_gebuehr, vorperioden_zinsen, vorperioden_mahnungen
 
 
+def _offene_ausgangsgutschriften_kunde(db: Session, kunde_id: int) -> list[Rechnung]:
+    """Offene (nicht vollständig verrechnete) Kundengutschriften eines Kunden, älteste zuerst -
+    Grundlage der automatischen Gutschriften-Verrechnung vor einer Mahnung (Issue #366)."""
+    return (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.kunde_id == kunde_id,
+            Rechnung.typ == "ausgang",
+            Rechnung.dokument_typ == "Gutschrift",
+            Rechnung.ist_entwurf == False,  # noqa: E712
+            Rechnung.storniert == False,  # noqa: E712
+            Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
+        )
+        .order_by(Rechnung.datum.asc())
+        .all()
+    )
+
+
+def _gutschrift_verrechnung_vorschau(db: Session, kunde_id: int, rechnungen: list[Rechnung]) -> Decimal:
+    """Rein informative (nicht buchende) Berechnung für /vorschau: wie viel von
+    offener_betrag_gesamt automatisch durch offene Kundengutschriften verrechnet würde.
+    Muss side-effect-frei bleiben - /vorschau darf keine Buchung auslösen (siehe
+    _berechne_mahnung()-Docstring: "Gemeinsame Berechnung für /vorschau und /erstellen")."""
+    gutschriften = _offene_ausgangsgutschriften_kunde(db, kunde_id)
+    if not gutschriften:
+        return Decimal("0.00")
+    verfuegbar = sum(
+        (abs(g.brutto_gesamt - (g.bezahlt_betrag or Decimal("0"))) for g in gutschriften), Decimal("0"),
+    )
+    offen = sum((r.brutto_gesamt - r.bezahlt_betrag for r in rechnungen), Decimal("0"))
+    return min(verfuegbar, offen).quantize(Q, ROUND_HALF_UP)
+
+
+def _verrechne_offene_gutschriften_vor_mahnung(db: Session, rechnungen: list[Rechnung]) -> None:
+    """Bucht die automatische Verrechnung offener Kundengutschriften gegen die mahnrelevanten
+    Rechnungen (Issue #366, Nutzer-Vorgabe "automatisch mindern") - echte Buchung über
+    gutschrift_verrechnen(), NICHT nur eine Anzeige-Korrektur. Nur in /erstellen aufgerufen,
+    nie in _berechne_mahnung()/vorschau() (siehe _gutschrift_verrechnung_vorschau()-Docstring).
+    Aktualisiert die übergebenen Rechnung-Objekte in-place (gleiche Session/Identity Map)."""
+    kunde_ids = {r.kunde_id for r in rechnungen if r.kunde_id}
+    for kunde_id in kunde_ids:
+        gutschriften = _offene_ausgangsgutschriften_kunde(db, kunde_id)
+        if not gutschriften:
+            continue
+        ziel_rechnungen = [
+            r for r in rechnungen
+            if r.kunde_id == kunde_id
+            and r.dokument_typ == "Rechnung"
+            and r.zahlungsstatus in ("offen", "teilweise")
+        ]
+        for gs in gutschriften:
+            for ziel in ziel_rechnungen:
+                gs_rest = abs(gs.brutto_gesamt - (gs.bezahlt_betrag or Decimal("0")))
+                if gs_rest <= Decimal("0.004"):
+                    break
+                ziel_rest = ziel.brutto_gesamt - (ziel.bezahlt_betrag or Decimal("0"))
+                if ziel_rest <= Decimal("0.004"):
+                    continue
+                gutschrift_verrechnen(gs.id, GutschriftVerrechnenRequest(rechnung_id=ziel.id), db)
+
+
 @router.post("/vorschau", response_model=MahnungVorschauResponse)
 def vorschau(data: MahnungVorschauRequest, db: Session = Depends(get_db)):
     """Berechnet Mahngebühr/Verzugszinsen für eine (ggf. konsolidierte) Mahnung, ohne zu speichern."""
@@ -915,17 +977,20 @@ def vorschau(data: MahnungVorschauRequest, db: Session = Depends(get_db)):
         for r in rechnungen
     ]
     gebuehr_vorperioden = (vorperioden_gebuehr + vorperioden_zinsen).quantize(Q, ROUND_HALF_UP)
+    gutschrift_verrechnung = _gutschrift_verrechnung_vorschau(db, kunde.id, rechnungen)
+    offener_betrag_netto = (offener_betrag_gesamt - gutschrift_verrechnung).quantize(Q, ROUND_HALF_UP)
     return MahnungVorschauResponse(
         kunde_id=kunde.id,
         kunde_name=_kunde_name(kunde),
         stufe=stufe.stufe,
         bezeichnung=stufe.bezeichnung,
         positionen=positionen,
-        offener_betrag_gesamt=offener_betrag_gesamt,
+        offener_betrag_gesamt=offener_betrag_netto,
         mahngebuehr=(mahngebuehr + vorperioden_gebuehr).quantize(Q, ROUND_HALF_UP),
         verzugszinsen=(verzugszinsen + vorperioden_zinsen).quantize(Q, ROUND_HALF_UP),
         gebuehr_vorperioden=gebuehr_vorperioden,
-        gesamtforderung=(offener_betrag_gesamt + mahngebuehr + verzugszinsen + gebuehr_vorperioden).quantize(Q, ROUND_HALF_UP),
+        gesamtforderung=(offener_betrag_netto + mahngebuehr + verzugszinsen + gebuehr_vorperioden).quantize(Q, ROUND_HALF_UP),
+        gutschrift_verrechnung=gutschrift_verrechnung,
     )
 
 
@@ -1022,6 +1087,23 @@ def erstellen(data: MahnungErstellenRequest, db: Session = Depends(get_db)):
         if not data.kunde_id:
             raise HTTPException(status_code=422, detail="rechnung_ids oder kunde_id erforderlich.")
         return _erstellen_gebuehr_only(db, data.kunde_id, data.stufe, einstellungen)
+
+    # Offene Kundengutschriften automatisch verrechnen, BEVOR der Mahnbetrag berechnet wird
+    # (Issue #366, Nutzer-Vorgabe "automatisch mindern") - reduziert rechnung.bezahlt_betrag
+    # der betroffenen Rechnungen direkt in der DB, sodass _berechne_mahnung() (dieselbe
+    # Funktion wie in /vorschau) den bereits geminderten Betrag automatisch korrekt liefert,
+    # ohne dort selbst etwas Buchendes anfassen zu müssen. Defensiv abgesichert: schlägt die
+    # Verrechnung aus einem unerwarteten Grund fehl, darf das die eigentliche Mahnungserstellung
+    # nicht blockieren - dann läuft sie wie bisher ohne automatische Verrechnung weiter.
+    vorab_rechnungen = db.query(Rechnung).filter(Rechnung.id.in_(data.rechnung_ids)).all()
+    try:
+        _verrechne_offene_gutschriften_vor_mahnung(db, vorab_rechnungen)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Automatische Gutschriften-Verrechnung vor Mahnung fehlgeschlagen (rechnung_ids=%s)",
+            data.rechnung_ids, exc_info=True,
+        )
 
     kunde, stufe, rechnungen, offener_betrag_gesamt, mahngebuehr, verzugszinsen = _berechne_mahnung(
         db, data.rechnung_ids, data.stufe, einstellungen

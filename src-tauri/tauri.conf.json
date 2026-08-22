@@ -50,7 +50,9 @@
       "nsis": {
         "languages": ["German"],
         "displayLanguageSelector": false,
-        "installerHooks": "nsis/installer.nsh"
+        "installerHooks": "nsis/installer.nsh",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon_uninstall.ico"
       }
     }
   }

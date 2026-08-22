@@ -1545,7 +1545,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 def _gutschrift_restbetrag(original: "Rechnung", db: Session, ausgenommen_id: int | None = None) -> Decimal:
     """Gibt zurück wie viel vom Original noch gutgeschrieben werden darf (positiver Betrag).
 
-    original.brutto_gesamt ist positiv (Ausgangsrechnung).
+    original.brutto_gesamt ist positiv (Ausgangs- oder Eingangsrechnung, Issue #364).
     Gutschriften haben negatives brutto_gesamt.
     Stornierte und Entwurf-Gutschriften zählen nicht mit.
     ausgenommen_id: ID der aktuellen Gutschrift, die nicht mitgezählt werden soll (beim Finalisieren).
@@ -2305,8 +2305,12 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                 detail=f"Betrag ({betrag_abs}) übersteigt den Restbetrag ({abs(restbetrag)}).")
         betrag_neg = -betrag_abs
 
-        # Barkassen-Prüfung: Gutschrift per Bar reduziert Kassenstand
-        if data.zahlungsart == "Bar":
+        # Barkassen-Prüfung nur für Kundengutschrift (typ=="ausgang"): eine Bar-Erstattung an
+        # den Kunden REDUZIERT den Kassenstand, muss also gedeckt sein. Bei einer Lieferanten-
+        # gutschrift (typ=="eingang", Issue #364) ist es umgekehrt - der Lieferant erstattet UNS
+        # bar, das ERHÖHT den Kassenstand, keine Deckungsprüfung nötig (wie bei jeder normalen
+        # Bar-Einnahme, die ebenfalls nicht gegen den Kassenstand geprüft wird).
+        if data.zahlungsart == "Bar" and rechnung.typ == "ausgang":
             ein_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
                 Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
             aus_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
@@ -2540,8 +2544,12 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # Fallback-Kategorie fuer Gruppen ohne eigenes kategorie_id: pos.kategorie_id und
         # rechnung.kategorie_id werden fuer Ausgangsrechnungen aktuell nie befuellt (keine UI
         # dafuer) - ohne diesen Fallback wuerden solche Gutschriften komplett ohne Kategorie
-        # gebucht, insbesondere bei ist_eu_lieferung (Issue #316).
-        fallback_kat_id, _ = _erloes_kategorie(db, rechnung)
+        # gebucht, insbesondere bei ist_eu_lieferung (Issue #316). _erloes_kategorie() ist eine
+        # reine Erlös-/Ausgangsrechnungs-Ermittlung - fuer eine Lieferantengutschrift (typ=
+        # "eingang", Issue #364) ergibt sie keinen Sinn; dort muss stattdessen jede Position
+        # bereits eine eigene Aufwand-Kategorie haben (analog zur Kategorie-Pflicht bei
+        # Eingangsrechnungen), sonst klarer Fehler statt stillschweigend falscher Kategorie.
+        fallback_kat_id = _erloes_kategorie(db, rechnung)[0] if rechnung.typ == "ausgang" else None
 
         gruppen_liste = list(pos_gruppen.items())
         for i, ((kat_id, satz_int, g_ist_diff), g_brutto_pos) in enumerate(gruppen_liste):
@@ -2554,6 +2562,11 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             satz_d = Decimal(str(satz_int)) if not steuerbefreiung_grund else Decimal("0")
             g_ust03, g_ust04 = (_ust_konto(art, satz_d) if satz_int > 0 and not steuerbefreiung_grund else (None, None))
             eff_kat_id = kat_25a_id_gs if g_ist_diff else (kat_id or rechnung.kategorie_id or fallback_kat_id)
+            if eff_kat_id is None and rechnung.typ == "eingang":
+                raise HTTPException(status_code=422, detail=(
+                    "Bitte eine Kategorie auswählen (je Position oder als Hauptkategorie) – "
+                    "die Lieferantengutschrift kann sonst nicht korrekt verbucht werden."
+                ))
             kat_obj_g = db.query(Kategorie).filter(Kategorie.id == eff_kat_id).first() if eff_kat_id else None
             # §25a-Marge dieser Gruppe anteilig auf den tatsaechlich verbuchten Teilbetrag
             # skalieren (bei Teil-Gutschrift ist |anteil| < g_brutto_pos). Skalierungsfaktor
@@ -3119,13 +3132,13 @@ def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{rechnung_id}/gutschrift", response_model=RechnungResponse, status_code=201)
 def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
-    """Erstellt eine Gutschrift aus einer bestehenden Ausgangsrechnung.
-    Alle Positionen werden übernommen (Mengen negiert), eigene RE-Nummer, Entwurf."""
+    """Erstellt eine Gutschrift aus einer bestehenden Rechnung (Ausgang: Kundengutschrift,
+    Eingang: Lieferantengutschrift, Issue #364). Alle Positionen werden übernommen
+    (Mengen negiert), eigene GS-Nummer (gemeinsamer Nummernkreis für beide Richtungen),
+    Entwurf. typ bleibt wie beim Original erhalten."""
     original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if original.typ != "ausgang":
-        raise HTTPException(status_code=409, detail="Gutschriften können nur für Ausgangsrechnungen erstellt werden.")
     if original.dokument_typ == "Gutschrift":
         raise HTTPException(status_code=409, detail="Aus einer Gutschrift kann keine weitere Gutschrift erstellt werden.")
     if original.storniert:
@@ -3162,13 +3175,14 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     orig_nr = original.rechnungsnummer or f"#{original.id}"
 
     gutschrift = Rechnung(
-        typ="ausgang",
+        typ=original.typ,
         dokument_typ="Gutschrift",
         gutschrift_zu_rechnung_id=original.id,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
         faellig_am=None,
         kunde_id=original.kunde_id,
+        lieferant_id=original.lieferant_id,
         partner_freitext=original.partner_freitext,
         partner_strasse=original.partner_strasse,
         partner_hausnummer=original.partner_hausnummer,
@@ -3236,6 +3250,177 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     resp = RechnungResponse.from_orm_extended(gutschrift)
     resp.gutschrift_zu_rechnung_nr = orig_nr
     return resp
+
+
+def _dominante_gruppe(rechnung: "Rechnung", db: Session) -> tuple[Decimal, "int | None", "Kategorie | None"]:
+    """Ermittelt USt-Satz und Kategorie einer Rechnung/Gutschrift anhand der dominanten
+    Positionsgruppe (höchster Betrag) - dieselbe Vereinfachung wie in forderungen.py
+    forderung_verrechnen() (keine positionsweise Aufteilung, ein Journal-Eintrag für die
+    gesamte Verrechnung). abs() nötig, da Gutschrift-Positionen negative Beträge tragen
+    (forderung_verrechnen() operiert nie auf einer Gutschrift, daher dort ohne abs()).
+    """
+    if not rechnung.positionen:
+        kat = rechnung.kategorie
+        return Decimal("0"), rechnung.kategorie_id, kat
+    satz_gruppen: dict[int, Decimal] = {}
+    kat_gruppen: dict[int | None, Decimal] = {}
+    for pos in rechnung.positionen:
+        s = int(pos.ust_satz_25a if pos.differenzbesteuerung and pos.ust_satz_25a else pos.ust_satz)
+        gewicht = abs(pos.brutto)
+        satz_gruppen[s] = satz_gruppen.get(s, Decimal("0")) + gewicht
+        kat_gruppen[pos.kategorie_id] = kat_gruppen.get(pos.kategorie_id, Decimal("0")) + gewicht
+    satz = Decimal(str(max(satz_gruppen, key=lambda s: satz_gruppen[s]))) if satz_gruppen else Decimal("0")
+    kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k]) if kat_gruppen else None
+    if kat_id is None:
+        kat_id = rechnung.kategorie_id
+    if kat_id is None and rechnung.typ == "ausgang":
+        # Ausgangsrechnungen/-gutschriften fuehren nie ein eigenes kategorie_id je Position
+        # (keine UI dafuer, siehe zahlung_bar_erstellen) - ohne diesen Fallback wuerde die
+        # Verrechnung ohne Kategorie/Erloeskonto gebucht (Issue #366, analog zum Fix in
+        # forderung_verrechnen() fuer denselben zugrundeliegenden Fall).
+        kat_id = _erloes_kategorie(db, rechnung)[0]
+    kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
+    return satz, kat_id, kat
+
+
+class GutschriftVerrechnenRequest(BaseModel):
+    rechnung_id: int
+
+
+class GutschriftVerrechnenResult(BaseModel):
+    gutschrift: RechnungResponse
+    rechnung: RechnungResponse
+    betrag: Decimal
+
+
+@router.post("/{gutschrift_id}/verrechnen", response_model=GutschriftVerrechnenResult)
+def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest, db: Session = Depends(get_db)):
+    """Verrechnet eine offene Gutschrift direkt mit einer offenen Rechnung desselben Partners
+    (Issue #366) - ohne Bankbewegung/Kassenvorgang. Bucht zwei Journaleinträge (einen je
+    Dokument, jeweils zahlungsart="Verrechnung"), da hier - anders als bei der bestehenden
+    Kunden-/Lieferantenguthaben-Verrechnung in forderungen.py - KEINE Seite vorher schon
+    gebucht war (beide Dokumente sind bis hierhin unbezahlt/offen). Nutzt dieselbe Kategorie-/
+    USt-Vereinfachung (dominante Gruppe statt Positionsaufteilung, siehe _dominante_gruppe())
+    wie forderung_verrechnen() - kein §25a/Reverse-Charge in dieser Verrechnung.
+    """
+    gutschrift = db.query(Rechnung).filter(Rechnung.id == gutschrift_id).first()
+    if not gutschrift:
+        raise HTTPException(status_code=404, detail="Gutschrift nicht gefunden.")
+    if gutschrift.dokument_typ != "Gutschrift":
+        raise HTTPException(status_code=400, detail="Nur Gutschriften können auf diesem Weg verrechnet werden.")
+    if gutschrift.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Entwurf zuerst finalisieren.")
+    if gutschrift.storniert:
+        raise HTTPException(status_code=409, detail="Stornierte Gutschrift.")
+
+    rechnung = db.query(Rechnung).filter(Rechnung.id == data.rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.id == gutschrift.id:
+        raise HTTPException(status_code=400, detail="Gutschrift kann nicht mit sich selbst verrechnet werden.")
+    if rechnung.dokument_typ != "Rechnung":
+        raise HTTPException(status_code=400, detail="Verrechnung ist nur gegen reguläre Rechnungen möglich.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(status_code=409, detail="Zielrechnung ist noch Entwurf.")
+    if rechnung.storniert:
+        raise HTTPException(status_code=409, detail="Zielrechnung ist storniert.")
+    if rechnung.typ != gutschrift.typ:
+        raise HTTPException(
+            status_code=400,
+            detail="Gutschrift und Rechnung müssen dieselbe Richtung haben (Ausgang/Eingang).",
+        )
+    if gutschrift.typ == "ausgang":
+        if not gutschrift.kunde_id or rechnung.kunde_id != gutschrift.kunde_id:
+            raise HTTPException(status_code=400, detail="Kunde von Gutschrift und Rechnung stimmt nicht überein.")
+    else:
+        if not gutschrift.lieferant_id or rechnung.lieferant_id != gutschrift.lieferant_id:
+            raise HTTPException(status_code=400, detail="Lieferant von Gutschrift und Rechnung stimmt nicht überein.")
+
+    gutschrift_rest = abs(gutschrift.brutto_gesamt - (gutschrift.bezahlt_betrag or Decimal("0")))
+    if gutschrift_rest <= Decimal("0.004"):
+        raise HTTPException(status_code=409, detail="Gutschrift ist bereits vollständig verrechnet/erstattet.")
+    rechnung_rest = rechnung.brutto_gesamt - (rechnung.bezahlt_betrag or Decimal("0"))
+    if rechnung_rest <= Decimal("0.004"):
+        raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt.")
+
+    betrag = min(gutschrift_rest, rechnung_rest)
+    heute = date.today()
+    beleg_gs = gutschrift.rechnungsnummer or f"#{gutschrift.id}"
+    beleg_re = rechnung.rechnungsnummer or f"#{rechnung.id}"
+
+    gs_satz, gs_kat_id, gs_kat = _dominante_gruppe(gutschrift, db)
+    re_satz, re_kat_id, re_kat = _dominante_gruppe(rechnung, db)
+    if re_kat_id is None and rechnung.typ == "eingang":
+        raise HTTPException(
+            status_code=422,
+            detail="Bitte zuerst eine Kategorie für die Rechnung hinterlegen – die Verrechnung kann sonst nicht korrekt verbucht werden.",
+        )
+    if gs_kat_id is None and gutschrift.typ == "eingang":
+        raise HTTPException(
+            status_code=422,
+            detail="Bitte zuerst eine Kategorie für die Gutschrift hinterlegen – die Verrechnung kann sonst nicht korrekt verbucht werden.",
+        )
+
+    gs_art = "Einnahme" if gutschrift.typ == "ausgang" else "Ausgabe"
+    gs_ust03, gs_ust04 = (_ust_konto(gs_art, gs_satz) if gs_satz > 0 else (None, None))
+    if gs_satz > 0:
+        gs_netto = (-betrag * 100 / (100 + gs_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        gs_ust = (-betrag - gs_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    else:
+        gs_netto, gs_ust = -betrag, Decimal("0.00")
+    gs_vst_abzug = gs_art == "Ausgabe" and gs_satz > 0
+    gs_eintrag = Journaleintrag(
+        datum=heute, belegnr=_naechste_belegnr_journal(db, heute),
+        beschreibung=f"Verrechnung Gutschrift {beleg_gs} mit Rechnung {beleg_re}",
+        kategorie_id=gs_kat_id,
+        konto_skr03=gs_kat.konto_skr03 if gs_kat else None,
+        konto_skr04=gs_kat.konto_skr04 if gs_kat else None,
+        konto_ust_skr03=gs_ust03, konto_ust_skr04=gs_ust04,
+        zahlungsart="Verrechnung", art=gs_art,
+        netto_betrag=gs_netto, ust_satz=gs_satz, ust_betrag=gs_ust,
+        vorsteuer_betrag=_berechne_vorsteuer(gs_ust, gs_vst_abzug, gs_kat),
+        brutto_betrag=-betrag, vorsteuerabzug=gs_vst_abzug,
+        rechnung_id=gutschrift.id, immutable=True,
+    )
+    gs_eintrag.signatur = signatur_journaleintrag(gs_eintrag)
+    db.add(gs_eintrag)
+
+    re_art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    re_ust03, re_ust04 = (_ust_konto(re_art, re_satz) if re_satz > 0 else (None, None))
+    if re_satz > 0:
+        re_netto = (betrag * 100 / (100 + re_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        re_ust = (betrag - re_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    else:
+        re_netto, re_ust = betrag, Decimal("0.00")
+    re_vst_abzug = re_art == "Ausgabe" and re_satz > 0
+    re_eintrag = Journaleintrag(
+        datum=heute, belegnr=_naechste_belegnr_journal(db, heute),
+        beschreibung=f"Verrechnung Rechnung {beleg_re} mit Gutschrift {beleg_gs}",
+        kategorie_id=re_kat_id,
+        konto_skr03=re_kat.konto_skr03 if re_kat else None,
+        konto_skr04=re_kat.konto_skr04 if re_kat else None,
+        konto_ust_skr03=re_ust03, konto_ust_skr04=re_ust04,
+        zahlungsart="Verrechnung", art=re_art,
+        netto_betrag=re_netto, ust_satz=re_satz, ust_betrag=re_ust,
+        vorsteuer_betrag=_berechne_vorsteuer(re_ust, re_vst_abzug, re_kat),
+        brutto_betrag=betrag, vorsteuerabzug=re_vst_abzug,
+        rechnung_id=rechnung.id, immutable=True,
+    )
+    re_eintrag.signatur = signatur_journaleintrag(re_eintrag)
+    db.add(re_eintrag)
+
+    db.flush()
+    _aktualisiere_zahlungsstatus(gutschrift)
+    _aktualisiere_zahlungsstatus(rechnung)
+
+    db.commit()
+    db.refresh(gutschrift)
+    db.refresh(rechnung)
+    return GutschriftVerrechnenResult(
+        gutschrift=RechnungResponse.from_orm_extended(gutschrift),
+        rechnung=RechnungResponse.from_orm_extended(rechnung),
+        betrag=betrag,
+    )
 
 
 @router.get("/{rechnung_id}/zahlungen", response_model=list[ZahlungKompakt])

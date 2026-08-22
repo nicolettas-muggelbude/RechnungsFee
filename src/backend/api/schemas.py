@@ -854,6 +854,10 @@ class MahnungVorschauResponse(BaseModel):
     verzugszinsen: Decimal
     gebuehr_vorperioden: Decimal = Decimal("0")
     gesamtforderung: Decimal
+    # Issue #366: Betrag, der beim Anlegen automatisch mit offenen Kundengutschriften
+    # verrechnet wird - offener_betrag_gesamt/gesamtforderung sind bereits um diesen Betrag
+    # gemindert, das Feld dient nur der Transparenz in der UI.
+    gutschrift_verrechnung: Decimal = Decimal("0")
 
 
 class MahnungErstellenRequest(BaseModel):

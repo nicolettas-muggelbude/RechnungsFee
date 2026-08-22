@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
@@ -303,6 +303,34 @@ def _abgleich_score(rechnung: Rechnung, tx: BankTransaktion) -> tuple[int, bool,
     return int(bm) + int(nm) + int(nam), bm, nm, nam
 
 
+def _offene_rechnungen_fuer_tx(db: Session, tx: BankTransaktion) -> list[Rechnung]:
+    """Kandidaten für den Rechnungsabgleich einer Banktransaktion (Issue #364).
+
+    Eine eingehende (positive) Transaktion kann entweder eine normale Ausgangsrechnung
+    begleichen ODER die Erstattung einer Lieferantengutschrift sein (negative Eingangsrechnung,
+    dokument_typ="Gutschrift"). Eine ausgehende (negative) Transaktion spiegelbildlich: normale
+    Eingangsrechnung ODER Erstattung einer Kundengutschrift. Vor Issue #364 wurde hier nur
+    dokument_typ="Rechnung" nach reinem typ-Vorzeichen gesucht - Gutschrift-Erstattungen fanden
+    in beide Richtungen nie einen Kandidaten (auch nicht die schon länger bestehende
+    Ausgangsrechnungs-Gutschrift bei Rückerstattung per Bank)."""
+    if tx.betrag > 0:
+        normal = (Rechnung.typ == "ausgang") & (Rechnung.dokument_typ == "Rechnung")
+        gutschrift = (Rechnung.typ == "eingang") & (Rechnung.dokument_typ == "Gutschrift")
+    else:
+        normal = (Rechnung.typ == "eingang") & (Rechnung.dokument_typ == "Rechnung")
+        gutschrift = (Rechnung.typ == "ausgang") & (Rechnung.dokument_typ == "Gutschrift")
+    return (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.ist_entwurf == False,
+            Rechnung.storniert == False,
+            Rechnung.zahlungsstatus != "bezahlt",
+            or_(normal, gutschrift),
+        )
+        .all()
+    )
+
+
 _RUECKERSTATTUNG_KEYWORDS = {"erstattung", "rueckerstattung", "rückerstattung", "refund", "rueck", "rück"}
 
 
@@ -412,6 +440,10 @@ def _buche_pfad_a(
     restbetrag = abs(rechnung.brutto_gesamt - rechnung.bezahlt_betrag)
     art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
     tx_abs = abs(tx.betrag)
+    # Gutschrift (Issue #364): bis hier arbeitet die gesamte Verteil-/Rundungslogik bewusst
+    # unverändert mit positiven Magnitudenwerten (wie im Normalfall) - erst unmittelbar vor dem
+    # Erzeugen des Journaleintrags wird pro Satzgruppe negiert, siehe unten.
+    ist_gutschrift = rechnung.dokument_typ == "Gutschrift"
 
     if betrag_zu_buchen is None:
         # Bei Überzahlung immer nur den Restbetrag buchen – Surplus wird als Guthaben erfasst
@@ -512,6 +544,17 @@ def _buche_pfad_a(
                 g_ust = (g_betrag - g_netto).quantize(Decimal("0.01"), ROUND_HALF_UP)
         else:
             g_netto, g_ust = g_betrag, Decimal("0.00")
+
+        if ist_gutschrift:
+            # Kundengutschrift (art=Einnahme, negiert = Erlösminderung) oder Lieferanten-
+            # gutschrift (art=Ausgabe, negiert = Aufwandsminderung) - analog zum bereits
+            # bestehenden Vorzeichen-Verfahren in zahlung_bar_erstellen()/_erstelle_eintrag().
+            g_betrag = -g_betrag
+            g_netto = -g_netto
+            g_ust = -g_ust
+            if g_marge is not None:
+                g_marge = -g_marge
+
         g_vst_abzug = art == "Ausgabe" and g_satz > 0
         e = Journaleintrag(
             datum=tx.datum,
@@ -956,14 +999,7 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
                 gebucht += 1
                 continue
 
-            rechnung_typ = "ausgang" if tx.betrag > 0 else "eingang"
-            offene = db.query(Rechnung).filter(
-                Rechnung.ist_entwurf == False,
-                Rechnung.storniert == False,
-                Rechnung.zahlungsstatus != "bezahlt",
-                Rechnung.dokument_typ == "Rechnung",
-                Rechnung.typ == rechnung_typ,
-            ).all()
+            offene = _offene_rechnungen_fuer_tx(db, tx)
 
             score3_treffer = [r for r in offene if _abgleich_score(r, tx)[0] == 3]
 
@@ -1062,14 +1098,7 @@ def abgleich_transaktion(tx_id: int, db: Session = Depends(get_db)):
     if not tx:
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden.")
 
-    rechnung_typ = "ausgang" if tx.betrag > 0 else "eingang"
-    offene = db.query(Rechnung).filter(
-        Rechnung.ist_entwurf == False,
-        Rechnung.storniert == False,
-        Rechnung.zahlungsstatus != "bezahlt",
-        Rechnung.dokument_typ == "Rechnung",
-        Rechnung.typ == rechnung_typ,
-    ).all()
+    offene = _offene_rechnungen_fuer_tx(db, tx)
 
     vorschlaege = []
     for rechnung in offene:

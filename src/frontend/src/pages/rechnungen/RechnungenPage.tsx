@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, getRechnung, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
   stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, forderungsausbuchenRechnung,
-  getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, type Forderung,
+  getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, gutschriftVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, openPdfReadOnly, downloadPdfForMail,
@@ -67,6 +67,18 @@ function adjustMenge(current: string, step: number): string {
 
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+// §14a Abs. 1 UStG: Rechnung über eine Leistung im Sinne des §3a Abs. 2 (Reverse Charge) oder
+// §6a (ig. Lieferung) muss bis zum 15. Tag des Monats ausgestellt werden, der auf den Monat der
+// Leistungserbringung folgt. Reine string-Arithmetik auf ISO-Daten (yyyy-mm-dd) statt Date-Objekten,
+// um Zeitzonen-Verschiebungen bei new Date(isoString) an Monatsgrenzen zu vermeiden (Issue #365).
+function nach15TagesFrist(leistungIso: string, rechnungsdatumIso: string): boolean {
+  const [ljahr, lmonat] = leistungIso.split('-').map(Number)
+  let fjahr = ljahr, fmonat = lmonat + 1
+  if (fmonat > 12) { fmonat = 1; fjahr += 1 }
+  const fristIso = `${fjahr}-${String(fmonat).padStart(2, '0')}-15`
+  return rechnungsdatumIso > fristIso
 }
 
 // ---------------------------------------------------------------------------
@@ -219,15 +231,13 @@ function TesseractAssistentModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Homebrew ist ein kostenloser Paketmanager für macOS, der für die Installation benötigt wird.
               </p>
-              <a
-                href="https://brew.sh"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
                 onClick={() => import('../../api/client').then(m => m.openUrl('https://brew.sh'))}
                 className="block w-full py-2.5 text-center bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-xl transition-colors"
               >
                 brew.sh öffnen →
-              </a>
+              </button>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 Nach der Homebrew-Installation diesen Assistenten erneut öffnen.
               </p>
@@ -241,15 +251,13 @@ function TesseractAssistentModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Der Windows-Paketmanager (winget) ist nicht verfügbar. Bitte Tesseract OCR manuell installieren:
               </p>
-              <a
-                href="https://github.com/UB-Mannheim/tesseract/wiki"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
                 onClick={() => import('../../api/client').then(m => m.openUrl('https://github.com/UB-Mannheim/tesseract/wiki'))}
                 className="block w-full py-2.5 text-center bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-xl transition-colors"
               >
                 Tesseract Installer herunterladen →
-              </a>
+              </button>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 Nach der Installation RechnungsFee neu starten.
               </p>
@@ -549,7 +557,8 @@ function ZahlungsDialog({
   const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
   const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
   const kassenstand = parseFloat(kassenstandData?.kassenstand ?? '0')
-  const istBarAusgabe = rechnung.typ === 'eingang' && zahlungsart === 'Bar'
+  // Eingangs-Gutschrift per Bar ist ein Kassenzufluss (keine Ausgabe) - keine Kassenstand-Prüfung
+  const istBarAusgabe = rechnung.typ === 'eingang' && !istGutschrift && zahlungsart === 'Bar'
   const aufwandKat = (kategorien ?? []).filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = (kategorien ?? []).filter((k) => k.kontenart === 'Anlage')
 
@@ -568,7 +577,9 @@ function ZahlungsDialog({
 
   const betragDecimal = parseFloat(betrag.replace(',', '.'))
   const kassenstandUeberschritten = istBarAusgabe && !isNaN(betragDecimal) && betragDecimal > kassenstand
-  const artLabel = rechnung.typ === 'ausgang' ? 'Einnahme' : 'Ausgabe'
+  const artLabel = rechnung.typ === 'ausgang'
+    ? (istGutschrift ? 'Einnahme (Minderung)' : 'Einnahme')
+    : (istGutschrift ? 'Ausgabe (Minderung)' : 'Ausgabe')
   const splitSumme = splitZeilen.reduce((s, z) => s + (parseFloat(z.betrag.replace(',', '.')) || 0), 0)
   const splitSummeOK = !isNaN(betragDecimal) && Math.abs(splitSumme - betragDecimal) < 0.005
 
@@ -1130,6 +1141,28 @@ function RechnungDetail({
     },
   })
 
+  // Gutschrift mit offener Rechnung desselben Partners verrechnen (Issue #366)
+  const istGutschriftMitZahlungsoption = rechnung.dokument_typ === 'Gutschrift' && hatZahlungsoption
+  const { data: offeneZielRechnungen } = useQuery({
+    queryKey: ['offene-zielrechnungen-fuer-gutschrift', rechnung.typ, rechnung.kunde_id, rechnung.lieferant_id],
+    queryFn: () => getRechnungen({
+      typ: rechnung.typ,
+      dokument_typ: 'Rechnung',
+      zahlungsstatus: ['offen', 'teilweise'],
+      ...(rechnung.typ === 'ausgang' ? { kunde_id: rechnung.kunde_id! } : { lieferant_id: rechnung.lieferant_id! }),
+    }),
+    enabled: istGutschriftMitZahlungsoption
+      && !!(rechnung.typ === 'ausgang' ? rechnung.kunde_id : rechnung.lieferant_id),
+    staleTime: 1000 * 60,
+  })
+  const gutschriftVerrechnenMut = useMutation({
+    mutationFn: (zielRechnungId: number) => gutschriftVerrechnen(rechnung.id, zielRechnungId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      qc.invalidateQueries({ queryKey: ['offene-zielrechnungen-fuer-gutschrift'] })
+    },
+  })
+
   const partnerEmail = rechnung.typ === 'ausgang'
     ? rechnung.kunde_email
     : rechnung.lieferant_email
@@ -1387,7 +1420,7 @@ function RechnungDetail({
               </button>
             )
           )}
-          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ !== 'Gutschrift' && rechnung.dokument_typ !== 'Lieferschein' && !zeigStornoEingabe && (
+          {!rechnung.ist_entwurf && !rechnung.storniert && rechnung.dokument_typ !== 'Gutschrift' && rechnung.dokument_typ !== 'Lieferschein' && !zeigStornoEingabe && (
             <button
               onClick={() => gutschriftMutation.mutate()}
               disabled={gutschriftMutation.isPending}
@@ -1976,6 +2009,31 @@ function RechnungDetail({
             </div>
           )
         })()}
+
+        {/* Gutschrift mit offener Rechnung desselben Partners verrechnen (Issue #366) */}
+        {istGutschriftMitZahlungsoption && (offeneZielRechnungen?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            {offeneZielRechnungen!.map((z) => {
+              const zRest = Math.abs(parseFloat(z.brutto_gesamt) - parseFloat(z.bezahlt_betrag))
+              return (
+                <div key={z.id} className="flex items-center justify-between gap-2 p-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-purple-800 dark:text-purple-200">
+                      {z.rechnungsnummer}: {formatEuro(zRest)} offen
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => gutschriftVerrechnenMut.mutate(z.id)}
+                    disabled={gutschriftVerrechnenMut.isPending}
+                    className="shrink-0 px-2.5 py-1 text-xs font-medium bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40 transition-colors"
+                  >
+                    {gutschriftVerrechnenMut.isPending ? '…' : 'Mit dieser Rechnung verrechnen'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Verknüpfte Zahlungen */}
         {rechnung.zahlungen_kette.length > 0 && (
@@ -2694,6 +2752,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     (istAusfuhrlieferung && hatDienstleistungTyp && !hatWareTyp)
   )
 
+  // §14a Abs. 1 UStG, Issue #365: bei Reverse Charge/ig. Lieferung gilt eine 15-Tage-Rechnungsfrist
+  // ab dem Monat der Leistungserbringung - nur ein Hinweis, keine Blockade (Nutzer entscheidet selbst).
+  const leistungReferenzdatum = leistungZeitraum && leistungBis ? leistungBis : leistungVon
+  const zeig15TagesHinweis = (istReverseCharge || istEuLieferung) && !!leistungReferenzdatum
+    && nach15TagesFrist(leistungReferenzdatum, datum)
+
   // Positionen tragen ihren USt-Satz als eigenen State-Wert (nicht live aus istReverseCharge/
   // istEuLieferung/istDrittlandLeistung/istAusfuhrlieferung berechnet) - wird eine Position VOR
   // der Auto-Erkennung ausgefüllt, steht dort noch der normale Satz. Sobald eines der Flags (auch
@@ -3291,6 +3355,14 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   ? 'Reverse Charge ist aktiv, die Positionen scheinen aber Waren zu sein.'
                   : 'Innergemeinschaftliche Lieferung ist aktiv, die Positionen scheinen aber Dienstleistungen zu sein.'}
                 {' '}Bitte prüfen, ob das richtige Häkchen gesetzt ist.
+              </span>
+            </div>
+          )}
+          {zeig15TagesHinweis && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="shrink-0">⚠</span>
+              <span>
+                Für Reverse Charge/ig. Lieferung gilt eine 15-Tage-Rechnungsfrist ab dem Monat der Leistungserbringung (§14a Abs. 1 UStG) – das Rechnungsdatum liegt danach. Du entscheidest selbst, ob das in diesem Fall relevant ist.
               </span>
             </div>
           )}

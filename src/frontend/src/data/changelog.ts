@@ -23,6 +23,20 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.10',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Lieferantengutschrift: Rückerstattungen von Lieferanten (z. B. eine Amazon-Erstattung) lassen sich jetzt genau wie bei Ausgangsrechnungen über einen eigenen „↩ Gutschrift"-Button direkt aus der Eingangsrechnung erstellen – mit automatisch negierten Positionen, korrekter Vorzeichen-Verbuchung (Vorsteuer-/Aufwandsminderung statt Verdopplung) und automatischem Bank-Abgleich. Bisher gab es eine echte Gutschrift-Funktion nur für Ausgangsrechnungen; der bisherige Workaround über eine negative Eingangsrechnung ließ sich weder im Bank-Import automatisch zuordnen noch über den normalen Zahlungsdialog sauber verbuchen. Danke an UweKoslowski für den ausführlichen Bug-Report (Issue #364).' },
+      { typ: 'fix', text: 'Bank-Import – eine per Überweisung erstattete Ausgangsrechnungs-Gutschrift (Kundenerstattung) wurde beim automatischen Abgleich nie als Kandidat gefunden, nur die Bar-Erstattung über den Zahlungsdialog funktionierte. Ursache war derselbe Matching-Filter, der auch die neue Lieferantengutschrift betraf – als Nebenbefund bei deren Umsetzung mitbehoben (Issue #364).' },
+      { typ: 'fix', text: 'Reverse Charge (§3a Abs. 2 UStG) und innergemeinschaftliche Lieferung (§4 Nr. 1b/§6a UStG) – die Rechnungs-PDF enthielt bisher nur die eigene USt-IdNr., nicht die des Kunden. Bei diesen beiden grenzüberschreitenden Fällen schreibt §14a Abs. 1 UStG die Angabe der USt-IdNr. des Leistungsempfängers ausdrücklich vor (anders als beim rein inländischen §13b-Fall, wo das nur gilt „sofern vorhanden“) – erscheint jetzt automatisch auf der PDF, sofern beim Kunden hinterlegt. Zusätzlich ein neuer, nicht blockierender Hinweis im Rechnungsformular, wenn das Rechnungsdatum die dafür geltende 15-Tage-Frist (§14a Abs. 1 UStG, ab dem Monat der Leistungserbringung) überschreitet – die Einschätzung dazu bleibt bei dir. Danke an SilkeBallin für den Hinweis in der Community (Issue #365).' },
+      { typ: 'verbesserung', text: 'Journal – im Fenster „Neue Buchung" wechseln die Tasten E und A jetzt direkt zwischen Einnahme und Ausgabe, ganz ohne Maus. Danke an Peter1061 fürs Weiterdenken (Issue #356-Folgefund).' },
+      { typ: 'fix', text: 'Der „Bei BZSt online prüfen"-Link (USt-IdNr.-Prüfung) öffnete im Browser zwei Tabs statt einem – der Link hatte sowohl ein natives href/target als auch einen zusätzlichen Klick-Handler, die beide gleichzeitig ausgelöst haben. Beim Aufräumen gleich vier weitere Stellen mit demselben fehleranfälligen Muster gefunden und mitbehoben (Handbuch-Links bei der Backup-Wiederherstellung, brew.sh-/Tesseract-Links beim OCR-Setup). Danke an Peter1061 fürs Melden (Issue #358-Folgefund).' },
+      { typ: 'fix', text: 'Windows-Installer und -Deinstaller zeigten statt des RechnungsFee-Logos ein generisches Platzhalter-Icon. Der Installer nutzt jetzt das reguläre App-Icon, der Deinstaller ein eigens dafür gestaltetes Icon.' },
+      { typ: 'neu', text: 'Gutschrift mit Rechnung verrechnen: Eine Kunden- oder Lieferantengutschrift lässt sich jetzt direkt gegen eine offene Rechnung desselben Partners gegenrechnen, ohne dass Geld fließt – z. B. Rechnung 500 €, Gutschrift 200 €, offen bleiben 300 €. Im Mahnwesen wird eine offene Kundengutschrift jetzt außerdem automatisch mit angemahnten Rechnungen verrechnet, bevor der Mahnbetrag berechnet wird – die Vorschau zeigt das vorab an. Danke an Peter1061 für den Vorschlag (Issue #366).' },
+      { typ: 'fix', text: 'Kundenguthaben-Verrechnung (z. B. aus einer Überzahlung) gegen eine Ausgangsrechnung wurde ohne Kategorie und ohne Erlöskonto gebucht, da Ausgangsrechnungen kein eigenes Kategorie-Feld je Position führen – die Umsatzsteuer selbst war davon nicht betroffen, aber die Buchung fehlte in der EÜR-Berechnung und im DATEV-Export. Beim Umsetzen von Issue #366 gefunden und mitbehoben.' },
+    ],
+  },
+  {
     version: 'v0.5.9',
     datum: 'August 2026',
     eintraege: [

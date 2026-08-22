@@ -13,7 +13,7 @@ from database.connection import get_db
 from database.models import Forderung, Journaleintrag, Kategorie, Rechnung
 from utils.signatur import signatur_journaleintrag
 from .journal import _felder_aus_data, _naechste_belegnr
-from .rechnungen import _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _partner_name, _ust_konto
+from .rechnungen import _aktualisiere_zahlungsstatus, _berechne_vorsteuer, _erloes_kategorie, _partner_name, _ust_konto
 from database.models import Lieferant
 from .schemas import JournalEintragCreate
 
@@ -234,6 +234,12 @@ def forderung_verrechnen(
         kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k] if k is not None else Decimal("0"))
 
     ist_einnahme = f.typ == "kundenguthaben"
+    if kat_id is None and ist_einnahme:
+        # Ausgangsrechnungen fuehren nie ein eigenes kategorie_id je Position/Rechnung (siehe
+        # zahlung_bar_erstellen: "keine UI dafuer") - ohne diesen Fallback wuerde die Buchung
+        # komplett ohne Kategorie/Erloeskonto angelegt (fehlt dann in EUER-Berechnung und
+        # DATEV-Export, obwohl die USt selbst korrekt gebucht wird).
+        kat_id = _erloes_kategorie(db, rechnung)[0]
     art = "Einnahme" if ist_einnahme else "Ausgabe"
     bezeichnung = "Kundenguthaben" if ist_einnahme else "Lieferantenguthaben"
     vst_abzug = not ist_einnahme and ust_satz > 0

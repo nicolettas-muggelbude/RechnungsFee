@@ -32,15 +32,13 @@ export function UstIdnrPruefung({
         </p>
       )}
       <div className="flex items-center gap-3 flex-wrap">
-        <a
-          href={BZST_URL}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
           onClick={() => import('../api/client').then((m) => m.openUrl(BZST_URL))}
           className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
         >
           🔍 Bei BZSt online prüfen (eVatR) ↗
-        </a>
+        </button>
         <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
           <input
             type="checkbox"

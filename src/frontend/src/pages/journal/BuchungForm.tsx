@@ -215,6 +215,26 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const kassenstandUeberschrittenSingle = art === 'Ausgabe' && zahlungsart === 'Bar' && bruttoSingle > kassenstand
   const kassenstandUeberschrittenSplit = artSplit === 'Ausgabe' && zahlungsartSplit === 'Bar' && bruttoSplit > kassenstand
 
+  // "E"/"A" wechselt zwischen Einnahme/Ausgabe ohne Maus (Issue #356, Vorschlag von Peter1061) -
+  // nur wenn kein Eingabefeld fokussiert ist (sonst würde z.B. ein "a" im Beschreibungsfeld
+  // ungewollt die Art umschalten) und keine Modifier-Taste gedrückt ist (sonst Kollision mit
+  // Browser-Shortcuts wie Strg+A).
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const key = e.key.toLowerCase()
+      if (key !== 'e' && key !== 'a') return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      e.preventDefault()
+      const neueArt: 'Einnahme' | 'Ausgabe' = key === 'e' ? 'Einnahme' : 'Ausgabe'
+      if (isSplit) setValueS('art', neueArt)
+      else setValue('art', neueArt)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isSplit, setValue, setValueS])
+
   // Beim Umschalten: gemeinsame Felder synchronisieren
   function toggleSplit(ein: boolean) {
     if (ein) {

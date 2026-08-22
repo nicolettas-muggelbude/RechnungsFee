@@ -630,6 +630,14 @@ class RechnungPDFBase(FPDF):
                             "Steuerfreie innergemeinschaftliche Lieferung (§4 Nr. 1b i.V.m. §6a UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
                             new_x="LMARGIN", new_y="NEXT")
+        # §14a Abs. 1 UStG: bei grenzüberschreitender Dienstleistung (§3a Abs. 2, Reverse Charge)
+        # und innergemeinschaftlicher Lieferung (§6a) ist die USt-IdNr. des Leistungsempfängers
+        # Pflichtangabe auf der Rechnung - anders als beim rein inländischen §13b-Fall (§14a Abs. 5:
+        # dort nur "sofern vorhanden"). Issue #365.
+        if ist_reverse_charge or ist_eu_lieferung:
+            kunde_ust_idnr = getattr(getattr(r, "kunde", None), "ust_idnr", None)
+            if kunde_ust_idnr:
+                self.cell(0, 5, f"USt-IdNr. Kunde: {kunde_ust_idnr}", new_x="LMARGIN", new_y="NEXT")
         # §3a Abs. 2 UStG: Dienstleistung an Unternehmer im Drittland (z.B. Schweiz, GB, USA) -
         # Leistungsort beim Empfaenger, nicht steuerbar in Deutschland (Issue #315)
         ist_drittland_leistung = bool(getattr(r, "ist_drittland_leistung", False))
