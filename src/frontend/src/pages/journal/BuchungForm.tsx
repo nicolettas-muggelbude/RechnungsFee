@@ -256,7 +256,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     if (!kategorien || isSplit) return
     if (skipKatRef.current) { skipKatRef.current = false; return }
     if (art === 'Einnahme') {
-      const defaultName = istKleinunternehmer ? 'Kleinunternehmer-Einnahmen' : 'Betriebseinnahmen'
+      const defaultName = istKleinunternehmer ? 'Betriebseinnahmen (0%)' : 'Betriebseinnahmen'
       const kat = kategorien.find((k) => k.name === defaultName)
       if (kat) setValue('kategorie_id', String(kat.id))
     } else {
@@ -365,13 +365,13 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   // Kategorie-Gruppen
   const alle = kategorien ?? []
-  const erloeseKat = alle.filter(
-    (k) =>
-      k.kontenart === 'Erlös' &&
-      (istKleinunternehmer
-        ? k.name === 'Kleinunternehmer-Einnahmen'
-        : k.name !== 'Kleinunternehmer-Einnahmen')
-  )
+  // Issue #367: "Kleinunternehmer-Einnahmen" wurde als Duplikat-Kategorie entfernt
+  // (Commit c8ce4d5, "Betriebseinnahmen (0%) bleibt - passt ins Muster"), die Filterung
+  // hier wurde dabei nie nachgezogen - dadurch war erloeseKat für JEDEN Kleinunternehmer
+  // seit diesem Commit immer leer (auch eigene, aktivierte Erlös-Kategorien fehlten
+  // komplett). Kleinunternehmer sehen jetzt wie alle anderen sämtliche Erlös-Kategorien -
+  // nur die Vorauswahl (siehe oben) bevorzugt weiterhin "Betriebseinnahmen (0%)".
+  const erloeseKat = alle.filter((k) => k.kontenart === 'Erlös')
   // Einlage/Entnahme über euer_zeile unterscheiden statt über den exakten Namen - sonst
   // fallen eigene Privat-Kategorien (z.B. "Privateinlage Gesellschafter A" bei Personen-
   // gesellschaften mit getrennten Konten je Gesellschafter) komplett aus der Auswahl heraus,

@@ -2606,7 +2606,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   useEffect(() => {
     if (!kategorien || initial) return
     if (typ === 'ausgang') {
-      const defaultName = istKleinunternehmer ? 'Kleinunternehmer-Einnahmen' : 'Betriebseinnahmen'
+      // Issue #367: "Kleinunternehmer-Einnahmen" existiert seit Commit c8ce4d5 nicht mehr
+      // (Duplikat entfernt zugunsten von "Betriebseinnahmen (0%)") - Referenz hier nie
+      // nachgezogen, dadurch bekam eine neue Ausgangsrechnung für Kleinunternehmer nie eine
+      // Default-Kategorie vorausgewählt.
+      const defaultName = istKleinunternehmer ? 'Betriebseinnahmen (0%)' : 'Betriebseinnahmen'
       const kat = kategorien.find((k) => k.name === defaultName)
       if (kat) setKategorieId(String(kat.id))
     }

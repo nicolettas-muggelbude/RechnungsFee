@@ -12,7 +12,6 @@ Jede Buchung in einer der unten aufgeführten Kategorien fließt automatisch in 
 | A1 | Betriebseinnahmen (brutto) | Betriebseinnahmen | 8400 | 4400 | Erlös |
 | | | Betriebseinnahmen (7%) | 8300 | 4300 | Erlös |
 | | | Betriebseinnahmen (0%) | 8100 | 4100 | Erlös |
-| | | Kleinunternehmer-Einnahmen | 8100 | 4100 | Erlös |
 | A2 | Privatentnahmen | Privatentnahme | 1800 | 2010 | Privat |
 | A3 | Sonstige Einnahmen | Sonstige Einnahmen | 8900 | 4900 | Erlös |
 | A4 | Privateinlagen | Privateinlage | 1890 | 2100 | Privat |

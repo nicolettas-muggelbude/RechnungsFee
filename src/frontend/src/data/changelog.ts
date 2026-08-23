@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.5.11',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Kleinunternehmer nach §19 UStG: Im Fenster „Neue Buchung" war die Kategorie-Auswahl bei „Einnahme" komplett leer – unter „Erlöse" erschien kein einziger Eintrag, auch keine selbst angelegten Kategorien. Ursache: eine im Mai entfernte Kategorie namens „Kleinunternehmer-Einnahmen" wurde durch „Betriebseinnahmen (0%)" ersetzt, die Dropdown-Filterung suchte aber weiterhin nach dem alten, nicht mehr existierenden Namen – seitdem war das Dropdown für jeden Kleinunternehmer bei jeder manuellen Buchung (z. B. über Bank-Import → Abgleichen) betroffen. Kleinunternehmer sehen jetzt wie alle anderen sämtliche Erlös-Kategorien. Danke an sreichenberg90 für den präzisen Report inkl. Reproduktionsschritten (Issue #367).' },
+    ],
+  },
+  {
     version: 'v0.5.10',
     datum: 'August 2026',
     eintraege: [
