@@ -846,6 +846,23 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             </div>
           </label>
 
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!form.profilmanager_aktiv}
+              onChange={ev => set('profilmanager_aktiv', ev.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Profile aktivieren
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Mehrere Firmen oder Tätigkeiten getrennt in derselben Installation führen (eigene Datenbank, Belege und Backups je Profil). Aktiviert den Menüpunkt „Profile". Sobald mehr als ein Profil existiert, bleibt der Menüpunkt unabhängig von diesem Schalter sichtbar.
+              </p>
+            </div>
+          </label>
+
 
           <div className="space-y-2 pt-2">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">

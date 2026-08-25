@@ -74,6 +74,7 @@ class Unternehmen(Base):
     wiederkehrend_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     buchungsvorlagen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     lagerführung_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    profilmanager_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # Buchführung
     versteuerungsart: Mapped[str] = mapped_column(String(4), default="ist", nullable=False)  # ist|soll
     kontenrahmen: Mapped[str] = mapped_column(String(10), default="SKR03", nullable=False)  # SKR03|SKR04|SKR49

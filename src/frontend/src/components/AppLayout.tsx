@@ -464,9 +464,11 @@ export function AppLayout() {
               <NavIcon name="upload_file" /><span>Datenübernahme</span>
             </NavLink>
           )}
-          <NavLink to="/profile" className={navLinkClass}>
-            <NavIcon name="switch_account" /><span>Profile</span>
-          </NavLink>
+          {(untDef?.profilmanager_aktiv || mehrereProfile) && (
+            <NavLink to="/profile" className={navLinkClass}>
+              <NavIcon name="switch_account" /><span>Profile</span>
+            </NavLink>
+          )}
           <NavLink to="/backup" className={navLinkClass}>
             <NavIcon name="save" /><span>Backup</span>
           </NavLink>

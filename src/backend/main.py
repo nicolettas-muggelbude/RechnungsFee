@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile
 
-SCHEMA_VERSION = 149
+SCHEMA_VERSION = 150
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3210,6 +3210,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 149"))
             conn.commit()
             print("[Migration] Schema auf Version 149 (Issue #358: ust_idnr_validiert/-datum für Lieferanten, Datum-Spalte für Kunden)")
+
+        if version < 150:
+            # Profilmanager (v0.6.0) war zunächst immer sichtbar - Nutzer-Feedback: die
+            # meisten Installationen brauchen nie ein zweites Profil, der Menüpunkt stiftet
+            # dann nur Verwirrung. Sichtbarkeitsregel im Frontend: profilmanager_aktiv ODER
+            # es existiert bereits mehr als ein Profil (AppLayout.tsx) - so bleibt der Zugang
+            # erhalten, falls jemand den Schalter nach dem Anlegen mehrerer Profile wieder
+            # deaktiviert.
+            cols150 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "profilmanager_aktiv" not in cols150:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN profilmanager_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 150"))
+            conn.commit()
+            print("[Migration] Schema auf Version 150 (unternehmen.profilmanager_aktiv – Profile-Menüpunkt optional)")
 
 
 def _migrate_kategorien() -> None:

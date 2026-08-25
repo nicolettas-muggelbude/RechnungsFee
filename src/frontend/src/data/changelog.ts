@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.1',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Profile: Der Menüpunkt „Profile" ist jetzt standardmäßig ausgeblendet und lässt sich unter Einstellungen → Unternehmen → Funktionen aktivieren – die meisten Installationen brauchen nur ein einziges Profil, ein permanent sichtbarer Menüpunkt dafür stiftet nur Verwirrung. Sobald mehr als ein Profil existiert, bleibt der Menüpunkt unabhängig vom Schalter sichtbar, damit man jederzeit zwischen Profilen wechseln kann.' },
+    ],
+  },
+  {
     version: 'v0.6.0',
     datum: 'August 2026',
     eintraege: [

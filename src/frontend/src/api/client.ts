@@ -292,6 +292,7 @@ export type Unternehmen = {
   wiederkehrend_aktiv?: boolean
   buchungsvorlagen_aktiv?: boolean
   lagerführung_aktiv?: boolean
+  profilmanager_aktiv?: boolean
   backup_extern_pfad_1?: string | null
   backup_extern_pfad_2?: string | null
   backup_extern_passwort?: string | null
