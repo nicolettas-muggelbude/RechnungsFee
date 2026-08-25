@@ -39,6 +39,7 @@ import { RechnungenPage } from './pages/rechnungen/RechnungenPage'
 import { WiederkehrendePage } from './pages/wiederkehrend/WiederkehrendePage'
 import BuchungsvorlagenPage from './pages/buchungsvorlagen/BuchungsvorlagenPage'
 import { BackupPage } from './pages/backup/BackupPage'
+import { ProfilePage } from './pages/profile/ProfilePage'
 import { InfoPage } from './pages/info/InfoPage'
 import { SpendenPage } from './pages/info/SpendenPage'
 import { FristenPage } from './pages/fristen/FristenPage'
@@ -141,6 +142,7 @@ function AppRoutes() {
           <Route path="/bank-import" element={<BankImportPage />} />
           <Route path="/datenmigration" element={<DatensmigrationsPage />} />
           <Route path="/ansicht" element={<AnsichtPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/info" element={<InfoPage />} />
           <Route path="/spenden" element={<SpendenPage />} />

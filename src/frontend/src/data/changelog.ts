@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.0',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Profile: Mehrere Firmen oder Tätigkeiten (z. B. freiberuflich und gewerblich) lassen sich jetzt getrennt in derselben Installation führen – jedes Profil hat eine eigene Datenbank, eigene Belege und eigene Backups. Neuer Menüpunkt „Profile" neben „Backup": neues Profil anlegen (startet leer mit dem gewohnten Einrichtungs-Assistenten) oder zu einem bestehenden wechseln, jeweils mit einem Neustart der App. Bestehende Installationen werden beim ersten Start automatisch und ohne Datenverlust in ein Profil „Standard" überführt. Es findet bewusst keine automatische Zusammenrechnung von Umsätzen über Profile hinweg statt (z. B. für die §19-Kleinunternehmergrenze oder die UStVA) – das bleibt in deiner Verantwortung.' },
+      { typ: 'fix', text: 'Firmenlogo: Nach einem Umzug des Datenordners (z. B. durch die neue Profile-Funktion oder die bereits bestehende automatische macOS-Pfadkorrektur) verschwand das Logo mit „Logo-Datei nicht gefunden" – der gespeicherte Pfad zeigte auf den alten Ordner, obwohl die Datei längst mitverschoben wurde. Wird jetzt automatisch selbst repariert.' },
+    ],
+  },
+  {
     version: 'v0.5.11',
     datum: 'August 2026',
     eintraege: [

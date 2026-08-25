@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, openUrl, isTauri, type EntwurfErgebnis } from '../api/client'
+import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, getProfile, openUrl, isTauri, type EntwurfErgebnis } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useAnsicht } from '../hooks/useAnsicht'
@@ -309,6 +309,16 @@ export function AppLayout() {
     staleTime: 1000 * 60 * 5,
   })
 
+  // Nur relevant/sichtbar sobald mehr als ein Profil existiert - bei genau einem Profil
+  // (der Normalfall) wäre die Anzeige nur Rauschen, siehe Profile.md.
+  const { data: profilListe } = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    staleTime: 1000 * 60 * 5,
+  })
+  const aktivesProfil = profilListe?.profile.find((p) => p.aktiv)?.name
+  const mehrereProfile = (profilListe?.profile.length ?? 0) > 1
+
   const { data: zmPruefung } = useQuery({
     queryKey: ['zm-pruefen'],
     queryFn: pruefZM,
@@ -372,9 +382,18 @@ export function AppLayout() {
       <aside className="w-56 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
           <img src="/logo.svg" alt="RechnungsFee" className="w-8 h-8 flex-shrink-0" />
-          <div>
+          <div className="min-w-0">
             <h1 className="font-bold text-lg leading-tight"><span className="text-slate-800 dark:text-white">Rechnungs</span><span className="text-[#4F46E5]">Fee</span></h1>
             <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight">v{__APP_VERSION__}</p>
+            {mehrereProfile && aktivesProfil && (
+              <NavLink
+                to="/profile"
+                className="block text-[10px] font-medium text-[#4F46E5] dark:text-indigo-400 leading-tight truncate hover:underline"
+                title={`Aktives Profil: ${aktivesProfil}`}
+              >
+                {aktivesProfil}
+              </NavLink>
+            )}
           </div>
         </div>
 
@@ -445,6 +464,9 @@ export function AppLayout() {
               <NavIcon name="upload_file" /><span>Datenübernahme</span>
             </NavLink>
           )}
+          <NavLink to="/profile" className={navLinkClass}>
+            <NavIcon name="switch_account" /><span>Profile</span>
+          </NavLink>
           <NavLink to="/backup" className={navLinkClass}>
             <NavIcon name="save" /><span>Backup</span>
           </NavLink>

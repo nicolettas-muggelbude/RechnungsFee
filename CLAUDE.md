@@ -66,9 +66,15 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 ## Ports & Pfade
 - Backend: Port **8002**
 - Frontend Dev: Port **5173** (Vite) – `cd src/frontend && npm run dev`
-- DB: `~/.local/share/RechnungsFee/rechnungsfee.db`
-- Uploads: `~/.local/share/RechnungsFee/uploads/`
-- Backups: `~/.local/share/RechnungsFee/backups/`
+- DB: `~/.local/share/RechnungsFee/profile/<Name>/rechnungsfee.db`
+- Uploads: `~/.local/share/RechnungsFee/profile/<Name>/uploads/`
+- Backups: `~/.local/share/RechnungsFee/profile/<Name>/backups/`
+
+### Profilmanager (`src/backend/database/connection.py`)
+
+Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern eine Ebene tiefer auf das jeweils **aktive Profil** (`BASE_DIR/profile/<Name>/`, Zeiger in `BASE_DIR/profile.json`). Ein Profilwechsel erfordert zwingend einen Prozess-Neustart – siehe [Wiki: Profile](https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Profile).
+
+**Wichtig für neuen Code:** Immer `APP_DATA_DIR` aus `database.connection` importieren, nie einen eigenen Datenpfad hartkodieren (z. B. `Path.home() / ".local/share/RechnungsFee"`) – so ein eigenständiger Pfad umgeht sowohl die Profiltrennung als auch die Windows/macOS-Pfadlogik. Genau dieser Fehler steckte bis v0.6.0 in `api/unternehmen.py` (Logo-Upload) und führte nach der Profilmanager-Migration zu 404 beim Logo-Abruf, weil die Datei woanders lag als der eigene hartkodierte Pfad annahm.
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 

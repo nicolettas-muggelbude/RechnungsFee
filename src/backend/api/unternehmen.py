@@ -11,13 +11,17 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from database.connection import get_db
+from database.connection import get_db, APP_DATA_DIR
 from database.models import Unternehmen
 from .schemas import UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse
 
 router = APIRouter(prefix="/api/unternehmen", tags=["Stammdaten"])
 
-UPLOAD_DIR = Path.home() / ".local" / "share" / "RechnungsFee" / "uploads"
+# War früher hartkodiert auf Path.home()/".local/share/RechnungsFee/uploads" - ignorierte
+# sowohl Windows/macOS (dort landete das Logo faktisch in einem toten Ordner) als auch
+# den Profilmanager (siehe database/connection.py: APP_DATA_DIR zeigt jetzt auf das aktive
+# Profil, profile/<name>/uploads/ statt direkt uploads/).
+UPLOAD_DIR = APP_DATA_DIR / "uploads"
 ERLAUBTE_TYPEN = {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
 MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
 
@@ -185,7 +189,17 @@ def get_logo(db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Kein Logo hinterlegt.")
     pfad = Path(unternehmen.logo_pfad)
     if not pfad.exists():
-        raise HTTPException(status_code=404, detail="Logo-Datei nicht gefunden.")
+        # Selbstheilung: logo_pfad wurde als absoluter Pfad gespeichert (Altfehler, siehe
+        # UPLOAD_DIR-Kommentar oben) - nach einer Profil-Migration oder einem Datenordner-
+        # Umzug (z.B. macOS-Migration) liegt die Datei nicht mehr dort, sondern unter dem
+        # gleichen Dateinamen im aktuellen UPLOAD_DIR. Pfad in der DB gleich dauerhaft
+        # korrigieren, damit dieser Fallback nur einmal greifen muss.
+        alternativ = UPLOAD_DIR / pfad.name
+        if not alternativ.exists():
+            raise HTTPException(status_code=404, detail="Logo-Datei nicht gefunden.")
+        pfad = alternativ
+        unternehmen.logo_pfad = str(pfad)
+        db.commit()
     return FileResponse(str(pfad))
 
 

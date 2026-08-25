@@ -204,6 +204,19 @@ export const setKassenbestand = (betrag: string) =>
 export const getKleinunternehmerUmsatz = () =>
   request<{ jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number }>('/setup/kleinunternehmer-umsatz')
 
+// --- Profilmanager ---
+export type ProfilItem = { name: string; aktiv: boolean }
+export const getProfile = () => request<{ profile: ProfilItem[] }>('/profile')
+export const createProfil = (name: string) =>
+  request<{ neustart_erforderlich: boolean }>('/profile', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+export const aktiviereProfil = (name: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/aktivieren`, {
+    method: 'POST',
+  })
+
 // --- Unternehmen ---
 export type Unternehmen = {
   id?: number

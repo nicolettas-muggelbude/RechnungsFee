@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { downloadBackup, getUnternehmen, updateUnternehmen, uploadBackupWiederherstellen, getBackupListe, wiederherstellenLokal, isTauri } from '../../api/client'
+import { downloadBackup, getUnternehmen, updateUnternehmen, uploadBackupWiederherstellen, getBackupListe, wiederherstellenLokal, isTauri, getProfile } from '../../api/client'
 import type { BackupEintrag } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 type TabId = 'backup' | 'wiederherstellung'
 
 const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
+
+// Datenpfad enthält seit dem Profilmanager eine zusätzliche profile/<Name>/-Ebene
+// (siehe database/connection.py) - Name dynamisch aus der API statt hartkodiert
+// "Standard", da nach einem Profilwechsel ein anderes Profil aktiv sein kann.
+function useAktivesProfilPfad(): string {
+  const { data } = useQuery({ queryKey: ['profile'], queryFn: getProfile, staleTime: 1000 * 60 })
+  const aktiv = data?.profile.find((p) => p.aktiv)?.name ?? 'Standard'
+  return `profile/${aktiv}/`
+}
 
 function istSystemlaufwerk(pfad: string): boolean {
   if (!pfad || pfad.startsWith('smb://')) return false
@@ -257,6 +266,7 @@ function BackupTab() {
   const [laedt, setLaedt] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [erfolg, setErfolg] = useState<string | null>(null)
+  const profilPfad = useAktivesProfilPfad()
 
   async function handleBackup() {
     setLaedt(true); setFehler(null); setErfolg(null)
@@ -327,9 +337,9 @@ function BackupTab() {
         </p>
         <div className="space-y-1.5">
           {[
-            { os: 'Linux',   pfad: '~/.local/share/RechnungsFee/backups/' },
-            { os: 'Windows', pfad: '%APPDATA%\\RechnungsFee\\backups\\' },
-            { os: 'macOS',   pfad: '~/Library/Application Support/RechnungsFee/backups/' },
+            { os: 'Linux',   pfad: `~/.local/share/RechnungsFee/${profilPfad}backups/` },
+            { os: 'Windows', pfad: `%APPDATA%\\RechnungsFee\\${profilPfad.replace(/\//g, '\\')}backups\\` },
+            { os: 'macOS',   pfad: `~/Library/Application Support/RechnungsFee/${profilPfad}backups/` },
           ].map(({ os, pfad }) => (
             <div key={os} className="flex items-center gap-2 text-sm">
               <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-medium w-16 text-center shrink-0">{os}</span>
@@ -466,6 +476,7 @@ function WiederherstellungTab() {
   const [zeigPasswort, setZeigPasswort] = useState(false)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'bereit' | 'err'>('idle')
   const [fehler, setFehler] = useState<string | null>(null)
+  const profilPfad = useAktivesProfilPfad()
 
   const istVerschluesselt = datei?.name.endsWith('.zip.enc') ?? false
   const kannWiederherstellen = !!datei && (!istVerschluesselt || !!passwort)
@@ -649,9 +660,9 @@ function WiederherstellungTab() {
         </ol>
         <div className="space-y-1.5 pt-1">
           {[
-            { os: 'Linux',   pfad: '~/.local/share/RechnungsFee/' },
-            { os: 'Windows', pfad: '%APPDATA%\\RechnungsFee\\' },
-            { os: 'macOS',   pfad: '~/Library/Application Support/RechnungsFee/' },
+            { os: 'Linux',   pfad: `~/.local/share/RechnungsFee/${profilPfad}` },
+            { os: 'Windows', pfad: `%APPDATA%\\RechnungsFee\\${profilPfad.replace(/\//g, '\\')}` },
+            { os: 'macOS',   pfad: `~/Library/Application Support/RechnungsFee/${profilPfad}` },
           ].map(({ os, pfad }) => (
             <div key={os} className="flex items-center gap-2 text-sm">
               <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-medium w-16 text-center shrink-0">{os}</span>
