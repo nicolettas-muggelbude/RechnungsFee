@@ -22,6 +22,7 @@ export const HANDBUCH_NAV: NavGroup[] = [
       { label: 'E-Mail-Versand', slug: 'e-mail-versand' },
       { label: 'Belege scannen & OCR', slug: 'belege-scannen-und-ocr' },
       { label: 'Backup & Wiederherstellung', slug: 'backup' },
+      { label: 'Profile', slug: 'profile' },
     ],
   },
   {
