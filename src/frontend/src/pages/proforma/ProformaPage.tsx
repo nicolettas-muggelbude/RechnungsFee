@@ -66,7 +66,7 @@ function adjustMenge(current: string, step: number): string {
 }
 
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
@@ -74,6 +74,7 @@ function PositionenTabelle({
   onArtikelWahl: (i: number, a: ArtikelSuche) => void
   eingabeModus: EingabeModus
   summen: { netto: number; ust: number; brutto: number }
+  istKleinunternehmer: boolean
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
@@ -135,10 +136,15 @@ function PositionenTabelle({
               </td>
               <td className="px-2 py-1.5">
                 <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
-                  className={`${cellInput} text-right`}>
-                  {ustSaetze.map(u => (
-                    <option key={u.satz} value={u.satz}>{u.satz} %</option>
-                  ))}
+                  disabled={istKleinunternehmer}
+                  className={`${cellInput} text-right disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed`}>
+                  {istKleinunternehmer ? (
+                    <option value="0">0 (§19)</option>
+                  ) : (
+                    ustSaetze.map(u => (
+                      <option key={u.satz} value={u.satz}>{u.satz} %</option>
+                    ))
+                  )}
                 </select>
               </td>
               <td className="px-2 py-1.5 text-center">
@@ -212,6 +218,8 @@ function ProformaFormular({
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
   const [faelligAm, setFaelligAm] = useState(initial?.faellig_am ?? '')
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
+  const [einleitungstext, setEinleitungstext] = useState(initial?.einleitungstext ?? '')
+  const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>(initial?.eingabemodus ?? 'brutto')
   const [rabattModus, setRabattModus] = useState<'prozent' | 'betrag'>(
     initial?.rabatt_betrag && parseFloat(String(initial.rabatt_betrag)) > 0 ? 'betrag' : 'prozent'
@@ -249,9 +257,11 @@ function ProformaFormular({
   const ausgewaehlterKundeWarnung = !ausgewaehlterKundeGesperrt && !!ausgewaehlterKunde?.mahnung_warnung
 
   const ustSaetzeListe = ustSaetze?.filter(u => u.ist_aktiv) ?? []
-  const defaultSatz = ustSaetze?.find(u => u.ist_default)?.satz
-    ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
-    ?? '19'
+  const defaultSatz = unternehmen?.ist_kleinunternehmer
+    ? '0'
+    : (ustSaetze?.find(u => u.ist_default)?.satz
+        ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
+        ?? '19')
 
   const [positionen, setPositionen] = useState<Pos[]>(() => {
     if (initial?.positionen?.length) {
@@ -267,14 +277,14 @@ function ProformaFormular({
     return [leerePos()]
   })
 
-  // Sobald UstSätze geladen sind, default-Satz der leeren Positionen korrigieren
+  // Sobald UstSätze/Unternehmen geladen sind, default-Satz der leeren Positionen korrigieren
   useEffect(() => {
     if (!ustSaetze?.length || initial) return
     setPositionen(prev => prev.map(p =>
       p.einzelpreis === '' ? { ...p, ust_satz: defaultSatz } : p
     ))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ustSaetze])
+  }, [ustSaetze, unternehmen?.ist_kleinunternehmer])
 
   // Summen kommen ausschließlich vom Backend (Issue #332) - das Formular rechnet nicht selbst
   const vorschauRequest: RechnungVorschauRequest | null = positionen.some(p => p.beschreibung.trim() && p.einzelpreis.trim())
@@ -346,6 +356,10 @@ function ProformaFormular({
         partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
         partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
         notizen: notizen || undefined,
+        // Issue #368: null statt undefined - nur so kommt ein bewusst geleertes Feld beim
+        // Bearbeiten als "explizit geleert" im Backend an (model_fields_set).
+        einleitungstext: einleitungstext || null,
+        schlusstext: schlusstext || null,
         dokument_typ: 'Proforma' as const,
         ist_entwurf: istEntwurf,
         eingabemodus: eingabeModus,
@@ -482,6 +496,7 @@ function ProformaFormular({
           onArtikelWahl={fillPositionFromArtikel}
           eingabeModus={eingabeModus}
           summen={summen}
+          istKleinunternehmer={unternehmen?.ist_kleinunternehmer ?? false}
         />
       </div>
 
@@ -511,6 +526,20 @@ function ProformaFormular({
           placeholder={rabattModus === 'prozent' ? 'z. B. 5' : 'z. B. 50,00'}
           className={inputCls}
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
+        <textarea value={einleitungstext} onChange={e => setEinleitungstext(e.target.value)}
+          rows={3} className={`${inputCls} resize-y`}
+          placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für Proforma-Rechnungen." />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
+        <textarea value={schlusstext} onChange={e => setSchlusstext(e.target.value)}
+          rows={3} className={`${inputCls} resize-y`}
+          placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für Proforma-Rechnungen." />
       </div>
 
       <div>
@@ -930,6 +959,20 @@ function ProformaDetail({
                 </tfoot>
               </table>
             </div>
+          </div>
+        )}
+
+        {proforma.einleitungstext && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Einleitungstext</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{proforma.einleitungstext}</p>
+          </div>
+        )}
+
+        {proforma.schlusstext && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Schlusstext</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{proforma.schlusstext}</p>
           </div>
         )}
 

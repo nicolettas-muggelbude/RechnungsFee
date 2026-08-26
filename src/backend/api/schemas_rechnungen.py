@@ -111,6 +111,7 @@ class RechnungCreate(BaseModel):
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
     einleitungstext: Optional[str] = None
+    schlusstext: Optional[str] = None
     externe_belegnr: Optional[str] = None
     ist_entwurf: bool = True
     rabatt_prozent: Decimal = Decimal("0")
@@ -210,6 +211,13 @@ class RechnungUpdate(BaseModel):
     partner_land: Optional[str] = None
     kategorie_id: Optional[int] = None
     notizen: Optional[str] = None
+    # Issue #368: fehlten hier komplett - Bearbeiten eines bestehenden Entwurfs speicherte
+    # einleitungstext bisher nie (nur das Neuanlegen funktionierte), schlusstext ist neu und
+    # muss von Anfang an korrekt verdrahtet sein. Absichtlich nicht ins generische
+    # "val is not None"-Kopiermuster in update_rechnung() aufgenommen, sondern dort separat
+    # über model_fields_set behandelt, damit sich ein Text auch bewusst wieder leeren lässt.
+    einleitungstext: Optional[str] = None
+    schlusstext: Optional[str] = None
     externe_belegnr: Optional[str] = None
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
@@ -333,6 +341,7 @@ class RechnungResponse(BaseModel):
     mahnstufe_aktuell: int = 0
     notizen: Optional[str]
     einleitungstext: Optional[str] = None
+    schlusstext: Optional[str] = None
     externe_belegnr: Optional[str]
     leistung_von: Optional[date]
     leistung_bis: Optional[date]

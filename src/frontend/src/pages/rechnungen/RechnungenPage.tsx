@@ -2183,6 +2183,13 @@ function RechnungDetail({
           </div>
         )}
 
+        {rechnung.schlusstext && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Schlusstext</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{rechnung.schlusstext}</p>
+          </div>
+        )}
+
         {rechnung.notizen && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Notizen</p>
@@ -2483,6 +2490,7 @@ function RechnungForm({
   const [showNeuArtikel, setShowNeuArtikel] = useState(false)
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
   const [einleitungstext, setEinleitungstext] = useState(initial?.einleitungstext ?? '')
+  const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
@@ -2967,7 +2975,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
       notizen: notizen || undefined,
-      einleitungstext: einleitungstext || undefined,
+      // Issue #368: null statt undefined - nur so kann ein bewusst geleertes Feld beim
+      // Bearbeiten eines Entwurfs tatsächlich als "explizit geleert" beim Backend ankommen
+      // (model_fields_set), ein weggelassenes Feld (undefined) bleibt sonst unangetastet.
+      einleitungstext: einleitungstext || null,
+      schlusstext: schlusstext || null,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       ist_entwurf: istEntwurf,
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
@@ -3938,7 +3950,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         />
       )}
 
-      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (
+      {typ === 'ausgang' && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
           <textarea
@@ -3946,7 +3958,23 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             onChange={(e) => setEinleitungstext(e.target.value)}
             rows={3}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-            placeholder="Erscheint vor der Positionstabelle. Leer = globaler Standard aus Einstellungen."
+            placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für diesen Dokumenttyp."
+          />
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">*kursiv*</code> · Zeilenumbruch mit Enter
+          </p>
+        </div>
+      )}
+
+      {typ === 'ausgang' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
+          <textarea
+            value={schlusstext}
+            onChange={(e) => setSchlusstext(e.target.value)}
+            rows={3}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+            placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für diesen Dokumenttyp."
           />
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">*kursiv*</code> · Zeilenumbruch mit Enter

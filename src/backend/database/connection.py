@@ -44,7 +44,7 @@ _PROFILE_ROOT_NAME = "profile"
 _STANDARD_PROFIL = "Standard"
 _MIGRATION_TEMP_PREFIX = ".migrating_"
 
-_PROFILNAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]{1,50}$")
+_PROFILNAME_PATTERN = re.compile(r"^[A-Za-zÄÖÜäöüß0-9 _-]{1,50}$")
 
 # Alles was zu einer flachen Alt-Installation gehören kann und beim ersten Start
 # nach diesem Update einmalig ins Standard-Profil verschoben werden muss.
@@ -56,9 +56,12 @@ _MIGRIERBARE_ELEMENTE = (
 
 
 def ist_gueltiger_profilname(name: str) -> bool:
-    """Nur alphanumerisch + Leerzeichen/Bindestrich/Unterstrich, max. 50 Zeichen -
-    verhindert Path-Traversal (../, /, \\) sowohl beim Anlegen als auch defensiv
-    beim Lesen eines (potenziell manuell manipulierten) Profil-Zeigers."""
+    """Nur alphanumerisch (inkl. deutscher Umlaute/ß) + Leerzeichen/Bindestrich/
+    Unterstrich, max. 50 Zeichen - verhindert Path-Traversal (../, /, \\) sowohl
+    beim Anlegen als auch defensiv beim Lesen eines (potenziell manuell
+    manipulierten) Profil-Zeigers. Umlaute sind bewusst zusätzlich erlaubt (Issue-
+    Feedback: deutsche Firmennamen wie "Müller" oder "Bäckerei" wurden sonst als
+    ungültig abgelehnt, obwohl die Fehlermeldung "Buchstaben" versprach)."""
     return bool(_PROFILNAME_PATTERN.match(name))
 
 

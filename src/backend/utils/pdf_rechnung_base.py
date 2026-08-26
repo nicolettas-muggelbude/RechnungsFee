@@ -24,6 +24,22 @@ from typing import Any
 from fpdf import FPDF
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
 
+_STANDARDTEXT_TYP_SUFFIX = {
+    "Angebot": "_angebot", "Auftrag": "_auftrag",
+    "Proforma": "_proforma", "Lieferschein": "_lieferschein",
+}
+
+
+def _standardtext(unt: dict, feld: str, dokument_typ: str) -> str:
+    """Issue #368: liefert den Standard-Einleitungs-/Schlusstext für den jeweiligen
+    Dokumenttyp aus dem Unternehmens-Snapshot-Dict. Rechnung/Gutschrift/Storno nutzen das
+    unpräfigierte Basisfeld (feld selbst), die vier optionalen Dokumenttypen ihr eigenes -
+    bewusst KEIN Fallback auf den Rechnung-Text wenn das typspezifische Feld leer ist, sonst
+    würde ein leer gelassenes Angebots-Feld fälschlich den Rechnungstext übernehmen (genau
+    das ursprüngliche Problem aus Issue #368)."""
+    suffix = _STANDARDTEXT_TYP_SUFFIX.get(dokument_typ, "")
+    return (unt.get(f"{feld}{suffix}") or "").strip()
+
 
 # ---------------------------------------------------------------------------
 # Konstanten
@@ -513,8 +529,9 @@ class RechnungPDFBase(FPDF):
 
     def _render_nach_titel(self):
         """Hook zwischen Titel und Positionen: Einleitungstext, dann Abstand."""
+        dokument_typ = getattr(self._r, "dokument_typ", "Rechnung") or "Rechnung"
         text = (getattr(self._r, "einleitungstext", None) or
-                self._unt.get("einleitungstext") or "").strip()
+                _standardtext(self._unt, "einleitungstext", dokument_typ)).strip()
         if text:
             self.set_font("DejaVu", "", 9)
             self.set_text_color(*TEXT_DUNKEL)
@@ -523,6 +540,20 @@ class RechnungPDFBase(FPDF):
             self.ln(2)
         else:
             self.ln(4)
+
+    def _render_schlusstext(self):
+        """Issue #368: Hook kurz vor den Notizen - Pendant zu _render_nach_titel(), aber
+        NACH Positionen/Summenblock/Zahlungsblock statt davor. Läuft unabhängig vom
+        Dokumenttyp, genau wie der Einleitungstext-Hook auch immer aufgerufen wird."""
+        dokument_typ = getattr(self._r, "dokument_typ", "Rechnung") or "Rechnung"
+        text = (getattr(self._r, "schlusstext", None) or
+                _standardtext(self._unt, "schlusstext", dokument_typ)).strip()
+        if text:
+            self.set_font("DejaVu", "", 9)
+            self.set_text_color(*TEXT_DUNKEL)
+            self.set_x(L_MARGIN)
+            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True)
+            self.ln(2)
 
     def _render_positionen(self):
         """Positionstabelle. Muss self._sum_x, self._sum_lbl_w, self._sum_val_w setzen."""
@@ -699,6 +730,7 @@ class RechnungPDFBase(FPDF):
             self._render_19_hinweis()
             if not ist_angebot and not ist_auftrag and not ist_storno_rnd:
                 self._render_zahlungsblock()
+        self._render_schlusstext()
         self._render_notizen()
         if ist_lieferschein:
             self._render_empfangsbestaetigung()

@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile
 
-SCHEMA_VERSION = 150
+SCHEMA_VERSION = 151
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3224,6 +3224,31 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 150"))
             conn.commit()
             print("[Migration] Schema auf Version 150 (unternehmen.profilmanager_aktiv – Profile-Menüpunkt optional)")
+
+        if version < 151:
+            # Issue #368: getrennte Standard-Einleitungs-/Schlusstexte je Dokumenttyp statt
+            # eines einzigen globalen Texts für alle. unternehmen.einleitungstext bleibt
+            # unverändert der Rechnung-Standardtext (kein Rename, kein Migrationsrisiko für
+            # bereits produktiv genutzte Werte) - neu sind schlusstext (Pendant für Rechnung)
+            # sowie je ein Einleitungs-/Schlusstext-Paar für die vier optionalen Dokumenttypen.
+            # rechnungen.schlusstext ist das universelle Dokument-Override, analog zum
+            # bestehenden rechnungen.einleitungstext.
+            cols151_unt = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for spalte in (
+                "schlusstext",
+                "einleitungstext_angebot", "schlusstext_angebot",
+                "einleitungstext_auftrag", "schlusstext_auftrag",
+                "einleitungstext_proforma", "schlusstext_proforma",
+                "einleitungstext_lieferschein", "schlusstext_lieferschein",
+            ):
+                if spalte not in cols151_unt:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {spalte} TEXT"))
+            cols151_re = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "schlusstext" not in cols151_re:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN schlusstext TEXT"))
+            conn.execute(text("PRAGMA user_version = 151"))
+            conn.commit()
+            print("[Migration] Schema auf Version 151 (Issue #368: Einleitungs-/Schlusstext je Dokumenttyp)")
 
 
 def _migrate_kategorien() -> None:

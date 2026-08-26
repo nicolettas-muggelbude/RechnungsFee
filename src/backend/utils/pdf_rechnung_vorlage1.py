@@ -13,7 +13,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _iso_zu_de, _adresszeilen, _md,
+    _fmt_euro, _iso_zu_de, _adresszeilen, _md, _standardtext,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -48,8 +48,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         vorname_kunde = getattr(partner_obj, "vorname", None) or ""
         anrede = f"Hallo {vorname_kunde}," if vorname_kunde else "Hallo,"
 
+        dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
         einleitungstext = (getattr(r, "einleitungstext", None) or
-                           self._unt.get("einleitungstext") or "").strip()
+                           _standardtext(self._unt, "einleitungstext", dokument_typ)).strip()
 
         self.ln(5)
         self.set_font("DejaVu", "", 9.5)
@@ -61,7 +62,10 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
             self.multi_cell(NUTZ_W, 5, _md(einleitungstext), markdown=True)
-        else:
+        elif dokument_typ == "Rechnung":
+            # Eingebauter Vorlage-1-Standardtext gilt bewusst nur für Rechnung (Issue #368) -
+            # für die anderen Dokumenttypen ohne konfigurierten Text lieber gar nichts zeigen
+            # als fälschlich "...in Rechnung" auf einem Angebot/Auftrag/einer Proforma.
             self.set_text_color(*TEXT_GRAU)
             self.cell(0, 5.5,
                       "Vielen Dank für Dein Vertrauen. Wir stellen hiermit folgende Leistungen in Rechnung:",

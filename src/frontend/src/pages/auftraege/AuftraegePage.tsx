@@ -89,7 +89,7 @@ function adjustMenge(current: string, step: number): string {
 }
 
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
@@ -97,6 +97,7 @@ function PositionenTabelle({
   onArtikelWahl: (i: number, a: ArtikelSuche) => void
   eingabeModus: EingabeModus
   summen: { netto: number; ust: number; brutto: number }
+  istKleinunternehmer: boolean
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
@@ -158,10 +159,15 @@ function PositionenTabelle({
               </td>
               <td className="px-2 py-1.5">
                 <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
-                  className={`${cellInput} text-right`}>
-                  {ustSaetze.map(u => (
-                    <option key={u.satz} value={u.satz}>{u.satz} %</option>
-                  ))}
+                  disabled={istKleinunternehmer}
+                  className={`${cellInput} text-right disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed`}>
+                  {istKleinunternehmer ? (
+                    <option value="0">0 (§19)</option>
+                  ) : (
+                    ustSaetze.map(u => (
+                      <option key={u.satz} value={u.satz}>{u.satz} %</option>
+                    ))
+                  )}
                 </select>
               </td>
               <td className="px-2 py-1.5 text-center">
@@ -222,6 +228,7 @@ function AuftragFormular({
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
   const { data: ustSaetze } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze })
   const { data: pakete } = useQuery({ queryKey: ['dokumentenpakete'], queryFn: getDokumentenPakete })
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
 
   const [partnerId, setPartnerId] = useState(initial?.kunde_id?.toString() ?? vorKundeId ?? '')
   const [partnerFreitext, setPartnerFreitext] = useState(initial?.partner_freitext ?? '')
@@ -233,6 +240,8 @@ function AuftragFormular({
   const [showNeuKunde, setShowNeuKunde] = useState(false)
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
+  const [einleitungstext, setEinleitungstext] = useState(initial?.einleitungstext ?? '')
+  const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>(initial?.eingabemodus ?? 'brutto')
   const [rabattModus, setRabattModus] = useState<'prozent' | 'betrag'>(
@@ -261,9 +270,11 @@ function AuftragFormular({
   const ausgewaehlterKundeWarnung = !ausgewaehlterKundeGesperrt && !!ausgewaehlterKunde?.mahnung_warnung
 
   const ustSaetzeListe = ustSaetze?.filter(u => u.ist_aktiv) ?? []
-  const defaultSatz = ustSaetze?.find(u => u.ist_default)?.satz
-    ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
-    ?? '19'
+  const defaultSatz = unternehmen?.ist_kleinunternehmer
+    ? '0'
+    : (ustSaetze?.find(u => u.ist_default)?.satz
+        ?? ustSaetze?.find(u => parseFloat(u.satz) === 19)?.satz
+        ?? '19')
 
   const [positionen, setPositionen] = useState<Pos[]>(() => {
     if (initial?.positionen?.length) {
@@ -285,7 +296,7 @@ function AuftragFormular({
       p.einzelpreis === '' ? { ...p, ust_satz: defaultSatz } : p
     ))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ustSaetze])
+  }, [ustSaetze, unternehmen?.ist_kleinunternehmer])
 
   // Summen kommen ausschließlich vom Backend (Issue #332) - das Formular rechnet nicht selbst
   const vorschauRequest: RechnungVorschauRequest | null = positionen.some(p => p.beschreibung.trim() && p.einzelpreis.trim())
@@ -366,6 +377,10 @@ function AuftragFormular({
         partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
         partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
         notizen: notizen || undefined,
+        // Issue #368: null statt undefined - nur so kommt ein bewusst geleertes Feld beim
+        // Bearbeiten als "explizit geleert" im Backend an (model_fields_set).
+        einleitungstext: einleitungstext || null,
+        schlusstext: schlusstext || null,
         dokument_typ: 'Auftrag' as const,
         dokumentenpaket_id: paketId ? parseInt(paketId) : undefined,
         ist_entwurf: istEntwurf,
@@ -507,6 +522,7 @@ function AuftragFormular({
           onArtikelWahl={fillPositionFromArtikel}
           eingabeModus={eingabeModus}
           summen={summen}
+          istKleinunternehmer={unternehmen?.ist_kleinunternehmer ?? false}
         />
         {(() => {
           const warnungen = positionen.filter(p =>
@@ -552,6 +568,20 @@ function AuftragFormular({
           placeholder={rabattModus === 'prozent' ? 'z. B. 5' : 'z. B. 50,00'}
           className={inputCls}
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
+        <textarea value={einleitungstext} onChange={e => setEinleitungstext(e.target.value)}
+          rows={3} className={`${inputCls} resize-y`}
+          placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für Aufträge." />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
+        <textarea value={schlusstext} onChange={e => setSchlusstext(e.target.value)}
+          rows={3} className={`${inputCls} resize-y`}
+          placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für Aufträge." />
       </div>
 
       <div>
@@ -911,6 +941,16 @@ function AuftragDetail({
               {brutto.toFixed(2).replace('.', ',')} €
             </span>
           </div>
+          {auftrag.einleitungstext && (
+            <div className="pt-1 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">
+              {auftrag.einleitungstext}
+            </div>
+          )}
+          {auftrag.schlusstext && (
+            <div className="pt-1 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">
+              {auftrag.schlusstext}
+            </div>
+          )}
           {auftrag.notizen && (
             <div className="pt-1 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">
               {auftrag.notizen}

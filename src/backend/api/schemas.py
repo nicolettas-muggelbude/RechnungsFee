@@ -59,6 +59,15 @@ class UnternehmenBase(BaseModel):
     zahlungshinweis_aktiv: bool = True
     pdf_vorlage: int = 0
     einleitungstext: Optional[str] = None
+    schlusstext: Optional[str] = None
+    einleitungstext_angebot: Optional[str] = None
+    schlusstext_angebot: Optional[str] = None
+    einleitungstext_auftrag: Optional[str] = None
+    schlusstext_auftrag: Optional[str] = None
+    einleitungstext_proforma: Optional[str] = None
+    schlusstext_proforma: Optional[str] = None
+    einleitungstext_lieferschein: Optional[str] = None
+    schlusstext_lieferschein: Optional[str] = None
     logo_pfad: Optional[str] = None
     mail_betreff_vorlage: Optional[str] = None
     mail_text_vorlage: Optional[str] = None

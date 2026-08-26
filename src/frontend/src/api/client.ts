@@ -206,7 +206,7 @@ export const getKleinunternehmerUmsatz = () =>
 
 // --- Profilmanager ---
 export type ProfilItem = { name: string; aktiv: boolean }
-export const getProfile = () => request<{ profile: ProfilItem[] }>('/profile')
+export const getProfile = () => request<{ profile: ProfilItem[]; archiviert: string[] }>('/profile')
 export const createProfil = (name: string) =>
   request<{ neustart_erforderlich: boolean }>('/profile', {
     method: 'POST',
@@ -215,6 +215,29 @@ export const createProfil = (name: string) =>
 export const aktiviereProfil = (name: string) =>
   request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/aktivieren`, {
     method: 'POST',
+  })
+export const benenneProfilUm = (name: string, neuerName: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ neuer_name: neuerName }),
+  })
+export const archiviereProfil = (name: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/archivieren`, {
+    method: 'POST',
+  })
+export const stelleProfilWiederHer = (name: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/wiederherstellen`, {
+    method: 'POST',
+  })
+export const loescheProfil = (name: string, bestaetigung: string) =>
+  request<void>(`/profile/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ bestaetigung }),
+  })
+export const loescheArchiviertesProfil = (name: string, bestaetigung: string) =>
+  request<void>(`/profile/${encodeURIComponent(name)}/archiv`, {
+    method: 'DELETE',
+    body: JSON.stringify({ bestaetigung }),
   })
 
 // --- Unternehmen ---
@@ -307,6 +330,15 @@ export type Unternehmen = {
   datev_konto_karte?: string | null
   datev_konto_paypal?: string | null
   einleitungstext?: string | null
+  schlusstext?: string | null
+  einleitungstext_angebot?: string | null
+  schlusstext_angebot?: string | null
+  einleitungstext_auftrag?: string | null
+  schlusstext_auftrag?: string | null
+  einleitungstext_proforma?: string | null
+  schlusstext_proforma?: string | null
+  einleitungstext_lieferschein?: string | null
+  schlusstext_lieferschein?: string | null
   guv_aktiv?: boolean
   kontenuebersicht_aktiv?: boolean
   bank_import_aktiv?: boolean
@@ -1381,6 +1413,7 @@ export type Rechnung = {
   rabatt_betrag: string | null
   eingabemodus: 'netto' | 'brutto'
   einleitungstext: string | null
+  schlusstext: string | null
   ist_reverse_charge: boolean
   ist_eu_lieferung: boolean
   ist_drittland_leistung: boolean
@@ -1405,6 +1438,7 @@ export type RechnungCreate = {
   kategorie_id?: number
   notizen?: string
   einleitungstext?: string | null
+  schlusstext?: string | null
   externe_belegnr?: string
   ist_entwurf?: boolean
   skonto_prozent?: number | null

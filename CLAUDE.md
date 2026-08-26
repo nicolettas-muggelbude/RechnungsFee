@@ -78,7 +78,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 149` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 151` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -291,6 +291,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 148 | unternehmen.backup_extern_pfad_1/2_lokal_ok BOOLEAN – Issue #348: Opt-in pro Backup-Zielpfad, um die Systemlaufwerk-Prüfung (`_ist_systemlaufwerk()`) gezielt zu übergehen, z. B. für einen lokal per Sync-Client (Dropbox/Proton Drive) extern gesicherten Ordner. Default weiterhin sicher (Prüfung greift ohne Bestätigung). Zusätzlich (kein Schema-Change): `database/connection.py` unterschied APP_DATA_DIR bisher nur Windows vs. „alles andere" – macOS lief fälschlich über die Linux-XDG-Konvention (`~/.local/share/`) statt `~/Library/Application Support/`; bestehende macOS-Installationen werden beim ersten Start mit dem Fix einmalig automatisch in den korrekten Ordner verschoben (nur wenn dort noch keine DB liegt) |
 | 149 | lieferanten.ust_idnr_validiert BOOLEAN + ust_idnr_validierung_datum DATE (neu, analog zu den bei Kunden bereits vorhandenen, bis dahin aber ungenutzten Feldern); kunden.ust_idnr_validierung_datum DATE (fehlte bislang, `ust_idnr_validiert` gab es schon) – Issue #358: „Über BZSt bestätigt"-Checkbox samt Datum in Kunden-/Lieferantenstammdaten; dazu client-seitiger USt-IdNr-Formatcheck je EU-Land (`utils/laender.ts`, Muster aus `EU_LAENDER`/seed.py übernommen) und Link zur BZSt-eVatR-Abfrage. Beim Kunden nur aktiv wenn `istEuAusland` (Land ≠ DE und EU-Mitglied) – das Feld ist für DE/Drittland weiterhin auch als normale Steuernummer nutzbar (Issue #335), ein Formatcheck dagegen würde dort falsche Warnungen erzeugen |
 | 150 | unternehmen.profilmanager_aktiv BOOLEAN DEFAULT 0 – Menüpunkt „Profile" (v0.6.0) ist jetzt standardmäßig ausgeblendet und über Einstellungen → Unternehmen → Funktionen aktivierbar; bleibt unabhängig vom Schalter sichtbar sobald mehr als ein Profil existiert (v0.6.1) |
+| 151 | Issue #368: unternehmen.schlusstext + je 2 Spalten (einleitungstext_X/schlusstext_X) für angebot/auftrag/proforma/lieferschein (9 neue Spalten); rechnungen.schlusstext – getrennte Standard-Einleitungs-/Schlusstexte je Dokumenttyp statt eines einzigen globalen Texts für alle; `_standardtext()` (utils/pdf_rechnung_base.py) löst pro Dokumenttyp auf, ohne Cross-Fallback auf den Rechnung-Text bei leerem Feld |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

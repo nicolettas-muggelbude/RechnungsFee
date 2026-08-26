@@ -101,6 +101,18 @@ class Unternehmen(Base):
     zahlungshinweis_aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     pdf_vorlage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     einleitungstext: Mapped[str | None] = mapped_column(Text)
+    schlusstext: Mapped[str | None] = mapped_column(Text)
+    # Issue #368: eigene Standardtexte je optionalem Dokumenttyp (Rechnung nutzt weiterhin
+    # obiges einleitungstext/schlusstext, kein Rename - vermeidet Migrationsrisiko für den
+    # bereits produktiv genutzten Rechnung-Standardtext).
+    einleitungstext_angebot: Mapped[str | None] = mapped_column(Text)
+    schlusstext_angebot: Mapped[str | None] = mapped_column(Text)
+    einleitungstext_auftrag: Mapped[str | None] = mapped_column(Text)
+    schlusstext_auftrag: Mapped[str | None] = mapped_column(Text)
+    einleitungstext_proforma: Mapped[str | None] = mapped_column(Text)
+    schlusstext_proforma: Mapped[str | None] = mapped_column(Text)
+    einleitungstext_lieferschein: Mapped[str | None] = mapped_column(Text)
+    schlusstext_lieferschein: Mapped[str | None] = mapped_column(Text)
     # Logo & Mail-Vorlagen
     logo_pfad: Mapped[str | None] = mapped_column(String(500))
     mail_betreff_vorlage: Mapped[str | None] = mapped_column(String(500))
@@ -634,8 +646,11 @@ class Rechnung(Base):
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)
-    # Einleitungstext (überschreibt globalen Text aus unternehmen.einleitungstext)
+    # Einleitungstext (überschreibt globalen Text aus unternehmen.einleitungstext/-typspezifisch)
     einleitungstext: Mapped[str | None] = mapped_column(Text)
+    # Schlusstext (Issue #368) - analog einleitungstext, universelles Override unabhängig
+    # vom Dokumenttyp (Typ-Unterscheidung passiert nur bei den Unternehmen-Standardwerten)
+    schlusstext: Mapped[str | None] = mapped_column(Text)
     # Rabatt
     rabatt_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"), nullable=False, server_default="0")
     rabatt_betrag: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

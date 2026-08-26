@@ -405,6 +405,15 @@ def _absender_snapshot(db: Session) -> str:
         "unterschrift_auf_rechnung": bool(unt.unterschrift_auf_rechnung),
         "qr_zahlung_aktiv":        bool(unt.qr_zahlung_aktiv),
         "einleitungstext":         unt.einleitungstext or "",
+        "schlusstext":             unt.schlusstext or "",
+        "einleitungstext_angebot":      unt.einleitungstext_angebot or "",
+        "schlusstext_angebot":          unt.schlusstext_angebot or "",
+        "einleitungstext_auftrag":      unt.einleitungstext_auftrag or "",
+        "schlusstext_auftrag":          unt.schlusstext_auftrag or "",
+        "einleitungstext_proforma":     unt.einleitungstext_proforma or "",
+        "schlusstext_proforma":         unt.schlusstext_proforma or "",
+        "einleitungstext_lieferschein": unt.einleitungstext_lieferschein or "",
+        "schlusstext_lieferschein":     unt.schlusstext_lieferschein or "",
     }, ensure_ascii=False)
 
 
@@ -1134,6 +1143,11 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
         partner_ort=data.partner_ort,
         partner_land=data.partner_land,
         notizen=data.notizen,
+        # Issue #368: fehlten hier komplett - Auftrag hat als einziger Dokumenttyp einen
+        # eigenen Erstellen-Endpunkt (statt create_rechnung()) und übernahm einleitungstext
+        # bislang gar nicht aus dem Request.
+        einleitungstext=data.einleitungstext,
+        schlusstext=data.schlusstext,
         ist_entwurf=data.ist_entwurf,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -1322,6 +1336,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         kategorie_id=data.kategorie_id,
         notizen=data.notizen,
         einleitungstext=data.einleitungstext,
+        schlusstext=data.schlusstext,
         externe_belegnr=data.externe_belegnr,
         ist_entwurf=data.ist_entwurf,
         skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
@@ -1447,6 +1462,17 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
+
+    # Issue #368: einleitungstext/schlusstext bewusst NICHT im obigen "val is not None"-
+    # Muster - das würde ein absichtliches Leeren (Frontend schickt explizit null) nicht von
+    # "gar nicht mitgeschickt" unterscheiden können. Über model_fields_set wird nur dann
+    # geschrieben, wenn das Feld im Request tatsächlich vorkam - so lässt sich der Text auch
+    # wieder auf leer zurücksetzen. Behebt zugleich den Bestandsfehler, dass ein bearbeiteter
+    # Einleitungstext an einem gespeicherten Entwurf bisher nie persistiert wurde.
+    if "einleitungstext" in data.model_fields_set:
+        rechnung.einleitungstext = data.einleitungstext
+    if "schlusstext" in data.model_fields_set:
+        rechnung.schlusstext = data.schlusstext
 
     if sum([
         rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,
@@ -1694,6 +1720,15 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
                 "qr_zahlung_aktiv":           unternehmen.qr_zahlung_aktiv or False,
                 "einleitungstext":            unternehmen.einleitungstext or "",
+                "schlusstext":                unternehmen.schlusstext or "",
+                "einleitungstext_angebot":      unternehmen.einleitungstext_angebot or "",
+                "schlusstext_angebot":          unternehmen.schlusstext_angebot or "",
+                "einleitungstext_auftrag":      unternehmen.einleitungstext_auftrag or "",
+                "schlusstext_auftrag":          unternehmen.schlusstext_auftrag or "",
+                "einleitungstext_proforma":     unternehmen.einleitungstext_proforma or "",
+                "schlusstext_proforma":         unternehmen.schlusstext_proforma or "",
+                "einleitungstext_lieferschein": unternehmen.einleitungstext_lieferschein or "",
+                "schlusstext_lieferschein":     unternehmen.schlusstext_lieferschein or "",
             }
 
     # Gutschrift: Originalrechnungsnummer am Objekt hinterlegen (für PDF-Titel)
@@ -1979,6 +2014,15 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "qr_zahlung_aktiv":        unternehmen.qr_zahlung_aktiv or False,
         "einleitungstext":         unternehmen.einleitungstext or "",
+        "schlusstext":             unternehmen.schlusstext or "",
+        "einleitungstext_angebot":      unternehmen.einleitungstext_angebot or "",
+        "schlusstext_angebot":          unternehmen.schlusstext_angebot or "",
+        "einleitungstext_auftrag":      unternehmen.einleitungstext_auftrag or "",
+        "schlusstext_auftrag":          unternehmen.schlusstext_auftrag or "",
+        "einleitungstext_proforma":     unternehmen.einleitungstext_proforma or "",
+        "schlusstext_proforma":         unternehmen.schlusstext_proforma or "",
+        "einleitungstext_lieferschein": unternehmen.einleitungstext_lieferschein or "",
+        "schlusstext_lieferschein":     unternehmen.schlusstext_lieferschein or "",
     }
 
     try:
@@ -3057,6 +3101,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         kategorie_id=original.kategorie_id,
         notizen=original.notizen,
         einleitungstext=original.einleitungstext,
+        schlusstext=original.schlusstext,
         rabatt_prozent=original.rabatt_prozent,
         rabatt_betrag=original.rabatt_betrag,
         skonto_prozent=original.skonto_prozent,

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail,
+  getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail, getProfile,
   type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -166,6 +166,15 @@ function LogoSektion({
 
 function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab: TabId }) {
   const qc = useQueryClient()
+  // Sobald mehr als ein Profil existiert, bleibt der Menüpunkt "Profile" unabhängig vom
+  // Schalter sichtbar (siehe AppLayout.tsx) - der Schalter selbst muss dann als dauerhaft
+  // aktiv erkennbar sein, sonst wirkt er deaktivierbar, obwohl das Ausschalten wirkungslos wäre.
+  const { data: profilListe } = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    staleTime: 1000 * 60 * 5,
+  })
+  const mehrereProfile = (profilListe?.profile.length ?? 0) > 1
   const [form, setForm] = useState<Partial<Unternehmen>>(() => {
     const { logo_pfad: _logo, ...rest } = data
     if (rest.iban) {
@@ -201,6 +210,43 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
 
   function set(key: keyof Unternehmen, value: string | boolean | number | null) {
     setForm(f => ({ ...f, [key]: value }))
+  }
+
+  // Issue #368: Standard-Einleitungs-/Schlusstext je Dokumenttyp - ein Textfeld-Paar pro Typ,
+  // Rechnung immer sichtbar, die anderen nur wenn der jeweilige Dokumenttyp aktiviert ist.
+  function textfeldPaar(typLabel: string, einleitungKey: keyof Unternehmen, schlussKey: keyof Unternehmen) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
+            Einleitungstext für {typLabel}
+          </label>
+          <textarea
+            value={(form[einleitungKey] as string | null | undefined) ?? ''}
+            onChange={ev => set(einleitungKey, ev.target.value || null)}
+            rows={3}
+            placeholder="Erscheint vor der Positionstabelle."
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
+            Schlusstext für {typLabel}
+          </label>
+          <textarea
+            value={(form[schlussKey] as string | null | undefined) ?? ''}
+            onChange={ev => set(schlussKey, ev.target.value || null)}
+            rows={3}
+            placeholder="Erscheint nach Positionen/Summen."
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
+          />
+        </div>
+        <p className="text-xs text-slate-400 dark:text-slate-500 md:col-span-2 -mt-2">
+          Leer lassen wenn kein Standardtext gewünscht. Pro Dokument überschreibbar.
+          Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*kursiv*</code> · Zeilenumbruch mit Enter
+        </p>
+      </div>
+    )
   }
 
   function handleSpeichern(e: React.FormEvent) {
@@ -705,6 +751,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <span className="text-sm text-slate-500 dark:text-slate-400">Tagen (leer = kein Skonto)</span>
           </div>
 
+          {textfeldPaar('Rechnung', 'einleitungstext', 'schlusstext')}
+
           <label className={`flex items-start gap-3 ${form.iban?.trim() ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
             <input
               type="checkbox"
@@ -743,6 +791,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               </p>
             </div>
           </label>
+          {form.lieferschein_aktiv && textfeldPaar('Lieferschein', 'einleitungstext_lieferschein', 'schlusstext_lieferschein')}
 
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -760,6 +809,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               </p>
             </div>
           </label>
+          {form.angebote_aktiv && textfeldPaar('Angebot', 'einleitungstext_angebot', 'schlusstext_angebot')}
 
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -777,6 +827,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               </p>
             </div>
           </label>
+          {form.proforma_aktiv && textfeldPaar('Proforma', 'einleitungstext_proforma', 'schlusstext_proforma')}
 
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -794,6 +845,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               </p>
             </div>
           </label>
+          {form.auftraege_aktiv && textfeldPaar('Auftrag', 'einleitungstext_auftrag', 'schlusstext_auftrag')}
 
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -846,40 +898,25 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             </div>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label className={`flex items-start gap-3 ${mehrereProfile ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
             <input
               type="checkbox"
-              checked={!!form.profilmanager_aktiv}
+              checked={mehrereProfile || !!form.profilmanager_aktiv}
+              disabled={mehrereProfile}
               onChange={ev => set('profilmanager_aktiv', ev.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 disabled:opacity-60"
             />
             <div>
               <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
                 Profile aktivieren
               </span>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Mehrere Firmen oder Tätigkeiten getrennt in derselben Installation führen (eigene Datenbank, Belege und Backups je Profil). Aktiviert den Menüpunkt „Profile". Sobald mehr als ein Profil existiert, bleibt der Menüpunkt unabhängig von diesem Schalter sichtbar.
+                {mehrereProfile
+                  ? 'Mehrere Firmen oder Tätigkeiten getrennt in derselben Installation führen (eigene Datenbank, Belege und Backups je Profil). Es existiert bereits mehr als ein Profil – der Menüpunkt „Profile" bleibt deshalb dauerhaft sichtbar und lässt sich hier nicht mehr ausblenden.'
+                  : 'Mehrere Firmen oder Tätigkeiten getrennt in derselben Installation führen (eigene Datenbank, Belege und Backups je Profil). Aktiviert den Menüpunkt „Profile". Sobald mehr als ein Profil existiert, bleibt der Menüpunkt unabhängig von diesem Schalter sichtbar.'}
               </p>
             </div>
           </label>
-
-
-          <div className="space-y-2 pt-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
-              Einleitungstext auf Rechnungen
-            </label>
-            <textarea
-              value={form.einleitungstext ?? ''}
-              onChange={ev => set('einleitungstext', ev.target.value || null)}
-              rows={4}
-              placeholder="Dieser Text erscheint auf allen Rechnungen vor der Positionstabelle. Er kann pro Rechnung individuell überschrieben werden."
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
-            />
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Leer lassen wenn kein Standardtext gewünscht. Pro Rechnung überschreibbar.
-              Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*kursiv*</code> · Zeilenumbruch mit Enter
-            </p>
-          </div>
         </div>
 
         <hr className="border-slate-100 dark:border-slate-700" />
