@@ -17,7 +17,7 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'Lieferschein', optional: true },
       { text: 'Proforma-Rechnung', optional: true },
       { text: 'Wiederkehrende Rechnungen mit frei wählbarem Intervall', optional: true },
-      { text: 'Einleitungstext vor der Positionstabelle (Markdown: fett, kursiv)' },
+      { text: 'Eigener Einleitungs- und Schlusstext je Dokumenttyp (Rechnung, Angebot, Auftrag, Proforma, Lieferschein), pro Dokument überschreibbar (Markdown: fett, kursiv)' },
       { text: 'Positionsrabatt und Rechnungsrabatt (% oder €)' },
       { text: 'Skonto mit eigenem Zahlungsziel' },
       { text: '§25a UStG Differenzbesteuerung (Ankauf & Weiterverkauf)' },
@@ -140,6 +140,8 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'EK-Preis und Lieferanten-Artikelnummer' },
       { text: 'Debitor-/Kreditorennummern (automatisch vergeben, DATEV Spalte 48)' },
       { text: 'Kontokorrent-Auszug: Bewegungsliste mit laufendem Saldo, PDF-Download und Mail-Versand' },
+      { text: 'Kontokorrent-Übersicht: alle Partner mit offenem Saldo auf einen Blick, mit Summenanzeige und Filter' },
+      { text: 'Kunden-/Lieferantenguthaben direkt im Kontokorrent gegen eine offene Rechnung verrechnen' },
     ],
   },
   {
@@ -169,6 +171,9 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'Neues Profil startet leer mit dem gewohnten Einrichtungs-Assistenten' },
       { text: 'Bestehende Installationen werden beim Update automatisch ins Profil „Standard" überführt – ohne Datenverlust' },
       { text: 'Profilwechsel per Klick, App startet automatisch neu' },
+      { text: 'Profile umbenennen' },
+      { text: 'Profile archivieren (reversibel ausblenden) und wiederherstellen' },
+      { text: 'Archiviertes Profil endgültig löschen, mit Sicherheitsabfrage' },
     ],
   },
   {
