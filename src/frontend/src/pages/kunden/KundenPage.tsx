@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getKunden, createKunde, updateKunde, deleteKunde,
   anonymisiereKunde, dsgvoExportKunde, dsgvoExportKundePdf, getRechnungen, getAngebote, getUnternehmen,
@@ -17,7 +17,7 @@ import {
   getKundeBelege, uploadKundeBeleg, deleteKundeBeleg, updateKundeBeleg, getKundeBelegDownloadUrl,
   getKontokorrentKunde, downloadKontokorrentPdf, sendeKontokorrentMail, getNaechsteDebitorNr,
   getMahnwesenEinstellungen, getKundeMahnungen, getMahnungPdfUrl, openUrl, getMahnwesenKundenUebersicht,
-  kundensperrungAufheben,
+  kundensperrungAufheben, getKundenguthaben, forderungVerrechnen,
   type Kunde, type AnonymisierungResult, type Rechnung, type KundeLieferadresse, type KundeBeleg, type KontokorrentBewegung,
 } from '../../api/client'
 
@@ -234,6 +234,36 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
     staleTime: 1000 * 60,
   })
 
+  // Guthaben-Verrechnung (docs/ROADMAP.md): offenes Kundenguthaben direkt aus dem
+  // Kontokorrent heraus gegen eine offene Rechnung desselben Kunden verrechnen -
+  // nutzt dieselbe Backend-Logik wie die bereits bestehende Verrechnung im
+  // Rechnungsformular (RechnungenPage.tsx), nur mit Partner statt Rechnung als Einstieg.
+  const { data: kundenguthabenAlle } = useQuery({
+    queryKey: ['kundenguthaben', kunde.id],
+    queryFn: () => getKundenguthaben(kunde.id!),
+    staleTime: 1000 * 30,
+  })
+  const offeneGuthaben = (kundenguthabenAlle ?? []).filter(f => f.typ === 'kundenguthaben' && f.status === 'offen')
+  const { data: offeneRechnungenFuerVerrechnung } = useQuery({
+    queryKey: ['offene-rechnungen-fuer-verrechnung', kunde.id],
+    queryFn: () => getRechnungen({
+      typ: 'ausgang', dokument_typ: 'Rechnung', zahlungsstatus: ['offen', 'teilweise'], kunde_id: kunde.id!,
+    }),
+    enabled: offeneGuthaben.length > 0,
+  })
+  const [zielRechnungJeGuthaben, setZielRechnungJeGuthaben] = useState<Record<number, string>>({})
+  const verrechnenMut = useMutation({
+    mutationFn: ({ forderungId, rechnungId }: { forderungId: number; rechnungId: number }) =>
+      forderungVerrechnen(forderungId, rechnungId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kontokorrent-kunde', kunde.id] })
+      qc.invalidateQueries({ queryKey: ['kundenguthaben', kunde.id] })
+      qc.invalidateQueries({ queryKey: ['offene-rechnungen-fuer-verrechnung', kunde.id] })
+      qc.invalidateQueries({ queryKey: ['forderungen'] })
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    },
+  })
+
   const mailMut = useMutation({
     mutationFn: () => sendeKontokorrentMail(kunde.id!, {
       an: mailAn, cc: mailCc || undefined,
@@ -371,6 +401,37 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
           {mailMut.isError && <p className="text-xs text-red-500">Fehler beim Senden.</p>}
         </div>
       )}
+
+      {/* Guthaben-Verrechnung */}
+      {offeneGuthaben.map((f) => (
+        <div key={f.id} className="border border-green-200 dark:border-green-800 rounded-lg p-3 bg-green-50/40 dark:bg-green-950/30 space-y-2">
+          <p className="text-xs font-medium text-green-800 dark:text-green-200">
+            Guthaben verfügbar: {formatEuro(f.betrag)}
+          </p>
+          <div className="flex items-center gap-2">
+            <select
+              value={zielRechnungJeGuthaben[f.id] ?? ''}
+              onChange={(e) => setZielRechnungJeGuthaben((prev) => ({ ...prev, [f.id]: e.target.value }))}
+              className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex-1"
+            >
+              <option value="">Rechnung wählen…</option>
+              {(offeneRechnungenFuerVerrechnung ?? []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.rechnungsnummer} · Rest {formatEuro(parseFloat(r.brutto_gesamt) - parseFloat(r.bezahlt_betrag))}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => verrechnenMut.mutate({ forderungId: f.id, rechnungId: parseInt(zielRechnungJeGuthaben[f.id], 10) })}
+              disabled={!zielRechnungJeGuthaben[f.id] || verrechnenMut.isPending}
+              className="text-xs px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              Verrechnen
+            </button>
+          </div>
+        </div>
+      ))}
+      {verrechnenMut.isError && <p className="text-xs text-red-500">Fehler beim Verrechnen.</p>}
 
       {/* Bewegungsliste */}
       <div>
@@ -587,10 +648,10 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
 // Rechts: Rechnungspanel
 // ---------------------------------------------------------------------------
 
-function KundeRechnungen({ kunde }: { kunde: Kunde }) {
+function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'kontokorrent' }) {
   const navigate = useNavigate()
   const [offeneRechnung, setOffeneRechnung] = useState<number | null>(null)
-  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent'>('rechnungen')
+  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent'>(initialTab ?? 'rechnungen')
   const [debitorEdit, setDebitorEdit] = useState(false)
   const [debitorNr, setDebitorNr] = useState(kunde.debitor_nr ?? '')
   const qcKontokorrent = useQueryClient()
@@ -806,10 +867,12 @@ const EMPTY: FormValues = {
 export function KundenPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('kunden', 33)
   const [selected, setSelected] = useState<Kunde | null>(null)
+  const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
   const [editKunde, setEditKunde] = useState<Kunde | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -820,6 +883,19 @@ export function KundenPage() {
   const [anonymisierungResult, setAnonymisierungResult] = useState<AnonymisierungResult | null>(null)
 
   const { data: kunden, isLoading } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+
+  // ?open=ID&tab=kontokorrent: direkt zu einem Kunden springen (z.B. aus der Kontokorrent-Übersicht)
+  useEffect(() => {
+    const openId = searchParams.get('open')
+    if (!openId || !kunden) return
+    const id = parseInt(openId, 10)
+    const treffer = kunden.find((k) => k.id === id)
+    if (treffer) {
+      setSelected(treffer)
+      setInitialDetailTab(searchParams.get('tab') === 'kontokorrent' ? 'kontokorrent' : undefined)
+    }
+    setSearchParams({}, { replace: true })
+  }, [kunden, searchParams, setSearchParams])
 
   const { data: mahnwesenEinst } = useQuery({
     queryKey: ['mahnwesen-einstellungen'],
@@ -1188,7 +1264,7 @@ export function KundenPage() {
       {!showForm && (
         <div className="w-[28rem] shrink-0">
           {selected ? (
-            <KundeRechnungen key={selected.id} kunde={selected} />
+            <KundeRechnungen key={selected.id} kunde={selected} initialTab={initialDetailTab} />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
               Kunden auswählen

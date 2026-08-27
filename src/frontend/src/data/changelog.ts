@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.2',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Kontokorrent-Übersicht: neuer Menüpunkt „Kontokorrent" zeigt alle Kunden und Lieferanten mit offenem Saldo auf einen Blick, statt jeden Partner einzeln öffnen zu müssen – inklusive Summenübersicht (offene Salden gesamt / Guthaben gesamt) und Filter nach Offen/Guthaben. Klick auf einen Partner öffnet direkt dessen Kontokorrent-Tab.' },
+      { typ: 'neu', text: 'Guthaben-Verrechnung direkt im Kontokorrent: Ein offenes Kunden- oder Lieferantenguthaben lässt sich jetzt direkt im Kontokorrent-Tab des Partners gegen eine offene Rechnung verrechnen, statt den Umweg über das Rechnungsformular zu benötigen.' },
+    ],
+  },
+  {
     version: 'v0.6.1',
     datum: 'August 2026',
     eintraege: [

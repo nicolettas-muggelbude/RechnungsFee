@@ -848,6 +848,16 @@ export const getNaechsteDebitorNr = () =>
 export const getNaechsteKreditorNr = () =>
   request<{ naechste_nr: string | null }>('/lieferanten/naechste-kreditor-nr')
 
+export type PartnerSaldo = {
+  partner_typ: 'kunde' | 'lieferant'
+  partner_id: number
+  name: string
+  saldo: number
+  status: 'offen' | 'guthaben'
+}
+export const getKontokorrentUebersicht = () =>
+  request<PartnerSaldo[]>('/kontokorrent/uebersicht')
+
 export async function downloadKontokorrentPdf(id: number, von: string, bis: string) {
   const base = await getBaseUrl()
   await openUrl(`${base}/kunden/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`)

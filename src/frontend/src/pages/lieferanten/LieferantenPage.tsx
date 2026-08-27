@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
@@ -12,7 +13,7 @@ import {
   getLieferanten, createLieferant, updateLieferant, deleteLieferant,
   anonymisiereLieferant, dsgvoExportLieferant, dsgvoExportLieferantPdf,
   getKontokorrentLieferant, downloadKontokorrentPdfLieferant, sendeKontokorrentMailLieferant,
-  getNaechsteKreditorNr,
+  getNaechsteKreditorNr, getLieferantenguthaben, forderungVerrechnen, getRechnungen,
   type Lieferant, type AnonymisierungResult, type KontokorrentBewegung,
 } from '../../api/client'
 
@@ -58,9 +59,9 @@ function formatDatum(iso: string): string {
   return `${d}.${m}.${y}`
 }
 
-function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
+function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; initialTab?: 'kontokorrent' }) {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'details' | 'kontokorrent'>('details')
+  const [tab, setTab] = useState<'details' | 'kontokorrent'>(initialTab ?? 'details')
   const [kreditorEdit, setKreditorEdit] = useState(false)
   const [kreditorNr, setKreditorNr] = useState(lieferant.kreditor_nr ?? '')
 
@@ -101,6 +102,36 @@ function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
     queryFn: () => getKontokorrentLieferant(lieferant.id!),
     enabled: tab === 'kontokorrent',
     staleTime: 1000 * 60,
+  })
+
+  // Guthaben-Verrechnung (docs/ROADMAP.md): offenes Lieferantenguthaben direkt aus
+  // dem Kontokorrent heraus gegen eine offene Eingangsrechnung verrechnen, analog
+  // zur Kunden-Variante in KundenPage.tsx.
+  const { data: lieferantenguthabenAlle } = useQuery({
+    queryKey: ['lieferantenguthaben', lieferant.id],
+    queryFn: () => getLieferantenguthaben(lieferant.id!),
+    enabled: tab === 'kontokorrent',
+    staleTime: 1000 * 30,
+  })
+  const offeneGuthaben = (lieferantenguthabenAlle ?? []).filter(f => f.typ === 'lieferantenguthaben' && f.status === 'offen')
+  const { data: offeneRechnungenFuerVerrechnung } = useQuery({
+    queryKey: ['offene-rechnungen-fuer-verrechnung-lieferant', lieferant.id],
+    queryFn: () => getRechnungen({
+      typ: 'eingang', dokument_typ: 'Rechnung', zahlungsstatus: ['offen', 'teilweise'], lieferant_id: lieferant.id!,
+    }),
+    enabled: tab === 'kontokorrent' && offeneGuthaben.length > 0,
+  })
+  const [zielRechnungJeGuthaben, setZielRechnungJeGuthaben] = useState<Record<number, string>>({})
+  const verrechnenMut = useMutation({
+    mutationFn: ({ forderungId, rechnungId }: { forderungId: number; rechnungId: number }) =>
+      forderungVerrechnen(forderungId, rechnungId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kontokorrent-lieferant', lieferant.id] })
+      qc.invalidateQueries({ queryKey: ['lieferantenguthaben', lieferant.id] })
+      qc.invalidateQueries({ queryKey: ['offene-rechnungen-fuer-verrechnung-lieferant', lieferant.id] })
+      qc.invalidateQueries({ queryKey: ['forderungen'] })
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    },
   })
 
   const gefilterteBewegungen = (bewegungen ?? []).filter(b => b.datum >= von && b.datum <= bis)
@@ -260,6 +291,37 @@ function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
               </div>
             )}
 
+            {/* Guthaben-Verrechnung */}
+            {offeneGuthaben.map((f) => (
+              <div key={f.id} className="border border-green-200 dark:border-green-800 rounded-lg p-3 bg-green-50/40 dark:bg-green-950/30 space-y-2">
+                <p className="text-xs font-medium text-green-800 dark:text-green-200">
+                  Guthaben verfügbar: {formatEuro(f.betrag)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={zielRechnungJeGuthaben[f.id] ?? ''}
+                    onChange={(e) => setZielRechnungJeGuthaben((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                    className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex-1"
+                  >
+                    <option value="">Rechnung wählen…</option>
+                    {(offeneRechnungenFuerVerrechnung ?? []).map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.rechnungsnummer ?? r.externe_belegnr} · Rest {formatEuro(parseFloat(r.brutto_gesamt) - parseFloat(r.bezahlt_betrag))}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => verrechnenMut.mutate({ forderungId: f.id, rechnungId: parseInt(zielRechnungJeGuthaben[f.id], 10) })}
+                    disabled={!zielRechnungJeGuthaben[f.id] || verrechnenMut.isPending}
+                    className="text-xs px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Verrechnen
+                  </button>
+                </div>
+              </div>
+            ))}
+            {verrechnenMut.isError && <p className="text-xs text-red-500">Fehler beim Verrechnen.</p>}
+
             {/* Bewegungsliste */}
             <div>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Kontokorrent</p>
@@ -383,10 +445,12 @@ function LieferantDetail({ lieferant }: { lieferant: Lieferant }) {
 
 export function LieferantenPage() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('lieferanten', 33)
   const [selected, setSelected] = useState<Lieferant | null>(null)
+  const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
   const [editLieferant, setEditLieferant] = useState<Lieferant | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -399,6 +463,19 @@ export function LieferantenPage() {
     queryKey: ['lieferanten'],
     queryFn: getLieferanten,
   })
+
+  // ?open=ID&tab=kontokorrent: direkt zu einem Lieferanten springen (z.B. aus der Kontokorrent-Übersicht)
+  useEffect(() => {
+    const openId = searchParams.get('open')
+    if (!openId || !lieferanten) return
+    const id = parseInt(openId, 10)
+    const treffer = lieferanten.find((l) => l.id === id)
+    if (treffer) {
+      setSelected(treffer)
+      setInitialDetailTab(searchParams.get('tab') === 'kontokorrent' ? 'kontokorrent' : undefined)
+    }
+    setSearchParams({}, { replace: true })
+  }, [lieferanten, searchParams, setSearchParams])
 
   const createMutation = useMutation({
     mutationFn: createLieferant,
@@ -616,7 +693,7 @@ export function LieferantenPage() {
       {!showForm && (
         <div className="w-[28rem] shrink-0">
           {selected ? (
-            <LieferantDetail key={selected.id} lieferant={selected} />
+            <LieferantDetail key={selected.id} lieferant={selected} initialTab={initialDetailTab} />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
               Lieferant auswählen
