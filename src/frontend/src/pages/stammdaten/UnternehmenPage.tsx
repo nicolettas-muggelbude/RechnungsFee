@@ -473,8 +473,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           />
           <div>
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
-              Transferleistungen (ALG II / Bürgergeld)
-              <InfoTooltip text="Aktiviere diese Option wenn du Bürgergeld oder ALG II beziehst. RechnungsFee berücksichtigt dann den Grundfreibetrag nach §11b SGB II." side="bottom" />
+              Transferleistungen (ALG II / Grundsicherung, früher Bürgergeld)
+              <InfoTooltip text="Aktiviere diese Option wenn du Grundsicherung (früher Bürgergeld) oder ALG II beziehst. RechnungsFee berücksichtigt dann den Grundfreibetrag nach §11b SGB II." side="bottom" />
             </span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Freibetrag nach §11b SGB II wird berücksichtigt.</p>
           </div>

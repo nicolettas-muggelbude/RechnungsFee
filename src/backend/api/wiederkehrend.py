@@ -179,8 +179,14 @@ def _kunde_name(vorlage: Rechnungsvorlage) -> Optional[str]:
     return ", ".join(t for t in teile if t) or None
 
 
-def _to_response(v: Rechnungsvorlage) -> VorlageResponse:
+def _to_response(v: Rechnungsvorlage, db: Session) -> VorlageResponse:
     positionen = [VorlagePosition(**p) for p in json.loads(v.positionen_json or "[]")]
+    # Live gezählt statt aus v.erstellte_rechnungen gelesen (Community-Issue #370): der
+    # gespeicherte Zähler wurde bei jedem Entwurf hochgezählt, aber nie wieder runter, wenn
+    # der Entwurf ohne Finalisierung wieder gelöscht wurde - "3× erstellt" blieb bestehen,
+    # obwohl real keine einzige Rechnung mehr existierte. Eine Live-Zählung der tatsächlich
+    # noch vorhandenen Rechnungen (Entwurf oder final) korrigiert sich dadurch von selbst.
+    anzahl_rechnungen = db.query(Rechnung).filter(Rechnung.vorlage_id == v.id).count()
     return VorlageResponse(
         id=v.id,
         bezeichnung=v.bezeichnung,
@@ -194,7 +200,7 @@ def _to_response(v: Rechnungsvorlage) -> VorlageResponse:
         notizen=v.notizen,
         positionen=positionen,
         letzte_erstellung=v.letzte_erstellung,
-        erstellte_rechnungen=v.erstellte_rechnungen,
+        erstellte_rechnungen=anzahl_rechnungen,
         erstellt_am=v.erstellt_am,
         auftrag_id=v.auftrag_id,
         auftrag_nr=v.auftrag.rechnungsnummer if v.auftrag else None,
@@ -330,7 +336,6 @@ def pruefen_intern(db: Session) -> list[dict]:
         rid, rnr, pa = _erstelle_entwurf(v, db)
         v.naechstes_datum = _naechstes_datum(v.naechstes_datum, v.intervall)
         v.letzte_erstellung = heute
-        v.erstellte_rechnungen = (v.erstellte_rechnungen or 0) + 1
         db.commit()
         ergebnisse.append({
             "vorlage_id": v.id,
@@ -349,7 +354,7 @@ def pruefen_intern(db: Session) -> list[dict]:
 @router.get("", response_model=list[VorlageResponse])
 def liste_vorlagen(db: Session = Depends(get_db)):
     vorlagen = db.query(Rechnungsvorlage).order_by(Rechnungsvorlage.bezeichnung).all()
-    return [_to_response(v) for v in vorlagen]
+    return [_to_response(v, db) for v in vorlagen]
 
 
 @router.post("", response_model=VorlageResponse, status_code=201)
@@ -377,7 +382,7 @@ def erstelle_vorlage(data: VorlageCreate, db: Session = Depends(get_db)):
         _set_auftrag_laufend(auftrag)
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.get("/{vorlage_id}", response_model=VorlageResponse)
@@ -385,7 +390,7 @@ def get_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     v = db.query(Rechnungsvorlage).filter(Rechnungsvorlage.id == vorlage_id).first()
     if not v:
         raise HTTPException(404, "Vorlage nicht gefunden.")
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.put("/{vorlage_id}", response_model=VorlageResponse)
@@ -437,7 +442,7 @@ def aktualisiere_vorlage(vorlage_id: int, data: VorlageUpdate, db: Session = Dep
                 v.auftrag_id = None
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.post("/{vorlage_id}/beenden", response_model=VorlageResponse)
@@ -454,7 +459,7 @@ def beende_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
         _revert_auftrag_status(auftrag_id, db, ziel_status="abgeschlossen")
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.delete("/{vorlage_id}", status_code=204)
@@ -462,7 +467,7 @@ def loesche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
     v = db.query(Rechnungsvorlage).filter(Rechnungsvorlage.id == vorlage_id).first()
     if not v:
         raise HTTPException(404, "Vorlage nicht gefunden.")
-    if v.erstellte_rechnungen and v.erstellte_rechnungen > 0:
+    if db.query(Rechnung).filter(Rechnung.vorlage_id == vorlage_id).count() > 0:
         raise HTTPException(409, "Vorlage hat bereits Rechnungen – bitte 'Beenden' statt Löschen verwenden.")
     if v.auftrag_id:
         raise HTTPException(409, "Vorlage ist mit einem Auftrag verknüpft – bitte 'Beenden' statt Löschen verwenden.")
@@ -525,7 +530,6 @@ def entwurf_jetzt(vorlage_id: int, db: Session = Depends(get_db)):
     rid, rnr, pa = _erstelle_entwurf(v, db)
     v.naechstes_datum = _naechstes_datum(v.naechstes_datum, v.intervall)
     v.letzte_erstellung = date.today()
-    v.erstellte_rechnungen = (v.erstellte_rechnungen or 0) + 1
     db.commit()
     return EntwurfErgebnis(
         vorlage_id=v.id,
@@ -552,7 +556,7 @@ def preise_synchronisieren(vorlage_id: int, db: Session = Depends(get_db)):
     v.positionen_json = json.dumps(positionen, default=str)
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.post("/{vorlage_id}/vertrag", response_model=VorlageResponse)
@@ -594,7 +598,7 @@ async def upload_vertrag(vorlage_id: int, datei: UploadFile = File(...), db: Ses
     v.beleg_id = beleg.id
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)
 
 
 @router.delete("/{vorlage_id}/vertrag", response_model=VorlageResponse)
@@ -613,4 +617,4 @@ def loesche_vertrag(vorlage_id: int, db: Session = Depends(get_db)):
         v.beleg_id = None
     db.commit()
     db.refresh(v)
-    return _to_response(v)
+    return _to_response(v, db)

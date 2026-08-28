@@ -4,6 +4,7 @@ Rechnungen-API (Eingang + Ausgang) mit Journal-Verknüpfung.
 
 import difflib
 import hashlib
+import html
 import json
 import re
 import shutil
@@ -16,7 +17,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 
@@ -1960,6 +1961,60 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/{rechnung_id}/pdf-ansehen", response_class=HTMLResponse)
+def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db)):
+    """Liefert die Nur-Ansicht-Hülle (Titelleiste, Drucken/Speichern per Tastenkürzel
+    blockiert) als echte HTML-Seite statt der bisherigen blob:-URL im Frontend (Issue #371:
+    eine blob:-URL, in einem Fenster erzeugt, kann von einem separaten nativen
+    WebviewWindow - insbesondere WebKitGTK unter Linux - nicht aufgelöst werden und zeigte
+    dort eine weiße Seite; eine normale URL lädt jedes Fenster eigenständig). Bettet den
+    bereits bestehenden PDF-Endpunkt (?nur_ansehen=true) unverändert per <iframe> ein."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    titel = html.escape(rechnung.rechnungsnummer or "Dokument")
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>{titel} – nur zur Ansicht</title>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+html, body {{ width: 100%; height: 100%; overflow: hidden; background: #1e293b; }}
+.titelleiste {{
+  position: fixed; top: 0; left: 0; right: 0; height: 44px;
+  background: #1e293b; display: flex; align-items: center;
+  padding: 0 16px; z-index: 9999;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #cbd5e1; font-size: 14px; font-weight: 500; user-select: none;
+}}
+.viewer {{
+  position: fixed; top: 44px; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+}}
+iframe {{
+  position: absolute; top: -44px; left: 0;
+  width: 100%; height: calc(100% + 44px);
+  border: none;
+}}
+@media print {{ * {{ display: none !important; }} }}
+</style>
+</head>
+<body>
+<div class="titelleiste">{titel} – nur zur Ansicht</div>
+<div class="viewer"><iframe src="/api/rechnungen/{rechnung_id}/pdf?nur_ansehen=true"></iframe></div>
+<script>
+document.addEventListener('keydown', function(e) {{
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's')) {{
+    e.preventDefault(); e.stopImmediatePropagation();
+  }}
+}}, true);
+window.print = function() {{}};
+</script>
+</body>
+</html>""")
 
 
 @router.get("/{rechnung_id}/zugferd")

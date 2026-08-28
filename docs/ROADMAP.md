@@ -31,8 +31,8 @@ Vollständige Übersicht und Verwaltung offener Forderungen gegenüber Kunden un
 - [x] Übersicht „Offene Forderungen" – Mahnwesen-Seite zeigt alle Kunden mit offenen Rechnungen/Mahngebühr, Filter nach Status
 
 ### Verbindlichkeiten (Eingangsrechnungen)
-- [ ] Übersicht „Offene Verbindlichkeiten": alle unbezahlten Eingangsrechnungen mit Fälligkeit und Skonto-Frist
-- [ ] Zahlungsvorschlag: welche Eingangsrechnungen sind diese Woche fällig?
+- [x] Übersicht „Offene Verbindlichkeiten": alle unbezahlten Eingangsrechnungen mit Fälligkeit und Skonto-Frist
+- [x] Zahlungsvorschlag: welche Eingangsrechnungen sind diese Woche fällig?
 
 ### Auswertung
 - [ ] Debitorenliste / Kreditorenliste: Summe offener Posten pro Kunde / Lieferant

@@ -28,6 +28,11 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'neu', text: 'Kontokorrent-Übersicht: neuer Menüpunkt „Kontokorrent" zeigt alle Kunden und Lieferanten mit offenem Saldo auf einen Blick, statt jeden Partner einzeln öffnen zu müssen – inklusive Summenübersicht (offene Salden gesamt / Guthaben gesamt) und Filter nach Offen/Guthaben. Klick auf einen Partner öffnet direkt dessen Kontokorrent-Tab.' },
       { typ: 'neu', text: 'Guthaben-Verrechnung direkt im Kontokorrent: Ein offenes Kunden- oder Lieferantenguthaben lässt sich jetzt direkt im Kontokorrent-Tab des Partners gegen eine offene Rechnung verrechnen, statt den Umweg über das Rechnungsformular zu benötigen.' },
+      { typ: 'neu', text: 'Offene Verbindlichkeiten: neuer Menüpunkt zeigt alle unbezahlten Eingangsrechnungen mit Fälligkeits- und Skonto-Frist auf einen Blick – inklusive Zahlungsvorschlag „diese Woche fällig" und Filtern nach Überfällig/Diese Woche/Skonto noch möglich. Klick auf eine Zeile öffnet die jeweilige Rechnung direkt.' },
+      { typ: 'verbesserung', text: '„Bürgergeld" heißt jetzt „Grundsicherung" – an allen Stellen zu Transferleistungen (Unternehmen-Einstellungen, Setup-Assistent, Dashboard-Zufluss-Monitor, Anlage EKS) ergänzt, mit Hinweis auf den bisherigen Namen zum Wiedererkennen.' },
+      { typ: 'fix', text: 'Im Dokumentkopf stand bei jedem Dokumenttyp „Rechnungsdatum" – auch auf Angeboten, Aufträgen, Proforma-Rechnungen und Lieferscheinen. Heißt jetzt passend zum Dokument Angebotsdatum, Auftragsdatum, Proformadatum, Lieferdatum bzw. Gutschriftdatum (Issue #369).' },
+      { typ: 'fix', text: 'Wiederkehrende Rechnungen: Der „Erstellt"-Zähler einer Vorlage sank nicht, wenn ein daraus erzeugter Entwurf ohne Finalisierung wieder gelöscht wurde – die Vorlage ließ sich dadurch dauerhaft nicht mehr löschen, nur noch beenden. Der Zähler zeigt jetzt immer die tatsächlich noch vorhandene Anzahl an Rechnungen (Issue #370).' },
+      { typ: 'fix', text: '„Ansehen" einer Rechnung zeigte im internen PDF-Fenster eine weiße Seite, insbesondere unter Linux (WebKitGTK) – eine im Hauptfenster erzeugte blob:-URL kann von einem separaten nativen Fenster nicht aufgelöst werden. Das Fenster lädt das Dokument jetzt über eine echte URL, die es eigenständig lädt (Issue #371).' },
     ],
   },
   {

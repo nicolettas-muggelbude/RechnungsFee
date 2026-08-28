@@ -444,7 +444,14 @@ class RechnungPDFBase(FPDF):
                 _meta("Stornodatum", _iso_zu_de(str(storno_datum)))
             _meta("Originaldatum", _iso_zu_de(str(r.datum)), dim=True)
         else:
-            _meta("Rechnungsdatum", _iso_zu_de(str(r.datum)))
+            _datum_label = {
+                "Angebot":      "Angebotsdatum",
+                "Auftrag":      "Auftragsdatum",
+                "Proforma":     "Proformadatum",
+                "Lieferschein": "Lieferdatum",
+                "Gutschrift":   "Gutschriftdatum",
+            }.get(_dok_meta, "Rechnungsdatum")
+            _meta(_datum_label, _iso_zu_de(str(r.datum)))
         if r.leistung_von and r.leistung_bis:
             _meta("Leistungszeitraum", f"{_iso_zu_de(str(r.leistung_von))} – {_iso_zu_de(str(r.leistung_bis))}")
         elif r.leistung_von and str(r.leistung_von) != str(r.datum):

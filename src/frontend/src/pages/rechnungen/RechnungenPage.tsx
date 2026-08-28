@@ -10,7 +10,7 @@ import {
   getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, gutschriftVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen,
-  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, openPdfReadOnly, downloadPdfForMail,
+  getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
   uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
@@ -1225,52 +1225,43 @@ function RechnungDetail({
     onError: (e: Error) => setFehler(e.message),
   })
 
-  /** Lädt das PDF als Blob. Das Backend entscheidet anhand original_pdf_pfad ob Original oder Kopie. */
-  async function _fetchPdfBlob(): Promise<string> {
-    const base = await getApiBase()
-    const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf`)
-    const blob = await resp.blob()
-    return URL.createObjectURL(blob)
-  }
-
-  function _zeigeBlob(blobUrl: string) {
+  /** Öffnet eine PDF-URL direkt (kein Blob-Umweg) - ein separates natives Tauri-Fenster
+   *  lädt echte URLs eigenständig, kann aber eine im Hauptfenster erzeugte blob:-URL nicht
+   *  auflösen (Issue #371, zeigte insb. unter WebKitGTK/Linux eine weiße Seite). */
+  function _zeigePdf(url: string, titel: string) {
     if (isTauri()) {
-      openInPdfWindow(blobUrl, 'Rechnung')
+      openInPdfWindow(url, titel)
     } else {
-      window.open(blobUrl, '_blank')
+      window.open(url, '_blank')
     }
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
   }
 
   async function handleDrucken() {
-    const blobUrl = await _fetchPdfBlob()
-    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    const base = await getApiBase()
+    const url = `${base}/rechnungen/${rechnung.id}/pdf`
+    // Archivierung passiert serverseitig beim Laden der URL, unabhängig vom Aufrufer -
+    // kurze Verzögerung damit die Liste den neuen "ausgegeben"-Status zuverlässig zeigt.
+    setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
     if (isTauri()) {
-      openInPdfWindow(blobUrl, 'Rechnung drucken')
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
+      openInPdfWindow(url, 'Rechnung drucken')
     } else {
-      const win = window.open(blobUrl, '_blank')
+      const win = window.open(url, '_blank')
       if (win) win.addEventListener('load', () => win.print())
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
     }
   }
 
   async function handlePdfOeffnen() {
-    const blobUrl = await _fetchPdfBlob()
-    qc.invalidateQueries({ queryKey: ['rechnungen'] })
-    _zeigeBlob(blobUrl)
+    const base = await getApiBase()
+    setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
+    _zeigePdf(`${base}/rechnungen/${rechnung.id}/pdf`, 'Rechnung')
   }
 
   async function handleAnsehen() {
     const base = await getApiBase()
-    const resp = await fetch(`${base}/rechnungen/${rechnung.id}/pdf?nur_ansehen=true`)
-    const blob = await resp.blob()
-    const blobUrl = URL.createObjectURL(blob)
     if (isTauri()) {
-      openPdfReadOnly(blobUrl, rechnung.rechnungsnummer ?? 'Dokument')
+      openInPdfWindow(`${base}/rechnungen/${rechnung.id}/pdf-ansehen`, rechnung.rechnungsnummer ?? 'Dokument')
     } else {
-      window.open(blobUrl, '_blank')
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
+      window.open(`${base}/rechnungen/${rechnung.id}/pdf?nur_ansehen=true`, '_blank')
     }
   }
 

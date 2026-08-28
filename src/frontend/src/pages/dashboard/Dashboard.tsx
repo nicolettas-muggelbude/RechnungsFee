@@ -28,10 +28,10 @@ function heuteIso(): string {
 type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr'
 
 // ---------------------------------------------------------------------------
-// Zufluss-Monitor für Transferleistungen (Bürgergeld / ALG I)
+// Zufluss-Monitor für Transferleistungen (Grundsicherung/Bürgergeld / ALG I)
 // ---------------------------------------------------------------------------
 
-// Bürgergeld 2026: § 11b SGB II – dreistufige Freibetragsberechnung
+// Grundsicherung (früher Bürgergeld) 2026: § 11b SGB II – dreistufige Freibetragsberechnung
 // Stufe 1:    0–100 €:   vollständig anrechnungsfrei (Grundfreibetrag)
 // Stufe 2: 100–1000 €:   20 % Freibetrag auf diesen Anteil (max. 180 €)
 // Stufe 3: 1000–1200 €:  10 % Freibetrag auf diesen Anteil (max. 20 €)
@@ -198,7 +198,7 @@ function ZuflussMonitor({
       {stufe === 'kritisch' && (
         <p className={`text-xs font-medium ${farben.text}`}>
           Der Zufluss übersteigt 1.200 €. Der Überschuss über dem Gesamtfreibetrag von 300 €
-          wird vollständig auf das Bürgergeld angerechnet. Stelle sicher, dass deine EKS aktuell ist.
+          wird vollständig auf die Grundsicherung (Bürgergeld) angerechnet. Stelle sicher, dass deine EKS aktuell ist.
         </p>
       )}
 

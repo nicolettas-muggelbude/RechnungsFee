@@ -369,7 +369,7 @@ export function EksPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Anlage EKS</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
-          Einkommenserklärung für Selbstständige · Jobcenter / Bürgergeld · Formular 04/2025
+          Einkommenserklärung für Selbstständige · Jobcenter / Grundsicherung (früher Bürgergeld) · Formular 04/2025
         </p>
       </div>
 

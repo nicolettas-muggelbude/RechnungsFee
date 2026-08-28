@@ -125,7 +125,7 @@ export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
         <input type="checkbox" {...register('bezieht_transferleistungen')}
           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600" />
         <div>
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Ich beziehe Transferleistungen (ALG II / Bürgergeld)</span>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Ich beziehe Transferleistungen (ALG II / Grundsicherung, früher Bürgergeld)</span>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Aktiviert den EKS-Export (Anlage EKS) für das Jobcenter.
           </p>
