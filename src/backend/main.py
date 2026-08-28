@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent
 
-SCHEMA_VERSION = 151
+SCHEMA_VERSION = 152
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -1521,7 +1521,7 @@ def _run_migrations() -> None:
                     conn.execute(text(f"ALTER TABLE rechnungen ADD COLUMN {col} {ddl}"))
             conn.execute(text("""
                 INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
-                VALUES ('angebot', 'Angebote', 'ANG-JJNNNN', 1, 1, NULL)
+                VALUES ('angebot', 'Angebote', 'ANG-YY####', 1, 1, NULL)
             """))
             conn.execute(text("PRAGMA user_version = 55"))
             conn.commit()
@@ -1608,7 +1608,7 @@ def _run_migrations() -> None:
                 conn.execute(text("ALTER TABLE rechnungen ADD COLUMN rechnung_zu_proforma_id INTEGER REFERENCES rechnungen(id)"))
             conn.execute(text("""
                 INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
-                VALUES ('proforma', 'Proforma-Rechnungen', 'PRF-JJNNNN', 1, 1, NULL)
+                VALUES ('proforma', 'Proforma-Rechnungen', 'PRF-YY####', 1, 1, NULL)
             """))
             conn.execute(text("PRAGMA user_version = 59"))
             conn.commit()
@@ -1631,11 +1631,11 @@ def _run_migrations() -> None:
                 conn.execute(text("ALTER TABLE rechnungen ADD COLUMN proforma_zu_auftrag_id INTEGER REFERENCES rechnungen(id)"))
             conn.execute(text("""
                 INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
-                VALUES ('auftrag', 'Aufträge', 'AU-JJNNNN', 1, 1, NULL)
+                VALUES ('auftrag', 'Aufträge', 'AU-YY####', 1, 1, NULL)
             """))
             conn.execute(text("PRAGMA user_version = 60"))
             conn.commit()
-            print("[Migration] Schema auf Version 60 (Aufträge: auftraege_aktiv + FK-Felder + Nummernkreis AU-JJNNNN)")
+            print("[Migration] Schema auf Version 60 (Aufträge: auftraege_aktiv + FK-Felder + Nummernkreis AU-YY####)")
 
         if version < 61:
             # Auftrag-Statuskorrektur: in_bearbeitung → abgeschlossen wenn verknüpfte Rechnung bezahlt
@@ -2098,7 +2098,7 @@ def _run_migrations() -> None:
                 conn.execute(text("ALTER TABLE rechnungen ADD COLUMN storno_rechnungsnummer VARCHAR(50)"))
             conn.execute(text("""
                 INSERT OR IGNORE INTO nummernkreise (typ, bezeichnung, format, naechste_nr, reset_jaehrlich, letztes_jahr)
-                VALUES ('stornorechnung', 'Stornorechnungen', 'STORNO-JJNNNN', 1, 1, NULL)
+                VALUES ('stornorechnung', 'Stornorechnungen', 'STORNO-YY####', 1, 1, NULL)
             """))
             conn.execute(text("PRAGMA user_version = 90"))
             conn.commit()
@@ -3250,6 +3250,26 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 151"))
             conn.commit()
             print("[Migration] Schema auf Version 151 (Issue #368: Einleitungs-/Schlusstext je Dokumenttyp)")
+
+        if version < 152:
+            # Datenfix (Nutzer-Feedback): Die Nummernkreise fuer Angebot/Auftrag/Proforma/
+            # Stornorechnung wurden seit ihrer jeweiligen Einfuehrung (Migration 55/59/60/90)
+            # mit dem Format "...-JJNNNN" angelegt ("JJ"=Jahr, "NNNN"=Nummer) - Platzhalter,
+            # die _belegnr_aus_format() (api/journal.py) nie erkannt hat (dort werden nur
+            # YYYY/YY/MM/TT/# unterstuetzt). Diese vier Dokumenttypen bekamen dadurch seit
+            # Einfuehrung buchstaeblich die unveraenderte Formatvorlage als "Nummer", z.B.
+            # "ANG-JJNNNN" statt einer echten Nummer wie "ANG-260007". Betrifft nur die
+            # Erzeugung KUENFTIGER Nummern - bereits ausgestellte Dokumente mit der falschen
+            # Nummer bleiben unveraendert (GoBD: keine rueckwirkende Aenderung ausgegebener
+            # Belegnummern). Guard "WHERE format LIKE '%JJNNNN%'" laesst abweichend gesetzte
+            # eigene Formate der Nutzerin unangetastet.
+            conn.execute(text("""
+                UPDATE nummernkreise SET format = REPLACE(format, 'JJNNNN', 'YY####')
+                WHERE format LIKE '%JJNNNN%'
+            """))
+            conn.execute(text("PRAGMA user_version = 152"))
+            conn.commit()
+            print("[Migration] Schema auf Version 152 (Datenfix: Nummernkreis-Format JJNNNN -> YY#### für Angebot/Auftrag/Proforma/Stornorechnung)")
 
 
 def _migrate_kategorien() -> None:

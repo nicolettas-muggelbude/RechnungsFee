@@ -6,6 +6,12 @@ Fenster - blob:-URLs sind an das erzeugende Dokument gebunden und können von ei
 separaten Fenster/Prozess nicht aufgelöst werden. Der neue Endpunkt liefert stattdessen
 eine echte HTML-Seite, die das neue Fenster eigenständig laden kann; der iframe darin
 bettet den unveränderten bestehenden PDF-Endpunkt ein.
+
+Nutzer-Folgefund nach dem #371-Fix: "Ansehen" einer bereits archivierten Rechnung zeigte
+eine andere Vorlage/kein QR-Code, obwohl das tatsächlich archivierte Original mit QR-Code
+erzeugt worden war - weil nur_ansehen=True bislang IMMER frisch aus aktuellen Einstellungen/
+Snapshot neu gerendert hat (Ausnahme nur für stornierte Rechnungen), statt das echte
+archivierte Original zu zeigen. Getestet in test_ansehen_zeigt_echtes_original_...
 """
 from datetime import date
 from decimal import Decimal
@@ -14,7 +20,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from api.rechnungen import rechnung_pdf_ansehen_wrapper
+from api.rechnungen import rechnung_als_pdf, rechnung_pdf_ansehen_wrapper, _absender_snapshot, create_rechnung
+from api.schemas_rechnungen import RechnungCreate, RechnungspositionCreate
 from database.connection import Base
 from database.models import Rechnung, Unternehmen
 from fastapi import HTTPException
@@ -73,3 +80,35 @@ def test_unbekannte_rechnung_404(db):
     with pytest.raises(HTTPException) as exc_info:
         rechnung_pdf_ansehen_wrapper(999999, db)
     assert exc_info.value.status_code == 404
+
+
+def test_ansehen_zeigt_echtes_original_auch_nach_geaenderten_einstellungen(db):
+    """Kernfehler aus dem Nutzer-Feedback: Ansehen darf nach dem Archivieren nie eine
+    andere Vorlage/andere Einstellungen zeigen als beim ursprünglichen Drucken - auch
+    dann nicht, wenn die Unternehmenseinstellungen sich seitdem geändert haben."""
+    unt = db.query(Unternehmen).first()
+    unt.pdf_vorlage = 1
+    unt.qr_zahlung_aktiv = True
+    unt.iban = "DE02120300000000202051"
+    db.commit()
+
+    payload = RechnungCreate(
+        typ="ausgang", datum=date(2026, 1, 5), partner_freitext="Testkunde",
+        positionen=[RechnungspositionCreate(beschreibung="Beratung", menge=Decimal("1"), einheit="Stk.", netto="100.00", ust_satz="19")],
+    )
+    resp = create_rechnung(payload, db)
+    rechnung = db.query(Rechnung).filter(Rechnung.id == resp.id).first()
+    rechnung.ist_entwurf = False
+    rechnung.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+
+    original = rechnung_als_pdf(rechnung.id, db=db)  # archiviert original_pdf_pfad
+
+    # Einstellungen jetzt ändern - simuliert einen späteren Wechsel auf Standard-Vorlage/kein QR
+    unt.pdf_vorlage = 0
+    unt.qr_zahlung_aktiv = False
+    db.commit()
+
+    ansehen = rechnung_als_pdf(rechnung.id, nur_ansehen=True, db=db)
+
+    assert ansehen.body == original.body

@@ -191,12 +191,22 @@ def seed_nummernkreise(db: Session) -> None:
         neue.append(Nummernkreis(bezeichnung="Artikelnummern", typ="artikel", format="ART-####", naechste_nr=1, reset_jaehrlich=False))
     if "lieferschein" not in typen:
         neue.append(Nummernkreis(bezeichnung="Lieferscheine", typ="lieferschein", format="LS-YY####", naechste_nr=1, reset_jaehrlich=True))
+    if "angebot" not in typen:
+        # Sicherheitsnetz fuer Neuinstallationen: create_all() legt nummernkreise.aktiv von
+        # Anfang an als NOT NULL ohne DB-seitigen Default an (nur Python-seitiger
+        # SQLAlchemy-default, siehe database/models.py) - die rohe INSERT-Migration in
+        # main.py (Version < 55) laesst "aktiv" weg und schlaegt dadurch bei einer
+        # brandneuen DB still fehl (INSERT OR IGNORE). Ueber die ORM (hier) wird der
+        # Python-Default korrekt angewendet.
+        neue.append(Nummernkreis(bezeichnung="Angebote", typ="angebot", format="ANG-YY####", naechste_nr=1, reset_jaehrlich=True))
+    if "auftrag" not in typen:
+        neue.append(Nummernkreis(bezeichnung="Aufträge", typ="auftrag", format="AU-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "proforma" not in typen:
-        neue.append(Nummernkreis(bezeichnung="Proforma-Rechnungen", typ="proforma", format="PRF-JJNNNN", naechste_nr=1, reset_jaehrlich=True))
+        neue.append(Nummernkreis(bezeichnung="Proforma-Rechnungen", typ="proforma", format="PRF-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "gutschrift" not in typen:
         neue.append(Nummernkreis(bezeichnung="Gutschriften", typ="gutschrift", format="GS-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "stornorechnung" not in typen:
-        neue.append(Nummernkreis(bezeichnung="Stornorechnungen", typ="stornorechnung", format="STORNO-JJNNNN", naechste_nr=1, reset_jaehrlich=True))
+        neue.append(Nummernkreis(bezeichnung="Stornorechnungen", typ="stornorechnung", format="STORNO-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "mahnung" not in typen:
         neue.append(Nummernkreis(bezeichnung="Mahnungen", typ="mahnung", format="MHN-YY####", naechste_nr=1, reset_jaehrlich=True))
     if neue:

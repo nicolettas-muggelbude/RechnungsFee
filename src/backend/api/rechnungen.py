@@ -1877,6 +1877,28 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         _ist_storno_pdf = False
         rechnung.storniert = False
 
+    # Ansehen (nicht storniert): das tatsächlich archivierte Original zeigen statt neu zu
+    # generieren. "Ansehen" darf nie eine andere Vorlage oder Einstellung zeigen als beim
+    # Finalisieren/ersten Drucken tatsächlich verwendet wurde (Nutzer-Feedback: alte Rechnung
+    # ohne QR-Code angezeigt, obwohl das archivierte Original mit QR-Code erzeugt wurde) -
+    # eine Neuerzeugung aus absender_snapshot/aktuellen Einstellungen kann von der Realität
+    # abweichen, z.B. wenn Einstellungen zwischen erstem Druck und heute geändert wurden oder
+    # bei rückwirkend befüllten Snapshots (Migration 93 erfasste den Stand zum Zeitpunkt der
+    # Migration, nicht zwingend den Stand beim ursprünglichen Druck).
+    if nur_ansehen and not _ist_storno_pdf and rechnung.original_pdf_pfad:
+        orig_pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
+        if orig_pfad.exists():
+            nr = (rechnung.rechnungsnummer or str(rechnung_id)).replace("/", "-").replace(" ", "_")
+            return Response(
+                content=orig_pfad.read_bytes(),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="Rechnung_{nr}.pdf"',
+                    "Cache-Control": "no-store",
+                },
+            )
+        # Kein archiviertes Original mehr auffindbar (Datei gelöscht o.ä.) → wie bisher frisch generieren.
+
     # Kopie: Original bereits gespeichert → gespeichertes PDF + Wasserzeichen zurückgeben
     if darf_archiviert and rechnung.original_pdf_pfad:
         kopie_bytes = lade_original_mit_kopie_stempel(APP_DATA_DIR, rechnung.original_pdf_pfad)

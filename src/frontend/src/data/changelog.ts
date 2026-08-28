@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.3',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: '„Ansehen" einer bereits ausgegebenen Rechnung zeigte manchmal eine andere Vorlage oder keinen QR-Code mehr, obwohl das Original mit QR-Code erzeugt worden war – die Ansicht wurde bei jedem Aufruf neu aus den aktuellen Einstellungen erzeugt statt das tatsächlich archivierte Original zu zeigen. „Ansehen" zeigt jetzt garantiert exakt das archivierte Original, unabhängig von später geänderten Einstellungen.' },
+      { typ: 'fix', text: 'Angebote, Aufträge, Proforma-Rechnungen und Stornorechnungen erhielten seit ihrer Einführung fälschlich die unveränderte Formatvorlage als Belegnummer (z. B. „ANG-JJNNNN" statt einer echten Nummer wie „ANG-260007"), da die zugrunde liegenden Platzhalter nie unterstützt wurden. Betrifft nur künftig erzeugte Nummern – bereits ausgestellte Belegnummern bleiben unverändert.' },
+      { typ: 'fix', text: 'Nummernkreis-Format: Platzhalter (YYYY, YY, MM, TT) werden jetzt unabhängig von Groß-/Kleinschreibung erkannt, falls von Hand eingetippt.' },
+    ],
+  },
+  {
     version: 'v0.6.2',
     datum: 'August 2026',
     eintraege: [
