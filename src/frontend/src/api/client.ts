@@ -1913,6 +1913,8 @@ export type UStVAErgebnis = {
   kz_86: string; kz_88: string
   // B – steuerfreie Umsätze (manuell)
   kz_41: string; kz_87: string
+  // Nicht im Inland steuerbare Umsätze
+  kz_21: string; kz_45: string
   // C – ig. Erwerb
   kz_89: string; kz_93: string
   kz_90: string; kz_95: string; kz_98: string
@@ -1966,7 +1968,8 @@ export type JahresUStVAErgebnis = {
   bis: string
   ist_kleinunternehmer: boolean
   kz_81: string; kz_83: string; kz_86: string; kz_88: string
-  kz_41: string; kz_87: string; kz_89: string; kz_93: string
+  kz_41: string; kz_87: string; kz_21: string; kz_45: string
+  kz_89: string; kz_93: string
   kz_90: string; kz_95: string; kz_98: string
   kz_46: string; kz_47: string; kz_84: string; kz_85: string
   kz_66: string; kz_61: string; kz_62: string; kz_67: string
@@ -2450,6 +2453,37 @@ export const getKontenuebersichtExportUrl = async (
 ): Promise<string> => {
   const base = await getApiBase()
   return `${base}/kontenuebersicht/export?von=${von}&bis=${bis}&format=${format}`
+}
+
+
+// ---------------------------------------------------------------------------
+// Inventurliste
+// ---------------------------------------------------------------------------
+
+export type InventurZeile = {
+  artikel_id: number
+  artikelnummer: string
+  bezeichnung: string
+  einheit: string
+  bestand: string
+  ek_netto: string | null
+  wert: string | null
+}
+
+export type InventurlisteErgebnis = {
+  stichtag: string
+  zeilen: InventurZeile[]
+  gesamtwert: string
+}
+
+export const berechneInventurliste = (stichtag: string) =>
+  request<InventurlisteErgebnis>(`/inventurliste/berechnen?stichtag=${stichtag}`)
+
+export const getInventurlisteExportUrl = async (
+  stichtag: string, format: 'pdf' | 'csv'
+): Promise<string> => {
+  const base = await getApiBase()
+  return `${base}/inventurliste/export?stichtag=${stichtag}&format=${format}`
 }
 
 

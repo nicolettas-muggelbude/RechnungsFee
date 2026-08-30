@@ -6,6 +6,7 @@ import { StepUnternehmen } from './StepUnternehmen'
 import { StepSteuern } from './StepSteuern'
 import { StepKonto } from './StepKonto'
 import { StepKassenbestand } from './StepKassenbestand'
+import { BackupZipWiederherstellen } from '../../components/BackupZipWiederherstellen'
 
 const STEPS = [
   { label: 'Meine Daten', desc: 'Name & Adresse' },
@@ -14,7 +15,10 @@ const STEPS = [
   { label: 'Kassenbestand', desc: 'Bargeld-Anfangsbestand' },
 ]
 
+type Modus = 'wahl' | 'neu' | 'wiederherstellen'
+
 export function SetupWizard() {
+  const [modus, setModus] = useState<Modus>('wahl')
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<Partial<Unternehmen>>({})
   const [kontoData, setKontoData] = useState<Omit<Konto, 'id' | 'aktiv' | 'ist_standard'> | null>(null)
@@ -81,61 +85,119 @@ export function SetupWizard() {
             <img src="/logo.svg" alt="RechnungsFee" className="w-10 h-10 shrink-0" />
             <h1 className="text-3xl font-bold leading-tight"><span className="text-slate-800 dark:text-white">Rechnungs</span><span className="text-[#4F46E5]">Fee</span></h1>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Einrichtung in 4 Schritten</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
+            {modus === 'wahl' ? 'Willkommen – wie möchtest du starten?' : 'Einrichtung in 4 Schritten'}
+          </p>
         </div>
 
-        {/* Fortschrittsanzeige */}
-        <div className="flex mb-8">
-          {STEPS.map((s, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center relative">
-              {/* Verbindungslinie zur linken Seite (zum vorigen Schritt) */}
-              {i > 0 && (
-                <div className={`absolute left-0 right-1/2 top-[17px] h-0.5 ${
-                  i <= step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
-                }`} />
-              )}
-              {/* Verbindungslinie zur rechten Seite (zum nächsten Schritt) */}
-              {i < STEPS.length - 1 && (
-                <div className={`absolute left-1/2 right-0 top-[17px] h-0.5 ${
-                  i < step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
-                }`} />
-              )}
-              {/* Schritt-Kreis (z-10 überdeckt die Linien) */}
-              <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
-                i < step ? 'bg-green-500 text-white' :
-                i === step ? 'bg-blue-600 text-white' :
-                'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-              }`}>
-                {i < step ? '✓' : i + 1}
-              </div>
-              <div className="text-center mt-1">
-                <p className={`text-xs font-medium ${i === step ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{s.label}</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 hidden sm:block">{s.desc}</p>
-              </div>
+        {modus === 'wahl' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setModus('neu')}
+              className="text-left bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all"
+            >
+              <span className="text-3xl">🆕</span>
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-2">Neu einrichten</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                In 4 Schritten zur Ersteinrichtung deiner RechnungsFee.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setModus('wiederherstellen')}
+              className="text-left bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 hover:border-orange-400 dark:hover:border-orange-500 hover:shadow-md transition-all"
+            >
+              <span className="text-3xl">♻️</span>
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-2">Aus Backup wiederherstellen</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Stelle deine RechnungsFee aus einem Daten-Backup wieder her.
+              </p>
+            </button>
+          </div>
+        )}
+
+        {modus === 'wiederherstellen' && (
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setModus('wahl')}
+              className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            >
+              ← Zurück zur Auswahl
+            </button>
+            <BackupZipWiederherstellen />
+          </div>
+        )}
+
+        {modus === 'neu' && (
+          <>
+            {/* Fortschrittsanzeige */}
+            <div className="flex mb-8">
+              {STEPS.map((s, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center relative">
+                  {/* Verbindungslinie zur linken Seite (zum vorigen Schritt) */}
+                  {i > 0 && (
+                    <div className={`absolute left-0 right-1/2 top-[17px] h-0.5 ${
+                      i <= step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
+                    }`} />
+                  )}
+                  {/* Verbindungslinie zur rechten Seite (zum nächsten Schritt) */}
+                  {i < STEPS.length - 1 && (
+                    <div className={`absolute left-1/2 right-0 top-[17px] h-0.5 ${
+                      i < step ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
+                    }`} />
+                  )}
+                  {/* Schritt-Kreis (z-10 überdeckt die Linien) */}
+                  <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                    i < step ? 'bg-green-500 text-white' :
+                    i === step ? 'bg-blue-600 text-white' :
+                    'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {i < step ? '✓' : i + 1}
+                  </div>
+                  <div className="text-center mt-1">
+                    <p className={`text-xs font-medium ${i === step ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{s.label}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 hidden sm:block">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Formular-Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">{STEPS[step].label}</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{STEPS[step].desc}</p>
+            {/* Formular-Card */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">{STEPS[step].label}</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{STEPS[step].desc}</p>
 
-          {error && (
-            <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-              ⚠️ {error}
+              {error && (
+                <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              {step === 0 && <StepUnternehmen onNext={handleStep0} defaultValues={formData} />}
+              {step === 1 && <StepSteuern onNext={handleStep1} onBack={() => setStep(0)} defaultValues={formData} />}
+              {step === 2 && <StepKonto onNext={handleStep2} onBack={() => setStep(1)} />}
+              {step === 3 && <StepKassenbestand onNext={handleStep3} onBack={() => setStep(2)} isLoading={saveMutation.isPending} />}
             </div>
-          )}
 
-          {step === 0 && <StepUnternehmen onNext={handleStep0} defaultValues={formData} />}
-          {step === 1 && <StepSteuern onNext={handleStep1} onBack={() => setStep(0)} defaultValues={formData} />}
-          {step === 2 && <StepKonto onNext={handleStep2} onBack={() => setStep(1)} />}
-          {step === 3 && <StepKassenbestand onNext={handleStep3} onBack={() => setStep(2)} isLoading={saveMutation.isPending} />}
-        </div>
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-6">
+              Du kannst alle Angaben später unter Einstellungen ändern.
+            </p>
 
-        <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-6">
-          Du kannst alle Angaben später unter Einstellungen ändern.
-        </p>
+            {step === 0 && (
+              <p className="text-center text-sm mt-4">
+                <button
+                  type="button"
+                  onClick={() => setModus('wahl')}
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  ← Zurück zur Auswahl
+                </button>
+              </p>
+            )}
+          </>
+        )}
       </div>
     </div>
   </div>

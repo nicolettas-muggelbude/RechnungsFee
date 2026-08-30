@@ -39,6 +39,7 @@ const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: Zeig
   { to: '/anlageverzeichnis', label: 'AVEÜR',         icon: 'domain',          zeigen: () => true },
   { to: '/guv',               label: 'GuV',           icon: 'trending_up',     zeigen: ({ unt }) => !!unt?.guv_aktiv },
   { to: '/kontenuebersicht',  label: 'Kontenübersicht', icon: 'view_list',     zeigen: ({ unt }) => !!unt?.kontenuebersicht_aktiv },
+  { to: '/inventurliste',     label: 'Inventurliste',  icon: 'checklist',      zeigen: ({ unt }) => !!unt?.lagerführung_aktiv },
   { to: '/kontokorrent',      label: 'Kontokorrent',   icon: 'balance',        zeigen: () => true },
   { to: '/verbindlichkeiten', label: 'Verbindlichkeiten', icon: 'payments',    zeigen: () => true },
   { to: '/ustva',             label: 'UStVA',         icon: 'account_balance', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },

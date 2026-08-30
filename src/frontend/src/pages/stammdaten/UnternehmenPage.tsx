@@ -991,7 +991,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
                 Lagerführung aktivieren
               </span>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Bestand pro Artikel verwalten. Bei Finalisierung einer Rechnung sinkt der Bestand automatisch, bei Storno wird er zurückgebucht. Pro Artikel konfigurierbar: Anfangsbestand, Mindestbestand (Warngrenze) und ob Minusbestand erlaubt ist.
+                Bestand pro Artikel verwalten. Bei Finalisierung einer Rechnung sinkt der Bestand automatisch, bei Storno wird er zurückgebucht. Pro Artikel konfigurierbar: Anfangsbestand, Mindestbestand (Warngrenze) und ob Minusbestand erlaubt ist. Schaltet zusätzlich die Inventurliste (Auswertungen) frei.
               </p>
             </div>
           </label>

@@ -32,6 +32,7 @@ import { EUERPage } from './pages/euer/EUERPage'
 import { CockpitPage } from './pages/cockpit/CockpitPage'
 import { GUVPage } from './pages/guv/GUVPage'
 import { KontenuebersichtPage } from './pages/kontenuebersicht/KontenuebersichtPage'
+import { InventurlistePage } from './pages/inventurliste/InventurlistePage'
 import { KontokorrentUebersichtPage } from './pages/kontokorrent/KontokorrentUebersichtPage'
 import { VerbindlichkeitenPage } from './pages/verbindlichkeiten/VerbindlichkeitenPage'
 import { AnlageverzeichnisPage } from './pages/anlageverzeichnis/AnlageverzeichnisPage'
@@ -137,6 +138,7 @@ function AppRoutes() {
           <Route path="/cockpit" element={<CockpitPage />} />
           <Route path="/guv" element={<GUVPage />} />
           <Route path="/kontenuebersicht" element={<KontenuebersichtPage />} />
+          <Route path="/inventurliste" element={<InventurlistePage />} />
           <Route path="/kontokorrent" element={<KontokorrentUebersichtPage />} />
           <Route path="/verbindlichkeiten" element={<VerbindlichkeitenPage />} />
           <Route path="/anlageverzeichnis" element={<AnlageverzeichnisPage />} />

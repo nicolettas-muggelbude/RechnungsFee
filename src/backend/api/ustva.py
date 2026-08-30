@@ -67,6 +67,11 @@ KZ_META = [
     ("", "87",
      "Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)", False, False),
 
+    ("Nicht im Inland steuerbare Umsätze", "21",
+     "Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)", False, True),
+    ("", "45",
+     "Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)", False, True),
+
     ("C. Innergemeinschaftliche Erwerbe", "89",
      "Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage", False, True),
     ("", "93", "Steuerpflichtige Erwerbe 7 % – Bemessungsgrundlage", False, True),
@@ -243,6 +248,22 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         .all()
     }
 
+    # KZ 21/45 (Issue #372): Ausgangsrechnungen mit ist_reverse_charge (EU-B2B-Dienstleistung,
+    # §3a Abs. 2 UStG) bzw. ist_drittland_leistung (Drittland-Dienstleistung, §3a Abs. 2 UStG)
+    # haben 0% USt (Positionen werden bei aktivem Flag bereits im Formular auf 0% gesetzt,
+    # siehe RechnungenPage.tsx) - der resultierende Journaleintrag hat daher ust_betrag=0 und
+    # kein konto_ust_skr03/04, fällt also schon heute korrekt NICHT in KZ 81/86 (kein Risiko
+    # einer Doppelzählung durch diesen neuen Block), war bisher aber für keine Kennziffer
+    # sichtbar - genau das hat der Community-Report bemängelt. Bewusst per Bulk-Lookup hier in
+    # ustva.py gelöst statt die Zahlungsbuchung (api/rechnungen.py) anzufassen, analog zum
+    # bereits bestehenden _soll_vorsteuer_rechnung_ids-Muster direkt darüber.
+    _eu_dl_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id).filter(Rechnung.ist_reverse_charge == True).all()  # noqa: E712
+    }
+    _drittland_dl_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id).filter(Rechnung.ist_drittland_leistung == True).all()  # noqa: E712
+    }
+
     # Lookup-Cache: Original-id (gruppe_id) → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
     _marge_cache: dict[int, Decimal | None] = {}
 
@@ -330,6 +351,28 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
                 and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
             kz["kz_41"] += e.netto_betrag
             posten["kz_41"].append({**quelle, "betrag": e.netto_betrag})
+
+        # KZ 21/45 (Issue #372) – nicht steuerbare Auslands-Dienstleistungen. Erkennung über
+        # rechnung_id statt Konto/steuerbefreiung_grund, da diese Buchungen kein eigenes
+        # USt-Konto haben (0% USt, siehe Kommentar bei _eu_dl_rechnung_ids oben).
+        if e.art == "Einnahme" and e.rechnung_id in _eu_dl_rechnung_ids:
+            kz["kz_21"] += e.netto_betrag
+            posten["kz_21"].append({**quelle, "betrag": e.netto_betrag})
+        elif e.art == "Einnahme" and e.rechnung_id in _drittland_dl_rechnung_ids:
+            kz["kz_45"] += e.netto_betrag
+            posten["kz_45"].append({**quelle, "betrag": e.netto_betrag})
+
+        # Storno (art="Ausgabe", umgekehrt, analog zum KZ-81/86-Storno-Block oben) – Skonto
+        # ausschließen: der Zahlungseingang (Einnahme) enthält bei Ist-Versteuerung/
+        # Zuflussprinzip bereits den skontierten (reduzierten) Betrag; eine zusätzliche
+        # Kürzung durch den separaten Skonto-Gegeneintrag würde KZ 21/45 doppelt mindern
+        # (identisches Muster wie beim bestehenden KZ-81/86-Storno-Ausschluss weiter oben).
+        elif e.art == "Ausgabe" and e.zahlungsart != "Skonto" and e.rechnung_id in _eu_dl_rechnung_ids:
+            kz["kz_21"] -= e.netto_betrag
+            posten["kz_21"].append({**quelle, "betrag": -e.netto_betrag})
+        elif e.art == "Ausgabe" and e.zahlungsart != "Skonto" and e.rechnung_id in _drittland_dl_rechnung_ids:
+            kz["kz_45"] -= e.netto_betrag
+            posten["kz_45"].append({**quelle, "betrag": -e.netto_betrag})
 
         # Ausgabe-Vorsteuer → KZ 66/61/67. Storno einer Einnahme hat ebenfalls art=Ausgabe, aber
         # konto_ust ist ein Einnahme-Konto → ausschließen, damit kein falscher Vorsteuer-Eintrag
@@ -574,6 +617,9 @@ class UStVAErgebnis(BaseModel):
     # B – Steuerfreie Umsätze (manuell)
     kz_41: Decimal = ZERO
     kz_87: Decimal = ZERO
+    # Nicht im Inland steuerbare Umsätze (Issue #372)
+    kz_21: Decimal = ZERO
+    kz_45: Decimal = ZERO
     # C – ig. Erwerb
     kz_89: Decimal = ZERO
     kz_93: Decimal = ZERO
@@ -603,6 +649,8 @@ class UStVASpeichernRequest(BaseModel):
     kz_88: Decimal = ZERO
     kz_41: Decimal = ZERO
     kz_87: Decimal = ZERO
+    kz_21: Decimal = ZERO
+    kz_45: Decimal = ZERO
     kz_89: Decimal = ZERO
     kz_93: Decimal = ZERO
     kz_90: Decimal = ZERO
@@ -739,6 +787,7 @@ class JahresUStVAErgebnis(BaseModel):
     kz_81: Decimal = ZERO; kz_83: Decimal = ZERO
     kz_86: Decimal = ZERO; kz_88: Decimal = ZERO
     kz_41: Decimal = ZERO; kz_87: Decimal = ZERO
+    kz_21: Decimal = ZERO; kz_45: Decimal = ZERO
     kz_89: Decimal = ZERO; kz_93: Decimal = ZERO
     kz_90: Decimal = ZERO; kz_95: Decimal = ZERO; kz_98: Decimal = ZERO
     kz_46: Decimal = ZERO; kz_47: Decimal = ZERO
@@ -1008,7 +1057,7 @@ def jahresumsatzsteuer(
 
     hat_ig = any(
         kz.get(k, ZERO) != ZERO
-        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85"]
+        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85", "kz_21", "kz_45"]
     )
 
     return JahresUStVAErgebnis(
@@ -1016,6 +1065,7 @@ def jahresumsatzsteuer(
         kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
         kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_21=kz.get("kz_21", ZERO), kz_45=kz.get("kz_45", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
         kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),
@@ -1062,7 +1112,7 @@ def jahresumsatzsteuer_pdf(
 
     hat_ig = any(
         kz.get(k, ZERO) != ZERO
-        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85"]
+        for k in ["kz_41", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98", "kz_46", "kz_47", "kz_84", "kz_85", "kz_21", "kz_45"]
     )
 
     ergebnis = JahresUStVAErgebnis(
@@ -1070,6 +1120,7 @@ def jahresumsatzsteuer_pdf(
         kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
         kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_21=kz.get("kz_21", ZERO), kz_45=kz.get("kz_45", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
         kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),
         kz_46=kz.get("kz_46", ZERO), kz_47=kz.get("kz_47", ZERO),

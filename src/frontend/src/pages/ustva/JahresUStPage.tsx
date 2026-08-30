@@ -11,6 +11,8 @@ const KZ_META: [string, string, string, boolean][] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false],
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b)', false],
+  ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false],
+  ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false],
   ['', '93', 'Steuerpflichtige Erwerbe 7 % – Bemessungsgrundlage', false],
   ['', '90', 'Steuerpflichtige Erwerbe 0 % – Bemessungsgrundlage', false],

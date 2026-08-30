@@ -23,6 +23,16 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.4',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Setup-Wizard: Neue Startseite mit der Wahl „Neu einrichten" oder „Aus Backup wiederherstellen" – bisher musste man erst die komplette Ersteinrichtung durchlaufen, bevor überhaupt ein Backup eingespielt werden konnte, z. B. nach einem Festplattendefekt oder Rechnerwechsel (Issue #374).' },
+      { typ: 'neu', text: 'Inventurliste: Neuer Menüpunkt unter Auswertungen (sichtbar sobald Lagerführung aktiviert ist) zeigt Bestand und Wert (Bestand × EK-Preis) aller Artikel mit aktiver Lagerführung zum gewählten Stichtag – als Nachweis für die jährliche Inventur (§240 HGB), als PDF oder CSV exportierbar.' },
+      { typ: 'neu', text: 'UStVA-Anzeigehilfe: KZ 21 (nicht steuerbare EU-Dienstleistungen, §3a Abs. 2 UStG) und KZ 45 (u. a. Drittland-Dienstleistungen) werden jetzt automatisch berechnet. Ausgangsrechnungen mit gesetztem Reverse-Charge- bzw. Drittland-Flag erschienen bisher in keiner einzigen Kennziffer der UStVA.' },
+      { typ: 'fix', text: 'Eine als „Reverse-Charge" (EU-B2B-Dienstleistung) gekennzeichnete Ausgangsrechnung wurde beim Verbuchen der Zahlung fälschlich wie eine Eingangsrechnung nach §13b Abs. 1 klassifiziert (Empfänger schuldet USt) statt als nicht steuerbare Leistung – wirkte sich zwar nirgends sichtbar aus, verhinderte aber die korrekte Zuordnung zu KZ 21. Betrifft nur Rechnungen mit aktivem Reverse-Charge-Flag (Issue #372).' },
+    ],
+  },
+  {
     version: 'v0.6.3',
     datum: 'August 2026',
     eintraege: [

@@ -2542,8 +2542,16 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # auf einer §13b/ig.Erwerb-Kategorie IMMER None - weder USt-Sonderkonto (1780/
         # 1787 statt normalem Vorsteuerkonto) noch UStVA-Zuordnung griffen (Issue #315-
         # Nebenfund, entdeckt beim Pruefen des umgekehrten Falls Eingangsrechnungen).
+        # "and art == 'Ausgabe'" (Issue #372-Nebenfund): rechnung.ist_reverse_charge
+        # kennzeichnet bei AUSGANGSrechnungen eine im Inland nicht steuerbare
+        # EU-Dienstleistung (§3a Abs. 2 UStG, gehoert in KZ 21) - keinesfalls den
+        # §13b-Abs.1-Fall (wir als LeistungsEMPFAENGER schulden USt), der nur bei
+        # Eingangsrechnungen (art="Ausgabe") ueberhaupt Sinn ergibt. Ohne diese Bedingung
+        # griff der Fallback faelschlich auch bei Ausgangsrechnungen und die Buchung wurde
+        # von der Sonderfall-Erkennung in _berechne_kz() als §13b Abs.1 vereinnahmt statt
+        # (ab jetzt) in KZ 21 zu erscheinen.
         sonderfall, ust03, ust04 = _klassifiziere_sonderfall(
-            kat, rechnung.ist_reverse_charge, satz, ust03_default, ust04_default
+            kat, rechnung.ist_reverse_charge and art == "Ausgabe", satz, ust03_default, ust04_default
         )
         if sonderfall == "einfuhr_ust":
             # Einfuhrumsatzsteuer (DHL/Zoll): der Zahlbetrag IST bereits die Steuer, kein
