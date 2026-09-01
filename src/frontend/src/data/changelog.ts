@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.7',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Thunderbird-Versand startete auf keinem Betriebssystem, auch wenn Thunderbird korrekt installiert war (weder v0.6.5 noch der Versuch in v0.6.6 behoben das Problem) – ein Sicherheitsmechanismus der App-Plattform ließ grundsätzlich keine neu angesteuerten Programme zu, unabhängig vom Installationspfad. Jetzt korrekt freigeschaltet.' },
+    ],
+  },
+  {
     version: 'v0.6.6',
     datum: 'September 2026',
     eintraege: [

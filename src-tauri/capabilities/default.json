@@ -9,7 +9,17 @@
     "core:default",
     "core:webview:allow-create-webview-window",
     "core:webview:allow-set-webview-zoom",
-    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "thunderbird", "cmd": "thunderbird", "args": true },
+        { "name": "thunderbird-flatpak", "cmd": "flatpak", "args": true },
+        { "name": "thunderbird-macos", "cmd": "open", "args": true },
+        { "name": "thunderbird-win-64", "cmd": "C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe", "args": true },
+        { "name": "thunderbird-win-32", "cmd": "C:\\Program Files (x86)\\Mozilla Thunderbird\\thunderbird.exe", "args": true },
+        { "name": "thunderbird-win-appdata", "cmd": "$LOCALDATA/Mozilla Thunderbird/thunderbird.exe", "args": true }
+      ]
+    },
     "shell:allow-open",
     "updater:default",
     "process:allow-restart",

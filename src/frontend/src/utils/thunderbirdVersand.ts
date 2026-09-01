@@ -4,7 +4,7 @@
  * Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird unverändert wie
  * bei jeder anderen Mail. Bisher nur für Rechnungen angeboten.
  */
-import { tempDir, localDataDir, join } from '@tauri-apps/api/path'
+import { tempDir, join } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
 
@@ -64,28 +64,26 @@ function baueComposeString(params: ThunderbirdMailParams, anhangPfade: string[])
   return felder.join(',')
 }
 
-/** Kandidaten-Kommandos für die verschiedenen Installationsarten - werden der Reihe nach
- *  versucht, das erste erfolgreiche gewinnt. Kein Bedarf, das Betriebssystem vorher zu
- *  erkennen: ein nicht passender Kandidat schlägt einfach schnell fehl.
- *  Windows: Mozillas Installer legt Thunderbird je nach Rechten pro Maschine
- *  (Program Files) ODER pro Nutzer (%LOCALAPPDATA%) an - beide Pfade werden versucht. */
-async function kandidaten(composeString: string): Promise<{ programm: string; args: string[] }[]> {
-  let lokalerAppdataPfad: string | null = null
-  try {
-    lokalerAppdataPfad = await join(await localDataDir(), 'Mozilla Thunderbird', 'thunderbird.exe')
-  } catch {
-    // localDataDir() kann auf Nicht-Windows-Systemen fehlschlagen - Kandidat einfach weglassen
-  }
-
-  const liste = [
+/** Kandidaten - werden der Reihe nach versucht, der erste erfolgreiche Start gewinnt. Kein
+ *  Bedarf, das Betriebssystem vorher zu erkennen: ein nicht passender Kandidat schlägt
+ *  einfach schnell fehl.
+ *
+ *  WICHTIG: "programm" ist NICHT der auszuführende Befehl selbst, sondern der Name eines in
+ *  src-tauri/capabilities/default.json fest hinterlegten Scope-Eintrags (shell:allow-execute).
+ *  Tauri v2 lässt Command.create() grundsätzlich nur exakt vorab benannte Kommandos zu, auch
+ *  wenn die Berechtigung selbst "ohne Scope" heißt - ein beliebiger Programmname/Pfad aus JS
+ *  wird sonst mit "Programm nicht erlaubt" abgelehnt, bevor überhaupt ein Prozess gestartet
+ *  wird. Der tatsächliche Pfad (inkl. der Windows-Variable $LOCALDATA für die Installation
+ *  ohne Admin-Rechte) steht ausschließlich in der Capabilities-Datei. */
+function kandidaten(composeString: string): { programm: string; args: string[] }[] {
+  return [
     { programm: 'thunderbird', args: ['-compose', composeString] },
-    { programm: 'flatpak', args: ['run', 'org.mozilla.Thunderbird', '-compose', composeString] },
-    { programm: 'open', args: ['-a', 'Thunderbird', '--args', '-compose', composeString] },
-    { programm: 'C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe', args: ['-compose', composeString] },
-    { programm: 'C:\\Program Files (x86)\\Mozilla Thunderbird\\thunderbird.exe', args: ['-compose', composeString] },
+    { programm: 'thunderbird-flatpak', args: ['run', 'org.mozilla.Thunderbird', '-compose', composeString] },
+    { programm: 'thunderbird-macos', args: ['-a', 'Thunderbird', '--args', '-compose', composeString] },
+    { programm: 'thunderbird-win-64', args: ['-compose', composeString] },
+    { programm: 'thunderbird-win-32', args: ['-compose', composeString] },
+    { programm: 'thunderbird-win-appdata', args: ['-compose', composeString] },
   ]
-  if (lokalerAppdataPfad) liste.push({ programm: lokalerAppdataPfad, args: ['-compose', composeString] })
-  return liste
 }
 
 export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Promise<void> {
@@ -94,7 +92,7 @@ export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Prom
   )
   const composeString = baueComposeString(params, anhangPfade)
 
-  for (const { programm, args } of await kandidaten(composeString)) {
+  for (const { programm, args } of kandidaten(composeString)) {
     try {
       // spawn() statt execute(): Thunderbird ist ein langlebiger GUI-Prozess, der (falls noch
       // keine Instanz laeuft) erst beim eigenen Beenden zurueckkehrt - execute() haette bis
