@@ -149,7 +149,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 - **Rich-Text-Editor für Einleitungstext** – WYSIWYG-Editor (z. B. TipTap oder Quill) statt Markdown-Textarea für den Einleitungstext auf Rechnungen; aktuell: Markdown mit `**fett**`-Unterstützung im PDF
 
-- **Thunderbird-Integration** – `thunderbird -compose` als dritte Mail-Option neben SMTP und mailto; ermöglicht Dateianhänge ohne SMTP-Konfiguration und nutzt Thunderbirds GPG-Integration automatisch (Issue #147)
+- **Thunderbird-Versand auf weitere Dokumenttypen ausweiten** – bisher nur für Rechnungen umgesetzt (Issue #147); Angebote, Proforma, Aufträge, Mahnungen und Belege laufen weiterhin ausschließlich über SMTP/mailto. Gleiches Muster (`sendeUeberThunderbird()` in `utils/thunderbirdVersand.ts`), nur die jeweilige `handleMail()`-Stelle ergänzen.
 
 - **Erweiterbare Kontenpläne** – Built-in-Pakete (SKR03 vollständig) und CSV-Import eigener Kontenpläne
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
