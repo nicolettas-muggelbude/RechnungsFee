@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.9',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Findet RechnungsFee auf keinem der geprüften Wege Thunderbird, zeigt der Hinweis jetzt einen Button „Technische Details anzeigen" mit der tatsächlichen Fehlermeldung je Installationsart – lässt sich damit auch ohne Entwicklerwerkzeuge direkt in der App nachvollziehen.' },
+    ],
+  },
+  {
     version: 'v0.6.8',
     datum: 'September 2026',
     eintraege: [

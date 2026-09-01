@@ -1053,6 +1053,7 @@ function RechnungDetail({
   const [zeigMailDialog, setZeigMailDialog] = useState(false)
   const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
   const [zeigThunderbirdHinweis, setZeigThunderbirdHinweis] = useState(false)
+  const [thunderbirdFehlerDetails, setThunderbirdFehlerDetails] = useState<{ programm: string; fehler: string }[]>([])
   const [thunderbirdLaeuft, setThunderbirdLaeuft] = useState(false)
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
   const [pdfHinweis, setPdfHinweis] = useState(false)
@@ -1322,8 +1323,12 @@ function RechnungDetail({
         setZeigMailEingabe(false)
         setMailAdresse('')
       } catch (e) {
-        if (e instanceof ThunderbirdNichtGefundenError) setZeigThunderbirdHinweis(true)
-        else setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+        if (e instanceof ThunderbirdNichtGefundenError) {
+          setThunderbirdFehlerDetails(e.details)
+          setZeigThunderbirdHinweis(true)
+        } else {
+          setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+        }
       } finally {
         setThunderbirdLaeuft(false)
       }
@@ -1515,7 +1520,7 @@ function RechnungDetail({
         )}
 
         {zeigThunderbirdHinweis && (
-          <ThunderbirdInstallHinweis onClose={() => setZeigThunderbirdHinweis(false)} />
+          <ThunderbirdInstallHinweis onClose={() => setZeigThunderbirdHinweis(false)} details={thunderbirdFehlerDetails} />
         )}
 
         {zeigSmtpHinweis && (

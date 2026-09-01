@@ -1,10 +1,18 @@
+import { useState } from 'react'
+
 interface Props {
   onClose: () => void
+  /** Fehlermeldung je versuchtem Kandidaten (ThunderbirdNichtGefundenError.details) - zeigt die
+   *  tatsächliche technische Ursache direkt in der App an, ohne dass DevTools verfügbar sein
+   *  müssen (in der gepackten Desktop-App per Rechtsklick/F12 oft nicht erreichbar). */
+  details?: { programm: string; fehler: string }[]
 }
 
 /** Erscheint wenn der Thunderbird-Versand (Issue #147) keinen der bekannten Aufrufe
  *  (nativ/snap/flatpak/macOS-App-Bundle/Windows-Installationspfad) starten konnte. */
-export function ThunderbirdInstallHinweis({ onClose }: Props) {
+export function ThunderbirdInstallHinweis({ onClose, details }: Props) {
+  const [zeigDetails, setZeigDetails] = useState(false)
+
   return (
     <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg px-4 py-3 space-y-2">
       <div className="flex items-start justify-between gap-3">
@@ -31,6 +39,27 @@ export function ThunderbirdInstallHinweis({ onClose }: Props) {
       <p className="text-xs text-orange-600 dark:text-orange-400">
         Alternativ: Thunderbird-Versand unter Einstellungen → Unternehmen → E-Mail wieder deaktivieren, dann läuft der Versand wie gewohnt über SMTP oder das Standard-Mailprogramm.
       </p>
+
+      {details && details.length > 0 && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setZeigDetails(z => !z)}
+            className="text-xs text-orange-700 dark:text-orange-300 underline hover:no-underline"
+          >
+            {zeigDetails ? 'Technische Details ausblenden' : 'Technische Details anzeigen'}
+          </button>
+          {zeigDetails && (
+            <div className="mt-1.5 bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-800 rounded-lg p-2 space-y-1">
+              {details.map((d, i) => (
+                <p key={i} className="text-[11px] font-mono text-slate-600 dark:text-slate-300 break-all">
+                  <span className="text-slate-400 dark:text-slate-500">{d.programm}:</span> {d.fehler}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

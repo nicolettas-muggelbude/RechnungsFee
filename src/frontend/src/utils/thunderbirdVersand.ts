@@ -9,9 +9,14 @@ import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
 
 export class ThunderbirdNichtGefundenError extends Error {
-  constructor() {
+  /** Fehlermeldung je versuchtem Kandidaten, in derselben Reihenfolge wie kandidaten() - zur
+   *  Diagnose direkt in der App anzeigbar, ohne dass DevTools verfügbar sein müssen. */
+  details: { programm: string; fehler: string }[]
+
+  constructor(details: { programm: string; fehler: string }[]) {
     super('Thunderbird wurde nicht gefunden.')
     this.name = 'ThunderbirdNichtGefundenError'
+    this.details = details
   }
 }
 
@@ -92,6 +97,7 @@ export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Prom
   )
   const composeString = baueComposeString(params, anhangPfade)
 
+  const details: { programm: string; fehler: string }[] = []
   for (const { programm, args } of kandidaten(composeString)) {
     try {
       // spawn() statt execute(): Thunderbird ist ein langlebiger GUI-Prozess, der (falls noch
@@ -101,8 +107,10 @@ export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Prom
       await Command.create(programm, args).spawn()
       return
     } catch (e) {
+      const fehler = e instanceof Error ? e.message : String(e)
       console.warn(`[Thunderbird] Kandidat "${programm}" fehlgeschlagen:`, e)
+      details.push({ programm, fehler })
     }
   }
-  throw new ThunderbirdNichtGefundenError()
+  throw new ThunderbirdNichtGefundenError(details)
 }
