@@ -4,7 +4,7 @@
  * Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird unverändert wie
  * bei jeder anderen Mail. Bisher nur für Rechnungen angeboten.
  */
-import { tempDir, join } from '@tauri-apps/api/path'
+import { tempDir, localDataDir, join } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
 
@@ -66,15 +66,26 @@ function baueComposeString(params: ThunderbirdMailParams, anhangPfade: string[])
 
 /** Kandidaten-Kommandos für die verschiedenen Installationsarten - werden der Reihe nach
  *  versucht, das erste erfolgreiche gewinnt. Kein Bedarf, das Betriebssystem vorher zu
- *  erkennen: ein nicht passender Kandidat schlägt einfach schnell fehl. */
-function kandidaten(composeString: string): { programm: string; args: string[] }[] {
-  return [
+ *  erkennen: ein nicht passender Kandidat schlägt einfach schnell fehl.
+ *  Windows: Mozillas Installer legt Thunderbird je nach Rechten pro Maschine
+ *  (Program Files) ODER pro Nutzer (%LOCALAPPDATA%) an - beide Pfade werden versucht. */
+async function kandidaten(composeString: string): Promise<{ programm: string; args: string[] }[]> {
+  let lokalerAppdataPfad: string | null = null
+  try {
+    lokalerAppdataPfad = await join(await localDataDir(), 'Mozilla Thunderbird', 'thunderbird.exe')
+  } catch {
+    // localDataDir() kann auf Nicht-Windows-Systemen fehlschlagen - Kandidat einfach weglassen
+  }
+
+  const liste = [
     { programm: 'thunderbird', args: ['-compose', composeString] },
     { programm: 'flatpak', args: ['run', 'org.mozilla.Thunderbird', '-compose', composeString] },
     { programm: 'open', args: ['-a', 'Thunderbird', '--args', '-compose', composeString] },
     { programm: 'C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe', args: ['-compose', composeString] },
     { programm: 'C:\\Program Files (x86)\\Mozilla Thunderbird\\thunderbird.exe', args: ['-compose', composeString] },
   ]
+  if (lokalerAppdataPfad) liste.push({ programm: lokalerAppdataPfad, args: ['-compose', composeString] })
+  return liste
 }
 
 export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Promise<void> {
@@ -83,15 +94,16 @@ export async function sendeUeberThunderbird(params: ThunderbirdMailParams): Prom
   )
   const composeString = baueComposeString(params, anhangPfade)
 
-  for (const { programm, args } of kandidaten(composeString)) {
+  for (const { programm, args } of await kandidaten(composeString)) {
     try {
-      const ergebnis = await Command.create(programm, args).execute()
-      // code === null bedeutet: Prozess wurde gestartet, aber (bei -compose gewollt) nicht
-      // auf Beendigung gewartet/liefert keinen Code zurück - beides zählt als Erfolg. Ein
-      // sofortiger Non-Zero-Code (z.B. "command not found") zählt als Fehlschlag.
-      if (ergebnis.code === null || ergebnis.code === 0) return
-    } catch {
-      // nächsten Kandidaten versuchen
+      // spawn() statt execute(): Thunderbird ist ein langlebiger GUI-Prozess, der (falls noch
+      // keine Instanz laeuft) erst beim eigenen Beenden zurueckkehrt - execute() haette bis
+      // dahin blockiert. Kein Rueckgabewert zu pruefen: schlaegt spawn() nicht fehl (Datei
+      // gefunden, ausfuehrbar), gilt der Kandidat als Erfolg.
+      await Command.create(programm, args).spawn()
+      return
+    } catch (e) {
+      console.warn(`[Thunderbird] Kandidat "${programm}" fehlgeschlagen:`, e)
     }
   }
   throw new ThunderbirdNichtGefundenError()

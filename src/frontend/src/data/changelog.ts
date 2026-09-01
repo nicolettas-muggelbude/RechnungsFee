@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.6',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Thunderbird-Versand (v0.6.5) fand auf Windows installierte Thunderbird-Installationen oft nicht – geprüft wurden nur die klassischen Pfade unter „Program Files", Mozillas Installer legt Thunderbird ohne Admin-Rechte aber pro Nutzer unter %LOCALAPPDATA% an. Dieser Pfad wird jetzt zusätzlich geprüft.' },
+      { typ: 'fix', text: 'Fand RechnungsFee eine Thunderbird-Installation, blieb der „Senden"-Button dauerhaft in Wartestellung, bis das geöffnete Thunderbird-Fenster komplett geschlossen wurde, statt sofort zurückzukehren.' },
+    ],
+  },
+  {
     version: 'v0.6.5',
     datum: 'August 2026',
     eintraege: [
