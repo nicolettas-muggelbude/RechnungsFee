@@ -10,7 +10,7 @@
     "core:webview:allow-create-webview-window",
     "core:webview:allow-set-webview-zoom",
     {
-      "identifier": "shell:allow-execute",
+      "identifier": "shell:allow-spawn",
       "allow": [
         { "name": "thunderbird", "cmd": "thunderbird", "args": ["-compose", { "validator": "(?s)^.*$", "raw": true }] },
         { "name": "thunderbird-flatpak", "cmd": "flatpak", "args": ["run", "org.mozilla.Thunderbird", "-compose", { "validator": "(?s)^.*$", "raw": true }] },

@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.10',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Thunderbird-Versand startete auf keinem Betriebssystem – die Systemberechtigung war für den falschen Befehl freigeschaltet (Berechtigung für „execute" konfiguriert, im Code aber der eigenständige Befehl „spawn" verwendet). Jetzt korrekt zugeordnet.' },
+    ],
+  },
+  {
     version: 'v0.6.9',
     datum: 'September 2026',
     eintraege: [
