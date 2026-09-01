@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.8',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Die für den Thunderbird-Versand (v0.6.7) freigeschaltete Systemberechtigung erlaubte auf macOS und Linux (Flatpak) unnötig weitreichend beliebige Argumente – theoretisch hätte darüber bei einer kompromittierten App-Oberfläche auch ein anderes Programm als Thunderbird gestartet werden können. Beide Freigaben sind jetzt exakt auf den Thunderbird-Aufruf eingeschränkt.' },
+    ],
+  },
+  {
     version: 'v0.6.7',
     datum: 'September 2026',
     eintraege: [

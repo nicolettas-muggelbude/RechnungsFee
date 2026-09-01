@@ -12,12 +12,12 @@
     {
       "identifier": "shell:allow-execute",
       "allow": [
-        { "name": "thunderbird", "cmd": "thunderbird", "args": true },
-        { "name": "thunderbird-flatpak", "cmd": "flatpak", "args": true },
-        { "name": "thunderbird-macos", "cmd": "open", "args": true },
-        { "name": "thunderbird-win-64", "cmd": "C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe", "args": true },
-        { "name": "thunderbird-win-32", "cmd": "C:\\Program Files (x86)\\Mozilla Thunderbird\\thunderbird.exe", "args": true },
-        { "name": "thunderbird-win-appdata", "cmd": "$LOCALDATA/Mozilla Thunderbird/thunderbird.exe", "args": true }
+        { "name": "thunderbird", "cmd": "thunderbird", "args": ["-compose", { "validator": "(?s)^.*$", "raw": true }] },
+        { "name": "thunderbird-flatpak", "cmd": "flatpak", "args": ["run", "org.mozilla.Thunderbird", "-compose", { "validator": "(?s)^.*$", "raw": true }] },
+        { "name": "thunderbird-macos", "cmd": "open", "args": ["-a", "Thunderbird", "--args", "-compose", { "validator": "(?s)^.*$", "raw": true }] },
+        { "name": "thunderbird-win-64", "cmd": "C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe", "args": ["-compose", { "validator": "(?s)^.*$", "raw": true }] },
+        { "name": "thunderbird-win-32", "cmd": "C:\\Program Files (x86)\\Mozilla Thunderbird\\thunderbird.exe", "args": ["-compose", { "validator": "(?s)^.*$", "raw": true }] },
+        { "name": "thunderbird-win-appdata", "cmd": "$LOCALDATA/Mozilla Thunderbird/thunderbird.exe", "args": ["-compose", { "validator": "(?s)^.*$", "raw": true }] }
       ]
     },
     "shell:allow-open",
