@@ -5,7 +5,7 @@ Bug: journal.py._felder_aus_data() und rechnungen.py._erstelle_eintrag() leitete
 ust_sonderfall aus einem gemeinsamen Tupel (kat.konto_skr03, kat.konto_skr04) ab, statt
 SKR03- und SKR04-Konto getrennt zu prüfen. Die Kategorie "Innergemeinschaftliche
 Lieferungen" hat konto_skr04="3125" - derselbe Wert ist konto_skr03 der Kategorie
-"Drittland-Dienstleistungen (§13b Abs. 1)". Die gemischte Prüfung "3125" in (skr03, skr04)
+"Drittland-Dienstleistungen (§13b Abs. 2)". Die gemischte Prüfung "3125" in (skr03, skr04)
 traf auf beide Kategorien zu, wodurch eine Buchung auf "Innergemeinschaftliche
 Lieferungen" fälschlich als ust_sonderfall="13b_abs1" eingestuft wurde - in der USt-VA
 landete der Betrag dadurch in KZ 46/47 statt (korrekt) in KZ 41.
@@ -43,7 +43,7 @@ def _kategorien(db) -> tuple[Kategorie, Kategorie]:
         konto_skr03="8125", konto_skr04="3125", vorsteuer_prozent=0, ust_satz_standard=0,
     )
     drittland_dl = Kategorie(
-        name="Drittland-Dienstleistungen (§13b Abs. 1)", kontenart="Aufwand",
+        name="Drittland-Dienstleistungen (§13b Abs. 2)", kontenart="Aufwand",
         konto_skr03="3125", konto_skr04="5925", vorsteuer_prozent=100, ust_satz_standard=19,
     )
     db.add_all([ig_lieferung, drittland_dl])
@@ -74,7 +74,7 @@ def test_ig_lieferung_bekommt_keinen_ust_sonderfall_und_kz41(db):
     assert kz["kz_47"] == Decimal("0")
 
 
-def test_drittland_dienstleistung_bekommt_weiterhin_13b_abs1(db):
+def test_drittland_dienstleistung_bekommt_weiterhin_13b_abs2(db):
     """Gegenprobe: die eigentliche Kollisions-Kategorie darf durch den Fix nicht kaputtgehen."""
     _ig_lieferung, drittland_dl = _kategorien(db)
     rechnung = Rechnung(
@@ -97,4 +97,4 @@ def test_drittland_dienstleistung_bekommt_weiterhin_13b_abs1(db):
         db,
     )
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.rechnung_id == rechnung.id).first()
-    assert eintrag.ust_sonderfall == "13b_abs1"
+    assert eintrag.ust_sonderfall == "13b_abs2"

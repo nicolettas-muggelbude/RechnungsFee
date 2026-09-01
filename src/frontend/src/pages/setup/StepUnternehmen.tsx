@@ -44,7 +44,7 @@ const schema = z.object({
   ort:                   xmlSauber('Ort').min(1, 'Ort ist erforderlich').max(200, 'Maximal 200 Zeichen'),
   email:                 z.string().email('Ungültige E-Mail').optional().or(z.literal('')),
   telefon:               z.string().optional(),
-  steuernummer:          z.string().min(1, 'Steuernummer ist erforderlich (§14 UStG – wird für Rechnungen benötigt)'),
+  steuernummer:          z.string().optional(),
   finanzamt:             z.string().optional(),
   berufsbezeichnung:        z.string().optional(),
   bezeichnung_des_gewerbes: z.string().optional(),
@@ -231,10 +231,13 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-            Steuernummer <span className="text-red-500">*</span>
+            Steuernummer
           </label>
           <input {...register('steuernummer')} placeholder="12/345/67890" className={inp} />
-          {errors.steuernummer && <p className="text-red-500 text-xs mt-1">{errors.steuernummer.message}</p>}
+          {errors.steuernummer
+            ? <p className="text-red-500 text-xs mt-1">{errors.steuernummer.message}</p>
+            : <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Noch nicht vom Finanzamt zugeteilt? Kannst du leer lassen und später unter Einstellungen ergänzen – wird erst für Rechnungen nach §14 UStG benötigt.</p>
+          }
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Finanzamt</label>

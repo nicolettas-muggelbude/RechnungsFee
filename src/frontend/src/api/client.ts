@@ -235,6 +235,7 @@ export type Unternehmen = {
   smtp_von_adresse?: string | null
   smtp_zertifikat_ignorieren?: boolean
   smtp_zertifikat_fingerprint?: string | null
+  thunderbird_aktiv?: boolean
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
   standard_zahlungsziel?: number

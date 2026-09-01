@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail, getProfile,
+  getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail, getProfile, isTauri,
   type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -1428,6 +1428,63 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
 }
 
 // ---------------------------------------------------------------------------
+// Thunderbird-Versand (Issue #147, bisher nur für Rechnungen)
+// ---------------------------------------------------------------------------
+
+function ThunderbirdSektion({ data }: { data: Unternehmen }) {
+  const qc = useQueryClient()
+  const [aktiv, setAktiv] = useState(data.thunderbird_aktiv ?? false)
+  const [gespeichert, setGespeichert] = useState(false)
+  const [fehler, setFehler] = useState<string | null>(null)
+
+  const mut = useMutation({
+    mutationFn: () => updateUnternehmen({ thunderbird_aktiv: aktiv }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['unternehmen'] })
+      setGespeichert(true)
+      setFehler(null)
+      setTimeout(() => setGespeichert(false), 2500)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
+  if (!isTauri()) return null
+
+  return (
+    <div className="space-y-3">
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={aktiv}
+          onChange={ev => setAktiv(ev.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+        />
+        <div>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            Thunderbird für den Versand von Rechnungen nutzen
+          </span>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Hat Vorrang vor SMTP. RechnungsFee öffnet ein vorausgefülltes Thunderbird-Compose-Fenster (Empfänger, Betreff, Text, PDF-Anhang) – den eigentlichen Versand inklusive eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung übernimmt Thunderbird unverändert wie bei jeder anderen Mail. Gilt aktuell nur für Rechnungen; andere Dokumenttypen laufen weiterhin über SMTP bzw. das Standard-Mailprogramm.
+          </p>
+        </div>
+      </label>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => mut.mutate()}
+          disabled={mut.isPending}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {mut.isPending ? 'Wird gespeichert…' : 'Speichern'}
+        </button>
+        {gespeichert && <span className="text-sm text-green-600 dark:text-green-400">✓ Gespeichert</span>}
+        {fehler && <span className="text-sm text-red-600 dark:text-red-400">{fehler}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // E-Mail-Tab (Vorlage + Signatur kombiniert)
 // ---------------------------------------------------------------------------
 
@@ -1439,6 +1496,16 @@ function EmailSektion({ data }: { data: Unternehmen }) {
         <p className="text-xs text-slate-400 dark:text-slate-500">Direkt aus RechnungsFee versenden – mit PDF-Anhang und Dokumentenpaketen.</p>
       </div>
       <SmtpSektion data={data} />
+
+      {isTauri() && (
+        <>
+          <hr className="border-slate-100 dark:border-slate-700" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Thunderbird-Versand</h3>
+          </div>
+          <ThunderbirdSektion data={data} />
+        </>
+      )}
 
       <hr className="border-slate-100 dark:border-slate-700" />
 

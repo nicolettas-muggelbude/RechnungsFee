@@ -139,6 +139,11 @@ class Unternehmen(Base):
     # Trust-on-First-Use: SHA-256-Fingerabdruck des beim ersten Verbindungsaufbau akzeptierten
     # Zertifikats (nur relevant/gesetzt wenn smtp_zertifikat_ignorieren aktiv ist, Issue #336)
     smtp_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    # Thunderbird als Mailversand-Option (Issue #147): hat Vorrang vor smtp_aktiv, wenn gesetzt -
+    # RechnungsFee übergibt Empfänger/Betreff/Text/Anhang an ein Thunderbird-Compose-Fenster,
+    # Versand (inkl. Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird
+    # selbst. Bisher nur für Rechnungen angeboten.
+    thunderbird_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
     unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     standard_zahlungsziel: Mapped[int] = mapped_column(Integer, default=14, server_default="14")
@@ -216,6 +221,10 @@ class Kategorie(Base):
     konto_skr04_default: Mapped[str | None] = mapped_column(String(10))
     user_modified_skr03: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     user_modified_skr04: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    # Persistente Sonderfall-Kennung (Issue #375): Quelle der Wahrheit für Reverse-Charge-
+    # Klassifizierung, unabhängig vom (per user_modified_skr03/04 änderbaren) SKR-Konto.
+    # ig_erwerb|13b_abs1|13b_abs2|einfuhr_ust|NULL (normale Kategorie).
+    ust_sonderfall: Mapped[str | None] = mapped_column(String(20))
     eks_kategorie: Mapped[str | None] = mapped_column(String(10))  # B9, A1 etc.
     euer_zeile: Mapped[int | None] = mapped_column(Integer)
     vorsteuer_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100, nullable=False)

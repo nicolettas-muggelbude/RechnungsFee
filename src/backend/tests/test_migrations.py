@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS kassenbuch (
     betrag NUMERIC(12,2) NOT NULL,
     beschreibung VARCHAR(500) NOT NULL,
     art VARCHAR(10) NOT NULL,
+    kategorie_id INTEGER REFERENCES kategorien(id),
     immutable BOOLEAN NOT NULL DEFAULT 0
 );
 /* kassenbuch wird durch Migration 17 zu journal umbenannt */

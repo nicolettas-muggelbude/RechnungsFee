@@ -15,6 +15,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-shell": "^2.3.6",
     "@tauri-apps/plugin-updater": "^2.10.0",
     "material-symbols": "^0.45.5",
     "react": "^19.2.0",

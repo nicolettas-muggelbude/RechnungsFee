@@ -78,7 +78,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 152` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 154` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -293,6 +293,8 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 150 | unternehmen.profilmanager_aktiv BOOLEAN DEFAULT 0 – Menüpunkt „Profile" (v0.6.0) ist jetzt standardmäßig ausgeblendet und über Einstellungen → Unternehmen → Funktionen aktivierbar; bleibt unabhängig vom Schalter sichtbar sobald mehr als ein Profil existiert (v0.6.1) |
 | 151 | Issue #368: unternehmen.schlusstext + je 2 Spalten (einleitungstext_X/schlusstext_X) für angebot/auftrag/proforma/lieferschein (9 neue Spalten); rechnungen.schlusstext – getrennte Standard-Einleitungs-/Schlusstexte je Dokumenttyp statt eines einzigen globalen Texts für alle; `_standardtext()` (utils/pdf_rechnung_base.py) löst pro Dokumenttyp auf, ohne Cross-Fallback auf den Rechnung-Text bei leerem Feld |
 | 152 | Datenfix (Nutzer-Feedback): Nummernkreis-Format für Angebot/Auftrag/Proforma/Stornorechnung war seit Einführung (Migration 55/59/60/90) fälschlich `...-JJNNNN` statt `...-YY####` – `_belegnr_aus_format()` (api/journal.py) kennt nur YYYY/YY/MM/TT/#, wodurch diese vier Dokumenttypen buchstäblich die unveränderte Formatvorlage als „Nummer" bekamen (z. B. „ANG-JJNNNN" statt „ANG-260007"); betrifft nur künftige Nummern, bereits ausgestellte Belegnummern bleiben unverändert (GoBD). Zusatzfund: `nummernkreise.aktiv` ist NOT NULL ohne DB-seitigen Default (nur Python-seitig im Modell) – auf einer brandneuen DB (create_all() legt die Spalte sofort im Vollschema an) schlug die rohe INSERT-Migration für Angebot/Auftrag dadurch still fehl (INSERT OR IGNORE); `database/seed.py` `seed_nummernkreise()` sichert beide jetzt zusätzlich über die ORM ab (korrekter Python-Default) |
+| 153 | Issue #375: kategorien.ust_sonderfall TEXT (persistente Sonderfall-Kennung ig_erwerb\|13b_abs1\|13b_abs2\|einfuhr_ust, Quelle der Wahrheit statt reiner Konto-Heuristik – überlebt eine spätere Kontoanpassung per user_modified_skr03/04); Backfill über den Kategorienamen für die fünf bekannten Sonderfall-Kategorien; „Drittland-Dienstleistungen (§13b Abs. 1)" umbenannt in „... (§13b Abs. 2)" (Drittland-Anbieter fallen rechtlich nicht unter Abs. 1, das gilt nur für EU-Lieferanten) + Beschreibung korrigiert (KZ 46/47→84/85); bereits gebuchte journal-/vorsteuer_ansprueche-Altbelege auf dieser Kategorie rückwirkend auf 13b_abs2 korrigiert. Zusatzfund: `protect_vorsteuer_ansprueche_update/_delete`-Trigger fehlten in der Drop-Liste von `_run_migrations()` (nur `protect_journal_*`/`protect_tagesabschluesse_*` standen dort) – jede künftige Migration mit UPDATE auf eine bereits immutable vorsteuer_ansprueche-Zeile wäre auf Bestandsinstallationen mit „GoBD-Verstoß" abgestürzt (identisches Muster wie Issue #268, nur für eine Tabelle die diese Absicherung nie bekommen hatte); jetzt ergänzt |
+| 154 | Issue #147: unternehmen.thunderbird_aktiv BOOLEAN DEFAULT 0 – Thunderbird als dritte Mailversand-Option (bisher nur Rechnungen), hat Vorrang vor smtp_aktiv wenn gesetzt |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

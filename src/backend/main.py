@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 152
+SCHEMA_VERSION = 154
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -433,6 +433,12 @@ def _run_migrations() -> None:
             "protect_journal_delete",
             "protect_tagesabschluesse_update",
             "protect_tagesabschluesse_delete",
+            # Issue #375: fehlten hier bisher - jede Migration, die eine bereits immutable
+            # vorsteuer_ansprueche-Zeile per UPDATE korrigieren muss, waere auf jeder
+            # Bestandsinstallation am eigenen Trigger aus dem vorherigen App-Start gescheitert
+            # (identisches Muster wie beim journal-Trigger oben, Issue #268-Folgefehler).
+            "protect_vorsteuer_ansprueche_update",
+            "protect_vorsteuer_ansprueche_delete",
         ]:
             conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
         conn.commit()
@@ -3272,6 +3278,74 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 152 (Datenfix: Nummernkreis-Format JJNNNN -> YY#### für Angebot/Auftrag/Proforma/Stornorechnung)")
 
+        if version < 153:
+            # Issue #375: kategorien.ust_sonderfall - persistente Sonderfall-Kennung als Quelle
+            # der Wahrheit fuer Reverse-Charge-Klassifizierung (ig_erwerb|13b_abs1|13b_abs2|
+            # einfuhr_ust), unabhaengig vom SKR-Konto der Kategorie. Bisher wurde der Sonderfall
+            # ausschliesslich aus dem AKTUELLEN konto_skr03/04 der Kategorie abgeleitet - aendert
+            # eine Nutzerin das Konto ueber user_modified_skr03/04 (ein explizit unterstuetztes
+            # Feature), brach die gesamte Sonderfall-Behandlung lautlos weg (falsche Netto/USt-
+            # Aufteilung, falsche/fehlende UStVA-Kennziffer, Vorsteuer faellt auf KZ 66 zurueck).
+            cols153 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if "ust_sonderfall" not in cols153:
+                conn.execute(text("ALTER TABLE kategorien ADD COLUMN ust_sonderfall TEXT"))
+
+            # Backfill ueber den NAMEN (nicht das aktuelle Konto) - genau das macht die
+            # Erkennung robust gegen eine bereits erfolgte Kontoanpassung.
+            _sonderfall_namen = {
+                "Wareneinkauf EU": "ig_erwerb",
+                "EU-Dienstleistungen (§13b Abs. 1)": "13b_abs1",
+                "Drittland-Dienstleistungen (§13b Abs. 1)": "13b_abs2",
+                "Bauleistungen / §13b Abs. 2": "13b_abs2",
+                "Einfuhrumsatzsteuer (Zoll/DHL)": "einfuhr_ust",
+            }
+            for _name, _sf in _sonderfall_namen.items():
+                conn.execute(
+                    text("UPDATE kategorien SET ust_sonderfall = :sf WHERE name = :name AND ust_sonderfall IS NULL"),
+                    {"sf": _sf, "name": _name},
+                )
+
+            # Datenfix: "Drittland-Dienstleistungen" ist §13b Abs. 2 (Empfaenger im Ausland,
+            # nicht im uebrigen Gemeinschaftsgebiet ansaessig), NICHT Abs. 1 (das gilt nur fuer
+            # EU-Lieferanten) - Name und Beschreibung waren seit Einfuehrung der Kategorie falsch
+            # beschriftet, und ihr Konto (3125/5925) lief im Code bisher faelschlich im selben
+            # Zweig wie die echte Abs.-1-Kategorie "EU-Dienstleistungen" mit (siehe Korrektur in
+            # api/rechnungen.py::_klassifiziere_sonderfall() und api/journal.py::_felder_aus_data()).
+            conn.execute(text("""
+                UPDATE kategorien SET
+                    name = 'Drittland-Dienstleistungen (§13b Abs. 2)',
+                    beschreibung = 'z. B. Anthropic/Claude, OpenAI, andere US-SaaS-Anbieter. Reverse Charge: Du schuldest die USt (KZ 84/85) und kannst sie als Vorsteuer (KZ 67) abziehen. Rechnungsbetrag = Nettobetrag.'
+                WHERE name = 'Drittland-Dienstleistungen (§13b Abs. 1)'
+            """))
+
+            # Bereits gebuchte Alt-Belege auf dieser Kategorie rueckwirkend korrigieren, damit
+            # sie in der UStVA-Anzeigehilfe ab sofort in KZ 84/85 statt KZ 46/47 erscheinen -
+            # gleiches Muster wie fruehere Datenfix-Migrationen (z.B. 124/125/146). Die Trigger
+            # protect_journal_* / protect_vorsteuer_ansprueche_* wurden oben bereits gedroppt.
+            conn.execute(text("""
+                UPDATE journal SET ust_sonderfall = '13b_abs2'
+                WHERE ust_sonderfall = '13b_abs1'
+                AND kategorie_id IN (SELECT id FROM kategorien WHERE name = 'Drittland-Dienstleistungen (§13b Abs. 2)')
+            """))
+            conn.execute(text("""
+                UPDATE vorsteuer_ansprueche SET ust_sonderfall = '13b_abs2'
+                WHERE ust_sonderfall = '13b_abs1'
+                AND kategorie_id IN (SELECT id FROM kategorien WHERE name = 'Drittland-Dienstleistungen (§13b Abs. 2)')
+            """))
+
+            conn.execute(text("PRAGMA user_version = 153"))
+            conn.commit()
+            print("[Migration] Schema auf Version 153 (Issue #375: kategorien.ust_sonderfall persistent, Drittland-Dienstleistungen §13b Abs.1 -> Abs.2 korrigiert)")
+
+        if version < 154:
+            # Issue #147: Thunderbird als dritte Mailversand-Option (bisher nur Rechnungen).
+            cols154 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "thunderbird_aktiv" not in cols154:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN thunderbird_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 154"))
+            conn.commit()
+            print("[Migration] Schema auf Version 154 (Issue #147: unternehmen.thunderbird_aktiv)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -3387,7 +3461,7 @@ def _migrate_kategorien() -> None:
             {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
             {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
-            {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "ig_erwerb"},
             # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige
             # USt-IdNr beim Verkäufer voraus. Ohne USt-IdNr stellt der Verkäufer brutto mit
             # ausländischer USt - in Deutschland nicht abziehbar. Bewusst NICHT Konto 3425.
@@ -3476,22 +3550,23 @@ def _migrate_kategorien() -> None:
             # euer_zeile=60 (Sonstige Betriebsausgaben) - Dienstleistung, keine Ware (Zeile 27
             # ist Waren/Rohstoffe/Hilfsstoffe); analog zu "Bauleistungen / §13b Abs. 2" unten
             # (Issue #340, war fälschlich 27).
-            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            # §13b Abs. 1 – Drittland-Dienstleistungen (z.B. Anthropic/Claude, OpenAI, US-SaaS)
-            # Gleicher Reverse-Charge-Mechanismus + gleiche UStVA-KZ (46/47/67) wie bei der
-            # EU-Variante - das amtliche Formular unterscheidet hier nicht zwischen EU- und
-            # Drittland-Anbietern, nur der DATEV-Kontenrahmen führt getrennte Sachkonten.
-            # Konto = DATEV-Automatikkonto "Leistungen eines im Ausland ansässigen Unternehmers
-            # 19% VSt/USt" (gegengeprüft am DATEV-Kontenrahmen, Pendant zu 3123/5923)
-            # euer_zeile=60 (Sonstige Betriebsausgaben) - Dienstleistung, keine Ware (Issue #340,
-            # war fälschlich 27, siehe Kommentar bei der EU-Variante oben).
-            {"name": "Drittland-Dienstleistungen (§13b Abs. 1)", "kontenart": "Aufwand", "konto_skr03": "3125", "konto_skr04": "5925", "eks_kategorie": "B1", "euer_zeile": 60, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
-             "beschreibung": "z. B. Anthropic/Claude, OpenAI, andere US-SaaS-Anbieter. Reverse Charge: Du schuldest die USt (KZ 46/47) und kannst sie als Vorsteuer (KZ 67) abziehen. Rechnungsbetrag = Nettobetrag."},
+            {"name": "EU-Dienstleistungen (§13b Abs. 1)",    "kontenart": "Aufwand", "konto_skr03": "3123", "konto_skr04": "5923", "eks_kategorie": "B1",    "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "13b_abs1"},
+            # §13b Abs. 2 Nr. 1 – Drittland-Dienstleistungen (z.B. Anthropic/Claude, OpenAI, US-SaaS)
+            # WICHTIG (Issue #375, war vorher fälschlich als "§13b Abs. 1" benannt und mit KZ
+            # 46/47 beschrieben): §13b Abs. 1 gilt NUR für im übrigen Gemeinschaftsgebiet (EU)
+            # ansässige Unternehmer. Ein Drittland-Anbieter (USA etc.) fällt unter Abs. 2 Nr. 1
+            # ("Werklieferungen und sonstige Leistungen eines im Ausland ansässigen Unternehmers")
+            # -> KZ 84/85, nicht KZ 46/47. Konto = DATEV-Automatikkonto "Leistungen eines im
+            # Ausland ansässigen Unternehmers 19% VSt/USt" (gegengeprüft am DATEV-Kontenrahmen,
+            # Pendant zu 3123/5923). euer_zeile=60 (Sonstige Betriebsausgaben) - Dienstleistung,
+            # keine Ware (Issue #340, war fälschlich 27, siehe Kommentar bei der EU-Variante oben).
+            {"name": "Drittland-Dienstleistungen (§13b Abs. 2)", "kontenart": "Aufwand", "konto_skr03": "3125", "konto_skr04": "5925", "eks_kategorie": "B1", "euer_zeile": 60, "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "13b_abs2",
+             "beschreibung": "z. B. Anthropic/Claude, OpenAI, andere US-SaaS-Anbieter. Reverse Charge: Du schuldest die USt (KZ 84/85) und kannst sie als Vorsteuer (KZ 67) abziehen. Rechnungsbetrag = Nettobetrag."},
             # §13b Abs. 2 – Bauleistungen, Gebäudereinigung, Sicherheit, Metallieferungen aus Inland/EU
             # Reverse Charge: Empfänger schuldet USt (KZ 84/85); Vorsteuer KZ 67; Rechnungsbetrag = Netto
             # Konto = DATEV-Automatikkonto "Bauleistungen eines im Inland ansässigen Unternehmers
             # 19% VSt/USt" (Issue #308, gegengeprüft am DATEV-Kontenrahmen)
-            {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3120", "konto_skr04": "5920", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3120", "konto_skr04": "5920", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "13b_abs2"},
             # §25a Differenzbesteuerung – Ankauf von Privatpersonen oder anderen ohne USt-Ausweis
             # Keine Vorsteuer abziehbar; EK-Preis ist Basis für Margenberechnung (VK − EK)
             {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -3506,7 +3581,7 @@ def _migrate_kategorien() -> None:
              "beschreibung": "z. B. Alibaba-Direktkauf beim Hersteller – keine USt auf der Rechnung. Kommt später eine DHL-Nachforderung, diese getrennt über 'Zoll / Einfuhrabgaben' bzw. 'Einfuhrumsatzsteuer' buchen."},
             {"name": "Zoll / Einfuhrabgaben", "kontenart": "Aufwand", "konto_skr03": "3850", "konto_skr04": "5840", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "Zollanteil einer DHL-Nachforderung – nicht als Vorsteuer abziehbar, reine Wareneinkaufs-Nebenkosten. Bei Kleinsendungen bis 150 € meist 0 €."},
-            {"name": "Einfuhrumsatzsteuer (Zoll/DHL)", "kontenart": "Aufwand", "konto_skr03": "1588", "konto_skr04": "1433", "eks_kategorie": None, "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 0,
+            {"name": "Einfuhrumsatzsteuer (Zoll/DHL)", "kontenart": "Aufwand", "konto_skr03": "1588", "konto_skr04": "1433", "eks_kategorie": None, "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 0, "ust_sonderfall": "einfuhr_ust",
              "beschreibung": "EUSt-Anteil einer DHL-Nachforderung – zu 100 % als Vorsteuer abziehbar (§15 Abs. 1 Nr. 2 UStG, KZ 62). Vollen von DHL verlangten EUSt-Betrag eintragen, keine Aufteilung nötig."},
         ]
         for data in neue:

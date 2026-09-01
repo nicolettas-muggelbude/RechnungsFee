@@ -28,6 +28,8 @@ import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { ArtikelFormModal } from '../artikel/ArtikelPage'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
+import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
@@ -1050,6 +1052,8 @@ function RechnungDetail({
   const [mailAdresse, setMailAdresse] = useState('')
   const [zeigMailDialog, setZeigMailDialog] = useState(false)
   const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
+  const [zeigThunderbirdHinweis, setZeigThunderbirdHinweis] = useState(false)
+  const [thunderbirdLaeuft, setThunderbirdLaeuft] = useState(false)
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
   const [pdfHinweis, setPdfHinweis] = useState(false)
   const [belegFehler, setBelegFehler] = useState<string | null>(null)
@@ -1265,22 +1269,9 @@ function RechnungDetail({
     }
   }
 
-  async function handleMail() {
-    if (unternehmen?.smtp_aktiv) { setZeigMailDialog(true); return }
-    const email = partnerEmail || mailAdresse.trim()
-    if (!email) { setZeigMailEingabe(true); return }
-
-    setPdfLaeuft(true)
-    setPdfHinweis(false)
-    try {
-      await downloadPdfForMail(rechnung.id)
-      setPdfHinweis(true)
-      qc.invalidateQueries({ queryKey: ['rechnungen'] })
-    } finally {
-      setPdfLaeuft(false)
-    }
-
-    // Platzhalter-Werte bestimmen
+  /** Betreff/Text aus der hinterlegten Vorlage bzw. Fallback berechnen - von mailto- und
+   *  Thunderbird-Versand gleichermaßen genutzt. */
+  function berechneBetreffUndText(): { subjectText: string; bodyText: string } {
     const datumDe = rechnung.datum.split('-').reverse().join('.')
     const faelligDe = rechnung.faellig_am ? rechnung.faellig_am.split('-').reverse().join('.') : '—'
     const kundeName = rechnung.kunde_name ?? rechnung.lieferant_name ?? rechnung.partner_freitext ?? ''
@@ -1296,20 +1287,64 @@ function RechnungDetail({
         .replace(/\{firmenname\}/g, firmenname)
     }
 
-    // Betreff aus Vorlage oder Fallback
     const betreffVorlage = unternehmen?.mail_betreff_vorlage ?? 'Rechnung {rechnungsnummer}'
     const subjectText = ersetze(betreffVorlage)
 
-    // Text aus Vorlage oder Fallback
     const standardText = `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
     const textVorlage = unternehmen?.mail_text_vorlage ?? standardText
     let bodyText = ersetze(textVorlage)
-
-    // Signatur anhängen
     if (unternehmen?.mail_signatur) {
       bodyText += `\n\n${unternehmen.mail_signatur}`
     }
+    return { subjectText, bodyText }
+  }
 
+  async function handleMail() {
+    if (unternehmen?.thunderbird_aktiv) {
+      const email = partnerEmail || mailAdresse.trim()
+      if (!email) { setZeigMailEingabe(true); return }
+
+      setThunderbirdLaeuft(true)
+      setZeigThunderbirdHinweis(false)
+      try {
+        const base = await getApiBase()
+        const { subjectText, bodyText } = berechneBetreffUndText()
+        await sendeUeberThunderbird({
+          an: email,
+          betreff: subjectText,
+          text: bodyText,
+          anhaenge: [{
+            url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
+            dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
+          }],
+        })
+        qc.invalidateQueries({ queryKey: ['rechnungen'] })
+        setZeigMailEingabe(false)
+        setMailAdresse('')
+      } catch (e) {
+        if (e instanceof ThunderbirdNichtGefundenError) setZeigThunderbirdHinweis(true)
+        else setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+      } finally {
+        setThunderbirdLaeuft(false)
+      }
+      return
+    }
+
+    if (unternehmen?.smtp_aktiv) { setZeigMailDialog(true); return }
+    const email = partnerEmail || mailAdresse.trim()
+    if (!email) { setZeigMailEingabe(true); return }
+
+    setPdfLaeuft(true)
+    setPdfHinweis(false)
+    try {
+      await downloadPdfForMail(rechnung.id)
+      setPdfHinweis(true)
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    } finally {
+      setPdfLaeuft(false)
+    }
+
+    const { subjectText, bodyText } = berechneBetreffUndText()
     const subject = encodeURIComponent(subjectText)
     const body    = encodeURIComponent(bodyText)
     const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
@@ -1364,10 +1399,10 @@ function RechnungDetail({
               )}
               <button
                 onClick={handleMail}
-                disabled={pdfLaeuft}
+                disabled={pdfLaeuft || thunderbirdLaeuft}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50"
               >
-                {pdfLaeuft ? '⏳ PDF…' : rechnung.storniert ? `✉️ Stornorechnung senden${!partnerEmail ? ' …' : ''}` : rechnung.ausgegeben ? `✉️ Kopie senden${!partnerEmail ? ' …' : ''}` : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
+                {pdfLaeuft ? '⏳ PDF…' : thunderbirdLaeuft ? '⏳ Thunderbird…' : rechnung.storniert ? `✉️ Stornorechnung senden${!partnerEmail ? ' …' : ''}` : rechnung.ausgegeben ? `✉️ Kopie senden${!partnerEmail ? ' …' : ''}` : `✉️ Mail senden${!partnerEmail ? ' …' : ''}`}
               </button>
             </>
           )}
@@ -1477,6 +1512,10 @@ function RechnungDetail({
             <span>{fehler}</span>
             <button onClick={() => setFehler(null)} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300">×</button>
           </div>
+        )}
+
+        {zeigThunderbirdHinweis && (
+          <ThunderbirdInstallHinweis onClose={() => setZeigThunderbirdHinweis(false)} />
         )}
 
         {zeigSmtpHinweis && (
@@ -1643,6 +1682,14 @@ function RechnungDetail({
                   !rechnung.positionen.every((p) => p.kategorie_id != null)
                 if (kategorieFehlt && !window.confirm(
                   'Für mindestens eine Position ist keine Kategorie gesetzt. Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht dafür eine Kategorie – ohne sie taucht diese Rechnung nicht in der UStVA auf, und eine finalisierte Rechnung lässt sich nachträglich nicht mehr ändern.\n\nTrotzdem jetzt finalisieren?'
+                )) return
+                // §14 Abs. 4 UStG: Steuernummer ODER USt-IdNr. ist Pflichtangabe auf einer
+                // Ausgangsrechnung. Bewusst kein Pflichtfeld im Setup (Issue #376 – kann bei
+                // Neugründung Wochen dauern), aber ein Hinweis genau hier, wo es konkret wird.
+                const steuerIdFehlt = rechnung.typ === 'ausgang' &&
+                  !unternehmen?.steuernummer?.trim() && !unternehmen?.ust_idnr?.trim()
+                if (steuerIdFehlt && !window.confirm(
+                  'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
                 )) return
                 finalisiereMutation.mutate()
               }}
@@ -3031,6 +3078,14 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         positionen.some((p) => p.beschreibung.trim() && !p.kategorie_id)) {
       if (!window.confirm(
         'Für mindestens eine Position ist keine Kategorie gesetzt. Die Vorsteuer wird bereits mit dem Rechnungsdatum geltend gemacht und braucht dafür eine Kategorie – ohne sie taucht diese Rechnung nicht in der UStVA auf, und eine finalisierte Rechnung lässt sich nachträglich nicht mehr ändern.\n\nTrotzdem jetzt finalisieren?'
+      )) return
+    }
+    // §14 Abs. 4 UStG: Steuernummer ODER USt-IdNr. ist Pflichtangabe auf einer Ausgangsrechnung
+    // (Issue #376 – bewusst kein Pflichtfeld im Setup, da das bei Neugründung Wochen dauern kann).
+    if (!istEntwurf && typ === 'ausgang' &&
+        !unternehmen?.steuernummer?.trim() && !unternehmen?.ust_idnr?.trim()) {
+      if (!window.confirm(
+        'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
       )) return
     }
     onSave(buildData(istEntwurf))

@@ -239,16 +239,27 @@ def _klassifiziere_sonderfall(
     Issue #338) garantiert identisch klassifizieren - siehe Issue #315/#326 im Code, wie leicht
     das bei dupliziertem Code auseinanderläuft.
 
+    Reihenfolge (Issue #375): kat.ust_sonderfall (persistente Kategorie-Kennung) hat Vorrang -
+    sie bleibt korrekt, auch wenn das SKR-Konto der Kategorie per user_modified_skr03/04 später
+    auf einen anderen Wert geändert wird. Die Konto-Heuristik darunter ist nur noch der Fallback
+    für Kategorien ohne gesetztes ust_sonderfall (z.B. selbst angelegte).
+
     WICHTIG: SKR03- und SKR04-Konto GETRENNT prüfen (nicht als gemeinsames Tupel) - Kontonummern
     sind zwischen den beiden Kontenrahmen nicht eindeutig (Issue #326).
     """
     skr03_kat = kat.konto_skr03 if kat else None
     skr04_kat = kat.konto_skr04 if kat else None
-    if skr03_kat == "3425" or skr04_kat == "5425":
+    if kat and kat.ust_sonderfall:
+        sonderfall = kat.ust_sonderfall
+    elif skr03_kat == "3425" or skr04_kat == "5425":
         sonderfall = "ig_erwerb"
-    elif skr03_kat in ("3123", "3125") or skr04_kat in ("5923", "5925"):
+    elif skr03_kat == "3123" or skr04_kat == "5923":
         sonderfall = "13b_abs1"
-    elif skr03_kat == "3120" or skr04_kat == "5920":
+    elif skr03_kat in ("3120", "3125") or skr04_kat in ("5920", "5925"):
+        # 3120/5920 (Bauleistungen) UND 3125/5925 (Drittland-Dienstleistungen) sind beides
+        # §13b Abs. 2 Nr. 1-Faelle (Empfaenger im Ausland ansaessig, nicht im uebrigen
+        # Gemeinschaftsgebiet) -> KZ 84/85, nicht KZ 46/47 (Issue #375: 3125/5925 liefen
+        # bisher faelschlich im 13b_abs1-Zweig mit).
         sonderfall = "13b_abs2"
     elif skr03_kat == "1588" or skr04_kat == "1433":
         sonderfall = "einfuhr_ust"

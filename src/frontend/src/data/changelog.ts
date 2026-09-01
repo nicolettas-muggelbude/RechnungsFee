@@ -23,6 +23,17 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.5',
+    datum: 'August 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Eingangsrechnungen mit der Kategorie „Drittland-Dienstleistungen" (z. B. Anthropic/Claude, OpenAI) erschienen fälschlich in KZ 46/47 der UStVA statt korrekt in KZ 84/85 – §13b Abs. 1 gilt gesetzlich nur für Anbieter aus der EU, ein Drittland-Anbieter fällt unter Abs. 2. Kategorie entsprechend umbenannt in „... (§13b Abs. 2)"; bereits gebuchte Altbelege werden automatisch korrigiert. Danke an UweKoslowski für den präzisen Report (Issue #375).' },
+      { typ: 'verbesserung', text: 'Reverse-Charge-Erkennung (ig. Erwerb, §13b) hängt nicht mehr ausschließlich am hinterlegten SKR-Konto einer Kategorie, sondern zusätzlich an einer festen, kontounabhängigen Kennung – ein späteres Anpassen des Kontos kann die Sonderfall-Behandlung dadurch nicht mehr versehentlich außer Kraft setzen.' },
+      { typ: 'fix', text: 'Eine per Bank-Import automatisch verbuchte Zahlung auf eine §13b-Eingangsrechnung (EU-/Drittland-Dienstleistungen, Bauleistungen) erhielt weder die korrekte Netto-/USt-Aufteilung noch eine UStVA-Kennziffer – nur die manuelle Zahlungserfassung war davon nicht betroffen.' },
+      { typ: 'verbesserung', text: 'Steuernummer ist im Setup-Assistenten kein Pflichtfeld mehr – bei einer Neugründung kann die Vergabe durch das Finanzamt Wochen dauern, bisher war die Einrichtung ohne (oft frei erfundene) Steuernummer nicht abschließbar. Fehlen beim Finalisieren einer Ausgangsrechnung sowohl Steuernummer als auch USt-IdNr., weist RechnungsFee stattdessen einmalig darauf hin (§14 Abs. 4 UStG), lässt sich aber bewusst übergehen. Danke an Peter1061 für den Vorschlag (Issue #376).' },
+      { typ: 'neu', text: 'Thunderbird als Alternative zu SMTP beim Versand von Rechnungen: Wer keine SMTP-Zugangsdaten in RechnungsFee hinterlegen möchte, kann stattdessen ein vorausgefülltes Thunderbird-Compose-Fenster öffnen lassen – Empfänger, Betreff, Text und PDF-Anhang sind schon dabei, den eigentlichen Versand (inkl. eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird unverändert. Aktivierbar unter Einstellungen → Unternehmen → E-Mail, hat dann Vorrang vor SMTP. Bisher nur für Rechnungen (Issue #147).' },
+    ],
+  },
+  {
     version: 'v0.6.4',
     datum: 'August 2026',
     eintraege: [

@@ -39,7 +39,8 @@ from utils.mahngebuehr_verrechnung import verrechne_mahngebuehren
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
-    _erstelle_skonto_eintrag, _kette_gruppe_id, _partner_name, _ust_konto, _verteile_nach_satz,
+    _erstelle_skonto_eintrag, _kette_gruppe_id, _klassifiziere_sonderfall, _partner_name, _ust_konto,
+    _verteile_nach_satz,
 )
 from .schemas import JournalEintragCreate
 
@@ -528,13 +529,29 @@ def _buche_pfad_a(
             g_kat_id, g_kat_obj = kat_id, kat
             g_marge = _marge_25a_gesamt if _marge_25a_gesamt > 0 else None
 
+        # Sonderfall-Klassifizierung (Issue #375): bisher pruefte dieser Pfad nur das
+        # Ausgangsrechnungs-Flag rechnung.ist_reverse_charge - Eingangsrechnungen mit einer
+        # §13b/ig.-Erwerb-Kategorie (EU-/Drittland-Dienstleistungen, Bauleistungen,
+        # Wareneinkauf EU) bekamen dadurch bei einer per Bank-Import automatisch verbuchten
+        # Zahlung NIE die additive Netto/USt-Aufteilung und NIE die passende UStVA-Kennziffer.
+        # "and art == 'Ausgabe'" (analog zum #372-Fix in rechnungen.py::_erstelle_eintrag()):
+        # ist_reverse_charge kennzeichnet bei Ausgangsrechnungen eine nicht steuerbare
+        # EU-/Drittland-Dienstleistung (KZ 21/45, siehe _berechne_kz() in ustva.py) - keinesfalls
+        # den §13b-Abs.1-Fall (wir schulden USt als Leistungsempfaenger).
+        g_sonderfall, g_ust03, g_ust04 = _klassifiziere_sonderfall(
+            g_kat_obj, rechnung.ist_reverse_charge and art == "Ausgabe", g_satz, g_ust_skr03, g_ust_skr04
+        )
+
         if g_satz > 0:
             if g_marge is not None:
                 g_ust = (g_marge * g_satz / (100 + g_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 g_netto = (g_betrag - g_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            elif rechnung.ist_reverse_charge:
-                # Reverse Charge (§13b): der Zahlbetrag IST bereits der Nettobetrag - der
-                # auslaendische Lieferant weist keine deutsche USt aus. USt wird additiv
+            elif g_sonderfall == "einfuhr_ust":
+                # Einfuhrumsatzsteuer: der Zahlbetrag IST bereits die Steuer, kein Netto-Anteil.
+                g_netto, g_ust = Decimal("0.00"), g_betrag
+            elif g_sonderfall:
+                # Reverse Charge (ig. Erwerb/§13b): der Zahlbetrag IST bereits der Nettobetrag -
+                # der auslaendische Lieferant weist keine deutsche USt aus. USt wird additiv
                 # aufgeschlagen statt aus dem Zahlbetrag herausgerechnet zu werden, analog
                 # zu rechnungen.py._erstelle_eintrag() (Issue #339-Folgefund).
                 g_netto = g_betrag
@@ -563,22 +580,22 @@ def _buche_pfad_a(
             kategorie_id=g_kat_id,
             konto_skr03=g_kat_obj.konto_skr03 if g_kat_obj else None,
             konto_skr04=g_kat_obj.konto_skr04 if g_kat_obj else None,
-            konto_ust_skr03=g_ust_skr03,
-            konto_ust_skr04=g_ust_skr04,
+            konto_ust_skr03=g_ust03,
+            konto_ust_skr04=g_ust04,
             zahlungsart="Bank",
             art=art,
             netto_betrag=g_netto,
             ust_satz=g_satz,
             ust_betrag=g_ust,
             marge_25a_brutto=g_marge,
-            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, g_kat_obj, bool(rechnung.ist_reverse_charge)),
+            vorsteuer_betrag=_berechne_vorsteuer(g_ust, g_vst_abzug, g_kat_obj, bool(g_sonderfall)),
             brutto_betrag=g_betrag,
             vorsteuerabzug=g_vst_abzug,
             steuerbefreiung_grund=steuerbefreiung_grund,
             rechnung_id=rechnung.id,
             gruppe_id=_gruppe_id_kette,
             konto_id=tx.konto_id,
-            ust_sonderfall="13b_abs1" if rechnung.ist_reverse_charge else None,
+            ust_sonderfall=g_sonderfall,
             immutable=True,
         )
         e.signatur = signatur_journaleintrag(e)

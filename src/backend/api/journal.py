@@ -336,18 +336,27 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
         if (kat.konto_skr03 == "8125" or kat.konto_skr04 == "3125") and not steuerbefreiung_grund:
             steuerbefreiung_grund = "§4 Nr. 1b UStG"
         if not data.ust_sonderfall and not data.ist_ig_erwerb:
+            # Vorrang (Issue #375): kat.ust_sonderfall ist die persistente Kategorie-Kennung,
+            # bleibt korrekt auch wenn das SKR-Konto spaeter per user_modified_skr03/04
+            # geaendert wird. Konto-Heuristik darunter nur Fallback fuer Kategorien ohne
+            # gesetztes ust_sonderfall.
+            #
             # WICHTIG: SKR03- und SKR04-Konto je Kategorie GETRENNT prüfen (nicht als
             # gemeinsames Tupel) - Kontonummern sind zwischen den beiden Kontenrahmen nicht
             # eindeutig. Z.B. hat "Innergemeinschaftliche Lieferungen" konto_skr04="3125",
-            # während "Drittland-Dienstleistungen (§13b Abs. 1)" konto_skr03="3125" hat - eine
+            # während "Drittland-Dienstleistungen (§13b Abs. 2)" konto_skr03="3125" hat - eine
             # gemischte Prüfung "3125" in (skr03, skr04) trifft auf beide Kategorien zu und
             # stufte ig. Lieferungen faelschlich als 13b_abs1 ein (KZ 46 statt KZ 41 in der
             # USt-VA, Issue #326).
-            if kat.konto_skr03 == "3425" or kat.konto_skr04 == "5425":
+            if kat.ust_sonderfall:
+                data = data.model_copy(update={"ust_sonderfall": kat.ust_sonderfall})
+            elif kat.konto_skr03 == "3425" or kat.konto_skr04 == "5425":
                 data = data.model_copy(update={"ust_sonderfall": "ig_erwerb"})
-            elif kat.konto_skr03 in ("3123", "3125") or kat.konto_skr04 in ("5923", "5925"):
+            elif kat.konto_skr03 == "3123" or kat.konto_skr04 == "5923":
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs1"})
-            elif kat.konto_skr03 == "3120" or kat.konto_skr04 == "5920":
+            elif kat.konto_skr03 in ("3120", "3125") or kat.konto_skr04 in ("5920", "5925"):
+                # 3125/5925 (Drittland-Dienstleistungen) ist §13b Abs. 2, nicht Abs. 1
+                # (Issue #375) - analog zur Korrektur in rechnungen.py::_klassifiziere_sonderfall().
                 data = data.model_copy(update={"ust_sonderfall": "13b_abs2"})
             elif kat.konto_skr03 == "1588" or kat.konto_skr04 == "1433":
                 data = data.model_copy(update={"ust_sonderfall": "einfuhr_ust"})

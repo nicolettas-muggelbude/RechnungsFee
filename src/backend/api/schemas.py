@@ -87,6 +87,7 @@ class UnternehmenBase(BaseModel):
     smtp_von_adresse: Optional[str] = None
     smtp_zertifikat_ignorieren: bool = False
     smtp_zertifikat_fingerprint: Optional[str] = None
+    thunderbird_aktiv: bool = False
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
     standard_zahlungsziel: int = 14

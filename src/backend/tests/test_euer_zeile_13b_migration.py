@@ -59,7 +59,9 @@ class TestEuerZeile13bMigration:
         main._run_migrations()
 
         assert get_euer_zeile(db_path, "EU-Dienstleistungen (§13b Abs. 1)") == 60
-        assert get_euer_zeile(db_path, "Drittland-Dienstleistungen (§13b Abs. 1)") == 60
+        # Migration 153 (Issue #375) benennt diese Kategorie zusaetzlich um (§13b Abs. 1 -> Abs. 2,
+        # da Drittland-Anbieter rechtlich nicht unter Abs. 1 fallen) - Nachschlagen unter dem neuen Namen.
+        assert get_euer_zeile(db_path, "Drittland-Dienstleistungen (§13b Abs. 2)") == 60
 
     def test_manuell_abweichende_euer_zeile_bleibt_unangetastet(self, tmp_path, monkeypatch):
         """Guard "WHERE euer_zeile = 27": eine bereits manuell auf einen anderen Wert
@@ -100,4 +102,4 @@ class TestEuerZeile13bMigration:
         main._migrate_kategorien()
 
         assert get_euer_zeile(db_path, "EU-Dienstleistungen (§13b Abs. 1)") == 60
-        assert get_euer_zeile(db_path, "Drittland-Dienstleistungen (§13b Abs. 1)") == 60
+        assert get_euer_zeile(db_path, "Drittland-Dienstleistungen (§13b Abs. 2)") == 60
