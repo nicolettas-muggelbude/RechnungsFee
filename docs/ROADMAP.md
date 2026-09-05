@@ -158,6 +158,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
 - **Offline-Handbuch** – eingebettetes Handbuch direkt in der App (Tauri-Webview oder lokale HTML-Seiten); kein Internetzugang nötig; synchronisiert mit der installierten Version
+- **Eigene PDF-Rechnungsvorlagen hochladen** (Issue #383) – setzt einen Umbau der PDF-Erzeugung von imperativem fpdf2-Zeichnen auf eine echte Template-Engine (z. B. HTML/CSS + Jinja + WeasyPrint) voraus; erst danach ist ein Upload-Feature mit Variablenliste sinnvoll möglich. Bis dahin: Wunschvorlagen werden auf Zuruf einzeln in der bestehenden fpdf2-Struktur nachgebaut.
 
 - **Vollständige BWA: Betriebswirtschaftliche Auswertung** – Erweiterung des Cockpits um Vorjahresvergleich als zweite Spalte (aktueller Monat / Quartal / Jahr vs. Vorjahresperiode), Exportfunktion als PDF im klassischen BWA-Format; für Nutzer die monatlich mit Steuerberater oder Bank kommunizieren (Issue #232)
 

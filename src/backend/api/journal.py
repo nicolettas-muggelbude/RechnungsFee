@@ -735,28 +735,39 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
         if unternehmen and unternehmen.ist_kleinunternehmer:
             ust_satz = Decimal("0")
             steuerbefreiung_grund = "§19 UStG"
-        if pos.kategorie_id:
-            kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first()
-            if kat and kat.kontenart == "Privat":
+        split_kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first() if pos.kategorie_id else None
+        if split_kat:
+            if split_kat.kontenart == "Privat":
                 ust_satz = Decimal("0")
                 vorsteuerabzug = False
                 if not steuerbefreiung_grund:
                     steuerbefreiung_grund = "Privatbuchung"
-            if kat and kat.konto_skr03 in ("8125", "3125") and not steuerbefreiung_grund:
+            if (split_kat.konto_skr03 == "8125" or split_kat.konto_skr04 == "3125") and not steuerbefreiung_grund:
                 steuerbefreiung_grund = "§4 Nr. 1b UStG"
         pos_sf = pos.ust_sonderfall or ("ig_erwerb" if pos.ist_ig_erwerb else None)
-        if not pos_sf and pos.kategorie_id:
-            _sf_kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first()
-            if _sf_kat:
-                _sf_konten = (_sf_kat.konto_skr03, _sf_kat.konto_skr04)
-                if "3425" in _sf_konten or "5425" in _sf_konten:
-                    pos_sf = "ig_erwerb"
-                elif "3123" in _sf_konten or "5923" in _sf_konten:
-                    pos_sf = "13b_abs1"
-                elif "3120" in _sf_konten or "5920" in _sf_konten:
-                    pos_sf = "13b_abs2"
-        split_kat = db.query(Kategorie).filter(Kategorie.id == pos.kategorie_id).first() if pos.kategorie_id else None
-        if pos_sf and ust_satz > 0:
+        if not pos_sf and split_kat:
+            # Reihenfolge/Feldtrennung wie _felder_aus_data() (Issue #375/#326/#384): kat.ust_sonderfall
+            # (persistente Kategorie-Kennung) hat Vorrang, danach SKR03/04 je Feld GETRENNT prüfen -
+            # nicht als gemeinsames Tupel, sonst treffen sich z.B. "Innergemeinschaftliche Lieferungen"
+            # (konto_skr04="3125") und "Drittland-Dienstleistungen (§13b Abs. 2)" (konto_skr03="3125").
+            if split_kat.ust_sonderfall:
+                pos_sf = split_kat.ust_sonderfall
+            elif split_kat.konto_skr03 == "3425" or split_kat.konto_skr04 == "5425":
+                pos_sf = "ig_erwerb"
+            elif split_kat.konto_skr03 == "3123" or split_kat.konto_skr04 == "5923":
+                pos_sf = "13b_abs1"
+            elif split_kat.konto_skr03 in ("3120", "3125") or split_kat.konto_skr04 in ("5920", "5925"):
+                pos_sf = "13b_abs2"
+            elif split_kat.konto_skr03 == "1588" or split_kat.konto_skr04 == "1433":
+                pos_sf = "einfuhr_ust"
+        if pos_sf == "einfuhr_ust":
+            # Einfuhrumsatzsteuer: der eingegebene Betrag IST bereits die Steuer, kein Nettoanteil.
+            ust_satz = Decimal("0")
+            netto = Decimal("0.00")
+            ust_betrag = pos.brutto_betrag
+            brutto_stored = pos.brutto_betrag
+            vorsteuerabzug = True
+        elif pos_sf and ust_satz > 0:
             netto = pos.brutto_betrag
             ust_betrag = (netto * ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
             brutto_stored = netto

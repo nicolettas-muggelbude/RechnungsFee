@@ -180,15 +180,25 @@ export function JournalPage() {
         }),
   })
 
-  // Datum-Sortierung (Issue #357) - Standard "desc" entspricht der bisherigen Backend-
-  // Sortierung (neueste oben); "asc" für den Vergleich mit Kontoauszügen, die chronologisch
-  // aufsteigend sortiert sind. Sekundär nach id sortiert, damit die Reihenfolge bei gleichem
-  // Datum stabil bleibt (spiegelt die Backend-Sortierung Journaleintrag.id.desc()).
-  const [sortDatum, setSortDatum] = useState<'asc' | 'desc'>('desc')
+  // Datum-/Belegdatum-Sortierung (Issue #357, erweitert um Belegdatum in #380) - Standard
+  // "desc" entspricht der bisherigen Backend-Sortierung (neueste oben); "asc" für den
+  // Vergleich mit Kontoauszügen, die chronologisch aufsteigend sortiert sind. Sekundär nach
+  // id sortiert, damit die Reihenfolge bei gleichem Datum stabil bleibt (spiegelt die
+  // Backend-Sortierung Journaleintrag.id.desc()). Buchungen ohne Rechnungsbezug haben kein
+  // eigenes Belegdatum - beim Sortieren nach Belegdatum fällt das auf das Buchungsdatum
+  // zurück, damit sie nicht willkürlich ans Ende/an den Anfang rutschen.
+  const [sortSpalte, setSortSpalte] = useState<'datum' | 'belegdatum'>('datum')
+  const [sortRichtung, setSortRichtung] = useState<'asc' | 'desc'>('desc')
+  function toggleSort(spalte: 'datum' | 'belegdatum') {
+    if (sortSpalte === spalte) setSortRichtung(r => r === 'asc' ? 'desc' : 'asc')
+    else { setSortSpalte(spalte); setSortRichtung('desc') }
+  }
   const eintraegeSortiert = eintraege
     ? [...eintraege].sort((a, b) => {
-        const cmp = a.datum.localeCompare(b.datum)
-        const richtung = sortDatum === 'asc' ? 1 : -1
+        const av = sortSpalte === 'belegdatum' ? (a.rechnung_datum ?? a.datum) : a.datum
+        const bv = sortSpalte === 'belegdatum' ? (b.rechnung_datum ?? b.datum) : b.datum
+        const cmp = av.localeCompare(bv)
+        const richtung = sortRichtung === 'asc' ? 1 : -1
         return cmp !== 0 ? cmp * richtung : (a.id - b.id) * richtung
       })
     : eintraege
@@ -467,10 +477,17 @@ export function JournalPage() {
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
                 <th
                   className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-28 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200"
-                  onClick={() => setSortDatum(s => s === 'asc' ? 'desc' : 'asc')}
-                  title="Nach Datum sortieren"
+                  onClick={() => toggleSort('datum')}
+                  title="Nach Buchungsdatum sortieren"
                 >
-                  Datum {sortDatum === 'asc' ? '↑' : '↓'}
+                  Datum {sortSpalte === 'datum' && (sortRichtung === 'asc' ? '↑' : '↓')}
+                </th>
+                <th
+                  className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-28 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200"
+                  onClick={() => toggleSort('belegdatum')}
+                  title="Nach Belegdatum sortieren (Rechnungsdatum, sofern vorhanden)"
+                >
+                  Belegdatum {sortSpalte === 'belegdatum' && (sortRichtung === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 w-36">Belegnr.</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Beschreibung</th>
@@ -493,6 +510,7 @@ export function JournalPage() {
                     {/* Netto-Zeile */}
                     <tr key={e.id} onClick={() => toggleEintrag(e.id)} className={rowClass}>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{formatDatum(e.datum)}</td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{e.rechnung_datum ? formatDatum(e.rechnung_datum) : '–'}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
                         <span className={`inline-block w-3 text-slate-300 dark:text-slate-600 transition-transform ${istAktiv ? 'rotate-90' : ''}`}>▶</span>
                         {e.belegnr}
@@ -537,6 +555,7 @@ export function JournalPage() {
                     {/* USt-Zeile */}
                     {hatUst && (
                       <tr key={`${e.id}-ust`} onClick={() => toggleEintrag(e.id)} className={rowClass}>
+                        <td className="px-4 py-2 text-slate-400 dark:text-slate-500 text-xs"></td>
                         <td className="px-4 py-2 text-slate-400 dark:text-slate-500 text-xs"></td>
                         <td className="px-4 py-2 font-mono text-xs text-slate-300 dark:text-slate-600">
                           {e.konto_ust_skr03 ?? ''}

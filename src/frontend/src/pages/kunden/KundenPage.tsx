@@ -1187,7 +1187,13 @@ export function KundenPage() {
                               {k.email && (
                                 <div>
                                   <span className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide block mb-1">E-Mail</span>
-                                  <a href={`mailto:${k.email}`} className="text-blue-600 dark:text-blue-400 hover:underline break-all">{k.email}</a>
+                                  <button
+                                    type="button"
+                                    onClick={() => openUrl(`mailto:${k.email}`)}
+                                    className="text-blue-600 dark:text-blue-400 hover:underline break-all text-left"
+                                  >
+                                    {k.email}
+                                  </button>
                                 </div>
                               )}
                               {k.telefon && (

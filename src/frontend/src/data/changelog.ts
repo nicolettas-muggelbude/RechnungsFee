@@ -23,6 +23,22 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.11',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Neues Feld „Bestellnummer des Kunden" bei Ausgangsrechnungen (und Angebot/Auftrag/Proforma/Lieferschein, wandert bei Umwandlung automatisch mit) – erscheint im PDF, sofern ausgefüllt, und wird im ZUGFeRD-Export als Referenzfeld BT-13 abgebildet. Vorschlag von ask4it (Issue #387).' },
+      { typ: 'neu', text: 'Beim Bank-Import-Abgleich lässt sich eine Transaktion jetzt direkt als „Privat" oder „Ignorieren" markieren – hilfreich bei Mischkonten, z. B. für private Buchungen oder interne Umbuchungen zwischen eigenen Konten, die nicht in die Verbuchung übernommen werden sollen. Vorschlag von pstirnberg (Issue #379).' },
+      { typ: 'neu', text: 'Journal: neue Spalte „Belegdatum" zeigt bei rechnungsverknüpften Buchungen das Rechnungsdatum getrennt vom Buchungsdatum – hilfreich wenn Zahlungen rückwirkend erfasst werden. Beide Spalten lassen sich per Klick auf den Spaltenkopf auf-/absteigend sortieren. Vorschlag von pstirnberg (Issue #380).' },
+      { typ: 'fix', text: 'GoBD-Integritätsprüfung meldete bei völlig unveränderten, normal über die Oberfläche angelegten Buchungen teils fälschlich „ungültige Signatur" – Ursache war eine Formatierungs-Inkonsistenz bei Geldbeträgen zwischen frisch erstellten und aus der Datenbank geladenen Buchungen. Zusätzlich sind die GoBD-Schutzmaßnahmen jetzt robuster gegen einen fehlgeschlagenen Start abgesichert. Danke an Jesu3003 für die sehr gründliche Analyse (Issue #384).' },
+      { typ: 'fix', text: 'UStVA-Anzeige berücksichtigte die Kennzahl 62 (Einfuhrumsatzsteuer) bei der angezeigten Zahllast nicht – der PDF-Export war korrekt, die Bildschirmanzeige und der gespeicherte Wert dagegen zu hoch (Issue #384).' },
+      { typ: 'fix', text: 'Kategorie „Drittland-Dienstleistungen (§13b Abs. 2)" wurde im Buchungsformular fälschlich als §13b Abs. 1 vorbelegt und landete dadurch in der falschen UStVA-Kennzahl (Issue #384).' },
+      { typ: 'fix', text: 'Split-Buchungen mit einer Position auf „Drittland-Dienstleistungen (§13b Abs. 2)" bekamen gar keinen steuerlichen Sonderfall zugeordnet und fielen komplett aus der UStVA heraus, zusätzlich wurde fälschlich eine Steuerbefreiung für Ausgangslieferungen gesetzt; dieselbe Verwechslung betraf auch Einfuhrumsatzsteuer-Positionen in Split-Buchungen (Issue #384).' },
+      { typ: 'fix', text: 'E-Rechnungs-Import: Beim Import einer reinen XML-Rechnungsdatei per Drag & Drop (ohne begleitendes PDF) tat der Button „Rechnung erstellen" nichts, ohne jede Fehlermeldung (Issue #384).' },
+      { typ: 'fix', text: 'ZUGFeRD-Export: Ist bei einer Rechnung ein Leistungszeitraum (Von/Bis) hinterlegt, wird er jetzt zusätzlich als Rechnungsperiode (BT-73/BT-74) im XML abgebildet – bisher landete nur ein einzelnes Leistungsdatum im Lieferdatum-Feld, der Zeitraum selbst fehlte komplett. Danke an ask4it für den Hinweis (Issue #383).' },
+      { typ: 'fix', text: 'Klick auf eine Kunden-E-Mail-Adresse (Kundenstammdaten, Journal-Buchungsdetail) zeigte eine weiße Seite mit „The URL can\'t be shown" und ließ die App komplett einfrieren, nur noch per Kill-Befehl zu beenden – die Adresse war ein normaler Link statt der App-eigenen Öffnen-Funktion, wodurch die Desktop-App versuchte, „mailto:..." wie eine normale Webseite im Hauptfenster zu laden. Danke an pstirnberg für den Report (Issue #377).' },
+    ],
+  },
+  {
     version: 'v0.6.10',
     datum: 'September 2026',
     eintraege: [

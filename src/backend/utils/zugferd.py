@@ -147,8 +147,21 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     else:
         doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)
 
+    # BT-13: Bestellnummer des Kunden - Feld bewusst nur bei tatsächlich vorhandenem Wert
+    # setzen, kein Platzhalter wie "keine Referenz" (führt bei Validatoren zu Fehlern, Issue #387).
+    if rechnung.kunden_bestellnummer:
+        doc.trade.agreement.buyer_order.issuer_assigned_id = rechnung.kunden_bestellnummer
+
     # ── Lieferdatum (XRechnung BR-13: Pflicht – Fallback auf Rechnungsdatum) ───
     doc.trade.delivery.event.occurrence._value = rechnung.leistung_von or rechnung.datum
+
+    # ── Leistungszeitraum (BT-73/BT-74: Rechnungsperiode Beginn/Ende) ──────────
+    # Nur bei echtem Zeitraum (beide Felder gesetzt) - ein einzelnes Leistungsdatum
+    # ohne leistung_bis ist bereits oben als Lieferdatum (BT-72) abgebildet, siehe
+    # identische Unterscheidung in pdf_rechnung_base.py.
+    if rechnung.leistung_von and rechnung.leistung_bis:
+        doc.trade.settlement.period.start._value = rechnung.leistung_von
+        doc.trade.settlement.period.end._value = rechnung.leistung_bis
 
     # ── Fälligkeitsdatum + Zahlungshinweis ───────────────────────────────────
     iban = unternehmen.get("iban") or ""

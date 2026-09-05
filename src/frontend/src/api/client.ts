@@ -65,7 +65,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     // FastAPI gibt bei 422 ein Array zurück: [{ loc, msg, type }]
     const detail = err.detail
     const message = Array.isArray(detail)
-      ? detail.map((e: any) => (e.msg ?? JSON.stringify(e)).replace(/^Value error,\s*/i, '')).join(' · ')
+      ? detail.map((e: { msg?: string }) => (e.msg ?? JSON.stringify(e)).replace(/^Value error,\s*/i, '')).join(' · ')
       : String(detail ?? 'Unbekannter Fehler')
     throw new Error(message)
   }
@@ -416,6 +416,7 @@ export type JournalEintrag = {
   externe_belegnr?: string
   rechnung_id?: number | null
   rechnung_nr?: string | null
+  rechnung_datum?: string | null
   konto_skr03?: string | null
   konto_skr04?: string | null
   konto_ust_skr03?: string | null
@@ -1289,6 +1290,7 @@ export type Rechnung = {
   zahlungsdatum: string | null
   notizen: string | null
   externe_belegnr: string | null
+  kunden_bestellnummer?: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   zahlungen_kette: ZahlungKompakt[]
@@ -1384,6 +1386,7 @@ export type RechnungCreate = {
   einleitungstext?: string | null
   schlusstext?: string | null
   externe_belegnr?: string
+  kunden_bestellnummer?: string
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null
@@ -2595,6 +2598,7 @@ export type BankTransaktion = {
   ist_privatentnahme: boolean
   ist_einlage: boolean
   ist_rueckerstattung: boolean
+  ignoriert: boolean
   auto_vorschlag?: string | null
   user_ueberschrieben: boolean
   kategorie_id?: number | null
@@ -2704,7 +2708,7 @@ export const autoBuchen = (kontoId: number, importId?: number) =>
 
 export const klassifiziereBankTransaktion = (
   txId: number,
-  data: { ist_geschaeftlich: boolean; ist_privatentnahme: boolean; ist_einlage: boolean; kategorie_id?: number | null },
+  data: { ist_geschaeftlich: boolean; ist_privatentnahme: boolean; ist_einlage: boolean; ignoriert?: boolean; kategorie_id?: number | null },
 ) => request<BankTransaktion>(`/bank-import/transaktion/${txId}`, { method: 'PATCH', body: JSON.stringify(data) })
 
 export const loescheBankImport = (importId: number) =>

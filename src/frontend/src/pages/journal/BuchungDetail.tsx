@@ -110,7 +110,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
 
   return (
     <tr>
-      <td colSpan={6} className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-4">
+      <td colSpan={7} className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-4">
 
         {/* Aktionsleiste – waagerecht als erste Zeile */}
         {istRechnungsBuchung ? (
@@ -266,9 +266,13 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Kunde</p>
                 <p className="font-medium text-slate-800 dark:text-slate-100">{e.kunde_name}</p>
                 {e.kunde_email ? (
-                  <a href={`mailto:${e.kunde_email}`} className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-all">
+                  <button
+                    type="button"
+                    onClick={() => openUrl(`mailto:${e.kunde_email}`)}
+                    className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-all text-left"
+                  >
                     {e.kunde_email}
-                  </a>
+                  </button>
                 ) : (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">Keine E-Mail hinterlegt</p>
                 )}

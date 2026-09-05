@@ -289,8 +289,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     }
     const sonderfall =
       kat.konto_skr03 === '3425' || kat.konto_skr04 === '5425' ? 'ig_erwerb' :
-      kat.konto_skr03 === '3123' || kat.konto_skr04 === '5923' || kat.konto_skr03 === '3125' || kat.konto_skr04 === '5925' ? '13b_abs1' :
-      kat.konto_skr03 === '3120' || kat.konto_skr04 === '5920' ? '13b_abs2' :
+      kat.konto_skr03 === '3123' || kat.konto_skr04 === '5923' ? '13b_abs1' :
+      kat.konto_skr03 === '3120' || kat.konto_skr04 === '5920' || kat.konto_skr03 === '3125' || kat.konto_skr04 === '5925' ? '13b_abs2' :
       kat.konto_skr03 === '1588' || kat.konto_skr04 === '1433' ? 'einfuhr_ust' : null
     setValue('ust_sonderfall', sonderfall ?? '')
   }, [kategorie_id, kategorien, isSplit, setValue, istKleinunternehmer])

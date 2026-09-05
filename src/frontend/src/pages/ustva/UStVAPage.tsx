@@ -226,7 +226,7 @@ export function UStVAPage() {
     // hier aus BG × Satz ableiten, analog zur Backend-Berechnung (Issue #272).
     const steuerIge = parseFloat(kzWert('89') || '0') * 0.19 + parseFloat(kzWert('93') || '0') * 0.07
     const ust = ['83','88','98','47','85'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0) + steuerIge
-    const vst = ['66','61','67'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0)
+    const vst = ['66','61','62','67'].reduce((s, nr) => s + parseFloat(kzWert(nr) || '0'), 0)
     return (ust - vst).toFixed(2)
   }
 

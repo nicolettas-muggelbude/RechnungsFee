@@ -127,6 +127,7 @@ class BankTransaktionResponse(BaseModel):
     ist_privatentnahme: bool
     ist_einlage: bool
     ist_rueckerstattung: bool = False
+    ignoriert: bool = False
     auto_vorschlag: Optional[str] = None
     user_ueberschrieben: bool
     kategorie_id: Optional[int] = None
@@ -167,6 +168,7 @@ class TransaktionKlassifizierung(BaseModel):
     ist_geschaeftlich: bool = True
     ist_privatentnahme: bool = False
     ist_einlage: bool = False
+    ignoriert: bool = False
     kategorie_id: Optional[int] = None
 
 
@@ -972,6 +974,7 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
             BankTransaktion.ist_geschaeftlich == True,
             BankTransaktion.ist_privatentnahme == False,
             BankTransaktion.ist_einlage == False,
+            BankTransaktion.ignoriert == False,
             BankTransaktion.journal_id == None,
         )
     )
@@ -1092,6 +1095,7 @@ def klassifiziere_transaktion(
     tx.ist_geschaeftlich = data.ist_geschaeftlich
     tx.ist_privatentnahme = data.ist_privatentnahme
     tx.ist_einlage = data.ist_einlage
+    tx.ignoriert = data.ignoriert
     tx.kategorie_id = data.kategorie_id
     tx.user_ueberschrieben = True
     db.commit()
@@ -1152,6 +1156,8 @@ def buche_transaktion(
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden.")
     if not tx.ist_geschaeftlich:
         raise HTTPException(status_code=409, detail="nicht_geschaeftlich")
+    if tx.ignoriert:
+        raise HTTPException(status_code=409, detail="ignoriert")
     if tx.journal_id:
         raise HTTPException(status_code=409, detail="bereits_gebucht")
 

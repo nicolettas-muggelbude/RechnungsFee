@@ -456,6 +456,8 @@ class RechnungPDFBase(FPDF):
             _meta("Leistungszeitraum", f"{_iso_zu_de(str(r.leistung_von))} – {_iso_zu_de(str(r.leistung_bis))}")
         elif r.leistung_von and str(r.leistung_von) != str(r.datum):
             _meta("Leistungsdatum", _iso_zu_de(str(r.leistung_von)))
+        if getattr(r, "kunden_bestellnummer", None):
+            _meta("Bestellnummer", r.kunden_bestellnummer)
         dokument_typ_meta = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
         if dokument_typ_meta == "Angebot":
             gueltig_bis = getattr(r, "gueltig_bis", None)

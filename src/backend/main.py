@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 154
+SCHEMA_VERSION = 156
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3346,6 +3346,30 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 154 (Issue #147: unternehmen.thunderbird_aktiv)")
 
+        if version < 155:
+            # Issue #379: bank_transaktionen.ignoriert - Transaktion vom Abgleich ausschliessen
+            # (z.B. interne Umbuchung zwischen eigenen Konten), ohne sie wie "Privat"
+            # (ist_geschaeftlich=0) zu klassifizieren - beides ist bei Mischkonten getrennt
+            # relevant und wird daher als eigenes Flag statt als dritter ist_geschaeftlich-Wert
+            # gefuehrt.
+            cols155 = {r[1] for r in conn.execute(text("PRAGMA table_info(bank_transaktionen)")).fetchall()}
+            if "ignoriert" not in cols155:
+                conn.execute(text("ALTER TABLE bank_transaktionen ADD COLUMN ignoriert BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 155"))
+            conn.commit()
+            print("[Migration] Schema auf Version 155 (Issue #379: bank_transaktionen.ignoriert)")
+
+        if version < 156:
+            # Issue #387: rechnungen.kunden_bestellnummer - Bestellnummer des Kunden (nur
+            # Ausgang), analog zu externe_belegnr (Lieferanten-Rechnungsnr., nur Eingang).
+            # Wird auf ZUGFeRD BT-13 (BuyerOrderReferencedDocument) abgebildet.
+            cols156 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "kunden_bestellnummer" not in cols156:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN kunden_bestellnummer VARCHAR(100)"))
+            conn.execute(text("PRAGMA user_version = 156"))
+            conn.commit()
+            print("[Migration] Schema auf Version 156 (Issue #387: rechnungen.kunden_bestellnummer)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -3602,8 +3626,11 @@ def _migrate_signaturen() -> None:
     - Veraltete Signatur (Signaturformel durch Software-Update erweitert,
       z.B. neue Felder wie externe_belegnr oder kunde_id hinzugekommen)
 
-    In beiden Fällen werden keine Buchungsdaten geändert – nur der Hash
-    wird neu aus den unveränderlichen Buchungsdaten berechnet.
+    In beiden Fällen wird nur der Hash aus den aktuellen Buchungsdaten neu berechnet - MIT
+    EINER historisch gewachsenen Ausnahme: der Datenfix zu Issue #132 weiter unten setzt
+    kategorie_id auf sehr alten, kategorielosen Einnahme-Buchungen, bevor neu signiert wird.
+    Jede so betroffene Zeile wird geloggt (siehe unten), damit dieser Eingriff nicht
+    unbemerkt bleibt.
 
     Ablauf:
     1. Bestehende Schutz-Trigger temporär entfernen (damit UPDATE möglich ist).
@@ -3680,20 +3707,28 @@ def _migrate_signaturen() -> None:
             .filter(Journaleintrag.immutable == True)
             .all()
         )
+        _neu_signiert = []
         for e in eintraege:
             neu = signatur_journaleintrag(e)
             if e.signatur != neu:
                 e.signatur = neu
+                _neu_signiert.append(e.belegnr)
+        if _neu_signiert:
+            print(f"[Signaturen] {len(_neu_signiert)} Journal-Signatur(en) neu berechnet: {', '.join(_neu_signiert)}")
 
         abschluesse = (
             db.query(Tagesabschluss)
             .filter(Tagesabschluss.immutable == True)
             .all()
         )
+        _neu_signiert_ta = []
         for a in abschluesse:
             neu = signatur_tagesabschluss(a)
             if a.signatur != neu:
                 a.signatur = neu
+                _neu_signiert_ta.append(str(a.datum))
+        if _neu_signiert_ta:
+            print(f"[Signaturen] {len(_neu_signiert_ta)} Tagesabschluss-Signatur(en) neu berechnet: {', '.join(_neu_signiert_ta)}")
 
         db.commit()
     finally:
@@ -3770,14 +3805,32 @@ def _setup_gobd_triggers() -> None:
         conn.commit()
 
 
+def _migrate_signaturen_sicher() -> None:
+    """Ruft _migrate_signaturen() auf und stellt sicher, dass _setup_gobd_triggers() DANACH
+    immer laeuft - auch wenn die Migration selbst fehlschlaegt.
+
+    _migrate_signaturen() dropt die Schutz-Trigger als allerersten Schritt (damit UPDATE
+    ueberhaupt moeglich ist); schlaegt danach irgendetwas fehl, muss der Trigger-Wiederaufbau
+    trotzdem laufen, sonst bleibt die DB bis zum naechsten erfolgreichen Start ungeschuetzt vor
+    UPDATE/DELETE auf immutable Zeilen (Issue #384).
+    """
+    try:
+        _migrate_signaturen()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "GoBD-Signatur-Migration fehlgeschlagen - Schutz-Trigger werden trotzdem neu gesetzt."
+        )
+    finally:
+        _setup_gobd_triggers()
+
+
 @app.on_event("startup")
 def startup():
     _prüfe_wiederherstellung()   # Vor create_all – DB muss ggf. erst ersetzt werden
     Base.metadata.create_all(bind=engine)
     _run_migrations()
     _migrate_kategorien()   # Fehlende Kategorien nachträglich eintragen
-    _migrate_signaturen()   # Erst Signaturen nachholen (Trigger noch nicht aktiv)
-    _setup_gobd_triggers()  # Dann Trigger scharf schalten
+    _migrate_signaturen_sicher()   # Signaturen nachholen, Trigger IMMER anschliessend neu setzen
     db = SessionLocal()
     try:
         run_all_seeds(db)

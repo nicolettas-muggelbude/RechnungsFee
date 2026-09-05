@@ -7,7 +7,8 @@ Reproduzierbar: gleiche Eingabe → gleicher Hash.
 
 import hashlib
 import json
-from typing import TYPE_CHECKING
+from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from database.models import Journaleintrag, Tagesabschluss, VorsteuerAnspruch
@@ -20,24 +21,39 @@ def berechne_signatur(felder: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _dec(wert: Optional[Decimal], skala: str) -> str:
+    """Normalisiert einen Decimal-Betrag auf die deklarierte Spalten-Skala (z.B. Numeric(12,2)
+    -> "0.01") bevor er in die Signatur einfliesst.
+
+    Ohne das lieferte str() unterschiedliche Strings fuer denselben Wert je nachdem ob das
+    Objekt frisch im Speicher stand (Decimal("19"), direkt aus dem Request geparst) oder
+    bereits einmal aus SQLite geladen wurde (Decimal("19.00"), durch den Numeric-Skalen der
+    Spalte) - identische Buchung, unterschiedlicher Hash, je nach Zeitpunkt der Signierung
+    (Issue #384: Neubuchungen instabil, aus der DB kopierte Storno-Buchungen stabil).
+    """
+    if wert is None:
+        return ""
+    return str(Decimal(str(wert)).quantize(Decimal(skala)))
+
+
 def signatur_journaleintrag(e: "Journaleintrag") -> str:
     """Signatur über alle buchungsrelevanten Felder eines Journaleintrags."""
     return berechne_signatur({
         "art": str(e.art),
         "belegnr": str(e.belegnr),
         "beschreibung": str(e.beschreibung),
-        "brutto_betrag": str(e.brutto_betrag),
+        "brutto_betrag": _dec(e.brutto_betrag, "0.01"),
         "datum": str(e.datum),
         "externe_belegnr": e.externe_belegnr or "",
         "kategorie_id": str(e.kategorie_id) if e.kategorie_id is not None else "",
         "kunde_id": str(e.kunde_id) if e.kunde_id is not None else "",
-        "netto_betrag": str(e.netto_betrag),
+        "netto_betrag": _dec(e.netto_betrag, "0.01"),
         "steuerbefreiung_grund": e.steuerbefreiung_grund or "",
-        "ust_betrag": str(e.ust_betrag),
-        "ust_satz": str(e.ust_satz),
+        "ust_betrag": _dec(e.ust_betrag, "0.01"),
+        "ust_satz": _dec(e.ust_satz, "0.01"),
         "vorsteuerabzug": bool(e.vorsteuerabzug),
         "zahlungsart": str(e.zahlungsart),
-        "km_anzahl": str(e.km_anzahl) if e.km_anzahl is not None else "",
+        "km_anzahl": _dec(e.km_anzahl, "0.1"),
     })
 
 
@@ -47,10 +63,10 @@ def signatur_vorsteueranspruch(v: "VorsteuerAnspruch") -> str:
         "rechnung_id": str(v.rechnung_id),
         "datum": str(v.datum),
         "kategorie_id": str(v.kategorie_id) if v.kategorie_id is not None else "",
-        "netto_betrag": str(v.netto_betrag),
-        "ust_satz": str(v.ust_satz),
-        "ust_betrag": str(v.ust_betrag),
-        "vorsteuer_betrag": str(v.vorsteuer_betrag),
+        "netto_betrag": _dec(v.netto_betrag, "0.01"),
+        "ust_satz": _dec(v.ust_satz, "0.01"),
+        "ust_betrag": _dec(v.ust_betrag, "0.01"),
+        "vorsteuer_betrag": _dec(v.vorsteuer_betrag, "0.01"),
         "ust_sonderfall": v.ust_sonderfall or "",
         "typ": str(v.typ),
         "bezug_id": str(v.bezug_id) if v.bezug_id is not None else "",
@@ -61,14 +77,14 @@ def signatur_vorsteueranspruch(v: "VorsteuerAnspruch") -> str:
 def signatur_tagesabschluss(a: "Tagesabschluss") -> str:
     """Signatur über alle buchungsrelevanten Felder eines Tagesabschlusses."""
     return berechne_signatur({
-        "anfangsbestand": str(a.anfangsbestand),
-        "ausgaben_bar": str(a.ausgaben_bar),
+        "anfangsbestand": _dec(a.anfangsbestand, "0.01"),
+        "ausgaben_bar": _dec(a.ausgaben_bar, "0.01"),
         "datum": str(a.datum),
-        "differenz": str(a.differenz),
-        "einnahmen_bar": str(a.einnahmen_bar),
-        "ist_endbestand": str(a.ist_endbestand),
+        "differenz": _dec(a.differenz, "0.01"),
+        "einnahmen_bar": _dec(a.einnahmen_bar, "0.01"),
+        "ist_endbestand": _dec(a.ist_endbestand, "0.01"),
         "kassenbewegungen_anzahl": str(a.kassenbewegungen_anzahl),
-        "soll_endbestand": str(a.soll_endbestand),
+        "soll_endbestand": _dec(a.soll_endbestand, "0.01"),
         "uhrzeit": str(a.uhrzeit),
         "zaehlung_json": a.zaehlung_json or "",
     })

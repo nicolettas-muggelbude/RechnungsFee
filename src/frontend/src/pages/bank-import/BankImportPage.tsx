@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
@@ -18,6 +18,7 @@ import {
   ueberzahlungAnerkennen,
   loescheTransaktion,
   loescheUngebuchte,
+  klassifiziereBankTransaktion,
   isTauri,
   type Konto,
   type BankTemplate,
@@ -83,7 +84,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const [tauriPfad, setTauriPfad] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const geschaeftskonten = konten.filter(k => k.kontotyp !== 'privat')
+  const geschaeftskonten = useMemo(() => konten.filter(k => k.kontotyp !== 'privat'), [konten])
 
   // Welches kontoId wird letztendlich für den Import verwendet
   const aktuellesKontoId: number | null =
@@ -124,8 +125,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   useEffect(() => {
     if (!isTauri() || schritt !== 1) return
     let unlisten: (() => void) | undefined
-    listen<{ paths: string[] }>('tauri://drag-drop', async (event) => {
-      const paths = event.payload?.paths ?? (event.payload as any) ?? []
+    listen<{ paths: string[] } | string[]>('tauri://drag-drop', async (event) => {
+      const payload = event.payload
+      const paths = Array.isArray(payload) ? payload : (payload?.paths ?? [])
       const erlaubte = (Array.isArray(paths) ? paths : [])
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
@@ -159,7 +161,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }
-  }, [schritt, templateId])
+  }, [schritt, templateId, geschaeftskonten])
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -570,10 +572,52 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
 // ---------------------------------------------------------------------------
 
 function KlassifizierungBadge({ tx }: { tx: BankTransaktion }) {
+  if (tx.ignoriert)          return <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded px-1.5 py-0.5 line-through">Ignoriert</span>
   if (tx.ist_privatentnahme) return <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded px-1.5 py-0.5">Privatentnahme</span>
   if (tx.ist_einlage)        return <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded px-1.5 py-0.5">Einlage</span>
   if (!tx.ist_geschaeftlich) return <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded px-1.5 py-0.5">Privat</span>
   return <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded px-1.5 py-0.5">Geschäftlich</span>
+}
+
+interface KlassifizierungAktionenProps {
+  tx: BankTransaktion
+  onSetzen: (tx: BankTransaktion, patch: { ist_geschaeftlich: boolean; ignoriert: boolean }) => void
+  pending: boolean
+}
+
+function KlassifizierungAktionen({ tx, onSetzen, pending }: KlassifizierungAktionenProps) {
+  if (tx.journal_id || tx.ist_privatentnahme || tx.ist_einlage || tx.ist_rueckerstattung) return null
+
+  if (!tx.ist_geschaeftlich || tx.ignoriert) {
+    return (
+      <button
+        onClick={() => onSetzen(tx, { ist_geschaeftlich: true, ignoriert: false })}
+        disabled={pending}
+        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+      >
+        Zurücksetzen
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <button
+        onClick={() => onSetzen(tx, { ist_geschaeftlich: false, ignoriert: false })}
+        disabled={pending}
+        className="text-[11px] text-slate-500 dark:text-slate-400 hover:underline disabled:opacity-40"
+      >
+        Privat
+      </button>
+      <button
+        onClick={() => onSetzen(tx, { ist_geschaeftlich: true, ignoriert: true })}
+        disabled={pending}
+        className="text-[11px] text-slate-500 dark:text-slate-400 hover:underline disabled:opacity-40"
+      >
+        Ignorieren
+      </button>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -773,7 +817,7 @@ function BuchungsCelle({ tx, ladendeTxId, buchePending, onBuchen }: BuchungsCell
     return <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded px-1.5 py-0.5">Gebucht</span>
   }
 
-  if (tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage) {
+  if (tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.ignoriert) {
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded px-1.5 py-0.5 shrink-0">
@@ -827,7 +871,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   } | null>(null)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
   const [suche, setSuche] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat'>('alle')
+  const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat' | 'ignoriert'>('alle')
 
   const [limit, setLimit] = useState(200)
 
@@ -929,6 +973,21 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     onError: () => zeigToast('Fehler beim Löschen', false),
   })
 
+  const klassifiziereMut = useMutation({
+    mutationFn: ({ tx, patch }: { tx: BankTransaktion; patch: { ist_geschaeftlich: boolean; ignoriert: boolean } }) =>
+      klassifiziereBankTransaktion(tx.id, {
+        ist_geschaeftlich: patch.ist_geschaeftlich,
+        ist_privatentnahme: false,
+        ist_einlage: false,
+        ignoriert: patch.ignoriert,
+        kategorie_id: tx.kategorie_id,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
+    },
+    onError: (e: Error) => zeigToast(e.message || 'Fehler beim Klassifizieren.', false),
+  })
+
   const abgleichMut = useMutation({
     mutationFn: (tx: BankTransaktion) => abgleichTransaktion(tx.id),
     onSuccess: (vorschlaege, tx) => {
@@ -967,7 +1026,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txs.length])
 
-  const offene = txs.filter(tx => tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.journal_id)
+  const offene = txs.filter(tx => tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.ignoriert && !tx.journal_id)
   const gebuchteList = txs.filter(tx => !!tx.journal_id)
   const gebuchte = gebuchteList.length
   const ungebuchteAnzahl = txs.filter(tx => !tx.journal_id).length
@@ -976,9 +1035,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const ladendeTxId = abgleichMut.isPending && abgleichMut.variables ? abgleichMut.variables.id : null
 
   const gefilterteTxs = txs.filter(tx => {
-    if (statusFilter === 'offen' && !(tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.journal_id)) return false
+    if (statusFilter === 'offen' && !(tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage && !tx.ignoriert && !tx.journal_id)) return false
     if (statusFilter === 'gebucht' && !tx.journal_id) return false
     if (statusFilter === 'privat' && (tx.ist_geschaeftlich && !tx.ist_privatentnahme && !tx.ist_einlage)) return false
+    if (statusFilter === 'ignoriert' && !tx.ignoriert) return false
     if (suche) {
       const s = suche.toLowerCase()
       if (!((tx.partner_name ?? '').toLowerCase().includes(s) ||
@@ -1055,6 +1115,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             <option value="offen">Offen</option>
             <option value="gebucht">Gebucht</option>
             <option value="privat">Privat</option>
+            <option value="ignoriert">Ignoriert</option>
           </select>
           <button
             onClick={() => setZahnradOffen(v => !v)}
@@ -1180,7 +1241,14 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
                   <p className="text-slate-700 dark:text-slate-200 truncate">{tx.partner_name ?? '–'}</p>
                   <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{tx.verwendungszweck ?? ''}</p>
                 </td>
-                <td className="px-4 py-2.5"><KlassifizierungBadge tx={tx} /></td>
+                <td className="px-4 py-2.5">
+                  <KlassifizierungBadge tx={tx} />
+                  <KlassifizierungAktionen
+                    tx={tx}
+                    pending={klassifiziereMut.isPending}
+                    onSetzen={(t, patch) => klassifiziereMut.mutate({ tx: t, patch })}
+                  />
+                </td>
                 <td className="px-4 py-2.5">
                   <BuchungsCelle tx={tx} ladendeTxId={ladendeTxId} buchePending={bucheMut.isPending} onBuchen={t => abgleichMut.mutate(t)} />
                 </td>

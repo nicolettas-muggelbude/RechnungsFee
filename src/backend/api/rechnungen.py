@@ -660,6 +660,19 @@ def _partner_name(rechnung: Rechnung) -> str:
 # Endpunkte
 # ---------------------------------------------------------------------------
 
+def _temp_dateiendung(dateiname: str, content_type: str | None) -> str | None:
+    """Dateiendung für die Temp-Datei nach der Analyse - nur für Formate, die später entweder
+    als Vorschau geöffnet (PDF) oder als Beleg-Anhang weiterverwendet werden (Issue #384:
+    Drag&Drop einer reinen XML-Rechnung ließ "Rechnung erstellen" wirkungslos stehen, weil für
+    sie nie eine Temp-Datei/temp_url angelegt wurde - datei blieb im Frontend dauerhaft null)."""
+    name = dateiname.lower()
+    if content_type == "application/pdf" or name.endswith(".pdf"):
+        return ".pdf"
+    if name.endswith(".xml"):
+        return ".xml"
+    return None
+
+
 @router.post("/analysieren", response_model=AnalyseResponse)
 async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depends(get_db)):
     """ZUGFeRD / XRechnung aus PDF oder XML extrahieren (keine DB-Änderung)."""
@@ -668,11 +681,12 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
 
     temp_url = None
     temp_path = None
-    if datei.content_type == "application/pdf":
+    _temp_ext = _temp_dateiendung(datei.filename or "", datei.content_type)
+    if _temp_ext:
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
         _bereinige_temp_dir()
         token = str(uuid.uuid4())
-        temp_file = TEMP_DIR / f"{token}.pdf"
+        temp_file = TEMP_DIR / f"{token}{_temp_ext}"
         temp_file.write_bytes(inhalt)
         temp_url = f"/rechnungen/temp/{token}"
         temp_path = str(temp_file.absolute())
@@ -744,11 +758,12 @@ def analysiere_rechnung_pfad(body: AnalysierePfadRequest, db: Session = Depends(
 
     temp_url = None
     temp_path = None
-    if dateiname.lower().endswith(".pdf"):
+    _temp_ext = _temp_dateiendung(dateiname, None)
+    if _temp_ext:
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
         _bereinige_temp_dir()
         token = str(uuid.uuid4())
-        temp_file = TEMP_DIR / f"{token}.pdf"
+        temp_file = TEMP_DIR / f"{token}{_temp_ext}"
         temp_file.write_bytes(inhalt)
         temp_url = f"/rechnungen/temp/{token}"
         temp_path = str(temp_file.absolute())
@@ -802,28 +817,30 @@ def analysiere_rechnung_pfad(body: AnalysierePfadRequest, db: Session = Depends(
 
 @router.get("/temp/{token}")
 def get_temp_pdf(token: str):
-    """Temporäre PDF-Vorschau nach Import-Analyse."""
+    """Temporäre Datei (PDF-Vorschau oder XML-Rohdatei) nach Import-Analyse."""
     import re
     if not re.fullmatch(r"[0-9a-f\-]{36}", token):
         raise HTTPException(status_code=404)
-    pfad = TEMP_DIR / f"{token}.pdf"
-    if not pfad.exists():
-        raise HTTPException(status_code=404)
-    return FileResponse(pfad, media_type="application/pdf", content_disposition_type="inline")
+    for ext, media_type in ((".pdf", "application/pdf"), (".xml", "application/xml")):
+        pfad = TEMP_DIR / f"{token}{ext}"
+        if pfad.exists():
+            return FileResponse(pfad, media_type=media_type, content_disposition_type="inline")
+    raise HTTPException(status_code=404)
 
 
 def _bereinige_temp_dir():
-    """Temp-PDFs die älter als 2h sind löschen."""
+    """Temp-Dateien (PDF/XML) die älter als 2h sind löschen."""
     import time
     jetzt = time.time()
     if not TEMP_DIR.exists():
         return
-    for f in TEMP_DIR.glob("*.pdf"):
-        try:
-            if jetzt - f.stat().st_mtime > 7200:
-                f.unlink()
-        except OSError:
-            pass
+    for muster in ("*.pdf", "*.xml"):
+        for f in TEMP_DIR.glob(muster):
+            try:
+                if jetzt - f.stat().st_mtime > 7200:
+                    f.unlink()
+            except OSError:
+                pass
 
 
 @router.get("/faellig", response_model=list[RechnungResponse])
@@ -1160,6 +1177,7 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
         # bislang gar nicht aus dem Request.
         einleitungstext=data.einleitungstext,
         schlusstext=data.schlusstext,
+        kunden_bestellnummer=data.kunden_bestellnummer,
         ist_entwurf=data.ist_entwurf,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -1350,6 +1368,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         einleitungstext=data.einleitungstext,
         schlusstext=data.schlusstext,
         externe_belegnr=data.externe_belegnr,
+        kunden_bestellnummer=data.kunden_bestellnummer,
         ist_entwurf=data.ist_entwurf,
         skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
         skonto_tage=None if data.dokument_typ == "Proforma" else data.skonto_tage,
@@ -1467,7 +1486,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
-                  "kategorie_id", "notizen", "externe_belegnr",
+                  "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
                   "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
                   "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
                   "eingabemodus"):
@@ -3198,6 +3217,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         notizen=original.notizen,
         einleitungstext=original.einleitungstext,
         schlusstext=original.schlusstext,
+        kunden_bestellnummer=original.kunden_bestellnummer,
         rabatt_prozent=original.rabatt_prozent,
         rabatt_betrag=original.rabatt_betrag,
         skonto_prozent=original.skonto_prozent,
@@ -3332,6 +3352,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         partner_land=original.partner_land,
         kategorie_id=original.kategorie_id,
         notizen=None,
+        kunden_bestellnummer=original.kunden_bestellnummer,
         skonto_prozent=None,
         skonto_tage=None,
         ist_entwurf=True,
@@ -3770,6 +3791,7 @@ def _lieferschein_zu_rechnung_konvertieren(
         partner_ort=lieferscheine[0].partner_ort,
         partner_land=lieferscheine[0].partner_land,
         notizen=merged_notizen,
+        kunden_bestellnummer=lieferscheine[0].kunden_bestellnummer,
         dokument_typ="Rechnung",
         ist_entwurf=True,
         bezahlt=False,
@@ -3922,6 +3944,7 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         partner_ort=r.partner_ort,
         partner_land=r.partner_land,
         notizen=f"Zu Rechnung {r.rechnungsnummer}" if r.rechnungsnummer else None,
+        kunden_bestellnummer=r.kunden_bestellnummer,
         dokument_typ="Lieferschein",
         lieferschein_zu_rechnung_id=rechnung_id,
         ist_entwurf=False,
@@ -3973,6 +3996,7 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_ort=angebot.partner_ort,
         partner_land=angebot.partner_land,
         notizen=f"Zu Angebot {angebot.rechnungsnummer}" if angebot.rechnungsnummer else None,
+        kunden_bestellnummer=angebot.kunden_bestellnummer,
         dokument_typ="Lieferschein",
         ist_entwurf=False,
         bezahlt=False,
@@ -4039,6 +4063,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_ort=angebot.partner_ort,
         partner_land=angebot.partner_land,
         notizen=angebot.notizen,
+        kunden_bestellnummer=angebot.kunden_bestellnummer,
         ist_entwurf=True,
         dokument_typ="Rechnung",
         bezahlt=False,
@@ -4101,6 +4126,7 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_ort=angebot.partner_ort,
         partner_land=angebot.partner_land,
         notizen=angebot.notizen,
+        kunden_bestellnummer=angebot.kunden_bestellnummer,
         ist_entwurf=False,
         dokument_typ="Proforma",
         bezahlt=False,
@@ -4162,6 +4188,7 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
         partner_ort=proforma.partner_ort,
         partner_land=proforma.partner_land,
         notizen=proforma.notizen,
+        kunden_bestellnummer=proforma.kunden_bestellnummer,
         ist_entwurf=True,
         dokument_typ="Rechnung",
         bezahlt=False,
@@ -4335,6 +4362,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_ort=angebot.partner_ort,
         partner_land=angebot.partner_land,
         notizen=angebot.notizen,
+        kunden_bestellnummer=angebot.kunden_bestellnummer,
         ist_entwurf=False,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -4394,6 +4422,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         partner_ort=auftrag.partner_ort,
         partner_land=auftrag.partner_land,
         notizen=auftrag.notizen,
+        kunden_bestellnummer=auftrag.kunden_bestellnummer,
         ist_entwurf=True,
         dokument_typ="Rechnung",
         bezahlt=False,
@@ -4460,6 +4489,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         partner_ort=auftrag.partner_ort,
         partner_land=auftrag.partner_land,
         notizen=auftrag.notizen,
+        kunden_bestellnummer=auftrag.kunden_bestellnummer,
         ist_entwurf=False,
         dokument_typ="Lieferschein",
         eingabemodus=auftrag.eingabemodus,
@@ -4521,6 +4551,7 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         partner_ort=auftrag.partner_ort,
         partner_land=auftrag.partner_land,
         notizen=auftrag.notizen,
+        kunden_bestellnummer=auftrag.kunden_bestellnummer,
         ist_entwurf=False,
         dokument_typ="Proforma",
         eingabemodus=auftrag.eingabemodus,

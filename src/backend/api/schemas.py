@@ -365,6 +365,7 @@ class JournalEintragResponse(BaseModel):
     externe_belegnr: Optional[str] = None
     rechnung_id: Optional[int] = None
     rechnung_nr: Optional[str] = None
+    rechnung_datum: Optional[date] = None
     konto_skr03: Optional[str] = None
     konto_skr04: Optional[str] = None
     konto_ust_skr03: Optional[str] = None
@@ -399,6 +400,7 @@ class JournalEintragResponse(BaseModel):
             data.kategorie_kontenart = obj.kategorie.kontenart
         if obj.rechnung:
             data.rechnung_nr = obj.rechnung.rechnungsnummer
+            data.rechnung_datum = obj.rechnung.datum
         return data
 
 

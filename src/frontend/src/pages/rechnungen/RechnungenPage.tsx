@@ -2219,6 +2219,13 @@ function RechnungDetail({
           </div>
         )}
 
+        {rechnung.typ === 'ausgang' && rechnung.kunden_bestellnummer && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Bestellnummer Kunde</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">{rechnung.kunden_bestellnummer}</p>
+          </div>
+        )}
+
         {rechnung.einleitungstext && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Einleitungstext</p>
@@ -2535,6 +2542,7 @@ function RechnungForm({
   const [einleitungstext, setEinleitungstext] = useState(initial?.einleitungstext ?? '')
   const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
+  const [kundenBestellnummer, setKundenBestellnummer] = useState(initial?.kunden_bestellnummer ?? '')
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
       return prefillFromAnalyse.positionen.map((p) => ({
@@ -3024,6 +3032,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       einleitungstext: einleitungstext || null,
       schlusstext: schlusstext || null,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
+      kunden_bestellnummer: typ === 'ausgang' ? (kundenBestellnummer || undefined) : undefined,
       ist_entwurf: istEntwurf,
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
@@ -4062,6 +4071,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
+      {typ === 'ausgang' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Bestellnummer des Kunden
+            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={kundenBestellnummer}
+            onChange={(e) => setKundenBestellnummer(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+            placeholder="Bestell-/Referenznummer des Kunden"
+          />
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           type="button"
@@ -4166,10 +4191,10 @@ function ImportDialog({
   useEffect(() => {
     if (!isTauri() || schritt !== 'upload') return
     let unlisten: (() => void) | undefined
-    listen<{ paths: string[] }>('tauri://drag-drop', async (event) => {
-      const paths = event.payload?.paths ?? (event.payload as any) ?? []
-      const erlaubte = (Array.isArray(paths) ? paths : [])
-        .filter((p: string) => /\.(pdf|xml)$/i.test(p))
+    listen<{ paths: string[] } | string[]>('tauri://drag-drop', async (event) => {
+      const payload = event.payload
+      const paths = Array.isArray(payload) ? payload : (payload?.paths ?? [])
+      const erlaubte = paths.filter((p: string) => /\.(pdf|xml)$/i.test(p))
       if (erlaubte.length === 0) return
       const pfad = erlaubte[0]
       const name = pfad.replace(/\\/g, '/').split('/').pop() ?? 'rechnung'
@@ -4177,16 +4202,19 @@ function ImportDialog({
       setLadeFehler(null)
       try {
         const res = await analysiereRechnungPfad(pfad)
-        // Datei für Beleganhang: temp-Datei vom Backend holen
+        // Datei für Beleganhang: temp-Datei vom Backend holen - für PDF UND XML (Issue #384:
+        // reine XML-Rechnungen hatten hier bisher nie eine temp_url, "datei" blieb null und
+        // "Rechnung erstellen" tat wirkungslos nichts).
         if (res.temp_url) {
           const base = await getApiBase()
           const blob = await fetch(`${base}${res.temp_url}`).then(r => r.blob())
-          setDatei(new File([blob], name, { type: 'application/pdf' }))
+          const mime = pfad.toLowerCase().endsWith('.xml') ? 'application/xml' : 'application/pdf'
+          setDatei(new File([blob], name, { type: mime }))
         }
         setErgebnis(res)
         setSchritt('ergebnis')
-      } catch (e: any) {
-        setLadeFehler(e.message)
+      } catch (e: unknown) {
+        setLadeFehler((e as Error).message)
       } finally {
         setLaedt(false)
       }

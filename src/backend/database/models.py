@@ -653,6 +653,7 @@ class Rechnung(Base):
     beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id"))
     notizen: Mapped[str | None] = mapped_column(Text)
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
+    kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)
     # Einleitungstext (überschreibt globalen Text aus unternehmen.einleitungstext/-typspezifisch)
@@ -945,6 +946,7 @@ class BankTransaktion(Base):
     ist_privatentnahme: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ist_einlage: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ist_rueckerstattung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ignoriert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_vorschlag: Mapped[str | None] = mapped_column(String(20))
     user_ueberschrieben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     dedupe_hash: Mapped[str | None] = mapped_column(String(64), index=True)
