@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.14',
+    datum: 'September 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Land-Dropdown: acht weitere Länder wählbar – Vereinigte Arabische Emirate, Norwegen, Türkei, Ukraine, Serbien, Singapur, Indien und Japan. Alle als Drittland, die Rechnungslogik (nicht steuerbare Leistung, Ausfuhrlieferung, ausländische Steuer-ID) greift automatisch. Außerdem stehen Deutschland, Österreich und die Schweiz jetzt oben in der Liste, der Rest ist alphabetisch nach Ländernamen sortiert statt nach Ländercode. Die Erkennung, ob ein Land zur EU gehört, läuft jetzt über eine explizite Liste der 27 EU-Staaten statt über eine Ausschlussliste – verhindert dass ein künftig neu hinzugefügtes Drittland versehentlich als EU-Land durchgeht. Danke an CodeBrauer für den PR (Issue #396).' },
+    ],
+  },
+  {
     version: 'v0.6.13',
     datum: 'September 2026',
     eintraege: [
