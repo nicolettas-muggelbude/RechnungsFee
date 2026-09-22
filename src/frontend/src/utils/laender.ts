@@ -1,10 +1,34 @@
 /**
- * EU-Mitgliedstaaten (2026, 27 Länder) + Schweiz, Vereinigtes Königreich, China und USA für
- * Land-Dropdowns. Reihenfolge: Deutschland zuerst, dann alphabetisch nach ISO-Code.
+ * Länder für die Land-Dropdowns (Kunden, Lieferanten, eigenes Unternehmen).
+ *
+ * Enthalten sind die 27 EU-Mitgliedstaaten (2026) plus die Drittländer, die bisher
+ * angefragt wurden. Ein weiteres Drittland braucht nur einen Eintrag in LAENDER_QUELLE -
+ * die steuerliche Sonderbehandlung (nicht steuerbare Leistung nach §3a Abs. 2 UStG,
+ * Ausfuhrlieferung nach §4 Nr. 1a UStG) hängt allein daran, dass sein Code nicht in
+ * EU_LAENDER_CODES steht.
+ *
+ * Reihenfolge im Dropdown: Deutschland, Österreich, Schweiz zuerst (deckt den Großteil
+ * der Fälle ab), darunter alle übrigen Länder alphabetisch nach deutschem Namen. Sortiert
+ * wird zur Laufzeit - ein neuer Eintrag in LAENDER_QUELLE landet dadurch automatisch an
+ * der richtigen Stelle, egal wo er eingefügt wurde.
  */
 
-export const LAENDER: { code: string; name: string }[] = [
-  { code: 'DE', name: 'Deutschland' },
+export type Land = { code: string; name: string }
+
+/** ISO-Codes der 27 EU-Mitgliedstaaten (Stand 2026). Alles was hier nicht steht, gilt als
+ * Drittland - diese Liste muss deshalb nur bei einem EU-Beitritt/-Austritt angefasst
+ * werden, nicht bei jedem neuen Land im Dropdown. */
+export const EU_LAENDER_CODES = new Set([
+  'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU',
+  'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+])
+
+/** Codes, die im Dropdown in dieser Reihenfolge ganz oben stehen (Issue #350: die
+ * Länderliste wächst auf Zuruf, der DACH-Raum soll trotzdem sofort greifbar bleiben). */
+const BEVORZUGTE_CODES = ['DE', 'AT', 'CH']
+
+const LAENDER_QUELLE: Land[] = [
+  { code: 'AE', name: 'Vereinigte Arabische Emirate' },
   { code: 'AT', name: 'Österreich' },
   { code: 'BE', name: 'Belgien' },
   { code: 'BG', name: 'Bulgarien' },
@@ -12,6 +36,7 @@ export const LAENDER: { code: string; name: string }[] = [
   { code: 'CN', name: 'China' },
   { code: 'CY', name: 'Zypern' },
   { code: 'CZ', name: 'Tschechien' },
+  { code: 'DE', name: 'Deutschland' },
   { code: 'DK', name: 'Dänemark' },
   { code: 'EE', name: 'Estland' },
   { code: 'ES', name: 'Spanien' },
@@ -22,26 +47,34 @@ export const LAENDER: { code: string; name: string }[] = [
   { code: 'HR', name: 'Kroatien' },
   { code: 'HU', name: 'Ungarn' },
   { code: 'IE', name: 'Irland' },
+  { code: 'IN', name: 'Indien' },
   { code: 'IT', name: 'Italien' },
+  { code: 'JP', name: 'Japan' },
   { code: 'LT', name: 'Litauen' },
   { code: 'LU', name: 'Luxemburg' },
   { code: 'LV', name: 'Lettland' },
   { code: 'MT', name: 'Malta' },
   { code: 'NL', name: 'Niederlande' },
+  { code: 'NO', name: 'Norwegen' },
   { code: 'PL', name: 'Polen' },
   { code: 'PT', name: 'Portugal' },
   { code: 'RO', name: 'Rumänien' },
+  { code: 'RS', name: 'Serbien' },
   { code: 'SE', name: 'Schweden' },
+  { code: 'SG', name: 'Singapur' },
   { code: 'SI', name: 'Slowenien' },
   { code: 'SK', name: 'Slowakei' },
+  { code: 'TR', name: 'Türkei' },
+  { code: 'UA', name: 'Ukraine' },
   { code: 'US', name: 'USA' },
 ]
 
-const NICHT_EU_CODES = new Set(['CH', 'GB', 'CN', 'US'])
-
-export const EU_LAENDER_CODES = new Set(
-  LAENDER.filter((l) => !NICHT_EU_CODES.has(l.code)).map((l) => l.code)
-)
+export const LAENDER: Land[] = [
+  ...BEVORZUGTE_CODES.flatMap((code) => LAENDER_QUELLE.filter((l) => l.code === code)),
+  ...LAENDER_QUELLE.filter((l) => !BEVORZUGTE_CODES.includes(l.code)).sort((a, b) =>
+    a.name.localeCompare(b.name, 'de')
+  ),
+]
 
 export function istEuLand(code: string | null | undefined): boolean {
   return !!code && EU_LAENDER_CODES.has(code.toUpperCase())
