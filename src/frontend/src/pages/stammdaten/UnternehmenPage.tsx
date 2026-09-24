@@ -609,6 +609,40 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           </label>
         </div>
 
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.wirtschaftsjahr_abweichend_aktiv}
+            onChange={ev => {
+              const checked = ev.target.checked
+              set('wirtschaftsjahr_abweichend_aktiv', checked)
+              if (!checked) set('geschaeftsjahr_beginn', 1)
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Abweichendes Wirtschaftsjahr
+            </span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Für die meisten Betriebe unnötig – nur relevant wenn das Wirtschaftsjahr nicht dem Kalenderjahr entspricht (z. B. Landwirtschaft: 01.07.–30.06.).
+            </p>
+          </div>
+        </label>
+        {form.wirtschaftsjahr_abweichend_aktiv && (
+          <Field label="Beginn Wirtschaftsjahr">
+            <select
+              value={form.geschaeftsjahr_beginn ?? 1}
+              onChange={ev => set('geschaeftsjahr_beginn', Number(ev.target.value))}
+              className={inputCls}
+            >
+              {['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'].map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
+          </Field>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <Field label={<>Kontenrahmen <InfoTooltip text="Empfehlungen – du kannst jeden Kontenrahmen unabhängig von deiner Tätigkeit verwenden. SKR03: Freiberufler, Dienstleister & Gewerbetreibende (Handwerk, Handel, kleine Betriebe). SKR04: Handels- & Industrieunternehmen (prozessorientiert). SKR49: Vereine & Non-Profits." /></>}>
             <select

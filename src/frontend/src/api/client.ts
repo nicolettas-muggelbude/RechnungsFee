@@ -203,6 +203,8 @@ export type Unternehmen = {
   kontenrahmen: 'SKR03' | 'SKR04' | 'SKR49'
   taetigkeitsart: string
   rechtsform: string
+  geschaeftsjahr_beginn?: number
+  wirtschaftsjahr_abweichend_aktiv?: boolean
   email?: string
   telefon?: string
   webseite?: string

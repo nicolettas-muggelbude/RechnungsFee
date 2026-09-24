@@ -12,11 +12,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from sqlalchemy import extract, func
+from sqlalchemy import func
 
 from api.euer import _berechne_euer
 from database.connection import get_db
 from database.models import Anlagegut, Journaleintrag, Kategorie, Unternehmen
+from utils.wirtschaftsjahr import wirtschaftsjahr_zeitraum
 
 router = APIRouter(prefix="/api/anlage-g", tags=["Anlage G"])
 
@@ -78,11 +79,12 @@ def anlage_g_berechnen(
     )
     gewst_gezahlt = Decimal("0")
     if gewst_kategorie:
+        von, bis = wirtschaftsjahr_zeitraum(unt, jahr)
         row = (
             db.query(func.sum(Journaleintrag.brutto_betrag))
             .filter(
                 Journaleintrag.kategorie_id == gewst_kategorie.id,
-                extract("year", Journaleintrag.datum) == jahr,
+                Journaleintrag.datum.between(von, bis),
             )
             .scalar()
         )

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Anlagegut, Journaleintrag, Kategorie, Unternehmen
+from utils.wirtschaftsjahr import wirtschaftsjahr_zeitraum
 
 router = APIRouter(prefix="/api/euer", tags=["EÜR"])
 
@@ -94,8 +95,10 @@ _EINNAHME_UST_KONTEN = {"1776", "3806", "1771", "3801", "1780", "1781", "1787", 
 # ---------------------------------------------------------------------------
 
 def _berechne_euer(jahr: int, db: Session) -> dict:
-    von = __import__("datetime").date(jahr, 1, 1)
-    bis = __import__("datetime").date(jahr, 12, 31)
+    unt = db.query(Unternehmen).first()
+    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (
+        __import__("datetime").date(jahr, 1, 1), __import__("datetime").date(jahr, 12, 31)
+    )
 
     eintraege = (
         db.query(Journaleintrag)
@@ -151,6 +154,12 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
     # AVEÜR: AfA aus dem Anlagenverzeichnis automatisch in Zeile 33 eintragen
     # (Zeile 33 = AfA bewegliche WG, nicht Zeile 36 = GWG – Issue #265)
+    # Bewusst weiterhin `jahr` (Kalenderjahr) statt des oben berechneten WJ-Zeitraums: der
+    # Abschreibungsplan (_afa_jahresplan) ist strukturell kalenderjahrbasiert (volle
+    # Kalenderjahre nach anteiligem Kaufjahr) - eine Umstellung auf WJ-Zeiträume wäre ein
+    # großer, eigenständiger Eingriff in eine steuerlich sensible Kernberechnung. Bei
+    # abweichendem Wirtschaftsjahr bleibt die AfA-Zuordnung zu "Jahr X" deshalb vorerst
+    # kalenderjahrbasiert (Issue #404, bewusste Scope-Entscheidung).
     from api.anlageverzeichnis import _afa_fuer_jahr
     gueter = db.query(Anlagegut).filter(Anlagegut.aktiv == True).all()
     aveur_afa = sum((_afa_fuer_jahr(g, jahr) for g in gueter), ZERO)
@@ -331,8 +340,8 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
 def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Decimal]]:
     """Gleiche Logik wie _berechne_euer, aber gruppiert nach (euer_zeile, kategorie_name)."""
     from datetime import date as _date
-    von = _date(jahr, 1, 1)
-    bis = _date(jahr, 12, 31)
+    unt = db.query(Unternehmen).first()
+    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (_date(jahr, 1, 1), _date(jahr, 12, 31))
 
     eintraege = (
         db.query(Journaleintrag)

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { berechneGUV, type GUVErgebnis } from '../../api/client'
+import { berechneGUV, getUnternehmen, type GUVErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -13,6 +14,7 @@ export function GUVPage() {
   const now = new Date()
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
   const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const [detailansicht, setDetailansicht] = useState(false)
 
   const { data: ergebnis, isLoading, error } = useQuery<GUVErgebnis>({
@@ -42,7 +44,7 @@ export function GUVPage() {
             onChange={e => setJahr(Number(e.target.value))}
             className="border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
           >
-            {jahre.map(j => <option key={j} value={j}>{j}</option>)}
+            {jahre.map(j => <option key={j} value={j}>{formatWirtschaftsjahrLabel(j, unternehmen?.geschaeftsjahr_beginn)}</option>)}
           </select>
         </div>
         {isLoading && <span className="text-sm text-slate-500 dark:text-slate-400">Berechne…</span>}

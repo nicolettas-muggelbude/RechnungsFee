@@ -45,6 +45,7 @@ class UnternehmenBase(BaseModel):
     rechtsform: str = "Einzelunternehmer"
     eu_handel_aktiv: bool = False
     geschaeftsjahr_beginn: int = 1
+    wirtschaftsjahr_abweichend_aktiv: bool = False
     email: Optional[str] = None
     telefon: Optional[str] = None
     webseite: Optional[str] = None
@@ -150,6 +151,18 @@ class UnternehmenBase(BaseModel):
         if not 1 <= v <= 12:
             raise ValueError("geschaeftsjahr_beginn muss zwischen 1 und 12 liegen")
         return v
+
+    @model_validator(mode="after")
+    def erzwinge_kalenderjahr_wenn_inaktiv(self):
+        # geschaeftsjahr_beginn ist die einzige Quelle der Wahrheit für die Zeitraumberechnung
+        # (siehe euer.py/anlage_g.py) - wirtschaftsjahr_abweichend_aktiv steuert nur die
+        # UI-Sichtbarkeit des Monatsfelds. Ohne diese Absicherung könnte ein Request mit
+        # abweichend_aktiv=False aber geschaeftsjahr_beginn!=1 einen inkonsistenten Zustand
+        # speichern (z.B. wenn das Frontend das Zurücksetzen vergisst oder ein direkter
+        # API-Call erfolgt) - dann würden EÜR & Co. still mit dem falschen Zeitraum rechnen.
+        if not self.wirtschaftsjahr_abweichend_aktiv:
+            self.geschaeftsjahr_beginn = 1
+        return self
 
 
 class UnternehmenCreate(UnternehmenBase):

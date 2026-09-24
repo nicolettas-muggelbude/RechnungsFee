@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 162
+SCHEMA_VERSION = 163
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3618,6 +3618,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 162"))
             conn.commit()
             print("[Migration] Schema auf Version 162 (Issue #399: RE-/ER-Praefix aus Code ins Nummernkreis-Format gehoben)")
+
+        if version < 163:
+            # Issue #404: geschaeftsjahr_beginn existiert bereits seit dem allerersten Schema
+            # (vom DATEV-Export genutzt), war aber nirgends in der UI setzbar und wurde von der
+            # EUER-Berechnung ignoriert (fest 01.01.-31.12.). wirtschaftsjahr_abweichend_aktiv
+            # ist ein reiner UI-Sichtbarkeits-Schalter (Opt-in, Default aus) - geschaeftsjahr_
+            # beginn bleibt die einzige Quelle der Wahrheit fuer die Zeitraumberechnung
+            # (utils/wirtschaftsjahr.py), s. schemas.py::erzwinge_kalenderjahr_wenn_inaktiv.
+            cols163 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "wirtschaftsjahr_abweichend_aktiv" not in cols163:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN wirtschaftsjahr_abweichend_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 163"))
+            conn.commit()
+            print("[Migration] Schema auf Version 163 (Issue #404: abweichendes Wirtschaftsjahr optional aktivierbar)")
 
 
 def _migrate_kategorien() -> None:

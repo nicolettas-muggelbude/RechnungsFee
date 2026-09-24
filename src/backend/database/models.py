@@ -82,6 +82,7 @@ class Unternehmen(Base):
     rechtsform: Mapped[str] = mapped_column(String(50), default="Einzelunternehmer", nullable=False)
     eu_handel_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     geschaeftsjahr_beginn: Mapped[int] = mapped_column(Integer, default=1, nullable=False)  # Monat 1-12
+    wirtschaftsjahr_abweichend_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Rechtsangaben
     handelsregister_nr: Mapped[str | None] = mapped_column(String(100))  # z.B. "HRB 215517"
     handelsregister_gericht: Mapped[str | None] = mapped_column(String(100))  # z.B. "Oldenburg"

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, openUrl, type EUERErgebnis, type EUERDetailErgebnis } from '../../api/client'
+import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, getUnternehmen, openUrl, type EUERErgebnis, type EUERDetailErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
+import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
 
 const ABSCHNITT_LABEL: Record<string, string> = {
   A: 'A – Betriebseinnahmen',
@@ -40,6 +41,7 @@ export function EUERPage() {
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [detailansicht, setDetailansicht] = useState(false)
   const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
 
   const { data: ergebnis, isLoading, error } = useQuery<EUERErgebnis>({
     queryKey: ['euer-berechnen', jahr],
@@ -88,7 +90,7 @@ export function EUERPage() {
           <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Wirtschaftsjahr</label>
           <select value={jahr} onChange={e => setJahr(Number(e.target.value))}
             className="border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
-            {jahre.map(j => <option key={j} value={j}>{j}</option>)}
+            {jahre.map(j => <option key={j} value={j}>{formatWirtschaftsjahrLabel(j, unternehmen?.geschaeftsjahr_beginn)}</option>)}
           </select>
         </div>
         {isLoading && <span className="text-sm text-slate-500 dark:text-slate-400">Berechne…</span>}
