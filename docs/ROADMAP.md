@@ -40,6 +40,29 @@ Vollständige Übersicht und Verwaltung offener Forderungen gegenüber Kunden un
 
 ---
 
+## 📦 Weitere Linux-Paketformate (Debian, Snap) – vor v1.0.0 testen
+
+**Anlass:** Über AppImage/NSIS/DMG hinaus wurden Debian und Snap als mögliche weitere
+Paketformate geprüft – beide haben grundlegend unterschiedliche Hürden.
+
+- **Debian:** Größter Brocken vermutlich das npm-Frontend (Debian verbietet minifizierte Bundles
+  als „Quellcode", jede transitive npm-Abhängigkeit müsste einzeln als `node-*`-Paket vorliegen)
+  und der Rust-/Tauri-Crate-Baum (kein Vendoring erlaubt, jede Crate braucht ein
+  `librust-*-dev`-Paket via debcargo) – aber ein etabliertes Debian-Rust-Team mit Tooling
+  existiert dafür. `saxonche` (nur für optionale ZUGFeRD-XSD-Validierung) ist MPL-2.0/frei, aber
+  nur als Wheel verfügbar – prüfen ob aus Quellcode baubar. PyMuPDF/`fitz`, `ocrmypdf`,
+  `tesseract-ocr` sind bereits fertig in Debian gepflegt. Tauri-Updater müsste für einen
+  Debian-Build deaktiviert werden (Debian-Policy: Updates ausschließlich über apt).
+- **Snap:** Umgekehrtes Problem-Profil – Snapcraft erlaubt Vendoring (kein Debian-Blocker), dafür
+  zwei eigene Risiken: (1) Bei Tauri-Apps kann die empfohlene GNOME-Extension-Einbindung von
+  webkit2gtk die Paketgröße drastisch aufblähen (dokumentierter Fall: 17 MB App → 3 GB Snap) –
+  vor Veröffentlichung unbedingt selbst nachbauen und Größe prüfen. (2) Strict Confinement
+  blockiert das externe Backup auf NAS/USB (`backup_extern_pfad_1/2`) ohne manuell verbundenes
+  `removable-media`-Interface – wird für Desktop-Apps nicht automatisch gewährt. Würde von uns
+  selbst gebaut und im Snap Store veröffentlicht (eigenes CI-Target, kein externer Maintainer).
+
+---
+
 ## ♿ Barrierefreiheit (kein fester Zeitplan, aber Pflicht vor 1.0)
 
 Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigation (Combobox) sind vorhanden, aber Screenreader-Unterstützung fehlt weitgehend.
