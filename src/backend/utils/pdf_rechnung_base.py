@@ -111,6 +111,15 @@ def _fmt_euro(val: Any) -> str:
     return f"{sign}{formatted} €"
 
 
+def _fmt_ust_satz(satz: Any) -> str:
+    """19.00 → "19", 7.00 → "7", 7.80 → "7,8" – analog zu zugferd.py::_ust_satz(), aber mit
+    deutschem Komma für die PDF-Anzeige. Issue #406: int(pos.ust_satz) kappte bei eigenen
+    Steuersätzen mit Nachkommastelle (z.B. 7,8 % Pauschalierung §24 UStG) die Dezimalstelle,
+    obwohl Berechnung/Speicherung korrekt waren - reiner Anzeigefehler in der PDF-Positionszeile."""
+    normalisiert = Decimal(str(satz)).quantize(Decimal("0.01")).normalize()
+    return str(normalisiert).replace(".", ",")
+
+
 def _iso_zu_de(iso: str) -> str:
     try:
         y, m, d = str(iso)[:10].split("-")
@@ -119,15 +128,19 @@ def _iso_zu_de(iso: str) -> str:
         return str(iso)
 
 
-def _ust_aufschluesselung(positionen) -> list[tuple[int, Decimal, Decimal]]:
-    """Gruppiert Positionen nach USt-Satz. Gibt [(satz_int, netto_sum, ust_sum), ...] zurück.
+def _ust_aufschluesselung(positionen) -> list[tuple[Decimal, Decimal, Decimal]]:
+    """Gruppiert Positionen nach USt-Satz. Gibt [(satz, netto_sum, ust_sum), ...] zurück.
     Decimal statt float (Issue: TypeError bei gemischten USt-Sätzen, ust_sum * _s mit
     _s als Decimal-Vorzeichen in _render_summenblock) – auch sonst Projektkonvention
-    für Geldbeträge (keine floats, siehe CLAUDE.md)."""
-    netto_by: dict[int, Decimal] = {}
-    ust_by:   dict[int, Decimal] = {}
+    für Geldbeträge (keine floats, siehe CLAUDE.md).
+    Gruppierungs-Key ist der normalisierte Satz (19.00 → 19, 7.80 → 7.8), nicht int(satz)
+    (Issue #406-Nebenfund): mit int() als Key hätten zwei Sätze, die zufällig auf denselben
+    Integer abschneiden (z.B. 7,8 % und das gesetzliche 7 % auf derselben Rechnung), ihre
+    Summen unbemerkt in einen gemeinsamen Bucket zusammengerechnet."""
+    netto_by: dict[Decimal, Decimal] = {}
+    ust_by:   dict[Decimal, Decimal] = {}
     for pos in positionen:
-        satz  = int(Decimal(str(pos.ust_satz)))
+        satz  = Decimal(str(pos.ust_satz)).quantize(Decimal("0.01")).normalize()
         # pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (Einzelpreis x Menge,
         # nach Positionsrabatt) - keine Stückpreise, keine Multiplikation mit Menge mehr (Issue #332).
         netto_eff = Decimal(str(pos.brutto)) - Decimal(str(pos.ust_betrag))
@@ -623,7 +636,7 @@ class RechnungPDFBase(FPDF):
             _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt * _s))
             if len(aufschluesselung) > 1:
                 ust_lbl = "  |  ".join(
-                    f"{satz} %: {_fmt_euro(ust_sum * _s)}" for satz, _, ust_sum in aufschluesselung
+                    f"{str(satz).replace('.', ',')} %: {_fmt_euro(ust_sum * _s)}" for satz, _, ust_sum in aufschluesselung
                 )
                 _sum_row(f"USt {ust_lbl}", _fmt_euro(r.ust_gesamt * _s))
             else:
@@ -640,7 +653,7 @@ class RechnungPDFBase(FPDF):
                 saetze_mit_werten = [(satz, netto_sum, ust_sum) for satz, netto_sum, ust_sum in aufschluesselung if satz > 0]
                 if len(saetze_mit_werten) > 1:
                     netto_lbl = "  |  ".join(
-                        f"{satz} %: {_fmt_euro(netto_sum * _s)}" for satz, netto_sum, _ in saetze_mit_werten
+                        f"{str(satz).replace('.', ',')} %: {_fmt_euro(netto_sum * _s)}" for satz, netto_sum, _ in saetze_mit_werten
                     )
                     _sum_row(f"Netto {netto_lbl}", _fmt_euro(r.netto_gesamt * _s), grau=True)
                 else:

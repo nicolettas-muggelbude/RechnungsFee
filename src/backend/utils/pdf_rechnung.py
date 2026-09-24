@@ -11,7 +11,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _iso_zu_de, _ust_aufschluesselung,
+    _fmt_euro, _fmt_ust_satz, _iso_zu_de, _ust_aufschluesselung,
     GRAU_HELL, GRAU_RAND, TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W,
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
@@ -85,7 +85,7 @@ class RechnungPDF(RechnungPDFBase):
             if ist_storno:
                 menge_str = f"-{menge_str}"
             ist_diff  = getattr(pos, "differenzbesteuerung", False)
-            ust_label = "§25a" if ist_diff else f"{int(pos.ust_satz)} %"
+            ust_label = "§25a" if ist_diff else f"{_fmt_ust_satz(pos.ust_satz)} %"
             pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
             ROW_H  = 5    # Zeilenhöhe Einzelzellen (Menge, Preis …)
             DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
