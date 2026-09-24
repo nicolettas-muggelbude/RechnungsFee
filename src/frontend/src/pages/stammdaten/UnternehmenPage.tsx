@@ -615,6 +615,13 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             checked={!!form.wirtschaftsjahr_abweichend_aktiv}
             onChange={ev => {
               const checked = ev.target.checked
+              if (!checked && !window.confirm(
+                'Abweichendes Wirtschaftsjahr wirklich deaktivieren?\n\n' +
+                'Danach rechnen EÜR, Anlage S, Anlage G und GuV für JEDE Jahreszahl wieder mit dem ' +
+                'Kalenderjahr (01.01.–31.12.) statt mit dem bisherigen Zeitraum – auch rückwirkend für ' +
+                'bereits angesehene oder exportierte Jahre. Bereits erstellte PDF-Auswertungen bleiben ' +
+                'unverändert, aber ein erneuter Aufruf derselben Jahreszahl zeigt danach andere Werte.'
+              )) return
               set('wirtschaftsjahr_abweichend_aktiv', checked)
               if (!checked) set('geschaeftsjahr_beginn', 1)
             }}
