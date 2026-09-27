@@ -160,13 +160,12 @@ class RechnungCreate(BaseModel):
             raise ValueError("leistung_bis darf nicht vor leistung_von liegen")
         return self
 
-    @model_validator(mode="after")
-    def check_netto_positionen(self) -> "RechnungCreate":
-        if self.dokument_typ not in ("Lieferschein", "Angebot", "Proforma"):
-            for pos in self.positionen:
-                if pos.netto == 0:
-                    raise ValueError("Position netto darf nicht 0 sein")
-        return self
+    # Issue #408: keine Sperre für netto=0 je Position oder in der Summe - beides sind legitime
+    # Fälle (einzelne 0-€-Position neben regulären Positionen, z.B. importierte Eingangsrechnung
+    # mit ausgewiesenem Gratis-Posten; komplett 0-€-Rechnung bei Gegenrechnung/Preiserlass/
+    # 100%-Rabatt). Ursprünglich "netto muss positiv sein", nur für Gutschriften auf "nicht exakt
+    # 0" gelockert (siehe fa1fa1a) - die verbliebene Einschränkung hatte keinen fachlichen Grund
+    # mehr, keine Berechnung im Code dividiert durch pos.netto.
 
     # Direkt-Übernahme aus XML-Import – überschreibt die berechneten Gesamtbeträge
     netto_gesamt_override: Optional[Decimal] = None
