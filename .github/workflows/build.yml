@@ -491,7 +491,7 @@ jobs:
 
   # ── Release Notes generieren & Release veröffentlichen ───────────────────
   release-notes:
-    needs: updater-json
+    needs: [updater-json, checksums]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
@@ -544,7 +544,10 @@ jobs:
           notes += '> - 🪟 Windows: automatisch durch den Installer\n'
           notes += '> - 🐧 Linux: wird vom `install-linux.sh`-Skript angeboten; manuell: `sudo apt install tesseract-ocr tesseract-ocr-deu`\n'
           notes += '> - 🍎 macOS: `brew install tesseract tesseract-lang`\n'
-          notes += '>\n> Ohne Tesseract zeigt RechnungsFee einen Installationshinweis sobald ein gescannter Beleg importiert wird.\n\n---\n\n'
+          notes += '>\n> Ohne Tesseract zeigt RechnungsFee einen Installationshinweis sobald ein gescannter Beleg importiert wird.\n\n'
+          notes += f'> 🔒 **Download prüfen:** [SHA256SUMS.txt]({base}/SHA256SUMS.txt) enthält die Prüfsummen aller Dateien dieses Release.\n'
+          notes += '> - 🐧 Linux/🍎 macOS: `sha256sum -c SHA256SUMS.txt --ignore-missing`\n'
+          notes += '> - 🪟 Windows (PowerShell): `Get-FileHash RechnungsFee_' + v + '_x64-setup.exe -Algorithm SHA256` und mit dem Eintrag in SHA256SUMS.txt vergleichen\n\n---\n\n'
 
           neu  = [tx for tp, tx in entries if tp == 'neu']
           verb = [tx for tp, tx in entries if tp == 'verbesserung']
