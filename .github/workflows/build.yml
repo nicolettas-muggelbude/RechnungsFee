@@ -173,6 +173,17 @@ jobs:
           rm -rf "$SQUASH/usr/lib/"
           echo "=== usr/lib/ entfernt – System-Bibliotheken werden verwendet ==="
 
+          # linuxdeploy erzeugt AppRun.wrapped (kleine Helper-Datei, nicht der App-Binary
+          # selbst) teils mit rwxrwx--- statt rwxr-xr-x - "andere" haben dann keinerlei
+          # Zugriff. Normale AppImage-Ausfuehrung ueber FUSE-Mount normalisiert den
+          # Dateibesitz meist unbemerkt auf den aktuellen Nutzer, aber Tools die direkt
+          # extrahieren (z.B. der AppImageHub-Katalogtest, oder der Runtime-Fallback wenn
+          # FUSE/libfuse2 fehlt) scheitern mit "Permission denied" (Issue: AppImage/
+          # appimage.github.io#8773). a+rX: Lesen fuer alle, Ausfuehren fuer alle nur bei
+          # bereits ausfuehrbaren Dateien/Verzeichnissen - keine Datei wird faelschlich
+          # ausfuehrbar gemacht die es vorher nicht war.
+          chmod -R a+rX "$SQUASH"
+
           wget -qO /tmp/appimagetool \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x /tmp/appimagetool
