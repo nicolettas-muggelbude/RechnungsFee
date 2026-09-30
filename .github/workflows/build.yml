@@ -399,6 +399,34 @@ jobs:
 
           gh release upload "${{ github.ref_name }}" "$TAR" "$SIG" --clobber
 
+  # ── SHA256SUMS.txt generieren ─────────────────────────────────────────────
+  # Bisher gab es keine Möglichkeit für Nutzer, einen heruntergeladenen Installer/eine
+  # AppImage selbst auf Vollständigkeit zu prüfen - die .sig-Dateien sind Minisign-
+  # Signaturen nur für die Updater-relevanten .tar.gz/.nsis.zip-Archive, nicht für die
+  # Dateien die direkt heruntergeladen werden (.exe/.dmg/.AppImage). Deckte sich mit
+  # einem realen Fall: ein Nutzer bekam beim AppImage-Start einen PyInstaller-
+  # Dekompressionsfehler (zlib return -3), vermutlich durch einen beschädigten Download -
+  # ohne Prüfsumme ließ sich das nicht in Sekunden ausschließen.
+  checksums:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: SHA256SUMS.txt generieren und hochladen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir assets
+          gh release download "$TAG" --dir assets --repo "$REPO"
+          cd assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber --repo "$REPO"
+
   # ── latest.json generieren ────────────────────────────────────────────────
   updater-json:
     needs: build
