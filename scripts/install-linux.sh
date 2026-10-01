@@ -146,6 +146,35 @@ _check_and_install_ghostscript() {
   echo "────────────────────────────────────────────────────────────────────────"
 }
 
+# ── Bibliothek prüfen (SONAME-basiert, distro-unabhängig) ─────────────────────
+# Statt Paketnamen zu raten (die je Distribution stark variieren, z.B. "libEGL1"
+# vs. "Mesa-libEGL1" auf openSUSE Tumbleweed) wird direkt geprüft, ob der
+# dynamische Linker die Bibliothek tatsächlich findet - die SONAME kommt vom
+# Upstream-Projekt, nicht vom distro-spezifischen Paketnamen.
+# ldconfig wird mit vollem Pfad aufgerufen: /sbin bzw. /usr/sbin steht bei
+# manchen Distributionen nicht im PATH normaler Nutzer - "ldconfig: command not
+# found" landet dann unbemerkt in /dev/null und wird fälschlich als "Bibliothek
+# fehlt" interpretiert. Vermutlich genau das auf openSUSE Tumbleweed passiert
+# (Issue #409: libEGL und libfuse2 waren real installiert, der ldconfig-Check
+# ohne vollen Pfad meldete trotzdem "fehlt"). Zusätzlicher Fallback: direkte
+# Dateisystemsuche, falls der ldconfig-Cache veraltet ist.
+_lib_vorhanden() {
+  local grep_muster="$1" glob_muster="$2"
+  local ldconfig_bin=""
+  for kandidat in /sbin/ldconfig /usr/sbin/ldconfig ldconfig; do
+    if command -v "$kandidat" &>/dev/null; then
+      ldconfig_bin="$kandidat"
+      break
+    fi
+  done
+  if [ -n "$ldconfig_bin" ] && "$ldconfig_bin" -p 2>/dev/null | grep -q "$grep_muster"; then
+    return 0
+  fi
+  find /lib /lib64 /usr/lib /usr/lib64 /usr/lib/*-linux-gnu* \
+    -maxdepth 1 -name "$glob_muster" 2>/dev/null | grep -q . && return 0
+  return 1
+}
+
 check_and_fix_deps() {
   local pkg_manager="" webkit_pkg="" egl_pkg="" fuse_pkg="" extra_pkgs=""
 
@@ -171,8 +200,8 @@ check_and_fix_deps() {
     fuse_pkg="fuse-libs"
   elif command -v zypper &>/dev/null; then
     pkg_manager="zypper"
-    webkit_pkg="libwebkit2gtk-4.1-0"
-    egl_pkg="libEGL1"
+    webkit_pkg="libwebkit2gtk-4_1-0"
+    egl_pkg="Mesa-libEGL1"
     extra_pkgs=""
     fuse_pkg="libfuse2"
   elif command -v pacman &>/dev/null; then
@@ -185,20 +214,11 @@ check_and_fix_deps() {
 
   local webkit_ok=true egl_ok=true fuse_ok=true
 
-  # webkit2gtk prüfen
-  if [ "$pkg_manager" = "apt" ]; then
-    dpkg -s "$webkit_pkg" &>/dev/null || webkit_ok=false
-  elif [ "$pkg_manager" = "dnf" ] || [ "$pkg_manager" = "zypper" ]; then
-    rpm -q "$webkit_pkg" &>/dev/null || webkit_ok=false
-  elif [ "$pkg_manager" = "pacman" ]; then
-    pacman -Q "$webkit_pkg" &>/dev/null || webkit_ok=false
-  fi
-
-  # libEGL prüfen
-  ldconfig -p 2>/dev/null | grep -q "libEGL\.so\.1" || egl_ok=false
-
-  # FUSE 2 prüfen (AppImage-Voraussetzung)
-  ldconfig -p 2>/dev/null | grep -q "libfuse\.so\.2" || fuse_ok=false
+  # webkit2gtk, libEGL, FUSE 2 prüfen - SONAME-basiert statt über (je Distribution
+  # abweichende) Paketnamen, siehe _lib_vorhanden() oben.
+  _lib_vorhanden 'libwebkit2gtk-4\.1\.so' 'libwebkit2gtk-4.1.so*' || webkit_ok=false
+  _lib_vorhanden 'libEGL\.so\.1' 'libEGL.so.1*' || egl_ok=false
+  _lib_vorhanden 'libfuse\.so\.2' 'libfuse.so.2*' || fuse_ok=false
 
   echo ""
   echo "── Systemprüfung ──────────────────────────────────────────────────────"
@@ -277,8 +297,8 @@ repair_deps() {
     pkg_manager="dnf"; webkit_pkg="webkit2gtk4.1"
     egl_pkg="mesa-libEGL"; extra_pkgs="mesa-dri-drivers"; fuse_pkg="fuse-libs"
   elif command -v zypper &>/dev/null; then
-    pkg_manager="zypper"; webkit_pkg="libwebkit2gtk-4.1-0"
-    egl_pkg="libEGL1"; extra_pkgs=""; fuse_pkg="libfuse2"
+    pkg_manager="zypper"; webkit_pkg="libwebkit2gtk-4_1-0"
+    egl_pkg="Mesa-libEGL1"; extra_pkgs=""; fuse_pkg="libfuse2"
   elif command -v pacman &>/dev/null; then
     pkg_manager="pacman"; webkit_pkg="webkit2gtk-4.1"
     egl_pkg=""; extra_pkgs=""; fuse_pkg="fuse2"
