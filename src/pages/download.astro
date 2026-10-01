@@ -188,6 +188,37 @@ const fmt = (n: number) => n > 0 ? n.toLocaleString('de-DE') + '×' : null
       </div>
     </section>
 
+    <!-- Download prüfen -->
+    <section class="scroll-mt-24 bg-white border border-slate-200 rounded-2xl p-8">
+      <div class="flex items-center gap-3 mb-5">
+        <span class="text-3xl">🔒</span>
+        <h2 class="text-2xl font-bold text-slate-900">Download prüfen</h2>
+      </div>
+      <p class="text-slate-600 mb-4">
+        Jedes Release-Asset hat eine Prüfsumme – nützlich falls eine Datei unvollständig oder beschädigt
+        heruntergeladen wurde (z. B. bei Abbruch der Verbindung).
+      </p>
+      <a
+        href={`https://github.com/nicolettas-muggelbude/RechnungsFee/releases/download/${version}/SHA256SUMS.txt`}
+        class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium text-sm rounded-lg transition-colors"
+      >
+        SHA256SUMS.txt herunterladen
+      </a>
+      <div class="mt-3 bg-slate-900 text-slate-100 rounded-xl p-4 text-sm font-mono space-y-3">
+        <div>
+          <span class="text-slate-400"># Linux / macOS:</span><br/>
+          sha256sum -c SHA256SUMS.txt --ignore-missing
+        </div>
+        <div>
+          <span class="text-slate-400"># Windows (PowerShell):</span><br/>
+          Get-FileHash RechnungsFee_{v}_x64-setup.exe -Algorithm SHA256
+        </div>
+      </div>
+      <p class="text-xs text-slate-400 mt-3">
+        Den Windows-Wert von Hand mit dem passenden Eintrag in SHA256SUMS.txt vergleichen.
+      </p>
+    </section>
+
     <!-- Alle Releases -->
     <div class="text-center">
       <a href={downloadUrls.all} class="text-sm text-slate-400 hover:text-slate-600 transition-colors">
