@@ -60,8 +60,13 @@ def _smtp_einstellungen(db: Session) -> Unternehmen:
     return u
 
 
-def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
-    """Gibt (pdf_bytes, dateiname) zurück."""
+def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional[tuple[int, str]]]:
+    """Gibt (pdf_bytes, dateiname, frisches_original) zurück. frisches_original ist
+    (rechnung_id, rel_pfad) wenn hier ein neues Original-PDF erzeugt wurde, das noch NICHT
+    als versendet markiert ist - der Aufrufer committed das erst nach erfolgreichem Versand
+    (Issue #410: Ein fehlgeschlagener Sendeversuch, z.B. SMTP-Rate-Limit, markierte die
+    Rechnung bisher trotzdem sofort als "ausgegeben" - ein erneuter, diesmal erfolgreicher
+    Versandversuch bekam dadurch fälschlich den KOPIE-Stempel statt des echten Originals)."""
     r = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not r:
         raise HTTPException(404, "Dokument nicht gefunden")
@@ -106,7 +111,7 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
         kopie_bytes = lade_original_mit_kopie_stempel(APP_DATA_DIR, r.original_pdf_pfad)
         if kopie_bytes:
             nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
-            return kopie_bytes, f"{_dok}_{nr}_Kopie.pdf"
+            return kopie_bytes, f"{_dok}_{nr}_Kopie.pdf", None
 
     if kunde_zugferd:
         try:
@@ -118,17 +123,18 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str]:
     else:
         pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
 
-    # Original speichern (erste echte Mail)
+    # Original-PDF auf Disk schreiben (deterministischer Dateiname, siehe speichere_original_pdf -
+    # wiederholtes Schreiben vor einem erfolgreichen Versand ist harmlos, kein Problem bei Retries).
+    # DB-Markierung "ausgegeben" erfolgt bewusst NICHT hier, sondern erst nach erfolgreichem
+    # _sende() im Aufrufer (Issue #410).
+    frisches_original = None
     if darf_archiviert and not r.original_pdf_pfad:
         rel_pfad = speichere_original_pdf(APP_DATA_DIR, r, pdf_bytes)
-        r.original_pdf_pfad = rel_pfad
-        r.ausgegeben = True
-        r.ausgegeben_am = datetime.now()
-        db.commit()
+        frisches_original = (r.id, rel_pfad)
 
     nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
     prefix = "Stornorechnung" if _ist_storno_mail else _dok
-    return pdf_bytes, f"{prefix}_{nr}.pdf"
+    return pdf_bytes, f"{prefix}_{nr}.pdf", frisches_original
 
 
 def _build_message(
@@ -290,9 +296,10 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
     u = _smtp_einstellungen(db)
 
     attachments: list[tuple[bytes, str]] = []
+    frisches_original: Optional[tuple[int, str]] = None
 
     if req.rechnung_id:
-        pdf_bytes, dateiname = _pdf_bytes_fuer(req.rechnung_id, db)
+        pdf_bytes, dateiname, frisches_original = _pdf_bytes_fuer(req.rechnung_id, db)
         attachments.append((pdf_bytes, dateiname))
 
     if req.mahnung_id:
@@ -322,6 +329,17 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
 
     msg = _build_message(u, req.an, req.cc, req.betreff, req.text, attachments)
     _sende(u, msg, empfaenger, db)
+
+    # Erst nach erfolgreichem Versand als ausgegeben markieren (Issue #410) - _sende() wirft bei
+    # jedem Fehler eine HTTPException, der Code hier wird dann nicht erreicht.
+    if frisches_original:
+        rid, rel_pfad = frisches_original
+        r = db.query(Rechnung).filter(Rechnung.id == rid).first()
+        r.original_pdf_pfad = rel_pfad
+        r.ausgegeben = True
+        r.ausgegeben_am = datetime.now()
+        db.commit()
+
     return {"ok": True}
 
 
