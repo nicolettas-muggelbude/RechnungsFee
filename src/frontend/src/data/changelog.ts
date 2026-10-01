@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.6.15',
+    datum: 'Oktober 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Scheiterte der Mailversand einer Rechnung (z. B. weil die minütliche Sendefrequenz des Mailservers überschritten war), wurde die Rechnung trotzdem schon als „ausgegeben" markiert. Ein zweiter, diesmal erfolgreicher Versandversuch verschickte dadurch fälschlich eine Kopie mit KOPIE-Stempel statt des echten Originals. Die Markierung erfolgt jetzt erst nach tatsächlich erfolgreichem Versand. Danke an pstirnberg für den präzisen Bug-Report (Issue #410).' },
+      { typ: 'verbesserung', text: 'Jedes Release-Asset (Installer, AppImage, DMG) hat jetzt eine Prüfsumme – SHA256SUMS.txt im Download-Bereich, mit Anleitung zur Verifikation in den Release-Notes. Hilft bei der Fehlersuche, falls ein Download beschädigt ankam.' },
+    ],
+  },
+  {
     version: 'v0.6.14',
     datum: 'September 2026',
     eintraege: [
