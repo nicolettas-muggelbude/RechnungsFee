@@ -111,6 +111,18 @@ def test_gutschrift_ohne_kategorie_wird_bei_zahlung_verweigert(db):
     db.commit()
 
     resp = create_gutschrift(rechnung.id, db)
+
+    # create_gutschrift() stempelt die Gutschrift immer mit date.today() (fachlich korrekt -
+    # eine heute ausgestellte Gutschrift traegt heutiges Datum), unabhaengig vom Datum der
+    # Ursprungsrechnung. Dieser Test will aber gezielt den AELTEREN, zahlungszeitpunktbezogenen
+    # Kategorie-Check pruefen (Alt-Fall vor Issue #338), nicht den neuen finalisierungszeitpunkt-
+    # bezogenen - deshalb Datum explizit vor CUTOVER_DATUM_VORSTEUER zuruecksetzen, sonst wuerde
+    # bereits finalisiere_rechnung() faelschlich fehlschlagen sobald das echte Kalenderdatum den
+    # Cutover erreicht (passiert ist das am 2026-10-01, identisch zum Cutover-Datum selbst).
+    gutschrift = db.query(Rechnung).filter(Rechnung.id == resp.id).first()
+    gutschrift.datum = date(2026, 3, 1)
+    db.commit()
+
     finalisiere_rechnung(resp.id, db)
 
     from fastapi import HTTPException
