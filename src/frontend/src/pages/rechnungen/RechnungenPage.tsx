@@ -2582,6 +2582,10 @@ function RechnungForm({
     if (initial?.faellig_am) return initial.faellig_am
     if (initial) return ''
     if (prefillFromAnalyse) return ''  // Import ohne Fälligkeit → leer lassen
+    // Standard-Zahlungsziel explizit 0 = in den Einstellungen deaktiviert (kein eigenes
+    // Ein/Aus-Feld dafür vorhanden) - dann keine Fälligkeit vorschlagen statt "fällig heute"
+    // (0 Tage), siehe Issue #411. undefined/null (nie gespeichert) fällt weiterhin auf 14.
+    if (unternehmen?.standard_zahlungsziel === 0) return ''
     const d = new Date(heuteIso())
     d.setDate(d.getDate() + (unternehmen?.standard_zahlungsziel ?? 14))
     return d.toISOString().slice(0, 10)

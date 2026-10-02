@@ -242,9 +242,12 @@ function ProformaFormular({
     if (k) setEingabeModus(k.firmenname?.trim() ? 'netto' : 'brutto')
   }, [partnerId, kunden])
 
-  // faellig_am aus Unternehmens-Standard berechnen wenn noch leer
+  // faellig_am aus Unternehmens-Standard berechnen wenn noch leer. Standard-Zahlungsziel
+  // explizit 0 = in den Einstellungen deaktiviert (kein eigenes Ein/Aus-Feld dafür
+  // vorhanden) - dann keine Fälligkeit vorschlagen statt "fällig heute" (Issue #411).
   useEffect(() => {
     if (initial || faelligAm) return
+    if (unternehmen?.standard_zahlungsziel === 0) return
     const tage = unternehmen?.standard_zahlungsziel ?? 14
     const d = new Date(datum)
     d.setDate(d.getDate() + tage)
