@@ -186,17 +186,16 @@ function PositionenTabelle({
                   type="text" placeholder="0" className={`${cellInput} text-right`} />
               </td>
               <td className="px-2 py-1.5">
-                <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
-                  disabled={istKleinunternehmer}
-                  className={`${cellInput} text-right disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed`}>
-                  {istKleinunternehmer ? (
-                    <option value="0">0 (§19)</option>
-                  ) : (
-                    ustSaetze.map(u => (
+                {istKleinunternehmer ? (
+                  <div className="text-right text-xs text-slate-400 dark:text-slate-500 px-1">§19</div>
+                ) : (
+                  <select value={pos.ust_satz} onChange={e => update(i, 'ust_satz', e.target.value)}
+                    className={`${cellInput} text-right`}>
+                    {ustSaetze.map(u => (
                       <option key={u.satz} value={u.satz}>{u.satz} %</option>
-                    ))
-                  )}
-                </select>
+                    ))}
+                  </select>
+                )}
               </td>
               <td className="px-2 py-1.5 text-center">
                 {positionen.length > 1 && (
@@ -208,20 +207,24 @@ function PositionenTabelle({
           ))}
         </tbody>
         <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-          <tr>
-            <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
-              Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
-            </td>
-            <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
-              {summen.netto.toFixed(2).replace('.', ',')} €
-            </td>
-          </tr>
-          <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
-              {summen.ust.toFixed(2).replace('.', ',')} €
-            </td>
-          </tr>
+          {!istKleinunternehmer && (
+            <>
+              <tr>
+                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+                  Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
+                </td>
+                <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
+                  {summen.netto.toFixed(2).replace('.', ',')} €
+                </td>
+              </tr>
+              <tr className="border-t border-slate-100 dark:border-slate-700">
+                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
+                  {summen.ust.toFixed(2).replace('.', ',')} €
+                </td>
+              </tr>
+            </>
+          )}
           <tr className="border-t border-slate-100 dark:border-slate-700">
             <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
@@ -337,7 +340,7 @@ function AuftragFormular({
             menge: String(parseMenge(p.menge)),
             einheit: p.einheit || 'Stk.',
             netto: p.einzelpreis.replace(',', '.'),
-            ust_satz: String(parseFloat(p.ust_satz) || 0),
+            ust_satz: unternehmen?.ist_kleinunternehmer ? '0' : String(parseFloat(p.ust_satz) || 0),
             artikel_id: p.artikel_id,
             rabatt_prozent: parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || undefined,
           })),
@@ -388,7 +391,7 @@ function AuftragFormular({
           menge: String(parseMenge(p.menge)),
           einheit: p.einheit || 'Stk.',
           netto: p.einzelpreis.replace(',', '.') || '0',
-          ust_satz: String(parseFloat(p.ust_satz) || 0),
+          ust_satz: unternehmen?.ist_kleinunternehmer ? '0' : String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
         }

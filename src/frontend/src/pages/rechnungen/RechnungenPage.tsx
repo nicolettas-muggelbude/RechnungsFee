@@ -3671,15 +3671,13 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
-      {/* §19-Hinweis */}
-      {istKleinunternehmer && (
+      {/* §19-Hinweis - nur noch für Eingang: beim Ausgang ist das Steuersatz-Feld jetzt
+          komplett ausgeblendet statt nur gesperrt, es gibt also nichts mehr zu erklären. */}
+      {istKleinunternehmer && typ === 'eingang' && (
         <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
           <span className="mt-0.5">ℹ️</span>
           <span>
-            <strong>Kleinunternehmer §19 UStG</strong> –{' '}
-            {typ === 'ausgang'
-              ? 'Keine Umsatzsteuer ausgewiesen. USt-Satz ist gesperrt.'
-              : 'Trag den tatsächlich vom Lieferanten ausgewiesenen USt-Satz ein - die Vorsteuer ist als Kleinunternehmer trotzdem nicht abziehbar.'}
+            <strong>Kleinunternehmer §19 UStG</strong> – Trag den tatsächlich vom Lieferanten ausgewiesenen USt-Satz ein - die Vorsteuer ist als Kleinunternehmer trotzdem nicht abziehbar.
           </span>
         </div>
       )}
@@ -3811,21 +3809,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               </div>
               <div>
                 <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">USt-Satz</label>
-                <select
-                  value={positionen[0]?.ust_satz ?? defaultUstGlobal}
-                  onChange={(e) => updatePosition(0, 'ust_satz', e.target.value)}
-                  disabled={sperreUstAufNull}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                >
-                  {sperreUstAufNull ? (
-                    <option value="0">0 % (§19)</option>
-                  ) : (
-                    aktiveSaetze.map((s) => {
+                {sperreUstAufNull ? (
+                  <div className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800">
+                    §19 – keine USt
+                  </div>
+                ) : (
+                  <select
+                    value={positionen[0]?.ust_satz ?? defaultUstGlobal}
+                    onChange={(e) => updatePosition(0, 'ust_satz', e.target.value)}
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    {aktiveSaetze.map((s) => {
                       const val = String(parseFloat(s.satz))
                       return <option key={s.id} value={val}>{val} %</option>
-                    })
-                  )}
-                </select>
+                    })}
+                  </select>
+                )}
               </div>
             </div>
             {/* Kategorie */}
@@ -3955,23 +3954,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                     <td className="px-2 py-1.5">
                       {pos.differenzbesteuerung ? (
                         <div className="text-right text-xs font-medium text-amber-600 dark:text-amber-400 px-1">§25a</div>
+                      ) : sperreUstAufNull ? (
+                        <div className="text-right text-xs text-slate-400 dark:text-slate-500 px-1">§19</div>
                       ) : (
                         <select
                           value={pos.ust_satz}
                           onChange={(e) => updatePosition(i, 'ust_satz', e.target.value)}
-                          disabled={sperreUstAufNull}
-                          className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
+                          className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
                         >
-                          {sperreUstAufNull ? (
-                            <option value="0">0 (§19)</option>
-                          ) : (
-                            aktiveSaetze.map((s) => {
-                              const val = String(parseFloat(s.satz))
-                              return (
-                                <option key={s.id} value={val}>{val} %</option>
-                              )
-                            })
-                          )}
+                          {aktiveSaetze.map((s) => {
+                            const val = String(parseFloat(s.satz))
+                            return (
+                              <option key={s.id} value={val}>{val} %</option>
+                            )
+                          })}
                         </select>
                       )}
                     </td>
@@ -4006,16 +4002,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </tbody>
             {dokumentTyp !== 'Lieferschein' && (
             <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-              <tr>
-                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
-                  Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
-                </td>
-                <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
-              </tr>
-              <tr>
-                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
-                <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
-              </tr>
+              {!sperreUstAufNull && (
+                <>
+                  <tr>
+                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                      Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
+                    </td>
+                    <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                    <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
+                  </tr>
+                </>
+              )}
               {rechnungRabattNum > 0 && (
                 <tr>
                   <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
