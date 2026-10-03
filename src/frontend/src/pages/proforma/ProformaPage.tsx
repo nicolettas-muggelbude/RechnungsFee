@@ -8,7 +8,7 @@ import {
   getProformas, getKunden, getUstSaetze, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusProforma,
-  openUrl, getRechnungPdf, isTauri, openInPdfWindow, downloadPdfForMail,
+  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
   type Rechnung, type ArtikelSuche,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
@@ -644,35 +644,33 @@ function ProformaDetail({
     finally { setFinLaedt(false) }
   }
 
-  async function fetchPdfBlob(): Promise<string> {
-    const blob = await getRechnungPdf(proforma.id)
-    return URL.createObjectURL(blob)
-  }
-
+  // Direkte PDF-URL statt Blob-Umweg: ein separates natives Tauri-Fenster lädt echte URLs
+  // eigenständig, kann aber eine im Hauptfenster erzeugte blob:-URL nicht auflösen - zeigte
+  // unter WebKitGTK/Linux ein leeres Fenster (analog zu Issue #371, dort für Rechnungen bereits
+  // gefixt). Issue #415.
   async function handlePdf() {
     setPdfLaedt(true)
     try {
-      const blobUrl = await fetchPdfBlob()
+      const base = await getApiBase()
+      const url = `${base}/rechnungen/${proforma.id}/pdf`
       if (isTauri()) {
-        openInPdfWindow(blobUrl, `Proforma ${proforma.rechnungsnummer ?? ''}`)
+        openInPdfWindow(url, `Proforma ${proforma.rechnungsnummer ?? ''}`)
       } else {
-        window.open(blobUrl, '_blank')
+        window.open(url, '_blank')
       }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
     } finally { setPdfLaedt(false) }
   }
 
   async function handleDrucken() {
     setPdfLaedt(true)
     try {
-      const blobUrl = await fetchPdfBlob()
+      const base = await getApiBase()
+      const url = `${base}/rechnungen/${proforma.id}/pdf`
       if (isTauri()) {
-        openInPdfWindow(blobUrl, 'Proforma drucken')
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
+        openInPdfWindow(url, 'Proforma drucken')
       } else {
-        const win = window.open(blobUrl, '_blank')
+        const win = window.open(url, '_blank')
         if (win) win.addEventListener('load', () => win.print())
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
       }
     } finally { setPdfLaedt(false) }
   }
