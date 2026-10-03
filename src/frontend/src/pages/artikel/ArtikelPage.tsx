@@ -269,7 +269,7 @@ const schema = z.object({
   bezeichnung: z.string().min(1, 'Bezeichnung erforderlich'),
   einheit: z.string().min(1, 'Einheit erforderlich'),
   steuersatz: z.string().min(1, 'Steuersatz erforderlich'),
-  vk_brutto: z.string().refine(v => parseFloat(v) > 0, 'VK muss positiv sein'),
+  vk_brutto: z.string().refine(v => parseFloat(v) >= 0, 'VK darf nicht negativ sein'),
   ek_netto: z.string().optional(),
   lieferant_id: z.string().optional(),
   lieferanten_artikelnr: z.string().optional(),
@@ -417,13 +417,13 @@ export function ArtikelFormModal({
     setVkNetto(val)
     setVkEingabe('netto')
     const n = parseFloat(val)
-    if (!isNaN(n) && n > 0) setValue('vk_brutto', String(bruttoAusNetto(n)), { shouldValidate: true })
+    if (!isNaN(n) && n >= 0) setValue('vk_brutto', String(bruttoAusNetto(n)), { shouldValidate: true })
   }
   function onVkBruttoChange(val: string) {
     setValue('vk_brutto', val, { shouldValidate: true })
     setVkEingabe('brutto')
     const b = parseFloat(val)
-    if (!isNaN(b) && b > 0) setVkNetto(String(nettoAusBrutto(b)))
+    if (!isNaN(b) && b >= 0) setVkNetto(String(nettoAusBrutto(b)))
     else setVkNetto('')
   }
   function onEkBruttoChange(val: string) {
@@ -576,7 +576,7 @@ export function ArtikelFormModal({
                 <div>
                   <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
                   <input
-                    type="number" step="0.01" min="0.01" placeholder="0,00"
+                    type="number" step="0.01" min="0" placeholder="0,00"
                     value={vkNetto}
                     onChange={(e) => onVkNettoChange(e.target.value)}
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
@@ -588,7 +588,7 @@ export function ArtikelFormModal({
                   {differenzbesteuerung ? 'Verkaufspreis (inkl. Margensteuer)' : 'Brutto'}
                 </span>
                 <input
-                  type="number" step="0.01" min="0.01" placeholder="0,00"
+                  type="number" step="0.01" min="0" placeholder="0,00"
                   value={watch('vk_brutto') ?? ''}
                   onChange={(e) => onVkBruttoChange(e.target.value)}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"

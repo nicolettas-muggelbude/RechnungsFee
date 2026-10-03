@@ -41,8 +41,8 @@ class ArtikelCreate(BaseModel):
     @field_validator("vk_brutto")
     @classmethod
     def check_vk(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("vk_brutto muss positiv sein")
+        if v < 0:
+            raise ValueError("vk_brutto darf nicht negativ sein")
         return v
 
     @field_validator("vk_eingabe")
