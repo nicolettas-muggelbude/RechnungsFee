@@ -96,6 +96,13 @@ function parseMenge(menge: string): number {
   return Number.isNaN(n) ? 1 : n
 }
 
+// Rein optische Rundung auf 2 Nachkommastellen (z. B. bei Artikel-Übernahme mit 4 Nachkommastellen
+// aus Issue #332/#344) - der gespeicherte Wert selbst bleibt exakt, siehe editingPreisIdx unten.
+function formatPreis(preis: string): string {
+  const n = parseFloat(preis.replace(',', '.'))
+  return Number.isNaN(n) ? preis : n.toFixed(2).replace('.', ',')
+}
+
 function PositionenTabelle({
   positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
 }: {
@@ -110,6 +117,10 @@ function PositionenTabelle({
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
   }
+
+  // Während der Bearbeitung den vollen eingegebenen/exakten Wert zeigen, sonst gerundet auf
+  // 2 Nachkommastellen (nur die Anzeige - der Wert selbst bleibt für die Berechnung exakt).
+  const [editingPreisIdx, setEditingPreisIdx] = useState<number | null>(null)
 
   const cellInput = "w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
 
@@ -158,7 +169,11 @@ function PositionenTabelle({
                   placeholder="Stk." className={cellInput} />
               </td>
               <td className="px-2 py-1.5">
-                <input value={pos.einzelpreis} onChange={e => update(i, 'einzelpreis', e.target.value)}
+                <input
+                  value={editingPreisIdx === i ? pos.einzelpreis : formatPreis(pos.einzelpreis)}
+                  onChange={e => update(i, 'einzelpreis', e.target.value)}
+                  onFocus={() => setEditingPreisIdx(i)}
+                  onBlur={() => setEditingPreisIdx(null)}
                   type="text" placeholder="0,00" className={`${cellInput} text-right`} />
               </td>
               <td className="px-2 py-1.5">

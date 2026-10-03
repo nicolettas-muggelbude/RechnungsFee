@@ -76,6 +76,13 @@ function parseMenge(menge: string): number {
   return Number.isNaN(n) ? 1 : n
 }
 
+// Rein optische Rundung auf 2 Nachkommastellen (z. B. bei Artikel-Übernahme mit 4 Nachkommastellen
+// aus Issue #332/#344) - der gespeicherte Wert selbst bleibt exakt, siehe editingPreisIdx oben.
+function formatPreis(preis: string): string {
+  const n = parseFloat(preis.replace(',', '.'))
+  return Number.isNaN(n) ? preis : n.toFixed(2).replace('.', ',')
+}
+
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -2654,6 +2661,9 @@ function RechnungForm({
     else if (pf?.gesamt_netto) pos.netto = pf.gesamt_netto
     return [pos]
   })
+  // Während der Bearbeitung den vollen eingegebenen/exakten Wert zeigen, sonst gerundet auf
+  // 2 Nachkommastellen (nur die Anzeige - der Wert selbst bleibt für die Berechnung exakt).
+  const [editingPreisIdx, setEditingPreisIdx] = useState<number | null>(null)
   const [eingabeModus, setEingabeModus] = useState<'netto' | 'brutto'>(
     initial?.eingabemodus
       ? initial.eingabemodus
@@ -3925,8 +3935,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                       <input
                         required
                         type="text"
-                        value={pos.netto}
+                        value={editingPreisIdx === i ? pos.netto : formatPreis(pos.netto)}
                         onChange={(e) => updatePosition(i, 'netto', e.target.value)}
+                        onFocus={() => setEditingPreisIdx(i)}
+                        onBlur={() => setEditingPreisIdx(null)}
                         className="w-full border-0 outline-none bg-transparent text-right text-slate-700 dark:text-slate-200"
                         placeholder="0,00"
                       />
