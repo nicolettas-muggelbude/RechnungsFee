@@ -61,13 +61,6 @@ class RechnungspositionCreate(BaseModel):
             raise ValueError("ust_satz muss zwischen 0 und 100 liegen")
         return v
 
-    @field_validator("menge")
-    @classmethod
-    def check_menge(cls, v: Decimal) -> Decimal:
-        if v == 0:
-            raise ValueError("menge darf nicht 0 sein")
-        return v
-
 
 class RechnungspositionResponse(BaseModel):
     id: int
