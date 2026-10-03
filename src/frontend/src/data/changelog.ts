@@ -36,6 +36,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Eine Position mit Menge 0 ließ sich in Angebot, Auftrag, Proforma und Rechnung nicht anlegen oder wurde beim Speichern automatisch auf Menge 1 zurückgesetzt - für optionale Positionen aber ein legitimer Fall. Menge 0 ist jetzt überall möglich, die Position fließt dann korrekt mit 0€ in die Summe ein. Danke an ludgerknorps für den Bug-Report (Issue #414).' },
       { typ: 'fix', text: 'Ein Positionspreis, der von einem Artikel mit krummem Rundungswert übernommen wurde, erschien im Eingabefeld mit 4 statt den üblichen 2 Nachkommastellen (z. B. "2,9412" statt "2,94"). Angezeigt wird jetzt wieder kaufmännisch auf den Cent gerundet, gerechnet wird weiterhin exakt (Issue #414).' },
       { typ: 'verbesserung', text: 'Die gespeicherte Detail-Ansicht von Angebot, Auftrag und Proforma zeigt jetzt eine eigene Menge-Spalte statt eines leicht zu übersehenden Präfixes vor der Beschreibung - Netto und Brutto zeigen dort durchgängig die Positionssumme statt einer Mischung aus Einzelpreis und Gesamtsumme (Issue #414).' },
+      { typ: 'verbesserung', text: 'Als Kleinunternehmer (§19 UStG) nie benötigte Felder bei Angebot, Auftrag, Proforma und Rechnung (Verkauf) weiter aufgeräumt: Das bisher nur deaktivierte "0%"-Steuersatz-Dropdown je Position ist jetzt komplett ausgeblendet, in der Summenzeile entfallen die separaten Netto- und USt-Zeilen (nur noch Gesamtsumme). Eingangsrechnungen sind unverändert, dort bleibt der reale Lieferanten-USt-Satz relevant (Issue #416).' },
     ],
   },
   {
