@@ -311,9 +311,14 @@ export function ArtikelFormModal({
   const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
   const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const aktiveSaetze = ustSaetze.filter((s) => s.ist_aktiv)
-  const defaultSatz = ustSaetze.find((s) => s.ist_default)?.satz
-    ? String(parseFloat(ustSaetze.find((s) => s.ist_default)!.satz))
-    : '19'
+  // §19 UStG: Kleinunternehmer weisen nie USt aus - neue Artikel/Dienstleistungen/
+  // Fremdleistungen sollen deshalb mit 0% statt dem allgemeinen Standardsatz starten,
+  // nicht erst nachträglich manuell umgestellt werden müssen (Issue #412).
+  const defaultSatz = unt?.ist_kleinunternehmer
+    ? '0'
+    : ustSaetze.find((s) => s.ist_default)?.satz
+      ? String(parseFloat(ustSaetze.find((s) => s.ist_default)!.satz))
+      : '19'
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
