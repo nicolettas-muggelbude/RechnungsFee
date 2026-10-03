@@ -65,6 +65,13 @@ function adjustMenge(current: string, step: number): string {
   return r % 1 === 0 ? String(r) : String(r).replace('.', ',')
 }
 
+// "0" ist eine gültige Menge (z. B. optionale Position) - anders als bei einem leeren/ungültigen
+// Feld darf das "|| 1" hier nicht greifen, sonst verschwindet die 0 wieder (Issue #414).
+function parseMenge(menge: string): number {
+  const n = parseFloat(menge.replace(',', '.'))
+  return Number.isNaN(n) ? 1 : n
+}
+
 function PositionenTabelle({
   positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
 }: {
@@ -297,7 +304,7 @@ function ProformaFormular({
           .filter(p => p.einzelpreis.trim())
           .map(p => ({
             beschreibung: p.beschreibung || '-',
-            menge: String(parseFloat(p.menge.replace(',', '.')) || 1),
+            menge: String(parseMenge(p.menge)),
             einheit: p.einheit || 'Stk.',
             netto: p.einzelpreis.replace(',', '.'),
             ust_satz: String(parseFloat(p.ust_satz) || 0),
@@ -338,7 +345,7 @@ function ProformaFormular({
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung.trim(),
-          menge: String(parseFloat(p.menge) || 1),
+          menge: String(parseMenge(p.menge)),
           einheit: p.einheit || 'Stk.',
           netto: p.einzelpreis.replace(',', '.') || '0',
           ust_satz: String(parseFloat(p.ust_satz) || 0),

@@ -69,6 +69,13 @@ function adjustMenge(current: string, step: number): string {
   return r % 1 === 0 ? String(r) : String(r).replace('.', ',')
 }
 
+// "0" ist eine gültige Menge (z. B. optionale Position) - anders als bei einem leeren/ungültigen
+// Feld darf das "|| 1" hier nicht greifen, sonst verschwindet die 0 wieder (Issue #414).
+function parseMenge(menge: string): number {
+  const n = parseFloat(menge.replace(',', '.'))
+  return Number.isNaN(n) ? 1 : n
+}
+
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -3024,7 +3031,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     const gruppen: Record<string, number> = {}
     for (const p of positionen) {
       const satz = String(parseFloat(p.ust_satz) || 0)
-      const betrag = (parseFloat(p.netto.replace(',', '.')) || 0) * (parseFloat(p.menge) || 1)
+      const betrag = (parseFloat(p.netto.replace(',', '.')) || 0) * parseMenge(p.menge)
       gruppen[satz] = (gruppen[satz] ?? 0) + betrag
     }
     const labels: Record<string, string> = { '0': 'Waren (0%)', '7': 'Waren (7%)', '19': 'Waren (19%)' }
