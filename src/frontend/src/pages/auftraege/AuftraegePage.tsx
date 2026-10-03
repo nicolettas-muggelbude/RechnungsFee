@@ -102,6 +102,12 @@ function formatPreis(preis: string): string {
   return Number.isNaN(n) ? preis : n.toFixed(2).replace('.', ',')
 }
 
+function formatMenge(v: string | number): string {
+  const n = parseFloat(String(v).replace(',', '.'))
+  if (isNaN(n)) return String(v)
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 }).format(n)
+}
+
 function PositionenTabelle({
   positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
 }: {
@@ -989,31 +995,46 @@ function AuftragDetail({
                 <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
                     <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
-                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Netto</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Menge</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Einzelpreis</th>
                     <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">USt</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Netto</th>
                     <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Brutto</th>
                   </tr>
                 </thead>
                 <tbody>
                   {auftrag.positionen.map((pos, i) => {
                     const posRabatt = parseFloat(pos.rabatt_prozent ?? '0') || 0
+                    // pos.netto ist der eingegebene Einzelpreis, pos.brutto/pos.ust_betrag sind
+                    // bereits fertige Positionssummen (inkl. Menge, nach Positionsrabatt) - die
+                    // Netto-Spalte hier muss daraus abgeleitet werden, sonst steht bei Menge 0
+                    // ein Einzelpreis > 0 neben einer Gesamtsumme von 0 ohne erklärende Menge-
+                    // Spalte (Issue #414, Folgefund).
+                    const bruttoPos = parseFloat(pos.brutto as any) || 0
+                    const ustPos = parseFloat(pos.ust_betrag as any) || 0
+                    const nettoPos = bruttoPos - ustPos
                     return (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
-                        {pos.menge !== '1' && <span className="text-slate-400 dark:text-slate-500 mr-1">{pos.menge}×</span>}
                         {pos.beschreibung}
                         {posRabatt > 0 && (
                           <span className="text-slate-400 dark:text-slate-500 text-xs ml-1">(− {posRabatt} %)</span>
                         )}
                       </td>
+                      <td className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+                        {formatMenge(pos.menge)}{pos.einheit ? ` ${pos.einheit}` : ''}
+                      </td>
                       <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
                         {(parseFloat(pos.netto as any) || 0).toFixed(2).replace('.', ',')} €
                       </td>
                       <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500">
-                        {pos.ust_satz}%
+                        {pos.differenzbesteuerung ? '§25a' : `${pos.ust_satz}%`}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
+                        {nettoPos.toFixed(2).replace('.', ',')} €
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
-                        {(parseFloat(pos.brutto as any) || 0).toFixed(2).replace('.', ',')} €
+                        {bruttoPos.toFixed(2).replace('.', ',')} €
                       </td>
                     </tr>
                     )
@@ -1031,18 +1052,18 @@ function AuftragDetail({
                     return (
                       <>
                         <tr>
-                          <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">Zwischensumme</td>
+                          <td colSpan={5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">Zwischensumme</td>
                           <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{zwischensumme.toFixed(2).replace('.', ',')} €</td>
                         </tr>
                         <tr>
-                          <td colSpan={3} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{rabattLbl}</td>
+                          <td colSpan={5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">{rabattLbl}</td>
                           <td className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">− {rabattBetrag.toFixed(2).replace('.', ',')} €</td>
                         </tr>
                       </>
                     )
                   })()}
                   <tr>
-                    <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamt</td>
+                    <td colSpan={5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Gesamt</td>
                     <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">
                       {brutto.toFixed(2).replace('.', ',')} €
                     </td>
