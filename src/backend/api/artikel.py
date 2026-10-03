@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Artikel, Lieferant, Nummernkreis, Rechnung, Rechnungsposition, Kunde, UstSatz
+from database.models import Artikel, Lieferant, Nummernkreis, Rechnung, Rechnungsposition, Kunde, UstSatz, Unternehmen
 from .schemas_artikel import ArtikelCreate, ArtikelUpdate, ArtikelResponse, ArtikelSucheResponse, ArtikelRechnungKurz
 
 router = APIRouter(prefix="/api/artikel", tags=["Artikel"])
@@ -20,10 +20,17 @@ def _berechne_preise(
     ek_netto: Optional[Decimal],
     steuersatz: Decimal,
     differenzbesteuerung: bool = False,
+    ist_kleinunternehmer: bool = False,
 ):
     """Berechnet vk_brutto und vk_netto - je nachdem welcher der beiden Preise laut vk_eingabe
     die vom Nutzer eingegebene Wahrheit ist, wird der jeweils andere daraus abgeleitet. Gibt
     (vk_brutto, vk_netto, ek_brutto) zurück.
+
+    Bei Kleinunternehmern (§19 UStG) gilt das nur für den Verkauf (VK) - vk_netto = vk_brutto,
+    unabhängig vom gespeicherten steuersatz. Der Lieferant, bei dem eingekauft wird, berechnet
+    aber ganz normal USt, auch wenn man selbst Kleinunternehmer ist - ek_brutto wird deshalb
+    weiterhin mit dem echten steuersatz berechnet (Issue #412-Folgefund). steuersatz ist für
+    Kleinunternehmer dadurch faktisch nur noch der Einkaufs-Steuersatz.
 
     Ohne diese Unterscheidung ging beim Runden Präzision verloren: wer 2,94€ netto einträgt,
     bekommt korrekt 3,50€ brutto (2,94 x 1,19 = 3,4986€ -> 3,50€) - eine Rückrechnung
@@ -51,6 +58,10 @@ def _berechne_preise(
 
     if differenzbesteuerung:
         # §25a: kein USt-Aufschlag auf den Rechnungspreis
+        return vk_brutto, vk_brutto, ek_brutto
+
+    if ist_kleinunternehmer:
+        # §19: kein USt-Ausweis auf dem Verkauf, unabhängig vom (Einkaufs-)Steuersatz
         return vk_brutto, vk_brutto, ek_brutto
 
     faktor = 1 + steuersatz / 100
@@ -148,8 +159,10 @@ def _prüfe_steuersatz(satz: Decimal, db: Session) -> None:
 def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
     if not data.differenzbesteuerung:
         _prüfe_steuersatz(data.steuersatz, db)
+    unternehmen = db.query(Unternehmen).first()
     vk_brutto, vk_netto, ek_brutto = _berechne_preise(
-        data.vk_brutto, data.vk_netto, data.vk_eingabe, data.ek_netto, data.steuersatz, data.differenzbesteuerung
+        data.vk_brutto, data.vk_netto, data.vk_eingabe, data.ek_netto, data.steuersatz, data.differenzbesteuerung,
+        bool(unternehmen and unternehmen.ist_kleinunternehmer),
     )
     artikelnummer = _naechste_artikelnummer(db)
     artikel = Artikel(
@@ -215,8 +228,10 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
     vk_eingabe = update.get("vk_eingabe", artikel.vk_eingabe)
     steuersatz = update.get("steuersatz", artikel.steuersatz)
     ek_netto = update.get("ek_netto", artikel.ek_netto)
+    unternehmen = db.query(Unternehmen).first()
     vk_brutto, vk_netto, ek_brutto = _berechne_preise(
-        vk_brutto_in, vk_netto_in, vk_eingabe, ek_netto, steuersatz, differenzbesteuerung
+        vk_brutto_in, vk_netto_in, vk_eingabe, ek_netto, steuersatz, differenzbesteuerung,
+        bool(unternehmen and unternehmen.ist_kleinunternehmer),
     )
     update["vk_brutto"] = vk_brutto
     update["vk_netto"] = vk_netto

@@ -355,6 +355,11 @@ export function ArtikelFormModal({
   const typ = watch('typ') as ArtikelTyp
   const differenzbesteuerung = watch('differenzbesteuerung')
   const steuersatz = differenzbesteuerung ? 0 : parseFloat(watch('steuersatz') || '0')
+  // §19: Steuersatz-Feld bleibt nur sichtbar, wenn es noch gebraucht wird - für den
+  // Einkaufspreis bei Artikel/Fremdleistung (der Lieferant berechnet real USt, unabhängig
+  // davon ob man selbst Kleinunternehmer ist). Ohne Einkauf (Dienstleistung) entfällt es
+  // komplett, der Verkauf ist für Kleinunternehmer immer ohne USt-Ausweis (Issue #412-Folgefund).
+  const istKleinunternehmer = unt?.ist_kleinunternehmer ?? false
   const lager_aktiv = watch('lager_aktiv')
   const einheit = watch('einheit')
 
@@ -517,9 +522,11 @@ export function ArtikelFormModal({
               <EinheitAuswahl value={watch('einheit') ?? ''} onChange={(v) => setValue('einheit', v, { shouldValidate: true })} />
               {errors.einheit && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.einheit.message}</p>}
             </div>
-            {!differenzbesteuerung && (
+            {!differenzbesteuerung && (!istKleinunternehmer || hatEK(typ)) && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Steuersatz *</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                  {istKleinunternehmer ? 'Einkaufs-USt *' : 'Steuersatz *'}
+                </label>
                 <select {...register('steuersatz')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
                   {aktiveSaetze.map((s) => {
                     const val = String(parseFloat(s.satz))
@@ -530,6 +537,9 @@ export function ArtikelFormModal({
                     )
                   })}
                 </select>
+                {istKleinunternehmer && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Nur für den Einkaufspreis - dein Verkauf bleibt als Kleinunternehmer ohne USt-Ausweis.</p>
+                )}
               </div>
             )}
             {differenzbesteuerung && (
@@ -537,6 +547,14 @@ export function ArtikelFormModal({
                 <label className="block text-sm font-medium text-slate-400 dark:text-slate-500 mb-1">Steuersatz</label>
                 <div className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800">
                   §25a – kein Ausweis
+                </div>
+              </div>
+            )}
+            {!differenzbesteuerung && istKleinunternehmer && !hatEK(typ) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-400 dark:text-slate-500 mb-1">Steuersatz</label>
+                <div className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800">
+                  §19 – keine USt
                 </div>
               </div>
             )}
@@ -549,9 +567,12 @@ export function ArtikelFormModal({
               {differenzbesteuerung && (
                 <span className="ms-2 text-xs font-normal text-amber-600 dark:text-amber-400">Rechnungspreis (Brutto = Netto)</span>
               )}
+              {!differenzbesteuerung && istKleinunternehmer && (
+                <span className="ms-2 text-xs font-normal text-amber-600 dark:text-amber-400">Keine USt ausgewiesen (Brutto = Netto)</span>
+              )}
             </label>
-            <div className={`grid gap-2 ${differenzbesteuerung ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              {!differenzbesteuerung && (
+            <div className={`grid gap-2 ${differenzbesteuerung || istKleinunternehmer ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {!differenzbesteuerung && !istKleinunternehmer && (
                 <div>
                   <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
                   <input
