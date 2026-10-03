@@ -30,6 +30,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Jedes Release-Asset (Installer, AppImage, DMG) hat jetzt eine Prüfsumme – SHA256SUMS.txt im Download-Bereich, mit Anleitung zur Verifikation in den Release-Notes. Hilft bei der Fehlersuche, falls ein Download beschädigt ankam.' },
       { typ: 'fix', text: 'Das Linux-Installationsskript (install-linux.sh) meldete auf openSUSE Tumbleweed webkit2gtk, libEGL und libfuse2 fälschlich als fehlend, obwohl alle drei installiert waren – teils wegen falscher Paketnamen für zypper, teils weil ldconfig ohne vollen Pfad aufgerufen wurde und auf manchen Distributionen gar nicht gefunden wurde. Die Erkennung läuft jetzt distro-unabhängig direkt über die tatsächlich bereitgestellten Bibliotheken statt über geratene Paketnamen. Danke an harihegen für die ausführliche Fehlersuche (Issue #409).' },
       { typ: 'fix', text: 'Ist das Standard-Zahlungsziel in den Einstellungen deaktiviert, wurde im Rechnungs- und Proforma-Formular trotzdem automatisch "fällig heute" vorausgefüllt statt das Feld leer zu lassen. Danke an Ben für den Hinweis (Issue #411).' },
+      { typ: 'verbesserung', text: 'Land-Auswahl überall auf die vollständige, amtliche Liste des Auswärtigen Amts erweitert (196 Staaten statt bisher 39) und durch ein Suchfeld ersetzt statt eines langen Dropdowns – einfach Namen oder Länderkürzel eintippen (z. B. "arab" oder "US"). Betrifft Unternehmen, Kunden, Lieferanten und Einmalkunden/-lieferanten in Rechnungen (Issue #401).' },
     ],
   },
   {

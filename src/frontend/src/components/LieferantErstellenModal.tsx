@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createLieferant, type Lieferant } from '../api/client'
-import { LAENDER } from '../utils/laender'
+import { LandCombobox } from './LandCombobox'
 
 const schema = z.object({
   firmenname: z.string().min(1, 'Firmenname erforderlich'),
@@ -39,7 +39,7 @@ interface Props {
 
 export function LieferantErstellenModal({ onSave, onClose }: Props) {
   const qc = useQueryClient()
-  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: EMPTY,
   })
@@ -89,9 +89,9 @@ export function LieferantErstellenModal({ onSave, onClose }: Props) {
                 <input type="text" {...register('hausnummer')} placeholder="Nr." className={inp} />
                 <input type="text" {...register('plz')} placeholder="PLZ" className={inp} />
                 <input type="text" {...register('ort')} placeholder="Ort" className={`col-span-2 ${inp}`} />
-                <select {...register('land')} className={`col-span-3 ${inp}`}>
-                  {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-                </select>
+                <div className="col-span-3">
+                  <LandCombobox value={watch('land') ?? ''} onChange={(code) => setValue('land', code)} />
+                </div>
               </div>
             </div>
 

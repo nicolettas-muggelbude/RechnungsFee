@@ -34,7 +34,8 @@ import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../util
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
-import { istEuLand, LAENDER } from '../../utils/laender'
+import { istEuLand } from '../../utils/laender'
+import { LandCombobox } from '../../components/LandCombobox'
 import { rechnungenFilter, lieferscheinFilter } from '../../store/filterStore'
 
 // ---------------------------------------------------------------------------
@@ -3628,13 +3629,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               />
             </div>
             <div className="w-40">
-              <select
-                value={partnerLand || 'DE'}
-                onChange={e => setPartnerLand(e.target.value)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-              >
-                {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-              </select>
+              <LandCombobox value={partnerLand || 'DE'} onChange={(code) => setPartnerLand(code)} />
             </div>
           </div>
         </div>

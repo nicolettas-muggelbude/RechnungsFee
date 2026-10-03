@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
-import { LAENDER } from '../../utils/laender'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
+import { LandCombobox } from '../../components/LandCombobox'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -741,9 +741,9 @@ export function LieferantenPage() {
                     <input type="text" {...register('hausnummer')} placeholder="Nr." className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                     <input type="text" {...register('plz')} placeholder="PLZ" className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
                     <input type="text" {...register('ort')} placeholder="Ort" className="col-span-2 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
-                    <select {...register('land')} className="col-span-3 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100">
-                      {LAENDER.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-                    </select>
+                    <div className="col-span-3">
+                      <LandCombobox value={watchLand ?? ''} onChange={(code) => setValue('land', code)} />
+                    </div>
                   </div>
                 </div>
                 <div>
