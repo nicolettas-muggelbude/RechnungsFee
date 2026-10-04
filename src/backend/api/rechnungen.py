@@ -1447,14 +1447,17 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             differenzbesteuerung=ist_diff,
             ek_netto_25a=ek_netto_25a,
             ust_satz_25a=ust_satz_25a,
+            abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
         )
         db.add(pos)
+
+    db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
+    db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
+    _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
 
     # Lagerführung: direkt finalisierte Rechnungen (ist_entwurf=False) buchen den Bestand sofort ab.
     # Entwürfe holen den Abgang über /finalisieren nach.
     if not data.ist_entwurf:
-        db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
-        db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
         _lager_buchen(rechnung, db, faktor=Decimal("-1"))
         rechnung.absender_snapshot = _absender_snapshot(db)
         _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
@@ -1516,6 +1519,9 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     )
 
     if data.positionen is not None:
+        # Issue #419 Phase 2: welche Abschlagsrechnungen VOR dem Löschen verrechnet waren -
+        # wird nach dem Neuanlegen gebraucht, um nicht mehr referenzierte wieder freizugeben.
+        alte_abschlag_ids = {p.abschlag_rechnung_id for p in rechnung.positionen if p.abschlag_rechnung_id}
         # Bestehende Positionen löschen und neu anlegen
         for pos in rechnung.positionen:
             db.delete(pos)
@@ -1547,8 +1553,13 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 ust_betrag=erg.ust_betrag,
                 brutto=erg.brutto,
                 differenzbesteuerung=ist_diff,
+                abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
             )
             db.add(pos)
+
+        db.flush()
+        db.expire(rechnung, ["positionen"])
+        _synchronisiere_abschlagsverrechnung(rechnung, alte_abschlag_ids, db)
 
         # Gutschrift: Betrag darf den noch verbleibenden Restbetrag nicht überschreiten
         if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
@@ -1617,6 +1628,69 @@ def _gutschrift_restbetrag(original: "Rechnung", db: Session, ausgenommen_id: in
         Decimal("0.00"),
     )
     return abs(original.brutto_gesamt) - bereits
+
+
+def _synchronisiere_abschlagsverrechnung(
+    rechnung: "Rechnung", alte_abschlag_ids: set[int], db: Session
+) -> None:
+    """Issue #419 Phase 2: haelt Abschlagsrechnung.verrechnet_in_rechnung_id konsistent mit den
+    tatsaechlich in rechnung.positionen vorhandenen Abzugszeilen (abschlag_rechnung_id). Muss
+    NACH dem Anlegen/Ersetzen der Positionen aufgerufen werden.
+
+    alte_abschlag_ids: welche Abschlagsrechnungen VOR dieser Änderung verrechnet waren (bei
+    create_rechnung() ein leeres Set, bei update_rechnung() die Menge vor dem Löschen der alten
+    Positionen) - wird benutzt um nicht mehr referenzierte Abschlagsrechnungen wieder freizugeben.
+    """
+    neue_abschlag_ids = {p.abschlag_rechnung_id for p in rechnung.positionen if p.abschlag_rechnung_id}
+
+    for alt_id in alte_abschlag_ids - neue_abschlag_ids:
+        abschlag = db.query(Rechnung).filter(Rechnung.id == alt_id).first()
+        if abschlag and abschlag.verrechnet_in_rechnung_id == rechnung.id:
+            abschlag.verrechnet_in_rechnung_id = None
+
+    if not neue_abschlag_ids:
+        return
+
+    if rechnung.brutto_gesamt < 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Die verrechneten Abschlagsrechnungen übersteigen die Rechnungssumme. Bitte Positionen ergänzen oder weniger Abschlagsrechnungen auswählen.",
+        )
+
+    for abschlag_id in neue_abschlag_ids:
+        abschlag = db.query(Rechnung).filter(Rechnung.id == abschlag_id).first()
+        if not abschlag:
+            raise HTTPException(status_code=404, detail=f"Abschlagsrechnung #{abschlag_id} nicht gefunden.")
+        if abschlag.dokument_typ != "Abschlagsrechnung":
+            raise HTTPException(status_code=409, detail=f"{abschlag.rechnungsnummer or abschlag_id} ist keine Abschlagsrechnung.")
+        if abschlag.storniert:
+            raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} ist storniert und kann nicht verrechnet werden.")
+        if abschlag.ist_entwurf:
+            raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} ist noch Entwurf und kann nicht verrechnet werden.")
+        if abschlag.verrechnet_in_rechnung_id and abschlag.verrechnet_in_rechnung_id != rechnung.id:
+            raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} ist bereits in einer anderen Rechnung verrechnet.")
+        if abschlag.kunde_id != rechnung.kunde_id:
+            raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} gehört zu einem anderen Kunden.")
+        abschlag.verrechnet_in_rechnung_id = rechnung.id
+
+
+@router.get("/offene-abschlaege", response_model=list[RechnungResponse])
+def offene_abschlaege(kunde_id: int, db: Session = Depends(get_db)):
+    """Issue #419 Phase 2: Abschlagsrechnungen eines Kunden, die noch in keiner Schlussrechnung
+    verrechnet sind - für den Auswahl-Picker beim Anlegen einer Rechnung."""
+    rechnungen = (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.kunde_id == kunde_id,
+            Rechnung.dokument_typ == "Abschlagsrechnung",
+            Rechnung.storniert == False,
+            Rechnung.ist_entwurf == False,
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
+        )
+        .order_by(Rechnung.datum)
+        .all()
+    )
+    return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
@@ -3150,11 +3224,22 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
         raise HTTPException(status_code=409, detail="Entwürfe können nicht storniert werden. Bitte den Entwurf löschen.")
     if rechnung.storniert:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits storniert.")
+    if rechnung.verrechnet_in_rechnung_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Abschlagsrechnung ist bereits in einer Schlussrechnung verrechnet - storniere/bearbeite stattdessen die Schlussrechnung.",
+        )
     if not data.grund or not data.grund.strip():
         raise HTTPException(status_code=422, detail="Storno-Begründung darf nicht leer sein.")
 
     re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
     heute = date.today()
+
+    # Issue #419 Phase 2: Wird eine Schlussrechnung storniert, die Abschlagsrechnungen
+    # verrechnet hat, werden diese wieder freigegeben (für eine neue Schlussrechnung wählbar).
+    verrechnete_abschlaege = db.query(Rechnung).filter(Rechnung.verrechnet_in_rechnung_id == rechnung.id).all()
+    for abschlag in verrechnete_abschlaege:
+        abschlag.verrechnet_in_rechnung_id = None
 
     # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Journal-Storno)
     for eintrag in list(rechnung.journaleintraege):
@@ -3416,6 +3501,11 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus einer Gutschrift kann keine weitere Gutschrift erstellt werden.")
     if original.storniert:
         raise HTTPException(status_code=409, detail="Stornierte Rechnungen können nicht als Vorlage für eine Gutschrift dienen.")
+    if original.verrechnet_in_rechnung_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Abschlagsrechnung ist bereits in einer Schlussrechnung verrechnet - storniere/bearbeite stattdessen die Schlussrechnung.",
+        )
 
     # Prüfen ob bereits der volle Betrag durch finalisierte Gutschriften abgedeckt ist
     restbetrag = _gutschrift_restbetrag(original, db)

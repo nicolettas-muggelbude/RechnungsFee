@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 164
+SCHEMA_VERSION = 165
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3642,6 +3642,23 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 164"))
             conn.commit()
             print("[Migration] Schema auf Version 164 (Issue #419: Abschlagsrechnungen optional aktivierbar)")
+
+        if version < 165:
+            # Issue #419 Phase 2: Verrechnung von Abschlagsrechnungen in der Schlussrechnung.
+            # verrechnet_in_rechnung_id sitzt auf der Abschlagsrechnung (Quelle, zeitlich vor
+            # dem Ziel) und zeigt auf die Schlussrechnung - bewusst umgekehrte Richtung zum
+            # sonst üblichen <ziel>_zu_<quelle>-Muster. abschlag_rechnung_id auf
+            # rechnungspositionen markiert automatisch generierte Abzugszeilen, damit der
+            # generische Positions-Editor sie nicht unbemerkt loeschen/aendern kann.
+            cols165 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "verrechnet_in_rechnung_id" not in cols165:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN verrechnet_in_rechnung_id INTEGER REFERENCES rechnungen(id)"))
+            pos_cols165 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungspositionen)")).fetchall()}
+            if "abschlag_rechnung_id" not in pos_cols165:
+                conn.execute(text("ALTER TABLE rechnungspositionen ADD COLUMN abschlag_rechnung_id INTEGER REFERENCES rechnungen(id)"))
+            conn.execute(text("PRAGMA user_version = 165"))
+            conn.commit()
+            print("[Migration] Schema auf Version 165 (Issue #419: Verrechnung von Abschlagsrechnungen in der Schlussrechnung)")
 
 
 def _migrate_kategorien() -> None:

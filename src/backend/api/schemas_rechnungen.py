@@ -53,6 +53,9 @@ class RechnungspositionCreate(BaseModel):
     artikel_id: Optional[int] = None
     kategorie_id: Optional[int] = None
     differenzbesteuerung: bool = False
+    # Issue #419 Phase 2: markiert eine automatisch generierte Abzugszeile (negierte Menge),
+    # die eine Abschlagsrechnung in einer Schlussrechnung verrechnet.
+    abschlag_rechnung_id: Optional[int] = None
 
     @field_validator("ust_satz")
     @classmethod
@@ -78,6 +81,7 @@ class RechnungspositionResponse(BaseModel):
     brutto: Decimal
     differenzbesteuerung: bool = False
     artikelcode: Optional[str] = None
+    abschlag_rechnung_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -376,6 +380,9 @@ class RechnungResponse(BaseModel):
     dokument_typ: str = "Rechnung"
     gutschrift_zu_rechnung_id: Optional[int] = None
     gutschrift_zu_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
+    # Issue #419 Phase 2: auf der Abschlagsrechnung, in welcher Schlussrechnung sie verrechnet ist
+    verrechnet_in_rechnung_id: Optional[int] = None
+    verrechnet_in_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
     lieferschein_zu_rechnung_id: Optional[int] = None
     lieferschein_rechnung_ist_entwurf: Optional[bool] = None  # wird in from_orm_extended befüllt
     lieferschein_zu_rechnung_nr: Optional[str] = None  # wird in from_orm_extended befüllt
@@ -660,6 +667,7 @@ class RechnungResponse(BaseModel):
         _resolve("proforma_zu_auftrag_id",   "proforma_zu_auftrag_nr")
         _resolve("ersatzrechnung_id",        "ersatzrechnung_nr")
         _resolve("ersatz_fuer_rechnung_id",  "ersatz_fuer_rechnung_nr")
+        _resolve("verrechnet_in_rechnung_id", "verrechnet_in_rechnung_nr")
         # Bei Auftrag: Eltern-Angebot ermitteln
         if getattr(obj, "dokument_typ", None) == "Auftrag":
             try:

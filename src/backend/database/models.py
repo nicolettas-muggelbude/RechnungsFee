@@ -758,6 +758,12 @@ class Rechnung(Base):
     ersatzrechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     ersatz_fuer_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
 
+    # Abschlagsrechnung-Verrechnung (Issue #419 Phase 2): sitzt auf der Abschlagsrechnung
+    # (Quelle, zeitlich VOR dem Ziel) und zeigt vorwaerts auf die Schlussrechnung, in der sie
+    # verrechnet wurde - bewusst umgekehrte Richtung zum sonst ueblichen Muster oben, weil hier
+    # die Quelle zeitlich zuerst entsteht statt aus dem Ziel abgeleitet zu werden.
+    verrechnet_in_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -765,7 +771,10 @@ class Rechnung(Base):
     lieferant: Mapped["Lieferant | None"] = relationship(back_populates="rechnungen")
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
-    positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan")
+    positionen: Mapped[list["Rechnungsposition"]] = relationship(
+        back_populates="rechnung", cascade="all, delete-orphan",
+        foreign_keys="Rechnungsposition.rechnung_id",
+    )
     journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="rechnung")
     vorsteuer_ansprueche: Mapped[list["VorsteuerAnspruch"]] = relationship(back_populates="rechnung")
     zugferd_anhaenge: Mapped[list["RechnungZugferdAnhang"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan", order_by="RechnungZugferdAnhang.id")
@@ -792,8 +801,14 @@ class Rechnungsposition(Base):
     ust_satz_25a: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))   # nominaler USt-Satz (19/7) für Margensteuer
 
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
+    # Issue #419 Phase 2: markiert automatisch aus einer Abschlagsrechnung generierte
+    # Abzugszeilen in einer Schlussrechnung (negierte Menge/Betraege, analog zur Gutschrift-
+    # Positions-Kopie). Verhindert, dass der generische Positions-Editor eine solche Zeile
+    # unbemerkt loescht/aendert, ohne dass die Abschlagsrechnung davon erfaehrt.
+    abschlag_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"))
 
-    rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen")
+    rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen", foreign_keys=[rechnung_id])
+    abschlag_rechnung: Mapped["Rechnung | None"] = relationship(foreign_keys=[abschlag_rechnung_id])
     artikel: Mapped["Artikel | None"] = relationship(back_populates="positionen")
 
     __table_args__ = (
