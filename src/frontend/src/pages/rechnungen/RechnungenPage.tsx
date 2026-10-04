@@ -9,7 +9,7 @@ import {
   stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, forderungsausbuchenRechnung,
   getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, gutschriftVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
-  getLieferadressen,
+  getLieferadressen, getOffeneAbschlaege,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
@@ -2506,6 +2506,7 @@ type Positionszeile = {
   art_bestand?: string
   art_minusbestand_erlaubt?: boolean
   art_typ?: ArtikelTyp  // Artikel-Typ (artikel/dienstleistung/fremdleistung) - fuer ig.Lieferung/Reverse-Charge-Erkennung
+  abschlag_rechnung_id?: number  // Issue #419: markiert eine automatisch generierte Abzugszeile
 }
 
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
@@ -2694,6 +2695,33 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     if (standard) setLieferadresseId(String(standard.id))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lieferadressen])
+
+  // Issue #419 Phase 2: offene Abschlagsrechnungen des gewählten Kunden, zur Verrechnung in
+  // dieser Schlussrechnung - nur bei normalen Ausgangsrechnungen, nicht bei Lieferschein o.ä.
+  const { data: offeneAbschlaege = [] } = useQuery({
+    queryKey: ['offene-abschlaege', kundeIdNum],
+    queryFn: () => getOffeneAbschlaege(kundeIdNum!),
+    enabled: dokumentTyp === 'Rechnung' && typ === 'ausgang' && !!kundeIdNum && !!unternehmen?.abschlagsrechnungen_aktiv,
+  })
+  const verrechneteAbschlagIds = new Set(
+    positionen.filter(p => p.abschlag_rechnung_id).map(p => p.abschlag_rechnung_id!)
+  )
+
+  function abschlagVerrechnen(abschlag: Rechnung) {
+    const neuePositionen: Positionszeile[] = abschlag.positionen.map(pos => ({
+      beschreibung: `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`,
+      menge: String(-parseFloat(pos.menge)),
+      einheit: pos.einheit,
+      netto: pos.netto,
+      ust_satz: pos.ust_satz,
+      abschlag_rechnung_id: abschlag.id,
+    }))
+    setPositionen(prev => [...prev, ...neuePositionen])
+  }
+
+  function abschlagEntfernen(abschlagId: number) {
+    setPositionen(prev => prev.filter(p => p.abschlag_rechnung_id !== abschlagId))
+  }
 
   // Netto-Modus automatisch aktivieren wenn Firmenkunde gewählt wird (B2B)
   useEffect(() => {
@@ -3161,6 +3189,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
           differenzbesteuerung: istDiff,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
+          abschlag_rechnung_id: p.abschlag_rechnung_id,
         } as RechnungspositionCreate
       }),
       rabatt_prozent: rechnungRabattNum > 0 && rechnungRabattModus === 'prozent' ? rechnungRabattNum : undefined,
@@ -3673,6 +3702,27 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
+      {/* Issue #419: Verrechnung offener Abschlagsrechnungen des gewählten Kunden */}
+      {dokumentTyp === 'Rechnung' && typ === 'ausgang' && kundeIdNum && !!unternehmen?.abschlagsrechnungen_aktiv && offeneAbschlaege.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Offene Abschlagsrechnungen verrechnen
+          </label>
+          <div className="space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+            {offeneAbschlaege.map(abschlag => (
+              <label key={abschlag.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={verrechneteAbschlagIds.has(abschlag.id)}
+                  onChange={(e) => e.target.checked ? abschlagVerrechnen(abschlag) : abschlagEntfernen(abschlag.id)}
+                />
+                {abschlag.rechnungsnummer} vom {formatDatum(abschlag.datum)} – {formatEuro(abschlag.brutto_gesamt)}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* §19-Hinweis - nur noch für Eingang: beim Ausgang ist das Steuersatz-Feld jetzt
           komplett ausgeblendet statt nur gesperrt, es gibt also nichts mehr zu erklären. */}
       {istKleinunternehmer && typ === 'eingang' && (
@@ -3899,6 +3949,29 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </thead>
             <tbody>
               {positionen.map((pos, i) => (
+                pos.abschlag_rechnung_id ? (
+                  <tr key={i} className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
+                    <td className="px-3 py-1.5 italic">{pos.beschreibung}</td>
+                    <td className="px-3 py-1.5 text-right">{pos.menge}</td>
+                    <td className="px-3 py-1.5">{pos.einheit}</td>
+                    {dokumentTyp !== 'Lieferschein' && <>
+                      <td className="px-3 py-1.5 text-right">{formatPreis(pos.netto)}</td>
+                      <td className="px-3 py-1.5"></td>
+                      <td className="px-3 py-1.5 text-right">{pos.ust_satz} %</td>
+                      {typ === 'eingang' && <td className="px-3 py-1.5"></td>}
+                    </>}
+                    <td className="px-2 py-1.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => abschlagEntfernen(pos.abschlag_rechnung_id!)}
+                        className="text-slate-300 hover:text-red-500 text-base leading-none"
+                        title="Verrechnung entfernen"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
                 <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                   <td className={`px-2 py-1.5 ${fehlerRing(positionenFehlen && !pos.beschreibung.trim())}`}>
                     <ArtikelAutocomplete
@@ -4000,6 +4073,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                     )}
                   </td>
                 </tr>
+                )
               ))}
             </tbody>
             {dokumentTyp !== 'Lieferschein' && (

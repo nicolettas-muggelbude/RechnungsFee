@@ -1256,6 +1256,7 @@ export type Rechnungsposition = {
   differenzbesteuerung: boolean
   rabatt_prozent?: string
   artikelcode: string | null
+  abschlag_rechnung_id?: number | null
 }
 
 export type RechnungspositionCreate = {
@@ -1268,6 +1269,7 @@ export type RechnungspositionCreate = {
   kategorie_id?: number
   differenzbesteuerung?: boolean
   rabatt_prozent?: number
+  abschlag_rechnung_id?: number
 }
 
 export type RechnungsKettenGlied = {
@@ -1348,6 +1350,8 @@ export type Rechnung = {
   dokument_typ: string
   gutschrift_zu_rechnung_id: number | null
   gutschrift_zu_rechnung_nr: string | null
+  verrechnet_in_rechnung_id?: number | null
+  verrechnet_in_rechnung_nr?: string | null
   lieferschein_zu_rechnung_id: number | null
   lieferschein_rechnung_ist_entwurf: boolean | null
   lieferschein_zu_rechnung_nr: string | null
@@ -1554,6 +1558,8 @@ export const lieferscheinAusRechnung = (rechnungId: number) =>
 
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
 export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)
+export const getOffeneAbschlaege = (kundeId: number) =>
+  request<Rechnung[]>(`/rechnungen/offene-abschlaege${toQuery({ kunde_id: kundeId })}`)
 export const getUeberzahlungen = () => request<Rechnung[]>('/rechnungen/ueberzahlungen')
 export const ueberzahlungAnerkennen = (rechnungId: number) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/ueberzahlung-anerkannt`, { method: 'PATCH' })
