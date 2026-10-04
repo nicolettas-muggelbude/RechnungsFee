@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 163
+SCHEMA_VERSION = 164
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3632,6 +3632,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 163"))
             conn.commit()
             print("[Migration] Schema auf Version 163 (Issue #404: abweichendes Wirtschaftsjahr optional aktivierbar)")
+
+        if version < 164:
+            # Issue #419 Phase 1: Abschlagsrechnung als eigener dokument_typ. Opt-in-Schalter
+            # (Default aus, kein Auftritt im Setup-Wizard) analog zu wiederkehrend_aktiv.
+            cols164 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "abschlagsrechnungen_aktiv" not in cols164:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN abschlagsrechnungen_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 164"))
+            conn.commit()
+            print("[Migration] Schema auf Version 164 (Issue #419: Abschlagsrechnungen optional aktivierbar)")
 
 
 def _migrate_kategorien() -> None:

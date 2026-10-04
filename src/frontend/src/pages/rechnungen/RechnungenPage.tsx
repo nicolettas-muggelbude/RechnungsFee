@@ -36,7 +36,7 @@ import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
 import { LandCombobox } from '../../components/LandCombobox'
-import { rechnungenFilter, lieferscheinFilter } from '../../store/filterStore'
+import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../store/filterStore'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -2532,7 +2532,7 @@ function RechnungForm({
   typ: 'eingang' | 'ausgang'
   initial?: Rechnung
   prefillFromAnalyse?: AnalyseErgebnis
-  initialDokumentTyp?: 'Lieferschein'
+  initialDokumentTyp?: 'Lieferschein' | 'Abschlagsrechnung'
   vorKundeId?: string
   onSave: (data: RechnungCreate) => void
   onCancel: () => void
@@ -2673,8 +2673,10 @@ function RechnungForm({
           ? 'netto'
           : pf?.gesamt_netto && !pf?.gesamt_brutto ? 'netto' : 'brutto'
   )
-  const dokumentTyp: 'Rechnung' | 'Lieferschein' =
-    (initial?.dokument_typ === 'Lieferschein' ? 'Lieferschein' : initialDokumentTyp) ?? 'Rechnung'
+  const dokumentTyp: 'Rechnung' | 'Lieferschein' | 'Abschlagsrechnung' =
+    (initial?.dokument_typ === 'Lieferschein' ? 'Lieferschein'
+      : initial?.dokument_typ === 'Abschlagsrechnung' ? 'Abschlagsrechnung'
+      : initialDokumentTyp) ?? 'Rechnung'
   const [lieferadresseId, setLieferadresseId] = useState<string>(
     initial?.lieferadresse_id ? String(initial.lieferadresse_id) : ''
   )
@@ -4492,7 +4494,7 @@ function ImportDialog({
 
 type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'jahr' | 'alle'
 
-export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' | 'lieferscheine' } = {}) {
+export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' | 'lieferscheine' | 'abschlag' } = {}) {
   const qc = useQueryClient()
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
@@ -4502,11 +4504,12 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
   const istLieferscheinSeite = modus === 'lieferscheine'
   const lieferscheinModus = istLieferscheinSeite
+  const istAbschlagSeite = modus === 'abschlag'
   const [zahlungsstatus, setZahlungsstatus] = useState<string[]>([])
   const [ketteFilterId, setKetteFilterId] = useState<number | null>(null)
   const [lsAbrechnungFilter, setLsAbrechnungFilter] = useState<'' | 'offen' | 'entwurf' | 'abgerechnet'>('')
   const [suche, setSuche] = useState('')
-  const store = istLieferscheinSeite ? lieferscheinFilter : rechnungenFilter
+  const store = istLieferscheinSeite ? lieferscheinFilter : istAbschlagSeite ? abschlagFilter : rechnungenFilter
   const [filterModus, _setFilterModus] = useState<FilterModus>(() => store.modus as FilterModus)
   const setFilterModus = (m: FilterModus) => { store.modus = m; _setFilterModus(m) }
   const [monat, _setMonat] = useState<string>(() => store.monat)
@@ -4672,14 +4675,16 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     mahnwesenEinst?.mahnstufen.find((s) => s.stufe === stufe)?.bezeichnung ?? `Mahnstufe ${stufe}`
 
   const { data: rechnungen, isLoading } = useQuery({
-    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus, ketteFilterId],
+    queryKey: ['rechnungen', typ, zahlungsstatus, filterModus, monat, datum, datumVon, datumBis, lieferscheinModus, istAbschlagSeite, ketteFilterId],
     queryFn: () => ketteFilterId !== null
       // Ersatzrechnungs-Kette anzeigen: ignoriert alle anderen Filter bewusst, damit die
       // Kette auch bei abweichendem Zeitraum/Status vollstaendig sichtbar ist.
       ? getRechnungen({ kette_von_id: ketteFilterId })
       : lieferscheinModus
         ? getLieferscheine()
-        : getRechnungen({ typ, zahlungsstatus: zahlungsstatus.length ? zahlungsstatus : undefined, ...filterParams }),
+        : istAbschlagSeite
+          ? getRechnungen({ typ: 'ausgang', dokument_typ: 'Abschlagsrechnung', zahlungsstatus: zahlungsstatus.length ? zahlungsstatus : undefined, ...filterParams })
+          : getRechnungen({ typ, zahlungsstatus: zahlungsstatus.length ? zahlungsstatus : undefined, ...filterParams }),
   })
 
   const _fromQuery = rechnungen?.find((r) => r.id === selectedId) ?? null
@@ -4872,7 +4877,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
       >
         <div className="p-6 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{lieferscheinModus ? 'Lieferscheine' : 'Rechnungen'}</h2>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{lieferscheinModus ? 'Lieferscheine' : istAbschlagSeite ? 'Abschlagsrechnungen' : 'Rechnungen'}</h2>
             <div className="flex gap-2">
               {!lieferscheinModus && (
                 <div className="flex rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
@@ -4907,7 +4912,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                 onClick={() => { setFormModus('neu'); setSelectedId(null); setImportPrefill(null) }}
                 className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
               >
-                {lieferscheinModus ? '+ Neuer Lieferschein' : '+ Neue Rechnung'}
+                {lieferscheinModus ? '+ Neuer Lieferschein' : istAbschlagSeite ? '+ Neue Abschlagsrechnung' : '+ Neue Rechnung'}
               </button>
             </div>
           </div>
@@ -4915,7 +4920,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
           {/* Tabs + Filter */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Eingang/Ausgang – nur auf Rechnungen-Seite */}
-            {!istLieferscheinSeite && (
+            {!istLieferscheinSeite && !istAbschlagSeite && (
               <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
                 {(['ausgang', 'eingang'] as const).map((t) => (
                   <button
@@ -5307,7 +5312,11 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
               typ={formModus === 'bearbeiten' && selectedRechnung ? selectedRechnung.typ : typ}
               initial={formModus === 'bearbeiten' ? selectedRechnung ?? undefined : undefined}
               prefillFromAnalyse={formModus === 'neu' ? importPrefill ?? undefined : undefined}
-              initialDokumentTyp={lieferscheinModus && formModus === 'neu' ? 'Lieferschein' : undefined}
+              initialDokumentTyp={
+                lieferscheinModus && formModus === 'neu' ? 'Lieferschein'
+                  : istAbschlagSeite && formModus === 'neu' ? 'Abschlagsrechnung'
+                  : undefined
+              }
               vorKundeId={formModus === 'neu' ? vorKundeId : undefined}
               onSave={(data) => {
                 setPendingEditRechnung(null)

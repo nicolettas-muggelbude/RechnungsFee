@@ -20,6 +20,7 @@ import { KategorienPage } from './pages/stammdaten/KategorienPage'
 import { UnternehmenPage } from './pages/stammdaten/UnternehmenPage'
 import { DokumentenpaketePage } from './pages/stammdaten/DokumentenpaketePage'
 import { LieferscheineUebersicht } from './pages/lieferscheine/LieferscheineUebersicht'
+import { AbschlagsrechnungenUebersicht } from './pages/abschlagsrechnungen/AbschlagsrechnungenUebersicht'
 import { AngebotePage } from './pages/angebote/AngebotePage'
 import { AuftraegePage } from './pages/auftraege/AuftraegePage'
 import { ProformaPage } from './pages/proforma/ProformaPage'
@@ -126,6 +127,7 @@ function AppRoutes() {
           <Route path="/wiederkehrend" element={<WiederkehrendePage />} />
           <Route path="/buchungsvorlagen" element={<BuchungsvorlagenPage />} />
           <Route path="/lieferscheine" element={<LieferscheineUebersicht />} />
+          <Route path="/abschlagsrechnungen" element={<AbschlagsrechnungenUebersicht />} />
           <Route path="/angebote" element={<AngebotePage />} />
           <Route path="/auftraege" element={<AuftraegePage />} />
           <Route path="/proformas" element={<ProformaPage />} />

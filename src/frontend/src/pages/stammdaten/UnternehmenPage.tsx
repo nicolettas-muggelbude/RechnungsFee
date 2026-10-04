@@ -902,6 +902,23 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
+              checked={!!form.abschlagsrechnungen_aktiv}
+              onChange={ev => set('abschlagsrechnungen_aktiv', ev.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Abschlagsrechnungen aktivieren
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Abschlags-/Teilrechnungen als eigener Dokumenttyp – eigener Nummernkreis, eigene Übersichtsseite.
+              </p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
               checked={!!form.buchungsvorlagen_aktiv}
               onChange={ev => set('buchungsvorlagen_aktiv', ev.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"

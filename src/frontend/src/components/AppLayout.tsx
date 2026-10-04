@@ -15,6 +15,7 @@ const fakturierungAlleItems = [
   { to: '/auftraege',       label: 'Aufträge',               icon: 'assignment',     bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.auftraege_aktiv },
   { to: '/proformas',       label: 'Proforma',               icon: 'description',    bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.proforma_aktiv },
   { to: '/lieferscheine',   label: 'Lieferscheine',          icon: 'local_shipping', bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.lieferschein_aktiv },
+  { to: '/abschlagsrechnungen', label: 'Abschlagsrechnungen', icon: 'payments',      bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.abschlagsrechnungen_aktiv },
   { to: '/rechnungen',      label: 'Rechnungen',             icon: 'receipt_long',   bald: false, zeigen: (_u: Unternehmen | undefined) => true },
   { to: '/wiederkehrend',   label: 'Wiederkehrend',          icon: 'autorenew',      bald: false, zeigen: (u: Unternehmen | undefined) => !!u?.wiederkehrend_aktiv },
 ]

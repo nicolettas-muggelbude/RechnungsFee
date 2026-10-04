@@ -497,7 +497,7 @@ class RechnungPDFBase(FPDF):
     def _render_titel(self):
         r = self._r
         dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
-        ist_storno = getattr(r, "storniert", False) and dokument_typ == "Rechnung"
+        ist_storno = getattr(r, "storniert", False) and dokument_typ in ("Rechnung", "Abschlagsrechnung")
         if ist_storno:
             _snr = getattr(r, "storno_rechnungsnummer", None) or r.rechnungsnummer or ""
             titel = f"Stornorechnung {_snr}".strip()
@@ -511,6 +511,8 @@ class RechnungPDFBase(FPDF):
             titel = f"Proforma-Rechnung {r.rechnungsnummer or ''}".strip()
         elif dokument_typ == "Auftrag":
             titel = f"Auftragsbestätigung {r.rechnungsnummer or ''}".strip()
+        elif dokument_typ == "Abschlagsrechnung":
+            titel = f"Abschlagsrechnung {r.rechnungsnummer or ''}".strip()
         elif r.typ == "ausgang":
             titel = f"Rechnung {r.rechnungsnummer or ''}".strip()
         else:

@@ -215,6 +215,10 @@ def seed_nummernkreise(db: Session) -> None:
         neue.append(Nummernkreis(bezeichnung="Proforma-Rechnungen", typ="proforma", format="PRF-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "gutschrift" not in typen:
         neue.append(Nummernkreis(bezeichnung="Gutschriften", typ="gutschrift", format="GS-YY####", naechste_nr=1, reset_jaehrlich=True))
+    if "abschlagsrechnung" not in typen:
+        # Issue #419: eigener Dokumenttyp fuer Abschlags-/Teilrechnungen, gating ausschliesslich
+        # ueber unternehmen.abschlagsrechnungen_aktiv (analog Angebot/Auftrag/Proforma).
+        neue.append(Nummernkreis(bezeichnung="Abschlagsrechnungen", typ="abschlagsrechnung", format="AR-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "stornorechnung" not in typen:
         neue.append(Nummernkreis(bezeichnung="Stornorechnungen", typ="stornorechnung", format="STORNO-YY####", naechste_nr=1, reset_jaehrlich=True))
     if "mahnung" not in typen:

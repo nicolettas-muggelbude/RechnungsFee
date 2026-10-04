@@ -250,6 +250,7 @@ export type Unternehmen = {
   proforma_aktiv?: boolean
   auftraege_aktiv?: boolean
   wiederkehrend_aktiv?: boolean
+  abschlagsrechnungen_aktiv?: boolean
   buchungsvorlagen_aktiv?: boolean
   lagerführung_aktiv?: boolean
   profilmanager_aktiv?: boolean
@@ -1424,7 +1425,7 @@ export type RechnungCreate = {
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null
-  dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein' | 'Angebot' | 'Proforma' | 'Auftrag'
+  dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Abschlagsrechnung'
   gueltig_bis?: string
   dokumentenpaket_id?: number
   lieferadresse_id?: number | null

@@ -318,7 +318,7 @@ def _offene_rechnungen_fuer_tx(db: Session, tx: BankTransaktion) -> list[Rechnun
     in beide Richtungen nie einen Kandidaten (auch nicht die schon länger bestehende
     Ausgangsrechnungs-Gutschrift bei Rückerstattung per Bank)."""
     if tx.betrag > 0:
-        normal = (Rechnung.typ == "ausgang") & (Rechnung.dokument_typ == "Rechnung")
+        normal = (Rechnung.typ == "ausgang") & (Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]))
         gutschrift = (Rechnung.typ == "eingang") & (Rechnung.dokument_typ == "Gutschrift")
     else:
         normal = (Rechnung.typ == "eingang") & (Rechnung.dokument_typ == "Rechnung")

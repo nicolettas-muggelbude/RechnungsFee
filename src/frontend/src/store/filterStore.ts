@@ -94,6 +94,14 @@ export const lieferscheinFilter: RechnungenFilterState = {
   datumBis: heute(),
 }
 
+export const abschlagFilter: RechnungenFilterState = {
+  modus:    'monat',
+  monat:    aktuellerMonat(),
+  datum:    heute(),
+  datumVon: heute(),
+  datumBis: heute(),
+}
+
 // ---------------------------------------------------------------------------
 // Bank-Import
 // ---------------------------------------------------------------------------

@@ -532,12 +532,12 @@ def delete_kunde_beleg(kunde_id: int, kb_id: int, db: Session = Depends(get_db))
 # Zeilen (Zahlung/Gutschrift/Storno) - sonst kann bei Buchungen am selben Tag eine Zahlung vor
 # der Forderung erscheinen, die sie ausgleicht (Saldo-Endstand bleibt korrekt, Zwischenstand wirkt
 # aber falsch).
-_TYP_SORT_PRIO = {"rechnung": 0, "mahngebuehr": 0, "verzugszinsen": 0, "zahlung": 1, "gutschrift": 1, "storno": 1}
+_TYP_SORT_PRIO = {"rechnung": 0, "abschlag": 0, "mahngebuehr": 0, "verzugszinsen": 0, "zahlung": 1, "gutschrift": 1, "storno": 1}
 
 
 class KontokorrentBewegung(BaseModel):
     datum: str
-    typ: str          # rechnung | zahlung | gutschrift | storno | mahngebuehr | verzugszinsen
+    typ: str          # rechnung | abschlag | zahlung | gutschrift | storno | mahngebuehr | verzugszinsen
     belegnr: str
     beschreibung: str
     betrag: float     # positiv = Forderung, negativ = Ausgleich
@@ -613,7 +613,7 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
             Rechnung.kunde_id == kunde_id,
             Rechnung.typ == "ausgang",
             Rechnung.ist_entwurf == False,
-            Rechnung.dokument_typ.in_(["Rechnung", "Gutschrift", "Stornorechnung"]),
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung", "Gutschrift", "Stornorechnung"]),
         )
         .all()
     )
@@ -622,6 +622,9 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
     for r in rechnungen:
         if r.dokument_typ == "Rechnung":
             typ = "rechnung"
+            betrag = float(r.brutto_gesamt)
+        elif r.dokument_typ == "Abschlagsrechnung":
+            typ = "abschlag"
             betrag = float(r.brutto_gesamt)
         elif r.dokument_typ == "Gutschrift":
             typ = "gutschrift"
@@ -686,7 +689,7 @@ def _kontokorrent_bewegungen(
             Rechnung.kunde_id == kunde_id,
             Rechnung.typ == "ausgang",
             Rechnung.ist_entwurf == False,
-            Rechnung.dokument_typ.in_(["Rechnung", "Gutschrift", "Stornorechnung"]),
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung", "Gutschrift", "Stornorechnung"]),
         )
         .all()
     )
@@ -696,6 +699,8 @@ def _kontokorrent_bewegungen(
     for r in rechnungen:
         if r.dokument_typ == "Rechnung":
             typ, betrag = "rechnung", float(r.brutto_gesamt)
+        elif r.dokument_typ == "Abschlagsrechnung":
+            typ, betrag = "abschlag", float(r.brutto_gesamt)
         elif r.dokument_typ == "Gutschrift":
             typ, betrag = "gutschrift", -float(r.brutto_gesamt)
         else:

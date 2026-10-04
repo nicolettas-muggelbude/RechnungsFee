@@ -327,7 +327,7 @@ def kunden_uebersicht(db: Session = Depends(get_db)):
         db.query(Rechnung)
         .filter(
             Rechnung.typ == "ausgang",
-            Rechnung.dokument_typ == "Rechnung",
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -790,7 +790,7 @@ def _berechne_mahnung(
         alle_offenen_kunde = db.query(Rechnung).filter(
             Rechnung.kunde_id == kunde.id,
             Rechnung.typ == "ausgang",
-            Rechnung.dokument_typ == "Rechnung",
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -814,7 +814,7 @@ def _berechne_mahnung(
             .filter(
                 Rechnung.kunde_id == kunde.id,
                 Rechnung.typ == "ausgang",
-                Rechnung.dokument_typ == "Rechnung",
+                Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
                 Rechnung.ist_entwurf == False,  # noqa: E712
                 Rechnung.storniert == False,  # noqa: E712
                 Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -929,7 +929,7 @@ def _verrechne_offene_gutschriften_vor_mahnung(db: Session, rechnungen: list[Rec
         ziel_rechnungen = [
             r for r in rechnungen
             if r.kunde_id == kunde_id
-            and r.dokument_typ == "Rechnung"
+            and r.dokument_typ in ("Rechnung", "Abschlagsrechnung")
             and r.zahlungsstatus in ("offen", "teilweise")
         ]
         for gs in gutschriften:
@@ -1504,7 +1504,7 @@ def generate_inkasso_zip(db: Session, kunde_id: int) -> tuple[bytes, str]:
         .filter(
             Rechnung.kunde_id == kunde_id,
             Rechnung.typ == "ausgang",
-            Rechnung.dokument_typ == "Rechnung",
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus != "bezahlt",

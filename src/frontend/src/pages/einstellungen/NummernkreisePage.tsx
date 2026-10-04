@@ -19,6 +19,7 @@ const TYP_PRAEFIX_BEISPIEL: Record<string, string> = {
   auftrag: 'AU-',
   proforma: 'PRF-',
   stornorechnung: 'STORNO-',
+  abschlagsrechnung: 'AR-',
 }
 
 const VORLAGEN_MUSTER = [
@@ -65,7 +66,8 @@ export function NummernkreisePage() {
 
   const sichtbar = (nummernkreise ?? []).filter(nk =>
     (nk.typ !== 'lieferschein' || !!unternehmen?.lieferschein_aktiv) &&
-    (nk.typ !== 'rechnung_wiederkehrend' || !!unternehmen?.wiederkehrend_aktiv)
+    (nk.typ !== 'rechnung_wiederkehrend' || !!unternehmen?.wiederkehrend_aktiv) &&
+    (nk.typ !== 'abschlagsrechnung' || !!unternehmen?.abschlagsrechnungen_aktiv)
   )
 
   const mutation = useMutation({

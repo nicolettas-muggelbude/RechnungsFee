@@ -143,8 +143,8 @@ class RechnungCreate(BaseModel):
     @field_validator("dokument_typ")
     @classmethod
     def check_dokument_typ(cls, v: str) -> str:
-        if v not in ("Rechnung", "Gutschrift", "Lieferschein", "Angebot", "Proforma", "Auftrag"):
-            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift', 'Lieferschein', 'Angebot', 'Proforma' oder 'Auftrag' sein")
+        if v not in ("Rechnung", "Gutschrift", "Lieferschein", "Angebot", "Proforma", "Auftrag", "Abschlagsrechnung"):
+            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift', 'Lieferschein', 'Angebot', 'Proforma', 'Auftrag' oder 'Abschlagsrechnung' sein")
         return v
 
     @model_validator(mode="after")

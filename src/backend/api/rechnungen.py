@@ -858,7 +858,7 @@ def get_ueberzahlungen(db: Session = Depends(get_db)):
     rechnungen = (
         db.query(Rechnung)
         .filter(Rechnung.typ == "ausgang")
-        .filter(Rechnung.dokument_typ == "Rechnung")
+        .filter(Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]))
         .filter(Rechnung.storniert == False)
         .filter(Rechnung.ist_entwurf == False)
         .filter(Rechnung.bezahlt_betrag > Rechnung.brutto_gesamt + Decimal("0.01"))
@@ -920,6 +920,7 @@ def _rechnungen_gefiltert(
         q = q.filter(Rechnung.dokument_typ != "Angebot")
         q = q.filter(Rechnung.dokument_typ != "Proforma")
         q = q.filter(Rechnung.dokument_typ != "Auftrag")
+        q = q.filter(Rechnung.dokument_typ != "Abschlagsrechnung")
     if typ:
         if typ not in ("eingang", "ausgang"):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
@@ -1313,6 +1314,11 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
             else:
                 count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Angebot").count()
                 rechnungsnummer = f"ANG-{str(data.datum.year)[-2:]}{count + 1:04d}"
+        elif data.dokument_typ == "Abschlagsrechnung":
+            rechnungsnummer = naechste_nummer("abschlagsrechnung", db, data.datum)
+            if not rechnungsnummer:
+                count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Abschlagsrechnung").count()
+                rechnungsnummer = f"AR-{str(data.datum.year)[-2:]}{count + 1:04d}"
         elif data.dokument_typ == "Proforma":
             if not data.ist_entwurf:
                 rechnungsnummer = _naechste_proformanummer(data.datum, db)
@@ -1961,7 +1967,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     kunde_zugferd = (
         not ist_entwurf
         and ist_netto
-        and _dok_typ == "Rechnung"
+        and _dok_typ in ("Rechnung", "Abschlagsrechnung")
         and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
     )
     if kunde_zugferd:
