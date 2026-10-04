@@ -640,6 +640,20 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
             "beschreibung": f"{r.dokument_typ} {r.rechnungsnummer or '—'}",
             "betrag": betrag,
         })
+        # Storno: eigene Gegenzeile, die die Forderung wieder ausgleicht - "Stornorechnung"
+        # als dokument_typ existiert nicht wirklich (storniert ist ein Flag auf dem Original),
+        # der Zweig oben griff dadurch nie. Eine bereits verbuchte Zahlung bleibt bewusst
+        # stehen (keine automatische Rückerstattung) - das Ergebnis ist ein sichtbares
+        # Guthaben, das über die bestehende Guthaben-Verrechnung ausgeglichen werden kann.
+        if r.storniert and r.dokument_typ in ("Rechnung", "Abschlagsrechnung"):
+            storno_datum = r.storno_datum or datum
+            bewegungen.append({
+                "datum": str(storno_datum),
+                "typ": "storno",
+                "belegnr": r.storno_rechnungsnummer or r.rechnungsnummer or str(r.id),
+                "beschreibung": f"Storno {r.rechnungsnummer or '—'}",
+                "betrag": -betrag,
+            })
 
     # Zahlungseingänge aus dem Journal
     zahlungen = (
@@ -706,14 +720,25 @@ def _kontokorrent_bewegungen(
         else:
             typ, betrag = "storno", -float(r.brutto_gesamt)
         datum = (r.ausgegeben_am.date() if r.ausgegeben_am else r.datum)
-        if not (von <= datum <= bis):
-            continue
-        raw.append({
-            "datum": str(datum), "typ": typ,
-            "belegnr": r.rechnungsnummer or str(r.id),
-            "beschreibung": f"{r.dokument_typ} {r.rechnungsnummer or '—'}",
-            "betrag": betrag,
-        })
+        if von <= datum <= bis:
+            raw.append({
+                "datum": str(datum), "typ": typ,
+                "belegnr": r.rechnungsnummer or str(r.id),
+                "beschreibung": f"{r.dokument_typ} {r.rechnungsnummer or '—'}",
+                "betrag": betrag,
+            })
+        # Storno: eigene Gegenzeile mit eigenem Datum, die die Forderung wieder ausgleicht -
+        # unabhaengig vom Zeitraumfilter der urspruenglichen Rechnung geprueft, da das
+        # Stornodatum vom Rechnungsdatum abweichen kann.
+        if r.storniert and r.dokument_typ in ("Rechnung", "Abschlagsrechnung"):
+            storno_datum = r.storno_datum or datum
+            if von <= storno_datum <= bis:
+                raw.append({
+                    "datum": str(storno_datum), "typ": "storno",
+                    "belegnr": r.storno_rechnungsnummer or r.rechnungsnummer or str(r.id),
+                    "beschreibung": f"Storno {r.rechnungsnummer or '—'}",
+                    "betrag": -betrag,
+                })
 
     zahlungen = (
         db.query(Journaleintrag)

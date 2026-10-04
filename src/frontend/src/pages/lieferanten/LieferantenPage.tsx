@@ -330,15 +330,15 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
                 <p className="text-xs text-slate-400 dark:text-slate-500 italic">Keine Bewegungen im gewählten Zeitraum.</p>
               )}
               {gefilterteBewegungen.length > 0 && (
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden text-xs">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-x-auto text-xs">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wide">
                         <th className="text-left px-2 py-1.5">Datum</th>
                         <th className="text-left px-2 py-1.5">Typ</th>
                         <th className="text-left px-2 py-1.5 hidden sm:table-cell">Beleg</th>
-                        <th className="text-right px-2 py-1.5">Betrag</th>
-                        <th className="text-right px-2 py-1.5">Saldo</th>
+                        <th className="text-right px-2 py-1.5 min-w-[96px]">Betrag</th>
+                        <th className="text-right px-2 py-1.5 min-w-[96px]">Saldo</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
