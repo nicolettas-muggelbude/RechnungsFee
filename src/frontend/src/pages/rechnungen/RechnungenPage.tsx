@@ -2708,14 +2708,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   )
 
   function abschlagVerrechnen(abschlag: Rechnung) {
-    const neuePositionen: Positionszeile[] = abschlag.positionen.map(pos => ({
-      beschreibung: `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`,
-      menge: String(-parseFloat(pos.menge)),
-      einheit: pos.einheit,
-      netto: pos.netto,
-      ust_satz: pos.ust_satz,
-      abschlag_rechnung_id: abschlag.id,
-    }))
+    // pos.netto ist der eingegebene Einzelpreis, Bedeutung je nach eingabemodus DER
+    // Abschlagsrechnung - für die Abzugsposition hier brauchen wir stattdessen die bereits
+    // fertig berechnete, eindeutige Positionssumme (brutto/ust_betrag sind immer Summen, nicht
+    // Stückpreise, Issue #332) und richten sie am eingabemodus DIESER Schlussrechnung aus -
+    // sonst wird der Abzug bei abweichendem Eingabemodus falsch interpretiert (zu hoch/niedrig).
+    const neuePositionen: Positionszeile[] = abschlag.positionen.map(pos => {
+      const nettoPositionssumme = parseFloat(pos.brutto) - parseFloat(pos.ust_betrag)
+      return {
+        beschreibung: `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`,
+        menge: '-1',
+        einheit: pos.einheit,
+        netto: eingabeModus === 'brutto' ? pos.brutto : String(nettoPositionssumme),
+        ust_satz: pos.ust_satz,
+        abschlag_rechnung_id: abschlag.id,
+      }
+    })
     setPositionen(prev => [...prev, ...neuePositionen])
   }
 
