@@ -1222,6 +1222,25 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     return RechnungResponse.from_orm_extended(auftrag)
 
 
+@router.get("/offene-abschlaege", response_model=list[RechnungResponse])
+def offene_abschlaege(kunde_id: int, db: Session = Depends(get_db)):
+    """Issue #419 Phase 2: Abschlagsrechnungen eines Kunden, die noch in keiner Schlussrechnung
+    verrechnet sind - für den Auswahl-Picker beim Anlegen einer Rechnung."""
+    rechnungen = (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.kunde_id == kunde_id,
+            Rechnung.dokument_typ == "Abschlagsrechnung",
+            Rechnung.storniert == False,
+            Rechnung.ist_entwurf == False,
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
+        )
+        .order_by(Rechnung.datum)
+        .all()
+    )
+    return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
+
+
 @router.get("/{rechnung_id}", response_model=RechnungResponse)
 def get_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     r = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
@@ -1672,25 +1691,6 @@ def _synchronisiere_abschlagsverrechnung(
         if abschlag.kunde_id != rechnung.kunde_id:
             raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} gehört zu einem anderen Kunden.")
         abschlag.verrechnet_in_rechnung_id = rechnung.id
-
-
-@router.get("/offene-abschlaege", response_model=list[RechnungResponse])
-def offene_abschlaege(kunde_id: int, db: Session = Depends(get_db)):
-    """Issue #419 Phase 2: Abschlagsrechnungen eines Kunden, die noch in keiner Schlussrechnung
-    verrechnet sind - für den Auswahl-Picker beim Anlegen einer Rechnung."""
-    rechnungen = (
-        db.query(Rechnung)
-        .filter(
-            Rechnung.kunde_id == kunde_id,
-            Rechnung.dokument_typ == "Abschlagsrechnung",
-            Rechnung.storniert == False,
-            Rechnung.ist_entwurf == False,
-            Rechnung.verrechnet_in_rechnung_id.is_(None),
-        )
-        .order_by(Rechnung.datum)
-        .all()
-    )
-    return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
