@@ -277,7 +277,7 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
   const gefilterteBewebungen = (bewegungen ?? []).filter(b => b.datum >= von && b.datum <= bis)
 
   const typLabel: Record<string, string> = {
-    rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung', zahlung: 'Zahlung', gutschrift: 'Gutschrift', storno: 'Storno',
+    rechnung: 'Rechnung', abschlag: 'Abschlag', zahlung: 'Zahlung', gutschrift: 'Gutschrift', storno: 'Storno',
     mahngebuehr: 'Mahngebühr', verzugszinsen: 'Verzugszinsen',
   }
   const typFarbe: Record<string, string> = {
@@ -459,7 +459,7 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
                   <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="px-2 py-1.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">{formatDatum(b.datum)}</td>
                     <td className="px-2 py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] ${typFarbe[b.typ] ?? ''}`}>
+                      <span className={`px-1.5 py-0.5 rounded border text-[10px] whitespace-nowrap ${typFarbe[b.typ] ?? ''}`}>
                         {typLabel[b.typ] ?? b.typ}
                       </span>
                     </td>
