@@ -56,6 +56,15 @@ def _abschlag(db, kunde_id, netto="1000.00", nr="AR-1") -> Rechnung:
     return db.query(Rechnung).filter(Rechnung.id == resp.id).first()
 
 
+def _abschlag_mit_zeitraum(db, kunde_id, leistung_von, leistung_bis, nr="AR-1") -> Rechnung:
+    resp = create_rechnung(RechnungCreate(
+        typ="ausgang", dokument_typ="Abschlagsrechnung", datum=date(2026, 1, 10), ist_entwurf=False,
+        kunde_id=kunde_id, leistung_von=leistung_von, leistung_bis=leistung_bis,
+        positionen=[RechnungspositionCreate(beschreibung="Abschlag", menge=Decimal("1"), netto=Decimal("1000.00"), ust_satz=Decimal("19"))],
+    ), db)
+    return db.query(Rechnung).filter(Rechnung.id == resp.id).first()
+
+
 def _schlussrechnung_mit_abzug(db, kunde_id, abschlag: Rechnung, gesamt_netto="2000.00", ist_entwurf=False) -> Rechnung:
     resp = create_rechnung(RechnungCreate(
         typ="ausgang", dokument_typ="Rechnung", datum=date(2026, 2, 1), ist_entwurf=ist_entwurf,
@@ -90,11 +99,23 @@ def test_offene_abschlaege_filtert_korrekt(db):
     verrechnet = _abschlag(session, kunde_id, nr="AR-2")
     _schlussrechnung_mit_abzug(session, kunde_id, verrechnet)
 
-    ergebnis = offene_abschlaege(kunde_id, session)
+    ergebnis = offene_abschlaege(kunde_id, db=session)
 
     ids = {r.id for r in ergebnis}
     assert offen.id in ids
     assert verrechnet.id not in ids
+
+
+def test_offene_abschlaege_filtert_nach_leistungszeitraum(db):
+    session, kunde_id = db
+    projekt_a = _abschlag_mit_zeitraum(session, kunde_id, date(2026, 1, 1), date(2026, 1, 31), nr="AR-1")
+    projekt_b = _abschlag_mit_zeitraum(session, kunde_id, date(2026, 6, 1), date(2026, 6, 30), nr="AR-2")
+
+    ergebnis = offene_abschlaege(kunde_id, leistung_von=date(2026, 1, 15), leistung_bis=date(2026, 2, 15), db=session)
+
+    ids = {r.id for r in ergebnis}
+    assert projekt_a.id in ids
+    assert projekt_b.id not in ids
 
 
 def test_ueberdeckung_wird_abgelehnt(db):
@@ -142,7 +163,7 @@ def test_storno_der_schlussrechnung_gibt_abschlag_wieder_frei(db):
 
     session.refresh(abschlag)
     assert abschlag.verrechnet_in_rechnung_id is None
-    ergebnis = offene_abschlaege(kunde_id, session)
+    ergebnis = offene_abschlaege(kunde_id, db=session)
     assert any(r.id == abschlag.id for r in ergebnis)
 
 

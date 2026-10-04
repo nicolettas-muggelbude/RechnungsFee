@@ -2698,9 +2698,18 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   // Issue #419 Phase 2: offene Abschlagsrechnungen des gewählten Kunden, zur Verrechnung in
   // dieser Schlussrechnung - nur bei normalen Ausgangsrechnungen, nicht bei Lieferschein o.ä.
+  // Leistungszeitraum nur übergeben, wenn er für DIESE Rechnung bewusst gesetzt wurde (nicht der
+  // reine Default "= Rechnungsdatum") - ein Kunde kann mehrere parallele Projekte mit je eigenem
+  // Abschlag/Schlussrechnung-Zyklus haben, sonst würde der Picker alle offenen Abschläge dieses
+  // Kunden zeigen, auch aus einem völlig anderen Projekt.
+  const hatEigenenLeistungszeitraum = leistungManuell || leistungZeitraum
   const { data: offeneAbschlaege = [] } = useQuery({
-    queryKey: ['offene-abschlaege', kundeIdNum],
-    queryFn: () => getOffeneAbschlaege(kundeIdNum!),
+    queryKey: ['offene-abschlaege', kundeIdNum, hatEigenenLeistungszeitraum ? leistungVon : null, hatEigenenLeistungszeitraum ? leistungBis : null],
+    queryFn: () => getOffeneAbschlaege(
+      kundeIdNum!,
+      hatEigenenLeistungszeitraum ? leistungVon : undefined,
+      hatEigenenLeistungszeitraum ? leistungBis : undefined,
+    ),
     enabled: dokumentTyp === 'Rechnung' && typ === 'ausgang' && !!kundeIdNum && !!unternehmen?.abschlagsrechnungen_aktiv,
   })
   const verrechneteAbschlagIds = new Set(

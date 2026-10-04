@@ -1558,8 +1558,8 @@ export const lieferscheinAusRechnung = (rechnungId: number) =>
 
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
 export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)
-export const getOffeneAbschlaege = (kundeId: number) =>
-  request<Rechnung[]>(`/rechnungen/offene-abschlaege${toQuery({ kunde_id: kundeId })}`)
+export const getOffeneAbschlaege = (kundeId: number, leistungVon?: string, leistungBis?: string) =>
+  request<Rechnung[]>(`/rechnungen/offene-abschlaege${toQuery({ kunde_id: kundeId, leistung_von: leistungVon, leistung_bis: leistungBis })}`)
 export const getUeberzahlungen = () => request<Rechnung[]>('/rechnungen/ueberzahlungen')
 export const ueberzahlungAnerkennen = (rechnungId: number) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/ueberzahlung-anerkannt`, { method: 'PATCH' })

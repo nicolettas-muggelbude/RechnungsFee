@@ -1223,21 +1223,33 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
 
 
 @router.get("/offene-abschlaege", response_model=list[RechnungResponse])
-def offene_abschlaege(kunde_id: int, db: Session = Depends(get_db)):
+def offene_abschlaege(
+    kunde_id: int,
+    leistung_von: date | None = None,
+    leistung_bis: date | None = None,
+    db: Session = Depends(get_db),
+):
     """Issue #419 Phase 2: Abschlagsrechnungen eines Kunden, die noch in keiner Schlussrechnung
-    verrechnet sind - für den Auswahl-Picker beim Anlegen einer Rechnung."""
-    rechnungen = (
-        db.query(Rechnung)
-        .filter(
-            Rechnung.kunde_id == kunde_id,
-            Rechnung.dokument_typ == "Abschlagsrechnung",
-            Rechnung.storniert == False,
-            Rechnung.ist_entwurf == False,
-            Rechnung.verrechnet_in_rechnung_id.is_(None),
-        )
-        .order_by(Rechnung.datum)
-        .all()
+    verrechnet sind - für den Auswahl-Picker beim Anlegen einer Rechnung.
+
+    Wird ein Leistungszeitraum übergeben (die Schlussrechnung hat selbst einen gesetzt - nicht
+    nur den Default "= Rechnungsdatum"), werden nur Abschlagsrechnungen angezeigt, deren eigener
+    Leistungszeitraum sich damit überschneidet. Ein Kunde kann mehrere parallele Projekte mit je
+    eigenem Abschlag/Schlussrechnung-Zyklus haben - ohne diese Einschränkung würde der Picker
+    Abschläge aus einem völlig anderen Projekt zur Auswahl anbieten."""
+    query = db.query(Rechnung).filter(
+        Rechnung.kunde_id == kunde_id,
+        Rechnung.dokument_typ == "Abschlagsrechnung",
+        Rechnung.storniert == False,
+        Rechnung.ist_entwurf == False,
+        Rechnung.verrechnet_in_rechnung_id.is_(None),
     )
+    if leistung_von:
+        schluss_bis = leistung_bis or leistung_von
+        abschlag_start = func.coalesce(Rechnung.leistung_von, Rechnung.datum)
+        abschlag_ende = func.coalesce(Rechnung.leistung_bis, abschlag_start)
+        query = query.filter(abschlag_start <= schluss_bis, abschlag_ende >= leistung_von)
+    rechnungen = query.order_by(Rechnung.datum).all()
     return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
 
 
