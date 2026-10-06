@@ -1558,8 +1558,12 @@ export const lieferscheinAusRechnung = (rechnungId: number) =>
 
 export const getOffeneRechnungen = () => request<Rechnung[]>('/rechnungen/offene')
 export const getFaelligeRechnungen = (tage = 7) => request<Rechnung[]>(`/rechnungen/faellig?tage=${tage}`)
+// Issue #419 Phase 2b: bezahlt_je_satz ist die tatsächlich gezahlte (nicht die in Rechnung
+// gestellte) Summe je USt-Satz dieser Abschlagsrechnung - Grundlage für den Abzug.
+export type SatzBetrag = { ust_satz: string; brutto: string }
+export type OffenerAbschlag = Rechnung & { bezahlt_je_satz: SatzBetrag[] }
 export const getOffeneAbschlaege = (kundeId: number, leistungVon?: string, leistungBis?: string) =>
-  request<Rechnung[]>(`/rechnungen/offene-abschlaege${toQuery({ kunde_id: kundeId, leistung_von: leistungVon, leistung_bis: leistungBis })}`)
+  request<OffenerAbschlag[]>(`/rechnungen/offene-abschlaege${toQuery({ kunde_id: kundeId, leistung_von: leistungVon, leistung_bis: leistungBis })}`)
 export const getUeberzahlungen = () => request<Rechnung[]>('/rechnungen/ueberzahlungen')
 export const ueberzahlungAnerkennen = (rechnungId: number) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/ueberzahlung-anerkannt`, { method: 'PATCH' })

@@ -9,7 +9,7 @@ import {
   stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, forderungsausbuchenRechnung,
   getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, gutschriftVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
-  getLieferadressen, getOffeneAbschlaege,
+  getLieferadressen, getOffeneAbschlaege, type OffenerAbschlag,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
@@ -2716,23 +2716,37 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     positionen.filter(p => p.abschlag_rechnung_id).map(p => p.abschlag_rechnung_id!)
   )
 
-  function abschlagVerrechnen(abschlag: Rechnung) {
-    // pos.netto ist der eingegebene Einzelpreis, Bedeutung je nach eingabemodus DER
-    // Abschlagsrechnung - für die Abzugsposition hier brauchen wir stattdessen die bereits
-    // fertig berechnete, eindeutige Positionssumme (brutto/ust_betrag sind immer Summen, nicht
-    // Stückpreise, Issue #332) und richten sie am eingabemodus DIESER Schlussrechnung aus -
-    // sonst wird der Abzug bei abweichendem Eingabemodus falsch interpretiert (zu hoch/niedrig).
-    const neuePositionen: Positionszeile[] = abschlag.positionen.map(pos => {
-      const nettoPositionssumme = parseFloat(pos.brutto) - parseFloat(pos.ust_betrag)
-      return {
-        beschreibung: `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`,
-        menge: '-1',
-        einheit: pos.einheit,
-        netto: eingabeModus === 'brutto' ? pos.brutto : String(nettoPositionssumme),
-        ust_satz: pos.ust_satz,
-        abschlag_rechnung_id: abschlag.id,
-      }
-    })
+  function abschlagVerrechnen(abschlag: OffenerAbschlag) {
+    // Issue #419 Phase 2b: der Abzug richtet sich nach dem TATSÄCHLICH GEZAHLTEN Betrag
+    // (abschlag.bezahlt_je_satz, vom Backend bereits korrekt je USt-Satz verteilt), nicht nach
+    // dem Rechnungsbetrag der Abschlagsrechnung - deckt Unter- und Überzahlung einheitlich ab.
+    const beschreibung = `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`
+    const jeSatz = abschlag.bezahlt_je_satz ?? []
+    const neuePositionen: Positionszeile[] = jeSatz.length > 0
+      ? jeSatz.map(({ ust_satz, brutto }) => {
+          const satzNum = parseFloat(ust_satz)
+          const nettoWert = satzNum > 0 ? parseFloat(brutto) * 100 / (100 + satzNum) : parseFloat(brutto)
+          return {
+            beschreibung,
+            menge: '-1',
+            einheit: '',
+            netto: eingabeModus === 'brutto' ? brutto : String(nettoWert),
+            ust_satz,
+            abschlag_rechnung_id: abschlag.id,
+          }
+        })
+      // Noch gar nicht bezahlte Abschlagsrechnung: kein Abzug (nichts gezahlt, nichts zu
+      // verrechnen), aber trotzdem eine Markierungs-Position mit menge=0, damit die
+      // Abschlagsrechnung über abschlag_rechnung_id als verrechnet erkannt wird und nicht
+      // nochmal in einer anderen Schlussrechnung ausgewählt werden kann.
+      : [{
+          beschreibung: `${beschreibung} (noch nicht bezahlt)`,
+          menge: '0',
+          einheit: '',
+          netto: '0',
+          ust_satz: defaultUstGlobal,
+          abschlag_rechnung_id: abschlag.id,
+        }]
     setPositionen(prev => [...prev, ...neuePositionen])
   }
 

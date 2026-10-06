@@ -300,7 +300,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 "Bar": "Barzahlung", "Karte": "Kartenzahlung",
                 "PayPal": "PayPal", "Bank": "Bank",
             }
-            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
+            # Issue #419 Phase 2b: eine durch Abschlags-Verrechnung negative Schlussrechnung
+            # ist fachlich eine Rückerstattung, auch wenn dokument_typ="Rechnung" bleibt.
+            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0
             for z in zahlungen:
                 art_label = art_labels.get(
                     str(getattr(z, "zahlungsart", "")),
@@ -321,9 +323,11 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                         else "Teilbetrag erhalten am"
                     )
                     _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(betrag_anzeige), bold_val=True)
-        elif getattr(r, "dokument_typ", "Rechnung") == "Gutschrift":
-            # Gutschrift (offen/Entwurf): nur Betrag, kein Zahlungsweg (noch unbekannt)
-            _row("Gutschriftsbetrag", _fmt_euro(abs(r.brutto_gesamt)), bold_val=True)
+        elif getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0:
+            # Gutschrift (offen/Entwurf) oder negative Schlussrechnung (Issue #419 Phase 2b):
+            # nur Betrag, kein Zahlungsweg (noch unbekannt)
+            label = "Gutschriftsbetrag" if getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" else "Erstattungsbetrag"
+            _row(label, _fmt_euro(abs(r.brutto_gesamt)), bold_val=True)
         else:
             if empfaenger:
                 _row("Empfänger", empfaenger, bold_val=True)

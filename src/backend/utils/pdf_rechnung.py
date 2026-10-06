@@ -172,7 +172,9 @@ class RechnungPDF(RechnungPDFBase):
                 "Bar": "Barzahlung", "Karte": "Kartenzahlung",
                 "PayPal": "PayPal", "Bank": "Bank",
             }
-            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
+            # Issue #419 Phase 2b: eine durch Abschlags-Verrechnung negative Schlussrechnung
+            # ist fachlich eine Rückerstattung, auch wenn dokument_typ="Rechnung" bleibt.
+            ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0
             for z in zahlungen:
                 art_label = art_labels.get(
                     str(getattr(z, "zahlungsart", "")),
@@ -197,9 +199,10 @@ class RechnungPDF(RechnungPDFBase):
                 )
                 self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
         else:
-            ist_gutschrift_offen = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift"
+            ist_gutschrift_offen = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0
 
-            # Gutschrift (offen/Entwurf): Rückerstattungshinweis statt Zahlungsaufforderung
+            # Gutschrift (offen/Entwurf) oder negative Schlussrechnung (Issue #419 Phase 2b):
+            # Rückerstattungshinweis statt Zahlungsaufforderung
             if ist_gutschrift_offen:
                 betrag_gs = abs(r.brutto_gesamt)
                 self.set_font("DejaVu", "", 8)

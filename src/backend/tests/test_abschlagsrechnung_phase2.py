@@ -118,20 +118,17 @@ def test_offene_abschlaege_filtert_nach_leistungszeitraum(db):
     assert projekt_b.id not in ids
 
 
-def test_ueberdeckung_wird_abgelehnt(db):
+def test_ueberdeckung_erzeugt_negative_endsumme_statt_409(db):
+    """Issue #419 Phase 2b: eine Überdeckung (Abzüge > Gesamtleistung) ist ein legitimer Fall
+    (Kunde hat de facto ein Guthaben) und wird nicht mehr mit 409 blockiert."""
     session, kunde_id = db
     abschlag = _abschlag(session, kunde_id, netto="5000.00")
 
-    with pytest.raises(HTTPException) as exc:
-        _schlussrechnung_mit_abzug(session, kunde_id, abschlag, gesamt_netto="100.00")
-    assert exc.value.status_code == 409
-    # In der echten Anwendung schliesst get_db() die Session nach einer unbehandelten
-    # Exception ohne commit() - das verwirft den bis hierhin nur geflushten, nie committeten
-    # Datensatz automatisch. Im Test wird das explizit nachgebildet.
-    session.rollback()
+    schlussrechnung = _schlussrechnung_mit_abzug(session, kunde_id, abschlag, gesamt_netto="100.00")
 
-    rechnungen = session.query(Rechnung).filter(Rechnung.dokument_typ == "Rechnung").all()
-    assert len(rechnungen) == 0
+    assert schlussrechnung.brutto_gesamt < 0
+    session.refresh(abschlag)
+    assert abschlag.verrechnet_in_rechnung_id == schlussrechnung.id
 
 
 def test_verrechnete_abschlagsrechnung_kann_nicht_storniert_werden(db):

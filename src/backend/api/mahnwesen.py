@@ -328,6 +328,7 @@ def kunden_uebersicht(db: Session = Depends(get_db)):
         .filter(
             Rechnung.typ == "ausgang",
             Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -791,6 +792,7 @@ def _berechne_mahnung(
             Rechnung.kunde_id == kunde.id,
             Rechnung.typ == "ausgang",
             Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -815,6 +817,7 @@ def _berechne_mahnung(
                 Rechnung.kunde_id == kunde.id,
                 Rechnung.typ == "ausgang",
                 Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+                Rechnung.verrechnet_in_rechnung_id.is_(None),
                 Rechnung.ist_entwurf == False,  # noqa: E712
                 Rechnung.storniert == False,  # noqa: E712
                 Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
@@ -1505,6 +1508,7 @@ def generate_inkasso_zip(db: Session, kunde_id: int) -> tuple[bytes, str]:
             Rechnung.kunde_id == kunde_id,
             Rechnung.typ == "ausgang",
             Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus != "bezahlt",

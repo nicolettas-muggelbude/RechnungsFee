@@ -844,6 +844,10 @@ def get_faellige_rechnungen(tage: int = Query(7, ge=0, le=365), db: Session = De
         .filter(Rechnung.zahlungsstatus.in_(["offen", "teilweise"]))
         .filter(Rechnung.storniert == False)
         .filter(Rechnung.ist_entwurf == False)
+        # Issue #419 Phase 2b: eine verrechnete Abschlagsrechnung hat keinen eigenen offenen
+        # Anspruch mehr - ihr tatsächlicher Zahlungsstand ist jetzt vollständig in der
+        # Schlussrechnung abgebildet, sie darf nicht separat als fällig erscheinen.
+        .filter(Rechnung.verrechnet_in_rechnung_id.is_(None))
         .order_by(Rechnung.faellig_am.asc())
         .all()
     )
@@ -861,6 +865,10 @@ def get_ueberzahlungen(db: Session = Depends(get_db)):
         .filter(Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]))
         .filter(Rechnung.storniert == False)
         .filter(Rechnung.ist_entwurf == False)
+        # Issue #419 Phase 2b: brutto_gesamt > 0 verhindert einen Fehlalarm bei einer durch
+        # Abschlags-Verrechnung negativen Schlussrechnung (0 > -200 wäre sonst immer wahr,
+        # obwohl de facto nichts "überzahlt" wurde).
+        .filter(Rechnung.brutto_gesamt > 0)
         .filter(Rechnung.bezahlt_betrag > Rechnung.brutto_gesamt + Decimal("0.01"))
         .filter(Rechnung.ueberzahlung_anerkannt == False)
         .filter(
@@ -894,6 +902,9 @@ def get_offene_rechnungen(db: Session = Depends(get_db)):
         db.query(Rechnung)
         .filter(Rechnung.zahlungsstatus.in_(["offen", "teilweise"]))
         .filter(Rechnung.storniert == False)
+        # Issue #419 Phase 2b: siehe get_faellige_rechnungen() - verrechnete Abschlagsrechnung
+        # hat keinen eigenen offenen Anspruch mehr.
+        .filter(Rechnung.verrechnet_in_rechnung_id.is_(None))
         .order_by(Rechnung.datum.desc())
         .all()
     )
@@ -1222,7 +1233,18 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     return RechnungResponse.from_orm_extended(auftrag)
 
 
-@router.get("/offene-abschlaege", response_model=list[RechnungResponse])
+class SatzBetrag(BaseModel):
+    ust_satz: Decimal
+    brutto: Decimal
+
+
+class OffenerAbschlagResponse(RechnungResponse):
+    # Issue #419 Phase 2b: tatsächlich gezahlter Betrag je USt-Satz - Grundlage für den Abzug
+    # in der Schlussrechnung, NICHT der Rechnungsbetrag (brutto_gesamt) dieser Abschlagsrechnung.
+    bezahlt_je_satz: list[SatzBetrag] = []
+
+
+@router.get("/offene-abschlaege", response_model=list[OffenerAbschlagResponse])
 def offene_abschlaege(
     kunde_id: int,
     leistung_von: date | None = None,
@@ -1250,7 +1272,15 @@ def offene_abschlaege(
         abschlag_ende = func.coalesce(Rechnung.leistung_bis, abschlag_start)
         query = query.filter(abschlag_start <= schluss_bis, abschlag_ende >= leistung_von)
     rechnungen = query.order_by(Rechnung.datum).all()
-    return [RechnungResponse.from_orm_extended(r) for r in rechnungen]
+    ergebnis = []
+    for r in rechnungen:
+        basis = RechnungResponse.from_orm_extended(r)
+        je_satz = _bezahlte_betraege_je_satz(db, r)
+        ergebnis.append(OffenerAbschlagResponse(
+            **basis.model_dump(),
+            bezahlt_je_satz=[SatzBetrag(ust_satz=s, brutto=b) for s, b in je_satz],
+        ))
+    return ergebnis
 
 
 @router.get("/{rechnung_id}", response_model=RechnungResponse)
@@ -1674,19 +1704,26 @@ def _synchronisiere_abschlagsverrechnung(
     """
     neue_abschlag_ids = {p.abschlag_rechnung_id for p in rechnung.positionen if p.abschlag_rechnung_id}
 
+    # Issue #419 Phase 2b: eine überdeckte Schlussrechnung (Summe der tatsächlich gezahlten
+    # Abschläge > Gesamtleistung) ist ein legitimer Fall - der Kunde hat dann de facto ein
+    # Guthaben, die Schlussrechnung bekommt einen negativen Gesamtbetrag statt wie bisher mit
+    # 409 blockiert zu werden (Community-/Nutzer-Feedback im Issue).
     for alt_id in alte_abschlag_ids - neue_abschlag_ids:
         abschlag = db.query(Rechnung).filter(Rechnung.id == alt_id).first()
         if abschlag and abschlag.verrechnet_in_rechnung_id == rechnung.id:
             abschlag.verrechnet_in_rechnung_id = None
+            # Durch die Verrechnung geschlossenes Kundenguthaben (Phase 2b Punkt 5) wieder
+            # öffnen - ausgleich_journal_id IS NULL unterscheidet das von einer echten,
+            # bereits anderweitig verbrauchten Zahlungs-Verrechnung.
+            db.query(Forderung).filter(
+                Forderung.typ == "kundenguthaben",
+                Forderung.rechnung_id == alt_id,
+                Forderung.status == "ausgeglichen",
+                Forderung.ausgleich_journal_id.is_(None),
+            ).update({"status": "offen"})
 
     if not neue_abschlag_ids:
         return
-
-    if rechnung.brutto_gesamt < 0:
-        raise HTTPException(
-            status_code=409,
-            detail="Die verrechneten Abschlagsrechnungen übersteigen die Rechnungssumme. Bitte Positionen ergänzen oder weniger Abschlagsrechnungen auswählen.",
-        )
 
     for abschlag_id in neue_abschlag_ids:
         abschlag = db.query(Rechnung).filter(Rechnung.id == abschlag_id).first()
@@ -1703,6 +1740,16 @@ def _synchronisiere_abschlagsverrechnung(
         if abschlag.kunde_id != rechnung.kunde_id:
             raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} gehört zu einem anderen Kunden.")
         abschlag.verrechnet_in_rechnung_id = rechnung.id
+        # Issue #419 Phase 2b: eine Überzahlung auf dieser Abschlagsrechnung fließt jetzt über
+        # den tatsächlich gezahlten Betrag (siehe _bezahlte_betraege_je_satz) in den Abzug der
+        # Schlussrechnung ein - das separate Kundenguthaben dafür schließen, sonst würde dieselbe
+        # Überzahlung doppelt verwendet (einmal hier, einmal über die bestehende
+        # "Kundenguthaben verrechnen"-Funktion).
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag_id,
+            Forderung.status == "offen",
+        ).update({"status": "ausgeglichen"})
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
@@ -2608,6 +2655,32 @@ def _ausgangs_buchungsgruppen(
     return satz_ratios, ust_satz, False, gruppen_keys, gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed
 
 
+def _bezahlte_betraege_je_satz(db: Session, abschlag: "Rechnung") -> list[tuple[Decimal, Decimal]]:
+    """Issue #419 Phase 2b: verteilt den TATSÄCHLICH GEZAHLTEN Betrag einer Abschlagsrechnung
+    (nicht ihren Rechnungsbetrag) anteilig auf ihre USt-Sätze - Grundlage für den Abzug in der
+    Schlussrechnung. Deckt Unter- UND Überzahlung einheitlich ab, indem die bereits bestehenden
+    Bausteine der Zahlungsbuchung wiederverwendet werden (keine neue Berechnungslogik).
+
+    Rückgabe: Liste (ust_satz, brutto_betrag) je Satz-Gruppe mit brutto_betrag != 0 - eine
+    komplett unbezahlte Abschlagsrechnung liefert eine leere Liste.
+
+    WICHTIG: rechnung.bezahlt_betrag wird beim Buchen bewusst auf brutto_gesamt gekappt - der
+    Überschuss bei einer Überzahlung fließt NICHT dort ein, sondern ausschließlich in eine
+    separate Forderung(typ="kundenguthaben"). Ohne diese explizit dazuzurechnen, würde eine
+    Überzahlung hier unsichtbar bleiben."""
+    unternehmen = db.query(Unternehmen).first()
+    ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
+    offenes_guthaben = db.query(func.sum(Forderung.betrag)).filter(
+        Forderung.typ == "kundenguthaben",
+        Forderung.rechnung_id == abschlag.id,
+        Forderung.status == "offen",
+    ).scalar() or Decimal("0")
+    gesamt_gezahlt = (abschlag.bezahlt_betrag or Decimal("0")) + offenes_guthaben
+    satz_ratios, _, _, _, _, _, _ = _ausgangs_buchungsgruppen(db, abschlag, ist_ku)
+    verteilung = _verteile_nach_satz(gesamt_gezahlt, satz_ratios, "Einnahme")
+    return [(satz, betrag) for satz, betrag, _ust03, _ust04 in verteilung if betrag != 0]
+
+
 @router.post("/{rechnung_id}/zahlung-bar", response_model=BarZahlungResult, status_code=201)
 def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session = Depends(get_db)):
     """
@@ -2621,6 +2694,12 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         raise HTTPException(status_code=409, detail="Entwürfe können nicht kassiert werden. Bitte zuerst finalisieren.")
 
     ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
+    # Issue #419 Phase 2b: eine Schlussrechnung kann durch Abschlags-Verrechnung einen
+    # negativen Gesamtbetrag haben (Kunde hat de facto ein Guthaben) - fachlich dieselbe
+    # Erstattungs-Situation wie eine Gutschrift (Geld fließt an den Kunden zurück statt
+    # eingenommen zu werden), nur mit dokument_typ="Rechnung". Nutzt denselben, bereits
+    # bestehenden Erstattungs-Pfad (Kassenstand-Prüfung, positionsweise Verrechnung).
+    ist_erstattung = ist_gutschrift or rechnung.brutto_gesamt < 0
     restbetrag = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
 
     # Normalerweise blockiert eine bereits vollständig bezahlte Rechnung jede weitere Buchung -
@@ -2630,7 +2709,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # ist ja bereits 0) - schließt die zuvor dokumentierte Lücke "Rechnung bezahlt, Gebühr nicht
     # separat nachbuchbar".
     offene_mg_bei_bezahlter_rechnung = Decimal("0")
-    if abs(restbetrag) <= Decimal("0.004") and not ist_gutschrift and rechnung.typ == "ausgang":
+    if abs(restbetrag) <= Decimal("0.004") and not ist_erstattung and rechnung.typ == "ausgang":
         offene_mg_bei_bezahlter_rechnung = offene_mahngebuehr_summe(db, rechnung_id)
     if abs(restbetrag) <= Decimal("0.004") and offene_mg_bei_bezahlter_rechnung <= Decimal("0.004"):
         raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt/verbucht.")
@@ -2641,7 +2720,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     betrag_neg: Decimal = Decimal("0")  # nur für Gutschrift-Pfad
     betrag: Decimal = Decimal("0")      # nur für Normal-Pfad
 
-    if ist_gutschrift:
+    if ist_erstattung:
         # Frontend schickt positiven Betrag → Backend negiert für EÜR-korrekte Erlösminderung
         betrag_abs = (data.betrag if data.betrag is not None else abs(restbetrag)).quantize(Decimal("0.01"), ROUND_HALF_UP)
         if betrag_abs > abs(restbetrag) + Decimal("0.01"):
@@ -2693,7 +2772,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
 
     # Barkassen-Prüfung Normal-Pfad (Eingangsrechnung per Bar)
-    if not ist_gutschrift and art == "Ausgabe" and data.zahlungsart == "Bar":
+    if not ist_erstattung and art == "Ausgabe" and data.zahlungsart == "Bar":
         einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
             Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
         ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
@@ -2720,7 +2799,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     gruppen_brutto_mixed: dict[tuple[int, bool], Decimal] = {}
     gruppen_keys: list[tuple[int, bool]] = []
 
-    if not ist_gutschrift:
+    if not ist_erstattung:
         ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
         (
             satz_ratios, ust_satz, hat_gemischte_25a, gruppen_keys,
@@ -2847,9 +2926,12 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # Gutschrift-Buchung: positionsweise, gleiche Kategorien + USt, negative Einnahme
     # Artikel-IDs bleiben in den Positionen erhalten → Warenbestand-Hook für spätere Warenwirtschaft
     # -----------------------------------------------------------------------
-    if ist_gutschrift:
+    if ist_erstattung:
         from collections import defaultdict
-        beschreibung_gs = data.beschreibung or f"Gutschrift {rechnung.rechnungsnummer}: {partner}"
+        beschreibung_gs = data.beschreibung or (
+            f"Gutschrift {rechnung.rechnungsnummer}: {partner}" if ist_gutschrift
+            else f"Rückerstattung {rechnung.rechnungsnummer}: {partner}"
+        )
         pos_gruppen: dict[tuple, Decimal] = defaultdict(Decimal)
         marge_gruppen: dict[tuple, Decimal] = defaultdict(Decimal)
         kat_25a_id_gs: int | None = None
@@ -3252,6 +3334,15 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     verrechnete_abschlaege = db.query(Rechnung).filter(Rechnung.verrechnet_in_rechnung_id == rechnung.id).all()
     for abschlag in verrechnete_abschlaege:
         abschlag.verrechnet_in_rechnung_id = None
+        # Issue #419 Phase 2b: ein beim Verrechnen geschlossenes Kundenguthaben (siehe
+        # _synchronisiere_abschlagsverrechnung) wieder öffnen - sonst bliebe die Überzahlung
+        # nach dem Storno dauerhaft unsichtbar/unverrechenbar.
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag.id,
+            Forderung.status == "ausgeglichen",
+            Forderung.ausgleich_journal_id.is_(None),
+        ).update({"status": "offen"})
 
     # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Journal-Storno)
     for eintrag in list(rechnung.journaleintraege):
