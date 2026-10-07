@@ -2751,7 +2751,28 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           ust_satz: defaultUstGlobal,
           abschlag_rechnung_id: abschlag.id,
         }]
-    setPositionen(prev => [...prev, ...neuePositionen])
+
+    // Issue #419: Original-Position(en) der Abschlagsrechnung als Ausgangspunkt für die
+    // tatsächliche Leistung übernehmen (Nutzer-Erwartung) - bei unverändertem Projektumfang
+    // entspricht die Schlussrechnung genau dem, was ursprünglich per Abschlag abgerechnet
+    // wurde; frei editierbar, nicht mit abschlag_rechnung_id markiert. Nur wenn noch GAR KEINE
+    // eigene Leistung eingetragen wurde (alle Positionen ohne Beschreibung) - sonst würde ein
+    // erneutes An-/Abwählen während des Testens denselben Inhalt mehrfach einfügen.
+    const nochNichtsEingetragen = positionen.every(p => !p.beschreibung.trim())
+    if (nochNichtsEingetragen) {
+      // Noch unberührter Entwurf (nur die leere Default-Zeile) - diese durch die übernommene
+      // Leistung ersetzen statt danebenzustellen, sonst bleibt eine leere Positionszeile übrig.
+      const leistungsPositionen: Positionszeile[] = abschlag.positionen.map(pos => ({
+        beschreibung: pos.beschreibung,
+        menge: pos.menge,
+        einheit: pos.einheit,
+        netto: pos.netto,
+        ust_satz: pos.ust_satz,
+      }))
+      setPositionen([...leistungsPositionen, ...neuePositionen])
+    } else {
+      setPositionen(prev => [...prev, ...neuePositionen])
+    }
   }
 
   function abschlagEntfernen(abschlagId: number) {
