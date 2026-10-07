@@ -3985,12 +3985,19 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             <tbody>
               {positionen.map((pos, i) => (
                 pos.abschlag_rechnung_id ? (
+                  // Issue #419: eine verrechnete Abschlagsrechnung ist kein "Menge × Einzelpreis"
+                  // - Menge/Einheit sind hier bedeutungslos und würden nur verwirren (Nutzer-
+                  // Feedback: "Nenne es nicht Position, sondern Betrag"). Menge/Einheit bleiben
+                  // als "–" ausgeblendet, der tatsächliche Abzugsbetrag (bereits das fertige
+                  // Vorzeichen-Ergebnis aus Netto × Menge) steht stattdessen klar in einer Zahl.
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
                     <td className="px-3 py-1.5 italic">{pos.beschreibung}</td>
-                    <td className="px-3 py-1.5 text-right">{pos.menge}</td>
-                    <td className="px-3 py-1.5">{pos.einheit}</td>
+                    <td className="px-3 py-1.5 text-right">–</td>
+                    <td className="px-3 py-1.5">–</td>
                     {dokumentTyp !== 'Lieferschein' && <>
-                      <td className="px-3 py-1.5 text-right">{formatPreis(pos.netto)}</td>
+                      <td className="px-3 py-1.5 text-right font-medium">
+                        {formatEuro(parseFloat(pos.netto || '0') * parseFloat(pos.menge || '0'))}
+                      </td>
                       <td className="px-3 py-1.5"></td>
                       <td className="px-3 py-1.5 text-right">{pos.ust_satz} %</td>
                       {typ === 'eingang' && <td className="px-3 py-1.5"></td>}
