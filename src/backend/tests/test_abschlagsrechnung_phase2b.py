@@ -1,15 +1,15 @@
 """
 Regressionstests für Issue #419 Phase 2b: Abzugsbasis = tatsächlicher Zahlungseingang statt
-Rechnungsbetrag der Abschlagsrechnung.
+Rechnungsbetrag der Abschlagsrechnung - begrenzt auf Unterzahlung.
 
 Deckt ab:
 - _bezahlte_betraege_je_satz() liefert den tatsächlich gezahlten Betrag je USt-Satz (nicht den
-  Rechnungsbetrag) - für Unterzahlung, Überzahlung (inkl. der separat als Forderung erfassten
-  Überzahlungs-Spitze) und komplett unbezahlte Abschlagsrechnungen.
+  Rechnungsbetrag) bei Unterzahlung und komplett unbezahlten Abschlagsrechnungen.
+- Eine Überzahlung bleibt bewusst AUSSEN VOR (Nutzer-Vorgabe): der Abzug ist auf den
+  Rechnungsbetrag gekappt (= bezahlt_betrag, das die Kappung aus zahlung_bar_erstellen() schon
+  mitbringt), die Überzahlungs-Forderung bleibt komplett unabhängig von der Verrechnung - wird
+  weder beim Verrechnen geschlossen noch beim Storno/Löschen angefasst.
 - GET /offene-abschlaege liefert bezahlt_je_satz korrekt mit.
-- Verrechnen einer überzahlten Abschlagsrechnung schließt das zugehörige Kundenguthaben
-  (verhindert doppelte Verwendung derselben Überzahlung).
-- Storno der Schlussrechnung öffnet ein so geschlossenes Kundenguthaben wieder.
 - Eine komplett unbezahlte, aber verrechnete Abschlagsrechnung erzeugt keinen Abzug.
 - Eine verrechnete Abschlagsrechnung erscheint nicht mehr in der Fälligkeitsliste.
 - Eine durch Überdeckung negative Schlussrechnung erscheint nicht im Überzahlungs-Widget.
@@ -100,18 +100,24 @@ def test_unbezahlte_abschlagsrechnung_liefert_leere_liste(db):
     assert _bezahlte_betraege_je_satz(session, abschlag) == []
 
 
-def test_ueberzahlung_wird_in_bezahlte_betraege_eingerechnet(db):
+def test_ueberzahlung_bleibt_auf_rechnungsbetrag_gekappt(db):
+    """Nutzer-Vorgabe: der Abzug darf bei Überzahlung NICHT den vollen gezahlten Betrag
+    enthalten - nur den Rechnungsbetrag. Die Überzahlungs-Spitze bleibt eine komplett
+    eigenständige, von der Abschlags-Verrechnung unabhängige Kundenguthaben-Forderung."""
     session, kunde_id = db
     abschlag = _abschlag(session, kunde_id, netto="1000.00")  # brutto 1190,00
     zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank", betrag=Decimal("1200.00")), session)
     session.refresh(abschlag)
-    # bezahlt_betrag wird beim Buchen gekappt - nur die Forderung kennt die echten 1200,00 €
+    # bezahlt_betrag wird beim Buchen bewusst auf brutto_gesamt gekappt
     assert abschlag.bezahlt_betrag == Decimal("1190.00")
+    guthaben = session.query(Forderung).filter(Forderung.rechnung_id == abschlag.id).first()
+    assert guthaben.betrag == Decimal("10.00")
+    assert guthaben.status == "offen"
 
     je_satz = _bezahlte_betraege_je_satz(session, abschlag)
 
     assert len(je_satz) == 1
-    assert je_satz[0][1] == Decimal("1200.00")
+    assert je_satz[0][1] == Decimal("1190.00")  # NICHT 1200.00
 
 
 def test_offene_abschlaege_liefert_bezahlt_je_satz(db):
@@ -126,38 +132,35 @@ def test_offene_abschlaege_liefert_bezahlt_je_satz(db):
     assert treffer.bezahlt_je_satz[0].brutto == Decimal("1190.00")
 
 
-def test_ueberzahlung_schliesst_kundenguthaben_beim_verrechnen(db):
+def test_verrechnen_laesst_ueberzahlungs_forderung_unangetastet(db):
     session, kunde_id = db
     abschlag = _abschlag(session, kunde_id, netto="1000.00")
     zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank", betrag=Decimal("1200.00")), session)
     session.refresh(abschlag)
     guthaben = session.query(Forderung).filter(Forderung.rechnung_id == abschlag.id).first()
-    assert guthaben is not None
     assert guthaben.status == "offen"
-    assert guthaben.betrag == Decimal("10.00")
 
-    schlussrechnung = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1008.40")
+    schlussrechnung = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1000.00")
 
     session.refresh(guthaben)
-    assert guthaben.status == "ausgeglichen"
-    assert guthaben.ausgleich_journal_id is None
+    assert guthaben.status == "offen"  # unverändert, keine Kopplung
     session.refresh(abschlag)
     assert abschlag.verrechnet_in_rechnung_id == schlussrechnung.id
 
 
-def test_storno_oeffnet_kundenguthaben_wieder(db):
+def test_storno_laesst_ueberzahlungs_forderung_unangetastet(db):
     session, kunde_id = db
     abschlag = _abschlag(session, kunde_id, netto="1000.00")
     zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank", betrag=Decimal("1200.00")), session)
     guthaben = session.query(Forderung).filter(Forderung.rechnung_id == abschlag.id).first()
-    schlussrechnung = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1008.40")
-    session.refresh(guthaben)
-    assert guthaben.status == "ausgeglichen"
+    schlussrechnung = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1000.00")
 
     storno_rechnung(schlussrechnung.id, StornoRequest(grund="Test"), session)
 
     session.refresh(guthaben)
-    assert guthaben.status == "offen"
+    assert guthaben.status == "offen"  # unverändert
+    session.refresh(abschlag)
+    assert abschlag.verrechnet_in_rechnung_id is None
 
 
 def test_vollstaendig_unbezahlte_abschlagsrechnung_bleibt_verrechnet_ohne_abzug(db):
@@ -214,16 +217,10 @@ def test_entwurf_mit_verrechneten_abschlaegen_loeschen_gibt_sie_frei(db):
     (PRAGMA foreign_keys=ON) verletzte."""
     session, kunde_id = db
     abschlag = _abschlag(session, kunde_id, netto="1000.00")
-    zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank", betrag=Decimal("1200.00")), session)
-    guthaben = session.query(Forderung).filter(Forderung.rechnung_id == abschlag.id).first()
-    entwurf = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1008.40", ist_entwurf=True)
-    session.refresh(guthaben)
-    assert guthaben.status == "ausgeglichen"
+    entwurf = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1000.00", ist_entwurf=True)
 
     delete_rechnung(entwurf.id, session)
 
     session.refresh(abschlag)
     assert abschlag.verrechnet_in_rechnung_id is None
-    session.refresh(guthaben)
-    assert guthaben.status == "offen"
     assert session.query(Rechnung).filter(Rechnung.id == entwurf.id).first() is None
