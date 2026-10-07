@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Beleg, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Mahnung, Rechnung, Nummernkreis, Unternehmen
+from database.models import Beleg, Forderung, Kunde, KundeBeleg, KundeLieferadresse, Journaleintrag, Mahnung, Rechnung, Nummernkreis, Unternehmen
 from .schemas import KundeCreate, KundeUpdate, KundeResponse
 from .schemas_rechnungen import BelegResponse
 from utils.pdf_dsgvo import generate_dsgvo_pdf
@@ -532,16 +532,41 @@ def delete_kunde_beleg(kunde_id: int, kb_id: int, db: Session = Depends(get_db))
 # Zeilen (Zahlung/Gutschrift/Storno) - sonst kann bei Buchungen am selben Tag eine Zahlung vor
 # der Forderung erscheinen, die sie ausgleicht (Saldo-Endstand bleibt korrekt, Zwischenstand wirkt
 # aber falsch).
-_TYP_SORT_PRIO = {"rechnung": 0, "abschlag": 0, "mahngebuehr": 0, "verzugszinsen": 0, "zahlung": 1, "gutschrift": 1, "storno": 1}
+_TYP_SORT_PRIO = {"rechnung": 0, "abschlag": 0, "mahngebuehr": 0, "verzugszinsen": 0, "zahlung": 1, "gutschrift": 1, "storno": 1, "guthaben": 1}
 
 
 class KontokorrentBewegung(BaseModel):
     datum: str
-    typ: str          # rechnung | abschlag | zahlung | gutschrift | storno | mahngebuehr | verzugszinsen
+    typ: str          # rechnung | abschlag | zahlung | gutschrift | storno | mahngebuehr | verzugszinsen | guthaben
     belegnr: str
     beschreibung: str
     betrag: float     # positiv = Forderung, negativ = Ausgleich
     saldo: float
+
+
+def _kundenguthaben_bewegungen(kunde_id: int, db: Session) -> list[dict]:
+    """Noch offene Kundenguthaben-Forderungen (z.B. Überzahlung einer Abschlagsrechnung, Issue
+    #419 Phase 2b) als eigene Ausgleichs-Zeile zum Zeitpunkt ihrer Entstehung.
+
+    Ohne das zeigt das Kontokorrent nur den auf die jeweilige Rechnung GEKAPPTEN Zahlungsbetrag
+    (zahlung_bar_erstellen() kappt bewusst auf brutto_gesamt, der Überschuss landet separat in
+    dieser Forderung) - der Kunde hätte dann z.B. 5€ gezahlt, aber nur 2€ wären im Kontokorrent
+    sichtbar. Einmal verrechnet (status != "offen") verschwindet diese Zeile wieder - der
+    Betrag erscheint dann stattdessen ganz regulär über die Buchung, die die Verrechnung
+    erzeugt hat (eine echte Zahlung auf eine andere Rechnung über forderung_verrechnen(), oder
+    bei Verrechnung in einer Schlussrechnung bereits eingepreist in deren reduziertes
+    brutto_gesamt) - kein Doppelzählen."""
+    offene = db.query(Forderung).filter(
+        Forderung.typ == "kundenguthaben",
+        Forderung.partner_typ == "kunde",
+        Forderung.partner_id == kunde_id,
+        Forderung.status == "offen",
+    ).all()
+    return [{
+        "datum": str(f.erstellt_am.date()), "typ": "guthaben",
+        "belegnr": str(f.id), "beschreibung": f.notiz or "Kundenguthaben",
+        "betrag": -float(f.betrag),
+    } for f in offene]
 
 
 def _mahngebuehr_bewegungen(kunde_id: int, db: Session) -> list[dict]:
@@ -674,6 +699,7 @@ def kontokorrent_kunde(kunde_id: int, db: Session = Depends(get_db)):
         })
 
     bewegungen.extend(_mahngebuehr_bewegungen(kunde_id, db))
+    bewegungen.extend(_kundenguthaben_bewegungen(kunde_id, db))
     bewegungen.sort(key=lambda b: (b["datum"], _TYP_SORT_PRIO.get(b["typ"], 0)))
 
     saldo = 0.0
@@ -760,6 +786,10 @@ def _kontokorrent_bewegungen(
     for mb in _mahngebuehr_bewegungen(kunde_id, db):
         if von <= _date.fromisoformat(mb["datum"]) <= bis:
             raw.append(mb)
+
+    for gb in _kundenguthaben_bewegungen(kunde_id, db):
+        if von <= _date.fromisoformat(gb["datum"]) <= bis:
+            raw.append(gb)
 
     raw.sort(key=lambda b: (b["datum"], _TYP_SORT_PRIO.get(b["typ"], 0)))
     saldo = 0.0

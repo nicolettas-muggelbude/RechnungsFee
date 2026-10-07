@@ -51,11 +51,13 @@ def _fmt_datum(iso: str) -> str:
 
 _TYP_LABEL = {
     "rechnung":  "Rechnung",
+    "abschlag":  "Abschlag",
     "zahlung":   "Zahlung",
     "gutschrift": "Gutschrift",
     "storno":    "Storno",
     "mahngebuehr": "Mahngebühr",
     "verzugszinsen": "Verzugszinsen",
+    "guthaben":  "Guthaben",
 }
 
 # Spaltenbreiten (Summe = ca. 170 mm bei 20 mm Rand je Seite)
