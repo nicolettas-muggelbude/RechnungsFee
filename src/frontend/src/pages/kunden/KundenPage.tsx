@@ -278,7 +278,7 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
 
   const typLabel: Record<string, string> = {
     rechnung: 'Rechnung', abschlag: 'Abschlag', zahlung: 'Zahlung', gutschrift: 'Gutschrift', storno: 'Storno',
-    mahngebuehr: 'Mahngebühr', verzugszinsen: 'Verzugszinsen', guthaben: 'Guthaben',
+    mahngebuehr: 'Mahngebühr', verzugszinsen: 'Verzugszinsen',
   }
   const typFarbe: Record<string, string> = {
     rechnung: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
@@ -288,7 +288,6 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
     storno: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
     mahngebuehr: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800',
     verzugszinsen: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800',
-    guthaben: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
   }
 
   return (

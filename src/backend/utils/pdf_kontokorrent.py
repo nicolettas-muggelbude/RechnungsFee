@@ -57,7 +57,6 @@ _TYP_LABEL = {
     "storno":    "Storno",
     "mahngebuehr": "Mahngebühr",
     "verzugszinsen": "Verzugszinsen",
-    "guthaben":  "Guthaben",
 }
 
 # Spaltenbreiten (Summe = ca. 170 mm bei 20 mm Rand je Seite)
