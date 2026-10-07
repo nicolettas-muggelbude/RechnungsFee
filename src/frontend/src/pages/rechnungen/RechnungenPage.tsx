@@ -2507,6 +2507,7 @@ type Positionszeile = {
   art_minusbestand_erlaubt?: boolean
   art_typ?: ArtikelTyp  // Artikel-Typ (artikel/dienstleistung/fremdleistung) - fuer ig.Lieferung/Reverse-Charge-Erkennung
   abschlag_rechnung_id?: number  // Issue #419: markiert eine automatisch generierte Abzugszeile
+  leistung_von_abschlag_id?: number  // Issue #419: markiert eine aus der Abschlagsrechnung übernommene Leistungsposition (nur Frontend, verhindert doppeltes Übernehmen - wird nicht ans Backend gesendet)
 }
 
 const leerPosition = (defaultUst = '19'): Positionszeile => ({
@@ -2752,27 +2753,29 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           abschlag_rechnung_id: abschlag.id,
         }]
 
-    // Issue #419: Original-Position(en) der Abschlagsrechnung als Ausgangspunkt für die
+    // Issue #419: Original-Position(en) DIESER Abschlagsrechnung als Ausgangspunkt für die
     // tatsächliche Leistung übernehmen (Nutzer-Erwartung) - bei unverändertem Projektumfang
     // entspricht die Schlussrechnung genau dem, was ursprünglich per Abschlag abgerechnet
-    // wurde; frei editierbar, nicht mit abschlag_rechnung_id markiert. Nur wenn noch GAR KEINE
-    // eigene Leistung eingetragen wurde (alle Positionen ohne Beschreibung) - sonst würde ein
-    // erneutes An-/Abwählen während des Testens denselben Inhalt mehrfach einfügen.
-    const nochNichtsEingetragen = positionen.every(p => !p.beschreibung.trim())
-    if (nochNichtsEingetragen) {
-      // Noch unberührter Entwurf (nur die leere Default-Zeile) - diese durch die übernommene
-      // Leistung ersetzen statt danebenzustellen, sonst bleibt eine leere Positionszeile übrig.
-      const leistungsPositionen: Positionszeile[] = abschlag.positionen.map(pos => ({
-        beschreibung: pos.beschreibung,
-        menge: pos.menge,
-        einheit: pos.einheit,
-        netto: pos.netto,
-        ust_satz: pos.ust_satz,
-      }))
-      setPositionen([...leistungsPositionen, ...neuePositionen])
-    } else {
-      setPositionen(prev => [...prev, ...neuePositionen])
-    }
+    // wurde; frei editierbar. leistung_von_abschlag_id markiert die Herkunft (nur Frontend) -
+    // verhindert, dass dieselbe Abschlagsrechnung beim erneuten An-/Abwählen doppelt übernommen
+    // wird, erlaubt aber JEDER weiteren, anderen Abschlagsrechnung ihre eigene Leistung
+    // beizutragen (z.B. zweite Abschlagsrechnung zu einem bereits befüllten Entwurf).
+    const bereitsUebernommen = positionen.some(p => p.leistung_von_abschlag_id === abschlag.id)
+    const leistungsPositionen: Positionszeile[] = bereitsUebernommen ? [] : abschlag.positionen.map(pos => ({
+      beschreibung: pos.beschreibung,
+      menge: pos.menge,
+      einheit: pos.einheit,
+      netto: pos.netto,
+      ust_satz: pos.ust_satz,
+      leistung_von_abschlag_id: abschlag.id,
+    }))
+    // Die leere Default-Zeile (noch unberührter Entwurf) entfernen statt danebenzustellen,
+    // sonst bleibt eine leere Positionszeile neben der übernommenen Leistung übrig.
+    setPositionen(prev => [
+      ...prev.filter(p => p.beschreibung.trim() || p.netto.trim()),
+      ...leistungsPositionen,
+      ...neuePositionen,
+    ])
   }
 
   function abschlagEntfernen(abschlagId: number) {
