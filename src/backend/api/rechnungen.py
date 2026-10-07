@@ -1712,6 +1712,15 @@ def _synchronisiere_abschlagsverrechnung(
         abschlag = db.query(Rechnung).filter(Rechnung.id == alt_id).first()
         if abschlag and abschlag.verrechnet_in_rechnung_id == rechnung.id:
             abschlag.verrechnet_in_rechnung_id = None
+            # Durch die Verrechnung geschlossenes Kundenguthaben (Phase 2b Punkt 5) wieder
+            # öffnen - ausgleich_journal_id IS NULL unterscheidet das von einer echten,
+            # bereits anderweitig verbrauchten Zahlungs-Verrechnung.
+            db.query(Forderung).filter(
+                Forderung.typ == "kundenguthaben",
+                Forderung.rechnung_id == alt_id,
+                Forderung.status == "ausgeglichen",
+                Forderung.ausgleich_journal_id.is_(None),
+            ).update({"status": "offen"})
 
     if not neue_abschlag_ids:
         return
@@ -1731,6 +1740,16 @@ def _synchronisiere_abschlagsverrechnung(
         if abschlag.kunde_id != rechnung.kunde_id:
             raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} gehört zu einem anderen Kunden.")
         abschlag.verrechnet_in_rechnung_id = rechnung.id
+        # Issue #419 Phase 2b: eine Überzahlung auf dieser Abschlagsrechnung fließt jetzt über
+        # den tatsächlich gezahlten Betrag (siehe _bezahlte_betraege_je_satz) in den Abzug der
+        # Schlussrechnung ein - das separate Kundenguthaben dafür schließen, sonst würde dieselbe
+        # Überzahlung doppelt verwendet (einmal hier, einmal über die bestehende
+        # "Kundenguthaben verrechnen"-Funktion).
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag_id,
+            Forderung.status == "offen",
+        ).update({"status": "ausgeglichen"})
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
@@ -2433,6 +2452,12 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     verrechnete_abschlaege = db.query(Rechnung).filter(Rechnung.verrechnet_in_rechnung_id == rechnung_id).all()
     for abschlag in verrechnete_abschlaege:
         abschlag.verrechnet_in_rechnung_id = None
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag.id,
+            Forderung.status == "ausgeglichen",
+            Forderung.ausgleich_journal_id.is_(None),
+        ).update({"status": "offen"})
 
     db.delete(rechnung)
     db.commit()
@@ -2647,19 +2672,24 @@ def _ausgangs_buchungsgruppen(
 def _bezahlte_betraege_je_satz(db: Session, abschlag: "Rechnung") -> list[tuple[Decimal, Decimal]]:
     """Issue #419 Phase 2b: verteilt den TATSÄCHLICH GEZAHLTEN Betrag einer Abschlagsrechnung
     (nicht ihren Rechnungsbetrag) anteilig auf ihre USt-Sätze - Grundlage für den Abzug in der
-    Schlussrechnung. Deckt Unterzahlung ab, indem die bereits bestehenden Bausteine der
-    Zahlungsbuchung wiederverwendet werden (keine neue Berechnungslogik).
+    Schlussrechnung. Deckt Unter- UND Überzahlung einheitlich ab, indem die bereits bestehenden
+    Bausteine der Zahlungsbuchung wiederverwendet werden (keine neue Berechnungslogik).
 
     Rückgabe: Liste (ust_satz, brutto_betrag) je Satz-Gruppe mit brutto_betrag != 0 - eine
     komplett unbezahlte Abschlagsrechnung liefert eine leere Liste.
 
-    WICHTIG (Nutzer-Vorgabe): eine Überzahlung bleibt bewusst AUSSEN VOR - rechnung.bezahlt_betrag
-    ist durch die Kappung in zahlung_bar_erstellen() ohnehin bereits min(gezahlt, brutto_gesamt),
-    der Überschuss bleibt bewusst eine eigenständige, von der Abschlags-Verrechnung unabhängige
-    Forderung(typ="kundenguthaben") - keine Kopplung zwischen beiden Mechanismen."""
+    WICHTIG: rechnung.bezahlt_betrag wird beim Buchen bewusst auf brutto_gesamt gekappt - der
+    Überschuss bei einer Überzahlung fließt NICHT dort ein, sondern ausschließlich in eine
+    separate Forderung(typ="kundenguthaben"). Ohne diese explizit dazuzurechnen, würde eine
+    Überzahlung hier unsichtbar bleiben."""
     unternehmen = db.query(Unternehmen).first()
     ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
-    gesamt_gezahlt = abschlag.bezahlt_betrag or Decimal("0")
+    offenes_guthaben = db.query(func.sum(Forderung.betrag)).filter(
+        Forderung.typ == "kundenguthaben",
+        Forderung.rechnung_id == abschlag.id,
+        Forderung.status == "offen",
+    ).scalar() or Decimal("0")
+    gesamt_gezahlt = (abschlag.bezahlt_betrag or Decimal("0")) + offenes_guthaben
     satz_ratios, _, _, _, _, _, _ = _ausgangs_buchungsgruppen(db, abschlag, ist_ku)
     verteilung = _verteile_nach_satz(gesamt_gezahlt, satz_ratios, "Einnahme")
     return [(satz, betrag) for satz, betrag, _ust03, _ust04 in verteilung if betrag != 0]
@@ -3318,6 +3348,15 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     verrechnete_abschlaege = db.query(Rechnung).filter(Rechnung.verrechnet_in_rechnung_id == rechnung.id).all()
     for abschlag in verrechnete_abschlaege:
         abschlag.verrechnet_in_rechnung_id = None
+        # Issue #419 Phase 2b: ein beim Verrechnen geschlossenes Kundenguthaben (siehe
+        # _synchronisiere_abschlagsverrechnung) wieder öffnen - sonst bliebe die Überzahlung
+        # nach dem Storno dauerhaft unsichtbar/unverrechenbar.
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag.id,
+            Forderung.status == "ausgeglichen",
+            Forderung.ausgleich_journal_id.is_(None),
+        ).update({"status": "offen"})
 
     # Für jede verknüpfte Zahlung: Gegenbuchung erstellen (wie Journal-Storno)
     for eintrag in list(rechnung.journaleintraege):
