@@ -2721,6 +2721,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     // (abschlag.bezahlt_je_satz, vom Backend bereits korrekt je USt-Satz verteilt), nicht nach
     // dem Rechnungsbetrag der Abschlagsrechnung - deckt Unter- und Überzahlung einheitlich ab.
     const beschreibung = `Abzgl. Abschlagsrechnung ${abschlag.rechnungsnummer} vom ${formatDatum(abschlag.datum)}`
+    // bezahlt_je_satz kennt nur Satz + Betrag, keine Einheit (ist über Satz-Gruppen hinweg
+    // aggregiert) - die Einheit der Abschlagsrechnung selbst übernehmen (im Regelfall eine
+    // einzige Position/Einheit pro Abschlagsrechnung).
+    const einheit = abschlag.positionen[0]?.einheit || ''
     const jeSatz = abschlag.bezahlt_je_satz ?? []
     const neuePositionen: Positionszeile[] = jeSatz.length > 0
       ? jeSatz.map(({ ust_satz, brutto }) => {
@@ -2729,7 +2733,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           return {
             beschreibung,
             menge: '-1',
-            einheit: '',
+            einheit,
             netto: eingabeModus === 'brutto' ? brutto : String(nettoWert),
             ust_satz,
             abschlag_rechnung_id: abschlag.id,
@@ -2742,7 +2746,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       : [{
           beschreibung: `${beschreibung} (noch nicht bezahlt)`,
           menge: '0',
-          einheit: '',
+          einheit,
           netto: '0',
           ust_satz: defaultUstGlobal,
           abschlag_rechnung_id: abschlag.id,

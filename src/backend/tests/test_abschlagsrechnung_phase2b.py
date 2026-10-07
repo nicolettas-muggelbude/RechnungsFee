@@ -14,6 +14,8 @@ Deckt ab:
 - Eine verrechnete Abschlagsrechnung erscheint nicht mehr in der Fälligkeitsliste.
 - Eine durch Überdeckung negative Schlussrechnung erscheint nicht im Überzahlungs-Widget.
 - Eine Bar-Rückzahlung auf eine negative Rechnung prüft den Kassenstand (wie bei Gutschrift).
+- Löschen eines Schlussrechnungs-ENTWURFS mit verrechneten Abschlagsrechnungen gibt diese
+  vorher frei, statt an der FK-Referenz zu scheitern (PRAGMA foreign_keys=ON).
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -26,6 +28,7 @@ from sqlalchemy.orm import sessionmaker
 from api.rechnungen import (
     _bezahlte_betraege_je_satz,
     create_rechnung,
+    delete_rechnung,
     get_faellige_rechnungen,
     get_ueberzahlungen,
     offene_abschlaege,
@@ -62,7 +65,7 @@ def _abschlag(db, kunde_id, netto="1000.00", faellig_am=None) -> Rechnung:
     return db.query(Rechnung).filter(Rechnung.id == resp.id).first()
 
 
-def _schlussrechnung(db, kunde_id, abschlag_id, abzug_netto, gesamt_netto="2000.00") -> Rechnung:
+def _schlussrechnung(db, kunde_id, abschlag_id, abzug_netto, gesamt_netto="2000.00", ist_entwurf=False) -> Rechnung:
     positionen = [RechnungspositionCreate(beschreibung="Gesamtleistung", menge=Decimal("1"), netto=Decimal(gesamt_netto), ust_satz=Decimal("19"))]
     if abschlag_id is not None:
         positionen.append(RechnungspositionCreate(
@@ -70,7 +73,7 @@ def _schlussrechnung(db, kunde_id, abschlag_id, abzug_netto, gesamt_netto="2000.
             netto=Decimal(abzug_netto), ust_satz=Decimal("19"), abschlag_rechnung_id=abschlag_id,
         ))
     resp = create_rechnung(RechnungCreate(
-        typ="ausgang", dokument_typ="Rechnung", datum=date(2026, 2, 1), ist_entwurf=False,
+        typ="ausgang", dokument_typ="Rechnung", datum=date(2026, 2, 1), ist_entwurf=ist_entwurf,
         kunde_id=kunde_id, positionen=positionen,
     ), db)
     return db.query(Rechnung).filter(Rechnung.id == resp.id).first()
@@ -202,3 +205,25 @@ def test_bar_rueckzahlung_auf_negative_rechnung_prueft_kassenstand(db):
         zahlung_bar_erstellen(schlussrechnung.id, BarZahlungCreate(datum=date(2026, 2, 2), zahlungsart="Bar", betrag=Decimal("50.00")), session)
     assert exc.value.status_code == 409
     assert "Kassenstand" in exc.value.detail
+
+
+def test_entwurf_mit_verrechneten_abschlaegen_loeschen_gibt_sie_frei(db):
+    """Nutzer-Report: Löschen eines Schlussrechnungs-ENTWURFS mit verrechneten
+    Abschlagsrechnungen endete mit Internal Server Error - delete_rechnung() gab die
+    Abschlagsrechnungen nicht frei, was die FK-Referenz verrechnet_in_rechnung_id
+    (PRAGMA foreign_keys=ON) verletzte."""
+    session, kunde_id = db
+    abschlag = _abschlag(session, kunde_id, netto="1000.00")
+    zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank", betrag=Decimal("1200.00")), session)
+    guthaben = session.query(Forderung).filter(Forderung.rechnung_id == abschlag.id).first()
+    entwurf = _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="1008.40", ist_entwurf=True)
+    session.refresh(guthaben)
+    assert guthaben.status == "ausgeglichen"
+
+    delete_rechnung(entwurf.id, session)
+
+    session.refresh(abschlag)
+    assert abschlag.verrechnet_in_rechnung_id is None
+    session.refresh(guthaben)
+    assert guthaben.status == "offen"
+    assert session.query(Rechnung).filter(Rechnung.id == entwurf.id).first() is None

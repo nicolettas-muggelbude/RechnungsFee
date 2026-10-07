@@ -2445,6 +2445,20 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             _auftrag_ref2.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref2.id) else "offen"
         elif _auftrag_ref2.auftrag_status == "rechnung_gestellt":
             _auftrag_ref2.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref2.id) else "in_bearbeitung"
+
+    # Issue #419 Phase 2b: verrechnete Abschlagsrechnungen wieder freigeben, bevor der Entwurf
+    # gelöscht wird - sonst verletzt das Löschen die FK-Referenz verrechnet_in_rechnung_id
+    # (PRAGMA foreign_keys=ON) und endet in einem IntegrityError/500.
+    verrechnete_abschlaege = db.query(Rechnung).filter(Rechnung.verrechnet_in_rechnung_id == rechnung_id).all()
+    for abschlag in verrechnete_abschlaege:
+        abschlag.verrechnet_in_rechnung_id = None
+        db.query(Forderung).filter(
+            Forderung.typ == "kundenguthaben",
+            Forderung.rechnung_id == abschlag.id,
+            Forderung.status == "ausgeglichen",
+            Forderung.ausgleich_journal_id.is_(None),
+        ).update({"status": "offen"})
+
     db.delete(rechnung)
     db.commit()
 
