@@ -992,7 +992,11 @@ function RechnungMahnungenSection({ rechnung, navigate }: { rechnung: Rechnung; 
   })
 
   if (!einst?.aktiv) return null
-  const istOffen = rechnung.zahlungsstatus === 'offen' || rechnung.zahlungsstatus === 'teilweise'
+  // Issue #419: eine verrechnete Abschlagsrechnung hat keinen eigenen offenen Anspruch mehr
+  // (ihr Zahlungsstand ist in der Schlussrechnung abgebildet) - zeigt sonst trotz fehlender
+  // Mahnungen fälschlich einen aktiven "Zum Mahnwesen"-Link.
+  const istOffen = (rechnung.zahlungsstatus === 'offen' || rechnung.zahlungsstatus === 'teilweise')
+    && !rechnung.verrechnet_in_rechnung_id
   if (mahnungen.length === 0 && !istOffen) return null
 
   return (
@@ -1778,7 +1782,7 @@ function RechnungDetail({
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">Fällig bis</span>
               <span className={
-                rechnung.zahlungsstatus !== 'bezahlt' && rechnung.faellig_am < heuteIso()
+                rechnung.zahlungsstatus !== 'bezahlt' && !rechnung.verrechnet_in_rechnung_id && rechnung.faellig_am < heuteIso()
                   ? 'text-red-600 font-medium'
                   : ''
               }>{formatDatum(rechnung.faellig_am)}</span>
@@ -5378,12 +5382,12 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                           <td className="px-5 py-3 whitespace-nowrap">
                             {r.faellig_am ? (
                               <span className={`text-sm font-medium ${
-                                r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso()
+                                r.zahlungsstatus !== 'bezahlt' && !r.storniert && !r.verrechnet_in_rechnung_id && r.faellig_am < heuteIso()
                                   ? 'text-red-600 dark:text-red-400'
                                   : 'text-slate-500 dark:text-slate-400'
                               }`}>
                                 {formatDatum(r.faellig_am)}
-                                {r.zahlungsstatus !== 'bezahlt' && !r.storniert && r.faellig_am < heuteIso() && (
+                                {r.zahlungsstatus !== 'bezahlt' && !r.storniert && !r.verrechnet_in_rechnung_id && r.faellig_am < heuteIso() && (
                                   mahnwesenEinst?.aktiv && r.mahnstufe_aktuell > 0 ? (
                                     <span className="ml-1.5 text-[10px] bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded px-1">
                                       {mahnstufeBezeichnung(r.mahnstufe_aktuell)}
