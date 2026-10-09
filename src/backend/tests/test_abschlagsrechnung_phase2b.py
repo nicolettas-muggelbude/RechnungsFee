@@ -227,3 +227,16 @@ def test_entwurf_mit_verrechneten_abschlaegen_loeschen_gibt_sie_frei(db):
     session.refresh(guthaben)
     assert guthaben.status == "offen"
     assert session.query(Rechnung).filter(Rechnung.id == entwurf.id).first() is None
+
+
+def test_zahlung_auf_verrechnete_abschlagsrechnung_wird_abgelehnt(db):
+    """Nutzer-Report: der 'Zahlung kassieren'-Button blieb für eine bereits verrechnete
+    Abschlagsrechnung funktionsfähig - eine weitere Zahlung wäre im Abzug der Schlussrechnung
+    nie berücksichtigt worden (der Abzugsbetrag wird beim Verrechnen fixiert)."""
+    session, kunde_id = db
+    abschlag = _abschlag(session, kunde_id, netto="1000.00")
+    _schlussrechnung(session, kunde_id, abschlag.id, abzug_netto="0")
+
+    with pytest.raises(HTTPException) as exc:
+        zahlung_bar_erstellen(abschlag.id, BarZahlungCreate(datum=date(2026, 1, 15), zahlungsart="Bank"), session)
+    assert exc.value.status_code == 409

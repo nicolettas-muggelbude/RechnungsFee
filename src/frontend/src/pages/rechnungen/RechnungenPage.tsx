@@ -1161,6 +1161,10 @@ function RechnungDetail({
     && !rechnung.storniert && !rechnung.ist_entwurf
     && rechnung.zahlungsstatus !== 'uneinbringlich'
     && rechnung.dokument_typ !== 'Lieferschein'
+    // Issue #419: eine bereits in einer Schlussrechnung verrechnete Abschlagsrechnung nicht
+    // mehr separat kassierbar - eine weitere Zahlung würde im Abzug der Schlussrechnung nicht
+    // mehr berücksichtigt (vom Backend ebenfalls mit 409 abgelehnt).
+    && !rechnung.verrechnet_in_rechnung_id
 
   const { data: kundenguthaben } = useQuery({
     queryKey: ['kundenguthaben', rechnung.kunde_id],
@@ -1788,7 +1792,9 @@ function RechnungDetail({
                 ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
                 : rechnung.dokument_typ === 'Lieferschein'
                   ? <LieferscheinStatusBadge r={rechnung} />
-                  : <StatusBadge status={rechnung.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
+                  : rechnung.dokument_typ === 'Abschlagsrechnung' && rechnung.verrechnet_in_rechnung_id
+                    ? <span className="text-xs px-2 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800" title={`Verrechnet in ${rechnung.verrechnet_in_rechnung_nr ?? ''}`}>Verrechnet</span>
+                    : <StatusBadge status={rechnung.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
           </div>
           {rechnung.ausgegeben_am && !rechnung.ist_entwurf && (
             <div className="flex justify-between">
@@ -5401,7 +5407,9 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                             ? <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Entwurf</span>
                             : r.dokument_typ === 'Lieferschein'
                               ? <LieferscheinStatusBadge r={r} />
-                              : <StatusBadge status={r.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
+                              : r.dokument_typ === 'Abschlagsrechnung' && r.verrechnet_in_rechnung_id
+                                ? <span className="text-xs px-2 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800" title={`Verrechnet in ${r.verrechnet_in_rechnung_nr ?? ''}`}>Verrechnet</span>
+                                : <StatusBadge status={r.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
                       </td>
                       {typ !== 'ausgang' && (
                         <td className="px-3 py-3 text-center">

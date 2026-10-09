@@ -2706,6 +2706,11 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Entwürfe können nicht kassiert werden. Bitte zuerst finalisieren.")
+    if rechnung.verrechnet_in_rechnung_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Abschlagsrechnung ist bereits in einer Schlussrechnung verrechnet - eine weitere Zahlung würde dort nicht mehr berücksichtigt. Bitte storniere/bearbeite stattdessen die Schlussrechnung.",
+        )
 
     ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
     # Issue #419 Phase 2b: eine Schlussrechnung kann durch Abschlags-Verrechnung einen
