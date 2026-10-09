@@ -290,6 +290,10 @@ def faellig_liste(db: Session = Depends(get_db)):
             Rechnung.storniert == False,  # noqa: E712
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
             Rechnung.faellig_am.isnot(None),
+            # Issue #419 Phase 2b: eine verrechnete Abschlagsrechnung hat keinen eigenen
+            # offenen Anspruch mehr - ihr tatsächlicher Zahlungsstand ist jetzt vollständig in
+            # der Schlussrechnung abgebildet, sie darf nicht separat gemahnt werden.
+            Rechnung.verrechnet_in_rechnung_id.is_(None),
         )
         .all()
     )
