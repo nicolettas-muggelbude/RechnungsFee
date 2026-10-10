@@ -40,6 +40,26 @@ Vollständige Übersicht und Verwaltung offener Forderungen gegenüber Kunden un
 
 ---
 
+## 📋 v0.7.0 – Abschlagsrechnungen (Issue #419)
+
+Vorschlag aus der Community: Abschlags- und Teilrechnungen mit korrekter Anrechnung in der
+Schlussrechnung. Nicht vorher geplant, kam während der Entwicklung über Issue #419 hinzu.
+
+- [x] Abschlagsrechnung als eigenständiger, optional aktivierbarer Dokumenttyp (Zahlung,
+  Mahnwesen, Storno, Kontokorrent, Bank-Import, ZUGFeRD wie bei einer normalen Rechnung)
+- [x] Auswahl-Dialog in der Schlussrechnung: offene Abschlagsrechnungen des Kunden
+  (eingeschränkt auf überlappenden Leistungszeitraum), automatischer Abzug des tatsächlich
+  gezahlten Betrags (Unter- wie Überzahlung), automatische Übernahme der Original-Leistung
+- [x] Negative Schlussrechnung bei Überdeckung (Kunde hat ein Guthaben) statt Blockade
+- [x] Verrechnete Abschlagsrechnung: eigener Status, keine weitere Zahlung/Storno/Gutschrift,
+  fällt aus Mahnwesen/Fälligkeitslisten heraus, Freigabe bei Storno der Schlussrechnung
+- [x] Kontokorrent zeigt bei Überzahlung den tatsächlich gezahlten Betrag statt des gekappten
+- [ ] ZUGFeRD BT-113 (Vorauszahlungsreferenz) für Abzugszeilen – siehe „Ideen" unten
+- [ ] Bank-Import erkennt eine Rückzahlung auf eine negative Schlussrechnung noch nicht
+  automatisch (manuelle Buchung funktioniert)
+
+---
+
 ## 📦 Weitere Linux-Paketformate (Debian, Snap) – vor v1.0.0 testen
 
 **Anlass:** Über AppImage/NSIS/DMG hinaus wurden Debian und Snap als mögliche weitere
@@ -190,5 +210,12 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Zeiterfassungssystem** (Issue #395) – optional aktivierbares Zeiterfassungs-Modul mit eigenem Dashboard: Start/Stopp-Zeiterfassung, Zuordnung zu Kunde (idealerweise Projekt), Notizen/Tätigkeitsbeschreibung pro Eintrag; am Periodenende unberechnete Zeiten pro Kunde auswerten und direkt in eine Rechnung mit Stunden-/Projekt-Aufschlüsselung überführen. Größerer Scope (eigenes Datenmodell für Zeiteinträge/Projekte, neue Seite, Rechnungs-Workflow-Integration), kein fester Zeitplan.
 
 - **GbR / Personengesellschaften: Gesellschafter + Gewinnverteilung** (Issue #402) – Stammdatenbereich je Gesellschafter (Name, Beteiligungsquote, Gewinn-/Verlustverteilungsquote getrennt geführt, Gültigkeit je Wirtschaftsjahr, Zuordnung von Privateinlagen/-entnahmen); darauf aufbauend eine Jahresauswertung (EÜR-Gewinn der Gesellschaft, Gewinn-/Verlustanteil je Gesellschafter, Privateinlagen/-entnahmen je Gesellschafter, steuerlicher Ergebnisanteil) als Vorarbeit für die gesonderte und einheitliche Feststellung – keine ELSTER-Übermittlung nötig, reine Berechnung/Auswertung reicht laut Melder. Kein kleines Formularfeld: Buchhaltung/Rechnungen/EÜR laufen unternehmens- bzw. tätigkeitsbezogen und damit unabhängig von der Rechtsform – eine GbR kann RechnungsFee für den Gesamtbetrieb also schon heute nutzen. Es fehlt aber die Ebene darunter: die Aufteilung des bereits ermittelten Gesamtgewinns auf mehrere Personen. `unternehmen` ist als Singleton angelegt und Privatentnahme/-einlage laufen rein kategorienbasiert ohne Personenbezug (Anlage EKS ist zudem ein reines Einzelpersonen-Zusatzformular für Transferleistungsempfänger, damit für GbRs ohnehin irrelevant) – „Gesellschafter" wäre eine neue Dimension quer durch Stammdaten und Auswertung. Später denkbar: Sonderbetriebseinnahmen/-ausgaben, Sonderbetriebsvermögen, Ergänzungsrechnungen. Zurückgestellt bis sich zeigt, wie groß die Nachfrage über den einen Melder hinaus ist.
+
+- **Abschlagsrechnungen: eigener PDF-Abzugs-Block + ZUGFeRD BT-113** (Folge-Issue nach v0.7.0) –
+  aktuell erscheint der Abzug einer verrechneten Abschlagsrechnung als normale (read-only)
+  Positionszeile. Denkbar: ein eigener Abzugs-Block zwischen Summenblock und 19-Hinweis (Muster:
+  bestehende Rabatt-Zwischensumme). Zusätzlich die Vorauszahlungsreferenz BT-113/
+  `PrecedingInvoiceReference` im ZUGFeRD-Export korrekt befüllen, falls XRechnung-pflichtige
+  Kunden das brauchen – `utils/zugferd.py` hat dafür aktuell keine Unterstützung.
 
 - **Sammelposten / Sammelabschreibung (§6 Abs. 2a EStG)** – Wahlrecht für bewegliche Wirtschaftsgüter zwischen 250 € und 1.000 € netto: Pool pro Wirtschaftsjahr, pauschale Auflösung über 5 Jahre à 20 % (Anlage EÜR Zeile 37, Hilfsblatt Zeilen 63–81). Braucht eigene mehrjährige Pool-Verwaltung (ähnlich Anlagenverzeichnis, aber pro Jahrgang statt pro Einzelgut) – deutlich aufwändiger als die übrige EÜR/AVEÜR-Logik. Zurückgestellt bis explizit nachgefragt (Issue #265, Diskussion 2026-07).
