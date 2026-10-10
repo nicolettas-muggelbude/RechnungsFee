@@ -3054,7 +3054,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     typ,
     positionen: positionen.map((p) => ({
       beschreibung: p.beschreibung || '-',
-      menge: p.menge || '1',
+      // Issue #411: Menge wurde mit Komma (z.B. "1,5") roh an das Decimal-Feld im Backend
+      // durchgereicht ("Input should be a valid decimal") statt wie netto/rabatt_prozent auf
+      // Punkt umgewandelt zu werden.
+      menge: (p.menge || '1').replace(',', '.'),
       einheit: p.einheit || 'Stück',
       netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
       ust_satz: p.ust_satz || '0',
@@ -3250,7 +3253,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung,
-          menge: p.menge || '1',
+          menge: (p.menge || '1').replace(',', '.'),
           einheit: p.einheit || 'Stück',
           netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
           ust_satz,
