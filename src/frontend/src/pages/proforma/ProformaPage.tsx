@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
+import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -630,7 +631,13 @@ function ProformaDetail({
   const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
   const [zeigZahlungsForm, setZeigZahlungsForm] = useState(false)
   const [zahlungsart, setZahlungsart] = useState('Bank')
-  const [bezahltAm, setBezahltAm] = useState(heuteIso())
+  const leistungsdatum = proforma.leistung_bis ?? proforma.leistung_von ?? null
+  const [bezahltAm, setBezahltAm] = useState(() => {
+    const wahl = letzteZahlungsdatumWahl()
+    if (wahl === 'rechnungsdatum') return proforma.datum
+    if (wahl === 'leistungsdatum' && leistungsdatum) return leistungsdatum
+    return heuteIso()
+  })
   const [fehler, setFehler] = useState<string | null>(null)
 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
@@ -852,6 +859,25 @@ function ProformaDetail({
               </div>
               <div>
                 <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Zahlungsdatum</label>
+                <div className="flex gap-1.5 mb-1.5">
+                  <button type="button"
+                    onClick={() => { setBezahltAm(heuteIso()); merkeZahlungsdatumWahl('heute') }}
+                    className="px-2 py-0.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                    Heute
+                  </button>
+                  <button type="button"
+                    onClick={() => { setBezahltAm(proforma.datum); merkeZahlungsdatumWahl('rechnungsdatum') }}
+                    className="px-2 py-0.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                    Proforma-Datum
+                  </button>
+                  {leistungsdatum && (
+                    <button type="button"
+                      onClick={() => { setBezahltAm(leistungsdatum); merkeZahlungsdatumWahl('leistungsdatum') }}
+                      className="px-2 py-0.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors">
+                      Leistungsdatum
+                    </button>
+                  )}
+                </div>
                 <DateInput value={bezahltAm} onChange={setBezahltAm}
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm dark:bg-slate-700 dark:text-slate-100" />
               </div>

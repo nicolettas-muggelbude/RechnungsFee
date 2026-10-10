@@ -35,6 +35,7 @@ import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
+import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
 import { LandCombobox } from '../../components/LandCombobox'
 import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../store/filterStore'
 
@@ -86,6 +87,7 @@ function formatPreis(preis: string): string {
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
 
 // §14a Abs. 1 UStG: Rechnung über eine Leistung im Sinne des §3a Abs. 2 (Reverse Charge) oder
 // §6a (ig. Lieferung) muss bis zum 15. Tag des Monats ausgestellt werden, der auf den Monat der
@@ -531,7 +533,13 @@ function ZahlungsDialog({
   const [betrag, setBetrag] = useState(
     (nurMahngebuehr ? offeneMahngebuehr : Math.abs(restbetrag)).toFixed(2).replace('.', ',')
   )
-  const [datum, setDatum] = useState(heuteIso())
+  const leistungsdatum = rechnung.leistung_bis ?? rechnung.leistung_von ?? null
+  const [datum, setDatum] = useState(() => {
+    const wahl = letzteZahlungsdatumWahl()
+    if (wahl === 'rechnungsdatum') return rechnung.datum
+    if (wahl === 'leistungsdatum' && leistungsdatum) return leistungsdatum
+    return heuteIso()
+  })
   const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bar')
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
@@ -760,6 +768,25 @@ function ZahlungsDialog({
           {/* Datum */}
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Zahlungsdatum</label>
+            <div className="flex gap-1.5 mb-1.5">
+              <button type="button"
+                onClick={() => { setDatum(heuteIso()); merkeZahlungsdatumWahl('heute') }}
+                className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Heute
+              </button>
+              <button type="button"
+                onClick={() => { setDatum(rechnung.datum); merkeZahlungsdatumWahl('rechnungsdatum') }}
+                className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Rechnungsdatum
+              </button>
+              {leistungsdatum && (
+                <button type="button"
+                  onClick={() => { setDatum(leistungsdatum); merkeZahlungsdatumWahl('leistungsdatum') }}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  Leistungsdatum
+                </button>
+              )}
+            </div>
             <DateInput
               value={datum}
               max={new Date().toISOString().slice(0, 10)}
