@@ -33,7 +33,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
 
-SCHEMA_VERSION = 165
+SCHEMA_VERSION = 166
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3659,6 +3659,56 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 165"))
             conn.commit()
             print("[Migration] Schema auf Version 165 (Issue #419: Verrechnung von Abschlagsrechnungen in der Schlussrechnung)")
+
+        if version < 166:
+            # Datenfix Issue #426: naechste_nummer() (api/nummernkreise.py) erkannte einen
+            # Jahreswechsel bisher ueber "letztes_jahr != bezug.year" - das griff auch
+            # RUECKWAERTS. Wurde nach einer 2026er-Eingangsrechnung eine aeltere, noch nicht
+            # erfasste 2025er-Rechnung nachgetragen (typischer Fall: Papierbelege werden nicht
+            # chronologisch nach Rechnungsdatum erfasst), wertete das den Rollover faelschlich
+            # als "neues Jahr" und setzte naechste_nr auf 1 zurueck - die naechste echte
+            # 2026er-Rechnung erhielt dadurch exakt dieselbe Nummer wie eine bereits vergebene
+            # (vier unterschiedliche Lieferanten mit "ER-260009", UweKoslowski). Reine
+            # Zaehlerlogik ist jetzt vorwaerts-only gefixt (Phase 1) - dieser Block (Phase 2)
+            # repariert bereits entstandene Dubletten in Bestandsinstallationen: pro
+            # (typ, rechnungsnummer)-Dublette behaelt die aelteste Zeile (kleinste id) ihre
+            # Nummer, alle weiteren bekommen einen angehaengten "-2"/"-3"/... Suffix - macht sie
+            # eindeutig, ohne die urspruengliche (falsche) Nummer unkenntlich zu machen. Betrifft
+            # nur die interne Nummer selbst, keine Betraege/Journalbuchungen/Signaturen.
+            from utils.aenderungsprotokoll import protokolliere_aenderung
+
+            _dubletten166 = conn.execute(text("""
+                SELECT typ, rechnungsnummer, COUNT(*) AS n
+                FROM rechnungen
+                WHERE rechnungsnummer IS NOT NULL AND rechnungsnummer != ''
+                GROUP BY typ, rechnungsnummer
+                HAVING COUNT(*) > 1
+            """)).fetchall()
+            _anzahl166 = 0
+            for _typ166, _nr166, _n166 in _dubletten166:
+                _zeilen166 = conn.execute(text("""
+                    SELECT id FROM rechnungen WHERE typ = :typ AND rechnungsnummer = :nr ORDER BY id
+                """), {"typ": _typ166, "nr": _nr166}).fetchall()
+                for _idx166, (_id166,) in enumerate(_zeilen166):
+                    if _idx166 == 0:
+                        continue  # aelteste Zeile behaelt die Original-Nummer
+                    _neue_nr166 = f"{_nr166}-{_idx166 + 1}"
+                    conn.execute(
+                        text("UPDATE rechnungen SET rechnungsnummer = :neu WHERE id = :id"),
+                        {"neu": _neue_nr166, "id": _id166},
+                    )
+                    protokolliere_aenderung(
+                        conn, tabelle="rechnungen", datensatz_id=_id166, feld="rechnungsnummer",
+                        alter_wert=_nr166, neuer_wert=_neue_nr166, migration_version=166,
+                        grund="Issue #426: doppelt vergebene interne Rechnungsnummer durch "
+                              "rueckwaerts greifenden Jahreswechsel-Reset disambiguiert",
+                    )
+                    _anzahl166 += 1
+            if _anzahl166:
+                print(f"[Migration] {_anzahl166} doppelt vergebene Rechnungsnummer(n) disambiguiert (Issue #426)")
+            conn.execute(text("PRAGMA user_version = 166"))
+            conn.commit()
+            print("[Migration] Schema auf Version 166 (Issue #426: Nummernkreis-Jahreswechsel nur vorwaerts + Dublettenfix)")
 
 
 def _migrate_kategorien() -> None:

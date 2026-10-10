@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError as _IntegrityError
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
-from database.models import Nummernkreis
+from database.models import Nummernkreis, Rechnung
 from utils.belegnummer import belegnr_aus_format as _belegnr_aus_format
 from .schemas import NummernkreisUpdate, NummernkreisResponse
 
@@ -27,12 +27,27 @@ def naechste_nummer(typ: str, db: Session, datum: date | None = None) -> str | N
     if not nk:
         return None
     bezug = datum or date.today()
-    if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != bezug.year:
+    # Jahreswechsel-Reset nur vorwärts (Issue #426): eine Eingangsrechnung wird oft nicht
+    # chronologisch nach Rechnungsdatum erfasst, sondern wie der Beleg zur Hand ist. Wird
+    # danach eine ÄLTERE Rechnung (z.B. aus dem Vorjahr) nacherfasst, darf das nicht als
+    # Jahreswechsel missverstanden werden - sonst setzt sich der Zähler auf 1 zurück und
+    # vergibt eine bereits verwendete Nummer doppelt (reproduziert: ER-260001 erscheint an
+    # zwei verschiedenen Eingangsrechnungen, sobald zwischen 2026- und 2025-Belegen
+    # gewechselt wird).
+    if nk.reset_jaehrlich and nk.letztes_jahr and bezug.year > nk.letztes_jahr:
         nk.naechste_nr = 1
-    nk.letztes_jahr = bezug.year
+    if not nk.letztes_jahr or bezug.year > nk.letztes_jahr:
+        nk.letztes_jahr = bezug.year
     nr = nk.naechste_nr
     nk.naechste_nr += 1
-    return _belegnr_aus_format(nk.format, bezug, nr)
+    candidate = _belegnr_aus_format(nk.format, bezug, nr)
+    # Kollisions-Schutz (analog zu journal.py::_naechste_belegnr_journal()): Nummer
+    # überspringen falls durch eine frühere Rückdatierung bereits vergeben.
+    while db.query(Rechnung).filter(Rechnung.rechnungsnummer == candidate).first():
+        nr = nk.naechste_nr
+        nk.naechste_nr += 1
+        candidate = _belegnr_aus_format(nk.format, bezug, nr)
+    return candidate
 
 router = APIRouter(prefix="/api/nummernkreise", tags=["Stammdaten"])
 

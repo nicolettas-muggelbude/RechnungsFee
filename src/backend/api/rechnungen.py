@@ -1354,9 +1354,12 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         if data.dokument_typ == "Lieferschein":
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
             if nk:
-                if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != data.datum.year:
+                # Jahreswechsel-Reset nur vorwärts (Issue #426) - siehe ausführlicher
+                # Kommentar in api/nummernkreise.py::naechste_nummer().
+                if nk.reset_jaehrlich and nk.letztes_jahr and data.datum.year > nk.letztes_jahr:
                     nk.naechste_nr = 1
-                nk.letztes_jahr = data.datum.year
+                if not nk.letztes_jahr or data.datum.year > nk.letztes_jahr:
+                    nk.letztes_jahr = data.datum.year
                 nr = nk.naechste_nr
                 nk.naechste_nr += 1
                 rechnungsnummer = _belegnr_aus_format(nk.format, data.datum, nr)
@@ -1366,9 +1369,10 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         elif data.dokument_typ == "Angebot":
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "angebot").first()
             if nk:
-                if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != data.datum.year:
+                if nk.reset_jaehrlich and nk.letztes_jahr and data.datum.year > nk.letztes_jahr:
                     nk.naechste_nr = 1
-                nk.letztes_jahr = data.datum.year
+                if not nk.letztes_jahr or data.datum.year > nk.letztes_jahr:
+                    nk.letztes_jahr = data.datum.year
                 nr = nk.naechste_nr
                 nk.naechste_nr += 1
                 rechnungsnummer = _belegnr_aus_format(nk.format, data.datum, nr)
@@ -3647,9 +3651,11 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     # Rechnungsnummer aus eigenem Gutschrift-Nummernkreis
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "gutschrift").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+        # Jahreswechsel-Reset nur vorwärts (Issue #426).
+        if nk.reset_jaehrlich and nk.letztes_jahr and heute.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = heute.year
+        if not nk.letztes_jahr or heute.year > nk.letztes_jahr:
+            nk.letztes_jahr = heute.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         rechnungsnummer = _belegnr_aus_format(nk.format, heute, nr)
@@ -4178,9 +4184,11 @@ def _lieferschein_zu_rechnung_konvertieren(
 def _naechste_proformanummer(datum: date, db: Session) -> str:
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "proforma").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+        # Jahreswechsel-Reset nur vorwärts (Issue #426).
+        if nk.reset_jaehrlich and nk.letztes_jahr and datum.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = datum.year
+        if not nk.letztes_jahr or datum.year > nk.letztes_jahr:
+            nk.letztes_jahr = datum.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
@@ -4191,9 +4199,10 @@ def _naechste_proformanummer(datum: date, db: Session) -> str:
 def _naechste_lieferscheinnummer(datum: date, db: Session) -> str:
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+        if nk.reset_jaehrlich and nk.letztes_jahr and datum.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = datum.year
+        if not nk.letztes_jahr or datum.year > nk.letztes_jahr:
+            nk.letztes_jahr = datum.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
@@ -4620,9 +4629,11 @@ def angebot_status_setzen(angebot_id: int, data: AngebotStatusUpdate, db: Sessio
 def _naechste_auftragsnummer(datum: date, db: Session) -> str:
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "auftrag").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != datum.year:
+        # Jahreswechsel-Reset nur vorwärts (Issue #426).
+        if nk.reset_jaehrlich and nk.letztes_jahr and datum.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = datum.year
+        if not nk.letztes_jahr or datum.year > nk.letztes_jahr:
+            nk.letztes_jahr = datum.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
@@ -4787,9 +4798,11 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     heute = date.today()
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+        # Jahreswechsel-Reset nur vorwärts (Issue #426).
+        if nk.reset_jaehrlich and nk.letztes_jahr and heute.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = heute.year
+        if not nk.letztes_jahr or heute.year > nk.letztes_jahr:
+            nk.letztes_jahr = heute.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         ls_nr = _belegnr_aus_format(nk.format, heute, nr)
@@ -4849,9 +4862,11 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     heute = date.today()
     nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "proforma").first()
     if nk:
-        if nk.reset_jaehrlich and nk.letztes_jahr and nk.letztes_jahr != heute.year:
+        # Jahreswechsel-Reset nur vorwärts (Issue #426).
+        if nk.reset_jaehrlich and nk.letztes_jahr and heute.year > nk.letztes_jahr:
             nk.naechste_nr = 1
-        nk.letztes_jahr = heute.year
+        if not nk.letztes_jahr or heute.year > nk.letztes_jahr:
+            nk.letztes_jahr = heute.year
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         prf_nr = _belegnr_aus_format(nk.format, heute, nr)
