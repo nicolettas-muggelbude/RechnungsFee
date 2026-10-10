@@ -17,6 +17,7 @@ export const HANDBUCH_NAV: NavGroup[] = [
       { label: 'Aufträge', slug: 'auftraege' },
       { label: 'Proforma-Rechnungen', slug: 'proforma-rechnungen' },
       { label: 'Lieferscheine', slug: 'lieferscheine' },
+      { label: 'Abschlagsrechnungen', slug: 'abschlagsrechnungen' },
       { label: 'Rechnungen', slug: 'rechnungen' },
       { label: 'Wiederkehrende Rechnungen', slug: 'wiederkehrende-rechnungen' },
       { label: 'E-Mail-Versand', slug: 'e-mail-versand' },
