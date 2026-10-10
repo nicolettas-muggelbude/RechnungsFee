@@ -219,3 +219,5 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
   Kunden das brauchen – `utils/zugferd.py` hat dafür aktuell keine Unterstützung.
 
 - **Sammelposten / Sammelabschreibung (§6 Abs. 2a EStG)** – Wahlrecht für bewegliche Wirtschaftsgüter zwischen 250 € und 1.000 € netto: Pool pro Wirtschaftsjahr, pauschale Auflösung über 5 Jahre à 20 % (Anlage EÜR Zeile 37, Hilfsblatt Zeilen 63–81). Braucht eigene mehrjährige Pool-Verwaltung (ähnlich Anlagenverzeichnis, aber pro Jahrgang statt pro Einzelgut) – deutlich aufwändiger als die übrige EÜR/AVEÜR-Logik. Zurückgestellt bis explizit nachgefragt (Issue #265, Diskussion 2026-07).
+
+- **MCP-Server** (Issue #429) – eigener Model-Context-Protocol-Server, der die Backend-API (Rechnung erstellen, Zahlung erfassen, Journal abfragen etc.) als Tools für KI-Assistenten (z. B. Claude) exponiert. Vorschlag bisher sehr knapp, kein konkreter Anwendungsfall genannt – Rückfrage im Issue gestellt, Umfang/Priorität noch unklar.
