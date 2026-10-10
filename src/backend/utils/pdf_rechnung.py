@@ -175,26 +175,31 @@ class RechnungPDF(RechnungPDFBase):
             # Issue #419 Phase 2b: eine durch Abschlags-Verrechnung negative Schlussrechnung
             # ist fachlich eine Rückerstattung, auch wenn dokument_typ="Rechnung" bleibt.
             ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0
+            # Eine einzelne Zahlung über mehrere USt-Sätze erzeugt mehrere Journaleinträge
+            # (einen je Satz-Gruppe, siehe zahlung_bar_erstellen()) - ohne Gruppierung nach
+            # Datum+Zahlungsart würde das PDF dieselbe Zahlung fälschlich als mehrere
+            # Teilzahlungen ausweisen, selbst wenn die Rechnung bereits vollständig bezahlt ist.
+            gruppen: dict[tuple[str, str], Decimal] = {}
             for z in zahlungen:
-                art_label = art_labels.get(
-                    str(getattr(z, "zahlungsart", "")),
-                    str(getattr(z, "zahlungsart", ""))
-                )
-                betrag_anzeige = abs(z.brutto_betrag)
+                key = (str(z.datum), str(getattr(z, "zahlungsart", "")))
+                gruppen[key] = gruppen.get(key, Decimal("0")) + z.brutto_betrag
+            for (datum, zahlungsart), summe in gruppen.items():
+                art_label = art_labels.get(zahlungsart, zahlungsart)
+                betrag_anzeige = abs(summe)
                 if ist_gutschrift:
                     prefix = (
                         "Betrag wurde zurückerstattet"
-                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        if zahlungsstatus == "bezahlt" and len(gruppen) == 1
                         else "Teilbetrag zurückerstattet"
                     )
                 else:
                     prefix = (
                         "Rechnungsbetrag bereits dankend erhalten"
-                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        if zahlungsstatus == "bezahlt" and len(gruppen) == 1
                         else "Teilbetrag dankend erhalten"
                     )
                 zeile = (
-                    f"{prefix} am {_iso_zu_de(str(z.datum))} "
+                    f"{prefix} am {_iso_zu_de(datum)} "
                     f"per {art_label}: {_fmt_euro(betrag_anzeige)}"
                 )
                 self.cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")

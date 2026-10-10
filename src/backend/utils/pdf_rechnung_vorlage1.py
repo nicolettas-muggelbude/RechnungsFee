@@ -303,26 +303,31 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             # Issue #419 Phase 2b: eine durch Abschlags-Verrechnung negative Schlussrechnung
             # ist fachlich eine Rückerstattung, auch wenn dokument_typ="Rechnung" bleibt.
             ist_gutschrift = getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0
+            # Eine einzelne Zahlung über mehrere USt-Sätze erzeugt mehrere Journaleinträge
+            # (einen je Satz-Gruppe, siehe zahlung_bar_erstellen()) - ohne Gruppierung nach
+            # Datum+Zahlungsart würde das PDF dieselbe Zahlung fälschlich als mehrere
+            # Teilzahlungen ausweisen, selbst wenn die Rechnung bereits vollständig bezahlt ist.
+            gruppen: dict[tuple[str, str], "_D"] = {}
             for z in zahlungen:
-                art_label = art_labels.get(
-                    str(getattr(z, "zahlungsart", "")),
-                    str(getattr(z, "zahlungsart", ""))
-                )
-                betrag_anzeige = abs(z.brutto_betrag)
+                key = (str(z.datum), str(getattr(z, "zahlungsart", "")))
+                gruppen[key] = gruppen.get(key, _D("0")) + z.brutto_betrag
+            for (datum, zahlungsart), summe in gruppen.items():
+                art_label = art_labels.get(zahlungsart, zahlungsart)
+                betrag_anzeige = abs(summe)
                 if ist_gutschrift:
                     prefix = (
                         "Betrag zurückerstattet am"
-                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        if zahlungsstatus == "bezahlt" and len(gruppen) == 1
                         else "Teilbetrag zurückerstattet am"
                     )
-                    _row(f"{prefix} {_iso_zu_de(str(z.datum))} per {art_label}", _fmt_euro(betrag_anzeige), bold_val=True)
+                    _row(f"{prefix} {_iso_zu_de(datum)} per {art_label}", _fmt_euro(betrag_anzeige), bold_val=True)
                 else:
                     prefix = (
                         "Dankend erhalten am"
-                        if zahlungsstatus == "bezahlt" and len(zahlungen) == 1
+                        if zahlungsstatus == "bezahlt" and len(gruppen) == 1
                         else "Teilbetrag erhalten am"
                     )
-                    _row(f"{prefix} {_iso_zu_de(str(z.datum))}", _fmt_euro(betrag_anzeige), bold_val=True)
+                    _row(f"{prefix} {_iso_zu_de(datum)}", _fmt_euro(betrag_anzeige), bold_val=True)
         elif getattr(r, "dokument_typ", "Rechnung") == "Gutschrift" or r.brutto_gesamt < 0:
             # Gutschrift (offen/Entwurf) oder negative Schlussrechnung (Issue #419 Phase 2b):
             # nur Betrag, kein Zahlungsweg (noch unbekannt)
