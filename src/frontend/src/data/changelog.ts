@@ -23,6 +23,15 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.0',
+    datum: 'Oktober 2026',
+    eintraege: [
+      { typ: 'neu', text: 'Abschlagsrechnungen (Anzahlungs- oder Teilrechnungen): neuer, optional aktivierbarer Dokumenttyp unter Einstellungen → Unternehmen → Funktionen. Eine Abschlagsrechnung ist eine vollwertige, steuerlich wirksame Rechnung – Zahlung, Mahnwesen, Storno, Kontokorrent und ZUGFeRD-Export funktionieren genau wie bei einer normalen Rechnung. Beim Schreiben der Schlussrechnung zeigt ein neuer Auswahl-Dialog alle offenen Abschlagsrechnungen des Kunden (eingeschränkt auf überlappenden Leistungszeitraum, falls gesetzt) und zieht beim Ankreuzen automatisch den tatsächlich dafür gezahlten Betrag ab – bei Unter- wie Überzahlung. Ist das Formular noch leer, übernimmt die Schlussrechnung zusätzlich die Original-Position(en) der Abschlagsrechnung als eigene, frei editierbare Leistung. Übersteigt die Summe der verrechneten Abschläge die Gesamtleistung, darf die Schlussrechnung auch negativ werden (Kunde hat ein Guthaben) statt blockiert zu werden – eine Zahlung darauf ist dann eine Rückerstattung statt einer Einnahme. Vorschlag aus der Community, danke an abgebytezt für die Anregung und Peter1061 für die hilfreiche Einschätzung zur Abzugsbasis (Issue #419).' },
+      { typ: 'verbesserung', text: 'Kontokorrent: eine Zahlungszeile zeigt jetzt immer den tatsächlich gezahlten Betrag, auch bei einer Überzahlung – vorher stand dort nur der auf den Rechnungsbetrag gekappte Anteil, ein daraus entstehendes Guthaben ergibt sich jetzt automatisch aus der Saldo-Summe statt unsichtbar zu bleiben (Issue #419).' },
+      { typ: 'fix', text: 'Eine Rechnung mit mehreren USt-Sätzen (z. B. 19 % und 7 %) zeigte im PDF bei einer einzigen, bereits vollständigen Zahlung fälschlich zweimal „Teilbetrag erhalten" statt einmal den vollen Betrag – die Wortwahl hing an der Anzahl der (satzbedingt aufgeteilten) Journaleinträge statt an der Anzahl tatsächlicher Zahlungs-Ereignisse.' },
+    ],
+  },
+  {
     version: 'v0.6.15',
     datum: 'Oktober 2026',
     eintraege: [
