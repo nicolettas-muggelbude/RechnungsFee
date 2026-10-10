@@ -67,8 +67,8 @@ function formatDatumKurz(iso: string): string {
 /** Aufklappbare KZ-Zeile (Issue #353) - zeigt bei Klick die einzelnen Journaleinträge/
  * Vorsteuer-Ansprüche, die zur Summe beigetragen haben. Nur aufklappbar wenn ein zeitraum
  * mitgegeben wurde (Zahllast-Zeile z.B. hat keine eigene KZ und bleibt starr). */
-function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum }:
-  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean; zeitraum?: string }) {
+function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, gerundetWert }:
+  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean; zeitraum?: string; gerundetWert?: string }) {
   const navigate = useNavigate()
   const [offen, setOffen] = useState(false)
   const n = parseFloat(wert)
@@ -98,6 +98,11 @@ function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum }:
           {n === 0 ? <span className="text-slate-300 dark:text-slate-600">—</span> : euroFmt(wert)}
         </span>
       </div>
+      {gerundetWert !== undefined && gerundetWert !== wert && (
+        <p className="pl-12 pr-1 -mt-1.5 pb-1.5 text-xs text-slate-400 dark:text-slate-500">
+          ELSTER-Eingabewert (volle Euro, §123 AO): <span className="tabular-nums">{euroFmt(gerundetWert)}</span>
+        </p>
+      )}
       {offen && aufklappbar && (
         <div className="pb-2 pl-12 pr-1 space-y-1">
           {isLoading ? (
@@ -255,6 +260,10 @@ export function UStVAPage() {
 
   const zahllast = ergebnis ? berechneZahllast() : null
   const gruppen = ergebnis && !ergebnis.ist_kleinunternehmer ? renderKZTabelle() : []
+  // Issue #428: die vom Backend mitgelieferte ELSTER-Voraussicht berücksichtigt nur die
+  // automatisch berechneten KZs - bei einer manuellen Ergänzung (z.B. KZ 41 EU-Lieferungen)
+  // wäre der Vergleich irreführend, da zahllast_elster_voraussichtlich die Ergänzung nicht kennt.
+  const hatManuelleUeberschreibung = Object.values(manuell).some(v => v !== undefined && v !== '')
   return (
     <div className={`max-w-2xl ${mxAuto} px-6 py-8`}>
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">UStVA – Anzeigehilfe</h1>
@@ -352,7 +361,8 @@ export function UStVAPage() {
                 <Abschnitt key={abschnitt} titel={abschnitt}>
                   {zeilen.map(([, nr, bezeichnung, istSteuer]) => (
                     <KZZeile key={nr} kz={nr} label={bezeichnung}
-                      wert={kzWert(nr)} istSteuer={istSteuer} zeitraum={zeitraum} />
+                      wert={kzWert(nr)} istSteuer={istSteuer} zeitraum={zeitraum}
+                      gerundetWert={manuell[nr] === undefined ? ergebnis.gerundet?.[nr] : undefined} />
                   ))}
                 </Abschnitt>
               ))}
@@ -385,9 +395,25 @@ export function UStVAPage() {
               {zahllast !== null && (
                 <Abschnitt titel="H. Vorauszahlung / Überschuss">
                   <KZZeile kz="—"
-                    label={parseFloat(zahllast) < 0 ? 'Verbleibender Überschuss (Erstattung)' : 'Umsatzsteuer-Vorauszahlung'}
+                    label={`${parseFloat(zahllast) < 0 ? 'Verbleibender Überschuss (Erstattung)' : 'Umsatzsteuer-Vorauszahlung'} (centgenau laut Buchhaltung)`}
                     wert={zahllast} bold />
+                  {!hatManuelleUeberschreibung && ergebnis.zahllast_rundungsdifferenz !== undefined
+                    && parseFloat(ergebnis.zahllast_rundungsdifferenz) !== 0 && (
+                    <KZZeile kz="—"
+                      label={`${parseFloat(ergebnis.zahllast_elster_voraussichtlich ?? '0') < 0 ? 'Verbleibender Überschuss (Erstattung)' : 'Umsatzsteuer-Vorauszahlung'} (voraussichtlich laut ELSTER)`}
+                      wert={ergebnis.zahllast_elster_voraussichtlich ?? '0'} istSteuer />
+                  )}
                 </Abschnitt>
+              )}
+
+              {!hatManuelleUeberschreibung && ergebnis.zahllast_rundungsdifferenz !== undefined
+                && parseFloat(ergebnis.zahllast_rundungsdifferenz) !== 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2 mb-4">
+                  ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) und berechnet die
+                  Steuer bei festen Sätzen daraus selbst – die tatsächliche ELSTER-Zahllast weicht
+                  dadurch um {euroFmt(ergebnis.zahllast_rundungsdifferenz)} von der hier centgenau
+                  nach deinen Buchungen berechneten ab. Das ist normal und kein Fehler.
+                </p>
               )}
 
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">

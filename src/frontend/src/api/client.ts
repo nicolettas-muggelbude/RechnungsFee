@@ -1976,6 +1976,13 @@ export type UStVAErgebnis = {
   zahllast: string
   ist_kleinunternehmer: boolean
   hinweis?: string | null
+  // Issue #428: ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) - gerundet
+  // enthält die betroffenen KZs (Schlüssel = reine KZ-Nummer, z.B. "81") mit dem auf volle
+  // Euro gerundeten Wert; zahllast bleibt die centgenaue Buchhaltungs-Zahllast,
+  // zahllast_elster_voraussichtlich/-differenz sind reine Anzeigehilfe.
+  gerundet?: Record<string, string>
+  zahllast_elster_voraussichtlich?: string
+  zahllast_rundungsdifferenz?: string
 }
 
 export type UStVAHistorieEintrag = {

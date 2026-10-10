@@ -438,6 +438,46 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
     return kz, posten
 
 
+# Bemessungsgrundlage-Kennzahlen, die ELSTER in vollen Euro erwartet (Issue #428) - nur diese
+# werden für die "ELSTER-Eingabewert"-Spalte auf volle Euro gerundet; die direkt gemeldeten
+# Steuerbeträge (83/88/98/47/85) und Vorsteuerbeträge (66/61/62/67) bleiben centgenau, da sie
+# in ELSTER selbst centgenau eingetragen werden (keine eigene Bemessungsgrundlage-Rundung).
+_BEMESSUNGSGRUNDLAGE_KZS = {"81", "86", "41", "87", "21", "45", "89", "93", "90", "95", "46", "84"}
+
+
+def _voller_euro(betrag: Decimal) -> Decimal:
+    """Rundung auf volle Euro nach §123 AO (kaufmännisch: ab 50 Cent aufrunden)."""
+    return betrag.quantize(Decimal("1"), ROUND_HALF_UP)
+
+
+def _elster_rundung(kz: dict[str, Decimal]) -> tuple[dict[str, Decimal], Decimal, Decimal]:
+    """Issue #428: ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) und berechnet
+    bei festen Steuersätzen (KZ 81/86/89/93) die zugehörige Steuer automatisch aus dem
+    GERUNDETEN Betrag - nicht aus dem centgenauen Buchungswert. Dadurch entsteht eine kleine,
+    strukturell unvermeidbare Differenz zur centgenau gebuchten Zahllast (Issue #428,
+    UweKoslowski). kz_90 (0%-ig. Erwerb) trägt nie zur Steuer bei, kein Sonderfall nötig.
+
+    Gibt zurück: (kz_gerundet, zahllast_elster_voraussichtlich, zahllast_rundungsdifferenz).
+    kz_gerundet enthält nur die Bemessungsgrundlage-KZs (gerundet, Schlüssel = reine KZ-Nummer
+    ohne "kz_"-Präfix) - Steuer-/Vorsteuerbeträge sind in ELSTER identisch zum centgenauen
+    Buchungswert, werden deshalb nicht dupliziert.
+    """
+    kz_gerundet = {nr: _voller_euro(kz[f"kz_{nr}"]) for nr in _BEMESSUNGSGRUNDLAGE_KZS}
+
+    q = Decimal("0.01")
+    steuer_81 = (kz_gerundet["81"] * Decimal("19") / 100).quantize(q, ROUND_HALF_UP)
+    steuer_86 = (kz_gerundet["86"] * Decimal("7") / 100).quantize(q, ROUND_HALF_UP)
+    steuer_89 = (kz_gerundet["89"] * Decimal("19") / 100).quantize(q, ROUND_HALF_UP)
+    steuer_93 = (kz_gerundet["93"] * Decimal("7") / 100).quantize(q, ROUND_HALF_UP)
+    # kz_98/kz_47/kz_85 sind eigenständig gemeldete, centgenaue Steuerbeträge - unverändert
+    # aus dem Buchungswert übernommen (siehe Docstring).
+    ust_elster = steuer_81 + steuer_86 + steuer_89 + steuer_93 + kz["kz_98"] + kz["kz_47"] + kz["kz_85"]
+    vst_elster = kz["kz_66"] + kz["kz_61"] + kz["kz_62"] + kz["kz_67"]
+    zahllast_elster = (ust_elster - vst_elster).quantize(q, ROUND_HALF_UP)
+    differenz = (zahllast_elster - kz["zahllast"]).quantize(q, ROUND_HALF_UP)
+    return kz_gerundet, zahllast_elster, differenz
+
+
 def _zeitraum_label(zeitraum: str) -> str:
     MONATE = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
               "Juli", "August", "September", "Oktober", "November", "Dezember"]
@@ -455,7 +495,7 @@ def _zeitraum_label(zeitraum: str) -> str:
 # PDF-Anzeigehilfe
 # ---------------------------------------------------------------------------
 
-def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
+def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen, gerundet: dict, zahllast_elster: Decimal, zahllast_diff: Decimal) -> bytes:
     from fpdf import FPDF
 
     def _find_dejavu_dir() -> Path:
@@ -539,6 +579,17 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         pdf.cell(35, h, euro(wert), align="R", border=0)
         pdf.ln(h + 1)
 
+    def kz_sub_row(text: str):
+        """Issue #428: kleine graue Hinweiszeile unter einer Bemessungsgrundlage-Zeile,
+        zeigt den auf volle Euro gerundeten ELSTER-Eingabewert wenn er vom centgenauen
+        Buchungswert abweicht."""
+        y = pdf.get_y()
+        pdf.set_font("DejaVu", "", 7.5)
+        pdf.set_text_color(*MITTEL)
+        pdf.set_xy(34, y)
+        pdf.cell(156, 4.5, text, border=0, align="L")
+        pdf.ln(5)
+
     def section(titel: str):
         pdf.set_fill_color(229, 231, 235)
         pdf.set_font("DejaVu", "B", 9)
@@ -561,13 +612,19 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
             section(eff_abschnitt)
             letzter_abschnitt = eff_abschnitt
         kz_row(kz_nr, bezeichnung, wert, ist_steuer=ist_steuer)
+        wert_gerundet = gerundet.get(kz_nr)
+        if wert_gerundet is not None and wert_gerundet != wert:
+            kz_sub_row(f"ELSTER-Eingabewert (volle Euro, §123 AO): {euro(wert_gerundet)}")
 
     # Zahllast immer anzeigen
     pdf.ln(2)
     section("H. Vorauszahlung / Überschuss")
     zahllast = kz.get("zahllast", ZERO)
     label = "Verbleibender Überschuss (Erstattung)" if zahllast < 0 else "Umsatzsteuer-Vorauszahlung"
-    kz_row("—", label, zahllast, bold=True)
+    kz_row("—", f"{label} (centgenau laut Buchhaltung)", zahllast, bold=True)
+    if zahllast_diff != ZERO:
+        label_el = "Verbleibender Überschuss (Erstattung)" if zahllast_elster < 0 else "Umsatzsteuer-Vorauszahlung"
+        kz_row("—", f"{label_el} (voraussichtlich laut ELSTER)", zahllast_elster)
     pdf.ln(4)
 
     # Hinweis
@@ -575,6 +632,13 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
     pdf.set_x(20)
     pdf.set_font("DejaVu", "", 8)
     pdf.set_text_color(120, 80, 0)
+    rundungshinweis = (
+        "ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO, kaufmännisch gerundet) "
+        "und berechnet die Steuer bei festen Sätzen (KZ 81/86/89/93) automatisch aus diesem "
+        "gerundeten Betrag - dadurch kann die tatsächliche ELSTER-Zahllast geringfügig von der "
+        "hier centgenau nach deinen Buchungen berechneten abweichen. "
+        if zahllast_diff != ZERO else ""
+    )
     pdf.multi_cell(170, 5,
         "Hinweis: Dieses Dokument ist eine Anzeigehilfe und kein amtliches Formular. "
         "Bitte übertrage die Kennziffern in ELSTER (www.elster.de) oder übergib sie "
@@ -583,7 +647,7 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen) -> bytes:
         f"ab {CUTOVER_DATUM_VORSTEUER.strftime('%d.%m.%Y')}: nach Soll-Prinzip (§15 UStG, "
         "Rechnungsdatum statt Zahlungsdatum), davor weiterhin Zahlungsdatum. "
         "Nicht automatisch berechnete Felder (z.B. EU-Lieferungen KZ 41) müssen "
-        "manuell eingetragen werden.",
+        "manuell eingetragen werden. " + rundungshinweis,
         fill=True, align="L"
     )
 
@@ -639,6 +703,15 @@ class UStVAErgebnis(BaseModel):
     zahllast: Decimal = ZERO
     ist_kleinunternehmer: bool = False
     hinweis: Optional[str] = None
+    # Issue #428: ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) und berechnet
+    # die Steuer bei festen Sätzen (81/86/89/93) daraus selbst - gerundet enthält die auf volle
+    # Euro gerundeten Bemessungsgrundlage-KZs (Schlüssel = reine KZ-Nummer, z.B. "81"), die
+    # übrigen (Steuer-/Vorsteuerbeträge) bleiben centgenau wie oben und sind hier nicht
+    # dupliziert. zahllast bleibt die centgenaue Buchhaltungs-Zahllast (GoBD-Quelle der
+    # Wahrheit), zahllast_elster_voraussichtlich/-differenz sind reine Anzeigehilfe.
+    gerundet: dict[str, Decimal] = {}
+    zahllast_elster_voraussichtlich: Decimal = ZERO
+    zahllast_rundungsdifferenz: Decimal = ZERO
 
 
 class UStVASpeichernRequest(BaseModel):
@@ -699,15 +772,20 @@ def ustva_berechnen(
         hinweis = ("Als Kleinunternehmer nach §19 UStG bist du von der UStVA befreit. "
                    "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne "
                    "Vorsteuerabzug eingetragen – nur einmal jährlich in der Jahressteuererklärung.")
+        gerundet, zahllast_elster, zahllast_diff = {}, ZERO, ZERO
     else:
         kz, _ = _berechne_kz(von, bis, db)
         hinweis = None
+        gerundet, zahllast_elster, zahllast_diff = _elster_rundung(kz)
 
     return UStVAErgebnis(
         zeitraum=zeitraum, zeitraum_typ=typ, von=von, bis=bis,
         ist_kleinunternehmer=ist_ku, hinweis=hinweis,
         **{k: v for k, v in kz.items() if k != "zahllast"},
         zahllast=kz["zahllast"],
+        gerundet=gerundet,
+        zahllast_elster_voraussichtlich=zahllast_elster,
+        zahllast_rundungsdifferenz=zahllast_diff,
     )
 
 
@@ -766,7 +844,8 @@ def ustva_pdf(
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
     von, bis, _ = _zeitraum_grenzen(zeitraum)
     kz, _ = _berechne_kz(von, bis, db)
-    pdf_bytes = _generate_pdf(zeitraum, kz, unt)
+    gerundet, zahllast_elster, zahllast_diff = _elster_rundung(kz)
+    pdf_bytes = _generate_pdf(zeitraum, kz, unt, gerundet, zahllast_elster, zahllast_diff)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
