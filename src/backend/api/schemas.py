@@ -135,8 +135,10 @@ class UnternehmenBase(BaseModel):
     @field_validator("voranmeldungsrhythmus")
     @classmethod
     def check_voranmeldungsrhythmus(cls, v: str) -> str:
-        if v not in ("monat", "quartal"):
-            raise ValueError("voranmeldungsrhythmus muss 'monat' oder 'quartal' sein")
+        # "keine": vom Finanzamt von der Abgabepflicht befreit (§18 Abs. 2 Satz 3 UStG,
+        # Vorjahressteuer ≤ 2.000 €) - Issue #430.
+        if v not in ("monat", "quartal", "keine"):
+            raise ValueError("voranmeldungsrhythmus muss 'monat', 'quartal' oder 'keine' sein")
         return v
 
     @field_validator("kontenrahmen")

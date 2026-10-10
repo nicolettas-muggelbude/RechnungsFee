@@ -188,7 +188,9 @@ export function UStVAPage() {
   const { data: ergebnis, isLoading, error } = useQuery({
     queryKey: ['ustva-berechnen', zeitraum],
     queryFn: () => berechneUStVA(zeitraum),
-    enabled: !unt?.ist_kleinunternehmer,
+    // Issue #430: zusätzlich zu Kleinunternehmern auch bei Finanzamt-Befreiung (§18 Abs. 2
+    // Satz 3 UStG, voranmeldungsrhythmus="keine") die Berechnung nicht unnötig anstoßen.
+    enabled: !unt?.ist_kleinunternehmer && unt?.voranmeldungsrhythmus !== 'keine',
   })
 
   const speichernMut = useMutation({
@@ -259,7 +261,7 @@ export function UStVAPage() {
   }
 
   const zahllast = ergebnis ? berechneZahllast() : null
-  const gruppen = ergebnis && !ergebnis.ist_kleinunternehmer ? renderKZTabelle() : []
+  const gruppen = ergebnis && !ergebnis.befreit ? renderKZTabelle() : []
   // Issue #428: die vom Backend mitgelieferte ELSTER-Voraussicht berücksichtigt nur die
   // automatisch berechneten KZs - bei einer manuellen Ergänzung (z.B. KZ 41 EU-Lieferungen)
   // wäre der Vergleich irreführend, da zahllast_elster_voraussichtlich die Ergänzung nicht kennt.
@@ -322,7 +324,7 @@ export function UStVAPage() {
               {pdfExportiert && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
               {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
               <button type="button" onClick={() => speichernMut.mutate(alleKZ() as any)}
-                disabled={speichernMut.isPending || ergebnis.ist_kleinunternehmer}
+                disabled={speichernMut.isPending || ergebnis.befreit}
                 className="px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">
                 {gespeichertMeldung ? '✓ Gespeichert' : 'Speichern'}
               </button>
@@ -352,7 +354,7 @@ export function UStVAPage() {
             </div>
           )}
 
-          {!ergebnis.ist_kleinunternehmer && (
+          {!ergebnis.befreit && (
             <>
               {/* Auto-berechnete Felder – nur mit Wert */}
               {gruppen.length === 0 ? (

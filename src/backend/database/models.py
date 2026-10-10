@@ -53,7 +53,7 @@ class Unternehmen(Base):
     ust_idnr: Mapped[str | None] = mapped_column(String(20))
     w_idnr: Mapped[str | None] = mapped_column(String(20))
     finanzamt: Mapped[str | None] = mapped_column(String(200))
-    voranmeldungsrhythmus: Mapped[str] = mapped_column(String(12), default="quartal", nullable=False)  # monat|quartal
+    voranmeldungsrhythmus: Mapped[str] = mapped_column(String(12), default="quartal", nullable=False)  # monat|quartal|keine
     bundesland: Mapped[str | None] = mapped_column(String(2))  # z.B. BY, NW, BE
     dauerfristverlaengerung_ust: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     est_vorauszahlungen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -188,7 +188,7 @@ export type Unternehmen = {
   ust_idnr?: string
   w_idnr?: string
   finanzamt?: string
-  voranmeldungsrhythmus: 'monat' | 'quartal'
+  voranmeldungsrhythmus: 'monat' | 'quartal' | 'keine'
   bundesland?: string | null
   dauerfristverlaengerung_ust: boolean
   est_vorauszahlungen_aktiv: boolean
@@ -1975,6 +1975,10 @@ export type UStVAErgebnis = {
   kz_66: string; kz_61: string; kz_62: string; kz_67: string
   zahllast: string
   ist_kleinunternehmer: boolean
+  // Issue #430: true für Kleinunternehmer UND für eine §18 Abs. 2 Satz 3 UStG Finanzamt-
+  // Befreiung (voranmeldungsrhythmus="keine") - entscheidet, ob die volle KZ-Tabelle
+  // unterdrückt wird. ist_kleinunternehmer bleibt der präzise §19-Rechtsgrund.
+  befreit?: boolean
   hinweis?: string | null
   // Issue #428: ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) - gerundet
   // enthält die betroffenen KZs (Schlüssel = reine KZ-Nummer, z.B. "81") mit dem auf volle

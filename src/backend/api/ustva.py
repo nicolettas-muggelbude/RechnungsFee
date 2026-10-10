@@ -702,6 +702,12 @@ class UStVAErgebnis(BaseModel):
     kz_67: Decimal = ZERO
     zahllast: Decimal = ZERO
     ist_kleinunternehmer: bool = False
+    # Issue #430: zusätzlich zu Kleinunternehmern (§19 UStG) kann das Finanzamt auch reguläre
+    # Unternehmer von der UStVA-Pflicht befreien (§18 Abs. 2 Satz 3 UStG, Vorjahressteuer
+    # ≤ 2.000 €, voranmeldungsrhythmus="keine"). befreit ist in beiden Fällen True - entscheidet
+    # im Frontend, ob die volle KZ-Tabelle unterdrückt wird; ist_kleinunternehmer bleibt die
+    # präzise Kennzahl für den konkreten §19-Rechtsgrund.
+    befreit: bool = False
     hinweis: Optional[str] = None
     # Issue #428: ELSTER erwartet Bemessungsgrundlagen in vollen Euro (§123 AO) und berechnet
     # die Steuer bei festen Sätzen (81/86/89/93) daraus selbst - gerundet enthält die auf volle
@@ -766,12 +772,22 @@ def ustva_berechnen(
 
     von, bis, typ = _zeitraum_grenzen(zeitraum)
     ist_ku = bool(unt.ist_kleinunternehmer)
+    # Issue #430: §18 Abs. 2 Satz 3 UStG - Befreiung durch das Finanzamt, unabhängig vom
+    # Kleinunternehmerstatus (Vorjahressteuer ≤ 2.000 €).
+    fa_befreit = (getattr(unt, "voranmeldungsrhythmus", None) == "keine") and not ist_ku
+    befreit = ist_ku or fa_befreit
 
-    if ist_ku:
+    if befreit:
         kz: dict = {k: ZERO for k in ALL_KZ_KEYS}
-        hinweis = ("Als Kleinunternehmer nach §19 UStG bist du von der UStVA befreit. "
-                   "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne "
-                   "Vorsteuerabzug eingetragen – nur einmal jährlich in der Jahressteuererklärung.")
+        if ist_ku:
+            hinweis = ("Als Kleinunternehmer nach §19 UStG bist du von der UStVA befreit. "
+                       "Umsätze werden in Zeile 23 (KZ 48) als steuerfreie Umsätze ohne "
+                       "Vorsteuerabzug eingetragen – nur einmal jährlich in der Jahressteuererklärung.")
+        else:
+            hinweis = ("Laut hinterlegtem Voranmeldungsrhythmus bist du vom Finanzamt von der "
+                       "Abgabepflicht für Voranmeldungen befreit (§18 Abs. 2 Satz 3 UStG, "
+                       "Vorjahressteuer ≤ 2.000 €). Prüfe diese Einstellung unter Einstellungen → "
+                       "Unternehmen → Steuer & Recht, falls sich deine Situation geändert hat.")
         gerundet, zahllast_elster, zahllast_diff = {}, ZERO, ZERO
     else:
         kz, _ = _berechne_kz(von, bis, db)
@@ -780,7 +796,7 @@ def ustva_berechnen(
 
     return UStVAErgebnis(
         zeitraum=zeitraum, zeitraum_typ=typ, von=von, bis=bis,
-        ist_kleinunternehmer=ist_ku, hinweis=hinweis,
+        ist_kleinunternehmer=ist_ku, befreit=befreit, hinweis=hinweis,
         **{k: v for k, v in kz.items() if k != "zahllast"},
         zahllast=kz["zahllast"],
         gerundet=gerundet,

@@ -446,7 +446,14 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <input
             type="checkbox"
             checked={!!form.ist_kleinunternehmer}
-            onChange={ev => set('ist_kleinunternehmer', ev.target.checked)}
+            onChange={ev => {
+              set('ist_kleinunternehmer', ev.target.checked)
+              // Issue #430: Kleinunternehmer sind von der UStVA befreit - Voranmeldungsrhythmus
+              // automatisch auf "keine" setzen; beim Entfernen des Hakens nur zurücksetzen,
+              // wenn der Wert noch auf der Auto-Auswahl steht (keine manuelle Wahl überschreiben).
+              if (ev.target.checked) set('voranmeldungsrhythmus', 'keine')
+              else if (form.voranmeldungsrhythmus === 'keine') set('voranmeldungsrhythmus', 'quartal')
+            }}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
           />
           <div>
@@ -514,7 +521,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
 
         <hr className="border-slate-100 dark:border-slate-700" />
 
-        <Field label={<>Voranmeldungsrhythmus <InfoTooltip text="Monatlich: wenn deine Jahres-USt-Zahllast im Vorjahr über 7.500 € lag. Vierteljährlich: bei Zahllast ≤ 7.500 €. Kleinunternehmer §19 sind von der UStVA befreit." /></>}>
+        <Field label={<>Voranmeldungsrhythmus <InfoTooltip text="Monatlich: wenn deine Jahres-USt-Zahllast im Vorjahr über 9.000 € lag (§18 Abs. 2 UStG). Vierteljährlich: bei Zahllast ≤ 9.000 €. Keine USt-VA: vom Finanzamt befreit, Vorjahressteuer ≤ 2.000 € (§18 Abs. 2 Satz 3 UStG). Kleinunternehmer §19 sind von der UStVA befreit." /></>}>
           <select
             value={form.voranmeldungsrhythmus ?? 'quartal'}
             onChange={ev => set('voranmeldungsrhythmus', ev.target.value)}
@@ -522,6 +529,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           >
             <option value="quartal">Vierteljährlich</option>
             <option value="monat">Monatlich</option>
+            <option value="keine">Keine USt-VA (vom Finanzamt befreit)</option>
           </select>
         </Field>
 
