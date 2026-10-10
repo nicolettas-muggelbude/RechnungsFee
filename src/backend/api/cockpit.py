@@ -78,7 +78,10 @@ def _ausgabe_netto(e: Journaleintrag, kat: Optional[Kategorie]) -> Decimal:
     from api.euer import AUSGABEN_ZEILEN
     if zeile in AUSGABEN_ZEILEN:
         vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-        return vz * (e.netto_betrag or ZERO)
+        # Gleiche Basis wie in api/euer.py::_berechne_euer() (Issue #424): nicht abzugsfähiger
+        # USt-Anteil (z.B. komplett bei Kleinunternehmer §19) ist ein echter Kostenbestandteil.
+        basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
+        return vz * basis
     return ZERO
 
 

@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: 'Beschreibungstexte wurden im PDF (Angebot, Auftrag, Proforma, Lieferschein, Rechnung) im Blocksatz dargestellt – bei schmalen Spalten und langen deutschen Wörtern dadurch schwer lesbar, insbesondere bei Aufzählungen mit vielen Zeilenumbrüchen. Jetzt durchgängig linksbündig, betrifft auch Einleitungstext, Schlusstext, Notizen und Stornobegründung.' },
       { typ: 'fix', text: 'In der gespeicherten Detail-Ansicht von Angebot, Auftrag, Proforma und Rechnung wurden Zeilenumbrüche in der Positions-Beschreibung nicht angezeigt – ein mehrzeiliger Text oder eine Aufzählung erschien als ein einziger Fließtext-Block. Danke an ludgerknorps für den Bug-Report inklusive Screenshots (Issue #422).' },
+      { typ: 'fix', text: 'Als Kleinunternehmer (§19 UStG) ist die beim Einkauf gezahlte Vorsteuer nicht abziehbar – der tatsächliche USt-Satz des Lieferanten blieb dabei zwar korrekt erhalten, floss aber nirgends mehr in den ausgewiesenen Gewinn ein: Dashboard, EÜR und GuV rechneten bei einer Ausgabe nur mit dem Nettobetrag statt mit dem vollen, nicht erstattungsfähigen Bruttobetrag – der Gewinn wurde dadurch systematisch zu hoch ausgewiesen. Danke an thomaskron für den Bug-Report aus der Community und Peter1061 für den ergänzenden Fund im Journal (Issue #424).' },
     ],
   },
   {

@@ -124,12 +124,24 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
             if ab == "A":
                 # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
                 vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
+                basis = e.netto_betrag or ZERO
             elif ab == "B":
-                # Ausgaben-Zeile: Ausgabe = addieren, Storno (art=Einnahme) = subtrahieren
+                # Ausgaben-Zeile: Ausgabe = addieren, Storno (art=Einnahme) = subtrahieren.
+                # Basis = netto_betrag + nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich
+                # tatsächlich abgezogener vorsteuer_betrag) - fehlt der Vorsteuerabzug ganz
+                # (Kleinunternehmer §19, Issue #424) oder teilweise (kat.vorsteuer_prozent < 100),
+                # ist dieser Anteil ein echter, nicht erstattungsfähiger Kostenbestandteil und
+                # gehört in die Betriebsausgabe. Bei vollem Vorsteuerabzug (vorsteuer_betrag ==
+                # ust_betrag) ist der Zuschlag 0, Ergebnis bleibt netto_betrag wie bisher. Bei
+                # Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT verwendet (dort
+                # ist brutto_betrag == netto_betrag, die additive USt wäre sonst fälschlich
+                # nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller Vorsteuerabzug).
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
+                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
             else:
                 vz = Decimal("1")
-            zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + vz * (e.netto_betrag or ZERO)
+                basis = e.netto_betrag or ZERO
+            zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + vz * basis
 
         # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
         # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
@@ -364,12 +376,17 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
             ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
             if ab == "A":
                 vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
+                basis = e.netto_betrag or ZERO
             elif ab == "B":
+                # Siehe ausführlicher Kommentar in _berechne_euer() (Issue #424) - gleiche Basis,
+                # damit Kategorie-Summen und EÜR-Zeilensumme konsistent bleiben.
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
+                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
             else:
                 vz = Decimal("1")
+                basis = e.netto_betrag or ZERO
             zeilen.setdefault(euer_zeile, {})
-            zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * (e.netto_betrag or ZERO)
+            zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * basis
 
         # Reverse Charge neutral halten, siehe Kommentar in _berechne_euer (Issue #307)
         ist_reverse_charge = bool(e.ust_sonderfall)
