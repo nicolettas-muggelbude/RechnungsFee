@@ -77,6 +77,7 @@ pyinstaller \
     --collect-all fpdf \
     --collect-all drafthorse \
     --collect-all facturx \
+    --collect-all iso4217 \
     --collect-all saxonche \
     --collect-all pdfplumber \
     --collect-all fitz \
