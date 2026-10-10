@@ -61,7 +61,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         if einleitungstext:
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
-            self.multi_cell(NUTZ_W, 5, _md(einleitungstext), markdown=True)
+            self.multi_cell(NUTZ_W, 5, _md(einleitungstext), markdown=True, align="L")
         elif dokument_typ == "Rechnung":
             # Eingebauter Vorlage-1-Standardtext gilt bewusst nur für Rechnung (Issue #368) -
             # für die anderen Dokumenttypen ohne konfigurierten Text lieber gar nichts zeigen
@@ -183,7 +183,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
                 self.multi_cell(col_w[2], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
             self.multi_cell(col_w[desc_col], DESC_H, pos.beschreibung or "",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
 
             # Rabatt-Unterzeile
             if pos_rabatt > 0 and not ist_lieferschein:

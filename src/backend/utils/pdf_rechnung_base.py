@@ -533,7 +533,7 @@ class RechnungPDFBase(FPDF):
                 self.set_font("DejaVu", "", 8.5)
                 self.multi_cell(0, 5,
                                 f"Stornobegründung: {storno_grund}",
-                                new_x="LMARGIN", new_y="NEXT")
+                                new_x="LMARGIN", new_y="NEXT", align="L")
                 self.ln(1)
         elif dokument_typ == "Gutschrift":
             gutschrift_nr = getattr(r, "_gutschrift_original_nr", None)
@@ -560,7 +560,7 @@ class RechnungPDFBase(FPDF):
             self.set_font("DejaVu", "", 9)
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
-            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True)
+            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True, align="L")
             self.ln(2)
         else:
             self.ln(4)
@@ -576,7 +576,7 @@ class RechnungPDFBase(FPDF):
             self.set_font("DejaVu", "", 9)
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
-            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True)
+            self.multi_cell(NUTZ_W, 5, _md(text), markdown=True, align="L")
             self.ln(2)
 
     def _render_positionen(self):
@@ -731,7 +731,7 @@ class RechnungPDFBase(FPDF):
         if notizen:
             self.set_font("DejaVu", "", 8)
             self.set_text_color(*TEXT_GRAU)
-            self.multi_cell(0, 5, notizen)
+            self.multi_cell(0, 5, notizen, align="L")
 
     def render(self) -> bytes:
         self.add_page()

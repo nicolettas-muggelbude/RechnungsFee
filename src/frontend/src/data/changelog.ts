@@ -23,6 +23,14 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.1',
+    datum: 'Oktober 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Beschreibungstexte wurden im PDF (Angebot, Auftrag, Proforma, Lieferschein, Rechnung) im Blocksatz dargestellt – bei schmalen Spalten und langen deutschen Wörtern dadurch schwer lesbar, insbesondere bei Aufzählungen mit vielen Zeilenumbrüchen. Jetzt durchgängig linksbündig, betrifft auch Einleitungstext, Schlusstext, Notizen und Stornobegründung.' },
+      { typ: 'fix', text: 'In der gespeicherten Detail-Ansicht von Angebot, Auftrag, Proforma und Rechnung wurden Zeilenumbrüche in der Positions-Beschreibung nicht angezeigt – ein mehrzeiliger Text oder eine Aufzählung erschien als ein einziger Fließtext-Block. Danke an ludgerknorps für den Bug-Report inklusive Screenshots (Issue #422).' },
+    ],
+  },
+  {
     version: 'v0.7.0',
     datum: 'Oktober 2026',
     eintraege: [

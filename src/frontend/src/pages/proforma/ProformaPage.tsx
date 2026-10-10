@@ -950,7 +950,7 @@ function ProformaDetail({
                     const nettoPos = bruttoPos - ustPos
                     return (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
                         {pos.beschreibung}
                         {posRabatt > 0 && (
                           <span className="text-slate-400 dark:text-slate-500 text-xs ml-1">(− {posRabatt} %)</span>

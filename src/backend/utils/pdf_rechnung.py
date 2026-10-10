@@ -99,9 +99,9 @@ class RechnungPDF(RechnungPDFBase):
                 self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
                 if hat_artikelcode:
                     ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                    self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP")
+                    self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
                 self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
-                                new_x="LMARGIN", new_y="NEXT")
+                                new_x="LMARGIN", new_y="NEXT", align="L")
                 self.ln(1.5)
                 continue
             # Anzeige-Werte für den "vor Rabatt"-Referenzpreis (Einzelpreis-Spalte) und die
@@ -128,9 +128,9 @@ class RechnungPDF(RechnungPDFBase):
             self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
             if hat_artikelcode:
                 ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP")
+                self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
             self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
             # Rabatt-Unterzeile
             if pos_rabatt > 0:
                 self.set_font("DejaVu", "", 7.5)
