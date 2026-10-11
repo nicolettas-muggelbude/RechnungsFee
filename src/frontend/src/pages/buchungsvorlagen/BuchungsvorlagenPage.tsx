@@ -248,7 +248,7 @@ function VorlageFormular({
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" title={form.ist_brutto ? 'mit MwSt' : 'ohne MwSt'}>
             {form.ist_brutto ? 'Brutto-Betrag *' : 'Netto-Betrag *'}
           </label>
           <input type="number" step="0.01" min="0" value={form.betrag}
@@ -274,7 +274,7 @@ function VorlageFormular({
           <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
             <input type="checkbox" checked={form.ist_brutto} onChange={e => set('ist_brutto', e.target.checked)}
               className="rounded border-slate-300 text-blue-600" />
-            Brutto-Eingabe
+            <span title="mit MwSt">Brutto-Eingabe</span>
           </label>
         </div>
       </div>
@@ -369,7 +369,7 @@ function VorlageKarte({ vorlage, onBuchen, onEingangsrechnung }: {
           </p>
         </div>
         <div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Betrag ({vorlage.ist_brutto ? 'brutto' : 'netto'})</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5" title={vorlage.ist_brutto ? 'mit MwSt' : 'ohne MwSt'}>Betrag ({vorlage.ist_brutto ? 'brutto' : 'netto'})</p>
           <p className="font-medium text-slate-700 dark:text-slate-200">
             {betragNum === 0
               ? <span className="text-slate-400 dark:text-slate-500 font-normal italic">variabel</span>

@@ -436,7 +436,7 @@ function KategorienTabelle({
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-700">
                 <th className="text-left py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Kategorie</th>
-                <th className="text-right py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Betrag (netto)</th>
+                <th className="text-right py-2 text-xs font-medium text-slate-500 dark:text-slate-400" title="ohne MwSt">Betrag (netto)</th>
                 <th className="text-right py-2 text-xs font-medium text-slate-500 dark:text-slate-400">Anteil</th>
               </tr>
             </thead>

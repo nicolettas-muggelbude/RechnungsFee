@@ -135,7 +135,7 @@ function PositionenTabelle({
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
-            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
+            <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24" title={eingabeModus === 'netto' ? 'ohne MwSt' : 'mit MwSt'}>
               {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
             </th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
@@ -203,7 +203,7 @@ function PositionenTabelle({
         </tbody>
         <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
           <tr>
-            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+            <td colSpan={3} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
               Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
             </td>
             <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
@@ -217,7 +217,7 @@ function PositionenTabelle({
             </td>
           </tr>
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">Brutto</td>
+            <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
               {gesamt.brutto.toFixed(2).replace('.', ',')} €
             </td>
@@ -505,7 +505,8 @@ function VorlageFormular({
             {!istKleinunternehmer && (
               <button type="button"
                 onClick={() => setEingabeModus(eingabeModus === 'netto' ? 'brutto' : 'netto')}
-                className="text-xs text-blue-600 hover:text-blue-700 underline">
+                className="text-xs text-blue-600 hover:text-blue-700 underline"
+                title={eingabeModus === 'netto' ? 'mit MwSt' : 'ohne MwSt'}>
                 {eingabeModus === 'netto' ? 'Brutto eingeben' : 'Netto eingeben'}
               </button>
             )}
@@ -598,7 +599,7 @@ function VorlageKarte({
           <p className="font-medium text-slate-700 dark:text-slate-200">{fmt(vorlage.naechstes_datum)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Betrag (ca. brutto)</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-0.5" title="mit MwSt">Betrag (ca. brutto)</p>
           <p className="font-medium text-slate-700 dark:text-slate-200">
             {brutto.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </p>
@@ -755,7 +756,7 @@ function VorlageDetail({
                   <tr>
                     <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Datum</th>
                     <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Nummer</th>
-                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Brutto</th>
+                    <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium" title="mit MwSt">Brutto</th>
                     <th className="px-3 py-2 text-center text-slate-500 dark:text-slate-400 font-medium">Status</th>
                   </tr>
                 </thead>

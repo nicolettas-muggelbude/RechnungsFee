@@ -574,7 +574,7 @@ export function ArtikelFormModal({
             <div className={`grid gap-2 ${differenzbesteuerung || istKleinunternehmer ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {!differenzbesteuerung && !istKleinunternehmer && (
                 <div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Netto</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block" title="ohne MwSt">Netto</span>
                   <input
                     type="number" step="0.01" min="0" placeholder="0,00"
                     value={vkNetto}
@@ -584,7 +584,7 @@ export function ArtikelFormModal({
                 </div>
               )}
               <div>
-                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">
+                <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block" title={differenzbesteuerung ? 'Verkaufspreis inklusive Margensteuer' : 'mit MwSt'}>
                   {differenzbesteuerung ? 'Verkaufspreis (inkl. Margensteuer)' : 'Brutto'}
                 </span>
                 <input
@@ -609,7 +609,7 @@ export function ArtikelFormModal({
               </label>
               <div className={`grid gap-2 ${differenzbesteuerung ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 <div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">
+                  <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block" title={differenzbesteuerung ? 'Ankaufspreis von Privatperson, ohne MwSt' : 'ohne MwSt'}>
                     {differenzbesteuerung ? 'Ankaufspreis' : 'Netto'}
                   </span>
                   <input
@@ -621,7 +621,7 @@ export function ArtikelFormModal({
                 </div>
                 {!differenzbesteuerung && (
                   <div>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Brutto</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 mb-1 block" title="mit MwSt">Brutto</span>
                     <input
                       type="number" step="0.01" min="0" placeholder="0,00"
                       value={ekBrutto}

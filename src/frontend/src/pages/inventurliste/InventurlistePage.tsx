@@ -66,8 +66,8 @@ export function InventurlistePage() {
                 <th className="text-left px-4 py-2">Artikelnr.</th>
                 <th className="text-left px-4 py-2">Bezeichnung</th>
                 <th className="text-right px-4 py-2">Bestand</th>
-                <th className="text-right px-4 py-2">EK (netto)</th>
-                <th className="text-right px-4 py-2">Wert (netto)</th>
+                <th className="text-right px-4 py-2" title="ohne MwSt">EK (netto)</th>
+                <th className="text-right px-4 py-2" title="ohne MwSt">Wert (netto)</th>
               </tr>
             </thead>
             <tbody>

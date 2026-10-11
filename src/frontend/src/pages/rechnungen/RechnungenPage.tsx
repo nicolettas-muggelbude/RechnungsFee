@@ -1883,7 +1883,7 @@ function RechnungDetail({
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Menge</th>
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">Einzelpreis</th>
                       <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">USt</th>
-                      <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium">
+                      <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium" title={rechnung.eingabemodus === 'netto' ? 'ohne MwSt' : 'mit MwSt'}>
                         {rechnung.eingabemodus === 'netto' ? 'Netto' : 'Brutto'}
                       </th>
                     </>}
@@ -3864,6 +3864,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 type="button"
                 onClick={toggleEingabeModus}
                 className="text-xs text-blue-600 hover:text-blue-700 underline"
+                title={eingabeModus === 'netto' ? 'mit MwSt' : 'ohne MwSt'}
               >
                 {eingabeModus === 'netto' ? 'Brutto eingeben' : 'Netto eingeben'}
               </button>
@@ -3935,7 +3936,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1" title={eingabeModus === 'netto' ? 'ohne MwSt' : 'mit MwSt'}>
                   {eingabeModus === 'netto' ? 'Nettobetrag (€)' : 'Bruttobetrag (€)'}
                 </label>
                 <div className="flex gap-2">
@@ -3952,6 +3953,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                       type="button"
                       onClick={toggleEingabeModus}
                       className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
+                      title={eingabeModus === 'netto' ? 'mit MwSt' : 'ohne MwSt'}
                     >
                       {eingabeModus === 'netto' ? '→ Brutto' : '→ Netto'}
                     </button>
@@ -4018,9 +4020,9 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             {/* Summenanzeige */}
             {parseFloat((positionen[0]?.netto ?? '').replace(',', '.')) !== 0 && (
               <div className="text-xs text-right text-slate-500 dark:text-slate-400 space-y-0.5 pt-1 border-t border-slate-100 dark:border-slate-700">
-                <div>Netto{eingabeModus === 'brutto' && ' (berechnet)'}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</span></div>
+                <div title="ohne MwSt">Netto{eingabeModus === 'brutto' && ' (berechnet)'}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</span></div>
                 {anzeigeSummen.ust !== 0 && <div>USt: <span className="text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</span></div>}
-                <div className="font-semibold text-slate-800 dark:text-slate-100">Brutto{eingabeModus === 'netto' && ' (berechnet)'}: {formatEuro(anzeigeSummen.brutto)}</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-100" title="mit MwSt">Brutto{eingabeModus === 'netto' && ' (berechnet)'}: {formatEuro(anzeigeSummen.brutto)}</div>
               </div>
             )}
           </div>
@@ -4034,7 +4036,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
                 <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
                 {dokumentTyp !== 'Lieferschein' && <>
-                  <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24">
+                  <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-24" title={eingabeModus === 'netto' ? 'ohne MwSt' : 'mit MwSt'}>
                     {eingabeModus === 'netto' ? 'Netto (€)' : 'Brutto (€)'}
                   </th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Rabatt %</th>
@@ -4187,7 +4189,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               {!sperreUstAufNull && (
                 <>
                   <tr>
-                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
                       Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                     </td>
                     <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
@@ -4219,7 +4221,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 </tr>
               )}
               <tr>
-                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200">
+                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(anzeigeSummen.brutto)}</td>
@@ -4626,7 +4628,7 @@ function ImportDialog({
                   )}
                   {felder.gesamt_brutto && (
                     <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-700 pt-2 mt-2 font-semibold">
-                      <span className="text-slate-600 dark:text-slate-300">Brutto</span>
+                      <span className="text-slate-600 dark:text-slate-300" title="mit MwSt">Brutto</span>
                       <div className="flex items-center gap-1.5">
                         <KonfidenzDot level={felder.konfidenz?.gesamt_brutto} />
                         <span className="dark:text-slate-100">{formatEuro(felder.gesamt_brutto)}</span>
@@ -5325,7 +5327,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                         >
                           Fällig bis {sortFaellig === 'asc' ? '↑' : sortFaellig === 'desc' ? '↓' : ''}
                         </th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Brutto</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="mit MwSt">Brutto</th>
                       </>
                     )}
                     <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>

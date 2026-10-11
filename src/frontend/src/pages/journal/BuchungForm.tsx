@@ -869,7 +869,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300" title={istEinfuhrUst ? 'Einfuhrumsatzsteuer' : eingabeModus === 'brutto' ? 'mit MwSt' : 'ohne MwSt'}>
                     {istEinfuhrUst ? 'Einfuhrumsatzsteuer-Betrag (€)' : eingabeModus === 'brutto' ? 'Brutto-Betrag (€)' : 'Netto-Betrag (€)'}
                   </label>
                   {!sperreUstAufNull && !istEinfuhrUst && (
@@ -877,6 +877,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                       type="button"
                       onClick={toggleEingabeModus}
                       className="text-xs text-blue-600 hover:text-blue-700 underline"
+                      title={eingabeModus === 'brutto' ? 'ohne MwSt' : 'mit MwSt'}
                     >
                       {eingabeModus === 'brutto' ? 'Netto eingeben' : 'Brutto eingeben'}
                     </button>
@@ -932,7 +933,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {!istEinfuhrUst && ustSatz > 0 && eingabeWert > 0 && (
               <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-xs text-slate-600 dark:text-slate-300 grid grid-cols-3 gap-2">
                 <div>
-                  <span className="block text-slate-400 dark:text-slate-500">Netto</span>
+                  <span className="block text-slate-400 dark:text-slate-500" title="ohne MwSt">Netto</span>
                   {netto.toFixed(2)} €
                 </div>
                 <div>
@@ -940,7 +941,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                   {ustBetrag.toFixed(2)} €
                 </div>
                 <div>
-                  <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`} title="mit MwSt">
                     Brutto {eingabeModus === 'netto' ? '(berechnet)' : ''}
                   </span>
                   {brutto.toFixed(2)} €
@@ -1180,12 +1181,13 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 text-sm">
                 <span className="text-slate-600 dark:text-slate-300">
                   Beträge eingeben als:{' '}
-                  <strong>{eingabeModus === 'brutto' ? 'Brutto' : 'Netto'}</strong>
+                  <strong title={eingabeModus === 'brutto' ? 'mit MwSt' : 'ohne MwSt'}>{eingabeModus === 'brutto' ? 'Brutto' : 'Netto'}</strong>
                 </span>
                 <button
                   type="button"
                   onClick={toggleEingabeModus}
                   className="text-xs text-blue-600 hover:text-blue-700 underline"
+                  title={eingabeModus === 'brutto' ? 'ohne MwSt' : 'mit MwSt'}
                 >
                   {eingabeModus === 'brutto' ? 'Netto eingeben' : 'Brutto eingeben'}
                 </button>
@@ -1333,7 +1335,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                       {u > 0 && inputVal > 0 && (
                         <div className="bg-white dark:bg-slate-800 rounded p-2 text-xs text-slate-500 dark:text-slate-300 grid grid-cols-3 gap-1">
                           <div>
-                            <span className="block text-slate-400 dark:text-slate-500">Netto</span>
+                            <span className="block text-slate-400 dark:text-slate-500" title="ohne MwSt">Netto</span>
                             {posNetto.toFixed(2)} €
                           </div>
                           <div>
@@ -1341,7 +1343,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                             {posUst.toFixed(2)} €
                           </div>
                           <div>
-                            <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`}>
+                            <span className={`block ${eingabeModus === 'netto' ? 'text-blue-500 font-medium' : 'text-slate-400 dark:text-slate-500'}`} title="mit MwSt">
                               Brutto {eingabeModus === 'netto' ? '→' : ''}
                             </span>
                             {b.toFixed(2)} €

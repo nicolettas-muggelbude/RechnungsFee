@@ -238,7 +238,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
         <div className="flex gap-6">
           <div className="flex-1 text-sm space-y-1">
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Netto</span>
+              <span title="ohne MwSt">Netto</span>
               <span>{formatEuro(e.netto_betrag)}</span>
             </div>
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
@@ -249,7 +249,7 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
               <div className="text-xs text-slate-400 dark:text-slate-500">{e.steuerbefreiung_grund}</div>
             )}
             <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-100 border-t border-slate-200 dark:border-slate-700 pt-1">
-              <span>Brutto</span>
+              <span title="mit MwSt">Brutto</span>
               <span>{formatEuro(e.brutto_betrag)}</span>
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500 pt-1 flex items-center gap-1 flex-wrap">
