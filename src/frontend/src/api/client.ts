@@ -1481,6 +1481,10 @@ export type BarZahlungCreate = {
 export type BarZahlungResult = {
   journaleintrag_id: number
   journaleintrag_belegnr: string
+  // Anteil des gezahlten Betrags, der gegen offene Mahngebühr/Verzugszinsen verrechnet wurde
+  mahngebuehr_verrechnet: string
+  // Anteil, der als Kundenguthaben erfasst wurde (Journal wird auf den Restbetrag gekappt)
+  kundenguthaben_betrag: string
   rechnung: Rechnung
 }
 

@@ -603,6 +603,15 @@ function ZahlungsDialog({
 
   const betragDecimal = parseFloat(betrag.replace(',', '.'))
   const kassenstandUeberschritten = istBarAusgabe && !isNaN(betragDecimal) && betragDecimal > kassenstand
+  // Überzahlung: bei Ausgangsrechnungen kappt das Backend die Journalbuchung auf den
+  // Restbetrag und erfasst den Überschuss zuerst gegen offene Mahngebühr/Verzugszinsen,
+  // den Rest als Kundenguthaben - ohne Hinweis war dieser Unterschied für Nutzerinnen
+  // unsichtbar (Differenzbetrag fehlte scheinbar im Journal).
+  const ueberzahlung = rechnung.typ === 'ausgang' && !istGutschrift && !skontoAktiv && !isNaN(betragDecimal)
+    ? betragDecimal - restbetrag
+    : 0
+  const ueberzahlungMg = Math.min(Math.max(ueberzahlung, 0), offeneMahngebuehr)
+  const ueberzahlungGuthaben = Math.max(ueberzahlung - ueberzahlungMg, 0)
   const artLabel = rechnung.typ === 'ausgang'
     ? (istGutschrift ? 'Einnahme (Minderung)' : 'Einnahme')
     : (istGutschrift ? 'Ausgabe (Minderung)' : 'Ausgabe')
@@ -721,6 +730,25 @@ function ZahlungsDialog({
               placeholder="0,00"
             />
           </div>
+
+          {/* Überzahlungs-Hinweis: Überschuss wird NICHT ignoriert, sondern als
+              Mahngebühren-Verrechnung + Kundenguthaben erfasst (Journal bleibt auf den
+              Restbetrag gekappt) - ohne diesen Hinweis wirkt der Differenzbetrag verloren. */}
+          {ueberzahlung > 0.004 && (
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-sm -mt-1">
+              <p className="text-amber-800 dark:text-amber-200 font-medium">
+                {formatEuro(ueberzahlung)} über dem offenen Restbetrag
+              </p>
+              <p className="text-amber-700 dark:text-amber-300 mt-0.5">
+                {ueberzahlungMg > 0.004 && (
+                  <>{formatEuro(ueberzahlungMg)} werden gegen offene Mahngebühr/Verzugszinsen verrechnet. </>
+                )}
+                {ueberzahlungGuthaben > 0.004 && (
+                  <>Der Rest ({formatEuro(ueberzahlungGuthaben)}) wird als <strong>Kundenguthaben</strong> für {rechnung.kunde_name ?? 'den Kunden'} erfasst – sichtbar im Dashboard und auf der Kundenseite, journalwirksam erst bei Verrechnung oder Rücküberweisung.</>
+                )}
+              </p>
+            </div>
+          )}
 
           {/* Skonto-Hinweis */}
           {skontoVerfuegbar && (

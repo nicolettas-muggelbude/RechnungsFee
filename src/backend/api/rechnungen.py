@@ -2779,6 +2779,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # -----------------------------------------------------------------------
     betrag_neg: Decimal = Decimal("0")  # nur für Gutschrift-Pfad
     betrag: Decimal = Decimal("0")      # nur für Normal-Pfad
+    # Überschuss-Aufteilung (nur Normal-Pfad, siehe Validierung unten) - hier initialisiert,
+    # damit alle Response-Pfade (auch Split) typsicher darauf zugreifen können.
+    mahngebuehr_ueberschuss: Decimal = Decimal("0")
+    kundenguthaben_ueberschuss: Decimal = Decimal("0")
 
     if ist_erstattung:
         # Frontend schickt positiven Betrag → Backend negiert für EÜR-korrekte Erlösminderung
@@ -2811,8 +2815,6 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # Rest wird als Kundenguthaben erfasst statt die Buchung zu blockieren - analog zum
         # bereits bestehenden Verhalten beim Bank-Import (_buche_pfad_a). Eingangsrechnungen
         # bleiben unverändert strikt auf den Restbetrag begrenzt (kein Mahnwesen für Lieferanten).
-        mahngebuehr_ueberschuss = Decimal("0")
-        kundenguthaben_ueberschuss = Decimal("0")
         if betrag > restbetrag:
             if rechnung.typ != "ausgang":
                 raise HTTPException(status_code=422,
@@ -3157,6 +3159,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         return BarZahlungResult(
             journaleintrag_id=erster_eintrag.id,
             journaleintrag_belegnr=erster_eintrag.belegnr,
+            mahngebuehr_verrechnet=mahngebuehr_ueberschuss,
+            kundenguthaben_betrag=kundenguthaben_ueberschuss,
             rechnung=RechnungResponse.from_orm_extended(rechnung),
         )
 
@@ -3237,6 +3241,8 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     return BarZahlungResult(
         journaleintrag_id=eintrag.id,
         journaleintrag_belegnr=eintrag.belegnr,
+        mahngebuehr_verrechnet=mahngebuehr_ueberschuss,
+        kundenguthaben_betrag=kundenguthaben_ueberschuss,
         rechnung=RechnungResponse.from_orm_extended(rechnung),
     )
 

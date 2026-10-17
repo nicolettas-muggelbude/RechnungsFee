@@ -846,4 +846,11 @@ class BarZahlungCreate(BaseModel):
 class BarZahlungResult(BaseModel):
     journaleintrag_id: int
     journaleintrag_belegnr: str
+    # Überzahlungs-Transparenz (Issue #419-Fortsetzung): zahlung_bar_erstellen kappt die
+    # Journalbuchung bewusst auf den Restbetrag und erfasst den Überschuss separat (Mahngebühr-
+    # Verrechnung + Kundenguthaben). Ohne diese Felder wusste die UI nach dem Buchen nicht,
+    # dass ein Kundenguthaben entstanden ist - Nutzerinnen suchten den Differenzbetrag im
+    # Journal und hielten die Zahlung für falsch gebucht.
+    mahngebuehr_verrechnet: Decimal = Decimal("0")
+    kundenguthaben_betrag: Decimal = Decimal("0")
     rechnung: RechnungResponse
