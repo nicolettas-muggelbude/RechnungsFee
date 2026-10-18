@@ -120,6 +120,7 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
     text: 'Digitale Belegverwaltung nach GoBD – unveränderlich, versioniert, durchsuchbar.',
     features: [
       { text: 'Belegupload per Drag & Drop (PDF, JPG, PNG)' },
+      { text: 'Rechnungspostfach (IMAP): PDF- und XML-Anhänge (auch ZUGFeRD/XRechnung) direkt aus dem Mailpostfach in eine Importliste holen – jede Rechnung wird geprüft übernommen, verarbeitete Mails wandern automatisch in einen Unterordner', optional: true },
       { text: 'OCR-Texterkennung (Tesseract) für gescannte Belege & Kassenbons' },
       { text: 'PDF/A-3-Archivierung für GoBD-Langzeitarchivierung' },
       { text: 'Beleg-Vorschau direkt in der App (inline)' },
@@ -158,7 +159,7 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
       { text: 'Alle Daten lokal auf deinem Gerät (SQLite, kein Cloud-Zwang)' },
       { text: 'Automatisches Backup vor jeder Schema-Migration' },
       { text: 'Backup direkt im Setup-Wizard wiederherstellbar – kein Umweg über eine Ersteinrichtung nötig, z. B. nach Festplattendefekt oder Rechnerwechsel' },
-      { text: 'Externes Backup auf NAS, USB oder SMB-Freigabe', optional: true },
+      { text: 'Externes Backup auf NAS, USB oder SMB-Freigabe – mit einstellbarer Anzahl aufbewahrter Backups je Ziel', optional: true },
       { text: 'AES-256-GCM-Verschlüsselung für externe Backups (immer aktiv)' },
       { text: 'GoBD-Trigger schützen finalisierte Buchungen vor Änderung' },
       { text: 'Absender-Snapshot: finalisierte Dokumente bleiben unveränderlich' },
@@ -188,6 +189,8 @@ const bereiche: { icon: string; title: string; text: string; screenshot: string;
     text: 'Professionelle PDFs und direkter E-Mail-Versand ohne Umweg.',
     features: [
       { text: 'PDF-Generierung für alle Dokumenttypen (2 Vorlagen)' },
+      { text: 'Anpassbare Anrede mit Platzhaltern (z. B. „Sehr geehrte Frau Grün,") – global oder individuell pro Kunde' },
+      { text: 'Eigener Zahlungshinweis-Text mit Platzhaltern (Betrag, Fälligkeit, IBAN …)' },
       { text: 'Unterschrift-Bild auf Rechnungen', optional: true },
       { text: 'E-Mail-Versand direkt aus der App (eigener SMTP)', optional: true },
       { text: 'Alternativ: Versand von Rechnungen über Thunderbird, inkl. Anhang – keine SMTP-Zugangsdaten nötig, eigene Signatur/Regeln/Verschlüsselung bleiben erhalten', optional: true },
