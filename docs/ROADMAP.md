@@ -60,6 +60,84 @@ Schlussrechnung. Nicht vorher geplant, kam während der Entwicklung über Issue 
 
 ---
 
+## 📋 Eingangsrechnungen aus dem Mailpostfach (Issue #451)
+
+Vorschlag aus der Community (Gerti): PDF-/XML-Anhänge aus einem eigenen Rechnungspostfach
+automatisch als **Entwurf** einer Eingangsrechnung samt Beleg übernehmen – nie direkt buchen,
+jeder Entwurf wird vom Nutzer geprüft. Gerade seit der E-Rechnungs-Empfangspflicht (2025)
+kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
+(Anhang → bestehende PDF/XML-Analyse → Entwurf + Beleg, SHA-256-Dublettenschutz):
+
+- [x] **Stufe 1 – IMAP direkt** (v0.7.4, `api/postfach.py`; umgesetzt als Importliste statt
+  automatischer Entwürfe – „Übernehmen" startet den unveränderten Einzelimport): Postfach in den Einstellungen (Host/Port/SSL/Benutzer/
+  Passwort/Ordner), Abruf beim Start und per Knopf „Postfach abrufen“; verarbeitete Mails
+  wandern in einen Unterordner „RechnungsFee/verarbeitet“ (sichtbar im Mailprogramm, übersteht
+  Neuinstallationen – kein UID-Tracking nötig). Unabhängig vom Mailprogramm (Gerti: Aerion).
+  Stdlib `imaplib`, Zertifikats-Pinning wie beim SMTP-Versand (Issue #336) wiederverwenden.
+  Nur PDF/XML mit Größenlimit, nur Entwürfe (Postfach ist von außen beschreibbar).
+  Einschränkung: Microsoft-Konten (Outlook/M365) verlangen OAuth2 – zunächst nicht unterstützt.
+- [ ] **Stufe 2 – Thunderbird-Add-on** (MailExtension): „An RechnungsFee senden“ bzw.
+  automatisch für einen Ordner, übergibt Anhänge an das lokale Backend und verschiebt die Mail.
+  Thunderbird übernimmt die Anmeldung (auch OAuth bei Microsoft/Google) – deckt damit die
+  Lücke aus Stufe 1 ab, RechnungsFee speichert keine Mail-Zugangsdaten. Eigenes Projekt,
+  Veröffentlichung über addons.thunderbird.net.
+- Bewusst **nicht**: Outlook-Steuerung per COM (nur klassisches Outlook unter Windows, läuft aus),
+  direkter Zugriff auf Thunderbird-Profildateien (beschädigt den Index bei laufendem Thunderbird).
+
+---
+
+## 📋 Nach v0.7.4 – vorgemerkt
+
+- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn) – bisher ziehen Entwürfe von
+  Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
+  (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
+  Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen
+  Lücken, spät finalisierte Entwürfe brechen die Reihenfolge. Plan: Entwurf ohne Nummer (außer manuell
+  eingetragen), Vergabe in `finalisiere_rechnung()` aus dem passenden Kreis (rechnung_ausgang/-eingang,
+  abschlagsrechnung, gutschrift, rechnung_wiederkehrend falls aktiv bei `vorlage_id`); direkt finalisiert
+  angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
+  Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
+  Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Kleinunternehmer: Dienstleistungen an EU-Unternehmer** (Folge aus Issue #464) – das
+  Rechnungsformular blendet Reverse Charge/ig. Lieferung/Drittland/Ausfuhr bei §19 komplett aus
+  (`kundeEuFaehig` u. a. verlangen `!istKleinunternehmer`). Auch ein Kleinunternehmer erbringt eine
+  B2B-Dienstleistung an EU-Unternehmer aber im Empfängerland (§3a Abs. 2 UStG): Hinweis
+  „Steuerschuldnerschaft des Leistungsempfängers“ auf der Rechnung, USt-IdNr. nötig, Zusammenfassende
+  Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
+  Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
+
+---
+
+## 📋 ELSTER-Export: Umsatzsteuer-Voranmeldung und Zusammenfassende Meldung (Issue #360)
+
+Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
+
+- [x] **Stufe 1 – Datei für den Upload in Mein ELSTER** (keine Registrierung, kein Zertifikat) – umgesetzt von herrschmidt (PR #460), Kennzahlen-Fehler davor behoben (#456 ZM, #457 KZ 43/87, #458 KZ 41, #459 §13b/Kleinunternehmer):
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (nach v0.7.4, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
+  - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung
+  - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum)
+  - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle
+  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr)
+  - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Vorschlag: Beginn eines Meldezeitraums (z. B. 01.01.2027)
+  - nicht betroffen: KZ 43 (Ausfuhr) und KZ 45 (Drittland) – nicht in §18b
+  - UStVA als XML: nur der Nutzdatenteil `Anmeldungssteuern` (Namensraum
+    `http://finkonsens.de/elster/elsteranmeldung/ustva/v20xx`, passendes `version`-Attribut je
+    Jahresversion – häufigste Fehlerursache beim Import), Zeichensatz ISO-8859-15. Reine Ausgabe der
+    bereits berechneten Kennzahlen aus `api/ustva.py` (inkl. ELSTER-Rundung, Issue #428).
+  - Zusammenfassende Meldung als CSV-Meldeliste (Versionstabelle, Satzarten, Länderkennzeichen) aus `api/zm.py`.
+  - Steuernummer ins 13-stellige bundeseinheitliche ELSTER-Format umrechnen (Regeln je Bundesland,
+    `unternehmen.bundesland` vorhanden) – größte Fehlerquelle, gegen offizielle Beispiele prüfen.
+  - Abgleich von Struktur und Beispielen mit dem ERiC-Dokumentationspaket (Entwicklerzugang vorhanden);
+    herrschmidt hat Unterstützung bei der XML-Struktur angeboten.
+  - Absenden bleibt beim Nutzer in Mein ELSTER (eigener Zugang, Prüfung vor dem Senden).
+- [ ] **Stufe 2 – Direktversand per ERiC** (zurückgestellt): Hersteller-Registrierung, eigene
+  Hersteller-ID, Lizenzvertrag, ERiC-Bibliotheken je Plattform bündeln, Zertifikat/PIN je Nutzer,
+  jährliche Pflege (ERiC-Mindestversionen, neue Jahresversionen). Mehrwert: auch Jahreserklärung,
+  Dauerfristverlängerung/Sondervorauszahlung – die nimmt Mein ELSTER nicht per Datei an.
+
+---
+
 ## 📦 Weitere Linux-Paketformate (Debian, Snap) – vor v1.0.0 testen
 
 **Anlass:** Über AppImage/NSIS/DMG hinaus wurden Debian und Snap als mögliche weitere
@@ -83,69 +161,57 @@ Paketformate geprüft – beide haben grundlegend unterschiedliche Hürden.
 
 ---
 
-## ♿ Barrierefreiheit (kein fester Zeitplan, aber Pflicht vor 1.0)
+## ♿ v0.8.0 – Barrierefreiheit & Tastatur (Pflicht vor 1.0)
 
-Die App ist aktuell **nicht barrierefrei**. Dark/Light Mode und Keyboard-Navigation (Combobox) sind vorhanden, aber Screenreader-Unterstützung fehlt weitgehend.
+Die App ist bisher **nicht barrierefrei**: Screenreader-Unterstützung fehlt weitgehend, vieles ist
+nur per Maus erreichbar. v0.8.0 wird deshalb ein eigenes Release für Barrierefreiheit und
+Tastatursteuerung. Bugfixes laufen parallel als 0.7.x weiter; größere neue Funktionen werden bis
+0.8.0 zurückgestellt, damit nicht laufend neue Oberfläche ohne diese Standards entsteht.
+Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/nicolettas-muggelbude/RechnungsFee/milestone/8) + Sammel-Issue #455.
 
-### Priorität 1 – Focus-Management in Modalen
-- [ ] `role="dialog"` + `aria-modal="true"` + `aria-labelledby` auf alle Modal-Overlays
-- [ ] Focus-Trap: Tab bleibt innerhalb des offenen Modals
-- [ ] Initial Focus beim Öffnen (erster Input oder Schließen-Button)
+**Ziel:** WCAG 2.1 AA für die Kernabläufe; restliche Bereiche schrittweise in 0.8.x.
 
-### Priorität 2 – Formulare
-- [ ] `htmlFor` + `id` in allen Formular-Labels verknüpfen (viele fehlen aktuell)
-- [ ] `aria-required="true"` für Pflichtfelder (visuelles `*` reicht nicht für Screenreader)
-- [ ] `aria-describedby` für Fehlermeldungen an den jeweiligen Input koppeln
+### 1. Fundament
+- [ ] Alle Dialoge auf die gemeinsame Modal-Basis (`components/Modal.tsx`, PR #452: `role="dialog"`,
+  `aria-modal`, `aria-labelledby`, Startfokus, Focus-Trap, Esc, Fokus zurück) – ca. 21 Dialoge
+- [ ] Esc in offenen Auswahllisten (Land, Stammdaten, Datum) schließt nur die Liste, nicht den Dialog
+- [ ] `aria-live="polite"` für Statusmeldungen (Gespeichert, Fehler, Import-Ergebnisse)
+- [ ] Landmarken in `AppLayout.tsx`: `<main>`, `<nav>`, `<header>`
+- [ ] Dekorative Icons/Emojis mit `aria-hidden="true"`, Icon-Buttons mit `aria-label`
 
-### Priorität 3 – Semantisches Layout
-- [ ] `<main>`, `<nav>`, `<header>` in `AppLayout.tsx` ergänzen
-- [ ] Dekorative SVG-Icons mit `aria-hidden="true"` versehen
-- [ ] Tabellen (`<table>`) mit `<thead>` / `<tbody>` / `scope`-Attributen
+### 2. Formulare
+- [ ] `htmlFor` + `id` in allen Formular-Labels
+- [ ] Pflichtfelder mit `aria-required`, Fehlermeldungen per `aria-describedby` am Feld
+- [ ] Comboboxen (Land, Stammdaten, Artikel, Kategorie) mit `role="combobox"`, `aria-expanded`,
+  `aria-activedescendant`; Pfeiltasten + Enter, kein Mausklick nötig
+- [ ] Datumsfelder per Tastatur bedienbar
+- [ ] Tabellen mit `<thead>`/`<tbody>`/`scope`
 
-### Priorität 4 – ARIA-Architektur
-- [ ] `aria-label` / `aria-labelledby` für Icon-only-Buttons (Löschen, Bearbeiten etc.)
-- [ ] `aria-expanded` für Akkordeons und aufklappbare Bereiche
-- [ ] `aria-live="polite"` für dynamische Statusmeldungen (Speichern, Fehler)
+### 3. Kernabläufe komplett per Tastatur
+- [ ] Navigation: Seitenleiste per Tab, aktiver Punkt per Enter
+- [ ] Listen (Rechnungen, Kunden …) per Pfeiltasten, Enter öffnet das Detail-Panel
+- [ ] Rechnung schreiben und finalisieren (inkl. Positionszeilen: Tab durch alle Spalten)
+- [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
+- [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
 
-### Ziel: WCAG 2.1 AA
+### 4. Prüfwerkzeuge & Abnahme
+- [ ] `eslint-plugin-jsx-a11y` im Lint
+- [ ] axe-Prüfung in den Vitest-Tests der umgestellten Komponenten
+- [ ] Kontrast-Check für Hell- und Dunkelmodus
+- [ ] Manueller Durchlauf der Kernabläufe mit NVDA (Windows) und Orca (Linux), VoiceOver (macOS)
+  wenn möglich – Linux (WebKitGTK) unterstützt Screenreader schwächer, dort nur Bestätigtes zusagen
 
----
-
-## ⌨️ Ziel: Vollständige Tastatursteuerung (kein fester Zeitplan)
-
-**Ziel:** RechnungsFee soll komplett ohne Maus bedienbar sein – von der Navigation bis zum Finalisieren einer Rechnung.
-
-### Globale Kürzel
+### Bereits vorhandene Tastaturkürzel
 
 | Kürzel | Aktion | Status |
 |--------|--------|--------|
 | Strg + F | Suchfeld auf der aktuellen Seite fokussieren | ✅ v0.3.33 |
 | Strg + Shift + E | Direkt zu Eingangsrechnungen | ✅ v0.3.26 |
-| Strg + N | Neue Rechnung / Neues Dokument anlegen (kontextabhängig) | [ ] |
-| Strg + S | Speichern (im aktiven Formular) | [ ] |
-| Strg + Enter | Finalisieren (Entwurf → Rechnung) | [ ] |
-| Esc | Dialog / Detail-Panel schließen | [ ] |
+| + / E / A | Journal: neue Buchung, Einnahme/Ausgabe wechseln | ✅ |
 
-### Navigation & Listen
-
-- [ ] Sidebar vollständig per Tab erreichbar; aktiver Menüpunkt per Enter öffnen
-- [ ] Listeneinträge (Rechnungen, Kunden usw.) per Pfeiltasten durchblättern; Enter öffnet Detail-Panel
-- [ ] Detail-Panel: Tab-Navigation durch alle Aktions-Buttons (Bearbeiten, Drucken, Stornieren …)
-- [ ] Tabellen-Header per Tab fokussierbar, Enter sortiert die Spalte
-
-### Formulare
-
-- [ ] Tab / Shift+Tab springt durch alle Felder in logischer Reihenfolge
-- [ ] Positionszeilen: Tab springt durch alle Spalten, Enter fügt neue Zeile hinzu
-- [ ] Datums-Felder: Pfeiltasten erhöhen/verringern Tag/Monat/Jahr
-- [ ] Dropdowns (USt-Satz, Kategorie, Zahlungsart): Pfeiltasten + Enter, kein Mausklick nötig
-- [ ] Autocomplete (Artikel, Kunde): Pfeiltasten wählen Vorschlag, Enter übernimmt
-
-### Modals & Dialoge
-
-- [ ] Focus-Trap: Tab bleibt innerhalb des offenen Dialogs
-- [ ] Esc schließt alle Dialoge (Mail, Storno, Finalisieren, …)
-- [ ] Bestätigungs-Buttons (Ja/Nein) per Enter / Leertaste auslösbar
+### Später (0.8.x, kein Muss für 0.8.0)
+- Selten genutzte Bereiche (Anlage EKS, Inventur, DATEV-Details …) schrittweise nachziehen
+- Komfort-Kürzel: Strg + N (neues Dokument), Strg + S (speichern), Strg + Enter (finalisieren)
 
 ---
 
@@ -194,6 +260,10 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 - **Thunderbird-Versand auf weitere Dokumenttypen ausweiten** – bisher nur für Rechnungen umgesetzt (Issue #147); Angebote, Proforma, Aufträge, Mahnungen und Belege laufen weiterhin ausschließlich über SMTP/mailto. Gleiches Muster (`sendeUeberThunderbird()` in `utils/thunderbirdVersand.ts`), nur die jeweilige `handleMail()`-Stelle ergänzen.
 
+- **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern). Nicht trivial, daher zurückgestellt.
+
+- **§13b-/Reverse-Charge-Kennzeichen für eigene Kategorien** (Issue #459) – die Sonderfall-Behandlung (§13b Abs. 1/2, ig. Erwerb, Einfuhrumsatzsteuer) hängt an `kategorien.ust_sonderfall`, das bisher nur die mitgelieferten Kategorien tragen; selbst angelegte Kategorien (z. B. „Plattformgebühren Airbnb“) werden nur über das SKR-Konto (3123/5923 usw.) erkannt. Auswahlfeld in der Kategorienverwaltung (Schema/API/Formular), Konto-Heuristik bleibt Fallback.
+
 - **Erweiterbare Kontenpläne** – Built-in-Pakete (SKR03 vollständig) und CSV-Import eigener Kontenpläne
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
@@ -221,3 +291,28 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Sammelposten / Sammelabschreibung (§6 Abs. 2a EStG)** – Wahlrecht für bewegliche Wirtschaftsgüter zwischen 250 € und 1.000 € netto: Pool pro Wirtschaftsjahr, pauschale Auflösung über 5 Jahre à 20 % (Anlage EÜR Zeile 37, Hilfsblatt Zeilen 63–81). Braucht eigene mehrjährige Pool-Verwaltung (ähnlich Anlagenverzeichnis, aber pro Jahrgang statt pro Einzelgut) – deutlich aufwändiger als die übrige EÜR/AVEÜR-Logik. Zurückgestellt bis explizit nachgefragt (Issue #265, Diskussion 2026-07).
 
 - **MCP-Server** (Issue #429) – eigener Model-Context-Protocol-Server, der die Backend-API (Rechnung erstellen, Zahlung erfassen, Journal abfragen etc.) als Tools für KI-Assistenten (z. B. Claude) exponiert. Vorschlag bisher sehr knapp, kein konkreter Anwendungsfall genannt – Rückfrage im Issue gestellt, Umfang/Priorität noch unklar.
+
+- **Bestellwesen (Einkauf)** – Spiegelbild zu Angebot/Auftrag auf der Lieferantenseite, als
+  Schalter unter Funktionen: Bestellung an Lieferanten als eigener Dokumenttyp (Nummernkreis z. B.
+  `BE-YY####`, PDF, Mailversand), Status offen → teilweise geliefert → geliefert; **Wareneingang**
+  erhöht den Lagerbestand (bisher wird er nur beim Verkauf fortgeschrieben, Lagerführung #173);
+  Eingangsrechnung aus der Bestellung vorbefüllen inkl. Abgleich Bestellung ↔ Rechnung;
+  Bestellvorschlag aus Mindestbestand (Dashboard-Lagerwarnung → direkt Bestellung).
+  Offen: nur Händler mit Lager oder auch Materialbestellungen von Dienstleistern für Aufträge?
+
+- **Seriennummernverwaltung** – baut auf dem Bestellwesen (Wareneingang) und der Lagerführung auf:
+  Artikel „seriennummernpflichtig“; Erfassen beim Wareneingang oder manuell, Bestand = freie
+  Seriennummern; beim Verkauf je Position so viele Seriennummern wie Menge zuordnen, auf PDF und
+  optional in der E-Rechnung (ZUGFeRD-Produktinstanz); Rückverfolgung per Suche (Einkauf, an
+  welchen Kunden, mit welcher Rechnung – Gewährleistung, Garantie, Rückruf); Storno/Gutschrift
+  gibt die Seriennummer wieder frei; passt zu §25a (Gebrauchtwarenhandel).
+  Offen: nur Rückverfolgung oder auch Garantiefristen mit Ablauf und Erinnerung?
+
+- **Öffentliche REST-API** – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
+  aber unversioniert, ohne Anmeldung und auf zufälligem Port. Für Dritte nötig: stabile, versionierte
+  Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von der internen), API-Tokens mit Rechten
+  (lesen / schreiben), in den Einstellungen erzeug- und widerrufbar; feste Adresse, standardmäßig
+  nur lokal, optional im Netzwerk; Schreibzugriffe über dieselben Wege wie die Oberfläche (GoBD,
+  Nummernkreise, Signaturen). Einschränkung Desktop-App: nur erreichbar, solange RechnungsFee läuft.
+  **Grundlage für MCP-Server (#429) und hellocash-Anbindung (#13)**, statt dass beide eigene Wege gehen.
+  Offen: Hauptzweck (Shop legt Rechnungen an, eigene Skripte/Auswertungen, Anbindung anderer Programme)?

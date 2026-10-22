@@ -74,20 +74,34 @@ class RechnungPDF(RechnungPDFBase):
         desc_idx = 1 if hat_artikelcode else 0
         other_x  = L_MARGIN + sum(col_w[:desc_idx + 1])
 
-        self.set_font("DejaVu", "B", 8)
-        self.set_fill_color(*GRAU_HELL)
-        self.set_draw_color(*GRAU_RAND)
-        self.set_text_color(*TEXT_GRAU)
-        for i, h in enumerate(headers):
-            self.cell(col_w[i], 6.5, h, border="B", fill=True, align=aligns[i])
-        self.ln()
+        KOPF_H = 6.5
+
+        def _tabellenkopf():
+            self.set_font("DejaVu", "B", 8)
+            self.set_fill_color(*GRAU_HELL)
+            self.set_draw_color(*GRAU_RAND)
+            self.set_text_color(*TEXT_GRAU)
+            self.set_x(L_MARGIN)
+            for i, h in enumerate(headers):
+                self.cell(col_w[i], KOPF_H, h, border="B", fill=True, align=aligns[i])
+            self.ln()
+            self.set_font("DejaVu", "", 8.5)
+            self.set_text_color(*TEXT_DUNKEL)
+
+        _tabellenkopf()
 
         ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
-        self.set_font("DejaVu", "", 8.5)
-        self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
+            # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
+            _beschr = [(col_w[desc_idx], pos.beschreibung)]
+            if hat_artikelcode and getattr(pos, "artikel", None):
+                _beschr.append((col_w[0], pos.artikel.artikelcode))
+            _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
+            _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
+            if self._umbruch_vor_position(_hoehe, KOPF_H):
+                _tabellenkopf()
             menge     = float(str(pos.menge))
             menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
             if ist_storno:
@@ -300,7 +314,7 @@ class RechnungPDF(RechnungPDFBase):
                             y_start = self.get_y()
                             qr_x_sk = L_MARGIN + text_w + 4
                             qr_x_vo = qr_x_sk + qr_sz + qr_gap
-                            self.multi_cell(text_w, 5, hinweis)
+                            self.multi_cell(text_w, 5, hinweis, align="L")
                             self.image(BytesIO(qr_sk),   x=qr_x_sk, y=y_start, w=qr_sz, h=qr_sz)
                             self.image(BytesIO(qr_voll), x=qr_x_vo, y=y_start, w=qr_sz, h=qr_sz)
                             lbl_y = y_start + qr_sz + 1
@@ -328,7 +342,7 @@ class RechnungPDF(RechnungPDFBase):
                             text_w  = NUTZ_W - qr_size - gap
                             y_start = self.get_y()
                             qr_x    = L_MARGIN + text_w + gap
-                            self.multi_cell(text_w, 5, hinweis)
+                            self.multi_cell(text_w, 5, hinweis, align="L")
                             self.image(BytesIO(qr_voll), x=qr_x, y=y_start, w=qr_size, h=qr_size)
                             self.set_font("DejaVu", "", 6)
                             self.set_text_color(*TEXT_GRAU)
@@ -338,7 +352,7 @@ class RechnungPDF(RechnungPDFBase):
                             if self.get_y() < y_start + qr_size + 5:
                                 self.set_y(y_start + qr_size + 5)
                     else:
-                        self.multi_cell(0, 5, hinweis)
+                        self.multi_cell(0, 5, hinweis, align="L")
 
         self.ln(2)
 

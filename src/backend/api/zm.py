@@ -4,9 +4,11 @@ Zusammenfassende Meldung (ZM) – §18a UStG
 Pflicht für alle USt-pflichtigen Unternehmer mit innergemeinschaftlichen
 Lieferungen oder Dienstleistungen. Kleinunternehmer §19 sind befreit.
 
-Kennzeichen:
-  L = Innergemeinschaftliche Lieferung  (konto_skr03=8125)
-  D = Innergemeinschaftliche Dienstleistung §13b Abs.1 (ust_sonderfall=13b_abs1)
+Kennzeichen (wie ELSTER):
+  L = Innergemeinschaftliche Lieferung  (konto_skr03=8125 / konto_skr04=3125)
+  S = Sonstige Leistung §3a Abs. 2 UStG an EU-Unternehmer (Ausgangsrechnung mit
+      ist_reverse_charge, Kunde schuldet die Steuer) – gleiche Quelle wie UStVA KZ 21
+  (D = Dreiecksgeschäft – nicht unterstützt)
 
 Rhythmus / Frist:
   < 50.000 € ig. Lieferungen pro Quartal → quartalsweise, bis 25. des Folgemonats
@@ -17,13 +19,17 @@ import calendar
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
 from database.connection import get_db
 from database.models import Journaleintrag, Rechnung, Kunde, Unternehmen
+from utils.elster import ElsterExportFehler, build_zm_csv
 
 router = APIRouter(prefix="/api/zm", tags=["ZM"])
 
@@ -77,46 +83,52 @@ def _zeitraum_label(zeitraum: str) -> str:
     return f"{MONATE[int(m)]} {j}"
 
 
-def _kennzeichen(e: Journaleintrag) -> str:
-    if getattr(e, "ust_sonderfall", None) == "13b_abs1":
-        return "D"
-    return "L"
-
-
 @dataclass
 class _IgBuchung:
     netto_betrag: Decimal   # vorzeichenbehaftet - Storno-Gegenbuchungen zaehlen negativ
-    kennzeichen: str        # "L" oder "D"
+    kennzeichen: str        # "L" oder "S"
     rechnung_id: int | None
 
 
+def _ig_lieferung_filter(e):
+    return (e.konto_skr03.in_(["8125"])) | (e.konto_skr04.in_(["3125"]))
+
+
+def _eu_dl_rechnungen():
+    """Ausgangsrechnungen mit EU-B2B-Dienstleistung (§3a Abs. 2 UStG) - wie UStVA KZ 21."""
+    return select(Rechnung.id).where(Rechnung.typ == "ausgang", Rechnung.ist_reverse_charge == True)  # noqa: E712
+
+
+def _ig_lieferung_rechnungen():
+    """Ausgangsrechnungen mit ig. Lieferung (§4 Nr. 1b UStG) - wie UStVA KZ 41 (Issue #458)."""
+    return select(Rechnung.id).where(Rechnung.typ == "ausgang", Rechnung.ist_eu_lieferung == True)  # noqa: E712
+
+
 def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
-    """Alle ZM-relevanten Buchungen im Zeitraum: eigene Einnahme-Buchungen aus ig. Lieferung
-    (§4 Nr. 1b, Konto 8125/3125) oder Reverse-Charge-Dienstleistung (§13b Abs.1) UND deren
-    Storno-Gegenbuchungen.
+    """Alle ZM-relevanten Buchungen im Zeitraum.
 
-    Eine Storno-Gegenbuchung hat art="Ausgabe" (Original->Storno kehrt die Buchungsrichtung um,
-    siehe rechnungen.storno_rechnung()) und wird deshalb NICHT vom obigen Einnahme-Filter
-    erfasst - ohne Sonderbehandlung würde eine stornierte ig-Rechnung weiterhin mit vollem
-    Betrag in der ZM auftauchen. Sie wird stattdessen über gruppe_id auf ihre Original-Buchung
-    zurückverfolgt und mit negativem Betrag gezählt.
+    L - ig. Lieferung (§4 Nr. 1b, Konto 8125/3125): Einnahme-Buchungen plus deren Storno-
+    Gegenbuchungen. Eine Storno-Gegenbuchung hat art="Ausgabe" (Original->Storno kehrt die
+    Buchungsrichtung um, siehe rechnungen.storno_rechnung()) und wird über gruppe_id auf ihre
+    Original-Buchung zurückverfolgt und negativ gezählt.
 
-    Eingangsrechnungs-seitige §13b/ig.Erwerb-Buchungen (wir als Leistungsempfänger, z.B. EU-
-    Dienstleistung eingekauft) bleiben aussen vor: deren Original-Buchung ist von Anfang an
-    art="Ausgabe" und hat daher keine per gruppe_id verknüpfte Einnahme-Wurzel."""
-    ig_filter = (
-        (Journaleintrag.konto_skr03.in_(["8125"])) |
-        (Journaleintrag.konto_skr04.in_(["3125"])) |
-        (Journaleintrag.ust_sonderfall == "13b_abs1")
-    )
+    S - sonstige Leistung an EU-Unternehmer (Issue #456): Erkennung wie UStVA KZ 21 über die
+    rechnung_id einer Ausgangsrechnung mit ist_reverse_charge, nicht über ust_sonderfall - seit
+    #372 bekommen diese Zahlungen keinen Sonderfall mehr. Einnahme zählt positiv, Ausgabe
+    (Storno, Gutschrift-Zahlung) negativ; Skonto-Gegeneinträge bleiben außen vor, weil der
+    Zahlungseingang den reduzierten Betrag bereits enthält (identisch zu ustva._berechne_kz()).
+
+    Eingangsseitige §13b-/ig.-Erwerb-Buchungen (wir als Leistungsempfänger) gehören nie in die
+    ZM - auch nicht deren Storno-Gegenbuchung (art="Einnahme", ust_sonderfall="13b_abs1"), die
+    ein früherer Sonderfall-Filter fälschlich als Dienstleistung gemeldet hatte."""
     ergebnis: list[_IgBuchung] = []
 
     einnahmen = db.query(Journaleintrag).filter(
         Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
-        Journaleintrag.art == "Einnahme", ig_filter,
+        Journaleintrag.art == "Einnahme", _ig_lieferung_filter(Journaleintrag),
     ).all()
     for e in einnahmen:
-        ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, _kennzeichen(e), e.rechnung_id))
+        ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, "L", e.rechnung_id))
 
     Original = aliased(Journaleintrag)
     stornos = (
@@ -126,16 +138,29 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
             Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
             Journaleintrag.art == "Ausgabe",
             Original.art == "Einnahme",
-            (
-                (Original.konto_skr03.in_(["8125"])) |
-                (Original.konto_skr04.in_(["3125"])) |
-                (Original.ust_sonderfall == "13b_abs1")
-            ),
+            _ig_lieferung_filter(Original),
         )
         .all()
     )
     for storno_e, orig_e in stornos:
-        ergebnis.append(_IgBuchung(-(storno_e.netto_betrag or ZERO), _kennzeichen(orig_e), orig_e.rechnung_id))
+        ergebnis.append(_IgBuchung(-(storno_e.netto_betrag or ZERO), "L", orig_e.rechnung_id))
+
+    # Über die Rechnung erkannt: sonstige Leistungen (S) und ig. Lieferungen (L) aus Rechnungen,
+    # deren Zahlungsbuchung auf einer anderen Kategorie als 8125/3125 liegt (Issue #458)
+    lieferung_ids = {r[0] for r in db.execute(_ig_lieferung_rechnungen()).all()}
+    ueber_rechnung = db.query(Journaleintrag).filter(
+        Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
+        Journaleintrag.rechnung_id.in_(_eu_dl_rechnungen()) | Journaleintrag.rechnung_id.in_(_ig_lieferung_rechnungen()),
+    ).all()
+    for e in ueber_rechnung:
+        # schon oben als L über das Konto gezählt (in Python statt per SQL-NOT: Konten sind hier oft NULL)
+        if e.konto_skr03 == "8125" or e.konto_skr04 == "3125":
+            continue
+        kz = "L" if e.rechnung_id in lieferung_ids else "S"
+        if e.art == "Einnahme":
+            ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, kz, e.rechnung_id))
+        elif e.art == "Ausgabe" and e.zahlungsart != "Skonto":
+            ergebnis.append(_IgBuchung(-(e.netto_betrag or ZERO), kz, e.rechnung_id))
 
     return ergebnis
 
@@ -147,7 +172,7 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
 class ZMPosition(BaseModel):
     ust_idnr: str
     land: str
-    kennzeichen: str          # L oder D
+    kennzeichen: str          # L oder S
     betrag: Decimal
 
 class ZMErgebnis(BaseModel):
@@ -177,11 +202,9 @@ def _hat_ig_eintraege_gesamt(db: Session) -> bool:
     """True wenn überhaupt je ig-Buchungen existieren (für Sidebar-Sichtbarkeit)."""
     return db.query(Journaleintrag).filter(
         Journaleintrag.art == "Einnahme",
-        (
-            (Journaleintrag.konto_skr03.in_(["8125"])) |
-            (Journaleintrag.konto_skr04.in_(["3125"])) |
-            (Journaleintrag.ust_sonderfall == "13b_abs1")
-        )
+        _ig_lieferung_filter(Journaleintrag)
+        | Journaleintrag.rechnung_id.in_(_eu_dl_rechnungen())
+        | Journaleintrag.rechnung_id.in_(_ig_lieferung_rechnungen()),
     ).limit(1).count() > 0
 
 
@@ -269,4 +292,22 @@ def zm_berechnen(
         positionen=positionen,
         gesamt=gesamt,
         ueber_50k=gesamt >= Decimal("50000"),
+    )
+
+
+@router.get("/csv")
+def zm_csv(
+    zeitraum: str = Query(..., description="YYYY-QN oder YYYY-MM"),
+    db: Session = Depends(get_db),
+):
+    """ZM als CSV-Meldeliste für den Import in Mein ELSTER. Issue #360."""
+    ergebnis = zm_berechnen(zeitraum=zeitraum, db=db)
+    try:
+        csv_bytes = build_zm_csv(ergebnis.positionen)
+    except ElsterExportFehler as exc:
+        raise HTTPException(422, str(exc))
+    return StreamingResponse(
+        BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="ZM_{zeitraum}_ELSTER.csv"'},
     )

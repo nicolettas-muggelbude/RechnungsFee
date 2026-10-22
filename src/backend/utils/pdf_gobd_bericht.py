@@ -259,7 +259,7 @@ class GobdBerichtPDF(FPDF):
             "und Aufbewahrung von Buecher, Aufzeichnungen, Unterlagen und Daten (GoBD) "
             "erstellt. Die enthaltenen Journaldaten sind unveraenderbar (immutable) "
             "gespeichert und durch SHA-256-Signaturen gesichert.",
-            border=1, fill=True)
+            border=1, fill=True, align="L")
         self.set_text_color(0, 0, 0)
 
     # --- Seite 2: Kennzahlen -----------------------------------------------
@@ -377,7 +377,7 @@ class GobdBerichtPDF(FPDF):
         self.set_x(10)
         self.set_font("DejaVu", "B", 8.5)
         self.set_text_color(*text_farbe)
-        self.multi_cell(0, 5.5, ergebnis_text, border=1, fill=True)
+        self.multi_cell(0, 5.5, ergebnis_text, border=1, fill=True, align="L")
         self.set_text_color(0, 0, 0)
         self.ln(4)
 
@@ -396,7 +396,7 @@ class GobdBerichtPDF(FPDF):
             "Detailergebnisse aller geprueften Datensaetze sind in der Datei "
             "'integritaetspruefung.csv' enthalten."
         )
-        self.multi_cell(0, 5.5, text)
+        self.multi_cell(0, 5.5, text, align="L")
         self.set_text_color(0, 0, 0)
         self.ln(4)
 
@@ -411,7 +411,7 @@ class GobdBerichtPDF(FPDF):
             "IDs. Da kein Datensatz jemals ueber die Anwendung geloescht wird, weist eine Luecke "
             "in dieser Nummernfolge nach, dass ein Datensatz ausserhalb der Anwendung entfernt "
             "wurde."
-        ))
+        ), align="L")
         self.set_text_color(0, 0, 0)
         self.ln(2)
 
@@ -437,7 +437,7 @@ class GobdBerichtPDF(FPDF):
         self.set_x(10)
         self.set_font("DejaVu", "B", 8.5)
         self.set_text_color(*text_farbe)
-        self.multi_cell(0, 5.5, luecken_text, border=1, fill=True)
+        self.multi_cell(0, 5.5, luecken_text, border=1, fill=True, align="L")
         self.set_text_color(0, 0, 0)
 
     # --- Seite 4: Dateiverzeichnis -----------------------------------------
@@ -506,7 +506,7 @@ class GobdBerichtPDF(FPDF):
             "Hinweis zur Betriebspruefung: Alle in diesem ZIP-Archiv enthaltenen Daten "
             "wurden unveraendert aus der RechnungsFee-Datenbank exportiert. "
             "Die Signaturdatei 'integritaetspruefung.csv' ermoeglicht die maschinelle "
-            "Pruefung der Datenauthentizitaet gemaess GoBD Rz. 108 ff.")
+            "Pruefung der Datenauthentizitaet gemaess GoBD Rz. 108 ff.", align="L")
         self.set_text_color(0, 0, 0)
 
 

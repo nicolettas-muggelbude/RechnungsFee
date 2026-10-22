@@ -11,6 +11,7 @@ const KZ_META: [string, string, string, boolean][] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false],
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b)', false],
+  ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen)', false],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false],
@@ -26,6 +27,11 @@ const KZ_META: [string, string, string, boolean][] = [
   ['', '61', 'Vorsteuer ig. Erwerb (§15 Abs. 1 Satz 1 Nr. 3 UStG)', false],
   ['', '67', 'Vorsteuer aus §13b-Leistungen (§15 Abs. 1 Satz 1 Nr. 4 UStG)', false],
 ]
+
+// Issue #459: Kennzahlen, für die auch ein Kleinunternehmer selbst Steuer schuldet (wie _KU_KZ im Backend)
+const KU_SONDERFALL_KZ: [string, string, boolean][] = KZ_META
+  .filter(([, nr]) => ['89', '93', '90', '95', '98', '46', '47', '84', '85'].includes(nr))
+  .map(([, nr, label, istSteuer]) => [nr, label, istSteuer])
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -161,6 +167,22 @@ export function JahresUStPage() {
                 Trage den Gesamtumsatz ({euroFmt(data.kz_48)}) in ELSTER ein (USt 2A, Zeile 23 / KZ 48) –
                 das Finanzamt prüft damit, ob du die §19-Grenze eingehalten hast.
               </div>
+              {/* Issue #459: Steuer als Leistungsempfänger schuldet auch der Kleinunternehmer */}
+              {KU_SONDERFALL_KZ.some(([nr]) => parseFloat(String((data as any)[`kz_${nr}`] ?? '0')) !== 0) && (
+                <>
+                  <Abschnitt titel="Steuer als Leistungsempfänger (§13b UStG / ig. Erwerb)">
+                    {KU_SONDERFALL_KZ.filter(([nr]) => parseFloat(String((data as any)[`kz_${nr}`] ?? '0')) !== 0)
+                      .map(([nr, label, istSteuer]) => (
+                        <KZZeile key={nr} kz={nr} label={label}
+                          wert={String((data as any)[`kz_${nr}`] ?? '0')} istSteuer={istSteuer} />
+                      ))}
+                  </Abschnitt>
+                  <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                    Diese Umsatzsteuer schuldest du auch als Kleinunternehmer – ohne Vorsteuerabzug.
+                    Zu zahlen sind {euroFmt(data.zahllast)}.
+                  </div>
+                </>
+              )}
             </div>
           )}
 

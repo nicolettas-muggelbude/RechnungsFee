@@ -92,6 +92,9 @@ class RechnungspositionResponse(BaseModel):
 
 class RechnungCreate(BaseModel):
     typ: str  # eingang|ausgang
+    # Ausgangsrechnung wurde außerhalb von RechnungsFee erstellt (Datenübernahme) - gleiche Sperre
+    # wie beim CSV-Import: kein neues PDF/ZUGFeRD, kein Versand, keine Mahnung (import_quelle='extern')
+    extern_erstellt: bool = False
     rechnungsnummer: Optional[str] = None
     datum: date
     leistung_von: Optional[date] = None
@@ -251,6 +254,9 @@ class RechnungVorschauRequest(BaseModel):
     # und schicken typ nicht mit - nur RechnungenPage.tsx setzt es explizit fuer Eingang/Ausgang.
     typ: str = "ausgang"
     positionen: List[RechnungspositionCreate]
+    # Issue #459: Kategorie der Rechnung (Fallback für Positionen ohne eigene) - erkennt
+    # Reverse-Charge-Eingangsrechnungen, deren USt nicht zum Rechnungsbetrag zählt
+    kategorie_id: Optional[int] = None
     eingabemodus: str = "netto"
     rabatt_prozent: Decimal = Decimal("0")
     rabatt_betrag: Optional[Decimal] = None
@@ -344,6 +350,7 @@ class RechnungResponse(BaseModel):
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
     externe_belegnr: Optional[str]
+    import_quelle: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
     leistung_von: Optional[date]
     leistung_bis: Optional[date]

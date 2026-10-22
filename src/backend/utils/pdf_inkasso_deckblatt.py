@@ -181,7 +181,7 @@ def erstelle_inkasso_deckblatt_pdf(
         pdf.set_text_color(110, 110, 110)
         pdf.multi_cell(0, 4, "Hinweis: Mahngebühren und Verzugszinsen sind bereits geleisteten Zahlungen "
                               "gegenzurechnen - die tagesaktuelle Zusammensetzung der Gesamtforderung je "
-                              "Mahnung ist dem jeweiligen Mahnungs-PDF zu entnehmen.")
+                              "Mahnung ist dem jeweiligen Mahnungs-PDF zu entnehmen.", align="L")
         pdf.set_text_color(0, 0, 0)
     else:
         pdf.set_font("DejaVu", "", 9)

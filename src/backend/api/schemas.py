@@ -92,6 +92,16 @@ class UnternehmenBase(BaseModel):
     smtp_zertifikat_ignorieren: bool = False
     smtp_zertifikat_fingerprint: Optional[str] = None
     thunderbird_aktiv: bool = False
+    postfach_aktiv: bool = False
+    imap_host: Optional[str] = None
+    imap_port: int = 993
+    imap_ssl: bool = True
+    imap_user: Optional[str] = None
+    imap_passwort: Optional[str] = None
+    imap_ordner: str = "INBOX"
+    imap_beim_start: bool = False
+    imap_zertifikat_ignorieren: bool = False
+    imap_zertifikat_fingerprint: Optional[str] = None
     zugferd_anhaenge_aktiv: bool = False
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False

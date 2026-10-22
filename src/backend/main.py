@@ -32,9 +32,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 169
+SCHEMA_VERSION = 174
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -78,6 +78,7 @@ app.include_router(euer.router)
 app.include_router(system.router)
 app.include_router(dokumentenpakete.router)
 app.include_router(mail.router)
+app.include_router(postfach.router)
 app.include_router(wiederkehrend.router)
 app.include_router(buchungsvorlagen.router)
 app.include_router(anlageverzeichnis.router)
@@ -96,6 +97,7 @@ app.include_router(forderungen.router)
 app.include_router(cockpit.router)
 app.include_router(datenmigration.router)
 app.include_router(mahnwesen.router)
+app.include_router(rechnungen_import.router)
 
 
 @app.post("/api/shutdown")
@@ -3764,6 +3766,126 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 169"))
             conn.commit()
             print("[Migration] Schema auf Version 169 (Issue #442: unternehmen.backup_extern_anzahl – Rotation externer Backups)")
+
+        if version < 170:
+            # Issue #451: Rechnungspostfach per IMAP. Tabelle postfach_eingang legt create_all() an.
+            cols170 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for col, typ in (
+                ("postfach_aktiv",              "BOOLEAN NOT NULL DEFAULT 0"),
+                ("imap_host",                   "VARCHAR(200)"),
+                ("imap_port",                   "INTEGER NOT NULL DEFAULT 993"),
+                ("imap_ssl",                    "BOOLEAN NOT NULL DEFAULT 1"),
+                ("imap_user",                   "VARCHAR(200)"),
+                ("imap_passwort",               "TEXT"),
+                ("imap_ordner",                 "VARCHAR(200) NOT NULL DEFAULT 'INBOX'"),
+                ("imap_beim_start",             "BOOLEAN NOT NULL DEFAULT 0"),
+                ("imap_zertifikat_ignorieren",  "BOOLEAN NOT NULL DEFAULT 0"),
+                ("imap_zertifikat_fingerprint", "VARCHAR(64)"),
+            ):
+                if col not in cols170:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {col} {typ}"))
+            conn.execute(text("PRAGMA user_version = 170"))
+            conn.commit()
+            print("[Migration] Schema auf Version 170 (Issue #451: Rechnungspostfach per IMAP – unternehmen.postfach_aktiv/imap_*)")
+
+        if version < 171:
+            # Issue #451: Mail wird erst beim Übernehmen verschoben - dafür muss sie wiederauffindbar sein
+            cols171 = {r[1] for r in conn.execute(text("PRAGMA table_info(postfach_eingang)")).fetchall()}
+            if cols171:   # Tabelle existiert (create_all legt sie auf neuen DBs bereits vollständig an)
+                for col, typ in (
+                    ("mail_ordner",      "VARCHAR(200)"),
+                    ("mail_uidvalidity", "VARCHAR(32)"),
+                    ("mail_uid",         "VARCHAR(32)"),
+                    ("mail_message_id",  "VARCHAR(500)"),
+                ):
+                    if col not in cols171:
+                        conn.execute(text(f"ALTER TABLE postfach_eingang ADD COLUMN {col} {typ}"))
+            # Abrufstand (Ordner/UIDVALIDITY/letzte geprüfte UID als JSON) - nur neue Mails prüfen
+            cols171_u = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if "imap_abruf_stand" not in cols171_u:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN imap_abruf_stand TEXT"))
+            conn.execute(text("PRAGMA user_version = 171"))
+            conn.commit()
+            print("[Migration] Schema auf Version 171 (Issue #451: postfach_eingang.mail_ordner/uidvalidity/uid/message_id)")
+
+        if version < 172:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "import_quelle" not in cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN import_quelle VARCHAR(30)"))
+            conn.execute(text("PRAGMA user_version = 172"))
+            conn.commit()
+            print("[Migration] Schema auf Version 172 (Issue #445: rechnungen.import_quelle – CSV-Import Altbestand)")
+
+        if version < 173:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS import_mapping_vorlagen (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(100) NOT NULL,
+                    typ VARCHAR(20) NOT NULL,
+                    hat_header BOOLEAN DEFAULT 1,
+                    mapping_json TEXT NOT NULL,
+                    typ_erkennung_aktiv BOOLEAN DEFAULT 0,
+                    erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("PRAGMA user_version = 173"))
+            conn.commit()
+            print("[Migration] Schema auf Version 173 (Issue #445: import_mapping_vorlagen auch auf frisch angelegten DBs)")
+
+        if version < 174:
+            # Issue #456-Nebenfund: vor v0.6.4 (#372-Fix) bekamen Zahlungen auf Ausgangsrechnungen
+            # mit ist_reverse_charge (EU-B2B-Dienstleistung, §3a Abs. 2 UStG) über den Fallback in
+            # _klassifiziere_sonderfall() fälschlich ust_sonderfall='13b_abs1' - als wären wir
+            # Leistungsempfänger. Folgen bis heute: die UStVA verbucht sie im Sonderfall-Zweig als
+            # §13b-Storno (KZ 46/47/67) statt in KZ 21. Zusätzlich hat Migration 160 genau diese
+            # Zeilen (13b + 0%) ohne Prüfung der Buchungsrichtung um 19% USt/Vorsteuer "ergänzt" -
+            # die EÜR sieht das nur deshalb nicht, weil sie bei gesetztem Sonderfall USt/Vorsteuer
+            # überspringt. Fix: Sonderfall entfernen UND die Änderung aus Migration 160 auf ihren
+            # protokollierten Altwert zurücksetzen (nur wo das Änderungsprotokoll sie belegt - sonst
+            # landete die erfundene USt nach dem Entfernen des Sonderfalls in EÜR-Zeile 17/57).
+            # Jede Änderung wird protokolliert; die Signaturen berechnet _migrate_signaturen() neu.
+            from utils.aenderungsprotokoll import protokolliere_aenderung
+
+            _grund174 = "Issue #456: Zahlung auf EU-Dienstleistung (Ausgangsrechnung, Reverse Charge) ist kein §13b-Fall - Sonderfall entfernt, USt/Vorsteuer aus Migration 160 zurückgesetzt"
+            _j174 = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
+            _r174 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            _vollstaendig174 = (
+                {"ust_sonderfall", "ust_satz", "ust_betrag", "vorsteuer_betrag", "rechnung_id"} <= _j174
+                and {"typ", "ist_reverse_charge"} <= _r174
+            )
+            # sehr alte/synthetische Zwischenstände ohne diese Spalten haben auch keine betroffenen Zeilen
+            _betroffene174 = [] if not _vollstaendig174 else conn.execute(text("""
+                SELECT j.id, j.ust_satz, j.ust_betrag, j.vorsteuer_betrag
+                FROM journal j
+                JOIN rechnungen r ON r.id = j.rechnung_id
+                WHERE j.ust_sonderfall = '13b_abs1'
+                AND r.typ = 'ausgang' AND r.ist_reverse_charge = 1
+            """)).fetchall()
+            for _id174, _satz174, _ust174, _vst174 in _betroffene174:
+                conn.execute(text("UPDATE journal SET ust_sonderfall = NULL WHERE id = :id"), {"id": _id174})
+                protokolliere_aenderung(
+                    conn, tabelle="journal", datensatz_id=_id174, feld="ust_sonderfall",
+                    alter_wert="13b_abs1", neuer_wert=None, migration_version=174, grund=_grund174,
+                )
+                _aktuell174 = {"ust_satz": _satz174, "ust_betrag": _ust174, "vorsteuer_betrag": _vst174}
+                _alt160 = conn.execute(text("""
+                    SELECT feld, alter_wert FROM aenderungsprotokoll
+                    WHERE tabelle = 'journal' AND datensatz_id = :id AND migration_version = 160
+                    AND feld IN ('ust_satz', 'ust_betrag', 'vorsteuer_betrag')
+                """), {"id": _id174}).fetchall()
+                for _feld174, _alterwert174 in _alt160:
+                    conn.execute(text(f"UPDATE journal SET {_feld174} = :wert WHERE id = :id"),
+                                 {"wert": _alterwert174, "id": _id174})
+                    protokolliere_aenderung(
+                        conn, tabelle="journal", datensatz_id=_id174, feld=_feld174,
+                        alter_wert=_aktuell174[_feld174], neuer_wert=_alterwert174,
+                        migration_version=174, grund=_grund174,
+                    )
+            if _betroffene174:
+                print(f"[Migration] {len(_betroffene174)} Alt-Zahlung(en) auf EU-Dienstleistungen korrigiert (Issue #456)")
+            conn.execute(text("PRAGMA user_version = 174"))
+            conn.commit()
+            print("[Migration] Schema auf Version 174 (Issue #456: Reverse-Charge-Ausgangszahlungen kein §13b-Sonderfall)")
 
 
 def _migrate_kategorien() -> None:

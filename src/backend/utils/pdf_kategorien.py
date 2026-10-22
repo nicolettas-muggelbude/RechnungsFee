@@ -103,7 +103,7 @@ class KategorienPDF(FPDF):
         if beschreibung:
             self.set_font("DejaVu", "", 8)
             self.set_text_color(80, 80, 80)
-            self.multi_cell(0, 4.5, beschreibung)
+            self.multi_cell(0, 4.5, beschreibung, align="L")
         else:
             # Leere Zeile als Schreibbereich
             self.set_draw_color(200, 200, 200)

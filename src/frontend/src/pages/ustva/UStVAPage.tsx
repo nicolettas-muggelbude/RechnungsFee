@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   berechneUStVA, speichereUStVA, getUStVAHistorie, getUStVAPdfUrl, getUStVAPosten,
-  getUnternehmen, openUrl,
+  getUnternehmen, openUrl, downloadUstvaXml,
   type UStVAErgebnis,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
@@ -17,8 +17,10 @@ type KZMeta = [string, string, string, boolean, boolean]
 const KZ_META: KZMeta[] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false, true],
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false, true],
+  // Issue #457: KZ 87 laut Vordruck = steuerpflichtige Umsätze zu 0 % (nicht Ausfuhr) – manuell
+  ['', '87', 'Umsätze zum Steuersatz von 0 % (§12 Abs. 3 UStG, z. B. Photovoltaik)', false, false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.', false, true],
-  ['', '87', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)', false, false],
+  ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen, §4 Nr. 1a i. V. m. §6 UStG)', false, true],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false, true],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false, true],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false, true],
@@ -165,8 +167,8 @@ export function UStVAPage() {
   const [monat, setMonat] = useState(now.getMonth() + 1)
   const [quartal, setQuartal] = useState(Math.ceil((now.getMonth() + 1) / 3))
   const [gespeichertMeldung, setGespeichertMeldung] = useState(false)
-  const [pdfFehler, setPdfFehler] = useState<string | null>(null)
-  const [pdfExportiert, setPdfExportiert] = useState(false)
+  const [exportFehler, setExportFehler] = useState<string | null>(null)
+  const [pdfGeoeffnet, setPdfGeoeffnet] = useState(false)
   // Manuelle Korrekturen für nicht-auto-berechnete KZs
   const [manuell, setManuell] = useState<Partial<Record<string, string>>>({})
 
@@ -190,7 +192,9 @@ export function UStVAPage() {
     queryFn: () => berechneUStVA(zeitraum),
     // Issue #430: zusätzlich zu Kleinunternehmern auch bei Finanzamt-Befreiung (§18 Abs. 2
     // Satz 3 UStG, voranmeldungsrhythmus="keine") die Berechnung nicht unnötig anstoßen.
-    enabled: !unt?.ist_kleinunternehmer && unt?.voranmeldungsrhythmus !== 'keine',
+    // Issue #459: Kleinunternehmer trotzdem berechnen lassen - das Backend meldet für sie nur
+    // §13b/ig. Erwerb und sonst "befreit".
+    enabled: !!unt && (!!unt.ist_kleinunternehmer || unt.voranmeldungsrhythmus !== 'keine'),
   })
 
   const speichernMut = useMutation({
@@ -202,13 +206,17 @@ export function UStVAPage() {
     },
   })
 
-  async function handlePdf() {
-    setPdfFehler(null); setPdfExportiert(false)
+  async function handleExport(format: 'pdf' | 'xml') {
+    setExportFehler(null); setPdfGeoeffnet(false)
     try {
-      await openUrl(await getUStVAPdfUrl(zeitraum))
-      setPdfExportiert(true)
-    } catch (e: any) {
-      setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
+      if (format === 'xml') {
+        await downloadUstvaXml(zeitraum)
+      } else {
+        await openUrl(await getUStVAPdfUrl(zeitraum))
+        setPdfGeoeffnet(true)
+      }
+    } catch (e) {
+      setExportFehler(e instanceof Error ? e.message : 'Export fehlgeschlagen')
     }
   }
 
@@ -245,13 +253,17 @@ export function UStVAPage() {
     const gruppen: { abschnitt: string; zeilen: KZMeta[] }[] = []
     let aktGruppe: { abschnitt: string; zeilen: KZMeta[] } | null = null
 
+    // Abschnitt aus KZ_META mitführen, auch über KZs ohne Wert hinweg - sonst landet z. B. KZ 43
+    // unter „A.“, wenn im Zeitraum nur KZ 81 und KZ 43 belegt sind
+    let metaAbschnitt = ''
     for (const meta of KZ_META) {
       const [abschnitt, nr] = meta
+      if (abschnitt) metaAbschnitt = abschnitt
       const wert = parseFloat(kzWert(nr) || '0')
       if (wert === 0) continue
 
-      const effAbschnitt: string = abschnitt || aktGruppe?.abschnitt || ''
-      if (!aktGruppe || (abschnitt && abschnitt !== aktGruppe.abschnitt)) {
+      const effAbschnitt: string = metaAbschnitt
+      if (!aktGruppe || effAbschnitt !== aktGruppe.abschnitt) {
         aktGruppe = { abschnitt: effAbschnitt, zeilen: [] }
         gruppen.push(aktGruppe)
       }
@@ -320,9 +332,10 @@ export function UStVAPage() {
           )}
           {ergebnis && (
             <div className="flex items-center gap-2 ml-auto">
-              <ExportButtons formats={['pdf']} onExport={handlePdf} />
-              {pdfExportiert && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
-              {pdfFehler && <span className="text-xs text-red-600 dark:text-red-400">{pdfFehler}</span>}
+              <ExportButtons formats={hatManuelleUeberschreibung ? ['pdf'] : ['pdf', 'xml']} onExport={handleExport} />
+              {hatManuelleUeberschreibung && <span className="text-xs text-amber-600 dark:text-amber-400">ELSTER-XML nur ohne manuelle Felder – trag sie direkt in Mein ELSTER ein.</span>}
+              {pdfGeoeffnet && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
+              {exportFehler && <span className="text-xs text-red-600 dark:text-red-400">{exportFehler}</span>}
               <button type="button" onClick={() => speichernMut.mutate(alleKZ() as any)}
                 disabled={speichernMut.isPending || ergebnis.befreit}
                 className="px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">
@@ -369,10 +382,10 @@ export function UStVAPage() {
                 </Abschnitt>
               ))}
 
-              {/* Manuelle Felder – immer sichtbar wenn EU-Handel möglich */}
-              <details className="mb-4">
+              {/* Manuelle Felder – nicht für Kleinunternehmer (melden nur §13b/ig. Erwerb, Issue #459) */}
+              {!ergebnis.ist_kleinunternehmer && <details className="mb-4">
                 <summary className="cursor-pointer text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2 select-none">
-                  Manuelle Felder (EU-Lieferungen, Ausfuhr) ▸
+                  Manuelle Felder (Umsätze 0 %) ▸
                 </summary>
                 <div className="mt-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
                   {KZ_META.filter(([,,, , auto]) => !auto).map(([, nr, bezeichnung]) => (
@@ -391,7 +404,7 @@ export function UStVAPage() {
                     </div>
                   ))}
                 </div>
-              </details>
+              </details>}
 
               {/* Zahllast */}
               {zahllast !== null && (

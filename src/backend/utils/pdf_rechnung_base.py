@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from utils.logo import logo_datei
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
 
 _STANDARDTEXT_TYP_SUFFIX = {
@@ -301,6 +302,39 @@ class RechnungPDFBase(FPDF):
         self._sum_val_w = 0.0
 
     # -------------------------------------------------------------------------
+    # Seitenumbruch in der Positionstabelle (Issue #462)
+    # -------------------------------------------------------------------------
+
+    def _positionshoehe(self, beschreibungen: list[tuple[float, str]], zeilen_h: float,
+                        min_h: float, versatz: float, zusatz: float) -> float:
+        """Vorab berechnete Höhe einer Positionszeile: die längste mehrzeilige Spalte
+        (Beschreibung, ggf. Art.-Nr.) im aktuellen Font, mindestens min_h, plus Zusatz
+        (Rabatt-Unterzeile, Abstand)."""
+        zeilen = max(
+            (len(self.multi_cell(breite, zeilen_h, text or "", align="L", dry_run=True, output="LINES"))
+             for breite, text in beschreibungen),
+            default=1,
+        )
+        return max(min_h, versatz + zeilen * zeilen_h) + zusatz
+
+    def _umbruch_vor_position(self, hoehe: float, kopf_hoehe: float, vor_umbruch=None) -> bool:
+        """Fügt vor einer Position einen Seitenumbruch ein, wenn sie nicht mehr vollständig auf die
+        Seite passt - sonst landeten Beträge und Beschreibung auf verschiedenen Seiten (Issue #462:
+        Beträge auf Seite 1, Nummer auf Seite 2, Beschreibung auf Seite 3). Eine Position, die
+        selbst auf einer leeren Seite keinen Platz hätte, wird nicht verschoben (würde nur eine
+        leere Seite erzeugen) und bricht wie bisher innerhalb der Beschreibung um.
+        vor_umbruch (optional) läuft noch auf der alten Seite, z. B. um deren Tabellenrahmen zu schließen.
+        Gibt True zurück, wenn umgebrochen wurde - der Aufrufer zeichnet dann den Tabellenkopf neu."""
+        if self.get_y() + hoehe <= self.page_break_trigger:
+            return False
+        if hoehe > self.page_break_trigger - ADRESS_Y - kopf_hoehe:
+            return False
+        if vor_umbruch:
+            vor_umbruch()
+        self.add_page()  # header() setzt y auf ADRESS_Y
+        return True
+
+    # -------------------------------------------------------------------------
     # Header / Footer (identisch in allen Vorlagen)
     # -------------------------------------------------------------------------
 
@@ -308,12 +342,13 @@ class RechnungPDFBase(FPDF):
         unt = self._unt
         top = 10.0
 
-        logo_pfad = unt.get("logo_pfad") or ""
-        if logo_pfad and Path(logo_pfad).exists():
+        # Issue #454: gespeicherter (ggf. absoluter, systemfremder) Pfad → tatsächliche Datei
+        logo = logo_datei(unt.get("logo_pfad"))
+        if logo:
             try:
-                lw, lh = _logo_abmessungen(logo_pfad)
+                lw, lh = _logo_abmessungen(str(logo))
                 if lw > 0:
-                    self.image(logo_pfad, x=L_MARGIN, y=top, w=lw, h=lh)
+                    self.image(str(logo), x=L_MARGIN, y=top, w=lw, h=lh)
             except Exception:
                 pass
 
@@ -756,14 +791,14 @@ class RechnungPDFBase(FPDF):
             self.multi_cell(0, 4.5,
                             "Steuerschuldnerschaft des Leistungsempfängers (§13b UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
         # §4 Nr. 1b UStG: innergemeinschaftliche Lieferung (Ware) an Unternehmer im EU-Ausland
         ist_eu_lieferung = bool(getattr(r, "ist_eu_lieferung", False))
         if ist_eu_lieferung:
             self.multi_cell(0, 4.5,
                             "Steuerfreie innergemeinschaftliche Lieferung (§4 Nr. 1b i.V.m. §6a UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
         # §14a Abs. 1 UStG: bei grenzüberschreitender Dienstleistung (§3a Abs. 2, Reverse Charge)
         # und innergemeinschaftlicher Lieferung (§6a) ist die USt-IdNr. des Leistungsempfängers
         # Pflichtangabe auf der Rechnung - anders als beim rein inländischen §13b-Fall (§14a Abs. 5:
@@ -779,14 +814,14 @@ class RechnungPDFBase(FPDF):
             self.multi_cell(0, 4.5,
                             "Nicht steuerbar in Deutschland - Leistungsort im Drittland (§3a Abs. 2 UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
         # §4 Nr. 1a i.V.m. §6 UStG: Ausfuhrlieferung (Ware) ins Drittland (Issue #323)
         ist_ausfuhrlieferung = bool(getattr(r, "ist_ausfuhrlieferung", False))
         if ist_ausfuhrlieferung:
             self.multi_cell(0, 4.5,
                             "Steuerfreie Ausfuhrlieferung (§4 Nr. 1a i.V.m. §6 UStG). "
                             "Diese Rechnung enthält keine Umsatzsteuer.",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
         # §25a-Hinweis: positionsweise, wenn mindestens eine Differenzbesteuerungs-Position vorhanden
         hat_diff = any(getattr(pos, "differenzbesteuerung", False) for pos in (r.positionen or []))
         if hat_diff:
@@ -794,7 +829,7 @@ class RechnungPDFBase(FPDF):
                             "Sonderregelung nach § 25a UStG: Für gekennzeichnete Positionen gilt die "
                             "Differenzbesteuerung (Gebrauchtgegenstände). "
                             "Der Umsatzsteuerbetrag wird nicht gesondert ausgewiesen.",
-                            new_x="LMARGIN", new_y="NEXT")
+                            new_x="LMARGIN", new_y="NEXT", align="L")
         if unt.get("ist_kleinunternehmer") or ist_reverse_charge or ist_eu_lieferung or ist_drittland_leistung or ist_ausfuhrlieferung or hat_diff:
             self.ln(self._ln_nach_19)
 

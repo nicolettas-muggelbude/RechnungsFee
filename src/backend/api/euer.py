@@ -142,6 +142,12 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
                 # nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller Vorsteuerabzug).
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
                 basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
+                if e.ust_sonderfall:
+                    # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
+                    # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
+                    # „Umsatzsteuer-Zahlung FA“). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
+                    # hier sonst ein zweites Mal Betriebsausgabe.
+                    basis = e.netto_betrag or ZERO
             else:
                 vz = Decimal("1")
                 basis = e.netto_betrag or ZERO
@@ -327,7 +333,7 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
         pdf.set_text_color(120, 80, 0)
         pdf.multi_cell(170, 5,
             f"Anlagezugänge {daten['jahr']}: {euro(daten['anlage_zugaenge'])} (KFZ, EDV etc.) sind nicht enthalten. "
-            "Bitte Anlage AVEÜR (Abschreibungsplan) separat ausfüllen.", fill=True)
+            "Bitte Anlage AVEÜR (Abschreibungsplan) separat ausfüllen.", fill=True, align="L")
         pdf.ln(4)
 
     pdf.set_fill_color(254, 243, 199)
@@ -336,7 +342,7 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
     pdf.set_text_color(120, 80, 0)
     pdf.multi_cell(170, 5,
         "Hinweis: Anzeigehilfe auf Basis von Journalbuchungen (Ist-Versteuerung / Zuflussprinzip). "
-        "Bitte Werte in ELSTER oder mit dem Steuerberater übertragen.", fill=True)
+        "Bitte Werte in ELSTER oder mit dem Steuerberater übertragen.", fill=True, align="L")
 
     pdf.set_y(-15)
     pdf.set_font("DejaVu", "", 7)
@@ -386,6 +392,8 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
                 # damit Kategorie-Summen und EÜR-Zeilensumme konsistent bleiben.
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
                 basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
+                if e.ust_sonderfall:
+                    basis = e.netto_betrag or ZERO  # Reverse Charge, siehe _berechne_euer() (Issue #459)
             else:
                 vz = Decimal("1")
                 basis = e.netto_betrag or ZERO

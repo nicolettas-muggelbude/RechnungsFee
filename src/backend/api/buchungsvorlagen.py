@@ -27,7 +27,9 @@ from database.models import (
     Unternehmen,
 )
 from api.journal import _naechste_belegnr, _berechne_ust, _berechne_vorsteuer, _ust_konto
-from api.rechnungen import APP_DATA_DIR, BELEG_DIR, ERLAUBTE_MIME_TYPES
+from api.rechnungen import (
+    APP_DATA_DIR, BELEG_DIR, ERLAUBTE_MIME_TYPES, _beleg_loeschen_wenn_unbenutzt, _dateien_entfernen,
+)
 from utils.signatur import signatur_journaleintrag
 
 router = APIRouter(prefix="/api/buchungsvorlagen", tags=["Buchungsvorlagen"])
@@ -236,8 +238,14 @@ def loesche_vorlage(vorlage_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Vorlage nicht gefunden")
     if v.erstellte_buchungen and v.erstellte_buchungen > 0:
         raise HTTPException(409, "Vorlage hat bereits Buchungen – Löschen nicht möglich.")
+    beleg_id = v.beleg_id
     db.delete(v)
+    db.flush()
+    # Hinterlegten Beleg mit entfernen, sofern ihn nichts anderes verwendet (kein Datenmüll).
+    # Buchungsvorlagen speichern beleg.dateiname relativ zu BELEG_DIR, nicht zu uploads/.
+    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db, basis=BELEG_DIR) if beleg_id else []
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 # ---------------------------------------------------------------------------

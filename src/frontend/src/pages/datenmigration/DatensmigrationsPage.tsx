@@ -8,6 +8,13 @@ import {
   getMappingVorlagen,
   saveMappingVorlage,
   deleteMappingVorlage,
+  getKategorien,
+  getRechnungenImportMuster,
+  getRechnungenImportVorschau,
+  importRechnungenCsv,
+  type Kategorie,
+  type RechnungenImportErgebnis,
+  type RechnungenImportVorschauZeile,
   type ImportVorschauZeile,
   type ImportSpaltenResponse,
   type ImportMappingVorlage,
@@ -492,23 +499,101 @@ function MappingVorlagenListe() {
   )
 }
 
+type RechnungsImportTyp = 'rechnungen' | 'belege'
+
+function RechnungenBelegeImportFlow() {
+  const [typ, setTyp] = useState<RechnungsImportTyp>('rechnungen')
+  const [datei, setDatei] = useState<File | null>(null)
+  const [vorschau, setVorschau] = useState<RechnungenImportVorschauZeile[] | null>(null)
+  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [mappingStand, setMappingStand] = useState('')
+  const [ergebnis, setErgebnis] = useState<RechnungenImportErgebnis | null>(null)
+  const [fehler, setFehler] = useState<string | null>(null)
+  const [laedt, setLaedt] = useState(false)
+  const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien', 'import-mapping'], queryFn: () => getKategorien(true) })
+
+  const quellen = [...new Set((vorschau ?? []).map(z => z.kategorie_quelle).filter((x): x is string => !!x))]
+  const mappingVollstaendig = quellen.every(q => Boolean(mapping[q]))
+  const mappingUnveraendert = mappingStand === JSON.stringify(mapping)
+
+  async function musterLaden() {
+    const blob = await getRechnungenImportMuster(typ)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `muster_${typ}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function vorschauLaden() {
+    if (!datei) return
+    setFehler(null); setErgebnis(null); setLaedt(true)
+    try {
+      const rows = await getRechnungenImportVorschau(datei, typ, mapping)
+      setVorschau(rows)
+      setMappingStand(JSON.stringify(mapping))
+    } catch (e) { setFehler(e instanceof Error ? e.message : String(e)) }
+    finally { setLaedt(false) }
+  }
+
+  async function importStarten() {
+    if (!datei || !mappingUnveraendert || !mappingVollstaendig) return
+    setFehler(null); setLaedt(true)
+    try { setErgebnis(await importRechnungenCsv(datei, typ, mapping)) }
+    catch (e) { setFehler(e instanceof Error ? e.message : String(e)) }
+    finally { setLaedt(false) }
+  }
+
+  return (
+    <div className="min-w-0 max-w-full space-y-5">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+        Importierte Rechnungen und Belege bleiben in offenen Posten und im Kontokorrent sichtbar. Importierte Ausgangsrechnungen können nicht neu als PDF erzeugt, versendet oder gemahnt werden. Das Original bleibt im Altsystem; vorhandene Originalbelege können weiterhin angehängt werden.
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">CSV-Typ</label>
+        <select value={typ} onChange={e => { setTyp(e.target.value as RechnungsImportTyp); setDatei(null); setVorschau(null); setErgebnis(null); setMapping({}); setMappingStand('') }} className="max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+          <option value="rechnungen">Ausgangsrechnungen</option><option value="belege">Eingangsrechnungen &amp; Belege</option>
+        </select>
+        <button onClick={musterLaden} className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">Muster-CSV herunterladen</button>
+        <input type="file" accept=".csv,.txt" onChange={e => { setDatei(e.target.files?.[0] ?? null); setVorschau(null); setErgebnis(null); setMapping({}); setMappingStand('') }} className="max-w-full min-w-0 text-sm text-slate-600 dark:text-slate-300" />
+        <button onClick={vorschauLaden} disabled={!datei || laedt} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Vorschau laden</button>
+      </div>
+      {fehler && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{fehler}</div>}
+      {vorschau && <>
+        {quellen.length > 0 && <section className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Kategorien ausdrücklich zuordnen</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Die Zuordnung steuert Konten und Vorsteuer. Für jede CSV-Kategorie ist eine Zielkategorie erforderlich.</p>
+          {quellen.map(q => <label key={q} className="grid gap-2 text-sm sm:grid-cols-2 sm:items-center"><span className="text-slate-700 dark:text-slate-300">{q}</span><select value={mapping[q] ?? ''} onChange={e => setMapping(m => ({ ...m, [q]: e.target.value }))} className="min-w-0 w-full max-w-full rounded border border-slate-300 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"><option value="">Bitte auswählen …</option>{kategorien.filter((k: Kategorie) => k.kontenart !== 'Erlös').map(k => <option key={k.id} value={k.name}>{k.name}</option>)}</select></label>)}
+          {!mappingUnveraendert && <button onClick={vorschauLaden} disabled={laedt} className="rounded-lg border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">Vorschau mit Zuordnung aktualisieren</button>}
+        </section>}
+        <div className="max-w-full overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-slate-500"><tr><th className="p-2">Zeile</th><th className="p-2">Nummer</th><th className="p-2">Partner</th><th className="p-2">Datum</th><th className="p-2">Brutto</th><th className="p-2">Prüfung</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-700">{vorschau.map(z => <tr key={z.zeile}><td className="p-2">{z.zeile}</td><td className="p-2">{z.rechnungsnummer ?? '–'}</td><td className="p-2">{z.partner ?? '–'}</td><td className="p-2">{z.datum ?? '–'}</td><td className="p-2">{z.brutto ?? '–'}</td><td className="p-2 text-xs">{[...z.fehler, ...z.warnungen].join(' · ') || 'Bereit'}</td></tr>)}</tbody></table></div>
+        <button onClick={importStarten} disabled={laedt || !mappingUnveraendert || !mappingVollstaendig || vorschau.every(z => z.fehler.length > 0)} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{laedt ? 'Import läuft …' : 'Import starten'}</button>
+        {quellen.length > 0 && !mappingVollstaendig && <span className="ml-3 text-sm text-amber-700 dark:text-amber-300">Bitte alle Kategorien zuordnen.</span>}
+      </>}
+      {ergebnis && <section className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700"><h3 className="font-semibold text-slate-800 dark:text-slate-100">Import-Ergebnis</h3><p className="text-sm">{ergebnis.importiert} importiert · {ergebnis.uebersprungen} übersprungen · {ergebnis.fehler} Fehler</p><ul className="space-y-1 text-sm">{ergebnis.zeilen.map(z => <li key={z.zeile} className="text-slate-700 dark:text-slate-300">Zeile {z.zeile} · {z.rechnungsnummer ?? 'ohne Nummer'}: {z.status}{z.begruendung ? ` – ${z.begruendung}` : ''}{z.warnungen.length ? ` – ${z.warnungen.join('; ')}` : ''}</li>)}</ul></section>}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Hauptseite
 // ---------------------------------------------------------------------------
 
-const TABS: { id: ImportTyp; label: string }[] = [
+const TABS: { id: ImportTyp | 'rechnungen_belege'; label: string }[] = [
   { id: 'kunden', label: 'Kunden' },
   { id: 'lieferanten', label: 'Lieferanten' },
   { id: 'artikel', label: 'Artikel' },
   { id: 'gemischt', label: 'Gemischt' },
+  { id: 'rechnungen_belege', label: 'Rechnungen & Belege' },
 ]
 
 export function DatensmigrationsPage() {
   const mxAuto = useMxAuto()
-  const [aktuellerTab, setAktuellerTab] = useState<ImportTyp>('kunden')
+  const [aktuellerTab, setAktuellerTab] = useState<ImportTyp | 'rechnungen_belege'>('kunden')
 
   return (
-    <div className={`p-6 space-y-6 ${mxAuto}`}>
+    <div className={`min-w-0 p-6 max-sm:p-3 space-y-6 ${mxAuto}`}>
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Datenübernahme</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -519,12 +604,12 @@ export function DatensmigrationsPage() {
 
       {/* Tabs */}
       <div className="border-b border-slate-200 dark:border-slate-700">
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setAktuellerTab(t.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 aktuellerTab === t.id
                   ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
@@ -536,9 +621,15 @@ export function DatensmigrationsPage() {
         </nav>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-        <ImportFlow key={aktuellerTab} typ={aktuellerTab} />
-        <MappingVorlagenListe />
+      <div className="min-w-0 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 max-sm:p-3">
+        {aktuellerTab === 'rechnungen_belege' ? (
+          <RechnungenBelegeImportFlow key={aktuellerTab} />
+        ) : (
+          <>
+            <ImportFlow key={aktuellerTab} typ={aktuellerTab} />
+            <MappingVorlagenListe />
+          </>
+        )}
       </div>
     </div>
   )

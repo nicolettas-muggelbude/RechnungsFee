@@ -457,6 +457,23 @@ def parse_camt(raw: bytes) -> list[dict]:
     return ergebnis
 
 
+_BUNQ_LETZTE_SPALTE_RE = re.compile(r'^(.*,)""([^"].*)""$')
+
+
+def _bunq_zeilen_reparieren(text: str) -> str:
+    """Issue #466: bunq schreibt die letzte Spalte (Description) doppelt gequotet, z. B.
+    `,"Firma",""Rechnung, Oktober""`. Für einen CSV-Parser ist das ein leeres Feld mit
+    nachfolgendem Text - am Verwendungszweck blieb `""` hängen, und Kommas darin schnitten ihn ab.
+    Wird in ein regulär gequotetes Feld umgeschrieben (innere Anführungszeichen verdoppelt)."""
+    zeilen = []
+    for zeile in text.splitlines():
+        m = _BUNQ_LETZTE_SPALTE_RE.match(zeile)
+        if m:
+            zeile = f'{m.group(1)}"{m.group(2).replace(chr(34), chr(34) * 2)}"'
+        zeilen.append(zeile)
+    return "\n".join(zeilen)
+
+
 def parse_csv_mit_template(raw: bytes, template) -> tuple[list[dict], str]:
     """
     Parst raw-Bytes mit einem BankTemplate-Objekt.
@@ -465,6 +482,9 @@ def parse_csv_mit_template(raw: bytes, template) -> tuple[list[dict], str]:
     mapping = json.loads(template.column_mapping) if isinstance(template.column_mapping, str) else template.column_mapping
     enc = detect_encoding(raw)
     effective_encoding = template.encoding or enc
+    if getattr(template, "id", None) == "bunq":
+        raw = _bunq_zeilen_reparieren(decode_csv_text(raw, effective_encoding)).encode("utf-8")
+        effective_encoding = "UTF-8"
 
     # skip_rows ist am Template fest hinterlegt, manche Banken (z.B. DKB) stellen der
     # eigentlichen Spaltenüberschrift aber eine je nach Export wechselnde Anzahl Metazeilen

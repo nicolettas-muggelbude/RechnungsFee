@@ -119,22 +119,47 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         other_x  = L_MARGIN + sum(col_w[:desc_col + 1])  # X-Start der Spalten nach der Beschreibung
 
         tbl_x   = L_MARGIN
-        tbl_top = self.get_y()
+        tbl_total_w = sum(col_w)
+        KOPF_H = 6.5
 
-        self.set_font("DejaVu", "B", 8)
-        self.set_fill_color(*GRUEN_HELL)
-        self.set_draw_color(*GRUEN_RAND)
-        self.set_text_color(*TEXT_DUNKEL)
-        for i, h in enumerate(headers):
-            self.cell(col_w[i], 6.5, h, border="B", fill=True, align=aligns[i])
-        self.ln()
+        def _tabellenkopf():
+            self.set_font("DejaVu", "B", 8)
+            self.set_fill_color(*GRUEN_HELL)
+            self.set_draw_color(*GRUEN_RAND)
+            self.set_text_color(*TEXT_DUNKEL)
+            self.set_x(L_MARGIN)
+            for i, h in enumerate(headers):
+                self.cell(col_w[i], KOPF_H, h, border="B", fill=True, align=aligns[i])
+            self.ln()
+            self.set_font("DejaVu", "", 8.5)
+            self.set_text_color(*TEXT_DUNKEL)
+
+        def _rahmen(oben: float, unten: float):
+            # Tabellenrahmen je Seite (Issue #462: vorher einmal am Ende mit den Koordinaten von
+            # Seite 1 gezeichnet - bei mehrseitigen Tabellen landete er verrutscht auf der letzten)
+            self.set_draw_color(*GRUEN_RAND)
+            self.rect(tbl_x, oben, tbl_total_w, unten - oben)
+            x = tbl_x
+            for w in col_w[:-1]:
+                x += w
+                self.line(x, oben, x, unten)
+
+        tbl_top = self.get_y()
+        _tabellenkopf()
 
         ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
-        self.set_font("DejaVu", "", 8.5)
-        self.set_text_color(*TEXT_DUNKEL)
         for pos in r.positionen:
+            # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
+            _beschr = [(col_w[desc_col], pos.beschreibung)]
+            if hat_artikelcode and getattr(pos, "artikel", None):
+                _beschr.append((col_w[2], pos.artikel.artikelcode))
+            _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
+            _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
+            if self._umbruch_vor_position(_hoehe, KOPF_H, vor_umbruch=lambda: _rahmen(tbl_top, self.get_y())):
+                tbl_top = self.get_y()
+                _tabellenkopf()
             menge = float(str(pos.menge))
             ist_diff = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{_fmt_ust_satz(pos.ust_satz)} %"
@@ -200,14 +225,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 self.set_text_color(*TEXT_DUNKEL)
             self.ln(1.5)
 
-        tbl_bottom  = self.get_y()
-        tbl_total_w = sum(col_w)
-        self.set_draw_color(*GRUEN_RAND)
-        self.rect(tbl_x, tbl_top, tbl_total_w, tbl_bottom - tbl_top)
-        x = tbl_x
-        for w in col_w[:-1]:
-            x += w
-            self.line(x, tbl_top, x, tbl_bottom)
+        _rahmen(tbl_top, self.get_y())
 
         # Summenblock-Geometrie: mittig rechts
         self._sum_x     = L_MARGIN + NUTZ_W * 0.5
@@ -266,6 +284,11 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         qr_col_w = NUTZ_W - box_w  # 40 mm
 
         x_start   = float(L_MARGIN) if qr_aktiv else L_MARGIN + (NUTZ_W - box_w) / 2
+        # Issue #462: Block (Rahmen + QR-Codes relativ zu block_top) nicht über den Seitenumbruch
+        # zerreißen - obere Schranke: Kopf + alle möglichen Zeilen bzw. Mindesthöhe der QR-Spalte
+        _max_hoehe = max(6.5 + (8 + len(zahlungen)) * lh, 45.0)
+        if self.get_y() + _max_hoehe > self.page_break_trigger:
+            self.add_page()
         block_top = self.get_y()
 
         # Skonto-Werte vorab berechnen (für Tabellenzeile + QR-Code)

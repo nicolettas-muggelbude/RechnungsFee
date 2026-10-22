@@ -441,7 +441,7 @@ def pdf_export(jahr: int = Query(...), db: Session = Depends(get_db)):
         "Hinweis: Anzeigehilfe auf Basis des Anlagenverzeichnisses. Bitte Werte in ELSTER (Anlage AVEÜR) oder mit dem "
         "Steuerberater übertragen. Nutzungsdauer nach AfA-Tabellen des BMF. Lineare oder degressive AfA "
         "(§7 Abs. 2 EStG, Investitionsbooster, nur für Anschaffungen 01.07.2025-31.12.2027; automatischer "
-        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat).", fill=True)
+        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat).", fill=True, align="L")
 
     # Footer
     pdf.set_y(-15)

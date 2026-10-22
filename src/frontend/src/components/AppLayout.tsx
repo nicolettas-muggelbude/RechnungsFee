@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, getProfile, openUrl, isTauri, type EntwurfErgebnis } from '../api/client'
+import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefKleinunternehmerUStVA, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, getProfile, openUrl, isTauri, postfachAbrufen, type EntwurfErgebnis } from '../api/client'
 import { TagesabschlussDialog } from '../pages/journal/TagesabschlussDialog'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useAnsicht } from '../hooks/useAnsicht'
@@ -31,7 +31,10 @@ const buchhaltungNavOptional: { to: string; label: string; icon: string; zeigen:
 
 import type { Unternehmen, ZMPruefung } from '../api/client'
 
-type NavKontext = { unt: Unternehmen | undefined; zm: ZMPruefung | undefined }
+// Issue #451: Postfach-Abruf beim Start nur einmal pro App-Sitzung
+let postfachStartAbrufErledigt = false
+
+type NavKontext = { unt: Unternehmen | undefined; zm: ZMPruefung | undefined; kuReverseCharge?: boolean }
 type ZeigenFn = (k: NavKontext) => boolean
 
 const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: ZeigenFn }[] = [
@@ -43,7 +46,7 @@ const auswertungNavAlle: { to: string; label: string; icon: string; zeigen: Zeig
   { to: '/inventurliste',     label: 'Inventurliste',  icon: 'checklist',      zeigen: ({ unt }) => !!unt?.lagerführung_aktiv },
   { to: '/kontokorrent',      label: 'Kontokorrent',   icon: 'balance',        zeigen: () => true },
   { to: '/verbindlichkeiten', label: 'Verbindlichkeiten', icon: 'payments',    zeigen: () => true },
-  { to: '/ustva',             label: 'UStVA',         icon: 'account_balance', zeigen: ({ unt }) => !unt?.ist_kleinunternehmer },
+  { to: '/ustva',             label: 'UStVA',         icon: 'account_balance', zeigen: ({ unt, kuReverseCharge }) => !unt?.ist_kleinunternehmer || !!kuReverseCharge },  // Issue #459
   { to: '/jahres-ust',        label: 'Jahres-USt',    icon: 'calendar_month',  zeigen: () => true },
   { to: '/zm',                label: 'ZM',            icon: 'public',          zeigen: ({ zm }) => !!zm?.hat_ig_eintraege },
   { to: '/anlage-s',          label: 'Anlage S',      icon: 'article',         zeigen: ({ unt }) => unt?.taetigkeitsart !== 'gewerbe' },
@@ -201,6 +204,7 @@ export function AppLayout() {
   const { einstellungen } = useAnsicht()
   const qc = useQueryClient()
   const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Ctrl+Shift+D (Strg+Shift+D) → Dashboard
   useEffect(() => {
@@ -323,6 +327,17 @@ export function AppLayout() {
     staleTime: 1000 * 60 * 5,
   })
 
+  // Issue #451: Rechnungspostfach beim Start abrufen (opt-in). Einmal pro App-Sitzung - das Flag
+  // liegt bewusst auf Modulebene, damit ein Neu-Mount des Layouts keinen zweiten Abruf auslöst.
+  const qcPostfach = useQueryClient()
+  useEffect(() => {
+    if (postfachStartAbrufErledigt || !unt?.postfach_aktiv || !unt.imap_beim_start) return
+    postfachStartAbrufErledigt = true
+    postfachAbrufen()
+      .then(() => qcPostfach.invalidateQueries({ queryKey: ['postfach-eingang'] }))
+      .catch((e) => console.warn('[RechnungsFee] Postfach-Abruf beim Start fehlgeschlagen:', e))
+  }, [unt?.postfach_aktiv, unt?.imap_beim_start]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Nur relevant/sichtbar sobald mehr als ein Profil existiert - bei genau einem Profil
   // (der Normalfall) wäre die Anzeige nur Rauschen, siehe Profile.md.
   const { data: profilListe } = useQuery({
@@ -347,7 +362,14 @@ export function AppLayout() {
   })
 
   const untDef = unt ?? undefined
-  const navKontext: NavKontext = { unt: untDef, zm: zmPruefung }
+  // Issue #459: Kleinunternehmer mit §13b/ig. Erwerb müssen dafür eine UStVA abgeben
+  const { data: kuPruefung } = useQuery({
+    queryKey: ['ustva-ku-pruefen'],
+    queryFn: pruefKleinunternehmerUStVA,
+    staleTime: 1000 * 60 * 10,
+    enabled: !!unt?.ist_kleinunternehmer,
+  })
+  const navKontext: NavKontext = { unt: untDef, zm: zmPruefung, kuReverseCharge: kuPruefung?.hat_reverse_charge }
   const auswertungNav = auswertungNavAlle.filter(n => n.zeigen(navKontext))
   const fakturierungNav = [
     ...fakturierungAlleItems.filter(n => n.zeigen(untDef)),
@@ -393,7 +415,8 @@ export function AppLayout() {
       }}
     >
       {/* Sidebar */}
-      <aside className="w-56 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0">
+      {mobileNavOpen && <button aria-label="Navigation schließen" className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} />}
+      <aside id="app-navigation" className={`${mobileNavOpen ? 'flex' : 'hidden'} fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex-col shrink-0 md:static md:flex md:w-56`}>
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
           <img src="/logo.svg" alt="RechnungsFee" className="w-8 h-8 flex-shrink-0" />
           <div className="min-w-0">
@@ -411,6 +434,7 @@ export function AppLayout() {
           </div>
         </div>
 
+        <button className="md:hidden absolute top-3 right-3 rounded p-2 text-slate-600" aria-label="Navigation schließen" onClick={() => setMobileNavOpen(false)}>✕</button>
         <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
 
           {/* Dashboard */}
@@ -523,7 +547,11 @@ export function AppLayout() {
       </aside>
 
       {/* Hauptinhalt */}
-      <main className="flex-1 overflow-auto flex flex-col">
+      <main className="flex-1 min-w-0 overflow-auto flex flex-col">
+        <div className="md:hidden flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+          <button type="button" aria-label="Navigation öffnen" aria-controls="app-navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600">☰ Menü</button>
+          <span className="text-sm font-semibold">RechnungsFee</span>
+        </div>
         {/* Update-Banner */}
         {updateAvailable && !updateDismissed && (
           <div className={`border-b px-4 py-2.5 flex items-center gap-3 shrink-0 ${

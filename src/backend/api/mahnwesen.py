@@ -288,6 +288,7 @@ def faellig_liste(db: Session = Depends(get_db)):
             Rechnung.typ == "ausgang",
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
+            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
             Rechnung.faellig_am.isnot(None),
             # Issue #419 Phase 2b: eine verrechnete Abschlagsrechnung hat keinen eigenen
@@ -335,6 +336,7 @@ def kunden_uebersicht(db: Session = Depends(get_db)):
             Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
+            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
             Rechnung.faellig_am.isnot(None),
         )
@@ -770,6 +772,8 @@ def _berechne_mahnung(
     rechnungen = db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids)).all()
     if not rechnungen:
         raise HTTPException(status_code=404, detail="Keine Rechnungen gefunden.")
+    if any(r.import_quelle for r in rechnungen):
+        raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung kann nicht gemahnt werden – maßgeblich ist das Original.")
     kunde_ids = {r.kunde_id for r in rechnungen}
     if len(kunde_ids) > 1:
         raise HTTPException(status_code=422, detail="Alle Rechnungen müssen zum selben Kunden gehören.")
@@ -799,6 +803,7 @@ def _berechne_mahnung(
             Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
+            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
         ).all()
         aktuelle = max(
@@ -900,6 +905,7 @@ def _offene_ausgangsgutschriften_kunde(db: Session, kunde_id: int) -> list[Rechn
             Rechnung.dokument_typ == "Gutschrift",
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
+            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
         )
         .order_by(Rechnung.datum.asc())
@@ -1345,6 +1351,8 @@ def mahnung_pdf_bytes(db: Session, mahnung: Mahnung, nur_ansehen: bool = False) 
     rechnungen_by_id = {
         r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_([l.rechnung_id for l in links])).all()
     }
+    if any(r.import_quelle for r in rechnungen_by_id.values()):
+        raise HTTPException(status_code=409, detail="Diese Mahnung enthält eine importierte Rechnung und kann nicht ausgegeben werden.")
     positionen = []
     for link in links:
         r = rechnungen_by_id.get(link.rechnung_id)

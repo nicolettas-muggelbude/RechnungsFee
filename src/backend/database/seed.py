@@ -509,6 +509,30 @@ SYSTEM_BANK_TEMPLATES = [
         "erkennungs_spalten": ["Completed date", "Counterparty name", "Reference", "Payment amount", "Payment currency"],
     },
     {
+        # bunq (Issue #466): CSV-Export "Umsätze". MT940 bietet bunq ebenfalls an, dafür gibt es
+        # (wie bei Finom) keinen SWIFT-Tag-Parser. Die Spalte "Description" schreibt bunq doppelt
+        # gequotet (""Text"") - wird vor dem Einlesen in utils/bank_csv_parser.py repariert.
+        # "Account" ist die eigene IBAN (pro Zeile) und bleibt bewusst ungemappt.
+        "id": "bunq",
+        "name": "bunq",
+        "bank": "bunq",
+        "format": "Standard",
+        "delimiter": ",",
+        "encoding": "UTF-8",
+        "decimal_separator": ",",
+        "date_format": "%Y-%m-%d",
+        "skip_rows": 0,
+        "column_mapping": {
+            "Date":          "datum",
+            "Interest Date": "valuta",
+            "Amount":        "betrag",
+            "Counterparty":  "partner_iban",
+            "Name":          "partner_name",
+            "Description":   "verwendungszweck",
+        },
+        "erkennungs_spalten": ["Date", "Interest Date", "Amount", "Account", "Counterparty", "Name", "Description"],
+    },
+    {
         # Finom (PNL Fintech B.V.) - Issue #342. Nur der CSV-Export wird unterstützt; Finom
         # bietet denselben Kontoauszug wahlweise auch als MT940 (.txt) an, dafür gibt es in
         # RechnungsFee aktuell keinen SWIFT-Tag-Parser (das "MT940" bei anderen Templates ist

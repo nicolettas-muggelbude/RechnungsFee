@@ -263,6 +263,49 @@ def _klassifiziere_sonderfall(
     return sonderfall, ust03, ust04
 
 
+# Issue #459: Reverse-Charge-Fälle auf Eingangsrechnungen - der ausländische Lieferant weist keine
+# deutsche USt aus, der Rechnungs- und Zahlbetrag IST der Nettobetrag. Die USt (§13b/ig. Erwerb)
+# schuldet der Leistungsempfänger selbst; sie läuft nur nebenher für die UStVA (Vorsteuer-Anspruch
+# bzw. Journal) und darf den Rechnungsbetrag nicht erhöhen - sonst stand eine 100-€-Provision mit
+# 119 € als offener Posten da, und die Zahlungsbuchung schlug auf die 119 € noch einmal 19 % auf.
+_ADDITIVE_SONDERFAELLE = ("ig_erwerb", "13b_abs1", "13b_abs2")
+
+
+def _ist_additive_position(pos) -> bool:
+    """Gespeicherte Position mit USt nur nebenher (Issue #459): pos.brutto ist dann der Netto-/
+    Zahlbetrag und die USt wurde aus genau diesem Betrag berechnet. Normale Positionen
+    (brutto = netto + USt) und Entwürfe von vor dem Fix erfüllen das nicht."""
+    satz = pos.ust_satz or Decimal("0")
+    return bool(
+        satz > 0 and pos.ust_betrag
+        and pos.ust_betrag == (pos.brutto * satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    )
+
+
+def _reverse_charge_positionen(db: Session, typ: str, positionen, rechnung_kategorie_id: int | None):
+    """Gibt (positionen, additiv) zurück: additiv[i] = True, wenn Position i auf einer
+    Eingangsrechnung zu einer §13b-/ig.-Erwerb-Kategorie gehört (Kategorie der Position, sonst der
+    Rechnung). Steht eine §13b-Position auf 0 % (so wie auf der Rechnung des Lieferanten), wird der
+    Standardsatz der Kategorie übernommen - die Steuer entsteht trotzdem. Beim ig. Erwerb bleibt
+    0 % erlaubt (eigene KZ 90). additiv ist None, wenn keine Position betroffen ist."""
+    if typ != "eingang" or not positionen:
+        return positionen, None
+    kategorien: dict[int, Kategorie | None] = {}
+    neu, additiv = [], []
+    for pos in positionen:
+        kat_id = getattr(pos, "kategorie_id", None) or rechnung_kategorie_id
+        if kat_id and kat_id not in kategorien:
+            kategorien[kat_id] = db.query(Kategorie).filter(Kategorie.id == kat_id).first()
+        kat = kategorien.get(kat_id) if kat_id else None
+        sonderfall = _klassifiziere_sonderfall(kat, False, pos.ust_satz, None, None)[0] if kat else None
+        ist_additiv = sonderfall in _ADDITIVE_SONDERFAELLE
+        if ist_additiv and sonderfall != "ig_erwerb" and not pos.ust_satz and kat.ust_satz_standard:
+            pos = pos.model_copy(update={"ust_satz": Decimal(str(kat.ust_satz_standard))})
+        neu.append(pos)
+        additiv.append(ist_additiv)
+    return neu, (additiv if any(additiv) else None)
+
+
 def _vorsteuer_kategorie_fehlt(rechnung: "Rechnung") -> bool:
     """Prüft ob für mind. eine Position keine Kategorie ermittelbar ist (Position eigene
     kategorie_id ODER rechnung.kategorie_id als Fallback) - Vorsteuer-Klassifikation
@@ -291,7 +334,9 @@ def _erzeuge_vorsteuer_ansprueche(rechnung: "Rechnung", db: Session) -> None:
         satz = int(pos.ust_satz)
         kat_id = pos.kategorie_id or rechnung.kategorie_id
         key = (kat_id, satz)
-        netto_gruppen[key] += (pos.brutto - pos.ust_betrag)
+        # Issue #459: bei Reverse Charge ist pos.brutto bereits der Nettobetrag (USt nur nebenher)
+        netto_pos = pos.brutto if _ist_additive_position(pos) else pos.brutto - pos.ust_betrag
+        netto_gruppen[key] += netto_pos
         ust_gruppen[key] += pos.ust_betrag
 
     for key, ust_betrag in ust_gruppen.items():
@@ -475,6 +520,7 @@ def _berechne_rechnung(
     rabatt_betrag: Decimal | None,
     ist_kleinunternehmer: bool,
     ist_steuerfrei_ausland: bool,
+    ust_additiv: list[bool] | None = None,
 ) -> RechnungSummen:
     """EINE Berechnung für Positionswerte + Rechnungssummen (Issue #332).
 
@@ -512,6 +558,10 @@ def _berechne_rechnung(
     Bei Differenzbesteuerung (§25a), Kleinunternehmer (§19) oder steuerfreiem Auslandsgeschäft:
     kein USt-Ausweis, Netto=Brutto, unabhängig vom eingabemodus.
 
+    ust_additiv (Issue #459, siehe _reverse_charge_positionen()): Reverse-Charge-Positionen auf
+    Eingangsrechnungen - Positionsbetrag = Netto = Zahlbetrag, die USt wird je Position
+    berechnet (für Vorsteuer-Anspruch/UStVA), fließt aber weder in brutto noch in ust_gesamt ein.
+
     Rechnungsrabatt (Kopf-Ebene) wird als Faktor auf die bereits gerundeten Positionssummen
     angewendet - bei Brutto-Richtung wird USt danach wieder als Rest (Brutto−Netto) gebildet,
     damit die Exaktheit erhalten bleibt.
@@ -521,7 +571,7 @@ def _berechne_rechnung(
     ust_sum = Decimal("0.00")
     brutto_sum = Decimal("0.00")
 
-    for pos_data in positionen_data:
+    for idx, pos_data in enumerate(positionen_data):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
         ust_satz = Decimal("0") if (ist_kleinunternehmer or ist_diff or ist_steuerfrei_ausland) else pos_data.ust_satz
 
@@ -534,6 +584,14 @@ def _berechne_rechnung(
         # sich ein Rundungsfehler beim Aufsummieren mit der Menge (siehe Docstring oben).
         positionssumme = (einzelpreis * pos_data.menge).quantize(_Q4, ROUND_HALF_UP)
 
+        if ust_additiv and ust_additiv[idx] and ust_satz > 0:
+            # Reverse Charge (Issue #459): Betrag = Netto, USt nur nebenher (nicht in den Summen)
+            netto_pos = positionssumme.quantize(_Q2, ROUND_HALF_UP)
+            ust_pos = (positionssumme * ust_satz / 100).quantize(_Q2, ROUND_HALF_UP)
+            positionen.append(_PositionsErgebnis(ust_satz, ust_pos, netto_pos, netto_pos))
+            netto_sum += netto_pos
+            brutto_sum += netto_pos
+            continue
         if ust_satz == 0:
             # §25a / Kleinunternehmer / steuerfreies Ausland: kein USt-Ausweis
             netto_pos = positionssumme.quantize(_Q2, ROUND_HALF_UP)
@@ -1338,6 +1396,40 @@ def offene_abschlaege(
     return ergebnis
 
 
+class LetzterSteuerfall(BaseModel):
+    ist_reverse_charge: bool = False
+    ist_eu_lieferung: bool = False
+    ist_drittland_leistung: bool = False
+    ist_ausfuhrlieferung: bool = False
+
+
+@router.get("/letzter-steuerfall", response_model=LetzterSteuerfall)
+def letzter_steuerfall(kunde_id: int = Query(...), db: Session = Depends(get_db)):
+    """Issue #464: Steuerfall (Reverse Charge, ig. Lieferung, Drittland, Ausfuhr) der letzten
+    Ausgangsrechnung dieses Kunden - das Formular übernimmt ihn bei neuen Rechnungen, statt dass
+    man ihn jedes Mal neu anhaken muss (bewusst ohne eigenes Kundenfeld). Muss vor
+    /{rechnung_id} registriert sein, sonst greift dort die int-Validierung."""
+    r = (
+        db.query(Rechnung)
+        .filter(
+            Rechnung.kunde_id == kunde_id,
+            Rechnung.typ == "ausgang",
+            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+            Rechnung.storniert == False,  # noqa: E712
+        )
+        .order_by(Rechnung.datum.desc(), Rechnung.id.desc())
+        .first()
+    )
+    if not r:
+        return LetzterSteuerfall()
+    return LetzterSteuerfall(
+        ist_reverse_charge=bool(r.ist_reverse_charge),
+        ist_eu_lieferung=bool(r.ist_eu_lieferung),
+        ist_drittland_leistung=bool(r.ist_drittland_leistung),
+        ist_ausfuhrlieferung=bool(r.ist_ausfuhrlieferung),
+    )
+
+
 @router.get("/{rechnung_id}", response_model=RechnungResponse)
 def get_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     r = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
@@ -1358,9 +1450,10 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
     )
+    positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)
     summen = _berechne_rechnung(
-        data.positionen, data.eingabemodus, data.rabatt_prozent, data.rabatt_betrag,
-        ist_kleinunternehmer, ist_steuerfrei_ausland,
+        positionen, data.eingabemodus, data.rabatt_prozent, data.rabatt_betrag,
+        ist_kleinunternehmer, ist_steuerfrei_ausland, ust_additiv,
     )
     return RechnungVorschauResponse(
         positionen=[
@@ -1378,6 +1471,20 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
 
 @router.post("", response_model=RechnungResponse, status_code=201)
 def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
+    if data.extern_erstellt:
+        if data.typ != "ausgang" or (data.dokument_typ or "Rechnung") != "Rechnung":
+            raise HTTPException(status_code=422, detail="Nur Ausgangsrechnungen können als extern erstellt erfasst werden.")
+        unternehmen = db.query(Unternehmen).first()
+        if not (unternehmen and unternehmen.datenmigration_aktiv):
+            raise HTTPException(
+                status_code=422,
+                detail="Extern erstellte Rechnungen lassen sich nur erfassen, wenn unter Einstellungen → Unternehmen → Funktionen die Datenübernahme aktiv ist.",
+            )
+        return _create_rechnung(data, db, import_quelle="extern")
+    return _create_rechnung(data, db)
+
+
+def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | None = None):
     """Rechnung mit Positionen anlegen. Summen werden automatisch berechnet."""
     # Kundensperrung (Abschnitt E): deckt Rechnung/Angebot/Lieferschein/Proforma ab (alle
     # laufen über diesen Endpunkt, unterschieden per dokument_typ) - Gutschrift und Storno
@@ -1482,6 +1589,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         einleitungstext=data.einleitungstext,
         schlusstext=data.schlusstext,
         externe_belegnr=data.externe_belegnr,
+        import_quelle=import_quelle,
         kunden_bestellnummer=data.kunden_bestellnummer,
         ist_entwurf=data.ist_entwurf,
         skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
@@ -1513,11 +1621,12 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
     )
+    rc_positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)  # Issue #459
     override_summen = None
     if data.netto_gesamt_override is not None:
         override_summen = _berechne_rechnung(
-            data.positionen, data.eingabemodus, Decimal("0"), None,
-            ist_kleinunternehmer, ist_steuerfrei_ausland,
+            rc_positionen, data.eingabemodus, Decimal("0"), None,
+            ist_kleinunternehmer, ist_steuerfrei_ausland, ust_additiv,
         )
         if not _overrides_plausibel(data, override_summen):
             # Issue #450: widersprüchliche PDF-Kopfsummen nicht still übernehmen - dann gelten
@@ -1541,8 +1650,8 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
         rechnung.brutto_gesamt = (data.brutto_gesamt_override or rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
     else:
         summen = _berechne_rechnung(
-            data.positionen, data.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
-            ist_kleinunternehmer, ist_steuerfrei_ausland,
+            rc_positionen, data.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
+            ist_kleinunternehmer, ist_steuerfrei_ausland, ust_additiv,
         )
         rechnung.netto_gesamt  = summen.netto_gesamt
         rechnung.ust_gesamt    = summen.ust_gesamt
@@ -1660,9 +1769,12 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 
         rechnung.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
         rechnung.rabatt_betrag  = getattr(data, "rabatt_betrag", None) or None
+        rc_positionen, ust_additiv = _reverse_charge_positionen(  # Issue #459
+            db, rechnung.typ, data.positionen, getattr(data, "kategorie_id", None) or rechnung.kategorie_id,
+        )
         summen = _berechne_rechnung(
-            data.positionen, rechnung.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
-            ist_kleinunternehmer, ist_steuerfrei_ausland,
+            rc_positionen, rechnung.eingabemodus, rechnung.rabatt_prozent, rechnung.rabatt_betrag,
+            ist_kleinunternehmer, ist_steuerfrei_ausland, ust_additiv,
         )
         rechnung.netto_gesamt  = summen.netto_gesamt
         rechnung.ust_gesamt    = summen.ust_gesamt
@@ -1890,9 +2002,46 @@ def markiere_ausgegeben(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Entwürfe werden nicht als ausgegeben markiert.")
+    if rechnung.import_quelle:
+        raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung kann nicht als neu ausgegeben markiert werden – maßgeblich ist das Original.")
     rechnung.ausgegeben = True
     if not rechnung.ausgegeben_am:
         rechnung.ausgegeben_am = datetime.now()
+    db.commit()
+    db.refresh(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung)
+
+
+class ExternErstelltRequest(BaseModel):
+    extern_erstellt: bool
+
+
+@router.post("/{rechnung_id}/extern-erstellt", response_model=RechnungResponse)
+def setze_extern_erstellt(rechnung_id: int, data: ExternErstelltRequest, db: Session = Depends(get_db)):
+    """Kennzeichnung „extern erstellt" nachträglich setzen/entfernen (Datenübernahme) - nur solange
+    RechnungsFee noch kein eigenes Original ausgegeben hat, sonst existiert das zweite PDF bereits.
+    CSV-importierte Rechnungen (andere import_quelle) bleiben unangetastet."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.typ != "ausgang" or (rechnung.dokument_typ or "Rechnung") != "Rechnung":
+        raise HTTPException(status_code=422, detail="Nur Ausgangsrechnungen können als extern erstellt gekennzeichnet werden.")
+    unternehmen = db.query(Unternehmen).first()
+    if not (unternehmen and unternehmen.datenmigration_aktiv):
+        raise HTTPException(
+            status_code=422,
+            detail="Extern erstellte Rechnungen lassen sich nur kennzeichnen, wenn unter Einstellungen → Unternehmen → Funktionen die Datenübernahme aktiv ist.",
+        )
+    if rechnung.import_quelle not in (None, "extern"):
+        raise HTTPException(status_code=409, detail="Importierte Rechnung – die Kennzeichnung stammt aus dem CSV-Import und lässt sich nicht ändern.")
+    if rechnung.storniert:
+        raise HTTPException(status_code=409, detail="Stornierte Rechnungen lassen sich nicht mehr umkennzeichnen.")
+    if rechnung.ausgegeben or rechnung.ausgegeben_am or rechnung.original_pdf_pfad:
+        raise HTTPException(
+            status_code=409,
+            detail="Diese Rechnung wurde aus RechnungsFee bereits gedruckt oder versendet – die Kennzeichnung lässt sich nicht mehr ändern.",
+        )
+    rechnung.import_quelle = "extern" if data.extern_erstellt else None
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -1908,6 +2057,15 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.import_quelle:
+        if nur_ansehen and rechnung.original_pdf_pfad:
+            original = APP_DATA_DIR / rechnung.original_pdf_pfad
+            if original.is_file():
+                return Response(
+                    content=original.read_bytes(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{rechnung.rechnungsnummer or rechnung_id}_Original.pdf"', "Cache-Control": "no-store"},
+                )
+        raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung: PDF-Erzeugung ist gesperrt – maßgeblich ist das Original. Ein vorhandenes Original-PDF kann als Beleg angehängt werden.")
 
     # Absenderdaten: Snapshot hat Vorrang vor aktuellen Stammdaten (GoBD – finalisierte Dokumente sind unveränderlich)
     unternehmen = db.query(Unternehmen).first()
@@ -2369,13 +2527,13 @@ def delete_zugferd_anhang(rechnung_id: int, anhang_id: int, db: Session = Depend
     ).first()
     if not anhang:
         raise HTTPException(404, "Anhang nicht gefunden.")
-    beleg = anhang.beleg
-    pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-    if pfad.exists():
-        pfad.unlink()
+    beleg_id = anhang.beleg_id
     db.delete(anhang)
-    db.delete(beleg)
+    db.flush()
+    # inkl. PDF/A-Fassung, die bisher liegen blieb
+    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 @router.get("/{rechnung_id}/zugferd")
@@ -2385,6 +2543,8 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.import_quelle:
+        raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung kann nicht als ZUGFeRD neu ausgegeben werden – maßgeblich ist das Original.")
     if rechnung.typ != "ausgang":
         raise HTTPException(status_code=400, detail="ZUGFeRD ist nur für Ausgangsrechnungen verfügbar.")
     if getattr(rechnung, "dokument_typ", "Rechnung") != "Rechnung":
@@ -2535,8 +2695,51 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             Forderung.ausgleich_journal_id.is_(None),
         ).update({"status": "offen"})
 
+    # Kein Datenmüll: angehängte Belege (Beleganhang + ZUGFeRD-Zusatzanhänge) und ein bereits
+    # gespeichertes Original-PDF gehören nur zu diesem Dokument und werden mit entfernt - sofern
+    # kein anderer Datensatz denselben Beleg verwendet.
+    beleg_ids = {rechnung.beleg_id} | {a.beleg_id for a in rechnung.zugferd_anhaenge}
+    beleg_ids.discard(None)
+    original_pdf = rechnung.original_pdf_pfad
+
     db.delete(rechnung)
+    db.flush()   # Rechnung + ZUGFeRD-Verknüpfungen weg, damit die Belege als unbenutzt erkannt werden
+    zu_loeschende_dateien = [APP_DATA_DIR / original_pdf] if original_pdf else []
+    for beleg_id in beleg_ids:
+        zu_loeschende_dateien += _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(zu_loeschende_dateien)
+
+
+def _beleg_loeschen_wenn_unbenutzt(beleg_id: int, db: Session, basis: Path | None = None) -> list[Path]:
+    """Löscht den Beleg-Datensatz, wenn ihn nichts mehr verwendet, und liefert seine Dateien
+    (Original + PDF/A) zum anschließenden Entfernen. Wird er noch verwendet: leere Liste.
+    basis: Verzeichnis, relativ zu dem beleg.dateiname gespeichert ist - Standard uploads/,
+    Buchungsvorlagen legen ihre Belege abweichend relativ zu uploads/belege/ ab."""
+    from database.models import (
+        Buchungsvorlage, DokumentenPaketBeleg, KundeBeleg, Rechnungsvorlage, RechnungZugferdAnhang,
+    )
+    for modell in (Rechnung, Journaleintrag, RechnungZugferdAnhang, KundeBeleg, DokumentenPaketBeleg,
+                   Rechnungsvorlage, Buchungsvorlage):
+        if db.query(modell).filter(modell.beleg_id == beleg_id).first():
+            return []
+    beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
+    if not beleg:
+        return []
+    basis = basis or APP_DATA_DIR / "uploads"
+    dateien = [basis / rel for rel in {beleg.dateiname, beleg.beleg_pdfa_pfad} if rel]
+    db.delete(beleg)
+    return dateien
+
+
+def _dateien_entfernen(pfade: list[Path]) -> None:
+    """Nach erfolgreichem Commit aufrufen - schlägt der Commit fehl, bleiben die Dateien erhalten."""
+    for pfad in pfade:
+        try:
+            if pfad.is_file():
+                pfad.unlink()
+        except OSError:
+            logging.getLogger(__name__).warning("Datei nicht entfernt: %s", pfad)
 
 
 # ---------------------------------------------------------------------------
@@ -3809,7 +4012,9 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         )
         db.add(neue_pos)
         netto_sum += pos.netto * menge_neg
-        ust_sum += -pos.ust_betrag
+        # Reverse Charge (Issue #459): USt läuft nur nebenher, gehört nicht in den Gutschriftsbetrag
+        if not _ist_additive_position(pos):
+            ust_sum += -pos.ust_betrag
 
     gutschrift.netto_gesamt = netto_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)
     gutschrift.ust_gesamt = ust_sum.quantize(Decimal("0.01"), ROUND_HALF_UP)

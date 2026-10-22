@@ -266,7 +266,7 @@ class TagesabschlussPDF(FPDF):
             if begruendung:
                 text += f"  |  Begruendung: {begruendung}"
             self.set_x(10)
-            self.multi_cell(0, 5, text, border=1, fill=True)
+            self.multi_cell(0, 5, text, border=1, fill=True, align="L")
             self.set_text_color(0, 0, 0)
             self.ln(2)
 

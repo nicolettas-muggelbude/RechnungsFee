@@ -25,8 +25,10 @@ gibt es zusätzlich eine Steuer-Kennzahl. kz_83/kz_88 (Steuer 19%/7% Inland) sin
 KEINE echten Kennzahlen, sondern nur interne Hilfsgrößen für die Zahllast-Berechnung
 (Issue #272).
 
-KZ 41 (EU-Lieferungen steuerfreie Einnahmen) und KZ 87 (Ausfuhr etc.)
-können nicht sicher aus dem Journal abgeleitet werden – manuelle Eingabe.
+KZ 41 (ig. Lieferungen) und KZ 43 (Ausfuhrlieferungen) werden über die verknüpfte
+Ausgangsrechnung erkannt (Issue #458/#457). KZ 87 (steuerpflichtige Umsätze zu 0 %,
+§12 Abs. 3 UStG, z. B. Photovoltaik) bleibt manuell – 0 % kommt in RechnungsFee auch bei
+Kleinunternehmern und Auslandsfällen vor und ist daher kein eindeutiges Merkmal.
 """
 
 import calendar
@@ -45,6 +47,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport, Rechnung, VorsteuerAnspruch
+from utils.elster import ElsterExportFehler, KZ_BEMESSUNGSGRUNDLAGE, build_ustva_xml, steuernummer_elster13
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 
 router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
@@ -61,11 +64,14 @@ KZ_META = [
     ("A. Steuerpflichtige Ausgangsumsätze", "81",
      "Umsätze 19 % – Bemessungsgrundlage", False, True),
     ("", "86", "Umsätze 7 % – Bemessungsgrundlage", False, True),
+    # Issue #457: KZ 87 laut Vordruck = steuerpflichtige Umsätze zu 0 %, nicht Ausfuhr
+    ("", "87",
+     "Umsätze zum Steuersatz von 0 % (§12 Abs. 3 UStG, z. B. Photovoltaik)", False, False),
 
     ("B. Steuerfreie Umsätze mit Vorsteuerabzug", "41",
-     "Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.", False, False),
-    ("", "87",
-     "Weitere steuerfreie Umsätze mit Vorsteuerabzug (Ausfuhr, §4 Nr. 2–7 UStG)", False, False),
+     "Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.", False, True),
+    ("", "43",
+     "Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen, §4 Nr. 1a i. V. m. §6 UStG)", False, True),
 
     ("Nicht im Inland steuerbare Umsätze", "21",
      "Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)", False, True),
@@ -263,6 +269,20 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
     _drittland_dl_rechnung_ids = {
         r[0] for r in db.query(Rechnung.id).filter(Rechnung.ist_drittland_leistung == True).all()  # noqa: E712
     }
+    # KZ 41 (Issue #458): die Zahlungsbuchung einer Rechnung setzt steuerbefreiung_grund nie auf
+    # "§4 Nr. 1b UStG" (nur freie Journalbuchungen tun das, api/journal.py) - ig. Lieferungen aus
+    # Rechnungen fehlten dadurch in KZ 41, während die ZM sie (nur über das Konto) korrekt zählte.
+    # Erkennung deshalb zusätzlich über die Rechnung, analog zu KZ 21.
+    _ig_lieferung_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id)
+        .filter(Rechnung.typ == "ausgang", Rechnung.ist_eu_lieferung == True).all()  # noqa: E712
+    }
+    # KZ 43 (Issue #457): Ausfuhrlieferungen (§4 Nr. 1a i. V. m. §6 UStG, Flag seit #323) waren
+    # in der UStVA bisher gar nicht sichtbar - nur ein falsch beschriftetes manuelles Feld 87.
+    _ausfuhr_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id)
+        .filter(Rechnung.typ == "ausgang", Rechnung.ist_ausfuhrlieferung == True).all()  # noqa: E712
+    }
 
     # Lookup-Cache: Original-id (gruppe_id) → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
     _marge_cache: dict[int, Decimal | None] = {}
@@ -346,11 +366,27 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
                 posten[mapping[1]].append({**quelle, "betrag": ust_delta})
 
         # KZ 41 – ig. Lieferungen: 0% USt, Erkennung via konto_skr03 8125/3125
-        if (e.art == "Einnahme"
-                and (e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
-                and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"):
+        # bzw. über die verknüpfte Rechnung mit ist_eu_lieferung (Issue #458)
+        if e.art == "Einnahme" and (
+            e.rechnung_id in _ig_lieferung_rechnung_ids
+            or ((e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
+                and e.steuerbefreiung_grund == "§4 Nr. 1b UStG")
+        ):
             kz["kz_41"] += e.netto_betrag
             posten["kz_41"].append({**quelle, "betrag": e.netto_betrag})
+        # Storno/Gutschrift-Zahlung einer ig.-Lieferungs-Rechnung mindert KZ 41 (Skonto nicht,
+        # der Zahlungseingang enthält den reduzierten Betrag bereits - wie bei KZ 21 unten)
+        elif e.art == "Ausgabe" and e.zahlungsart != "Skonto" and e.rechnung_id in _ig_lieferung_rechnung_ids:
+            kz["kz_41"] -= e.netto_betrag
+            posten["kz_41"].append({**quelle, "betrag": -e.netto_betrag})
+
+        # KZ 43 – Ausfuhrlieferungen (Issue #457), gleiche Logik wie KZ 41 über die Rechnung
+        if e.art == "Einnahme" and e.rechnung_id in _ausfuhr_rechnung_ids:
+            kz["kz_43"] += e.netto_betrag
+            posten["kz_43"].append({**quelle, "betrag": e.netto_betrag})
+        elif e.art == "Ausgabe" and e.zahlungsart != "Skonto" and e.rechnung_id in _ausfuhr_rechnung_ids:
+            kz["kz_43"] -= e.netto_betrag
+            posten["kz_43"].append({**quelle, "betrag": -e.netto_betrag})
 
         # KZ 21/45 (Issue #372) – nicht steuerbare Auslands-Dienstleistungen. Erkennung über
         # rechnung_id statt Konto/steuerbefreiung_grund, da diese Buchungen kein eigenes
@@ -438,11 +474,44 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
     return kz, posten
 
 
+# Issue #459: Kleinunternehmer (§19 UStG) schulden die Steuer als Leistungsempfänger trotzdem -
+# bei §13b-Leistungen (z. B. Provisionen ausländischer Plattformen) und beim ig. Erwerb - und
+# geben nur für diese Zeiträume eine Voranmeldung ab (§18 Abs. 4a UStG), ohne Vorsteuerabzug.
+_KU_KZ = {"kz_46", "kz_47", "kz_84", "kz_85", "kz_89", "kz_93", "kz_90", "kz_95", "kz_98"}
+
+
+def _nur_ku_kz(kz: dict[str, Decimal], posten: dict[str, list[dict]] | None = None):
+    """Beschränkt ein _berechne_kz()-Ergebnis auf die Kennzahlen, für die ein Kleinunternehmer
+    selbst Steuer schuldet. Alle übrigen (eigene Umsätze, Vorsteuer) werden 0; die Zahllast wird
+    entsprechend neu gebildet (inkl. der internen ig.-Erwerb-Steuer zu festen Sätzen, die nur in
+    der ursprünglichen Zahllast steckt)."""
+    vst = kz["kz_66"] + kz["kz_61"] + kz["kz_62"] + kz["kz_67"]
+    eigene_ust = kz["kz_83"] + kz["kz_88"]
+    zahllast = (kz["zahllast"] + vst - eigene_ust).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    neu = {k: (v if k in _KU_KZ else ZERO) for k, v in kz.items()}
+    neu["zahllast"] = zahllast
+    if posten is not None:
+        posten = {k: (v if k in _KU_KZ else []) for k, v in posten.items()}
+    return neu, posten
+
+
+def _berechne_kz_fuer(unt, von: date, bis: date, db: Session):
+    """_berechne_kz() mit Kleinunternehmer-Beschränkung (Issue #459)."""
+    kz, posten = _berechne_kz(von, bis, db)
+    if unt and unt.ist_kleinunternehmer:
+        kz, posten = _nur_ku_kz(kz, posten)
+    return kz, posten
+
+
+def _hat_ku_steuer(kz: dict[str, Decimal]) -> bool:
+    return any(kz.get(k, ZERO) != ZERO for k in _KU_KZ)
+
+
 # Bemessungsgrundlage-Kennzahlen, die ELSTER in vollen Euro erwartet (Issue #428) - nur diese
 # werden für die "ELSTER-Eingabewert"-Spalte auf volle Euro gerundet; die direkt gemeldeten
 # Steuerbeträge (83/88/98/47/85) und Vorsteuerbeträge (66/61/62/67) bleiben centgenau, da sie
 # in ELSTER selbst centgenau eingetragen werden (keine eigene Bemessungsgrundlage-Rundung).
-_BEMESSUNGSGRUNDLAGE_KZS = {"81", "86", "41", "87", "21", "45", "89", "93", "90", "95", "46", "84"}
+_BEMESSUNGSGRUNDLAGE_KZS = KZ_BEMESSUNGSGRUNDLAGE
 
 
 def _voller_euro(betrag: Decimal) -> Decimal:
@@ -600,12 +669,14 @@ def _generate_pdf(zeitraum: str, kz: dict, unt: Unternehmen, gerundet: dict, zah
 
     # Nur Zeilen mit Wert ≠ 0 rendern, Abschnitte bei Bedarf
     letzter_abschnitt = None
+    meta_abschnitt = ""  # Abschnitt aus KZ_META, auch über KZs ohne Wert hinweg (Issue #457)
     for (abschnitt, kz_nr, bezeichnung, ist_steuer, _auto) in KZ_META:
+        meta_abschnitt = abschnitt or meta_abschnitt
         key = f"kz_{kz_nr}"
         wert = kz.get(key, ZERO)
         if wert == ZERO:
             continue
-        eff_abschnitt = abschnitt if abschnitt else letzter_abschnitt
+        eff_abschnitt = meta_abschnitt
         if eff_abschnitt != letzter_abschnitt:
             if letzter_abschnitt is not None:
                 pdf.ln(2)
@@ -678,9 +749,10 @@ class UStVAErgebnis(BaseModel):
     kz_83: Decimal = ZERO
     kz_86: Decimal = ZERO
     kz_88: Decimal = ZERO
-    # B – Steuerfreie Umsätze (manuell)
+    kz_87: Decimal = ZERO   # 0 % (manuell, Issue #457)
+    # B – Steuerfreie Umsätze mit Vorsteuerabzug
     kz_41: Decimal = ZERO
-    kz_87: Decimal = ZERO
+    kz_43: Decimal = ZERO   # Ausfuhrlieferungen (Issue #457)
     # Nicht im Inland steuerbare Umsätze (Issue #372)
     kz_21: Decimal = ZERO
     kz_45: Decimal = ZERO
@@ -727,6 +799,7 @@ class UStVASpeichernRequest(BaseModel):
     kz_86: Decimal = ZERO
     kz_88: Decimal = ZERO
     kz_41: Decimal = ZERO
+    kz_43: Decimal = ZERO
     kz_87: Decimal = ZERO
     kz_21: Decimal = ZERO
     kz_45: Decimal = ZERO
@@ -776,6 +849,12 @@ def ustva_berechnen(
     # Kleinunternehmerstatus (Vorjahressteuer ≤ 2.000 €).
     fa_befreit = (getattr(unt, "voranmeldungsrhythmus", None) == "keine") and not ist_ku
     befreit = ist_ku or fa_befreit
+    ku_kz = None
+    if ist_ku:
+        # Issue #459: Zeiträume mit §13b/ig. Erwerb sind auch für Kleinunternehmer meldepflichtig
+        ku_kz, _ = _berechne_kz_fuer(unt, von, bis, db)
+        if _hat_ku_steuer(ku_kz):
+            befreit = False
 
     if befreit:
         kz: dict = {k: ZERO for k in ALL_KZ_KEYS}
@@ -789,6 +868,13 @@ def ustva_berechnen(
                        "Vorjahressteuer ≤ 2.000 €). Prüfe diese Einstellung unter Einstellungen → "
                        "Unternehmen → Steuer & Recht, falls sich deine Situation geändert hat.")
         gerundet, zahllast_elster, zahllast_diff = {}, ZERO, ZERO
+    elif ku_kz is not None:
+        kz = ku_kz
+        hinweis = ("Als Kleinunternehmer nach §19 UStG gibst du nur für Zeiträume eine Voranmeldung ab, "
+                   "in denen du selbst Steuer schuldest – hier für §13b-Leistungen bzw. innergemeinschaftliche "
+                   "Erwerbe (§18 Abs. 4a UStG). Gemeldet wird nur diese Steuer, ein Vorsteuerabzug ist "
+                   "ausgeschlossen; deine eigenen Umsätze gehören nicht hinein.")
+        gerundet, zahllast_elster, zahllast_diff = _elster_rundung(kz)
     else:
         kz, _ = _berechne_kz(von, bis, db)
         hinweis = None
@@ -817,9 +903,25 @@ def ustva_posten(
     nr = kz if kz.startswith("kz_") else f"kz_{kz}"
     if nr not in ALL_KZ_KEYS:
         raise HTTPException(422, f"Unbekannte Kennziffer: {kz}")
-    _, posten = _berechne_kz(von, bis, db)
+    _, posten = _berechne_kz_fuer(db.query(Unternehmen).first(), von, bis, db)
     eintraege = sorted(posten.get(nr, []), key=lambda p: p["datum"])
     return [UStVAPostenItem(**p) for p in eintraege]
+
+
+class KUPruefung(BaseModel):
+    hat_reverse_charge: bool
+
+
+@router.get("/kleinunternehmer-pruefen", response_model=KUPruefung)
+def ku_pruefen(db: Session = Depends(get_db)):
+    """Issue #459: Menüpunkt UStVA für Kleinunternehmer nur zeigen, wenn es überhaupt
+    §13b-/ig.-Erwerb-Buchungen gibt (Journal oder Vorsteuer-Anspruch)."""
+    sonderfaelle = ("ig_erwerb", "13b_abs1", "13b_abs2")
+    hat = (
+        db.query(Journaleintrag.id).filter(Journaleintrag.ust_sonderfall.in_(sonderfaelle)).first() is not None
+        or db.query(VorsteuerAnspruch.id).filter(VorsteuerAnspruch.ust_sonderfall.in_(sonderfaelle)).first() is not None
+    )
+    return KUPruefung(hat_reverse_charge=hat)
 
 
 @router.post("/speichern")
@@ -859,13 +961,51 @@ def ustva_pdf(
     if not unt:
         raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
     von, bis, _ = _zeitraum_grenzen(zeitraum)
-    kz, _ = _berechne_kz(von, bis, db)
+    kz, _ = _berechne_kz_fuer(unt, von, bis, db)
     gerundet, zahllast_elster, zahllast_diff = _elster_rundung(kz)
     pdf_bytes = _generate_pdf(zeitraum, kz, unt, gerundet, zahllast_elster, zahllast_diff)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="UStVA_{zeitraum}.pdf"'},
+    )
+
+
+@router.get("/xml")
+def ustva_xml(
+    zeitraum: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """UStVA als ELSTER-XML (Nutzdaten) für den Upload in Mein ELSTER. Issue #360."""
+    unt = db.query(Unternehmen).first()
+    if not unt:
+        raise HTTPException(404, "Unternehmensdaten nicht gefunden.")
+    von, bis, _ = _zeitraum_grenzen(zeitraum)
+    kz, _ = _berechne_kz_fuer(unt, von, bis, db)
+    if unt.ist_kleinunternehmer and not _hat_ku_steuer(kz):
+        raise HTTPException(422, "Als Kleinunternehmer (§19 UStG) gibst du für diesen Zeitraum keine "
+                                 "Umsatzsteuer-Voranmeldung ab – es gibt keine §13b-Leistungen oder ig. Erwerbe.")
+    try:
+        stnr13 = steuernummer_elster13(unt.steuernummer, unt.bundesland)
+    except ElsterExportFehler as exc:
+        raise HTTPException(422, str(exc))
+    gerundet, zahllast_elster, _ = _elster_rundung(kz)
+
+    kz_werte = {nr: gerundet.get(nr, kz[f"kz_{nr}"]) for _, nr, *_ in KZ_META}
+    kz_werte["83"] = zahllast_elster  # Pflichtfeld: verbleibende Steuer
+
+    try:
+        xml_bytes = build_ustva_xml(
+            zeitraum=zeitraum, steuernummer13=stnr13,
+            unternehmen=unt, kz_werte=kz_werte,
+        )
+    except ElsterExportFehler as exc:
+        raise HTTPException(422, str(exc))
+
+    return StreamingResponse(
+        BytesIO(xml_bytes),
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="UStVA_{zeitraum}_ELSTER.xml"'},
     )
 
 
@@ -881,7 +1021,7 @@ class JahresUStVAErgebnis(BaseModel):
     # Reguläre KZs – identisch mit den Voranmeldungs-KZs, Jahressumme aus Journal
     kz_81: Decimal = ZERO; kz_83: Decimal = ZERO
     kz_86: Decimal = ZERO; kz_88: Decimal = ZERO
-    kz_41: Decimal = ZERO; kz_87: Decimal = ZERO
+    kz_41: Decimal = ZERO; kz_43: Decimal = ZERO; kz_87: Decimal = ZERO
     kz_21: Decimal = ZERO; kz_45: Decimal = ZERO
     kz_89: Decimal = ZERO; kz_93: Decimal = ZERO
     kz_90: Decimal = ZERO; kz_95: Decimal = ZERO; kz_98: Decimal = ZERO
@@ -917,7 +1057,8 @@ def _berechne_ku_kz48(von: date, bis: date, db: Session) -> Decimal:
         )
         .all()
     )
-    total = sum(Decimal(str(e.brutto_betrag or 0)) for e in eintraege)
+    # Startwert Decimal: ohne Einnahmen lieferte sum() int 0 und .quantize() schlug fehl
+    total = sum((Decimal(str(e.brutto_betrag or 0)) for e in eintraege), Decimal("0"))
     return total.quantize(Decimal("0.01"), ROUND_HALF_UP)
 
 
@@ -1026,15 +1167,25 @@ def _generate_pdf_jahres(jahr: int, ergebnis: JahresUStVAErgebnis, unt: Unterneh
             "damit das Finanzamt prüfen kann ob die §19-Grenze eingehalten wurde.",
             fill=True, align="L")
         pdf.ln(4)
+        # Issue #459: Steuer als Leistungsempfänger (§13b/ig. Erwerb) schuldet auch der Kleinunternehmer
+        ku_zeilen = [m for m in KZ_META if f"kz_{m[1]}" in _KU_KZ and getattr(ergebnis, f"kz_{m[1]}", ZERO) != ZERO]
+        if ku_zeilen:
+            section("Steuer als Leistungsempfänger (§13b UStG / ig. Erwerb)")
+            for (_abschnitt, kz_nr, bezeichnung, ist_steuer, _auto) in ku_zeilen:
+                kz_row(kz_nr, bezeichnung, getattr(ergebnis, f"kz_{kz_nr}"), ist_steuer=ist_steuer)
+            kz_row("—", "Zu zahlende Umsatzsteuer (ohne Vorsteuerabzug)", ergebnis.zahllast, bold=True)
+            pdf.ln(4)
     else:
         # Reguläre KZ-Tabelle (nur Zeilen ≠ 0)
         letzter_abschnitt = None
+        meta_abschnitt = ""  # wie oben (Issue #457)
         for (abschnitt, kz_nr, bezeichnung, ist_steuer, _auto) in KZ_META:
+            meta_abschnitt = abschnitt or meta_abschnitt
             key = f"kz_{kz_nr}"
             wert: Decimal = getattr(ergebnis, key, ZERO)
             if wert == ZERO:
                 continue
-            eff = abschnitt if abschnitt else letzter_abschnitt
+            eff = meta_abschnitt
             if eff != letzter_abschnitt:
                 if letzter_abschnitt is not None:
                     pdf.ln(2)
@@ -1134,7 +1285,8 @@ def jahresumsatzsteuer(
 
     kz_48 = ZERO
     if ist_ku:
-        kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+        # §13b/ig. Erwerb schuldet auch der Kleinunternehmer (Issue #459), alles andere bleibt 0
+        kz, _ = _berechne_kz_fuer(unt, von, bis, db)
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
         kz, _ = _berechne_kz(von, bis, db)
@@ -1159,7 +1311,7 @@ def jahresumsatzsteuer(
         jahr=jahr, von=von, bis=bis, ist_kleinunternehmer=ist_ku,
         kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
-        kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_41=kz.get("kz_41", ZERO), kz_43=kz.get("kz_43", ZERO), kz_87=kz.get("kz_87", ZERO),
         kz_21=kz.get("kz_21", ZERO), kz_45=kz.get("kz_45", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
         kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),
@@ -1191,7 +1343,8 @@ def jahresumsatzsteuer_pdf(
 
     kz_48 = ZERO
     if ist_ku:
-        kz: dict[str, Decimal] = {k: ZERO for k in ALL_KZ_KEYS}
+        # §13b/ig. Erwerb schuldet auch der Kleinunternehmer (Issue #459), alles andere bleibt 0
+        kz, _ = _berechne_kz_fuer(unt, von, bis, db)
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
         kz, _ = _berechne_kz(von, bis, db)
@@ -1214,7 +1367,7 @@ def jahresumsatzsteuer_pdf(
         jahr=jahr, von=von, bis=bis, ist_kleinunternehmer=ist_ku,
         kz_81=kz.get("kz_81", ZERO), kz_83=kz.get("kz_83", ZERO),
         kz_86=kz.get("kz_86", ZERO), kz_88=kz.get("kz_88", ZERO),
-        kz_41=kz.get("kz_41", ZERO), kz_87=kz.get("kz_87", ZERO),
+        kz_41=kz.get("kz_41", ZERO), kz_43=kz.get("kz_43", ZERO), kz_87=kz.get("kz_87", ZERO),
         kz_21=kz.get("kz_21", ZERO), kz_45=kz.get("kz_45", ZERO),
         kz_89=kz.get("kz_89", ZERO), kz_93=kz.get("kz_93", ZERO),
         kz_90=kz.get("kz_90", ZERO), kz_95=kz.get("kz_95", ZERO), kz_98=kz.get("kz_98", ZERO),

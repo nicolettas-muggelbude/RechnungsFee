@@ -21,6 +21,7 @@ from utils.pdf_rechnung_base import (
     GRAU_RAND, TEXT_GRAU, TEXT_DUNKEL,
     _find_dejavu_dir, _adresszeilen, _logo_abmessungen, _person_bezeichnung,
 )
+from utils.logo import logo_datei
 from utils.pdf_shared import epc_qr_bytes, build_hr_zeile, embed_unterschrift
 
 
@@ -71,12 +72,13 @@ class MahnungPDF(FPDF):
         unt = self.unt
         top = 10.0
 
-        logo_pfad = unt.get("logo_pfad") or ""
-        if logo_pfad and Path(logo_pfad).exists():
+        # Issue #454: gespeicherter (ggf. absoluter, systemfremder) Pfad → tatsächliche Datei
+        logo = logo_datei(unt.get("logo_pfad"))
+        if logo:
             try:
-                lw, lh = _logo_abmessungen(logo_pfad)
+                lw, lh = _logo_abmessungen(str(logo))
                 if lw > 0:
-                    self.image(logo_pfad, x=L_MARGIN, y=top, w=lw, h=lh)
+                    self.image(str(logo), x=L_MARGIN, y=top, w=lw, h=lh)
             except Exception:
                 pass
 
@@ -286,7 +288,7 @@ def erstelle_mahnung_pdf(
 
     pdf.set_font("DejaVu", "", 10)
     for zeile in (mahntext or "").split("\n"):
-        pdf.multi_cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 5, zeile, new_x="LMARGIN", new_y="NEXT", align="L")
     pdf.ln(4)
 
     # Positionstabelle
@@ -366,7 +368,7 @@ def erstelle_mahnung_pdf(
             text_w = pdf.w - pdf.l_margin - pdf.r_margin - qr_sz - gap
             qr_x = pdf.l_margin + text_w + gap
             y_start = pdf.get_y()
-            pdf.multi_cell(text_w, 5, hinweis)
+            pdf.multi_cell(text_w, 5, hinweis, align="L")
             pdf.image(BytesIO(qr_bytes), x=qr_x, y=y_start, w=qr_sz, h=qr_sz)
             # Label unter dem QR-Code - identisch zu den Rechnungs-Vorlagen (pdf_rechnung.py),
             # damit GiroCode-Optik über alle Dokumenttypen der App konsistent ist.
@@ -380,7 +382,7 @@ def erstelle_mahnung_pdf(
                 pdf.set_y(y_start + qr_sz + 5)
         else:
             pdf.set_font("DejaVu", "", 9)
-            pdf.multi_cell(0, 5, hinweis, new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(0, 5, hinweis, new_x="LMARGIN", new_y="NEXT", align="L")
 
     # Unterschrift - nur wirksam wenn unternehmen.unterschrift_auf_rechnung UND
     # unterschrift_bild gesetzt sind (Guard steckt in embed_unterschrift selbst),

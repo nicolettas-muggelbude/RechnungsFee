@@ -298,8 +298,9 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
     ust_satz = data.ust_satz
     vorsteuerabzug = data.vorsteuerabzug
     steuerbefreiung_grund = None
+    ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
 
-    if unternehmen and unternehmen.ist_kleinunternehmer:
+    if ist_ku:
         # §19 UStG betrifft nur die eigenen Einnahmen (keine USt auf eigene Umsätze) - bei
         # einer Ausgabe ist der USt-Satz des Lieferanten real, nur der Vorsteuerabzug bleibt
         # gesperrt (Issue #397). vorsteuerabzug wird serverseitig hart auf False erzwungen,
@@ -358,12 +359,12 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
         netto = Decimal("0.00")
         ust_betrag = data.brutto_betrag
         brutto_stored = data.brutto_betrag
-        vorsteuerabzug = True
+        vorsteuerabzug = not ist_ku  # §19: nie Vorsteuerabzug (Issue #459)
     elif ust_sonderfall and ust_satz > 0:
         netto = data.brutto_betrag
         ust_betrag = (netto * ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
         brutto_stored = netto
-        vorsteuerabzug = True
+        vorsteuerabzug = not ist_ku  # §19: die §13b-Steuer wird geschuldet, aber nicht abgezogen (Issue #459)
     else:
         netto, ust_betrag = _berechne_ust(data.brutto_betrag, ust_satz)
         brutto_stored = data.brutto_betrag
@@ -753,12 +754,12 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             netto = Decimal("0.00")
             ust_betrag = pos.brutto_betrag
             brutto_stored = pos.brutto_betrag
-            vorsteuerabzug = True
+            vorsteuerabzug = not (unternehmen and unternehmen.ist_kleinunternehmer)  # §19 (Issue #459)
         elif pos_sf and ust_satz > 0:
             netto = pos.brutto_betrag
             ust_betrag = (netto * ust_satz / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
             brutto_stored = netto
-            vorsteuerabzug = True
+            vorsteuerabzug = not (unternehmen and unternehmen.ist_kleinunternehmer)  # §19 (Issue #459)
         else:
             netto, ust_betrag = _berechne_ust(pos.brutto_betrag, ust_satz)
             brutto_stored = pos.brutto_betrag

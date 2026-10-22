@@ -152,6 +152,21 @@ class Unternehmen(Base):
     # Versand (inkl. Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird
     # selbst. Bisher nur für Rechnungen angeboten.
     thunderbird_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #451: Rechnungspostfach per IMAP - PDF/XML-Anhänge landen in einer Importliste
+    # (postfach_eingang), übernommen wird jede Rechnung manuell wie beim Einzelimport.
+    postfach_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    imap_host: Mapped[str | None] = mapped_column(String(200))
+    imap_port: Mapped[int] = mapped_column(Integer, default=993, server_default="993", nullable=False)
+    imap_ssl: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)   # SSL/TLS (993) statt STARTTLS (143)
+    imap_user: Mapped[str | None] = mapped_column(String(200))
+    imap_passwort: Mapped[str | None] = mapped_column(Text)
+    imap_ordner: Mapped[str] = mapped_column(String(200), default="INBOX", server_default="INBOX", nullable=False)
+    imap_beim_start: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Trust-on-First-Use analog SMTP (Issue #336) - eigener Fingerabdruck, IMAP-Server kann ein anderer sein
+    imap_zertifikat_ignorieren: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    imap_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    # interner Abrufstand {"ordner", "uidvalidity", "uid"} - nur Mails danach werden geprüft
+    imap_abruf_stand: Mapped[str | None] = mapped_column(Text)
     zugferd_anhaenge_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
     unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
@@ -249,6 +264,19 @@ class Kategorie(Base):
     journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="kategorie")
     rechnungen: Mapped[list["Rechnung"]] = relationship(back_populates="kategorie")
     transaktionen: Mapped[list["BankTransaktion"]] = relationship(back_populates="kategorie")
+
+
+class ImportMappingVorlage(Base):
+    """Gespeicherte Spaltenzuordnungen für CSV-Stammdatenimporte."""
+    __tablename__ = "import_mapping_vorlagen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    typ: Mapped[str] = mapped_column(String(20), nullable=False)
+    hat_header: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    mapping_json: Mapped[str] = mapped_column(Text, nullable=False)
+    typ_erkennung_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Schnellbuchung(Base):
@@ -606,6 +634,32 @@ class Artikel(Base):
 # Belege (Dateianhänge an Rechnungen und Journaleinträge)
 # ---------------------------------------------------------------------------
 
+class PostfachEingang(Base):
+    """Issue #451: aus dem Rechnungspostfach abgerufener PDF-/XML-Anhang, der auf die manuelle
+    Übernahme wartet. Bleibt nach Übernahme/Verwerfen als Zeile erhalten (sha256 = Dublettenschutz
+    beim nächsten Abruf), die Datei selbst wird beim Verwerfen gelöscht."""
+    __tablename__ = "postfach_eingang"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    datei_pfad: Mapped[str | None] = mapped_column(String(500))      # relativ zu uploads/, NULL nach Verwerfen
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    dateigroesse: Mapped[int] = mapped_column(Integer, nullable=False)
+    absender: Mapped[str | None] = mapped_column(String(300))
+    betreff: Mapped[str | None] = mapped_column(String(500))
+    mail_datum: Mapped[datetime | None] = mapped_column(DateTime)
+    # Wiederfinden der Mail beim Übernehmen (dann erst wird sie verschoben): UID gilt nur solange
+    # UIDVALIDITY des Ordners unverändert ist, sonst Suche per Message-ID
+    mail_ordner: Mapped[str | None] = mapped_column(String(200))
+    mail_uidvalidity: Mapped[str | None] = mapped_column(String(32))
+    mail_uid: Mapped[str | None] = mapped_column(String(32))
+    mail_message_id: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="offen", server_default="offen", nullable=False)  # offen|uebernommen|verworfen
+    rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id", ondelete="SET NULL"))
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Beleg(Base):
     """Dateianhang (PDF, Bild) – verknüpfbar mit Rechnungen und Journaleinträgen."""
     __tablename__ = "belege"
@@ -710,6 +764,7 @@ class Rechnung(Base):
     beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id"))
     notizen: Mapped[str | None] = mapped_column(Text)
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
+    import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, nicht neu ausgeben/mahnen
     kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)

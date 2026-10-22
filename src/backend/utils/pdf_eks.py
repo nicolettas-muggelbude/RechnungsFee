@@ -200,7 +200,7 @@ class EksPDF(FPDF):
         for (nr, label, wert, breite) in felder:
             nr_str = f"{nr} " if nr is not None else ""
             self.set_font("DejaVu", "", 8.5)
-            n = len(self.multi_cell(breite, lh, nr_str + label, split_only=True))
+            n = len(self.multi_cell(breite, lh, nr_str + label, split_only=True, align="L"))
             h = n * lh
             if h > max_lh:
                 max_lh = h
@@ -329,7 +329,7 @@ class EksPDF(FPDF):
         ok   = not _ist_leer(zsum)
 
         self.set_font("DejaVu", "B" if fett else "", 7.5)
-        n_lines = len(self.multi_cell(wl - 2, 5.0, label, split_only=True))
+        n_lines = len(self.multi_cell(wl - 2, 5.0, label, split_only=True, align="L"))
         row_h   = max(5.5, n_lines * 5.0)
 
         y0 = self.get_y()
@@ -848,7 +848,7 @@ def _s8_tabelle_c(pdf: EksPDF, felder_c: list[dict], zeilensummen: dict):
             pass
 
         pdf.set_font("DejaVu", "", 7.5)
-        n_lines_c = len(pdf.multi_cell(w_art - 1, 5.0, f["label"], split_only=True))
+        n_lines_c = len(pdf.multi_cell(w_art - 1, 5.0, f["label"], split_only=True, align="L"))
         row_h_c = max(5.5, n_lines_c * 5.0)
 
         y0_c = pdf.get_y()

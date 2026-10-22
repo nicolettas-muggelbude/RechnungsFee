@@ -241,6 +241,17 @@ export type Unternehmen = {
   smtp_zertifikat_ignorieren?: boolean
   smtp_zertifikat_fingerprint?: string | null
   thunderbird_aktiv?: boolean
+  // Issue #451: Rechnungspostfach per IMAP
+  postfach_aktiv?: boolean
+  imap_host?: string | null
+  imap_port?: number
+  imap_ssl?: boolean
+  imap_user?: string | null
+  imap_passwort?: string | null
+  imap_ordner?: string
+  imap_beim_start?: boolean
+  imap_zertifikat_ignorieren?: boolean
+  imap_zertifikat_fingerprint?: string | null
   zugferd_anhaenge_aktiv?: boolean
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
@@ -1072,6 +1083,18 @@ async function _triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Lädt eine ELSTER-Exportdatei; die Backend-Meldung (z. B. 422) wird als Fehlertext durchgereicht. */
+async function _downloadElsterDatei(pfad: string, fallbackName: string): Promise<string> {
+  const res = await fetch(`${await getBaseUrl()}${pfad}`)
+  if (!res.ok) {
+    const detail = await res.json().then(j => j.detail).catch(() => null)
+    throw new Error(typeof detail === 'string' ? detail : `Export fehlgeschlagen (${res.status})`)
+  }
+  const filename = res.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1] ?? fallbackName
+  await _triggerBlobDownload(await res.blob(), filename)
+  return filename
+}
+
 /** Lädt eine Rechnungs-PDF als Datei herunter (kein Viewer).
  *  Für den Mail-Workflow: User speichert die PDF und hängt sie manuell an. */
 export async function downloadPdfForMail(rechnungId: number): Promise<void> {
@@ -1333,6 +1356,7 @@ export type Rechnung = {
   zahlungsdatum: string | null
   notizen: string | null
   externe_belegnr: string | null
+  import_quelle?: string | null
   kunden_bestellnummer?: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
@@ -1413,6 +1437,8 @@ export type Rechnung = {
 
 export type RechnungCreate = {
   typ: 'eingang' | 'ausgang'
+  // Datenübernahme: außerhalb von RechnungsFee erstellte Ausgangsrechnung (Sperre wie CSV-Import)
+  extern_erstellt?: boolean
   rechnungsnummer?: string
   datum: string
   leistung_von?: string
@@ -1636,12 +1662,23 @@ export const getPaketDateiUrl = async (paketId: number, eintragId: number): Prom
 
 export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
 
+/** Issue #464: Steuerfall der letzten Ausgangsrechnung eines Kunden (wird bei neuen Rechnungen übernommen). */
+export type LetzterSteuerfall = {
+  ist_reverse_charge: boolean
+  ist_eu_lieferung: boolean
+  ist_drittland_leistung: boolean
+  ist_ausfuhrlieferung: boolean
+}
+export const getLetzterSteuerfall = (kundeId: number) =>
+  request<LetzterSteuerfall>(`/rechnungen/letzter-steuerfall?kunde_id=${kundeId}`)
+
 // Vorschau (Issue #332): berechnet Positions-/Kopfsummen ohne zu speichern - nutzt im Backend
 // exakt dieselbe Funktion wie createRechnung/updateRechnung. Das Formular soll selbst nicht mehr
 // rechnen, nur noch anzeigen was der Server zurückgibt.
 export type RechnungVorschauRequest = {
   typ?: 'eingang' | 'ausgang'
   positionen: RechnungspositionCreate[]
+  kategorie_id?: number  // Issue #459: Fallback-Kategorie für die Reverse-Charge-Erkennung
   eingabemodus: 'netto' | 'brutto'
   rabatt_prozent?: number
   rabatt_betrag?: number
@@ -1712,6 +1749,10 @@ export const finalisiereRechnung = (id: number) =>
 
 export const markiereRechnungAusgegeben = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ausgegeben`, { method: 'POST' })
+
+// Datenübernahme: „extern erstellt" nachträglich setzen/entfernen (nur vor erster Ausgabe)
+export const setzeRechnungExternErstellt = (id: number, extern_erstellt: boolean) =>
+  request<Rechnung>(`/rechnungen/${id}/extern-erstellt`, { method: 'POST', body: JSON.stringify({ extern_erstellt }) })
 
 export async function getRechnungPdf(id: number): Promise<Blob> {
   const base = await getBaseUrl()
@@ -1971,8 +2012,9 @@ export type UStVAErgebnis = {
   // A – Ausgangsumsätze
   kz_81: string; kz_83: string
   kz_86: string; kz_88: string
-  // B – steuerfreie Umsätze (manuell)
-  kz_41: string; kz_87: string
+  kz_87: string  // 0 % (manuell)
+  // B – steuerfreie Umsätze mit Vorsteuerabzug
+  kz_41: string; kz_43: string
   // Nicht im Inland steuerbare Umsätze
   kz_21: string; kz_45: string
   // C – ig. Erwerb
@@ -2020,6 +2062,10 @@ export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
 }
 
+/** UStVA als ELSTER-XML (Upload-Datei für Mein ELSTER) herunterladen. */
+export const downloadUstvaXml = (zeitraum: string): Promise<string> =>
+  _downloadElsterDatei(`/ustva/xml?zeitraum=${encodeURIComponent(zeitraum)}`, `UStVA_${zeitraum}_ELSTER.xml`)
+
 export type UStVAPosten = {
   quelle: 'journal' | 'vorsteuer_anspruch'
   quelle_id: number
@@ -2039,7 +2085,7 @@ export type JahresUStVAErgebnis = {
   bis: string
   ist_kleinunternehmer: boolean
   kz_81: string; kz_83: string; kz_86: string; kz_88: string
-  kz_41: string; kz_87: string; kz_21: string; kz_45: string
+  kz_41: string; kz_43: string; kz_87: string; kz_21: string; kz_45: string
   kz_89: string; kz_93: string
   kz_90: string; kz_95: string; kz_98: string
   kz_46: string; kz_47: string; kz_84: string; kz_85: string
@@ -2092,8 +2138,16 @@ export type ZMPruefung = {
 export const pruefZM = () =>
   request<ZMPruefung>('/zm/pruefen')
 
+/** Issue #459: gibt es §13b-/ig.-Erwerb-Buchungen? Dann braucht auch ein Kleinunternehmer die UStVA. */
+export const pruefKleinunternehmerUStVA = () =>
+  request<{ hat_reverse_charge: boolean }>('/ustva/kleinunternehmer-pruefen')
+
 export const berechneZM = (zeitraum: string) =>
   request<ZMErgebnis>(`/zm/berechnen?zeitraum=${encodeURIComponent(zeitraum)}`)
+
+/** ZM als CSV-Meldeliste (Import-Datei für Mein ELSTER) herunterladen. */
+export const downloadZmCsv = (zeitraum: string): Promise<string> =>
+  _downloadElsterDatei(`/zm/csv?zeitraum=${encodeURIComponent(zeitraum)}`, `ZM_${zeitraum}_ELSTER.csv`)
 
 // --- EÜR ---
 
@@ -2230,6 +2284,53 @@ export const sendeTestMail = (an: string) =>
     method: 'POST',
     body: JSON.stringify({ an }),
   })
+
+// --- Rechnungspostfach (Issue #451) ---
+export type PostfachEintrag = {
+  id: number
+  original_name: string
+  mime_type: string
+  dateigroesse: number
+  absender?: string | null
+  betreff?: string | null
+  mail_datum?: string | null
+  status: 'offen' | 'uebernommen' | 'verworfen'
+  rechnung_id?: number | null
+  erstellt_am?: string | null
+}
+
+export type PostfachAbrufErgebnis = {
+  mails_geprueft: number
+  neu: number
+  dubletten: number
+  uebersprungen: string[]
+  weitere_mails: boolean
+}
+
+export const postfachTesten = () =>
+  request<{ ok: boolean; ordner: string; anzahl_mails: number }>('/postfach/test', { method: 'POST' })
+export const postfachAbrufen = () =>
+  request<PostfachAbrufErgebnis>('/postfach/abrufen', { method: 'POST' })
+export const getPostfachEingang = () =>
+  request<PostfachEintrag[]>('/postfach/eingang')
+export const postfachDateiPfad = (id: number) => `/postfach/eingang/${id}/datei`
+// hinweis: z. B. "Mail konnte nicht verschoben werden" - Übernahme/Verwerfen ist trotzdem erledigt
+export type PostfachEintragMitHinweis = PostfachEintrag & { hinweis?: string | null }
+export const postfachUebernommen = (id: number, rechnungId: number | null) =>
+  request<PostfachEintragMitHinweis>(`/postfach/eingang/${id}/uebernommen`, {
+    method: 'POST',
+    body: JSON.stringify({ rechnung_id: rechnungId }),
+  })
+export const postfachVerwerfen = (id: number) =>
+  request<PostfachEintragMitHinweis>(`/postfach/eingang/${id}/verwerfen`, { method: 'POST' })
+
+/** Datei eines Postfach-Eintrags als File holen - für den unveränderten Einzelimport. */
+export async function ladePostfachDatei(e: PostfachEintrag): Promise<File> {
+  const base = await getApiBase()
+  const res = await fetch(`${base}${postfachDateiPfad(e.id)}`)
+  if (!res.ok) throw new Error('Datei aus dem Postfach-Eingang konnte nicht geladen werden.')
+  return new File([await res.blob()], e.original_name, { type: e.mime_type })
+}
 
 // ---------------------------------------------------------------------------
 // Wiederkehrende Ausgangsrechnungen
@@ -3001,6 +3102,56 @@ export const saveMappingVorlage = (data: Omit<ImportMappingVorlage, 'id' | 'erst
 
 export const deleteMappingVorlage = (id: number) =>
   request<void>(`/datenmigration/mapping-vorlagen/${id}`, { method: 'DELETE' })
+
+export type RechnungenImportVorschauZeile = {
+  zeile: number
+  rechnungsnummer: string | null
+  partner: string | null
+  datum: string | null
+  brutto: string | null
+  bezahlt_betrag: string | null
+  bezahlt_am: string | null
+  kategorie: string | null
+  kategorie_quelle: string | null
+  kategorie_match: boolean
+  fehler: string[]
+  warnungen: string[]
+}
+export type RechnungenImportZeileErgebnis = {
+  zeile: number
+  rechnungsnummer: string | null
+  partner: string | null
+  status: 'importiert' | 'uebersprungen' | 'fehler'
+  begruendung: string | null
+  rechnung_id: number | null
+  zahlung_id: number | null
+  warnungen: string[]
+}
+export type RechnungenImportErgebnis = {
+  importiert: number
+  uebersprungen: number
+  fehler: number
+  zeilen: RechnungenImportZeileErgebnis[]
+}
+
+export async function getRechnungenImportMuster(typ: 'rechnungen' | 'belege'): Promise<Blob> {
+  const base = await getBaseUrl()
+  const res = await fetch(`${base}/rechnungen-import/muster-csv/${typ}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.blob()
+}
+
+async function rechnungenImportRequest<T>(path: string, datei: File, typ: 'rechnungen' | 'belege', mapping: Record<string, string> = {}): Promise<T> {
+  const form = new FormData()
+  form.append('datei', datei)
+  form.append('typ', typ)
+  form.append('kategorie_mapping', JSON.stringify(mapping))
+  return request<T>(`/rechnungen-import/${path}`, { method: 'POST', body: form })
+}
+export const getRechnungenImportVorschau = (datei: File, typ: 'rechnungen' | 'belege', mapping: Record<string, string>) =>
+  rechnungenImportRequest<RechnungenImportVorschauZeile[]>('vorschau', datei, typ, mapping)
+export const importRechnungenCsv = (datei: File, typ: 'rechnungen' | 'belege', mapping: Record<string, string>) =>
+  rechnungenImportRequest<RechnungenImportErgebnis>('importieren', datei, typ, mapping)
 
 // --- Mahnwesen (docs/plan-mahnwesen.md) ---
 export type Mahnstufe = {

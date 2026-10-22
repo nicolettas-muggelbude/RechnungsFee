@@ -77,7 +77,64 @@
 
 ---
 
-#### **Version 2.0 (später): ELSTER-Integration** 🤖
+#### **ELSTER-Datei-Export (umgesetzt, Issue #360)** ✅
+
+Zwischenstufe zwischen manuellem Abtippen und ERiC-Vollintegration:
+RechnungsFee erzeugt Dateien für den **Upload in Mein ELSTER** – kein
+ELSTER-Zertifikat, keine Hersteller-Registrierung, kein ERiC nötig.
+
+- `GET /api/ustva/xml?zeitraum=YYYY-MM|YYYY-QN` → `UStVA_<zeitraum>_ELSTER.xml`
+  (ISO-8859-15, Nutzdaten-only: Root `<Anmeldungssteuern>`, `version`/`xmlns`
+  folgen dem Jahr des Zeitraums)
+- `GET /api/zm/csv?zeitraum=…` → `ZM_<zeitraum>_ELSTER.csv` – Meldeliste
+  Schnittstelle v3.0, UTF-8
+- Frontend: Export-Buttons auf der UStVA- und der ZM-Seite
+- Workflow: Datei herunterladen → in Mein ELSTER hochladen → kurz prüfen →
+  im Portal abschicken
+
+**Steuernummer-Umrechnung** (`utils/elster.py` `steuernummer_elster13`):
+Landesformat → 13-stelliges Bundesschema `\d{4}0\d{8}` für alle 16
+Bundesländer (Hessen: führende 0 optional; NW: abweichende Feldaufteilung;
+bereits konvertierte 13-stellige Nummern werden durchgereicht).
+
+**Bekannte Vorbehalte:**
+- `Kz09` ist im XSD Pflichtfeld, wird beim Mein-ELSTER-Upload laut offizieller
+  Hilfe ignoriert → RechnungsFee sendet den Platzhalter `00000` (keine
+  ERiC-Hersteller-ID vorhanden)
+- Internes ZM-Kennzeichen `D` (§13b-Dienstleistung) wird zu ELSTER-`S`
+  (sonstige Leistung) gemappt; ELSTER-`D` = Dreiecksgeschäft ist im
+  Datenmodell nicht abbildbar
+- Feldtypen, Längen und Pflichtfelder gegen die Jahresdokumentation UStVA
+  2026 (ERiC 43.4, öffentlich gespiegelt unter
+  aa.docs.rechtlogisch.de/filings/ust-va) geprüft.
+- Probe-Upload in Mein ELSTER (2026-10-20) für beide Dateien ohne Fehler
+  bestanden: Die UStVA-XML befüllte das Formular mit den von RechnungsFee
+  berechneten Werten (Kennziffern, Zeitraum, umgerechnete 13-stellige
+  Steuernummer; ELSTER berechnete die Steuer aus den vollen
+  Euro-Bemessungsgrundlagen selbst), die ZM-CSV wurde als Meldezeile
+  (USt-IdNr., Summe, Art der Leistung „L“) übernommen. Der Test verifiziert
+  Format und Übernahme, nicht die Berechnung – die ZM-Art „S“ (seit #456
+  korrekt berechnet) ist noch nicht upload-getestet.
+- Die Exporte übernehmen die berechneten Werte unverändert. Die beiden zuvor
+  bekannten Rechenfehler #456 (ZM: EU-B2B-Dienstleistungen fehlten) und #458
+  (ig. Lieferungen aus Rechnungen fehlten in KZ 41) sind behoben; ZM und UStVA
+  nutzen dieselbe Quelle (ZM-Summe S = KZ 21, L = KZ 41).
+- Offen: ZM und KZ 21/41 werden nach dem Zahlungsdatum zugeordnet; für die ZM
+  ist nach §18a Abs. 8 UStG vermutlich der Leistungs-/Rechnungsmonat maßgeblich
+  (noch zu prüfen).
+- Kein `<Unternehmer>`-Block (optional; ELSTER erlaubt dort als Hausnummer
+  nur Ziffern) – Name und Anschrift stehen im Pflichtblock `<DatenLieferant>`;
+  fehlen sie in den Stammdaten, antwortet der Endpunkt mit 422.
+- Manuelle Ergänzungen auf der UStVA-Seite (z. B. KZ 41) sind nicht im XML
+  enthalten – solange welche eingetragen sind, wird der XML-Export
+  ausgeblendet.
+- Kennziffern-Rundung wie im Formular: Bemessungsgrundlagen volle Euro
+  (§123 AO), Steuer- und Vorsteuerbeträge centgenau; `Kz83` = verbleibende
+  Steuer (Pflichtfeld).
+
+---
+
+#### **Version 2.0 (später): ERiC-Direktübermittlung** 🤖
 
 **Funktionsweise:**
 - Software erstellt ELSTER-XML

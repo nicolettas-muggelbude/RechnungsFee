@@ -3,7 +3,6 @@ API-Endpunkte für Unternehmensstammdaten.
 Es gibt immer genau einen Datensatz (id=1).
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
 from database.models import Unternehmen
+from utils.logo import logo_datei, logo_relativ
 from .schemas import UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse
 
 router = APIRouter(prefix="/api/unternehmen", tags=["Stammdaten"])
@@ -166,16 +166,16 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     ziel = _upload_dir() / f"logo.{ext}"
 
     # Altes Logo löschen (andere Erweiterung)
-    if unternehmen.logo_pfad and unternehmen.logo_pfad != str(ziel):
-        try:
-            os.unlink(unternehmen.logo_pfad)
-        except FileNotFoundError:
-            pass
+    alt = logo_datei(unternehmen.logo_pfad)
+    if alt and alt != ziel:
+        alt.unlink(missing_ok=True)
 
     with open(ziel, "wb") as f:
         f.write(inhalt)
 
-    unternehmen.logo_pfad = str(ziel)
+    # Issue #454: relativ zum Datenordner speichern - ein absoluter Pfad passt nach Backup-Import
+    # auf einem anderen System (z. B. Windows → macOS) oder einem Profilwechsel nicht mehr
+    unternehmen.logo_pfad = logo_relativ(ziel.name)
     db.commit()
     db.refresh(unternehmen)
     return unternehmen
@@ -187,18 +187,13 @@ def get_logo(db: Session = Depends(get_db)):
     unternehmen = db.query(Unternehmen).first()
     if not unternehmen or not unternehmen.logo_pfad:
         raise HTTPException(status_code=404, detail="Kein Logo hinterlegt.")
-    pfad = Path(unternehmen.logo_pfad)
-    if not pfad.exists():
-        # Selbstheilung: logo_pfad wurde als absoluter Pfad gespeichert (Altfehler, siehe
-        # UPLOAD_DIR-Kommentar oben) - nach einer Profil-Migration oder einem Datenordner-
-        # Umzug (z.B. macOS-Migration) liegt die Datei nicht mehr dort, sondern unter dem
-        # gleichen Dateinamen im aktuellen UPLOAD_DIR. Pfad in der DB gleich dauerhaft
-        # korrigieren, damit dieser Fallback nur einmal greifen muss.
-        alternativ = UPLOAD_DIR / pfad.name
-        if not alternativ.exists():
-            raise HTTPException(status_code=404, detail="Logo-Datei nicht gefunden.")
-        pfad = alternativ
-        unternehmen.logo_pfad = str(pfad)
+    # Selbstheilung (Issue #454): alter absoluter Pfad (anderes System, Profil-/Ordnerumzug) →
+    # Datei unter gleichem Namen im aktuellen uploads/ suchen, auch bei Windows-Pfad auf macOS/Linux
+    pfad = logo_datei(unternehmen.logo_pfad)
+    if not pfad:
+        raise HTTPException(status_code=404, detail="Logo-Datei nicht gefunden.")
+    if unternehmen.logo_pfad != logo_relativ(pfad.name) and pfad.parent == UPLOAD_DIR:
+        unternehmen.logo_pfad = logo_relativ(pfad.name)   # einmalig auf die relative Form umstellen
         db.commit()
     return FileResponse(str(pfad))
 
@@ -210,9 +205,8 @@ def delete_logo(db: Session = Depends(get_db)):
     if not unternehmen:
         raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
     if unternehmen.logo_pfad:
-        try:
-            os.unlink(unternehmen.logo_pfad)
-        except FileNotFoundError:
-            pass
+        datei = logo_datei(unternehmen.logo_pfad)
+        if datei:
+            datei.unlink(missing_ok=True)
         unternehmen.logo_pfad = None
         db.commit()

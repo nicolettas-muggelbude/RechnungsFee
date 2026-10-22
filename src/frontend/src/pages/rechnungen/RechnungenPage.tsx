@@ -13,11 +13,13 @@ import {
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
-  uploadBeleg, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
+  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
   type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
+  getPostfachEingang, postfachAbrufen, postfachVerwerfen, postfachUebernommen, postfachDateiPfad, ladePostfachDatei,
+  type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
 } from '../../api/client'
@@ -1177,6 +1179,23 @@ function RechnungDetail({
   }
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
 
+  // Datenübernahme: „extern erstellt" nachträglich umschalten - nur solange RechnungsFee noch nichts
+  // gedruckt/versendet hat (Backend prüft zusätzlich das gespeicherte Original-PDF)
+  const externUmschaltbar = rechnung.typ === 'ausgang'
+    && (rechnung.dokument_typ ?? 'Rechnung') === 'Rechnung'
+    && !!unternehmen?.datenmigration_aktiv
+    && (!rechnung.import_quelle || rechnung.import_quelle === 'extern')
+    && !rechnung.storniert && !rechnung.ausgegeben && !rechnung.ausgegeben_am
+  const [externFehler, setExternFehler] = useState<string | null>(null)
+  const externMutation = useMutation({
+    mutationFn: (wert: boolean) => setzeRechnungExternErstellt(rechnung.id, wert),
+    onSuccess: () => {
+      setExternFehler(null)
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    },
+    onError: (e: Error) => setExternFehler(e.message),
+  })
+
   const zeigZugferdAnhaenge = rechnung.typ === 'ausgang' && rechnung.ist_entwurf && !!unternehmen?.zugferd_anhaenge_aktiv
   const { data: zugferdAnhaenge = [] } = useQuery({
     queryKey: ['zugferd-anhaenge', rechnung.id],
@@ -1476,10 +1495,42 @@ function RechnungDetail({
       </div>
 
       <div className="p-5 space-y-5 flex-1">
+        {rechnung.import_quelle && (
+          <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            {rechnung.import_quelle === 'extern'
+              ? 'Extern erstellt – das Original liegt außerhalb von RechnungsFee.'
+              : 'Importiert – Original im Altsystem.'}{' '}
+            Diese Rechnung bleibt als offener Posten sichtbar, kann aber nicht neu als PDF erzeugt, versendet oder gemahnt werden. Original und ggf. Berichtigung kannst du unten als Beleg anhängen.
+          </div>
+        )}
+
+        {externUmschaltbar && (
+          <div className="text-xs">
+            <button
+              type="button"
+              disabled={externMutation.isPending}
+              onClick={() => {
+                const setzen = !rechnung.import_quelle
+                const frage = setzen
+                  ? 'Diese Rechnung als extern erstellt kennzeichnen? RechnungsFee erzeugt dafür dann kein eigenes PDF mehr, versendet und mahnt sie nicht – maßgeblich ist dein Original.'
+                  : 'Kennzeichnung „extern erstellt" entfernen? Danach kann RechnungsFee wieder ein eigenes PDF erzeugen und versenden.'
+                if (window.confirm(frage)) externMutation.mutate(setzen)
+              }}
+              className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+            >
+              {rechnung.import_quelle ? 'Kennzeichnung „extern erstellt" entfernen' : 'Als extern erstellte Rechnung kennzeichnen (Altbestand)'}
+            </button>
+            {externFehler && <p role="alert" className="mt-1 text-red-600 dark:text-red-400">{externFehler}</p>}
+          </div>
+        )}
 
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
-          {rechnung.ist_entwurf || (rechnung.dokument_typ === 'Gutschrift' && rechnung.zahlungsstatus !== 'bezahlt') ? (
+          {rechnung.import_quelle ? (
+            <span className="self-center text-xs text-amber-700 dark:text-amber-300">
+              PDF- und Mailversand gesperrt – {rechnung.import_quelle === 'extern' ? 'Original extern erstellt' : 'Original im Altsystem'}
+            </span>
+          ) : rechnung.ist_entwurf || (rechnung.dokument_typ === 'Gutschrift' && rechnung.zahlungsstatus !== 'bezahlt') ? (
             <button
               onClick={handlePdfOeffnen}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
@@ -2350,8 +2401,8 @@ function RechnungDetail({
           </div>
         )}
 
-        {/* Beleg-Anhang – nur für Eingangsrechnungen */}
-        {rechnung.typ === 'eingang' && <div>
+        {/* Beleg-Anhang – Eingangsrechnungen sowie importierte/extern erstellte Ausgangsrechnungen (Original) */}
+        {(rechnung.typ === 'eingang' || !!rechnung.import_quelle) && <div>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Beleg</p>
           {rechnung.beleg ? (
             <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 space-y-1.5">
@@ -2701,6 +2752,7 @@ function RechnungForm({
   const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
   const [kundenBestellnummer, setKundenBestellnummer] = useState(initial?.kunden_bestellnummer ?? '')
+  const [externErstellt, setExternErstellt] = useState(false)
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
       return prefillFromAnalyse.positionen.map((p) => ({
@@ -3024,11 +3076,28 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       zollPositionen.some((zp) => zp.ust_satz === p.ust_satz && zp.kategorie_id !== p.kategorie_id)
     )
   })()
+  // Issue #464: Steuerfall der letzten Rechnung dieses Kunden - bei Freitext-Positionen (kein
+  // Artikel-Typ, aus dem Ware/Dienstleistung ableitbar wäre) wird er übernommen, damit man ihn
+  // nicht bei jeder Rechnung neu anhaken muss. Bewusst kein eigenes Feld im Kundenstamm.
+  const { data: letzterSteuerfall } = useQuery({
+    queryKey: ['letzter-steuerfall', partnerId],
+    queryFn: () => getLetzterSteuerfall(parseInt(partnerId)),
+    enabled: typ === 'ausgang' && !initial && !!partnerId,
+    staleTime: 1000 * 60,
+  })
   useEffect(() => {
     if (initial || typ !== 'ausgang' || sonderfallManuell) return
     const artikelTypen = positionen.map((p) => p.art_typ).filter((t): t is ArtikelTyp => !!t)
     const hatWare = artikelTypen.includes('artikel')
     const hatDienstleistung = artikelTypen.some((t) => t === 'dienstleistung' || t === 'fremdleistung')
+    if (artikelTypen.length === 0 && letzterSteuerfall) {
+      // nur übernehmen, was beim aktuellen Kunden weiterhin zulässig ist
+      setIstReverseCharge(kundeEuFaehig && letzterSteuerfall.ist_reverse_charge)
+      setIstEuLieferung(kundeEuFaehig && letzterSteuerfall.ist_eu_lieferung)
+      setIstDrittlandLeistung(kundeDrittlandFaehig && letzterSteuerfall.ist_drittland_leistung)
+      setIstAusfuhrlieferung(kundeAusfuhrFaehig && letzterSteuerfall.ist_ausfuhrlieferung)
+      return
+    }
     if (kundeEuFaehig) {
       setIstEuLieferung(hatWare && !hatDienstleistung)
       setIstReverseCharge(hatDienstleistung && !hatWare)
@@ -3047,7 +3116,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     setIstEuLieferung(false)
     setIstDrittlandLeistung(false)
     setIstAusfuhrlieferung(false)
-  }, [kundeEuFaehig, kundeDrittlandFaehig, kundeAusfuhrFaehig, initial, typ, sonderfallManuell, positionen])
+  }, [kundeEuFaehig, kundeDrittlandFaehig, kundeAusfuhrFaehig, initial, typ, sonderfallManuell, positionen, letzterSteuerfall])
 
   // Warnung bei Reverse Charge/ig. Lieferung/Drittland-Dienstleistung/Ausfuhrlieferung, wenn die
   // Artikel-Typen der Positionen nicht dazu passen - nur relevant wenn eines der vier Flags aktiv
@@ -3124,7 +3193,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       ust_satz: p.ust_satz || '0',
       differenzbesteuerung: p.differenzbesteuerung ?? false,
       rabatt_prozent: parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || undefined,
+      // Issue #459: Kategorie mitschicken - bei §13b/ig. Erwerb zählt die USt nicht zum Rechnungsbetrag
+      kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
     })),
+    kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
     eingabemodus: eingabeModus,
     rabatt_prozent: rechnungRabattNum > 0 && rechnungRabattModus === 'prozent' ? rechnungRabattNum : undefined,
     rabatt_betrag: rechnungRabattNum > 0 && rechnungRabattModus === 'betrag' ? rechnungRabattNum : undefined,
@@ -3299,6 +3371,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       schlusstext: schlusstext || null,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       kunden_bestellnummer: typ === 'ausgang' ? (kundenBestellnummer || undefined) : undefined,
+      extern_erstellt: !initial && typ === 'ausgang' && externErstellt ? true : undefined,
       ist_entwurf: istEntwurf,
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
@@ -4418,6 +4491,28 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
+      {/* Datenübernahme: Altrechnung, die außerhalb von RechnungsFee geschrieben und verschickt wurde.
+          Nur beim Neuanlegen - danach gilt die gleiche Sperre wie beim CSV-Import. */}
+      {typ === 'ausgang' && !initial && dokumentTyp === 'Rechnung' && unternehmen?.datenmigration_aktiv && (
+        <label className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={externErstellt}
+            onChange={(e) => setExternErstellt(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Extern erstellte Rechnung (Altbestand)
+            <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Für Rechnungen, die außerhalb von RechnungsFee geschrieben und verschickt wurden – z. B. beim Umstieg
+              mit Originalnummer und -datum. Maßgeblich bleibt das Original: RechnungsFee erzeugt dafür kein eigenes
+              PDF, versendet und mahnt sie nicht. Zahlungen, Umsatzsteuer und offene Posten laufen normal.
+              Original und ggf. Berichtigung kannst du danach als Beleg anhängen.
+            </span>
+          </span>
+        </label>
+      )}
+
       <div className="flex gap-2">
         <button
           type="button"
@@ -4480,15 +4575,155 @@ function LieferantVorschlagBox({ vorschlaege }: { vorschlaege: LieferantVorschla
 
 
 // ---------------------------------------------------------------------------
+// Postfach-Eingang (Issue #451) – Importliste aus dem Rechnungspostfach
+// ---------------------------------------------------------------------------
+
+function PostfachDialog({
+  onClose,
+  onUebernehmen,
+  meldung,
+}: {
+  onClose: () => void
+  onUebernehmen: (eintrag: PostfachEintrag) => void
+  // Rückmeldung zur gerade gespeicherten Rechnung (z. B. Mail konnte nicht verschoben werden)
+  meldung?: string | null
+}) {
+  const qc = useQueryClient()
+  const { data: eintraege, isLoading } = useQuery({ queryKey: ['postfach-eingang'], queryFn: getPostfachEingang })
+  const [abrufErgebnis, setAbrufErgebnis] = useState<PostfachAbrufErgebnis | null>(null)
+  const [fehlerText, setFehlerText] = useState<string | null>(meldung ?? null)
+  const [verwerfenId, setVerwerfenId] = useState<number | null>(null)
+  const [ladeId, setLadeId] = useState<number | null>(null)
+
+  const abrufMut = useMutation({
+    mutationFn: postfachAbrufen,
+    onSuccess: (r) => { setAbrufErgebnis(r); setFehlerText(null); qc.invalidateQueries({ queryKey: ['postfach-eingang'] }) },
+    onError: (e: Error) => { setFehlerText(e.message); setAbrufErgebnis(null) },
+  })
+  const verwerfenMut = useMutation({
+    mutationFn: (id: number) => postfachVerwerfen(id),
+    onSuccess: (r) => {
+      setVerwerfenId(null)
+      if (r.hinweis) setFehlerText(r.hinweis)
+      qc.invalidateQueries({ queryKey: ['postfach-eingang'] })
+    },
+    onError: (e: Error) => setFehlerText(e.message),
+  })
+
+  async function ansehen(e: PostfachEintrag) {
+    const base = import.meta.env.DEV
+      ? `${window.location.protocol}//${window.location.host}/api`
+      : await getApiBase()
+    await openUrl(`${base}${postfachDateiPfad(e.id)}`)
+  }
+
+  async function uebernehmen(e: PostfachEintrag) {
+    setLadeId(e.id)
+    try { onUebernehmen(e) } finally { setLadeId(null) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">📬 Rechnungspostfach</h3>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => abrufMut.mutate()} disabled={abrufMut.isPending}
+              className="px-4 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
+              {abrufMut.isPending ? 'Rufe ab…' : 'Postfach abrufen'}
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none px-1">×</button>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-3 overflow-y-auto">
+          {fehlerText && (
+            <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-sm text-red-700 dark:text-red-300">{fehlerText}</div>
+          )}
+          {abrufErgebnis && (
+            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+              <p>
+                {abrufErgebnis.mails_geprueft === 0
+                  ? 'Keine neuen Mails seit dem letzten Abruf.'
+                  : <>{abrufErgebnis.mails_geprueft} neue Mail{abrufErgebnis.mails_geprueft === 1 ? '' : 's'} geprüft ·{' '}
+                      <strong>{abrufErgebnis.neu} neue Rechnung{abrufErgebnis.neu === 1 ? '' : 'en'}</strong>
+                      {abrufErgebnis.dubletten > 0 && <> · {abrufErgebnis.dubletten} bereits bekannt</>}</>}
+              </p>
+              {abrufErgebnis.weitere_mails && <p className="text-amber-700 dark:text-amber-300">Es liegen noch weitere Mails im Ordner – bitte erneut abrufen.</p>}
+              {abrufErgebnis.uebersprungen.map((h, i) => <p key={i} className="text-amber-700 dark:text-amber-300">⚠ {h}</p>)}
+            </div>
+          )}
+
+          {isLoading ? (
+            <p className="text-sm text-slate-400">Lade…</p>
+          ) : !eintraege?.length ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
+              Keine offenen Rechnungen aus dem Postfach.{!abrufErgebnis && ' Mit „Postfach abrufen" neue Mails holen.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+              {eintraege.map((e) => (
+                <li key={e.id} className="py-3 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{e.betreff || '(ohne Betreff)'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {e.absender}{e.mail_datum && <> · {new Date(e.mail_datum).toLocaleDateString('de-DE')}</>}
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                      {e.mime_type === 'application/xml' ? '🧾' : '📄'} {e.original_name} · {(e.dateigroesse / 1024).toFixed(0)} KB
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {verwerfenId === e.id ? (
+                      <>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Wirklich verwerfen?</span>
+                        <button onClick={() => verwerfenMut.mutate(e.id)} disabled={verwerfenMut.isPending}
+                          className="px-2.5 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">Ja</button>
+                        <button onClick={() => setVerwerfenId(null)}
+                          className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300">Nein</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => ansehen(e)}
+                          className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Ansehen</button>
+                        <button onClick={() => setVerwerfenId(e.id)}
+                          className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Verwerfen</button>
+                        <button onClick={() => uebernehmen(e)} disabled={ladeId === e.id}
+                          className="px-3 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Übernehmen</button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            „Übernehmen" öffnet den gewohnten Import mit dieser Datei – du prüfst die erkannten Daten und speicherst wie
+            beim Einzelimport, die Datei wird als Beleg angehängt. Danach wandert die Mail im Postfach in den Ordner
+            „RechnungsFee/verarbeitet“ und dieses Fenster öffnet sich für die nächste Rechnung wieder.
+            „Verwerfen" ist für Anhänge, die keine Rechnung sind (z. B. AGB) – die Mail bleibt im Posteingang, wird aber
+            nicht erneut angeboten. Ist der Ordner „RechnungsFee/verarbeitet“ in deinem Mailprogramm nicht zu sehen,
+            hilft meist ein Neustart des Mailprogramms.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Import-Dialog (Stufe 2 – ZUGFeRD/XRechnung)
 // ---------------------------------------------------------------------------
 
 function ImportDialog({
   onClose,
   onWeiter,
+  startDatei,
 }: {
   onClose: () => void
   onWeiter: (ergebnis: AnalyseErgebnis, datei: File) => void
+  // Issue #451: Datei aus dem Postfach-Eingang - startet sofort die Analyse wie nach einem Upload
+  startDatei?: File | null
 }) {
   const [schritt, setSchritt] = useState<'upload' | 'ergebnis'>('upload')
   const [ergebnis, setErgebnis] = useState<AnalyseErgebnis | null>(null)
@@ -4496,6 +4731,11 @@ function ImportDialog({
   const [laedt, setLaedt] = useState(false)
   const [datei, setDatei] = useState<File | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (startDatei) handleDatei(startDatei)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDatei])
 
   async function handleDatei(f: File) {
     setDatei(f)
@@ -4873,6 +5113,12 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const [importPrefill, setImportPrefill] = useState<AnalyseErgebnis | null>(null)
   const [importDatei, setImportDatei] = useState<File | null>(null)
   const [importKey, setImportKey] = useState(0)
+  // Issue #451: Import aus dem Postfach-Eingang - Startdatei für den Import-Dialog und Eintrag,
+  // der nach dem Speichern als übernommen markiert wird
+  const [zeigPostfach, setZeigPostfach] = useState(false)
+  const [postfachMeldung, setPostfachMeldung] = useState<string | null>(null)
+  const [importStartDatei, setImportStartDatei] = useState<File | null>(null)
+  const [importPostfachId, setImportPostfachId] = useState<number | null>(null)
   const [activeVorlageId, setActiveVorlageId] = useState<number | null>(null)
   const [selectedLsIds, setSelectedLsIds] = useState<Set<number>>(new Set())
   const [zeigSammelrechnung, setZeigSammelrechnung] = useState(false)
@@ -4909,6 +5155,13 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
 
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const lieferscheinAktiv = !!unternehmen?.lieferschein_aktiv
+  const postfachAktiv = !!unternehmen?.postfach_aktiv
+  const { data: postfachEintraege } = useQuery({
+    queryKey: ['postfach-eingang'],
+    queryFn: getPostfachEingang,
+    enabled: postfachAktiv,
+  })
+  const postfachOffen = postfachEintraege?.length ?? 0
 
   const { data: mahnwesenEinst } = useQuery({
     queryKey: ['mahnwesen-einstellungen'],
@@ -4949,6 +5202,22 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
       if (importDatei) {
         try { await uploadBeleg(r.id, importDatei) } catch {}
         setImportDatei(null)
+      }
+      if (importPostfachId) {
+        // Eintrag erledigt + Mail verschieben, danach direkt mit der nächsten Rechnung weiter
+        let hinweis: string | null = null
+        try {
+          hinweis = (await postfachUebernommen(importPostfachId, r.id)).hinweis ?? null
+        } catch (e) {
+          hinweis = `Die Rechnung ist gespeichert, der Postfach-Eintrag konnte aber nicht abgeschlossen werden: ${(e as Error).message}`
+        }
+        setImportPostfachId(null)
+        await qc.invalidateQueries({ queryKey: ['postfach-eingang'] })
+        const nochOffen = (await getPostfachEingang().catch(() => [])).length
+        if (nochOffen > 0 || hinweis) {
+          setPostfachMeldung(hinweis)
+          setZeigPostfach(true)
+        }
       }
       if (activeVorlageId) {
         try { await erledigtVorlage(activeVorlageId) } catch {}
@@ -5100,11 +5369,31 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
 
   return (
     <div className="flex h-full">
+      {zeigPostfach && (
+        <PostfachDialog
+          meldung={postfachMeldung}
+          onClose={() => { setZeigPostfach(false); setPostfachMeldung(null) }}
+          onUebernehmen={async (eintrag) => {
+            try {
+              const datei = await ladePostfachDatei(eintrag)
+              setZeigPostfach(false)
+              setPostfachMeldung(null)
+              setImportPostfachId(eintrag.id)
+              setImportStartDatei(datei)
+              setZeigImport(true)
+            } catch (e) {
+              setFehler((e as Error).message)
+            }
+          }}
+        />
+      )}
       {zeigImport && (
         <ImportDialog
-          onClose={() => setZeigImport(false)}
+          startDatei={importStartDatei}
+          onClose={() => { setZeigImport(false); setImportStartDatei(null); setImportPostfachId(null) }}
           onWeiter={(ergebnis, datei) => {
             setZeigImport(false)
+            setImportStartDatei(null)
             setImportPrefill(ergebnis)
             setImportDatei(datei)
             setTyp('eingang')
@@ -5144,16 +5433,25 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                   </button>
                 </div>
               )}
+              {typ === 'eingang' && postfachAktiv && (
+                <button
+                  onClick={() => setZeigPostfach(true)}
+                  title="Rechnungen aus dem Mailpostfach übernehmen"
+                  className="px-4 py-2 text-sm font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+                >
+                  📬 Postfach{postfachOffen > 0 && <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 text-xs font-semibold bg-blue-600 text-white rounded-full">{postfachOffen}</span>}
+                </button>
+              )}
               {typ === 'eingang' && (
                 <button
-                  onClick={() => setZeigImport(true)}
+                  onClick={() => { setImportPostfachId(null); setImportStartDatei(null); setZeigImport(true) }}
                   className="px-4 py-2 text-sm font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                 >
                   ↑ Importieren
                 </button>
               )}
               <button
-                onClick={() => { setFormModus('neu'); setSelectedId(null); setImportPrefill(null) }}
+                onClick={() => { setFormModus('neu'); setSelectedId(null); setImportPrefill(null); setImportPostfachId(null) }}
                 className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
               >
                 {lieferscheinModus ? '+ Neuer Lieferschein' : istAbschlagSeite ? '+ Neue Abschlagsrechnung' : '+ Neue Rechnung'}
