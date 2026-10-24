@@ -50,9 +50,30 @@ def _kunde_name(kunde) -> str:
     return " ".join(teile) if teile else "Unbekannt"
 
 
-def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool) -> str:
+# Issue #467: Steuerkategorie (UNTDID 5305) und Befreiungsgrund (BT-120/121) je Sonderfall der
+# Rechnung. Vorher bekam jede 0-%-Position "Z" (Nullsatz) - formal gültig, inhaltlich falsch.
+_SONDERFALL_KATEGORIE = {
+    "ist_reverse_charge":     ("AE", "VATEX-EU-AE", "Steuerschuldnerschaft des Leistungsempfängers"),
+    "ist_eu_lieferung":       ("K",  "VATEX-EU-IC", "Steuerfreie innergemeinschaftliche Lieferung"),
+    "ist_ausfuhrlieferung":   ("G",  "VATEX-EU-G",  "Steuerfreie Ausfuhrlieferung"),
+    "ist_drittland_leistung": ("O",  "VATEX-EU-O",  "Nicht im Inland steuerbare Leistung"),
+}
+
+
+def _sonderfall(rechnung) -> tuple[str, str, str] | None:
+    """(Kategorie, Befreiungsgrund-Code, Befreiungsgrund-Text) des Rechnungs-Sonderfalls oder None.
+    Die Flags schließen sich im Formular gegenseitig aus."""
+    for flag, werte in _SONDERFALL_KATEGORIE.items():
+        if getattr(rechnung, flag, False):
+            return werte
+    return None
+
+
+def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool, sonderfall=None) -> str:
     if ust_satz > 0:
         return "S"
+    if sonderfall:
+        return sonderfall[0]
     return "E" if ist_kleinunternehmer else "Z"
 
 
@@ -85,6 +106,10 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     from drafthorse.models.references import AdditionalReferencedDocument
 
     ist_ku = unternehmen.get("ist_kleinunternehmer", False)
+    sonderfall = _sonderfall(rechnung)
+    # Kategorie O (nicht steuerbar): die Rechnung darf keine USt-IdNr. von Verkäufer oder Käufer
+    # enthalten (BR-O-02) und die Positionen keinen Steuersatz (BR-O-05)
+    ist_nicht_steuerbar = bool(sonderfall and sonderfall[0] == "O")
 
     doc = Document()
     doc.context.business_parameter.id = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
@@ -107,7 +132,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     seller.address.city_name = unternehmen["ort"]
     seller.address.country_id = unternehmen.get("land", "DE")
 
-    if unternehmen.get("ust_idnr"):
+    if unternehmen.get("ust_idnr") and not ist_nicht_steuerbar:
         reg = TaxRegistration()
         reg.id = ("VA", unternehmen["ust_idnr"])
         seller.tax_registrations.add(reg)
@@ -115,6 +140,14 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         reg = TaxRegistration()
         reg.id = ("FC", unternehmen["steuernummer"])
         seller.tax_registrations.add(reg)
+
+    # BR-CO-26: ohne USt-IdNr. (bei Kategorie O verboten) braucht es eine Verkäuferkennung -
+    # Handelsregisternummer (BT-30), sonst die Steuernummer als Verkäuferkennung (BT-29) (Issue #467)
+    if ist_nicht_steuerbar:
+        if unternehmen.get("handelsregister_nr"):
+            seller.legal_organization.id = unternehmen["handelsregister_nr"]
+        elif unternehmen.get("steuernummer"):
+            seller.id = unternehmen["steuernummer"]
 
     # BT-34: Elektronische Adresse des Verkäufers (XRechnung-Pflichtfeld)
     if unternehmen.get("email"):
@@ -142,8 +175,41 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         # BT-49: Elektronische Adresse des Käufers (empfohlen)
         if hasattr(k, "email") and k.email:
             buyer.electronic_address.uri_ID = ("EM", k.email)
+        # BT-48: USt-IdNr. des Käufers - Pflicht bei Reverse Charge und ig. Lieferung (BR-AE-02,
+        # BR-IC-02), bei Kategorie O dagegen verboten (BR-O-02) (Issue #467)
+        if getattr(k, "ust_idnr", None) and k.ust_idnr.strip() and not ist_nicht_steuerbar:
+            reg = TaxRegistration()
+            reg.id = ("VA", k.ust_idnr.strip().replace(" ", ""))
+            buyer.tax_registrations.add(reg)
     else:
         buyer.name = rechnung.partner_freitext or "Kunde"
+
+    # BT-80: Lieferland - Pflicht bei ig. Lieferung (BR-IC-12); XRechnung verlangt dann die
+    # vollständige Lieferanschrift (BR-DE-10/11: Ort, PLZ). Lieferadresse vor Kundenadresse.
+    if sonderfall and sonderfall[0] == "K":
+        lieferadresse = next(
+            (la for la in (rechnung.kunde.lieferadressen if rechnung.kunde else [])
+             if la.id == getattr(rechnung, "lieferadresse_id", None)),
+            None,
+        )
+        quelle = lieferadresse or rechnung.kunde
+        ship_to = doc.trade.delivery.ship_to
+        if quelle is not None:
+            ship_to.name = getattr(quelle, "firmenname", None) or buyer.name
+            if quelle.strasse:
+                ship_to.address.line_one = f"{quelle.strasse} {quelle.hausnummer or ''}".strip()
+            if quelle.plz:
+                ship_to.address.postcode = quelle.plz
+            if quelle.ort:
+                ship_to.address.city_name = quelle.ort
+            ship_to.address.country_id = quelle.land or "DE"
+        elif rechnung.partner_land:
+            ship_to.name = buyer.name
+            if rechnung.partner_plz:
+                ship_to.address.postcode = rechnung.partner_plz
+            if rechnung.partner_ort:
+                ship_to.address.city_name = rechnung.partner_ort
+            ship_to.address.country_id = rechnung.partner_land
 
     # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer)
     if rechnung.kunde and rechnung.kunde.kundennummer:
@@ -252,8 +318,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
         # Steuer auf Position – nur Kategorie+Satz, kein Betrag (EN16931-Regel)
         li.settlement.trade_tax.type_code = "VAT"
-        li.settlement.trade_tax.category_code = _steuerkategorie(pos.ust_satz, ist_ku)
-        li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
+        li.settlement.trade_tax.category_code = _steuerkategorie(pos.ust_satz, ist_ku, sonderfall)
+        if not ist_nicht_steuerbar:  # BR-O-05: bei O kein Steuersatz
+            li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
 
         # Zeilensumme (BT-131) – Menge x Einzelpreis, nach Rabatt
         li.settlement.monetary_summation.total_amount = netto_gesamt
@@ -272,11 +339,17 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     for eintrag in steuern.values():
         tax = ApplicableTradeTax()
         tax.type_code = "VAT"
-        tax.category_code = _steuerkategorie(eintrag["satz"], ist_ku)
+        kategorie = _steuerkategorie(eintrag["satz"], ist_ku, sonderfall)
+        tax.category_code = kategorie
+        # Kopf-Ebene immer mit Satz (XRechnung BR-DE-14, bei O: 0) - nur die Positionen von
+        # Kategorie O tragen keinen Satz (BR-O-05)
         tax.rate_applicable_percent = _ust_satz(eintrag["satz"])
         tax.basis_amount = _d(eintrag["basis"])
         tax.calculated_amount = _d(eintrag["betrag"])
-        if ist_ku and eintrag["satz"] == 0:
+        if sonderfall and kategorie == sonderfall[0]:
+            tax.exemption_reason_code = sonderfall[1]
+            tax.exemption_reason = sonderfall[2]
+        elif ist_ku and eintrag["satz"] == 0:
             tax.exemption_reason = "Umsatzsteuerbefreiung gemäß §19 UStG"
         doc.trade.settlement.trade_tax.add(tax)
 
