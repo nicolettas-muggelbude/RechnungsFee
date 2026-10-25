@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.5',
     datum: 'Oktober 2026',
     eintraege: [
+      { typ: 'fix', text: 'Angebote, Proforma-Rechnungen und wiederkehrende Rechnungen übernehmen beim Einfügen eines Artikels jetzt auch dessen Beschreibung aus dem Artikelstamm – bisher nur die Bezeichnung, während Rechnungen und Aufträge die Beschreibung schon mitnahmen. Bereits angelegte Positionen bleiben unverändert. Danke an TD1 (Issue #468).' },
       { typ: 'fix', text: 'E-Rechnung (ZUGFeRD/XRechnung): Rechnungen mit Reverse Charge, innergemeinschaftlicher Lieferung, Ausfuhrlieferung oder Drittland-Dienstleistung trugen im XML die Steuerkategorie „Nullsatz“ statt der richtigen Kennung. Jetzt stehen dort die korrekten Kategorien (AE, K, G bzw. O) mit Befreiungsgrund, dazu die jeweils vorgeschriebenen Angaben – etwa die USt-IdNr. des Kunden bei Reverse Charge und ig. Lieferung oder die Lieferanschrift bei ig. Lieferungen. Alle Varianten wurden mit dem offiziellen KoSIT-Prüfwerkzeug für XRechnung 3.0.2 als gültig bestätigt (Issue #467).' },
     ],
   },
