@@ -376,11 +376,12 @@ sonst findet GitHub Actions die Workflow-Datei nicht.
 
 ### GitHub Actions (`.github/workflows/build.yml`)
 - Trigger: `push tags v*`
-- Matrix: Ubuntu (AppImage) + Windows (MSI/NSIS) + macOS arm64 + macOS x86_64 (DMG, unsigned)
+- Matrix: Ubuntu 22.04 (AppImage) + Windows (NSIS) + macOS arm64 (DMG, unsigned) – nur Apple Silicon, kein Intel-Mac-Build
+- Python 3.14 (`setup-python` mit `'3.14'` → jeweils neueste 3.14.x); 3.12 hat für Windows/macOS keine Sicherheits-Builds mehr (blieb dort auf 3.12.10)
 - Sidecar: PyInstaller (Linux/macOS: `build-sidecar.sh`, Windows: `build-sidecar.ps1`)
 - Signierung: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` als GitHub Secrets
 - macOS: kein Apple-Zertifikat → Gatekeeper-Bypass per Rechtsklick→Öffnen oder `xattr -cr`
-- Ergebnis: Release mit `.AppImage`, `.msi`, `.dmg` (arm64+x64), `latest.json`
+- Ergebnis: Release mit `.AppImage`, `_x64-setup.exe`, `.dmg` (arm64), `latest.json`
 - Veröffentlichung läuft automatisch (`draft: false`) – der Updater ist direkt nach erfolgreichem Build aktiv, kein manueller Freigabe-Schritt nötig
 - Job `deploy-web` (nach `release-notes`) triggert automatisch `website.yml --ref web`, sobald `PAGES_TOKEN`-Secret gesetzt ist – die Website aktualisiert sich also von selbst
 - Trotzdem nach jedem Release kurz verifizieren: `gh release view vX.Y.Z` (Status + Notes) und `gh run list --workflow=website.yml` (Website-Deploy erfolgreich?)
