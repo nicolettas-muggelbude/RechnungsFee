@@ -206,6 +206,10 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
               onChange={e => set('euer_zeile', e.target.value ? Number(e.target.value) : undefined)}
               placeholder="optional"
             />
+            {/* Issue #470: Basis ist der Vordruck 2025, die EÜR rechnet für spätere Jahre selbst um */}
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              Zeile laut Anlage EÜR 2025 – für spätere Jahre rechnet die EÜR-Auswertung automatisch auf den jeweiligen Vordruck um.
+            </p>
           </div>
 
           {hatEks && (

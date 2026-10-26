@@ -2167,6 +2167,10 @@ export type EUERErgebnis = {
   anlage_zugaenge: string
   aveur_afa: string
   ist_kleinunternehmer: boolean
+  // Issue #470: Zeilennummern im Vordruck des Wirtschaftsjahres (2026: Ausgaben +1)
+  zeile_summe_einnahmen: number
+  zeile_summe_ausgaben: number
+  zeile_afa: number
 }
 
 export const berechneEUER = (jahr: number) =>

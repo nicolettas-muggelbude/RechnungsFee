@@ -46,8 +46,7 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     20:  ("Private Kfz-Nutzung (1-%-Methode / Fahrtenbuch)",                   "A"),
     21:  ("Sonstige Sach-, Nutzungs- und Leistungsentnahmen (Eigenverbrauch)", "A"),
     27:  ("Waren, Rohstoffe, Hilfsstoffe (ohne USt)",                           "B"),
-    28:  ("Bezogene Leistungen (ohne USt)",                                     "B"),
-    29:  ("Fremdleistungen (ohne USt)",                                         "B"),
+    29:  ("Bezogene Fremdleistungen (ohne USt)",                                "B"),
     30:  ("Löhne, Gehälter, Sozialversicherung",                               "B"),
     33:  ("AfA für bewegliche Wirtschaftsgüter",                                 "B"),
     36:  ("Geringwertige Wirtschaftsgüter (GWG)",                               "B"),
@@ -58,24 +57,47 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     45:  ("Fortbildungskosten",                                                  "B"),
     46:  ("Kosten für Buchführung, Steuerberatung, Rechtsberatung",             "B"),
     47:  ("Miet- und Leasingkosten für Wirtschaftsgüter",                       "B"),
-    48:  ("Reparaturkosten Anlagevermögen",                                      "B"),
+    48:  ("Erhaltungsaufwendungen (Instandhaltung, Wartung, Reparatur; ohne Gebäude und Kfz)", "B"),
     57:  ("Abziehbare Vorsteuerbeträge",                                        "B"),
-    49:  ("Versicherungen (betrieblich)",                                        "B"),
-    50:  ("Sonstige unbeschränkt abziehbare Betriebsausgaben",                  "B"),
-    51:  ("Aufwendungen für Bürobedarf, Porto, Fachliteratur",                  "B"),
-    52:  ("Aufwendungen für Abfallbeseitigung, Reinigung",                      "B"),
+    49:  ("Beiträge, Gebühren, Abgaben und Versicherungen (ohne Gebäude und Kfz)", "B"),
+    50:  ("Laufende EDV-Kosten (z. B. Software, Wartung, Beratung)",             "B"),
+    51:  ("Arbeitsmittel (z. B. Bürobedarf, Porto, Fachliteratur)",              "B"),
+    52:  ("Kosten für Abfallbeseitigung und Entsorgung",                         "B"),
     54:  ("Aufwendungen für Werbung",                                           "B"),
     56:  ("Schuldzinsen",                                                       "B"),
     58:  ("Umsatzsteuer-Vorauszahlungen, sonstige Aufwendungen",               "B"),
-    60:  ("Sonstige Betriebsausgaben",                                          "B"),
+    60:  ("Übrige unbeschränkt abziehbare Betriebsausgaben",                     "B"),
     63:  ("Aufwendungen für Bewirtung (70 % abzugsfähig)",                      "B"),
+    64:  ("Verpflegungsmehraufwendungen",                                        "B"),
     65:  ("Aufwendungen für häusliches Arbeitszimmer",                          "B"),
+    66:  ("Tagespauschale für die Tätigkeit in der häuslichen Wohnung",          "B"),
     68:  ("Leasingkosten für Kraftfahrzeuge",                                   "B"),
     69:  ("KFZ-Steuer, KFZ-Versicherung",                                       "B"),
     70:  ("Übrige KFZ-Kosten, km-Pauschale, Fahrtkosten ÖPNV",                "B"),
     106: ("Entnahmen (Hinweiszeile, kein GuV-Einfluss)",                        "H"),
     107: ("Einlagen (Hinweiszeile, kein GuV-Einfluss)",                         "H"),
 }
+
+# Issue #470: Die euer_zeile der Kategorien folgt dem Vordruck der Anlage EÜR 2025 (Basis). Ab dem
+# Vordruck 2026 (BMF-Schreiben vom 01.09.2026) ist Zeile 27 "Bildung Rücklage Tierbewertung" (LuF) neu:
+# die Waren rücken hinter die Übertragszeile (27 → 29), alle weiteren Ausgaben (29–75) und die
+# ergänzenden Angaben ab Zeile 100 (u. a. Entnahmen/Einlagen 106/107) um eins. Die Einnahmen
+# (12–23) bleiben gleich. Ein künftiger Vordruck braucht hier nur eine weitere Stufe - die
+# Kategorien selbst behalten ihre Basisnummer (keine Datenmigration je Formularjahr).
+def formular_zeile(basis: int, jahr: int) -> int:
+    """Basis-Zeile (Vordruck 2025) → Zeilennummer im Vordruck des Wirtschaftsjahres."""
+    if jahr >= 2026:
+        if basis == 27:
+            return 29
+        if 29 <= basis <= 75 or basis >= 100:
+            return basis + 1
+    return basis
+
+
+ZEILE_SUMME_EINNAHMEN = 23   # Basis
+ZEILE_SUMME_AUSGABEN = 75    # Basis
+ZEILE_AFA_BEWEGLICH = 33     # Basis
+
 
 ABSCHNITT_LABEL = {
     "A": "A – Betriebseinnahmen",
@@ -306,14 +328,14 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
         if ab != aktueller_abschnitt:
             if aktueller_abschnitt == "A":
                 pdf.ln(1)
-                summen_row("Summe Betriebseinnahmen (Zeile 23)", daten["summe_einnahmen"])
+                summen_row(f"Summe Betriebseinnahmen (Zeile {formular_zeile(ZEILE_SUMME_EINNAHMEN, daten['jahr'])})", daten["summe_einnahmen"])
             aktueller_abschnitt = ab
             section_header(ABSCHNITT_LABEL.get(ab, ab))
-        zeile_row(z, bez, zeilen[z])
+        zeile_row(formular_zeile(z, daten["jahr"]), bez, zeilen[z])
 
     if aktueller_abschnitt == "B":
         pdf.ln(1)
-        summen_row("Summe Betriebsausgaben (Zeile 75)", daten["summe_ausgaben"])
+        summen_row(f"Summe Betriebsausgaben (Zeile {formular_zeile(ZEILE_SUMME_AUSGABEN, daten['jahr'])})", daten["summe_ausgaben"])
 
     pdf.ln(3)
     pdf.set_fill_color(30, 41, 59)
@@ -321,7 +343,7 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
     pdf.set_font("DejaVu", "B", 10)
     pdf.set_x(20)
     g = daten["gewinn_verlust"]
-    label = "Gewinn (Zeile 75)" if g >= 0 else "Verlust (Zeile 75)"
+    label = "Gewinn" if g >= 0 else "Verlust"
     pdf.cell(135, 8, f"  {label}", fill=True, align="L")
     pdf.cell(35, 8, euro(g), fill=True, align="R")
     pdf.ln(10)
@@ -442,6 +464,10 @@ class EUERErgebnis(BaseModel):
     anlage_zugaenge: Decimal
     aveur_afa: Decimal
     ist_kleinunternehmer: bool
+    # Issue #470: Zeilennummern im Vordruck des Wirtschaftsjahres (für Summen-/AfA-Hinweise)
+    zeile_summe_einnahmen: int = 23
+    zeile_summe_ausgaben: int = 75
+    zeile_afa: int = 33
 
 class EUERKatSumme(BaseModel):
     name: str
@@ -476,7 +502,7 @@ def euer_berechnen(
 
     zeilen_liste = [
         EUERZeile(
-            zeile=z,
+            zeile=formular_zeile(z, daten["jahr"]),
             bezeichnung=EUR_ZEILEN_META[z][0] if z in EUR_ZEILEN_META else f"Zeile {z}",
             abschnitt=EUR_ZEILEN_META[z][1] if z in EUR_ZEILEN_META else "?",
             betrag=betrag,
@@ -493,6 +519,9 @@ def euer_berechnen(
         anlage_zugaenge=daten["anlage_zugaenge"],
         aveur_afa=daten["aveur_afa"],
         ist_kleinunternehmer=bool(unt.ist_kleinunternehmer),
+        zeile_summe_einnahmen=formular_zeile(ZEILE_SUMME_EINNAHMEN, daten["jahr"]),
+        zeile_summe_ausgaben=formular_zeile(ZEILE_SUMME_AUSGABEN, daten["jahr"]),
+        zeile_afa=formular_zeile(ZEILE_AFA_BEWEGLICH, daten["jahr"]),
     )
 
 
@@ -508,7 +537,7 @@ def euer_kategorien(
     for z, kats in sorted(kat_daten.items()):
         betrag_gesamt = euer_daten["zeilen"].get(z, ZERO)
         zeilen_liste.append(EUERZeileDetail(
-            zeile=z,
+            zeile=formular_zeile(z, jahr),
             bezeichnung=EUR_ZEILEN_META[z][0] if z in EUR_ZEILEN_META else f"Zeile {z}",
             abschnitt=EUR_ZEILEN_META[z][1] if z in EUR_ZEILEN_META else "?",
             betrag_gesamt=betrag_gesamt,

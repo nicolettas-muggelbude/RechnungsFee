@@ -162,10 +162,10 @@ export function EUERPage() {
                 })}
               </div>
               {abschnitt === 'A' && (
-                <SummenZeile label="Summe Betriebseinnahmen (Z. 22)" betrag={ergebnis.summe_einnahmen} />
+                <SummenZeile label={`Summe Betriebseinnahmen (Z. ${ergebnis.zeile_summe_einnahmen})`} betrag={ergebnis.summe_einnahmen} />
               )}
               {abschnitt === 'B' && (
-                <SummenZeile label="Summe Betriebsausgaben (Z. 74)" betrag={ergebnis.summe_ausgaben} />
+                <SummenZeile label={`Summe Betriebsausgaben (Z. ${ergebnis.zeile_summe_ausgaben})`} betrag={ergebnis.summe_ausgaben} />
               )}
             </div>
           ))}
@@ -173,7 +173,7 @@ export function EUERPage() {
           {/* Gewinn / Verlust */}
           <div className="rounded-xl overflow-hidden">
             <SummenZeile
-              label={parseFloat(ergebnis.gewinn_verlust) >= 0 ? 'Gewinn (Zeile 75)' : 'Verlust (Zeile 75)'}
+              label={parseFloat(ergebnis.gewinn_verlust) >= 0 ? 'Gewinn' : 'Verlust'}
               betrag={ergebnis.gewinn_verlust}
               hervorgehoben
             />
@@ -182,14 +182,14 @@ export function EUERPage() {
           {/* Anlage AVEÜR – AfA automatisch oder Hinweis */}
           {parseFloat(ergebnis.aveur_afa) > 0 ? (
             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
-              <strong>Anlage AVEÜR:</strong> AfA {ergebnis.jahr} ({euroFmt(ergebnis.aveur_afa)}) wurde automatisch aus dem Anlagenverzeichnis in Zeile 33 eingetragen.
+              <strong>Anlage AVEÜR:</strong> AfA {ergebnis.jahr} ({euroFmt(ergebnis.aveur_afa)}) wurde automatisch aus dem Anlagenverzeichnis in Zeile {ergebnis.zeile_afa} eingetragen.
               {parseFloat(ergebnis.anlage_zugaenge) > 0 && (
                 <span className="ml-1">Anlagezugänge {ergebnis.jahr}: {euroFmt(ergebnis.anlage_zugaenge)}.</span>
               )}
             </div>
           ) : parseFloat(ergebnis.anlage_zugaenge) > 0 ? (
             <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
-              <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV o.ä.) – erfasse die Wirtschaftsgüter unter <strong>Auswertung → Anlage AVEÜR</strong>, damit die AfA automatisch in Zeile 33 einfließt.
+              <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV o.ä.) – erfasse die Wirtschaftsgüter unter <strong>Auswertung → Anlage AVEÜR</strong>, damit die AfA automatisch in Zeile {ergebnis.zeile_afa} einfließt.
             </div>
           ) : null}
 
