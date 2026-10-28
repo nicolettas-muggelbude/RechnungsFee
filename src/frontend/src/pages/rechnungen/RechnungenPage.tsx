@@ -4453,7 +4453,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onChange={(e) => setNotizen(e.target.value)}
           rows={2}
           className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-          placeholder="Erscheint als Fußtext auf dem PDF"
+          placeholder={typ === 'ausgang' ? 'Erscheint als Fußtext auf dem PDF und als Bemerkung (BT-22) in der E-Rechnung' : 'Erscheint als Fußtext auf dem PDF'}
         />
       </div>
 
@@ -4479,7 +4479,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
             Bestellnummer des Kunden
-            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional)</span>
+            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional, in der E-Rechnung BT-13)</span>
           </label>
           <input
             type="text"
