@@ -104,16 +104,17 @@ class RechnungPDF(RechnungPDFBase):
         ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
-        def _pos_und_code(nr: int, pos):
+        def _pos_und_code(pos):
             # Zeilenanfang links: Positionsnummer und ggf. Artikelcode, danach folgt die Beschreibung
             if mit_pos:
-                self.cell(col_w[0], DESC_H, str(nr), align="R")
+                # dieselbe Nummer wie in der E-Rechnung (line_id) und in Vorlage 1
+                self.cell(col_w[0], DESC_H, str(pos.position_nr), align="R")
             if hat_artikelcode:
                 ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
                 self.multi_cell(col_w[code_idx], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
 
         DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
-        for nr, pos in enumerate(r.positionen, start=1):
+        for pos in r.positionen:
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_idx], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
@@ -139,7 +140,7 @@ class RechnungPDF(RechnungPDFBase):
             if ist_lieferschein:
                 self.cell(col_w[desc_idx + 3], ROW_H, "", new_x="LMARGIN", new_y="NEXT")
                 self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
-                _pos_und_code(nr, pos)
+                _pos_und_code(pos)
                 self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                                 new_x="LMARGIN", new_y="NEXT", align="L")
                 self.ln(1.5)
@@ -166,7 +167,7 @@ class RechnungPDF(RechnungPDFBase):
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
             self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
-            _pos_und_code(nr, pos)
+            _pos_und_code(pos)
             self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT", align="L")
             # Rabatt-Unterzeile
