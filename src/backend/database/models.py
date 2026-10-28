@@ -108,6 +108,7 @@ class Unternehmen(Base):
     anrede_text: Mapped[str | None] = mapped_column(Text)
     anrede_fallback: Mapped[str | None] = mapped_column(Text)
     pdf_vorlage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pdf_positionsnummern: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)  # Issue #475
     einleitungstext: Mapped[str | None] = mapped_column(Text)
     schlusstext: Mapped[str | None] = mapped_column(Text)
     # Issue #368: eigene Standardtexte je optionalem Dokumenttyp (Rechnung nutzt weiterhin

@@ -70,8 +70,19 @@ class RechnungPDF(RechnungPDFBase):
                 headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Brutto"]
                 aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
 
-        # desc_idx: Index der Beschreibungs-Spalte; other_x: X-Start der Mengenspalte
-        desc_idx = 1 if hat_artikelcode else 0
+        # Issue #475: optionale Spalte "Pos." ganz links - die Breite geht von der Beschreibung ab,
+        # damit die Tabelle und der Summenblock unverändert bündig bleiben
+        mit_pos = bool(self._unt.get("pdf_positionsnummern"))
+        POS_W = 9
+        if mit_pos:
+            col_w[int(hat_artikelcode)] -= POS_W
+            col_w   = [POS_W] + col_w
+            headers = ["Pos."] + headers
+            aligns  = ["R"] + aligns
+
+        # code_idx/desc_idx: Index der Artikelcode-/Beschreibungs-Spalte; other_x: X-Start der Mengenspalte
+        code_idx = int(mit_pos)
+        desc_idx = code_idx + int(hat_artikelcode)
         other_x  = L_MARGIN + sum(col_w[:desc_idx + 1])
 
         KOPF_H = 6.5
@@ -93,11 +104,20 @@ class RechnungPDF(RechnungPDFBase):
         ist_storno = getattr(r, "storniert", False) and not ist_lieferschein
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
-        for pos in r.positionen:
+        def _pos_und_code(nr: int, pos):
+            # Zeilenanfang links: Positionsnummer und ggf. Artikelcode, danach folgt die Beschreibung
+            if mit_pos:
+                self.cell(col_w[0], DESC_H, str(nr), align="R")
+            if hat_artikelcode:
+                ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
+                self.multi_cell(col_w[code_idx], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+
+        DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
+        for nr, pos in enumerate(r.positionen, start=1):
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_idx], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
-                _beschr.append((col_w[0], pos.artikel.artikelcode))
+                _beschr.append((col_w[code_idx], pos.artikel.artikelcode))
             _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H):
@@ -119,9 +139,7 @@ class RechnungPDF(RechnungPDFBase):
             if ist_lieferschein:
                 self.cell(col_w[desc_idx + 3], ROW_H, "", new_x="LMARGIN", new_y="NEXT")
                 self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
-                if hat_artikelcode:
-                    ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                    self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+                _pos_und_code(nr, pos)
                 self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                                 new_x="LMARGIN", new_y="NEXT", align="L")
                 self.ln(1.5)
@@ -148,9 +166,7 @@ class RechnungPDF(RechnungPDFBase):
                 self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
                 self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
             self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
-            if hat_artikelcode:
-                ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[0], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+            _pos_und_code(nr, pos)
             self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT", align="L")
             # Rabatt-Unterzeile
@@ -171,7 +187,7 @@ class RechnungPDF(RechnungPDFBase):
             self.ln(1.5)
 
         # Summenblock-Geometrie: rechtsbündig ab Ende von (code+)beschr+menge+einheit
-        sum_offset = sum(col_w[:3 + int(hat_artikelcode)])
+        sum_offset = sum(col_w[:desc_idx + 3])
         self._sum_x     = L_MARGIN + sum_offset
         self._sum_val_w = col_w[-1]
         self._sum_lbl_w = sum(col_w) - sum_offset - self._sum_val_w

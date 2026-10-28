@@ -62,6 +62,7 @@ class UnternehmenBase(BaseModel):
     anrede_text: Optional[str] = None
     anrede_fallback: Optional[str] = None
     pdf_vorlage: int = 0
+    pdf_positionsnummern: bool = False
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
     einleitungstext_angebot: Optional[str] = None

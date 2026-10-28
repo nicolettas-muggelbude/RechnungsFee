@@ -221,6 +221,7 @@ export type Unternehmen = {
   anrede_text?: string | null
   anrede_fallback?: string | null
   pdf_vorlage?: number
+  pdf_positionsnummern?: boolean
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null

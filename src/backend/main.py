@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 175
+SCHEMA_VERSION = 176
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3908,6 +3908,15 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 175"))
             conn.commit()
             print("[Migration] Schema auf Version 175 (Issue #470: Konten Reparatur Anlagevermögen 4805/6470)")
+
+        if version < 176:
+            # Issue #475: optionale Spalte "Pos." in der Standard-Vorlage (Vorlage 1 hat sie immer)
+            _u176 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if _u176 and "pdf_positionsnummern" not in _u176:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN pdf_positionsnummern BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 176"))
+            conn.commit()
+            print("[Migration] Schema auf Version 176 (Issue #475: unternehmen.pdf_positionsnummern)")
 
 
 def _migrate_kategorien() -> None:
