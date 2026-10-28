@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from plugins.ereignisse import plugins_aus
 from database.connection import SessionLocal
 from database.models import Kunde, Lieferant, Artikel, ArtikelGruppe
 from api.schemas import (
@@ -583,6 +584,7 @@ def _pruefe_duplikat(typ: str, db: Session, daten: dict) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 @router.post("/importieren/{typ}", response_model=ImportErgebnis)
+@plugins_aus   # Massenimport: Plugins nicht pro Zeile (docs/plan-plugin-system.md, Phase 5)
 def import_durchfuehren(typ: str, request: ImportRequest, db: Session = Depends(get_db)):
     if typ not in ("kunden", "lieferanten", "artikel", "gemischt"):
         raise HTTPException(400, f"Unbekannter Typ: {typ}")

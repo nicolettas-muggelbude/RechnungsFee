@@ -1347,3 +1347,56 @@ class EksEinstellungen(Base):
     mehraufwand_verpflegung: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     arbeitstage_verpflegung: Mapped[str | None] = mapped_column(String(5))
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Plugin-System (docs/plan-plugin-system.md, Phase 1)
+# Plugin-DATEIEN liegen global unter BASE_DIR/plugins/<id>/ (für alle Profile gleich), der
+# Aktivierungsstatus dagegen pro Profil hier in der Profil-DB.
+# ---------------------------------------------------------------------------
+
+class PluginEinstellungen(Base):
+    """Hauptschalter für Plugins (Singleton id=1). Bewusst eigene Tabelle statt Feld in
+    `unternehmen`: der Schalter wird nur auf der Plugin-Seite gesetzt, ein Speichern der
+    Unternehmensseite ohne das Feld darf ihn nicht zurücksetzen."""
+    __tablename__ = "plugin_einstellungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugins_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class PluginStatus(Base):
+    """Vom Nutzer gesetzter Zustand eines Plugins. Ein Plugin ohne Zeile hier ist „neu“
+    (gefunden, aber nie bestätigt) und läuft nicht."""
+    __tablename__ = "plugin_status"
+
+    plugin_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # SHA-256 der plugin.wasm zum Zeitpunkt der letzten Bestätigung
+    wasm_sha256: Mapped[str | None] = mapped_column(String(64))
+    # JSON: vom Nutzer bestätigter Rechte-Snapshot (PluginManifest.rechte_snapshot())
+    genehmigte_rechte_json: Mapped[str | None] = mapped_column(Text)
+    # JSON-Liste einzeln abgeschalteter Hooks ("invoice:create:before", ...)
+    deaktivierte_hooks_json: Mapped[str | None] = mapped_column(Text)
+    aktiviert_am: Mapped[datetime | None] = mapped_column(DateTime)
+    fehler_in_folge: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    automatisch_deaktiviert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    letzter_fehler: Mapped[str | None] = mapped_column(Text)
+    letzter_fehler_am: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PluginProtokoll(Base):
+    """Aufruf-/Fehlerprotokoll je Plugin (Nachvollziehbarkeit, Verfahrensdokumentation)."""
+    __tablename__ = "plugin_protokoll"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_id: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    hook: Mapped[str] = mapped_column(String(50), nullable=False)   # invoice:create:before | host-api:create | verwaltung
+    entitaet: Mapped[str | None] = mapped_column(String(30))
+    datensatz_id: Mapped[int | None] = mapped_column(Integer)
+    ergebnis: Mapped[str] = mapped_column(String(20), nullable=False)  # ok|geaendert|abgebrochen|fehler|timeout|aktiviert|deaktiviert|...
+    dauer_ms: Mapped[int | None] = mapped_column(Integer)
+    meldung: Mapped[str | None] = mapped_column(Text)
+    # Ortszeit wie aktiviert_am/letzter_fehler_am - server_default (CURRENT_TIMESTAMP) wäre in
+    # SQLite UTC und würde in der Oberfläche eine Stunde neben den anderen Zeiten liegen.
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, server_default=func.now(), nullable=False)

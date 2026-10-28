@@ -157,6 +157,10 @@ def _prüfe_steuersatz(satz: Decimal, db: Session) -> None:
 
 @router.post("", response_model=ArtikelResponse, status_code=201)
 def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
+    return _create_artikel(data, db)
+
+
+def _create_artikel(data: ArtikelCreate, db: Session, *, commit: bool = True):
     if not data.differenzbesteuerung:
         _prüfe_steuersatz(data.steuersatz, db)
     unternehmen = db.query(Unternehmen).first()
@@ -190,7 +194,10 @@ def create_artikel(data: ArtikelCreate, db: Session = Depends(get_db)):
         minusbestand_erlaubt=data.minusbestand_erlaubt,
     )
     db.add(artikel)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(artikel)
     return artikel
 
@@ -205,6 +212,10 @@ def get_artikel(artikel_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{artikel_id}", response_model=ArtikelResponse)
 def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(get_db)):
+    return _update_artikel(artikel_id, data, db)
+
+
+def _update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session, *, commit: bool = True):
     artikel = db.query(Artikel).filter(Artikel.id == artikel_id).first()
     if not artikel:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden.")
@@ -241,7 +252,10 @@ def update_artikel(artikel_id: int, data: ArtikelUpdate, db: Session = Depends(g
 
     for k, v in update.items():
         setattr(artikel, k, v)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(artikel)
     return artikel
 
@@ -282,6 +296,10 @@ def get_artikel_rechnungen(artikel_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{artikel_id}", status_code=204)
 def delete_artikel(artikel_id: int, db: Session = Depends(get_db)):
+    return _delete_artikel(artikel_id, db)
+
+
+def _delete_artikel(artikel_id: int, db: Session, *, commit: bool = True):
     artikel = db.query(Artikel).filter(Artikel.id == artikel_id).first()
     if not artikel:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden.")
@@ -291,7 +309,10 @@ def delete_artikel(artikel_id: int, db: Session = Depends(get_db)):
     if artikel.lager_aktiv and artikel.bestand_aktuell and artikel.bestand_aktuell != Decimal("0"):
         raise HTTPException(status_code=409, detail=f"Lagerbestand ist {artikel.bestand_aktuell} – bitte zuerst auf 0 setzen.")
     db.delete(artikel)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
 
 @router.patch("/{artikel_id}/archivieren", response_model=ArtikelResponse)

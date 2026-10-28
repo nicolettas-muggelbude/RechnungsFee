@@ -1,0 +1,4 @@
+.venv/
+dist/
+wit_world/
+__pycache__/

@@ -43,6 +43,10 @@ def list_kunden(nur_aktive: bool = True, db: Session = Depends(get_db)):
 
 @router.post("", response_model=KundeResponse, status_code=201)
 def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
+    return _create_kunde(data, db)
+
+
+def _create_kunde(data: KundeCreate, db: Session, *, commit: bool = True):
     kunde_data = data.model_dump()
     for key in ("anrede", "anrede_individuell"):
         kunde_data[key] = (kunde_data.get(key) or "").strip() or None
@@ -59,7 +63,10 @@ def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
                 break
     kunde = Kunde(**kunde_data)
     db.add(kunde)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(kunde)
     return kunde
 
@@ -897,10 +904,14 @@ def get_kunde(kunde_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{kunde_id}", response_model=KundeResponse)
 def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)):
+    return _update_kunde(kunde_id, data, db)
+
+
+def _update_kunde(kunde_id: int, data: KundeUpdate, db: Session, *, commit: bool = True):
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
     if not kunde:
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
-    dump = data.model_dump(exclude_none=True)
+    dump = data.model_dump(exclude_none=True, exclude_unset=True)
     neue_nr = dump.get("kundennummer")
     if neue_nr and neue_nr != kunde.kundennummer:
         if db.query(Kunde).filter(Kunde.kundennummer == neue_nr, Kunde.id != kunde_id).first():
@@ -915,13 +926,20 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
         if key in ("anrede", "anrede_individuell"):
             value = (value or "").strip() or None
         setattr(kunde, key, value)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(kunde)
     return kunde
 
 
 @router.delete("/{kunde_id}", status_code=204)
 def delete_kunde(kunde_id: int, db: Session = Depends(get_db)):
+    return _delete_kunde(kunde_id, db)
+
+
+def _delete_kunde(kunde_id: int, db: Session, *, commit: bool = True):
     """Löscht einen Kunden – nur wenn keine Buchungen oder Rechnungen verknüpft sind.
     Für Kunden mit verknüpften Daten stattdessen /anonymisieren verwenden."""
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
@@ -938,4 +956,7 @@ def delete_kunde(kunde_id: int, db: Session = Depends(get_db)):
                    "Bitte 'Anonymisieren (DSGVO)' verwenden.",
         )
     db.delete(kunde)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()

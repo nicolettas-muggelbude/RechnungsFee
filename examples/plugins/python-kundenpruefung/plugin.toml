@@ -1,0 +1,12 @@
+[plugin]
+id = "org.rechnungsfee.beispiel.python-kundenpruefung"
+name = "Python-Beispiel: Kundenprüfung"
+version = "0.1.0"
+author = "RechnungsFee"
+description = "Prüft Kundennamen und entfernt Leerzeichen am Rand der E-Mail-Adresse."
+api_version = "0.1.0"
+
+[permissions]
+# Der Hook liefert das Customer-DTO mit; zusätzliche Host-Leserechte sind nicht nötig.
+entities = []
+hooks = ["customer:create:before", "customer:update:before"]

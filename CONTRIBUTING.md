@@ -233,22 +233,29 @@ Dann Browser öffnen: **http://localhost:5173**
 | Backend (FastAPI) | http://localhost:8002 |
 | API-Docs (Swagger) | http://localhost:8002/docs |
 
-### Datenpfade (Linux/macOS)
+### Datenpfade (Linux)
+
+Seit v0.6.0 (Profilmanager) liegen die Daten pro Profil eine Ebene tiefer (`<Name>` = aktives
+Profil, standardmäßig `Standard`; macOS: `~/Library/Application Support/RechnungsFee/`,
+Windows: `%APPDATA%\RechnungsFee\`):
 
 ```
-~/.local/share/RechnungsFee/rechnungsfee.db   ← Datenbank
-~/.local/share/RechnungsFee/uploads/          ← Belegdateien
-~/.local/share/RechnungsFee/backups/          ← automatische Backups
+~/.local/share/RechnungsFee/profile/<Name>/rechnungsfee.db   ← Datenbank
+~/.local/share/RechnungsFee/profile/<Name>/uploads/          ← Belegdateien
+~/.local/share/RechnungsFee/profile/<Name>/backups/          ← automatische Backups
+~/.local/share/RechnungsFee/plugins/                         ← Plugins (für alle Profile)
 ```
 
 ### Tauri-App bauen (optional)
 
+Kurzfassung (Linux, im Projektordner):
+
 ```bash
-cd src/frontend
-npm run tauri build
+bash scripts/build-sidecar.sh
+NO_STRIP=true npx --yes @tauri-apps/cli@^2 build --bundles appimage
 ```
 
-Voraussetzung: Rust + Cargo installiert (`rustup.rs`), Tauri-Abhängigkeiten je nach OS (siehe [Tauri-Docs](https://tauri.app/start/prerequisites/)).
+Voraussetzungen, Einrichtung, Testen und Fehlerbehebung: **[docs/build-lokal.md](docs/build-lokal.md)**.
 
 ---
 

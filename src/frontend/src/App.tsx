@@ -50,6 +50,8 @@ import { FristenPage } from './pages/fristen/FristenPage'
 import { BankImportPage } from './pages/bank-import/BankImportPage'
 import { DatensmigrationsPage } from './pages/datenmigration/DatensmigrationsPage'
 import { AnsichtPage } from './pages/einstellungen/AnsichtPage'
+import { PluginsPage } from './pages/einstellungen/PluginsPage'
+import { DebugBeobachter } from './components/DebugBeobachter'
 import { AnsichtContext, useAnsichtState } from './hooks/useAnsicht'
 
 function AppRoutes() {
@@ -119,6 +121,7 @@ function AppRoutes() {
           <Route path="/nummernkreise" element={<NummernkreisePage />} />
           <Route path="/ust-saetze" element={<UstSaetzePage />} />
           <Route path="/mahnwesen-einstellungen" element={<MahnwesenEinstellungenPage />} />
+          <Route path="/plugins" element={<PluginsPage />} />
           <Route path="/mahnwesen" element={<MahnwesenPage />} />
           <Route path="/vorlagen" element={<VorlagenPage />} />
           <Route path="/unternehmen" element={<UnternehmenPage />} />
@@ -258,6 +261,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <DebugBeobachter />
       <AnsichtProvider>
       <AppRoutes />
       {zeigSchliessen && (

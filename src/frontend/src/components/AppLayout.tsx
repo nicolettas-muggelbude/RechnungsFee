@@ -71,6 +71,7 @@ const einstellungenNav = [
   { to: '/ust-saetze',       label: 'Steuersätze',       icon: 'percent' },
   { to: '/mahnwesen-einstellungen', label: 'Mahnwesen',  icon: 'gavel' },
   { to: '/vorlagen',         label: 'Rechnungsvorlagen', icon: 'file_copy' },
+  { to: '/plugins',          label: 'Plugins',           icon: 'extension' },
   { to: '/unternehmen',      label: 'Unternehmen',       icon: 'business' },
 ]
 

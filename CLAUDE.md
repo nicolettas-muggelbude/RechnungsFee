@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 174` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 175` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -319,6 +319,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 172 | Issue #445 (PR #446, Caro/honiglinchen): rechnungen.import_quelle VARCHAR(30) – per CSV-Import (`api/rechnungen_import.py`, Datenübernahme-Tab „Rechnungen & Belege“) übernommene Alt-Rechnungen/-Belege (z. B. „papierkram“); gesetzt ⇒ PDF-/ZUGFeRD-Ausgabe, Mailversand und Mahnung gesperrt (Original liegt im Altsystem, Original-PDF als Beleg anhängbar), offene Posten/Kontokorrent bleiben. Import nur 0/7/19 % (gemischte Sätze abgewiesen), nur Herkunftsort „domestic“, Teilzahlungen abgewiesen. Im PR ursprünglich als 168 nummeriert, beim Merge auf 172 verschoben |
 | 173 | Issue #445-Folgefund (PR #446): `CREATE TABLE IF NOT EXISTS import_mapping_vorlagen` – fehlte auf frisch angelegten DBs (Migration 116 griff dort nicht), gespeicherte Feldzuordnungen der Datenübernahme scheiterten bei Neuinstallationen. Im PR ursprünglich 169 |
 | 174 | Issue #456-Nebenfund: Datenfix – Zahlungen auf Ausgangsrechnungen mit ist_reverse_charge von vor v0.6.4 trugen fälschlich ust_sonderfall='13b_abs1' (UStVA: §13b-Storno statt KZ 21) → Sonderfall NULL; zusätzlich die von Migration 160 auf genau diesen Zeilen ergänzte 19-%-USt/Vorsteuer (160 prüfte die Buchungsrichtung nicht) auf den protokollierten Altwert zurückgesetzt – sonst wäre sie nach Entfernen des Sonderfalls in EÜR-Zeile 17/57 aufgetaucht; nur wo das Änderungsprotokoll den 160-Eingriff belegt; jede Änderung protokolliert |
+| 175 | Plugin-System Phase 1 (docs/plan-plugin-system.md): `plugin_einstellungen` (Hauptschalter, Singleton id=1 – bewusst eigene Tabelle statt Feld in `unternehmen`, damit ein Speichern der Unternehmensseite ihn nicht zurücksetzt), `plugin_status` (Aktivierung pro Profil: bestätigter SHA-256 + Rechte-Snapshot, abgeschaltete Hooks, Fehlerzähler), `plugin_protokoll` (Verwaltungs- und später Aufrufprotokoll). Plugin-Dateien liegen global unter `BASE_DIR/plugins/<id>/` |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

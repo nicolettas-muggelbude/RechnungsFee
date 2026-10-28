@@ -25,3 +25,4 @@ smbprotocol
 --no-binary charset-normalizer
 charset-normalizer
 defusedxml
+wasmtime==50.0.1

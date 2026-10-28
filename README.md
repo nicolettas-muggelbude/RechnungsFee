@@ -123,7 +123,43 @@ Die aktuelle Roadmap mit allen abgeschlossenen und geplanten Features findest du
 
 ---
 
+Das mitgelieferte [Debug-Plugin](docs/debug-plugin.md) zeichnet auf Wunsch
+UI-Aktionen, Seitenwechsel, API-Anfragen, Plugin-Aufrufe und Fehler als Logdatei auf.
+Unter **Einstellungen → Plugins → Debug-Protokoll** kannst du Kategorien auswählen,
+das Protokoll live ansehen und herunterladen.
+
 ## 🚀 Lokale Entwicklung
+
+Das [Makefile](Makefile) bündelt Setup, Entwicklung, Builds, Tests, Prüfungen und
+Plugin-Test-Fixtures. Alle Befehle zeigt `make help` (GNU Make und Bash erforderlich).
+
+```bash
+make setup          # Python 3.12, Frontend und Tauri-CLI einrichten
+make dev            # Backend + Browser-Frontend; Strg+C beendet beide
+make dev-desktop    # Backend + Tauri-App mit frischem Sidecar
+make build:dev      # Desktop-Debug-Build ohne Installer
+make build:prod     # Produktionspaket inkl. frischem Backend-Sidecar
+make build:appimage # Linux-AppImage inkl. frischem Sidecar und Frontend
+make test           # pytest + Rust-Tests
+make lint           # ESLint + Rust-Formatprüfung
+make check          # TypeScript + Clippy
+make test-plugins   # Plugin-Tests
+make plugins-build  # Wasm-Test-Fixtures neu bauen
+make clean          # Build-Ausgaben und Caches entfernen
+```
+
+Einzelbereiche sind separat verfügbar, etwa `make build-frontend`,
+`make build-sidecar` und `make test-backend`. Optionen lassen sich überschreiben:
+`make setup PYTHON=python3.12`, `make build:prod BUNDLES=appimage` oder
+`make test-backend PYTEST_ARGS="-q -k plugin"`. `build-dev` und `build-prod` sind
+Aliase für die Schreibweise mit Doppelpunkt. Produktionspakete werden für das
+lokale Betriebssystem gebaut (Linux: AppImage, macOS: DMG, Windows: NSIS).
+Systembibliotheken müssen vorher installiert sein; siehe [Build-Anleitung](docs/build-lokal.md).
+Das AppImage lässt sich mit `make build:appimage` (auch `make build-appimage`)
+gezielt unter Linux bauen. Die Ausgabe liegt unter
+`src-tauri/target/release/bundle/appimage/`. `NO_STRIP=true` ist bereits voreingestellt.
+`make clean` behält Python-venv, npm-Abhängigkeiten und Nutzerdaten.
+
 
 ### Voraussetzungen
 
@@ -156,13 +192,18 @@ App läuft unter `http://localhost:5173`
 ### Tauri Desktop-App (Entwicklungsmodus)
 
 ```bash
-# Sidecar-Binary zuerst bauen
-bash scripts/build-sidecar.sh      # Linux
-# pwsh scripts/build-sidecar.ps1  # Windows
-
-cd src/frontend
-npm run tauri dev
+# Backend wie oben auf Port 8002 laufen lassen, dann im Projektordner:
+npx --yes @tauri-apps/cli@^2 dev
 ```
+
+### App selbst bauen (AppImage)
+
+```bash
+bash scripts/build-sidecar.sh      # Windows: pwsh scripts/build-sidecar.ps1
+NO_STRIP=true npx --yes @tauri-apps/cli@^2 build --bundles appimage
+```
+
+Voraussetzungen und Details: [docs/build-lokal.md](docs/build-lokal.md)
 
 ---
 

@@ -34,6 +34,13 @@ pip install --quiet pyinstaller
 
 New-Item -ItemType Directory -Force -Path $BinariesDir | Out-Null
 
+# Plugin-Laufzeit (wasmtime): die native Bibliothek liegt in einem Plattform-Unterordner
+# (win32-x86_64\ ...) und wird von --collect-all NICHT mitgenommen - ohne --add-binary bricht
+# der Sidecar beim ersten Plugin-Zugriff ab (Phase-0-Spike, docs/plan-plugin-system.md).
+$WasmtimeDir = python -c "import os, wasmtime; print(os.path.dirname(wasmtime.__file__))"
+$WasmtimeLibDir = Get-ChildItem -Path $WasmtimeDir -Directory | Where-Object { $_.Name -like '*-*' } | Select-Object -First 1
+if (-not $WasmtimeLibDir) { throw "Native wasmtime-Bibliothek nicht gefunden in $WasmtimeDir" }
+
 # Binary bauen
 Push-Location $BackendDir
 try {
@@ -88,6 +95,19 @@ try {
         --collect-all pdfplumber `
         --collect-all fitz `
         --collect-all resvg_py `
+        --collect-all wasmtime `
+        "--add-binary=$($WasmtimeLibDir.FullName)\*;wasmtime\$($WasmtimeLibDir.Name)" `
+        --hidden-import api.debug_plugin `
+        --hidden-import plugins.debug_plugin `
+        --hidden-import api.plugins `
+        --hidden-import plugins.registry `
+        --hidden-import plugins.manifest `
+        --hidden-import plugins.wasm_pruefung `
+        --hidden-import plugins.laufzeit `
+        --hidden-import plugins.host_api `
+        --hidden-import plugins.schreiben `
+        --hidden-import plugins.dto `
+        --hidden-import plugins.ereignisse `
         --hidden-import pytesseract `
         --hidden-import utils.rechnungs_parser `
         --hidden-import utils.pdfa_konverter `

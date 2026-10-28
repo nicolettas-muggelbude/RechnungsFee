@@ -3364,3 +3364,157 @@ export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
   await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'mahnung.pdf')
 }
+
+// --- Plugins (docs/plan-plugin-system.md, Phase 2) ---
+
+export type PluginStatusWert =
+  | 'neu'
+  | 'aktiv'
+  | 'deaktiviert'
+  | 'aktualisiert'
+  | 'rechte_erweitert'
+  | 'fehlerhaft'
+  | 'automatisch_deaktiviert'
+  | 'fehlt'
+
+export interface PluginRechte {
+  entities: Record<string, string[]>
+  hooks: string[]
+}
+
+export interface PluginHook {
+  hook: string
+  beschreibung: string
+  abgeschaltet: boolean
+  vor_dem_speichern: boolean
+}
+
+export interface PluginEintrag {
+  plugin_id: string
+  ordner: string | null
+  status: PluginStatusWert
+  laeuft: boolean
+  name: string
+  version: string | null
+  author: string | null
+  description: string | null
+  homepage: string | null
+  api_version: string | null
+  wasm_sha256: string | null
+  wasm_bytes: number | null
+  rechte: PluginRechte | null
+  rechte_klartext: string[]
+  hooks: PluginHook[]
+  neue_rechte_klartext: string[]
+  neue_hooks_klartext: string[]
+  fehler: string[]
+  warnungen: string[]
+  aktiviert_am: string | null
+  fehler_in_folge: number
+  letzter_fehler: string | null
+  letzter_fehler_am: string | null
+}
+
+export interface PluginUebersicht {
+  plugins_aktiv: boolean
+  abgesicherter_modus: boolean
+  verzeichnis: string
+  api_versionen: string[]
+  plugins: PluginEintrag[]
+}
+
+export interface PluginProtokollEintrag {
+  id: number
+  hook: string
+  entitaet: string | null
+  datensatz_id: number | null
+  ergebnis: string
+  dauer_ms: number | null
+  meldung: string | null
+  erstellt_am: string
+}
+
+const pluginPfad = (id: string) => `/plugins/${encodeURIComponent(id)}`
+
+export const getPlugins = () => request<PluginUebersicht>('/plugins')
+
+export const setPluginsGlobal = (plugins_aktiv: boolean) =>
+  request<PluginUebersicht>('/plugins/einstellungen', { method: 'PUT', body: JSON.stringify({ plugins_aktiv }) })
+
+/** Aktiviert/bestätigt genau den Stand (Hash + Rechte), den die Oberfläche angezeigt hat. */
+export const aktivierePlugin = (p: Pick<PluginEintrag, 'plugin_id' | 'wasm_sha256' | 'rechte'>) =>
+  request<PluginEintrag>(`${pluginPfad(p.plugin_id)}/aktivieren`, {
+    method: 'POST',
+    body: JSON.stringify({ wasm_sha256: p.wasm_sha256, rechte: p.rechte }),
+  })
+
+export const deaktivierePlugin = (id: string) =>
+  request<PluginEintrag>(`${pluginPfad(id)}/deaktivieren`, { method: 'POST' })
+
+export const setPluginHooks = (id: string, abgeschaltet: string[]) =>
+  request<PluginEintrag>(`${pluginPfad(id)}/hooks`, { method: 'PUT', body: JSON.stringify({ abgeschaltet }) })
+
+export const getPluginProtokoll = (id: string, limit = 50) =>
+  request<PluginProtokollEintrag[]>(`${pluginPfad(id)}/protokoll?limit=${limit}`)
+
+export const installierePlugin = (datei: File) => {
+  const fd = new FormData()
+  fd.append('datei', datei)
+  return request<PluginEintrag>('/plugins/installieren', { method: 'POST', body: fd })
+}
+
+export const entfernePlugin = (id: string) => request<void>(pluginPfad(id), { method: 'DELETE' })
+
+export const oeffnePluginOrdner = () => request<void>('/plugins/ordner-oeffnen', { method: 'POST' })
+
+export interface PluginTestlaufAntwort {
+  ergebnis: 'ok' | 'geaendert' | 'abgebrochen' | 'fehler' | 'timeout'
+  payload_json: string | null
+  meldung: string | null
+  dauer_ms: number
+}
+
+/** Ruft einen Hook zur Probe auf (ohne Zugriff auf echte Daten, zählt nicht als Fehler). */
+export const testePlugin = (id: string, hook: string, payload_json: string) =>
+  request<PluginTestlaufAntwort>(`${pluginPfad(id)}/testen`, {
+    method: 'POST',
+    body: JSON.stringify({ hook, payload_json }),
+  })
+
+// Fest mitgeliefertes Diagnose-Plugin
+export type DebugKategorie = 'ui' | 'navigation' | 'api' | 'plugins' | 'fehler'
+export interface DebugEinstellungen {
+  aktiviert: boolean
+  kategorien: DebugKategorie[]
+  plugin_id: string
+  mitgeliefert: boolean
+  logdatei: string
+  max_bytes: number
+  sicherungen: number
+  schreibfehler: boolean
+}
+export interface DebugEreignis {
+  kategorie: 'ui' | 'navigation' | 'fehler'
+  aktion: 'klick' | 'aenderung' | 'absenden' | 'seitenwechsel' | 'javascript' | 'promise'
+  seite: string
+  element?: 'button' | 'a' | 'input' | 'select' | 'textarea' | 'form' | 'sonstiges'
+  element_id?: string
+}
+export interface DebugLogEintrag {
+  zeit: string
+  kategorie: DebugKategorie
+  [key: string]: string | number | undefined
+}
+export const getDebugEinstellungen = () => request<DebugEinstellungen>('/debug-plugin/einstellungen')
+export const setDebugEinstellungen = (daten: Pick<DebugEinstellungen, 'aktiviert' | 'kategorien'>) =>
+  request<DebugEinstellungen>('/debug-plugin/einstellungen', { method: 'PUT', body: JSON.stringify(daten) })
+export const sendeDebugEreignisse = (ereignisse: DebugEreignis[]) =>
+  request<void>('/debug-plugin/ereignisse', { method: 'POST', keepalive: true, body: JSON.stringify({ ereignisse }) })
+export const getDebugProtokoll = (kategorie?: DebugKategorie) =>
+  request<DebugLogEintrag[]>(`/debug-plugin/protokoll?limit=200${kategorie ? `&kategorie=${kategorie}` : ''}`)
+export async function downloadDebugProtokoll(): Promise<void> {
+  const base = await getApiBase()
+  const res = await fetch(`${base}/debug-plugin/download`)
+  if (!res.ok) throw new Error('Debug-Protokoll konnte nicht heruntergeladen werden.')
+  await _triggerBlobDownload(await res.blob(), 'rechnungsfee-debug.jsonl')
+}

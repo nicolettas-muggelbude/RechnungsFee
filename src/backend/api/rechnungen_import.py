@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
+from plugins.ereignisse import plugins_aus
 from database.connection import get_db
 from database.models import Kunde, Lieferant, Kategorie, Rechnung
 
@@ -472,6 +473,7 @@ async def import_vorschau(
 
 
 @router.post("/importieren", response_model=ImportErgebnis)
+@plugins_aus   # Massenimport: Plugins nicht pro Zeile (docs/plan-plugin-system.md, Phase 5)
 async def import_durchfuehren(
     datei: UploadFile = File(...),
     typ: str = Form(TYP_RECHNUNGEN),

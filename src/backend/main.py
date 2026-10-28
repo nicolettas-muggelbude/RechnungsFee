@@ -32,11 +32,18 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, plugins
 
-SCHEMA_VERSION = 174
+SCHEMA_VERSION = 175
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
+
+# Fest eingebautes Diagnose-Plugin; steht auch ohne externe Wasm-Plugins bereit.
+from api.debug_plugin import router as _debug_router
+from plugins.debug_plugin import DebugMiddleware, FehlerHandler
+app.include_router(_debug_router)
+app.add_middleware(DebugMiddleware)
+logging.root.addHandler(FehlerHandler(level=logging.ERROR))
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,6 +105,22 @@ app.include_router(cockpit.router)
 app.include_router(datenmigration.router)
 app.include_router(mahnwesen.router)
 app.include_router(rechnungen_import.router)
+app.include_router(plugins.router)
+
+# Plugin-System Phase 5 (docs/plan-plugin-system.md): Speichervorgänge aller Sessions aus
+# SessionLocal laufen durch die Plugin-Hooks. Ohne aktive Plugins ist das ein schneller No-op.
+from plugins.ereignisse import registrieren as _plugin_pipeline_registrieren, ohne_plugins as _ohne_plugins
+from plugins.laufzeit import PluginAbbruch as _PluginAbbruch
+from fastapi.responses import JSONResponse as _JSONResponse
+
+_plugin_pipeline_registrieren(SessionLocal)
+
+
+@app.exception_handler(_PluginAbbruch)
+def _plugin_abbruch(_request, exc: _PluginAbbruch):
+    """Ein Pre-Hook hat das Speichern verhindert - kein Serverfehler, sondern eine Meldung für
+    den Nutzer (das Frontend zeigt `detail` an). Die Transaktion ist bereits verworfen."""
+    return _JSONResponse(status_code=422, content={"detail": exc.anzeige, "plugin_id": exc.plugin_id})
 
 
 @app.post("/api/shutdown")
@@ -3887,6 +3910,50 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 174 (Issue #456: Reverse-Charge-Ausgangszahlungen kein §13b-Sonderfall)")
 
+        if version < 175:
+            # Plugin-System Phase 1 (docs/plan-plugin-system.md): Hauptschalter, Aktivierungsstatus
+            # und Aufrufprotokoll pro Profil. create_all() legt die Tabellen bereits an - hier nur
+            # zur Absicherung (Muster wie Migration 173), damit der Stand unabhängig davon stimmt.
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS plugin_einstellungen (
+                    id INTEGER PRIMARY KEY,
+                    plugins_aktiv BOOLEAN NOT NULL DEFAULT 0
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS plugin_status (
+                    plugin_id VARCHAR(200) PRIMARY KEY,
+                    aktiv BOOLEAN NOT NULL DEFAULT 0,
+                    wasm_sha256 VARCHAR(64),
+                    genehmigte_rechte_json TEXT,
+                    deaktivierte_hooks_json TEXT,
+                    aktiviert_am DATETIME,
+                    fehler_in_folge INTEGER NOT NULL DEFAULT 0,
+                    automatisch_deaktiviert BOOLEAN NOT NULL DEFAULT 0,
+                    letzter_fehler TEXT,
+                    letzter_fehler_am DATETIME
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS plugin_protokoll (
+                    id INTEGER PRIMARY KEY,
+                    plugin_id VARCHAR(200) NOT NULL,
+                    hook VARCHAR(50) NOT NULL,
+                    entitaet VARCHAR(30),
+                    datensatz_id INTEGER,
+                    ergebnis VARCHAR(20) NOT NULL,
+                    dauer_ms INTEGER,
+                    meldung TEXT,
+                    erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_plugin_protokoll_plugin_id ON plugin_protokoll (plugin_id)"
+            ))
+            conn.execute(text("PRAGMA user_version = 175"))
+            conn.commit()
+            print("[Migration] Schema auf Version 175 (Plugin-System: plugin_einstellungen, plugin_status, plugin_protokoll)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4373,6 +4440,13 @@ def _migrate_signaturen_sicher() -> None:
 
 @app.on_event("startup")
 def startup():
+    # Migrationen, Seeds, wiederkehrende Rechnungen, Mahn-Automatik: ohne Plugins - ein
+    # fehlerhaftes Plugin darf den Start der App nie verhindern.
+    with _ohne_plugins():
+        _startup()
+
+
+def _startup():
     _prüfe_wiederherstellung()   # Vor create_all – DB muss ggf. erst ersetzt werden
     Base.metadata.create_all(bind=engine)
     _run_migrations()

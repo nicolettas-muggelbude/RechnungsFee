@@ -1,0 +1,63 @@
+// RechnungsFee Plugin-Schnittstelle (Lastenheft docs/plugin-system.md, Abschnitt 5)
+// Aenderungen an dieser Datei sind API-Aenderungen: Paketversion erhoehen und
+// plugins/manifest.py::UNTERSTUETZTE_API_VERSIONEN anpassen.
+package rechnungsfee:plugin@0.1.0;
+
+interface types {
+    enum entity-type {
+        customer,
+        invoice,
+        voucher,
+        article,
+        task,
+    }
+
+    enum crud-action {
+        create,
+        read,
+        update,
+        delete,
+    }
+
+    record event-context {
+        event-id: string,
+        timestamp: string,
+        entity: entity-type,
+        action: crud-action,
+    }
+
+    variant api-error {
+        unauthorized(string),
+        not-found(string),
+        validation-error(string),
+        internal-error(string),
+    }
+}
+
+/// Vom Hauptsystem bereitgestellte Funktionen fuer Plugins
+interface host-api {
+    use types.{entity-type, api-error};
+
+    get: func(entity: entity-type, id: string) -> result<string, api-error>;
+    // `list` ist ein WIT-Schluesselwort und muss mit % maskiert werden (Name bleibt "list")
+    %list: func(entity: entity-type, filter-json: option<string>) -> result<string, api-error>;
+    create: func(entity: entity-type, payload-json: string) -> result<string, api-error>;
+    update: func(entity: entity-type, id: string, payload-json: string) -> result<string, api-error>;
+    delete: func(entity: entity-type, id: string) -> result<_, api-error>;
+}
+
+/// Vom Wasm-Plugin zu implementierende Events
+interface event-handler {
+    use types.{event-context};
+
+    /// Synchroner Pre-Hook: Modifiziert Daten oder bricht DB-Transaktion ab
+    on-before-change: func(ctx: event-context, payload-json: string) -> result<string, string>;
+
+    /// Asynchroner Post-Hook fuer Folgeaktionen nach erfolgreichem DB-Zugriff
+    on-after-change: func(ctx: event-context, payload-json: string);
+}
+
+world plugin-world {
+    import host-api;
+    export event-handler;
+}

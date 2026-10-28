@@ -1484,7 +1484,7 @@ def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     return _create_rechnung(data, db)
 
 
-def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | None = None):
+def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | None = None, *, commit: bool = True):
     """Rechnung mit Positionen anlegen. Summen werden automatisch berechnet."""
     # Kundensperrung (Abschnitt E): deckt Rechnung/Angebot/Lieferschein/Proforma ab (alle
     # laufen über diesen Endpunkt, unterschieden per dokument_typ) - Gutschrift und Storno
@@ -1702,13 +1702,20 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         rechnung.absender_snapshot = _absender_snapshot(db)
         _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(rechnung)
-    return RechnungResponse.from_orm_extended(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung) if commit else rechnung
 
 
 @router.put("/{rechnung_id}", response_model=RechnungResponse)
 def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depends(get_db)):
+    return _update_rechnung(rechnung_id, data, db)
+
+
+def _update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session, *, commit: bool = True):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -1843,9 +1850,12 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
             rechnung.absender_snapshot = _absender_snapshot(db)
             _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(rechnung)
-    return RechnungResponse.from_orm_extended(rechnung)
+    return RechnungResponse.from_orm_extended(rechnung) if commit else rechnung
 
 
 def _gutschrift_restbetrag(original: "Rechnung", db: Session, ausgenommen_id: int | None = None) -> Decimal:
@@ -2620,6 +2630,10 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{rechnung_id}", status_code=204)
 def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
+    return _delete_rechnung(rechnung_id, db)
+
+
+def _delete_rechnung(rechnung_id: int, db: Session, *, commit: bool = True):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -2707,8 +2721,11 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     zu_loeschende_dateien = [APP_DATA_DIR / original_pdf] if original_pdf else []
     for beleg_id in beleg_ids:
         zu_loeschende_dateien += _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
-    db.commit()
-    _dateien_entfernen(zu_loeschende_dateien)
+    if commit:
+        db.commit()
+        _dateien_entfernen(zu_loeschende_dateien)
+    else:
+        return zu_loeschende_dateien
 
 
 def _beleg_loeschen_wenn_unbenutzt(beleg_id: int, db: Session, basis: Path | None = None) -> list[Path]:

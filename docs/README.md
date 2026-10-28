@@ -42,6 +42,7 @@ Diese Dokumentation beschreibt alle Anforderungen, Konzepte und Entscheidungen f
 |----------|--------------|-----------|
 | **[07-dsgvo.md](07-dsgvo.md)** | Datenschutzerklärung, DSGVO-Konformität | - |
 | **[09-backup-updates.md](09-backup-updates.md)** | Backup-Strategie, Software-Updates, Exit-Backup | Kategorie 10 |
+| **[debug-plugin.md](debug-plugin.md)** | Mitgeliefertes Debug-Protokoll: Kategorien, Live-Anzeige und Logdatei | - |
 
 ### ❓ Hilfe & Support
 
@@ -61,6 +62,10 @@ Diese Dokumentation beschreibt alle Anforderungen, Konzepte und Entscheidungen f
 
 ### Für Entwickler
 
+- **App lokal bauen (AppImage):** Siehe [build-lokal.md](build-lokal.md)
+- **Plugin-Host-API:** [Lesen, Schreiben, Transaktionen und Rechte](plugin-host-api.md)
+- **Python-Plugin entwickeln:** [Baubares Beispiel mit Anleitung](../examples/plugins/python-kundenpruefung/README.md)
+- **Plugin-System:** Siehe [plugin-system.md](plugin-system.md) (Lastenheft), [plan-plugin-system.md](plan-plugin-system.md) (Umsetzung)
 - **Datenbank-Schema:** Siehe [06-stammdaten.md](06-stammdaten.md), [02-kassenbuch.md](02-kassenbuch.md)
 - **API-Anforderungen:** Siehe [03-bank-integration.md](03-bank-integration.md), [08-import.md](08-import.md)
 - **UI/UX-Richtlinien:** Siehe [01-projektvision.md](01-projektvision.md#-uiux-richtlinien--tonalität)

@@ -29,6 +29,19 @@ pip install --quiet pyinstaller
 
 mkdir -p "$BINARIES_DIR"
 
+# Plugin-Laufzeit (wasmtime): die native Bibliothek liegt in einem Plattform-Unterordner
+# (linux-x86_64/, darwin-aarch64/, ...) und wird von --collect-all NICHT mitgenommen - ohne
+# --add-binary bricht der Sidecar beim ersten Plugin-Zugriff mit "Failed to load dynlib" ab
+# (Phase-0-Spike, docs/plan-plugin-system.md).
+# python3 als Rückfall: ohne aktivierte venv gibt es auf Debian/Ubuntu kein "python"
+PYTHON_BIN=$(command -v python || command -v python3)
+WASMTIME_DIR=$("$PYTHON_BIN" -c "import os, wasmtime; print(os.path.dirname(wasmtime.__file__))")
+WASMTIME_LIB_DIR=$(find "$WASMTIME_DIR" -mindepth 1 -maxdepth 1 -type d -name '*-*' | head -n 1)
+if [ -z "$WASMTIME_LIB_DIR" ]; then
+    echo "Fehler: native wasmtime-Bibliothek nicht gefunden in $WASMTIME_DIR" >&2
+    exit 1
+fi
+
 # Binary bauen
 cd "$BACKEND_DIR"
 pyinstaller \
@@ -82,6 +95,19 @@ pyinstaller \
     --collect-all pdfplumber \
     --collect-all fitz \
     --collect-all resvg_py \
+    --collect-all wasmtime \
+    --add-binary "$WASMTIME_LIB_DIR/*:wasmtime/$(basename "$WASMTIME_LIB_DIR")" \
+    --hidden-import api.debug_plugin \
+    --hidden-import plugins.debug_plugin \
+    --hidden-import api.plugins \
+    --hidden-import plugins.registry \
+    --hidden-import plugins.manifest \
+    --hidden-import plugins.wasm_pruefung \
+    --hidden-import plugins.laufzeit \
+    --hidden-import plugins.host_api \
+    --hidden-import plugins.schreiben \
+    --hidden-import plugins.dto \
+    --hidden-import plugins.ereignisse \
     --hidden-import pytesseract \
     --hidden-import utils.rechnungs_parser \
     --hidden-import utils.pdfa_konverter \
