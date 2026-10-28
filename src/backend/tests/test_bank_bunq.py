@@ -56,3 +56,21 @@ def test_bunq_buchungen_vollstaendig_und_sauber(templates):
     assert txs[2]["valuta"] == date(2026, 11, 1)
     assert txs[2]["partner_iban"] is None
     assert txs[3]["verwendungszweck"] is None  # leere Description bleibt leer
+
+
+def test_bunq_neues_format_ohne_doppelte_anfuehrungszeichen(templates):
+    # bunq hat Ende Oktober 2026 wieder auf normal gequotete Felder umgestellt (Beispieldatei
+    # von pasarn in #466) - die Reparatur darf diese Zeilen nicht verändern
+    neu = (
+        '"Date","Interest Date","Amount","Account","Counterparty","Name","Description"\n'
+        '"2026-10-01","2026-10-01","3.000,00","DE89370400440532013000","AE611904300234573201","Firma1 LLC","Rechnung September 2026"\n'
+        '"2026-10-01","2026-10-01","-478,99","DE89370400440532013000","DE89370400440532013001","Mustermann, Max","AutoVAT"\n'
+        '"2026-10-02","2026-11-01","-124,55","DE89370400440532013000","","ABCDEFG.COM","ABCDEFG.COM DUBAI, AE 139.00 USD, 1 USD = 0.89604 EUR"\n'
+        '"2026-10-03","2026-10-03","-12,00","DE89370400440532013000","NL28BUNQ2058737261","bunq BV",""\n'
+    ).encode("utf-8")
+    vorlage = next(t for t in templates if t.id == "bunq")
+    txs, _ = parse_csv_mit_template(neu, vorlage)
+    assert len(txs) == 4
+    assert txs[0]["verwendungszweck"] == "Rechnung September 2026"
+    assert txs[2]["verwendungszweck"] == "ABCDEFG.COM DUBAI, AE 139.00 USD, 1 USD = 0.89604 EUR"
+    assert txs[3]["verwendungszweck"] is None
