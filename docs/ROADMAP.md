@@ -102,6 +102,10 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
+- [x] **Positionsnummern im PDF** (Issue #475, erledigt für v0.7.5) – optionale Spalte „Pos.“ in der
+  Standard-Vorlage, Schalter unter Einstellungen → Rechnungsvorlagen.
+- [x] **Eigene Bemerkung für die E-Rechnung (BT-22)** (Issue #474, erledigt für v0.7.5) – Opt-in-Feld unter
+  dem Einleitungstext, Vorrang vor den Notizen; BT-13/BT-22-Hinweise an den Formularfeldern.
 - [ ] **XRechnung für öffentliche Auftraggeber** (Anfrage Handwerksbetriebe) – Kundenfeld „Leitweg-ID“,
   das statt der Kundennummer in BT-10 (BuyerReference) geschrieben wird; optional Download der reinen
   XRechnung-XML (bisher nur hybrides ZUGFeRD-PDF), da manche Behördenportale nur XML annehmen.
