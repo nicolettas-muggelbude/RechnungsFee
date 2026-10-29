@@ -1244,6 +1244,20 @@ export type AnalyseErgebnis = {
   lieferant_vorschlaege?: LieferantVorschlag[]
 }
 
+/** Liest eine ausgewählte Datei vollständig in den Speicher. Chromium/WebView2 liest eine
+ *  per Dateiauswahl gewählte Datei erst beim Hochladen von der Platte und bricht dabei bei
+ *  Netzlaufwerken (SMB) oft mit „Failed to fetch“ ab (net::ERR_UPLOAD_FILE_CHANGED, weil der
+ *  Server den Änderungszeitstempel anders meldet als bei der Auswahl). Eine Kopie im Speicher
+ *  umgeht das – und wird auch für den späteren Beleganhang weiterverwendet. */
+export async function dateiInSpeicher(datei: File): Promise<File> {
+  try {
+    const inhalt = await datei.arrayBuffer()
+    return new File([inhalt], datei.name, { type: datei.type, lastModified: datei.lastModified })
+  } catch {
+    throw new Error(`„${datei.name}“ konnte nicht gelesen werden. Liegt die Datei auf einem Netzlaufwerk, prüfe ob es erreichbar ist – oder kopiere sie zuerst auf deinen Rechner.`)
+  }
+}
+
 export async function analysiereRechnung(datei: File): Promise<AnalyseErgebnis> {
   const base = await getBaseUrl()
   const form = new FormData()

@@ -13,7 +13,7 @@ import {
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
-  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad,
+  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad, dateiInSpeicher,
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
@@ -4765,11 +4765,12 @@ function ImportDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDatei])
 
-  async function handleDatei(f: File) {
-    setDatei(f)
+  async function handleDatei(original: File) {
     setLaedt(true)
     setLadeFehler(null)
     try {
+      const f = await dateiInSpeicher(original)
+      setDatei(f)
       const res = await analysiereRechnung(f)
       setErgebnis(res)
       setSchritt('ergebnis')
