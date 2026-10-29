@@ -118,10 +118,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     doc.header.type_code._text = "380"
     doc.header.issue_date_time._value = rechnung.datum
 
-    if rechnung.notizen:
+    # Issue #474: eigene BT-22-Bemerkung hat Vorrang - dann bleiben die Notizen reiner
+    # PDF-Fußtext; ohne sie gehen wie bisher die Notizen in BT-22
+    bemerkung = (getattr(rechnung, "bemerkung_erechnung", None) or "").strip() or rechnung.notizen
+    if bemerkung:
         note = IncludedNote()
         note.subject_code._text = "AAI"
-        note.content._text = rechnung.notizen
+        note.content._text = bemerkung
         doc.header.notes.add(note)
 
     # ── Verkäufer ─────────────────────────────────────────────────────────────

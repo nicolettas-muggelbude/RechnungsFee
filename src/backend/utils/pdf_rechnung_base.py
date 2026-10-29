@@ -670,6 +670,18 @@ class RechnungPDFBase(FPDF):
             self.ln(2)
         else:
             self.ln(4)
+        self._render_bemerkung_erechnung()
+
+    def _render_bemerkung_erechnung(self):
+        """Issue #474: eigene Bemerkung für die E-Rechnung (BT-22) - steht auch im PDF,
+        damit PDF und XML inhaltlich übereinstimmen. Klartext, kein Markdown (im XML ebenso)."""
+        text = (getattr(self._r, "bemerkung_erechnung", None) or "").strip()
+        if text:
+            self.set_font("DejaVu", "", 9)
+            self.set_text_color(*TEXT_DUNKEL)
+            self.set_x(L_MARGIN)
+            self.multi_cell(NUTZ_W, 5, text, align="L")
+            self.ln(2)
 
     def _render_schlusstext(self):
         """Issue #368: Hook kurz vor den Notizen - Pendant zu _render_nach_titel(), aber

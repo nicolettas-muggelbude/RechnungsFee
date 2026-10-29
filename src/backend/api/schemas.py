@@ -119,6 +119,7 @@ class UnternehmenBase(BaseModel):
     lagerführung_aktiv: bool = False
     profilmanager_aktiv: bool = False
     abschlagsrechnungen_aktiv: bool = False
+    bt22_bemerkung_aktiv: bool = False
     backup_extern_pfad_1:   Optional[str] = None
     backup_extern_pfad_2:   Optional[str] = None
     backup_extern_passwort: Optional[str] = None

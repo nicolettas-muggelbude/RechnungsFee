@@ -1109,6 +1109,23 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
+              checked={!!form.bt22_bemerkung_aktiv}
+              onChange={ev => set('bt22_bemerkung_aktiv', ev.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Eigene Bemerkung für die E-Rechnung (BT-22)
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Zusätzliches Feld im Rechnungsformular, falls ein Kunde für BT-22 eine feste Schreibweise verlangt. Die Notizen bleiben dann reiner Fußtext im PDF.
+              </p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
               checked={!!form.buchungsvorlagen_aktiv}
               onChange={ev => set('buchungsvorlagen_aktiv', ev.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"

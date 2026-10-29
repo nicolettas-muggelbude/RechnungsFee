@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 176
+SCHEMA_VERSION = 177
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3917,6 +3917,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 176"))
             conn.commit()
             print("[Migration] Schema auf Version 176 (Issue #475: unternehmen.pdf_positionsnummern)")
+
+        if version < 177:
+            # Issue #474: eigene Bemerkung für die E-Rechnung (BT-22), Opt-in-Schalter
+            _u177 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if _u177 and "bt22_bemerkung_aktiv" not in _u177:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN bt22_bemerkung_aktiv BOOLEAN NOT NULL DEFAULT 0"))
+            _r177 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r177 and "bemerkung_erechnung" not in _r177:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN bemerkung_erechnung TEXT"))
+            conn.execute(text("PRAGMA user_version = 177"))
+            conn.commit()
+            print("[Migration] Schema auf Version 177 (Issue #474: rechnungen.bemerkung_erechnung)")
 
 
 def _migrate_kategorien() -> None:

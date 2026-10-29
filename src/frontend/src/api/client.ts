@@ -266,6 +266,7 @@ export type Unternehmen = {
   auftraege_aktiv?: boolean
   wiederkehrend_aktiv?: boolean
   abschlagsrechnungen_aktiv?: boolean
+  bt22_bemerkung_aktiv?: boolean
   buchungsvorlagen_aktiv?: boolean
   lagerführung_aktiv?: boolean
   profilmanager_aktiv?: boolean
@@ -1359,6 +1360,7 @@ export type Rechnung = {
   externe_belegnr: string | null
   import_quelle?: string | null
   kunden_bestellnummer?: string | null
+  bemerkung_erechnung?: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   zahlungen_kette: ZahlungKompakt[]
@@ -1459,6 +1461,7 @@ export type RechnungCreate = {
   schlusstext?: string | null
   externe_belegnr?: string
   kunden_bestellnummer?: string
+  bemerkung_erechnung?: string | null
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null

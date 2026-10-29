@@ -2387,6 +2387,13 @@ function RechnungDetail({
           </div>
         )}
 
+        {rechnung.bemerkung_erechnung && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Bemerkung E-Rechnung (BT-22)</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 whitespace-pre-wrap">{rechnung.bemerkung_erechnung}</p>
+          </div>
+        )}
+
         {rechnung.schlusstext && (
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Schlusstext</p>
@@ -2752,6 +2759,7 @@ function RechnungForm({
   const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
   const [kundenBestellnummer, setKundenBestellnummer] = useState(initial?.kunden_bestellnummer ?? '')
+  const [bemerkungErechnung, setBemerkungErechnung] = useState(initial?.bemerkung_erechnung ?? '')
   const [externErstellt, setExternErstellt] = useState(false)
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
@@ -3371,6 +3379,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       schlusstext: schlusstext || null,
       externe_belegnr: typ === 'eingang' ? (externeBelegnr || undefined) : undefined,
       kunden_bestellnummer: typ === 'ausgang' ? (kundenBestellnummer || undefined) : undefined,
+      bemerkung_erechnung: typ === 'ausgang' ? (bemerkungErechnung.trim() || null) : undefined,
       extern_erstellt: !initial && typ === 'ausgang' && externErstellt ? true : undefined,
       ist_entwurf: istEntwurf,
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
@@ -4430,6 +4439,25 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
+      {/* Issue #474: nur mit Schalter sichtbar - oder wenn schon ein Wert drinsteht, damit er nicht unsichtbar mitläuft */}
+      {typ === 'ausgang' && (!!unternehmen?.bt22_bemerkung_aktiv || !!bemerkungErechnung) && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Bemerkung für die E-Rechnung <span className="text-slate-400 font-normal">(optional, BT-22)</span>
+          </label>
+          <textarea
+            value={bemerkungErechnung}
+            onChange={(e) => setBemerkungErechnung(e.target.value)}
+            rows={2}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
+            placeholder="Genau so, wie dein Kunde es vorgibt. Leer = die Notizen gehen wie bisher in die E-Rechnung."
+          />
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Steht auch im PDF unter dem Einleitungstext. Ist das Feld gefüllt, erscheinen die Notizen nur noch im PDF.
+          </p>
+        </div>
+      )}
+
       {typ === 'ausgang' && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
@@ -4453,7 +4481,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onChange={(e) => setNotizen(e.target.value)}
           rows={2}
           className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-          placeholder={typ === 'ausgang' ? 'Erscheint als Fußtext auf dem PDF und als Bemerkung (BT-22) in der E-Rechnung' : 'Erscheint als Fußtext auf dem PDF'}
+          placeholder={typ === 'ausgang' && !bemerkungErechnung.trim() ? 'Erscheint als Fußtext auf dem PDF und als Bemerkung (BT-22) in der E-Rechnung' : 'Erscheint als Fußtext auf dem PDF'}
         />
       </div>
 

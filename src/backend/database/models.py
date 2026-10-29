@@ -76,6 +76,7 @@ class Unternehmen(Base):
     lagerführung_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     profilmanager_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     abschlagsrechnungen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    bt22_bemerkung_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)  # Issue #474
     # Buchführung
     versteuerungsart: Mapped[str] = mapped_column(String(4), default="ist", nullable=False)  # ist|soll
     kontenrahmen: Mapped[str] = mapped_column(String(10), default="SKR03", nullable=False)  # SKR03|SKR04|SKR49
@@ -767,6 +768,7 @@ class Rechnung(Base):
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
     import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, nicht neu ausgeben/mahnen
     kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
+    bemerkung_erechnung: Mapped[str | None] = mapped_column(Text)  # eigene Bemerkung -> ZUGFeRD BT-22, Vorrang vor notizen (Issue #474)
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)
     # Einleitungstext (überschreibt globalen Text aus unternehmen.einleitungstext/-typspezifisch)

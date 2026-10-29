@@ -68,7 +68,11 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.cell(0, 5.5,
                       "Vielen Dank für Dein Vertrauen. Wir stellen hiermit folgende Leistungen in Rechnung:",
                       new_x="LMARGIN", new_y="NEXT")
-        self.ln(4)
+        if getattr(r, "bemerkung_erechnung", None):
+            self.ln(2)
+            self._render_bemerkung_erechnung()
+        else:
+            self.ln(4)
 
     # -------------------------------------------------------------------------
     # Positionstabelle mit Pos./Datum-Spalten und grünem Design
