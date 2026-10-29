@@ -1187,6 +1187,9 @@ export function ArtikelPage() {
     return (
       a.bezeichnung.toLowerCase().includes(s) ||
       a.artikelnummer.toLowerCase().includes(s) ||
+      // Issue #471: eigener Artikelcode und Lieferanten-Artikelnummer durchsuchbar
+      (a.artikelcode?.toLowerCase().includes(s) ?? false) ||
+      (a.lieferanten_artikelnr?.toLowerCase().includes(s) ?? false) ||
       (a.lieferant?.firmenname.toLowerCase().includes(s) ?? false) ||
       (a.gruppe_obj?.name.toLowerCase().includes(s) ?? false)
     )
@@ -1239,7 +1242,7 @@ export function ArtikelPage() {
             data-search-input
             value={suche}
             onChange={e => setSuche(e.target.value)}
-            placeholder="Suche nach Bezeichnung, Artikelnummer, Gruppe …"
+            placeholder="Suche nach Bezeichnung, Artikelnummer, Artikelcode, Gruppe …"
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm mb-3 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
           />
           <div className="flex gap-2 flex-wrap">

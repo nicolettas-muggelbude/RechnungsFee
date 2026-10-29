@@ -99,6 +99,21 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
 - [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
+  immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
+  Befreiungsgrund (BT-120/121).
+- [x] **Positionsnummern im PDF** (Issue #475, erledigt für v0.7.5) – optionale Spalte „Pos.“ in der
+  Standard-Vorlage, Schalter unter Einstellungen → Rechnungsvorlagen.
+- [x] **Eigene Bemerkung für die E-Rechnung (BT-22)** (Issue #474, erledigt für v0.7.5) – Opt-in-Feld unter
+  dem Einleitungstext, Vorrang vor den Notizen; BT-13/BT-22-Hinweise an den Formularfeldern.
+- [ ] **XRechnung für öffentliche Auftraggeber** (Anfrage Handwerksbetriebe) – Kundenfeld „Leitweg-ID“,
+  das statt der Kundennummer in BT-10 (BuyerReference) geschrieben wird; optional Download der reinen
+  XRechnung-XML (bisher nur hybrides ZUGFeRD-PDF), da manche Behördenportale nur XML annehmen.
+- [ ] **Reverse Charge für Bauleistungen im Inland** (§13b Abs. 2 Nr. 4 / Abs. 5 UStG, Anfrage
+  Handwerksbetriebe) – Ausgangsrechnung eines Handwerkers an einen deutschen Bauunternehmer ohne USt mit
+  Hinweis „Steuerschuldnerschaft des Leistungsempfängers“; bisher nur für EU-Kunden möglich
+  (`kundeEuFaehig`). Eigener Haken nur sichtbar, wenn sinnvoll (keine Überfrachtung des Formulars),
+  passende Steuerkategorie AE in der E-Rechnung (siehe #467), UStVA-Kennzahl für eigene §13b-Umsätze prüfen.
 - [ ] **Kleinunternehmer: Dienstleistungen an EU-Unternehmer** (Folge aus Issue #464) – das
   Rechnungsformular blendet Reverse Charge/ig. Lieferung/Drittland/Ausfuhr bei §19 komplett aus
   (`kundeEuFaehig` u. a. verlangen `!istKleinunternehmer`). Auch ein Kleinunternehmer erbringt eine

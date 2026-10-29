@@ -93,7 +93,8 @@ def suche_artikel(
     q: str = Query(..., min_length=2, description="Suchbegriff (min. 2 Zeichen)"),
     db: Session = Depends(get_db),
 ):
-    """Volltextsuche in Artikelnummer, Bezeichnung und Lieferantenname."""
+    """Volltextsuche in Artikelnummer, eigenem Artikelcode, Lieferanten-Artikelnummer, Bezeichnung
+    und Lieferantenname (Issue #471: Artikelcode wie "AW5010KS" wurde bisher nicht gefunden)."""
     qlike = f"%{q}%"
     treffer = (
         db.query(Artikel)
@@ -102,6 +103,8 @@ def suche_artikel(
             Artikel.aktiv == True,
             (
                 Artikel.artikelnummer.ilike(qlike)
+                | Artikel.artikelcode.ilike(qlike)
+                | Artikel.lieferanten_artikelnr.ilike(qlike)
                 | Artikel.bezeichnung.ilike(qlike)
                 | Lieferant.firmenname.ilike(qlike)
             ),

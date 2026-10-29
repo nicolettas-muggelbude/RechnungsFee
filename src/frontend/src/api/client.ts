@@ -221,6 +221,7 @@ export type Unternehmen = {
   anrede_text?: string | null
   anrede_fallback?: string | null
   pdf_vorlage?: number
+  pdf_positionsnummern?: boolean
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
@@ -265,6 +266,7 @@ export type Unternehmen = {
   auftraege_aktiv?: boolean
   wiederkehrend_aktiv?: boolean
   abschlagsrechnungen_aktiv?: boolean
+  bt22_bemerkung_aktiv?: boolean
   buchungsvorlagen_aktiv?: boolean
   lagerführung_aktiv?: boolean
   profilmanager_aktiv?: boolean
@@ -1242,6 +1244,20 @@ export type AnalyseErgebnis = {
   lieferant_vorschlaege?: LieferantVorschlag[]
 }
 
+/** Liest eine ausgewählte Datei vollständig in den Speicher. Chromium/WebView2 liest eine
+ *  per Dateiauswahl gewählte Datei erst beim Hochladen von der Platte und bricht dabei bei
+ *  Netzlaufwerken (SMB) oft mit „Failed to fetch“ ab (net::ERR_UPLOAD_FILE_CHANGED, weil der
+ *  Server den Änderungszeitstempel anders meldet als bei der Auswahl). Eine Kopie im Speicher
+ *  umgeht das – und wird auch für den späteren Beleganhang weiterverwendet. */
+export async function dateiInSpeicher(datei: File): Promise<File> {
+  try {
+    const inhalt = await datei.arrayBuffer()
+    return new File([inhalt], datei.name, { type: datei.type, lastModified: datei.lastModified })
+  } catch {
+    throw new Error(`„${datei.name}“ konnte nicht gelesen werden. Liegt die Datei auf einem Netzlaufwerk, prüfe ob es erreichbar ist – oder kopiere sie zuerst auf deinen Rechner.`)
+  }
+}
+
 export async function analysiereRechnung(datei: File): Promise<AnalyseErgebnis> {
   const base = await getBaseUrl()
   const form = new FormData()
@@ -1358,6 +1374,7 @@ export type Rechnung = {
   externe_belegnr: string | null
   import_quelle?: string | null
   kunden_bestellnummer?: string | null
+  bemerkung_erechnung?: string | null
   positionen: Rechnungsposition[]
   zahlungen: ZahlungKompakt[]
   zahlungen_kette: ZahlungKompakt[]
@@ -1458,6 +1475,7 @@ export type RechnungCreate = {
   schlusstext?: string | null
   externe_belegnr?: string
   kunden_bestellnummer?: string
+  bemerkung_erechnung?: string | null
   ist_entwurf?: boolean
   skonto_prozent?: number | null
   skonto_tage?: number | null
@@ -2167,6 +2185,10 @@ export type EUERErgebnis = {
   anlage_zugaenge: string
   aveur_afa: string
   ist_kleinunternehmer: boolean
+  // Issue #470: Zeilennummern im Vordruck des Wirtschaftsjahres (2026: Ausgaben +1)
+  zeile_summe_einnahmen: number
+  zeile_summe_ausgaben: number
+  zeile_afa: number
 }
 
 export const berechneEUER = (jahr: number) =>

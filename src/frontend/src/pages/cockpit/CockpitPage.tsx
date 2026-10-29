@@ -16,6 +16,13 @@ const eur = (v: number) =>
 const pct = (v: number) =>
   new Intl.NumberFormat('de-DE', { style: 'decimal', maximumFractionDigits: 1 }).format(v) + ' %'
 
+// Y-Achse: unter 1.000 € volle Beträge, darüber in Tausend mit max. einer Nachkommastelle
+// (vorher immer toFixed(0) in Tausend → Werte unter 500 € erschienen alle als „0k“, Issue #472)
+const achse = (v: number) =>
+  Math.abs(v) < 1000
+    ? new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(v)
+    : new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 }).format(v / 1000) + 'k'
+
 const DONUT_FARBEN = [
   '#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6',
   '#14b8a6','#f97316','#84cc16','#06b6d4','#a855f7','#ef4444',
@@ -240,11 +247,11 @@ export function CockpitPage() {
                   tickLine={false}
                 />
                 <YAxis
-                  tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={achse}
                   tick={{ fontSize: 11, fill: '#94a3b8' }}
                   axisLine={false}
                   tickLine={false}
-                  width={40}
+                  width={48}
                 />
                 <RechartsTip content={<EurTooltip />} />
                 <Legend
@@ -288,11 +295,11 @@ export function CockpitPage() {
                     tickLine={false}
                   />
                   <YAxis
-                    tickFormatter={v => v === 0 ? '0' : `${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={achse}
                     tick={{ fontSize: 11, fill: '#94a3b8' }}
                     axisLine={false}
                     tickLine={false}
-                    width={40}
+                    width={48}
                   />
                   <RechartsTip content={<EurTooltip />} />
                   <Line

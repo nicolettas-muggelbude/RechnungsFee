@@ -62,6 +62,7 @@ class UnternehmenBase(BaseModel):
     anrede_text: Optional[str] = None
     anrede_fallback: Optional[str] = None
     pdf_vorlage: int = 0
+    pdf_positionsnummern: bool = False
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
     einleitungstext_angebot: Optional[str] = None
@@ -118,6 +119,7 @@ class UnternehmenBase(BaseModel):
     lagerführung_aktiv: bool = False
     profilmanager_aktiv: bool = False
     abschlagsrechnungen_aktiv: bool = False
+    bt22_bemerkung_aktiv: bool = False
     backup_extern_pfad_1:   Optional[str] = None
     backup_extern_pfad_2:   Optional[str] = None
     backup_extern_passwort: Optional[str] = None

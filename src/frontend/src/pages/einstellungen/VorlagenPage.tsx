@@ -14,6 +14,11 @@ export function VorlagenPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
   })
 
+  const posMutation = useMutation({
+    mutationFn: (an: boolean) => updateUnternehmen({ pdf_positionsnummern: an }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
+  })
+
   const aktuelleVorlage = unt?.pdf_vorlage ?? 0
 
   return (
@@ -53,6 +58,23 @@ export function VorlagenPage() {
           </div>
         ))}
       </div>
+      {aktuelleVorlage === 0 && (
+        <label className="mt-6 flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!unt?.pdf_positionsnummern}
+            onChange={(e) => posMutation.mutate(e.target.checked)}
+            className="mt-0.5 accent-blue-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Positionsnummern anzeigen</span>
+            <span className="block text-sm text-slate-500 dark:text-slate-400">
+              Zusätzliche Spalte „Pos.“ (1, 2, 3 …) in Rechnungen, Angeboten, Aufträgen, Proforma-Rechnungen,
+              Lieferscheinen und Gutschriften. Gilt für neu finalisierte Dokumente, bereits finalisierte bleiben unverändert.
+            </span>
+          </span>
+        </label>
+      )}
       {mutation.isSuccess && (
         <p className="mt-4 text-sm text-green-600">Vorlage gespeichert.</p>
       )}

@@ -354,7 +354,8 @@ function ProformaFormular({
     // Brutto-Rechnung mit demselben Artikel ab).
     const preis = eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto
     setPositionen(prev => prev.map((p, idx) =>
-      idx !== i ? p : { ...p, beschreibung: a.bezeichnung, einheit: a.einheit, einzelpreis: preis, ust_satz, artikel_id: a.id }
+      // Issue #468: Artikelbeschreibung mitnehmen, wie in Rechnung/Auftrag
+      idx !== i ? p : { ...p, beschreibung: a.beschreibung ? `${a.bezeichnung}\n${a.beschreibung}` : a.bezeichnung, einheit: a.einheit, einzelpreis: preis, ust_satz, artikel_id: a.id }
     ))
   }
 

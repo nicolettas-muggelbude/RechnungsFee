@@ -67,6 +67,8 @@ STANDARD_KATEGORIEN = [
     {"name": "Miete Büro (0%)",               "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 39,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Nebenkosten Büro",              "kontenart": "Aufwand", "konto_skr03": "4228", "konto_skr04": "6318", "eks_kategorie": "B3",    "euer_zeile": 41,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Arbeitszimmer (anteilig)",      "kontenart": "Aufwand", "konto_skr03": "4215", "konto_skr04": "6348", "eks_kategorie": "B3",    "euer_zeile": 65,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Issue #470: eigene EÜR-Zeile 66 (2026: 67), Konten laut DATEV-Kontenrahmen 2026
+    {"name": "Homeoffice-Tagespauschale",         "kontenart": "Aufwand", "konto_skr03": "4287", "konto_skr04": "6347", "eks_kategorie": "B3",    "euer_zeile": 66,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": "Tagespauschale für die Tätigkeit in der häuslichen Wohnung: 6 € je Tag, höchstens 1.260 € im Jahr – auch ohne eigenes Arbeitszimmer. Kein Zahlungsfluss, als Buchung ohne Beleg erfassen."},
     {"name": "Betriebsversicherungen",        "kontenart": "Aufwand", "konto_skr03": "4360", "konto_skr04": "6400", "eks_kategorie": "B4",    "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Berufsgenossenschaft",          "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6120", "eks_kategorie": "B4",    "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Werbung & Marketing",           "kontenart": "Aufwand", "konto_skr03": "4600", "konto_skr04": "6600", "eks_kategorie": "B5",    "euer_zeile": 54,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
@@ -76,7 +78,7 @@ STANDARD_KATEGORIEN = [
     {"name": "KFZ-Kosten",                    "kontenart": "Aufwand", "konto_skr03": "4530", "konto_skr04": "6530", "eks_kategorie": "B6_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "KFZ-Leasing",                   "kontenart": "Aufwand", "konto_skr03": "4570", "konto_skr04": "6560", "eks_kategorie": "B6_3",  "euer_zeile": 68,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "KFZ-Reparatur",                 "kontenart": "Aufwand", "konto_skr03": "4540", "konto_skr04": "6450", "eks_kategorie": "B6_4",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Reparatur Anlagevermögen",      "kontenart": "Aufwand", "konto_skr03": "4260", "konto_skr04": "6335", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Reparatur Anlagevermögen",      "kontenart": "Aufwand", "konto_skr03": "4805", "konto_skr04": "6470", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Miete Einrichtung",             "kontenart": "Aufwand", "konto_skr03": "4200", "konto_skr04": "6318", "eks_kategorie": "B14_2", "euer_zeile": 47,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Betriebliche Abfallbeseitigung","kontenart": "Aufwand", "konto_skr03": "4969", "konto_skr04": "6859", "eks_kategorie": "B14_4", "euer_zeile": 52,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Reisekosten – Übernachtung",    "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B7_1",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
@@ -108,8 +110,8 @@ STANDARD_KATEGORIEN = [
     {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "4803", "konto_skr04": "6403", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Abschreibungen (AfA)",             "kontenart": "Aufwand", "konto_skr03": "4830", "konto_skr04": "6220", "eks_kategorie": None,    "euer_zeile": 33,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4560", "konto_skr04": "6530", "eks_kategorie": "B6_5",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4661", "konto_skr04": "6645", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4390", "konto_skr04": "6405", "eks_kategorie": "B14_5", "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4661", "konto_skr04": "6645", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4390", "konto_skr04": "6405", "eks_kategorie": "B14_5", "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Spenden (betrieblich)",            "kontenart": "Aufwand", "konto_skr03": "1840", "konto_skr04": "2250", "eks_kategorie": "B14_5", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # Skonti – Erlösschmälerung (Ausgang) / Aufwandsminderung (Eingang)
     {"name": "Gewährte Skonti",                  "kontenart": "Erlös",   "konto_skr03": "8736", "konto_skr04": "4310", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},

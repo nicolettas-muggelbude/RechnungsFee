@@ -10,6 +10,7 @@ import {
   uploadBuchungsvorlageBeleg, deleteBuchungsvorlageBeleg,
   uploadJournalAnhangVorab,
   analysiereRechnung,
+  dateiInSpeicher,
   getKategorien, getLieferanten, getKonten, getUnternehmen,
   type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
 } from '../../api/client'
@@ -483,7 +484,7 @@ function VorlageDetail({
   async function handleRechnungsUpload(file: File) {
     setOcrLaed(true)
     try {
-      const ergebnis = await analysiereRechnung(file)
+      const ergebnis = await analysiereRechnung(await dateiInSpeicher(file))
       const kombiniert: AnalyseErgebnis = {
         ...ergebnis,
         format: 'vorlage',

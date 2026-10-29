@@ -114,6 +114,7 @@ class RechnungCreate(BaseModel):
     schlusstext: Optional[str] = None
     externe_belegnr: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
+    bemerkung_erechnung: Optional[str] = None
     ist_entwurf: bool = True
     rabatt_prozent: Decimal = Decimal("0")
     rabatt_betrag: Optional[Decimal] = None
@@ -220,6 +221,7 @@ class RechnungUpdate(BaseModel):
     schlusstext: Optional[str] = None
     externe_belegnr: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
+    bemerkung_erechnung: Optional[str] = None
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
@@ -352,6 +354,7 @@ class RechnungResponse(BaseModel):
     externe_belegnr: Optional[str]
     import_quelle: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
+    bemerkung_erechnung: Optional[str] = None
     leistung_von: Optional[date]
     leistung_bis: Optional[date]
     rabatt_prozent: Decimal = Decimal("0")

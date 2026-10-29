@@ -365,7 +365,8 @@ function AngebotFormular({
     setPositionen(prev => prev.map((p, idx) =>
       idx !== i ? p : {
         ...p,
-        beschreibung: a.bezeichnung,
+        // Issue #468: Artikelbeschreibung mitnehmen, wie in Rechnung/Auftrag
+        beschreibung: a.beschreibung ? `${a.bezeichnung}\n${a.beschreibung}` : a.bezeichnung,
         einheit: a.einheit,
         einzelpreis: preis,
         ust_satz,
