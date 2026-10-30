@@ -8,7 +8,7 @@ import {
   getAuftraege, getRechnung, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   auftragErstellen, updateRechnung, deleteRechnung,
   rechnungAusAuftrag, lieferscheinAusAuftrag, proformaAusAuftrag, auftragStatusSetzen,
-  getApiBase, openUrl, isTauri, openInPdfWindow,
+  getApiBase, openUrl, isTauri, openInPdfWindow, oeffnePaketVorschau,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -970,6 +970,13 @@ function AuftragDetail({
               title="Wiederkehrende Vorlage für diesen Auftrag erstellen"
             >
               🔁 Wiederkehrend
+            </button>
+          )}
+
+          {!!auftrag.dokumentenpaket_id && (
+            <button onClick={() => oeffnePaketVorschau(auftrag.dokumentenpaket_id!)} className={btnNeutral}
+              title="Alle Dokumente des Pakets als ein PDF ansehen und drucken">
+              📎 Paket ansehen
             </button>
           )}
 

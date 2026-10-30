@@ -8,7 +8,7 @@ import {
   getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
-  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
+  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, oeffnePaketVorschau,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -964,6 +964,12 @@ function AngebotDetail({
                 → {angebot.proforma_zu_angebot_nr ?? `PRF #${angebot.proforma_zu_angebot_id}`}
               </button>
             )
+          )}
+          {!!angebot.dokumentenpaket_id && (
+            <button onClick={() => oeffnePaketVorschau(angebot.dokumentenpaket_id!)} className={btnNeutral}
+              title="Alle Dokumente des Pakets als ein PDF ansehen und drucken">
+              📎 Paket ansehen
+            </button>
           )}
           <button
             onClick={onDelete}

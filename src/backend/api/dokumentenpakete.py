@@ -7,9 +7,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -253,6 +254,50 @@ def delete_datei(paket_id: int, eintrag_id: int, db: Session = Depends(get_db)):
     p = db.query(DokumentenPaket).filter(DokumentenPaket.id == paket_id).first()
     db.refresh(p)
     return _paket_response(p)
+
+
+def paket_als_pdf(p: DokumentenPaket) -> bytes:
+    """Fügt alle Dateien eines Pakets in Paket-Reihenfolge zu einem PDF zusammen.
+
+    Bilder (JPEG/PNG) werden je zu einer Seite in Bildgröße. Fehlende oder
+    unlesbare Dateien werden übersprungen statt die ganze Vorschau abzubrechen.
+    """
+    import fitz  # pymupdf
+
+    ziel = fitz.open()
+    for eintrag in p.dateien:
+        pfad = APP_DATA_DIR / "uploads" / eintrag.beleg.dateiname
+        if not pfad.exists():
+            continue
+        try:
+            with fitz.open(str(pfad)) as quelle:
+                if quelle.is_pdf:
+                    ziel.insert_pdf(quelle)
+                else:
+                    with fitz.open("pdf", quelle.convert_to_pdf()) as bild_pdf:
+                        ziel.insert_pdf(bild_pdf)
+        except Exception:
+            continue
+    if ziel.page_count == 0:
+        ziel.close()
+        raise HTTPException(status_code=404, detail="Das Paket enthält keine lesbaren Dokumente.")
+    daten = ziel.tobytes(garbage=3, deflate=True)
+    ziel.close()
+    return daten
+
+
+@router.get("/{paket_id}/vorschau")
+def paket_vorschau(paket_id: int, db: Session = Depends(get_db)):
+    """Gesamtes Paket als ein PDF – zum Durchsehen und Ausdrucken (Issue #477)."""
+    p = db.query(DokumentenPaket).filter(DokumentenPaket.id == paket_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Dokumentenpaket nicht gefunden.")
+    dateiname = f"Dokumentenpaket_{p.name}.pdf".replace('"', "")
+    return Response(
+        content=paket_als_pdf(p),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(dateiname)}"},
+    )
 
 
 @router.get("/{paket_id}/dateien/{eintrag_id}/download")

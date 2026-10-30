@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDokumentenPakete, createDokumentenPaket, updateDokumentenPaket, deleteDokumentenPaket,
-  uploadPaketDatei, updatePaketDatei, deletePaketDatei, getPaketDateiUrl,
+  uploadPaketDatei, updatePaketDatei, deletePaketDatei, getPaketDateiUrl, getPaketVorschauUrl,
   type DokumentenPaket, type PaketDatei,
 } from '../../api/client'
 import { openUrl } from '../../api/client'
@@ -246,6 +246,13 @@ function GruppenKarte({ paket }: { paket: DokumentenPaket }) {
               )}
             </div>
             <div className="flex gap-1 flex-shrink-0">
+              {paket.dateien.length > 0 && (
+                <button onClick={async () => openUrl(await getPaketVorschauUrl(paket.id, paket.name))}
+                  title="Alle Dokumente als ein PDF ansehen und drucken"
+                  className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                  Paket ansehen
+                </button>
+              )}
               <button onClick={() => setEditModus(true)}
                 className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
                 Umbenennen

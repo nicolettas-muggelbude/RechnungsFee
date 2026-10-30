@@ -1730,6 +1730,18 @@ export const getPaketDateiUrl = async (paketId: number, eintragId: number): Prom
   return `${base}/dokumentenpakete/${paketId}/dateien/${eintragId}/download`
 }
 
+/** Alle Dateien des Pakets als ein zusammengefügtes PDF (Vorschau/Druck, Issue #477). */
+export const getPaketVorschauUrl = async (paketId: number, paketName: string): Promise<string> => {
+  const base = await getApiBase()
+  return mitDateiname(`${base}/dokumentenpakete/${paketId}/vorschau`, `Dokumentenpaket_${paketName}`)
+}
+
+/** Paket-Vorschau direkt am Angebot/Auftrag öffnen – dort ist nur die Paket-ID bekannt. */
+export const oeffnePaketVorschau = async (paketId: number): Promise<void> => {
+  const paket = await getDokumentenPaket(paketId)
+  await openUrl(await getPaketVorschauUrl(paket.id, paket.name))
+}
+
 export const getRechnung = (id: number) => request<Rechnung>(`/rechnungen/${id}`)
 
 /** Issue #464: Steuerfall der letzten Ausgangsrechnung eines Kunden (wird bei neuen Rechnungen übernommen). */
