@@ -2,11 +2,13 @@
  * Thunderbird als Mailversand-Option (Issue #147). RechnungsFee übergibt Empfänger, Betreff,
  * Text und Anhang an ein Thunderbird-Compose-Fenster - den eigentlichen Versand (inkl. eigener
  * Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird unverändert wie
- * bei jeder anderen Mail. Bisher nur für Rechnungen angeboten.
+ * bei jeder anderen Mail. Für Rechnungen, Angebote und Aufträge (Issue #477: dort samt
+ * Dokumentenpaket).
  */
 import { tempDir, join } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
+import { getDokumentenPaket, getPaketDateiUrl } from '../api/client'
 
 export class ThunderbirdNichtGefundenError extends Error {
   /** Fehlermeldung je versuchtem Kandidaten, in derselben Reihenfolge wie kandidaten() - zur
@@ -21,6 +23,23 @@ export class ThunderbirdNichtGefundenError extends Error {
 }
 
 export type ThunderbirdAnhang = { url: string; dateiname: string }
+
+/** Issue #477: alle Dateien eines Dokumentenpakets als Thunderbird-Anhänge, in der im Paket
+ *  festgelegten Reihenfolge - Gegenstück zum SMTP-Versand (api/mail.py). Die Bezeichnung wird
+ *  zum Dateinamen; fehlt ihr die Endung, kommt sie vom Originalnamen (sonst erkennt das
+ *  Mailprogramm des Kunden z. B. „AGB“ nicht als PDF). Zeichen, die im file://-Pfad des
+ *  Compose-Aufrufs stören, werden ersetzt. */
+export async function paketAnhaenge(paketId: number | null | undefined): Promise<ThunderbirdAnhang[]> {
+  if (!paketId) return []
+  const paket = await getDokumentenPaket(paketId)
+  const dateien = [...paket.dateien].sort((a, b) => a.sort_order - b.sort_order)
+  return Promise.all(dateien.map(async d => {
+    const endung = d.original_name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? ''
+    let name = (d.bezeichnung?.trim() || d.original_name).replace(/[^\p{L}\p{N}._-]+/gu, '_')
+    if (endung && !name.toLowerCase().endsWith(endung.toLowerCase())) name += endung
+    return { url: await getPaketDateiUrl(paket.id, d.id), dateiname: name }
+  }))
+}
 
 export type ThunderbirdMailParams = {
   an: string

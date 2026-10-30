@@ -1879,7 +1879,7 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
 }
 
 // ---------------------------------------------------------------------------
-// Thunderbird-Versand (Issue #147, bisher nur für Rechnungen)
+// Thunderbird-Versand (Issue #147; seit #477 auch Angebote und Aufträge samt Dokumentenpaket)
 // ---------------------------------------------------------------------------
 
 function ThunderbirdSektion({ data }: { data: Unternehmen }) {
@@ -1912,10 +1912,10 @@ function ThunderbirdSektion({ data }: { data: Unternehmen }) {
         />
         <div>
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            Thunderbird für den Versand von Rechnungen nutzen
+            Thunderbird für den Versand von Rechnungen, Angeboten und Aufträgen nutzen
           </span>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Hat Vorrang vor SMTP. RechnungsFee öffnet ein vorausgefülltes Thunderbird-Compose-Fenster (Empfänger, Betreff, Text, PDF-Anhang) – den eigentlichen Versand inklusive eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung übernimmt Thunderbird unverändert wie bei jeder anderen Mail. Gilt aktuell nur für Rechnungen; andere Dokumenttypen laufen weiterhin über SMTP bzw. das Standard-Mailprogramm.
+            Hat Vorrang vor SMTP. RechnungsFee öffnet ein vorausgefülltes Thunderbird-Compose-Fenster (Empfänger, Betreff, Text, PDF-Anhang, bei Angeboten und Aufträgen auch das Dokumentenpaket) – den eigentlichen Versand inklusive eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung übernimmt Thunderbird unverändert wie bei jeder anderen Mail. Proforma-Rechnungen und Mahnungen laufen weiterhin über SMTP bzw. das Standard-Mailprogramm.
           </p>
         </div>
       </label>

@@ -18,6 +18,9 @@ import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import type { RechnungVorschauRequest } from '../../api/client'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
+import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
+import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -663,6 +666,9 @@ function AngebotDetail({
   const [mailAdresse, setMailAdresse] = useState('')
   const [zeigMailDialog, setZeigMailDialog] = useState(false)
   const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
+  const [zeigThunderbirdHinweis, setZeigThunderbirdHinweis] = useState(false)
+  const [thunderbirdFehlerDetails, setThunderbirdFehlerDetails] = useState<{ programm: string; fehler: string }[]>([])
+  const [thunderbirdLaeuft, setThunderbirdLaeuft] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [finLaedt, setFinLaedt] = useState(false)
 
@@ -708,7 +714,48 @@ function AngebotDetail({
     } finally { setPdfLaedt(false) }
   }
 
+  function mailBetreffUndText(mitAnhangHinweis: boolean): { betreff: string; text: string } {
+    const datumDe = angebot.datum.split('-').reverse().join('.')
+    const gueltigDe = angebot.gueltig_bis ? angebot.gueltig_bis.split('-').reverse().join('.') : '—'
+    const kundeName = angebot.kunde_name ?? angebot.partner_freitext ?? ''
+    const firmenname = unternehmen?.firmenname ?? [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ') ?? 'RechnungsFee'
+    const brutto = (parseFloat(angebot.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
+    return {
+      betreff: `Angebot ${angebot.rechnungsnummer ?? ''} – ${firmenname}`,
+      text: `Guten Tag ${kundeName},\n\nanbei finden Sie unser Angebot ${angebot.rechnungsnummer ?? ''} vom ${datumDe}.\n\nAngebotsbetrag: ${brutto} €\nGültig bis: ${gueltigDe}\n\n${mitAnhangHinweis ? 'Bitte fügen Sie die heruntergeladene PDF-Datei als Anhang hinzu.\n\n' : ''}Mit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`,
+    }
+  }
+
   async function handleMail() {
+    if (unternehmen?.thunderbird_aktiv) {
+      const email = angebot.kunde_email || mailAdresse.trim()
+      if (!email) { setZeigMailEingabe(true); return }
+      setThunderbirdLaeuft(true)
+      setZeigThunderbirdHinweis(false)
+      try {
+        const base = await getApiBase()
+        const { betreff, text } = mailBetreffUndText(false)
+        await sendeUeberThunderbird({
+          an: email, betreff, text,
+          anhaenge: [
+            { url: `${base}/rechnungen/${angebot.id}/pdf?download=1`, dateiname: `Angebot_${angebot.rechnungsnummer ?? angebot.id}.pdf` },
+            ...(await paketAnhaenge(angebot.dokumentenpaket_id)),
+          ],
+        })
+        setZeigMailEingabe(false)
+        setMailAdresse('')
+      } catch (e) {
+        if (e instanceof ThunderbirdNichtGefundenError) {
+          setThunderbirdFehlerDetails(e.details)
+          setZeigThunderbirdHinweis(true)
+        } else {
+          setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+        }
+      } finally {
+        setThunderbirdLaeuft(false)
+      }
+      return
+    }
     if (unternehmen?.smtp_aktiv) {
       setZeigMailDialog(true)
       return
@@ -721,16 +768,9 @@ function AngebotDetail({
       await downloadPdfForMail(angebot.id)
     } finally { setPdfLaedt(false) }
 
-    const datumDe = angebot.datum.split('-').reverse().join('.')
-    const gueltigDe = angebot.gueltig_bis ? angebot.gueltig_bis.split('-').reverse().join('.') : '—'
-    const kundeName = angebot.kunde_name ?? angebot.partner_freitext ?? ''
-    const firmenname = unternehmen?.firmenname ?? [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ') ?? 'RechnungsFee'
-    const brutto = (parseFloat(angebot.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
-
-    const subject = encodeURIComponent(`Angebot ${angebot.rechnungsnummer ?? ''} – ${firmenname}`)
-    const body = encodeURIComponent(
-      `Guten Tag ${kundeName},\n\nanbei finden Sie unser Angebot ${angebot.rechnungsnummer ?? ''} vom ${datumDe}.\n\nAngebotsbetrag: ${brutto} €\nGültig bis: ${gueltigDe}\n\nBitte fügen Sie die heruntergeladene PDF-Datei als Anhang hinzu.\n\nMit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`
-    )
+    const { betreff, text } = mailBetreffUndText(true)
+    const subject = encodeURIComponent(betreff)
+    const body = encodeURIComponent(text)
     const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
     if (isTauri()) {
       await openUrl(mailtoUrl)
@@ -740,7 +780,8 @@ function AngebotDetail({
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
-    setTimeout(() => setZeigSmtpHinweis(false), 6000)
+    // Issue #477: fehlt ein Paket, bleibt der Hinweis stehen bis er weggeklickt wird
+    if (!angebot.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)
   }
 
   async function handleStatusChange(s: string) {
@@ -834,8 +875,8 @@ function AngebotDetail({
           <button onClick={handlePdf} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
             📄 {pdfLaedt ? 'Lädt…' : 'PDF öffnen'}
           </button>
-          <button onClick={() => handleMail()} disabled={pdfLaedt || !!angebot.ist_entwurf} className={btnNeutral}>
-            ✉️ Mail senden{!angebot.kunde_email ? ' …' : ''}
+          <button onClick={() => handleMail()} disabled={pdfLaedt || thunderbirdLaeuft || !!angebot.ist_entwurf} className={btnNeutral}>
+            ✉️ {thunderbirdLaeuft ? 'Thunderbird…' : 'Mail senden'}{!angebot.kunde_email ? ' …' : ''}
           </button>
           <button onClick={onEdit} disabled={hatBezug}
             title={hatBezug ? 'Bereits ein Folgedokument vorhanden' : undefined}
@@ -957,12 +998,27 @@ function AngebotDetail({
           </div>
         )}
 
+        {/* Issue #477: per mailto kann kein Paket mitgehen - vorher sichtbar machen statt still weglassen */}
+        {!!angebot.dokumentenpaket_id && !unternehmen?.smtp_aktiv && !unternehmen?.thunderbird_aktiv && !angebot.ist_entwurf && (
+          <PaketMailtoWarnung onEinrichten={() => navigate('/unternehmen?tab=email')} />
+        )}
+
+        {zeigThunderbirdHinweis && (
+          <ThunderbirdInstallHinweis onClose={() => setZeigThunderbirdHinweis(false)} details={thunderbirdFehlerDetails} />
+        )}
+
         {zeigSmtpHinweis && (
           <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 shadow-lg flex gap-3 items-start">
             <span className="text-lg">💡</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                {angebot.dokumentenpaket_id ? 'Dokumentenpaket nicht angehängt' : 'Tipp: SMTP einrichten'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                {angebot.dokumentenpaket_id
+                  ? 'Über dein Standard-Mailprogramm lassen sich keine Anhänge übergeben. Mit SMTP oder Thunderbird gehen PDF und Dokumentenpaket automatisch mit.'
+                  : 'Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.'}
+              </p>
               <button onClick={() => { setZeigSmtpHinweis(false); navigate('/unternehmen?tab=email') }}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
                 Jetzt einrichten →
