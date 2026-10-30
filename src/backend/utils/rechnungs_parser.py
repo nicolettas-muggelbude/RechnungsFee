@@ -1622,6 +1622,54 @@ def _parse_cii_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     )
 
 
+_ZUGFERD1_NS = {
+    "urn:ferd:CrossIndustryDocument:invoice:1p0":
+        "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
+    "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:12":
+        "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
+    "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:15":
+        "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100",
+}
+_ZUGFERD1_NAMEN = {
+    "CrossIndustryDocument": "CrossIndustryInvoice",
+    "SpecifiedExchangedDocumentContext": "ExchangedDocumentContext",
+    "HeaderExchangedDocument": "ExchangedDocument",
+    "SpecifiedSupplyChainTradeTransaction": "SupplyChainTradeTransaction",
+    "ApplicableSupplyChainTradeAgreement": "ApplicableHeaderTradeAgreement",
+    "ApplicableSupplyChainTradeDelivery": "ApplicableHeaderTradeDelivery",
+    "ApplicableSupplyChainTradeSettlement": "ApplicableHeaderTradeSettlement",
+    "SpecifiedSupplyChainTradeAgreement": "SpecifiedLineTradeAgreement",
+    "SpecifiedSupplyChainTradeDelivery": "SpecifiedLineTradeDelivery",
+    "SpecifiedSupplyChainTradeSettlement": "SpecifiedLineTradeSettlement",
+    "ApplicablePercent": "RateApplicablePercent",
+}
+
+
+def _zugferd1_zu_cii(root) -> bytes:
+    """Issue #479: ZUGFeRD 1.0 (rsm:CrossIndustryDocument) auf die CII-Struktur von
+    ZUGFeRD 2.x/XRechnung umschreiben - gleiche Fachinhalte, nur andere Namespaces und
+    Elementnamen. Danach liest _parse_cii_xml() sie wie jede andere E-Rechnung.
+    Die Summenblöcke heißen in 1.0 auf Kopf- und Positionsebene gleich
+    (SpecifiedTradeSettlementMonetarySummation) und werden über das Elternelement unterschieden."""
+    from lxml import etree
+
+    for el in root.iter():
+        if not isinstance(el.tag, str) or not el.tag.startswith("{"):
+            continue
+        ns, name = el.tag[1:].split("}", 1)
+        if name == "SpecifiedTradeSettlementMonetarySummation":
+            # Elternelement ist beim Durchlauf in Dokumentreihenfolge schon umbenannt
+            eltern = etree.QName(el.getparent()).localname if el.getparent() is not None else ""
+            name = ("SpecifiedTradeSettlementLineMonetarySummation"
+                    if eltern in ("SpecifiedSupplyChainTradeSettlement", "SpecifiedLineTradeSettlement")
+                    else "SpecifiedTradeSettlementHeaderMonetarySummation")
+        else:
+            name = _ZUGFERD1_NAMEN.get(name, name)
+        el.tag = f"{{{_ZUGFERD1_NS.get(ns, ns)}}}{name}"
+    etree.cleanup_namespaces(root)
+    return etree.tostring(root)
+
+
 # ---------------------------------------------------------------------------
 # UBL-Format (manche XRechnungen nutzen UBL statt CII)
 # ---------------------------------------------------------------------------
@@ -1803,6 +1851,9 @@ def _analysiere_xml(xml_bytes: bytes) -> AnalyseErgebnis:
         tag = root.tag or ""
         if "CrossIndustryInvoice" in tag:
             return _parse_cii_xml(xml_bytes)
+        elif "CrossIndustryDocument" in tag:
+            # Issue #479: ZUGFeRD 1.0 (2014) - auf CII-Struktur (ZUGFeRD 2.x) umschreiben
+            return _parse_cii_xml(_zugferd1_zu_cii(root))
         elif "Invoice" in tag:
             return _parse_ubl_xml(xml_bytes)
         else:
