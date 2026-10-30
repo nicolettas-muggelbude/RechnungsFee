@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.6',
     datum: 'November 2026',
     eintraege: [
+      { typ: 'fix', text: 'Empfänger ändern: Wurde bei einem gespeicherten Entwurf (Angebot, Auftrag, Proforma, Rechnung) ein Kunde aus den Stammdaten durch einen frei eingetippten Empfänger ersetzt, stand nach dem Speichern wieder der alte Kunde drin. Der neue Empfänger wird jetzt übernommen – auch bei Eingangsrechnungen mit Lieferant. Danke an Gerti (Issue #478).' },
       { typ: 'fix', text: 'Linux: Beim Speichern aus dem PDF-Fenster hieß jede Datei „document.pdf“. Rechnungen, Angebote, Aufträge, Proforma-Rechnungen, Lieferscheine, Gutschriften und Mahnungen bekommen jetzt wie unter Windows einen sprechenden Namen mit der Belegnummer (z. B. „Rechnung_RE-260035.pdf“), Berichte wie EÜR, UStVA, Anlage S/G, Journal, Kassenbuch, Kontokorrent oder Inventurliste einen Namen mit Jahr bzw. Zeitraum. Danke an mswfw (Issue #476).' },
     ],
   },

@@ -1735,6 +1735,16 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         if val is not None:
             setattr(rechnung, field, val)
 
+    # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
+    # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
+    # und das "val is not None"-Muster oben ließ die alte ID stehen; da kunde_name überall
+    # Vorrang vor partner_freitext hat, war der neue Empfänger nach dem Speichern wieder weg.
+    # Nur bei gesetztem Freitext ohne ID - reine Teil-Updates (z. B. nur notizen) bleiben unberührt.
+    if data.partner_freitext and not data.kunde_id and not data.lieferant_id:
+        rechnung.kunde_id = None
+        rechnung.lieferant_id = None
+        rechnung.lieferadresse_id = None  # gehörte zum bisherigen Kunden
+
     # Issue #368: einleitungstext/schlusstext bewusst NICHT im obigen "val is not None"-
     # Muster - das würde ein absichtliches Leeren (Frontend schickt explizit null) nicht von
     # "gar nicht mitgeschickt" unterscheiden können. Über model_fields_set wird nur dann
