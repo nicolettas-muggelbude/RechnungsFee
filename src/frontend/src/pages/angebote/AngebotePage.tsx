@@ -10,6 +10,7 @@ import {
   rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
   openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
   type Rechnung, type ArtikelSuche,
+  dokumentPdfUrl,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
@@ -684,7 +685,7 @@ function AngebotDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${angebot.id}/pdf`
+      const url = dokumentPdfUrl(base, angebot)
       if (isTauri()) {
         openInPdfWindow(url, `Angebot ${angebot.rechnungsnummer ?? ''}`)
       } else {
@@ -697,7 +698,7 @@ function AngebotDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${angebot.id}/pdf`
+      const url = dokumentPdfUrl(base, angebot)
       if (isTauri()) {
         openInPdfWindow(url, 'Angebot drucken')
       } else {

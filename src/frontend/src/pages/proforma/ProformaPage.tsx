@@ -11,6 +11,7 @@ import {
   rechnungAusProforma,
   openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
   type Rechnung, type ArtikelSuche,
+  dokumentPdfUrl,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
@@ -661,7 +662,7 @@ function ProformaDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${proforma.id}/pdf`
+      const url = dokumentPdfUrl(base, proforma)
       if (isTauri()) {
         openInPdfWindow(url, `Proforma ${proforma.rechnungsnummer ?? ''}`)
       } else {
@@ -674,7 +675,7 @@ function ProformaDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${proforma.id}/pdf`
+      const url = dokumentPdfUrl(base, proforma)
       if (isTauri()) {
         openInPdfWindow(url, 'Proforma drucken')
       } else {

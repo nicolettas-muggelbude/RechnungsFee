@@ -106,6 +106,44 @@ export async function openUrl(url: string) {
   }
 }
 
+/** Issue #476: hängt den Speichernamen als letztes Pfadsegment an eine PDF-URL an
+ *  (`…/pdf/_datei/<name>.pdf?…`). Der PDF-Viewer von WebKitGTK (Linux) nimmt beim Speichern
+ *  den Namen aus der URL statt aus Content-Disposition – ohne das hieß jede Datei
+ *  „document.pdf“. Das Backend entfernt das Segment vor dem Routing (PdfDateinameMiddleware).
+ *  Namen möglichst wie im Content-Disposition-Header des jeweiligen Endpunkts. */
+export function mitDateiname(url: string, name: string): string {
+  const i = url.indexOf('?')
+  const pfad = i < 0 ? url : url.slice(0, i)
+  const query = i < 0 ? '' : url.slice(i)
+  const sauber = name.replace(/[\\/:*?"<>|]/g, '-')
+  return `${pfad}/_datei/${encodeURIComponent(sauber)}.pdf${query}`
+}
+
+/** Zeitraum-Teil des Dateinamens wie in api/journal.py bzw. api/rechnungen.py (Export). */
+function _zeitraumSuffix(p: { monat?: string; datum_von?: string; datum_bis?: string }, tagEinzeln: boolean): string {
+  if (p.monat) return p.monat
+  if (tagEinzeln && p.datum_von && p.datum_von === p.datum_bis) return p.datum_von
+  if (p.datum_von && p.datum_bis) return `${p.datum_von}_${p.datum_bis}`
+  if (p.datum_von) return `ab_${p.datum_von}`
+  if (p.datum_bis) return `bis_${p.datum_bis}`
+  return 'gesamt'
+}
+
+/** PDF-URL eines Dokuments (Rechnung, Angebot, Auftrag, Proforma, Lieferschein, Gutschrift)
+ *  mit Speichernamen. Präfixe wie in rechnung_als_pdf() (api/rechnungen.py). */
+export function dokumentPdfUrl(
+  base: string,
+  dok: { id: number; rechnungsnummer?: string | null; dokument_typ?: string | null },
+  query = '',
+): string {
+  const prefix: Record<string, string> = {
+    Gutschrift: 'Gutschrift', Lieferschein: 'Lieferschein', Angebot: 'Angebot',
+    Proforma: 'Proforma', Auftrag: 'Auftrag',
+  }
+  return mitDateiname(`${base}/rechnungen/${dok.id}/pdf${query}`,
+    `${prefix[dok.dokument_typ ?? ''] ?? 'Rechnung'}_${dok.rechnungsnummer || dok.id}`)
+}
+
 /** Öffnet ein Dokument in einem neuen Tauri-WebView-Fenster (eigenes OS-Fenster).
  *  Funktioniert für HTTP-URLs und blob:-URLs gleichermaßen. */
 export async function openInPdfWindow(url: string, title = 'Dokument') {
@@ -411,7 +449,7 @@ export const deleteKategorie = (id: number) =>
   request<void>(`/kategorien/${id}`, { method: 'DELETE' })
 export async function downloadKategorienPdf(): Promise<void> {
   const base = await getBaseUrl()
-  await openUrl(`${base}/kategorien/export/pdf`)
+  await openUrl(mitDateiname(`${base}/kategorien/export/pdf`, 'kategorien'))
 }
 
 // --- Journal ---
@@ -556,7 +594,8 @@ export const getKassenbuchExportUrl = async (
   datumVon: string, datumBis: string, format: 'pdf' | 'csv'
 ): Promise<string> => {
   const base = await getApiBase()
-  return `${base}/journal/kassenbuch-export?datum_von=${datumVon}&datum_bis=${datumBis}&format=${format}`
+  const url = `${base}/journal/kassenbuch-export?datum_von=${datumVon}&datum_bis=${datumBis}&format=${format}`
+  return format === 'pdf' ? mitDateiname(url, `Kassenbuch_${datumVon}_${datumBis}`) : url
 }
 
 export const getJournalExportUrl = async (
@@ -579,7 +618,8 @@ export const getJournalExportUrl = async (
   if (params.art) p.set('art', params.art)
   if (params.zahlungsart_typ) p.set('zahlungsart_typ', params.zahlungsart_typ)
   p.set('format', params.format)
-  return `${base}/journal/export?${p.toString()}`
+  const url = `${base}/journal/export?${p.toString()}`
+  return params.format === 'pdf' ? mitDateiname(url, `Journal_${_zeitraumSuffix(params, true)}`) : url
 }
 
 export const korrigiereZahlung = (
@@ -613,7 +653,8 @@ export const getRechnungenExportUrl = async (
   if (params.lieferant_id) p.set('lieferant_id', String(params.lieferant_id))
   if (params.dokument_typ) p.set('dokument_typ', params.dokument_typ)
   p.set('format', params.format)
-  return `${base}/rechnungen/export?${p.toString()}`
+  const url = `${base}/rechnungen/export?${p.toString()}`
+  return params.format === 'pdf' ? mitDateiname(url, `Rechnungen_${_zeitraumSuffix(params, false)}`) : url
 }
 
 // --- Tagesabschluss ---
@@ -670,7 +711,8 @@ export async function downloadTagesabschlussPdf(params: {
   const searchParams = new URLSearchParams({ zeitraum })
   if (wert) searchParams.set('wert', wert)
   const base = await getBaseUrl()
-  await openUrl(`${base}/tagesabschluss/export/pdf?${searchParams}`)
+  await openUrl(mitDateiname(`${base}/tagesabschluss/export/pdf?${searchParams}`,
+    `Tagesabschluesse_${zeitraum !== 'alle' && wert ? wert : 'gesamt'}`))
 }
 
 // --- Kunden ---
@@ -815,9 +857,14 @@ export async function dsgvoExportKunde(id: number) {
   const base = await getBaseUrl()
   await openUrl(`${base}/kunden/${id}/dsgvo-export`)
 }
-export async function dsgvoExportKundePdf(id: number) {
+/** Speichername wie in api/kunden.py / api/lieferanten.py (dsgvo-<Name>-<Datum>) */
+function _dsgvoName(name: string | undefined, id: number): string {
+  const heute = new Date().toLocaleDateString('sv-SE')
+  return `dsgvo-${(name || String(id)).replace(/ /g, '-')}-${heute}`
+}
+export async function dsgvoExportKundePdf(id: number, name?: string) {
   const base = await getBaseUrl()
-  await openUrl(`${base}/kunden/${id}/dsgvo-export-pdf`)
+  await openUrl(mitDateiname(`${base}/kunden/${id}/dsgvo-export-pdf`, _dsgvoName(name, id)))
 }
 
 export type KontokorrentBewegung = {
@@ -847,9 +894,13 @@ export type PartnerSaldo = {
 export const getKontokorrentUebersicht = () =>
   request<PartnerSaldo[]>('/kontokorrent/uebersicht')
 
-export async function downloadKontokorrentPdf(id: number, von: string, bis: string) {
+/** Speichername wie in api/kunden.py / api/lieferanten.py (Kontokorrent_<Name>_<von>_<bis>) */
+function _kontokorrentName(name: string | undefined, von: string, bis: string): string {
+  return name ? `Kontokorrent_${name.replace(/ /g, '_')}_${von}_${bis}` : `Kontokorrent_${von}_${bis}`
+}
+export async function downloadKontokorrentPdf(id: number, von: string, bis: string, name?: string) {
   const base = await getBaseUrl()
-  await openUrl(`${base}/kunden/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`)
+  await openUrl(mitDateiname(`${base}/kunden/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`, _kontokorrentName(name, von, bis)))
 }
 
 export type KontokorrentMailData = {
@@ -866,9 +917,9 @@ export const sendeKontokorrentMail = (id: number, data: KontokorrentMailData) =>
     body: JSON.stringify(data),
   })
 
-export async function downloadKontokorrentPdfLieferant(id: number, von: string, bis: string) {
+export async function downloadKontokorrentPdfLieferant(id: number, von: string, bis: string, name?: string) {
   const base = await getBaseUrl()
-  await openUrl(`${base}/lieferanten/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`)
+  await openUrl(mitDateiname(`${base}/lieferanten/${id}/kontokorrent/pdf?von=${von}&bis=${bis}`, _kontokorrentName(name, von, bis)))
 }
 export const sendeKontokorrentMailLieferant = (id: number, data: KontokorrentMailData) =>
   request<{ ok: boolean }>(`/lieferanten/${id}/kontokorrent/mail`, {
@@ -911,9 +962,9 @@ export async function dsgvoExportLieferant(id: number) {
   const base = await getBaseUrl()
   await openUrl(`${base}/lieferanten/${id}/dsgvo-export`)
 }
-export async function dsgvoExportLieferantPdf(id: number) {
+export async function dsgvoExportLieferantPdf(id: number, name?: string) {
   const base = await getBaseUrl()
-  await openUrl(`${base}/lieferanten/${id}/dsgvo-export-pdf`)
+  await openUrl(mitDateiname(`${base}/lieferanten/${id}/dsgvo-export-pdf`, _dsgvoName(name, id)))
 }
 
 // --- EKS ---
@@ -949,9 +1000,10 @@ export async function eksHalbjahr(start: string, art: string): Promise<EksHalbja
   return request<EksHalbjahr>(`/eks/halbjahr?start=${start}&art=${art}`)
 }
 
-export async function eksHalbjahresPdf(start: string, art: string): Promise<void> {
+export async function eksHalbjahresPdf(start: string, art: string, zeitraum?: { von: string; bis: string }): Promise<void> {
   const base = await getBaseUrl()
-  await openUrl(`${base}/eks/halbjahr/pdf?start=${start}&art=${art}`)
+  await openUrl(mitDateiname(`${base}/eks/halbjahr/pdf?start=${start}&art=${art}`,
+    zeitraum ? `EKS_${zeitraum.von}_${zeitraum.bis}` : `EKS_${start}`))
 }
 
 // --- Export ---
@@ -1946,7 +1998,7 @@ export const getPdfVorlagen = () => request<PdfVorlage[]>('/pdf-vorlagen')
 
 export async function openDemoPdf(vorlage: number): Promise<void> {
   const base = await getApiBase()
-  await openUrl(`${base}/pdf-vorlagen/demo?vorlage=${vorlage}`)
+  await openUrl(mitDateiname(`${base}/pdf-vorlagen/demo?vorlage=${vorlage}`, `Vorschau_Vorlage_${vorlage}`))
 }
 
 // --- EKS-Einstellungen ---
@@ -2077,7 +2129,7 @@ export const getUStVAHistorie = () =>
 
 export const getUStVAPdfUrl = async (zeitraum: string): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`
+  return mitDateiname(`${base}/ustva/pdf?zeitraum=${encodeURIComponent(zeitraum)}`, `UStVA_${zeitraum}`)
 }
 
 /** UStVA als ELSTER-XML (Upload-Datei für Mein ELSTER) herunterladen. */
@@ -2121,7 +2173,7 @@ export const berechneJahresUStVA = (jahr: number) =>
 
 export const getJahresUStVAPdfUrl = async (jahr: number): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/ustva/jahreserklarung/pdf?jahr=${jahr}`
+  return mitDateiname(`${base}/ustva/jahreserklarung/pdf?jahr=${jahr}`, `JahresUSt_${jahr}`)
 }
 
 // --- Zusammenfassende Meldung (ZM) ---
@@ -2196,7 +2248,7 @@ export const berechneEUER = (jahr: number) =>
 
 export const getEUERPdfUrl = async (jahr: number): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/euer/pdf?jahr=${jahr}`
+  return mitDateiname(`${base}/euer/pdf?jahr=${jahr}`, `EÜR_${jahr}`)
 }
 
 export type EUERKatSumme = {
@@ -2248,7 +2300,7 @@ export const berechneAnlageS = (jahr: number) =>
 
 export const getAnlageSPdfUrl = async (jahr: number): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/anlage-s/pdf?jahr=${jahr}`
+  return mitDateiname(`${base}/anlage-s/pdf?jahr=${jahr}`, `AnlageS_${jahr}`)
 }
 
 export type AnlageGKfzHinweis = {
@@ -2277,7 +2329,7 @@ export const berechneAnlageG = (jahr: number) =>
 
 export const getAnlageGPdfUrl = async (jahr: number, messbetrag = 0, hebesatz = 0): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/anlage-g/pdf?jahr=${jahr}&messbetrag=${messbetrag.toFixed(2)}&hebesatz=${hebesatz.toFixed(0)}`
+  return mitDateiname(`${base}/anlage-g/pdf?jahr=${jahr}&messbetrag=${messbetrag.toFixed(2)}&hebesatz=${hebesatz.toFixed(0)}`, `AnlageG_${jahr}`)
 }
 
 
@@ -2544,7 +2596,7 @@ export const getAveurZusammenfassung = (jahr: number) =>
   )
 export async function getAveurPdfUrl(jahr: number): Promise<string> {
   const base = await getBaseUrl()
-  return `${base}/anlageverzeichnis/pdf?jahr=${jahr}`
+  return mitDateiname(`${base}/anlageverzeichnis/pdf?jahr=${jahr}`, `anlageverzeichnis_${jahr}`)
 }
 
 // --- Steuer-Fristenliste ---
@@ -2646,7 +2698,8 @@ export const getKontenuebersichtExportUrl = async (
   von: string, bis: string, format: 'pdf' | 'csv'
 ): Promise<string> => {
   const base = await getApiBase()
-  return `${base}/kontenuebersicht/export?von=${von}&bis=${bis}&format=${format}`
+  const url = `${base}/kontenuebersicht/export?von=${von}&bis=${bis}&format=${format}`
+  return format === 'pdf' ? mitDateiname(url, `Kontenuebersicht_${von}_${bis}`) : url
 }
 
 
@@ -2677,7 +2730,8 @@ export const getInventurlisteExportUrl = async (
   stichtag: string, format: 'pdf' | 'csv'
 ): Promise<string> => {
   const base = await getApiBase()
-  return `${base}/inventurliste/export?stichtag=${stichtag}&format=${format}`
+  const url = `${base}/inventurliste/export?stichtag=${stichtag}&format=${format}`
+  return format === 'pdf' ? mitDateiname(url, `Inventurliste_${stichtag}`) : url
 }
 
 
@@ -3357,9 +3411,10 @@ export const getRechnungMahnungen = (rechnungId: number) =>
   request<Mahnung[]>(`/rechnungen/${rechnungId}/mahnungen`)
 export const getKundeMahnungen = (kundeId: number) =>
   request<MahnungHistorieItem[]>(`/kunden/${kundeId}/mahnungen`)
-export const getMahnungPdfUrl = async (mahnungId: number, nurAnsehen = false): Promise<string> => {
+export const getMahnungPdfUrl = async (mahnungId: number, nurAnsehen = false, mahnnummer?: string | null): Promise<string> => {
   const base = await getBaseUrl()
-  return `${base}/mahnwesen/${mahnungId}/pdf${nurAnsehen ? '?nur_ansehen=true' : ''}`
+  // Speichername wie mahnung_pdf_bytes() (api/mahnwesen.py)
+  return mitDateiname(`${base}/mahnwesen/${mahnungId}/pdf${nurAnsehen ? '?nur_ansehen=true' : ''}`, mahnnummer || 'Mahnung')
 }
 /** Lädt das Inkasso-Paket (ZIP: Deckblatt, Kontokorrent, Rechnungs-/Mahnungs-PDFs) eines Kunden herunter. */
 export async function downloadInkassoPaket(kundeId: number): Promise<void> {

@@ -10,6 +10,7 @@ import {
   rechnungAusAuftrag, lieferscheinAusAuftrag, proformaAusAuftrag, auftragStatusSetzen,
   getApiBase, openUrl, isTauri, openInPdfWindow,
   type Rechnung, type ArtikelSuche,
+  dokumentPdfUrl,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
@@ -689,7 +690,7 @@ function AuftragDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${auftrag.id}/pdf`
+      const url = dokumentPdfUrl(base, auftrag)
       if (isTauri()) {
         openInPdfWindow(url, `Auftrag ${auftrag.rechnungsnummer ?? ''}`)
       } else {
@@ -702,7 +703,7 @@ function AuftragDetail({
     setPdfLaedt(true)
     try {
       const base = await getApiBase()
-      const url = `${base}/rechnungen/${auftrag.id}/pdf`
+      const url = dokumentPdfUrl(base, auftrag)
       if (isTauri()) {
         openInPdfWindow(url, 'Auftrag drucken')
       } else {

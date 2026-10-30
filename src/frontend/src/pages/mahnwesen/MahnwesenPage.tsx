@@ -513,7 +513,7 @@ function KundeDetail({
                     )
                   })()}
                   <div className="flex flex-wrap gap-1.5">
-                    <button type="button" onClick={async () => { const url = await getMahnungPdfUrl(m.id, true); await openUrl(url) }}
+                    <button type="button" onClick={async () => { const url = await getMahnungPdfUrl(m.id, true, m.mahnnummer); await openUrl(url) }}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
                       👁 Ansehen
                     </button>

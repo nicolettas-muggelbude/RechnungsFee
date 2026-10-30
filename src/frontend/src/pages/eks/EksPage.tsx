@@ -337,7 +337,8 @@ export function EksPage() {
     if (!ergebnis) return
     setFehler(null)
     try {
-      await eksHalbjahresPdf(`${startMonat}-01`, art)
+      await eksHalbjahresPdf(`${startMonat}-01`, art,
+        { von: ergebnis.bewilligungszeitraum_von, bis: ergebnis.bewilligungszeitraum_bis })
       setExportiert(true)
     } catch (e: any) {
       setFehler(e?.message ?? 'PDF-Export fehlgeschlagen')

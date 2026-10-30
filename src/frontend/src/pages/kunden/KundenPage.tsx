@@ -183,7 +183,7 @@ function KundeMahnstatus({ kundeId }: { kundeId: number }) {
             <button
               key={m.id}
               type="button"
-              onClick={async () => { const url = await getMahnungPdfUrl(m.id); await openUrl(url) }}
+              onClick={async () => { const url = await getMahnungPdfUrl(m.id, false, m.mahnnummer); await openUrl(url) }}
               title={`${m.mahnnummer ?? ''} – ${formatDatum(m.erstellt_am.slice(0, 10))}`}
               className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
             >
@@ -353,7 +353,8 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
             className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
         </div>
         <button
-          onClick={() => downloadKontokorrentPdf(kunde.id!, von, bis)}
+          onClick={() => downloadKontokorrentPdf(kunde.id!, von, bis,
+            kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(' ') || undefined)}
           className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
           ↓ PDF
         </button>
@@ -1488,7 +1489,8 @@ export function KundenPage() {
                   <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => dsgvoExportKundePdf(editKunde.id!)}
+                      <button type="button" onClick={() => dsgvoExportKundePdf(editKunde.id!,
+                        [editKunde.firmenname, editKunde.vorname, editKunde.nachname].filter(Boolean).join(' ') || undefined)}
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
                         📄 Datenauskunft (PDF)
                       </button>

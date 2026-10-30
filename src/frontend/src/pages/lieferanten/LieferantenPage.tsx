@@ -240,7 +240,8 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
                   className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
               </div>
               <button
-                onClick={() => downloadKontokorrentPdfLieferant(lieferant.id!, von, bis)}
+                onClick={() => downloadKontokorrentPdfLieferant(lieferant.id!, von, bis,
+                  lieferant.firmenname || [lieferant.vorname, lieferant.nachname].filter(Boolean).join(' ') || undefined)}
                 className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                 ↓ PDF
               </button>
@@ -805,7 +806,8 @@ export function LieferantenPage() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => dsgvoExportLieferantPdf(editLieferant.id!)}
+                        onClick={() => dsgvoExportLieferantPdf(editLieferant.id!,
+                          editLieferant.firmenname || [editLieferant.vorname, editLieferant.nachname].filter(Boolean).join(' ') || undefined)}
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         📄 Datenauskunft (PDF)

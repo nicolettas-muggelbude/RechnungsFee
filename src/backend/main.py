@@ -53,6 +53,10 @@ app.add_middleware(
     ],
 )
 
+# Issue #476: angehängten Dateinamen ("/_datei/<name>") vor dem Routing entfernen
+from utils.pdf_dateiname_pfad import PdfDateinameMiddleware  # noqa: E402
+app.add_middleware(PdfDateinameMiddleware)
+
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
 app.include_router(konten.router)

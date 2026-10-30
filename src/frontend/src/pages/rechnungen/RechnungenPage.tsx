@@ -22,6 +22,7 @@ import {
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
+  dokumentPdfUrl,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -1363,7 +1364,7 @@ function RechnungDetail({
 
   async function handleDrucken() {
     const base = await getApiBase()
-    const url = `${base}/rechnungen/${rechnung.id}/pdf`
+    const url = dokumentPdfUrl(base, rechnung)
     // Archivierung passiert serverseitig beim Laden der URL, unabhängig vom Aufrufer -
     // kurze Verzögerung damit die Liste den neuen "ausgegeben"-Status zuverlässig zeigt.
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
@@ -1378,7 +1379,7 @@ function RechnungDetail({
   async function handlePdfOeffnen() {
     const base = await getApiBase()
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
-    _zeigePdf(`${base}/rechnungen/${rechnung.id}/pdf`, 'Rechnung')
+    _zeigePdf(dokumentPdfUrl(base, rechnung), 'Rechnung')
   }
 
   async function handleAnsehen() {
@@ -1386,7 +1387,7 @@ function RechnungDetail({
     if (isTauri()) {
       openInPdfWindow(`${base}/rechnungen/${rechnung.id}/pdf-ansehen`, rechnung.rechnungsnummer ?? 'Dokument')
     } else {
-      window.open(`${base}/rechnungen/${rechnung.id}/pdf?nur_ansehen=true`, '_blank')
+      window.open(dokumentPdfUrl(base, rechnung, '?nur_ansehen=true'), '_blank')
     }
   }
 
