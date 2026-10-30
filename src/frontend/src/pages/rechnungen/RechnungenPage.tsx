@@ -22,7 +22,7 @@ import {
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
-  dokumentPdfUrl,
+  dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -33,7 +33,8 @@ import { ArtikelFormModal } from '../artikel/ArtikelPage'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
-import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
+import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
@@ -1438,7 +1439,7 @@ function RechnungDetail({
           anhaenge: [{
             url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
             dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
-          }],
+          }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
         })
         qc.invalidateQueries({ queryKey: ['rechnungen'] })
         setZeigMailEingabe(false)
@@ -1482,7 +1483,7 @@ function RechnungDetail({
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
-    setTimeout(() => setZeigSmtpHinweis(false), 6000)
+    if (!rechnung.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)
   }
 
   return (
@@ -1663,6 +1664,15 @@ function RechnungDetail({
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
           )}
+          {!!rechnung.dokumentenpaket_id && (
+            <button
+              onClick={() => oeffnePaketVorschau(rechnung.dokumentenpaket_id!)}
+              title="Alle Dokumente des Pakets als ein PDF ansehen und drucken"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              📎 Paket ansehen
+            </button>
+          )}
         </div>
 
         {fehler && (
@@ -1670,6 +1680,11 @@ function RechnungDetail({
             <span>{fehler}</span>
             <button onClick={() => setFehler(null)} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300">×</button>
           </div>
+        )}
+
+        {/* Issue #477: per mailto kann kein Paket mitgehen - vorher sichtbar machen statt still weglassen */}
+        {!!rechnung.dokumentenpaket_id && !unternehmen?.smtp_aktiv && !unternehmen?.thunderbird_aktiv && !rechnung.ist_entwurf && (
+          <PaketMailtoWarnung onEinrichten={() => navigate('/unternehmen?tab=email')} />
         )}
 
         {zeigThunderbirdHinweis && (
@@ -1680,8 +1695,14 @@ function RechnungDetail({
           <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 shadow-lg flex gap-3 items-start">
             <span className="text-lg">💡</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                {rechnung.dokumentenpaket_id ? 'Dokumentenpaket nicht angehängt' : 'Tipp: SMTP einrichten'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                {rechnung.dokumentenpaket_id
+                  ? 'Über dein Standard-Mailprogramm lassen sich keine Anhänge übergeben. Mit SMTP oder Thunderbird gehen PDF und Dokumentenpaket automatisch mit.'
+                  : 'Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.'}
+              </p>
               <button onClick={() => { setZeigSmtpHinweis(false); navigate('/unternehmen?tab=email') }}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
                 Jetzt einrichten →
@@ -2761,6 +2782,8 @@ function RechnungForm({
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
   const [kundenBestellnummer, setKundenBestellnummer] = useState(initial?.kunden_bestellnummer ?? '')
   const [bemerkungErechnung, setBemerkungErechnung] = useState(initial?.bemerkung_erechnung ?? '')
+  const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
+  const { data: pakete } = useQuery({ queryKey: ['dokumentenpakete'], queryFn: getDokumentenPakete, enabled: typ === 'ausgang' })
   const [externErstellt, setExternErstellt] = useState(false)
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
@@ -3387,6 +3410,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
+      dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
       ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
@@ -4517,6 +4541,26 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             placeholder="Bestell-/Referenznummer des Kunden"
           />
+        </div>
+      )}
+
+      {/* Issue #477: nur wenn überhaupt ein aktives Paket existiert (oder schon eins gewählt ist) */}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (!!paketId || !!pakete?.some(p => p.aktiv)) && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Dokumentenpaket
+            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional, geht beim Mailversand mit)</span>
+          </label>
+          <select
+            value={paketId}
+            onChange={(e) => setPaketId(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          >
+            <option value="">— Kein Paket —</option>
+            {pakete?.filter(p => p.aktiv || p.id.toString() === paketId).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
       )}
 

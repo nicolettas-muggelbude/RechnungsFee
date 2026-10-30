@@ -10,11 +10,15 @@ import {
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusProforma,
   openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
+  getDokumentenPakete, oeffnePaketVorschau,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
+import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
+import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
@@ -251,6 +255,8 @@ function ProformaFormular({
   const [datum, setDatum] = useState(initial?.datum ?? heuteIso())
   const [faelligAm, setFaelligAm] = useState(initial?.faellig_am ?? '')
   const [notizen, setNotizen] = useState(initial?.notizen ?? '')
+  const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
+  const { data: pakete } = useQuery({ queryKey: ['dokumentenpakete'], queryFn: getDokumentenPakete })
   const [einleitungstext, setEinleitungstext] = useState(initial?.einleitungstext ?? '')
   const [schlusstext, setSchlusstext] = useState(initial?.schlusstext ?? '')
   const [eingabeModus, setEingabeModus] = useState<EingabeModus>(initial?.eingabemodus ?? 'brutto')
@@ -393,6 +399,7 @@ function ProformaFormular({
         partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
         partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
         notizen: notizen || undefined,
+        dokumentenpaket_id: paketId ? parseInt(paketId) : null,
         // Issue #368: null statt undefined - nur so kommt ein bewusst geleertes Feld beim
         // Bearbeiten als "explizit geleert" im Backend an (model_fields_set).
         einleitungstext: einleitungstext || null,
@@ -587,6 +594,19 @@ function ProformaFormular({
           placeholder="Erscheint als Fußtext auf dem PDF" />
       </div>
 
+      {/* Issue #477: nur wenn überhaupt ein aktives Paket existiert (oder schon eins gewählt ist) */}
+      {(!!paketId || !!pakete?.some(p => p.aktiv)) && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Dokumentenpaket</label>
+          <select value={paketId} onChange={e => setPaketId(e.target.value)} className={inputCls}>
+            <option value="">— Kein Paket —</option>
+            {pakete?.filter(p => p.aktiv || p.id.toString() === paketId).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}
 
       <div className="flex gap-2">
@@ -632,6 +652,9 @@ function ProformaDetail({
   const [mailAdresse, setMailAdresse] = useState('')
   const [zeigMailDialog, setZeigMailDialog] = useState(false)
   const [zeigSmtpHinweis, setZeigSmtpHinweis] = useState(false)
+  const [zeigThunderbirdHinweis, setZeigThunderbirdHinweis] = useState(false)
+  const [thunderbirdFehlerDetails, setThunderbirdFehlerDetails] = useState<{ programm: string; fehler: string }[]>([])
+  const [thunderbirdLaeuft, setThunderbirdLaeuft] = useState(false)
   const [zeigZahlungsForm, setZeigZahlungsForm] = useState(false)
   const [zahlungsart, setZahlungsart] = useState('Bank')
   const leistungsdatum = proforma.leistung_bis ?? proforma.leistung_von ?? null
@@ -685,7 +708,49 @@ function ProformaDetail({
     } finally { setPdfLaedt(false) }
   }
 
+  function mailBetreffUndText(mitAnhangHinweis: boolean): { betreff: string; text: string } {
+    const datumDe = proforma.datum.split('-').reverse().join('.')
+    const kundeName = proforma.kunde_name ?? proforma.partner_freitext ?? ''
+    const firmenname = unternehmen?.firmenname ?? [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ') ?? 'RechnungsFee'
+    const brutto = (parseFloat(proforma.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
+    return {
+      betreff: `Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} – ${firmenname}`,
+      text: `Guten Tag ${kundeName},\n\nanbei findest du unsere Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} vom ${datumDe}.\n\nBetrag: ${brutto} €\n\n${mitAnhangHinweis ? 'Bitte füge die heruntergeladene PDF-Datei als Anhang hinzu.\n\n' : ''}Mit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`,
+    }
+  }
+
   async function handleMail() {
+    // Issue #477: Thunderbird wie bei Rechnung/Angebot/Auftrag, damit auch das Paket mitgeht
+    if (unternehmen?.thunderbird_aktiv) {
+      const email = proforma.kunde_email || mailAdresse.trim()
+      if (!email) { setZeigMailEingabe(true); return }
+      setThunderbirdLaeuft(true)
+      setZeigThunderbirdHinweis(false)
+      try {
+        const base = await getApiBase()
+        const { betreff, text } = mailBetreffUndText(false)
+        await sendeUeberThunderbird({
+          an: email, betreff, text,
+          anhaenge: [
+            { url: `${base}/rechnungen/${proforma.id}/pdf?download=1`, dateiname: `Proforma_${proforma.rechnungsnummer ?? proforma.id}.pdf` },
+            ...(await paketAnhaenge(proforma.dokumentenpaket_id)),
+          ],
+        })
+        qc.invalidateQueries({ queryKey: ['proformas'] })
+        setZeigMailEingabe(false)
+        setMailAdresse('')
+      } catch (e) {
+        if (e instanceof ThunderbirdNichtGefundenError) {
+          setThunderbirdFehlerDetails(e.details)
+          setZeigThunderbirdHinweis(true)
+        } else {
+          setFehler(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+        }
+      } finally {
+        setThunderbirdLaeuft(false)
+      }
+      return
+    }
     if (unternehmen?.smtp_aktiv) { setZeigMailDialog(true); return }
     const email = proforma.kunde_email || mailAdresse.trim()
     if (!email) { setZeigMailEingabe(true); return }
@@ -695,16 +760,8 @@ function ProformaDetail({
       await downloadPdfForMail(proforma.id)
     } finally { setPdfLaedt(false) }
 
-    const datumDe = proforma.datum.split('-').reverse().join('.')
-    const kundeName = proforma.kunde_name ?? proforma.partner_freitext ?? ''
-    const firmenname = unternehmen?.firmenname ?? [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ') ?? 'RechnungsFee'
-    const brutto = (parseFloat(proforma.brutto_gesamt as any) || 0).toFixed(2).replace('.', ',')
-
-    const subject = encodeURIComponent(`Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} – ${firmenname}`)
-    const body = encodeURIComponent(
-      `Guten Tag ${kundeName},\n\nanbei findest du unsere Proforma-Rechnung ${proforma.rechnungsnummer ?? ''} vom ${datumDe}.\n\nBetrag: ${brutto} €\n\nBitte füge die heruntergeladene PDF-Datei als Anhang hinzu.\n\nMit freundlichen Grüßen\n${firmenname}${unternehmen?.mail_signatur ? '\n\n' + unternehmen.mail_signatur : ''}`
-    )
-    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`
+    const { betreff, text } = mailBetreffUndText(true)
+    const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`
     if (isTauri()) {
       await openUrl(mailtoUrl)
     } else {
@@ -713,7 +770,7 @@ function ProformaDetail({
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
-    setTimeout(() => setZeigSmtpHinweis(false), 6000)
+    if (!proforma.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)
   }
 
   async function handleRechnungErstellen() {
@@ -769,8 +826,8 @@ function ProformaDetail({
           <button onClick={handlePdf} disabled={pdfLaedt || !!proforma.ist_entwurf} className={btnNeutral}>
             📄 {pdfLaedt ? 'Lädt…' : 'PDF öffnen'}
           </button>
-          <button onClick={() => handleMail()} disabled={pdfLaedt || !!proforma.ist_entwurf} className={btnNeutral}>
-            ✉️ Mail senden{!proforma.kunde_email ? ' …' : ''}
+          <button onClick={() => handleMail()} disabled={pdfLaedt || thunderbirdLaeuft || !!proforma.ist_entwurf} className={btnNeutral}>
+            ✉️ {thunderbirdLaeuft ? 'Thunderbird…' : 'Mail senden'}{!proforma.kunde_email ? ' …' : ''}
           </button>
           <button onClick={onEdit} disabled={hatBezug}
             title={hatBezug ? 'Bereits eine Rechnung vorhanden' : undefined}
@@ -791,6 +848,12 @@ function ProformaDetail({
               → {proforma.rechnung_zu_proforma_nr ?? `RE #${proforma.rechnung_zu_proforma_id}`}
             </button>
           )}
+          {!!proforma.dokumentenpaket_id && (
+            <button onClick={() => oeffnePaketVorschau(proforma.dokumentenpaket_id!)} className={btnNeutral}
+              title="Alle Dokumente des Pakets als ein PDF ansehen und drucken">
+              📎 Paket ansehen
+            </button>
+          )}
           <button onClick={onDelete} disabled={hatBezug}
             title={hatBezug ? 'Kann nicht gelöscht werden – bereits eine Rechnung vorhanden' : undefined}
             className={btnRed}>
@@ -798,12 +861,27 @@ function ProformaDetail({
           </button>
         </div>
 
+        {/* Issue #477: per mailto kann kein Paket mitgehen - vorher sichtbar machen statt still weglassen */}
+        {!!proforma.dokumentenpaket_id && !unternehmen?.smtp_aktiv && !unternehmen?.thunderbird_aktiv && !proforma.ist_entwurf && (
+          <PaketMailtoWarnung onEinrichten={() => navigate('/unternehmen?tab=email')} />
+        )}
+
+        {zeigThunderbirdHinweis && (
+          <ThunderbirdInstallHinweis onClose={() => setZeigThunderbirdHinweis(false)} details={thunderbirdFehlerDetails} />
+        )}
+
         {zeigSmtpHinweis && (
           <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 shadow-lg flex gap-3 items-start">
             <span className="text-lg">💡</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                {proforma.dokumentenpaket_id ? 'Dokumentenpaket nicht angehängt' : 'Tipp: SMTP einrichten'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                {proforma.dokumentenpaket_id
+                  ? 'Über dein Standard-Mailprogramm lassen sich keine Anhänge übergeben. Mit SMTP oder Thunderbird gehen PDF und Dokumentenpaket automatisch mit.'
+                  : 'Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.'}
+              </p>
               <button onClick={() => { setZeigSmtpHinweis(false); navigate('/unternehmen?tab=email') }}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
                 Jetzt einrichten →

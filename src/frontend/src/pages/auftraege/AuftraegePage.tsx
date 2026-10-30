@@ -417,7 +417,7 @@ function AuftragFormular({
         einleitungstext: einleitungstext || null,
         schlusstext: schlusstext || null,
         dokument_typ: 'Auftrag' as const,
-        dokumentenpaket_id: paketId ? parseInt(paketId) : undefined,
+        dokumentenpaket_id: paketId ? parseInt(paketId) : null,
         ist_entwurf: istEntwurf,
         eingabemodus: eingabeModus,
         rabatt_prozent: rabattNum > 0 && rabattModus === 'prozent' ? rabattNum : undefined,

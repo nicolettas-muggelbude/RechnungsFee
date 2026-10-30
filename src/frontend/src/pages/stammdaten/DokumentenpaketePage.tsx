@@ -327,7 +327,7 @@ export function DokumentenpaketePage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Dokumentenpakete</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm">
-          Gruppen von Anhängen für Angebote und Auftragsbestätigungen – z.B. Gruppe „B2B" mit AGB, Datenschutzerklärung und Leistungsverzeichnis.
+          Gruppen von Anhängen für Angebote, Aufträge, Rechnungen und Proforma-Rechnungen – z.B. Gruppe „B2B" mit AGB, Datenschutzerklärung und Leistungsverzeichnis.
         </p>
       </div>
 
@@ -392,7 +392,7 @@ export function DokumentenpaketePage() {
           <p className="text-slate-600 dark:text-slate-300 font-medium">Noch keine Gruppen angelegt</p>
           <p className="text-slate-400 dark:text-slate-500 text-sm">
             Lege z.B. eine Gruppe „B2B" an und füge AGB, Datenschutzerklärung und Leistungsverzeichnis hinzu.
-            Diese Gruppe kannst du später bei Angeboten und Auftragsbestätigungen auswählen.
+            Diese Gruppe kannst du später bei Angeboten, Aufträgen, Rechnungen und Proforma-Rechnungen auswählen.
           </p>
         </div>
       ) : (

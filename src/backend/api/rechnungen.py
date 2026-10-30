@@ -1600,7 +1600,12 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         dokument_typ=data.dokument_typ,
         lieferadresse_id=data.lieferadresse_id if data.dokument_typ == "Lieferschein" else None,
         gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
-        dokumentenpaket_id=data.dokumentenpaket_id if data.dokument_typ == "Angebot" else None,
+        # Issue #477: Pakete auch für Rechnungen und Proforma (Lieferschein/Gutschrift/Eingang nicht)
+        dokumentenpaket_id=(
+            data.dokumentenpaket_id
+            if data.typ == "ausgang" and data.dokument_typ in ("Angebot", "Rechnung", "Abschlagsrechnung", "Proforma")
+            else None
+        ),
         angebot_status="offen" if data.dokument_typ == "Angebot" else None,
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
@@ -1728,7 +1733,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
-                  "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
+                  "skonto_prozent", "skonto_tage", "gueltig_bis",
                   "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
                   "eingabemodus"):
         val = getattr(data, field, None)
@@ -1757,6 +1762,9 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.schlusstext = data.schlusstext
     if "bemerkung_erechnung" in data.model_fields_set:
         rechnung.bemerkung_erechnung = (data.bemerkung_erechnung or "").strip() or None
+    # Issue #477: Paket muss sich auch wieder abwählen lassen (Frontend schickt dann null)
+    if "dokumentenpaket_id" in data.model_fields_set and rechnung.typ == "ausgang":
+        rechnung.dokumentenpaket_id = data.dokumentenpaket_id
 
     if sum([
         rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,

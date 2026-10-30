@@ -1533,7 +1533,7 @@ export type RechnungCreate = {
   skonto_tage?: number | null
   dokument_typ?: 'Rechnung' | 'Gutschrift' | 'Lieferschein' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Abschlagsrechnung'
   gueltig_bis?: string
-  dokumentenpaket_id?: number
+  dokumentenpaket_id?: number | null
   lieferadresse_id?: number | null
   ist_reverse_charge?: boolean
   ist_eu_lieferung?: boolean
