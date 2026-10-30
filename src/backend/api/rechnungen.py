@@ -5017,7 +5017,6 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         brutto_gesamt=angebot.brutto_gesamt,
         skonto_prozent=angebot.skonto_prozent,
         skonto_tage=angebot.skonto_tage,
-        dokumentenpaket_id=angebot.dokumentenpaket_id,
     )
     db.add(auftrag)
     db.flush()

@@ -62,3 +62,19 @@ def test_kein_paket_bei_lieferschein_und_eingang(db):
                                         dokumentenpaket_id=paket_id, positionen=_pos()), db)
     assert er.dokumentenpaket_id is None
     assert update_rechnung(er.id, RechnungUpdate(dokumentenpaket_id=paket_id), db).dokumentenpaket_id is None
+
+
+@pytest.mark.parametrize('umwandlung', ['auftrag_aus_angebot', 'proforma_aus_angebot', 'rechnung_aus_angebot'])
+def test_paket_wandert_nicht_mit(db, umwandlung):
+    # Pakete gehen in der Regel nur einmal an den Kunden - das Folgedokument startet ohne
+    import api.rechnungen as r
+    from database.models import Rechnung
+    kunde_id = db.query(Kunde).one().id
+    paket_id = db.query(DokumentenPaket).one().id
+    ang = create_rechnung(RechnungCreate(typ='ausgang', dokument_typ='Angebot', datum=date(2026, 10, 30),
+                                         kunde_id=kunde_id, dokumentenpaket_id=paket_id, ist_entwurf=False,
+                                         positionen=_pos()), db)
+    db.query(Rechnung).filter(Rechnung.id == ang.id).update({Rechnung.angebot_status: 'akzeptiert'})
+    db.commit()
+    folge = getattr(r, umwandlung)(ang.id, db)
+    assert folge.dokumentenpaket_id is None
