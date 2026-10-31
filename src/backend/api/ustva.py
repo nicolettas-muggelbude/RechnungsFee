@@ -42,6 +42,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from utils.konten import ist_ig_lieferung_konto
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -369,7 +371,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         # bzw. über die verknüpfte Rechnung mit ist_eu_lieferung (Issue #458)
         if e.art == "Einnahme" and (
             e.rechnung_id in _ig_lieferung_rechnung_ids
-            or ((e.konto_skr03 in ("8125",) or e.konto_skr04 in ("3125",))
+            or (ist_ig_lieferung_konto(e.konto_skr03, e.konto_skr04)
                 and e.steuerbefreiung_grund == "§4 Nr. 1b UStG")
         ):
             kz["kz_41"] += e.netto_betrag

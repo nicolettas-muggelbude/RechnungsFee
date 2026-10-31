@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 178` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 179` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -323,6 +323,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 176 | Issue #475: unternehmen.pdf_positionsnummern BOOLEAN DEFAULT 0 – optionale Spalte „Pos.“ in der Standard-Vorlage (Vorlage 1 hat sie immer); Schalter unter Einstellungen → Rechnungsvorlagen; im absender_snapshot eingefroren (Snapshots ohne den Schlüssel = aus) |
 | 177 | Issue #474: unternehmen.bt22_bemerkung_aktiv BOOLEAN DEFAULT 0 (Opt-in, nur UI-Sichtbarkeit) + rechnungen.bemerkung_erechnung TEXT – eigene BT-22-Bemerkung; gefüllt ⇒ einzige IncludedNote in `zugferd.py`, Notizen nur noch PDF-Fußtext; leer ⇒ bisheriges Verhalten (Notizen → BT-22); im PDF unter dem Einleitungstext (`_render_bemerkung_erechnung()`, Vorlage 0+1); wandert bei allen Umwandlungen mit wie kunden_bestellnummer |
 | 178 | Issue #470 (Folgemeldung): Reise-/Fahrtkostenkonten am DATEV-Kontenrahmen 2026 korrigiert (lagen seit Migration 25 auf Arbeitnehmer-/Bewirtungskonten): Übernachtung + Nebenkosten 4676/6680, ÖPNV 4673/6673, Verpflegungsmehraufwand 4674/6674, Fahrtkosten Privat-PKW 4590/6590 (vorher 4560 = Mautgebühren); respektiert user_modified_skr03/04. ÖPNV Vorsteuer 0 → 100 %, USt 0 → 7 % (§ 35 UStDV, nur wo noch 0). Privat-PKW EÜR-Zeile 70 → 71 (nur wo noch 70). Ohne Migration: neue EÜR-Zeile 71 „Nutzungseinlage“ (Kz 147, 2026: 72) in `EUR_ZEILEN_META`, neue Kategorie „Fahrtkosten nicht betriebliche Fahrzeuge (Nutzungseinlage)“; `kategorien.py::_pruefe_euer_zeile()` lässt nur bekannte Zeilen zu (Frontend: `EuerZeileSelect`), `euer.py` meldet Altbestand auf unbekannten Zeilen in `nicht_zugeordnet` (vorher fielen die Beträge still aus der Summe) |
+| 179 | Issue #470-Folgeprüfung: alle Systemkategorien gegen DATEV-Kontenrahmen 2026 (`vorlagen/kategorien/`) abgeglichen, 30 eindeutige Fehler korrigiert (Konto mit anderer Bedeutung, nicht existent oder reserviert) – u. a. Privatkonten (Privateinlage SKR04 2100 → 2180, Entnahme-Kategorien SKR03 1890 → 1800/1810/1820), ig. Lieferung SKR04 3125 → 4125, Skonti (8736/4736, 3736/5736), Forderungsausfall 2400/6930, Sonstige Einnahmen 8603/4830, Wareneinkauf Drittland 3200/5200, KFZ-Steuer/-Reparatur SKR04 7685/6540, Personal-, Beitrags- und Anlagekonten; respektiert user_modified_skr03/04. Zusätzlich ohne Migration: `rechnungen.py::_skonto_konto()` (Skonto-Gegenbuchung, lag auf Erlös-/Forderungsverlustkonten) und `utils/konten.py::IG_LIEFERUNG_SKR04` – ZM/UStVA/Journal/BuchungForm erkennen die ig. Lieferung an 4125 **und** 3125 (alte Konto-Snapshots). Bewusst offen: Ermessensfälle (Software & Abos, Zinsen, Wareneinkauf 3000/5000, Büroausstattung) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

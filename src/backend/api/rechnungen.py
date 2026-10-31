@@ -130,7 +130,7 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     für Bestandsdaten ist ein separater, späterer Schritt).
 
     Ausnahme innergemeinschaftliche Lieferung (Issue #316): ist rechnung.ist_eu_lieferung
-    gesetzt, wird die Kategorie "Innergemeinschaftliche Lieferungen" (Konto 8125/3125)
+    gesetzt, wird die Kategorie "Innergemeinschaftliche Lieferungen" (Konto 8125/4125)
     verwendet statt der generischen 0%-USt-Satz-Kategorie "Betriebseinnahmen (0%)" - sonst
     würde die Lieferung zwar korrekt mit 0% USt gebucht, aber mit falschem Konto und in der
     falschen EÜR-Zeile (12 statt 16) auftauchen.
@@ -400,15 +400,17 @@ def _pruefe_und_erzeuge_vorsteuer_soll(rechnung: "Rechnung", db: Session) -> Non
 
 def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     """Gibt (konto_skr03, konto_skr04) für die Skonto-Gegenbuchung zurück."""
+    # Konten gegengeprüft am DATEV-Kontenrahmen 2026 (Issue #470-Folgeprüfung) - vorher lagen
+    # hier u. a. Erlöskonten (SKR04 4300/4310/4320) und Forderungsverluste (SKR03 2400/2401)
     satz = int(ust_satz)
     if rechnung_typ == "ausgang":
-        # Erlösschmälerungen
-        skr03 = {19: "8736", 7: "8727", 0: "8720"}.get(satz)
-        skr04 = {19: "4310", 7: "4320", 0: "4300"}.get(satz)
+        # Gewährte Skonti
+        skr03 = {19: "8736", 7: "8731", 0: "8734"}.get(satz)
+        skr04 = {19: "4736", 7: "4731", 0: "4734"}.get(satz)
     else:
         # Erhaltene Skonti (Eingangsrechnung)
-        skr03 = {19: "2401", 7: "2400", 0: "2400"}.get(satz)
-        skr04 = {19: "3401", 7: "3400", 0: "3400"}.get(satz)
+        skr03 = {19: "3736", 7: "3731", 0: "3730"}.get(satz)
+        skr04 = {19: "5736", 7: "5731", 0: "5730"}.get(satz)
     return skr03, skr04
 
 

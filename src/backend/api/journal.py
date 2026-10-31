@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db, APP_DATA_DIR
 from database.models import BankTransaktion, Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
 from utils.signatur import signatur_journaleintrag
+from utils.konten import ist_ig_lieferung_konto
 from utils.pdfa_konverter import konvertiere_zu_pdfa
 from utils.rechnungs_parser import analysiere_datei
 from .schemas import (
@@ -318,7 +319,7 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
             vorsteuerabzug = False
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
-        if (kat.konto_skr03 == "8125" or kat.konto_skr04 == "3125") and not steuerbefreiung_grund:
+        if ist_ig_lieferung_konto(kat.konto_skr03, kat.konto_skr04) and not steuerbefreiung_grund:
             steuerbefreiung_grund = "§4 Nr. 1b UStG"
         if not data.ust_sonderfall and not data.ist_ig_erwerb:
             # Vorrang (Issue #375): kat.ust_sonderfall ist die persistente Kategorie-Kennung,
@@ -730,7 +731,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
                 vorsteuerabzug = False
                 if not steuerbefreiung_grund:
                     steuerbefreiung_grund = "Privatbuchung"
-            if (split_kat.konto_skr03 == "8125" or split_kat.konto_skr04 == "3125") and not steuerbefreiung_grund:
+            if ist_ig_lieferung_konto(split_kat.konto_skr03, split_kat.konto_skr04) and not steuerbefreiung_grund:
                 steuerbefreiung_grund = "§4 Nr. 1b UStG"
         pos_sf = pos.ust_sonderfall or ("ig_erwerb" if pos.ist_ig_erwerb else None)
         if not pos_sf and split_kat:

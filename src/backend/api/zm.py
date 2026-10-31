@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
 from database.connection import get_db
+from utils.konten import IG_LIEFERUNG_SKR04
 from database.models import Journaleintrag, Rechnung, Kunde, Unternehmen
 from utils.elster import ElsterExportFehler, build_zm_csv
 
@@ -91,7 +92,8 @@ class _IgBuchung:
 
 
 def _ig_lieferung_filter(e):
-    return (e.konto_skr03.in_(["8125"])) | (e.konto_skr04.in_(["3125"]))
+    # SKR04 4125 seit Migration 179; 3125 (Verbindlichkeitenkonto) steht noch in alten Konto-Snapshots
+    return (e.konto_skr03.in_(["8125"])) | (e.konto_skr04.in_(IG_LIEFERUNG_SKR04))
 
 
 def _eu_dl_rechnungen():
@@ -154,7 +156,7 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
     ).all()
     for e in ueber_rechnung:
         # schon oben als L über das Konto gezählt (in Python statt per SQL-NOT: Konten sind hier oft NULL)
-        if e.konto_skr03 == "8125" or e.konto_skr04 == "3125":
+        if e.konto_skr03 == "8125" or e.konto_skr04 in IG_LIEFERUNG_SKR04:
             continue
         kz = "L" if e.rechnung_id in lieferung_ids else "S"
         if e.art == "Einnahme":
