@@ -81,9 +81,10 @@ STANDARD_KATEGORIEN = [
     {"name": "Reparatur Anlagevermögen",      "kontenart": "Aufwand", "konto_skr03": "4805", "konto_skr04": "6470", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Miete Einrichtung",             "kontenart": "Aufwand", "konto_skr03": "4200", "konto_skr04": "6318", "eks_kategorie": "B14_2", "euer_zeile": 47,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Betriebliche Abfallbeseitigung","kontenart": "Aufwand", "konto_skr03": "4969", "konto_skr04": "6859", "eks_kategorie": "B14_4", "euer_zeile": 52,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Reisekosten – Übernachtung",    "kontenart": "Aufwand", "konto_skr03": "4660", "konto_skr04": "6640", "eks_kategorie": "B7_1",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
-    {"name": "Reisekosten – Nebenkosten",     "kontenart": "Aufwand", "konto_skr03": "4663", "konto_skr04": "6644", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Reisekosten – ÖPNV",           "kontenart": "Aufwand", "konto_skr03": "4664", "konto_skr04": "6644", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Issue #470: Konten "Reisekosten Unternehmer" (DATEV 2026), ÖPNV mit Vorsteuer (§ 35 UStDV)
+    {"name": "Reisekosten – Übernachtung",    "kontenart": "Aufwand", "konto_skr03": "4676", "konto_skr04": "6680", "eks_kategorie": "B7_1",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+    {"name": "Reisekosten – Nebenkosten",     "kontenart": "Aufwand", "konto_skr03": "4676", "konto_skr04": "6680", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Reisekosten – ÖPNV",           "kontenart": "Aufwand", "konto_skr03": "4673", "konto_skr04": "6673", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
     {"name": "Anlagevermögen (Kauf)",         "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "KFZ (Kauf)",                    "kontenart": "Anlage",  "konto_skr03": "0320", "konto_skr04": "0540", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Investition aus Zuwendung Dritter", "kontenart": "Anlage", "konto_skr03": "0435", "konto_skr04": "0435", "eks_kategorie": "B9",   "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
@@ -109,8 +110,10 @@ STANDARD_KATEGORIEN = [
     # ── Tabelle B Ergänzungen ─────────────────────────────────────────────
     {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "4803", "konto_skr04": "6403", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Abschreibungen (AfA)",             "kontenart": "Aufwand", "konto_skr03": "4830", "konto_skr04": "6220", "eks_kategorie": None,    "euer_zeile": 33,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4560", "konto_skr04": "6530", "eks_kategorie": "B6_5",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4661", "konto_skr04": "6645", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Issue #470: Privat-PKW gehört nicht zum Betriebsvermögen → Zeile 71 (Kz 147 Nutzungseinlage)
+    {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": "B6_5",  "euer_zeile": 71,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Fahrtkosten nicht betriebliche Fahrzeuge (Nutzungseinlage)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": None, "euer_zeile": 71, "vorsteuer_prozent": 0, "ust_satz_standard": 0, "beschreibung": "Betrieblicher Anteil an den tatsächlichen Kosten eines privaten Fahrzeugs, z. B. Reparatur des privaten Fahrrads oder Autos. Für gefahrene Kilometer mit dem privaten PKW gibt es die Kategorie „Fahrtkosten Privat-PKW“."},
+    {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4674", "konto_skr04": "6674", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4390", "konto_skr04": "6405", "eks_kategorie": "B14_5", "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Spenden (betrieblich)",            "kontenart": "Aufwand", "konto_skr03": "1840", "konto_skr04": "2250", "eks_kategorie": "B14_5", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # Skonti – Erlösschmälerung (Ausgang) / Aufwandsminderung (Eingang)

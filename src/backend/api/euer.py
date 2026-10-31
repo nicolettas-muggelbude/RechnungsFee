@@ -73,7 +73,11 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     66:  ("Tagespauschale für die Tätigkeit in der häuslichen Wohnung",          "B"),
     68:  ("Leasingkosten für Kraftfahrzeuge",                                   "B"),
     69:  ("KFZ-Steuer, KFZ-Versicherung",                                       "B"),
-    70:  ("Übrige KFZ-Kosten, km-Pauschale, Fahrtkosten ÖPNV",                "B"),
+    70:  ("Sonstige Kfz- und Fahrtkosten (z. B. Reparatur, Treibstoff, ÖPNV)",   "B"),
+    # Issue #470: Kz 147 - eigene Zeile für Fahrzeuge außerhalb des Betriebsvermögens (Privat-PKW
+    # mit km-Pauschale, anteilige Kosten eines privaten Fahrrads); fehlte bis v0.7.5, Beträge auf
+    # einer selbst gesetzten Zeile 71 fielen dadurch aus der Summe der Betriebsausgaben
+    71:  ("Fahrtkosten für nicht zum Betriebsvermögen gehörende Fahrzeuge (Nutzungseinlage)", "B"),
     106: ("Entnahmen (Hinweiszeile, kein GuV-Einfluss)",                        "H"),
     107: ("Einlagen (Hinweiszeile, kein GuV-Einfluss)",                         "H"),
 }
@@ -130,11 +134,16 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
     zeilen: dict[int, Decimal] = {}
     anlage_summe = ZERO
+    # Issue #470: Kategorien mit einer Zeile, die RechnungsFee nicht kennt - ihr Betrag fließt in
+    # keine Summe ein und muss in der Auswertung deutlich gemeldet werden
+    unbekannte_zeilen: dict[int, set[str]] = {}
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
         euer_zeile = kat.euer_zeile if kat else None
         ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
+        if euer_zeile is not None and euer_zeile not in EUR_ZEILEN_META and kat.kontenart != "Anlage":
+            unbekannte_zeilen.setdefault(euer_zeile, set()).add(kat.name)
 
         # Anlage-Buchungen (KFZ-Kauf, EDV etc.) → AVEÜR-Hinweis
         # Issue #439: Vorzeichen nach art – die Storno-Gegenbuchung eines Kaufs ist eine Einnahme
@@ -226,7 +235,20 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         "gewinn_verlust":  gewinn_verlust,
         "anlage_zugaenge": anlage_summe.quantize(q, ROUND_HALF_UP),
         "aveur_afa":       aveur_afa.quantize(q, ROUND_HALF_UP),
+        "nicht_zugeordnet": [
+            {"zeile": z, "betrag": zeilen.get(z, ZERO), "kategorien": sorted(namen)}
+            for z, namen in sorted(unbekannte_zeilen.items())
+            if zeilen.get(z, ZERO) != ZERO
+        ],
     }
+
+
+def euer_zeilen_auswahl() -> list[dict]:
+    """Gültige EÜR-Zeilen (Basis Vordruck 2025) für die Auswahl im Kategorie-Formular."""
+    return [
+        {"zeile": z, "bezeichnung": bez, "abschnitt": ab}
+        for z, (bez, ab) in sorted(EUR_ZEILEN_META.items())
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +358,17 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
     if aktueller_abschnitt == "B":
         pdf.ln(1)
         summen_row(f"Summe Betriebsausgaben (Zeile {formular_zeile(ZEILE_SUMME_AUSGABEN, daten['jahr'])})", daten["summe_ausgaben"])
+
+    for nz in daten.get("nicht_zugeordnet", []):
+        pdf.ln(2)
+        pdf.set_fill_color(254, 226, 226)
+        pdf.set_x(20)
+        pdf.set_font("DejaVu", "B", 8)
+        pdf.set_text_color(153, 27, 27)
+        pdf.multi_cell(170, 5,
+            f"Achtung: {euro(nz['betrag'])} auf der unbekannten EÜR-Zeile {nz['zeile']} "
+            f"(Kategorie {', '.join(nz['kategorien'])}) sind in keiner Summe enthalten. "
+            "Bitte der Kategorie eine gültige EÜR-Zeile zuordnen.", fill=True, align="L")
 
     pdf.ln(3)
     pdf.set_fill_color(30, 41, 59)
@@ -455,9 +488,21 @@ class EUERZeile(BaseModel):
     abschnitt: str
     betrag: Decimal
 
+class EUERNichtZugeordnet(BaseModel):
+    zeile: int
+    betrag: Decimal
+    kategorien: list[str]
+
+class EUERZeileAuswahl(BaseModel):
+    zeile: int
+    bezeichnung: str
+    abschnitt: str
+
 class EUERErgebnis(BaseModel):
     jahr: int
     zeilen: list[EUERZeile]
+    # Issue #470: Beträge auf unbekannten Zeilen (nicht in den Summen enthalten)
+    nicht_zugeordnet: list[EUERNichtZugeordnet] = []
     summe_einnahmen: Decimal
     summe_ausgaben: Decimal
     gewinn_verlust: Decimal
@@ -489,6 +534,11 @@ class EUERDetailErgebnis(BaseModel):
 # Endpunkte
 # ---------------------------------------------------------------------------
 
+@router.get("/zeilen", response_model=list[EUERZeileAuswahl])
+def euer_zeilen():
+    return euer_zeilen_auswahl()
+
+
 @router.get("/berechnen", response_model=EUERErgebnis)
 def euer_berechnen(
     jahr: int = Query(..., ge=2020, le=2100),
@@ -507,12 +557,14 @@ def euer_berechnen(
             abschnitt=EUR_ZEILEN_META[z][1] if z in EUR_ZEILEN_META else "?",
             betrag=betrag,
         )
-        for z, betrag in sorted(daten["zeilen"].items())
+        # unbekannte Zeilen stehen gesondert in nicht_zugeordnet (Issue #470)
+        for z, betrag in sorted(daten["zeilen"].items()) if z in EUR_ZEILEN_META
     ]
 
     return EUERErgebnis(
         jahr=daten["jahr"],
         zeilen=zeilen_liste,
+        nicht_zugeordnet=daten["nicht_zugeordnet"],
         summe_einnahmen=daten["summe_einnahmen"],
         summe_ausgaben=daten["summe_ausgaben"],
         gewinn_verlust=daten["gewinn_verlust"],

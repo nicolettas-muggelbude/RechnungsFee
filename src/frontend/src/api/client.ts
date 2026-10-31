@@ -2240,9 +2240,26 @@ export type EUERZeile = {
   betrag: string
 }
 
+export type EUERNichtZugeordnet = {
+  zeile: number
+  betrag: string
+  kategorien: string[]
+}
+
+export type EUERZeileAuswahl = {
+  zeile: number
+  bezeichnung: string
+  abschnitt: string
+}
+
+// Issue #470: gültige EÜR-Zeilen (Basis Vordruck 2025) für die Kategorie-Auswahl
+export const getEUERZeilen = () => request<EUERZeileAuswahl[]>('/euer/zeilen')
+
 export type EUERErgebnis = {
   jahr: number
   zeilen: EUERZeile[]
+  // Issue #470: Beträge auf Zeilen, die RechnungsFee nicht kennt - in keiner Summe enthalten
+  nicht_zugeordnet: EUERNichtZugeordnet[]
   summe_einnahmen: string
   summe_ausgaben: string
   gewinn_verlust: string

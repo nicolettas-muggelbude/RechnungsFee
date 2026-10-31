@@ -125,6 +125,13 @@ export function EUERPage() {
             </div>
           )}
 
+          {/* Issue #470: Beträge auf unbekannten Zeilen fließen in keine Summe ein */}
+          {(ergebnis.nicht_zugeordnet ?? []).map(nz => (
+            <div key={nz.zeile} role="alert" className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-800 dark:text-red-200">
+              <strong>Nicht in der Summe enthalten:</strong> {euroFmt(nz.betrag)} aus {nz.kategorien.length === 1 ? 'der Kategorie' : 'den Kategorien'} „{nz.kategorien.join('“, „')}“ stehen auf EÜR-Zeile {nz.zeile}, die RechnungsFee nicht kennt. Der Gewinn ist dadurch falsch. Ordne unter <strong>Stammdaten → Kategorien</strong> eine Zeile aus der Liste zu.
+            </div>
+          ))}
+
           {abschnitte.map(([abschnitt, zeilen]) => (
             <div key={abschnitt} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="bg-slate-100 dark:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">

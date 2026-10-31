@@ -13,6 +13,17 @@ from .schemas import KategorieResponse, KategorieKontoUpdate, KategorieCreate, K
 router = APIRouter(prefix="/api/kategorien", tags=["Stammdaten"])
 
 
+def _pruefe_euer_zeile(zeile: int | None) -> None:
+    """Issue #470: nur Zeilen zulassen, die die EÜR-Auswertung kennt - ein Betrag auf einer
+    unbekannten Zeile fiele sonst still aus der Summe der Betriebseinnahmen/-ausgaben."""
+    from .euer import EUR_ZEILEN_META
+    if zeile is not None and zeile not in EUR_ZEILEN_META:
+        raise HTTPException(
+            status_code=422,
+            detail=f"EÜR-Zeile {zeile} wird von RechnungsFee nicht ausgewertet. Bitte eine Zeile aus der Liste wählen (Nummerierung nach Vordruck 2025).",
+        )
+
+
 @router.get("", response_model=list[KategorieResponse])
 def list_kategorien(
     kontenart: str | None = None,
@@ -44,6 +55,7 @@ def get_kategorie(kategorie_id: int, db: Session = Depends(get_db)):
 def create_kategorie(data: KategorieCreate, db: Session = Depends(get_db)):
     if db.query(Kategorie).filter(Kategorie.name == data.name).first():
         raise HTTPException(status_code=409, detail="Eine Kategorie mit diesem Namen existiert bereits.")
+    _pruefe_euer_zeile(data.euer_zeile)
     kat = Kategorie(
         name=data.name,
         kontenart=data.kontenart,
@@ -76,6 +88,7 @@ def update_kategorie(kategorie_id: int, data: KategorieCreate, db: Session = Dep
     konflikt = db.query(Kategorie).filter(Kategorie.name == data.name, Kategorie.id != kategorie_id).first()
     if konflikt:
         raise HTTPException(status_code=409, detail="Eine Kategorie mit diesem Namen existiert bereits.")
+    _pruefe_euer_zeile(data.euer_zeile)
     kat.name = data.name
     kat.kontenart = data.kontenart
     kat.konto_skr03 = data.konto_skr03 or None
@@ -131,6 +144,7 @@ def update_konten(kategorie_id: int, data: KategorieKontoUpdate, db: Session = D
     if data.euer_zeile_loeschen:
         kat.euer_zeile = None
     elif data.euer_zeile is not None:
+        _pruefe_euer_zeile(data.euer_zeile)
         kat.euer_zeile = data.euer_zeile
     db.commit()
     db.refresh(kat)

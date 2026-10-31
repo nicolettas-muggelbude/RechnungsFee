@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { EuerZeileSelect } from './EuerZeileSelect'
 import {
   createKategorie, getUnternehmen,
   type Kategorie, type KategorieCreate,
@@ -126,12 +127,10 @@ export function KategorieErstellenModal({ onSave, onClose, kontenPflicht = false
 
           <div>
             {label('EÜR-Zeile', false)}
-            <input
-              type="number"
+            <EuerZeileSelect
               className={`${inputCls} border border-slate-300 dark:border-slate-600`}
-              value={form.euer_zeile ?? ''}
-              onChange={e => set('euer_zeile', e.target.value ? Number(e.target.value) : undefined)}
-              placeholder="optional"
+              value={form.euer_zeile}
+              onChange={v => set('euer_zeile', v ?? undefined)}
             />
           </div>
 

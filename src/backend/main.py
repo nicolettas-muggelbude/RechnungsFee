@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 177
+SCHEMA_VERSION = 178
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -3934,6 +3934,51 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 177 (Issue #474: rechnungen.bemerkung_erechnung)")
 
+        if version < 178:
+            # Issue #470 (Folgemeldung): Reise- und Fahrtkosten-Kategorien.
+            # 1. Konten gegengeprüft am DATEV-Kontenrahmen 2026 (vorlagen/kategorien/): der
+            #    Reisekosten-Block lag seit Migration 25 auf Arbeitnehmer- bzw. Bewirtungskonten
+            #    (z. B. SKR04 6644 = Nicht abzugsfähige Bewirtungskosten, SKR03 4560 = Mautgebühren).
+            #    Richtig für Unternehmer: 4673/6673 Fahrtkosten, 4674/6674 Verpflegungsmehraufwand,
+            #    4676/6680 Übernachtung und Reisenebenkosten, 4590/6590 Kosten für betrieblich
+            #    genutzte, zum Privatvermögen gehörende Fahrzeuge. Eigene Anpassungen
+            #    (user_modified_skr03/04) bleiben erhalten, gebuchte Einträge behalten ihren
+            #    Konto-Snapshot (GoBD).
+            # 2. "Reisekosten – ÖPNV": Fahrausweise berechtigen zum Vorsteuerabzug (§ 35 UStDV),
+            #    Nah- und Fernverkehr meist 7 % - war 0 % Vorsteuer / 0 % USt. Bereits gebuchte
+            #    Einträge bleiben unverändert (vorsteuer_betrag ist je Buchung gespeichert).
+            # 3. "Fahrtkosten Privat-PKW": EÜR-Zeile 70 → 71 (Kz 147 Nutzungseinlage, Fahrzeug
+            #    gehört nicht zum Betriebsvermögen) - nur wo noch die alte Standardzeile steht.
+            _k178 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"konto_skr03_default", "konto_skr04_default", "user_modified_skr03", "user_modified_skr04"} <= _k178:
+                for _name, _s03, _s04 in [
+                    ("Reisekosten – Übernachtung", "4676", "6680"),
+                    ("Reisekosten – Nebenkosten", "4676", "6680"),
+                    ("Reisekosten – ÖPNV", "4673", "6673"),
+                    ("Verpflegungsmehraufwand", "4674", "6674"),
+                    ("Fahrtkosten Privat-PKW (0,10 €/km)", "4590", "6590"),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET
+                            konto_skr03_default = :s03,
+                            konto_skr04_default = :s04,
+                            konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :s03 ELSE konto_skr03 END,
+                            konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :s04 ELSE konto_skr04 END
+                        WHERE name = :name
+                    """), {"s03": _s03, "s04": _s04, "name": _name})
+            if _k178:
+                conn.execute(text("""
+                    UPDATE kategorien SET vorsteuer_prozent = 100, ust_satz_standard = 7
+                    WHERE name = 'Reisekosten – ÖPNV' AND vorsteuer_prozent = 0
+                """))
+                conn.execute(text("""
+                    UPDATE kategorien SET euer_zeile = 71
+                    WHERE name = 'Fahrtkosten Privat-PKW (0,10 €/km)' AND euer_zeile = 70
+                """))
+            conn.execute(text("PRAGMA user_version = 178"))
+            conn.commit()
+            print("[Migration] Schema auf Version 178 (Issue #470: Reise-/Fahrtkostenkonten, ÖPNV-Vorsteuer, Nutzungseinlage Zeile 71)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4087,8 +4132,9 @@ def _migrate_kategorien() -> None:
             {"name": "Reparatur Anlagevermögen",              "kontenart": "Aufwand", "konto_skr03": "4805", "konto_skr04": "6470", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Miete Einrichtung",                     "kontenart": "Aufwand", "konto_skr03": "4200", "konto_skr04": "6318", "eks_kategorie": "B14_2", "euer_zeile": 47,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Betriebliche Abfallbeseitigung",        "kontenart": "Aufwand", "konto_skr03": "4969", "konto_skr04": "6859", "eks_kategorie": "B14_4", "euer_zeile": 52,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Reisekosten – Nebenkosten",            "kontenart": "Aufwand", "konto_skr03": "4663", "konto_skr04": "6644", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4664", "konto_skr04": "6644", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Issue #470: Konten "Reisekosten Unternehmer" (DATEV 2026), ÖPNV mit Vorsteuer (§ 35 UStDV)
+            {"name": "Reisekosten – Nebenkosten",            "kontenart": "Aufwand", "konto_skr03": "4676", "konto_skr04": "6680", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4673", "konto_skr04": "6673", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2140", "konto_skr04": "7330", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Kredittilgung",                        "kontenart": "Aufwand", "konto_skr03": "2100", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Zahlung FA",              "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -4105,8 +4151,11 @@ def _migrate_kategorien() -> None:
             {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "4803", "konto_skr04": "6403", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Issue #106 – fehlende EÜR-Zeilen
             {"name": "Abschreibungen (AfA)",             "kontenart": "Aufwand", "konto_skr03": "4830", "konto_skr04": "6220", "eks_kategorie": None,    "euer_zeile": 33,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4560", "konto_skr04": "6530", "eks_kategorie": "B6_5",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4661", "konto_skr04": "6645", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Issue #470: Privat-PKW gehört nicht zum Betriebsvermögen → Zeile 71 (Kz 147 Nutzungseinlage),
+            # Konten 4590/6590 bzw. 4674/6674 laut DATEV-Kontenrahmen 2026
+            {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": "B6_5",  "euer_zeile": 71,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Fahrtkosten nicht betriebliche Fahrzeuge (Nutzungseinlage)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": None, "euer_zeile": 71, "vorsteuer_prozent": 0, "ust_satz_standard": 0, "beschreibung": "Betrieblicher Anteil an den tatsächlichen Kosten eines privaten Fahrzeugs, z. B. Reparatur des privaten Fahrrads oder Autos. Für gefahrene Kilometer mit dem privaten PKW gibt es die Kategorie „Fahrtkosten Privat-PKW“."},
+            {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4674", "konto_skr04": "6674", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4390", "konto_skr04": "6405", "eks_kategorie": "B14_5", "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Spenden (betrieblich)",            "kontenart": "Aufwand", "konto_skr03": "1840", "konto_skr04": "2250", "eks_kategorie": "B14_5", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Skonti

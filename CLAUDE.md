@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 177` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 178` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -322,6 +322,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 175 | Issue #470: Kategorie „Reparatur Anlagevermögen“ SKR03 4260 / SKR04 6335 (= Instandhaltung betrieblicher Räume) → 4805 / 6470 (Reparatur andere Anlagen und BGA), gegengeprüft am DATEV-Kontenrahmen 2026 in `vorlagen/kategorien/`; respektiert user_modified_skr03/04. Ohne Migration (über `_migrate_kategorien()` bei jedem Start): Verpflegungsmehraufwand 44 → 64, Mitgliedsbeiträge 60 → 49, Reparatur Anlagevermögen 60 → 48, neue Kategorie „Homeoffice-Tagespauschale“ (4287/6347, Zeile 66). EÜR-Ausgabe je Formularjahr: `euer.py::formular_zeile()` – `kategorien.euer_zeile` bleibt Vordruck 2025 (Basis), ab 2026 Waren 27→29, Zeilen 29–75 und ≥ 100 +1 |
 | 176 | Issue #475: unternehmen.pdf_positionsnummern BOOLEAN DEFAULT 0 – optionale Spalte „Pos.“ in der Standard-Vorlage (Vorlage 1 hat sie immer); Schalter unter Einstellungen → Rechnungsvorlagen; im absender_snapshot eingefroren (Snapshots ohne den Schlüssel = aus) |
 | 177 | Issue #474: unternehmen.bt22_bemerkung_aktiv BOOLEAN DEFAULT 0 (Opt-in, nur UI-Sichtbarkeit) + rechnungen.bemerkung_erechnung TEXT – eigene BT-22-Bemerkung; gefüllt ⇒ einzige IncludedNote in `zugferd.py`, Notizen nur noch PDF-Fußtext; leer ⇒ bisheriges Verhalten (Notizen → BT-22); im PDF unter dem Einleitungstext (`_render_bemerkung_erechnung()`, Vorlage 0+1); wandert bei allen Umwandlungen mit wie kunden_bestellnummer |
+| 178 | Issue #470 (Folgemeldung): Reise-/Fahrtkostenkonten am DATEV-Kontenrahmen 2026 korrigiert (lagen seit Migration 25 auf Arbeitnehmer-/Bewirtungskonten): Übernachtung + Nebenkosten 4676/6680, ÖPNV 4673/6673, Verpflegungsmehraufwand 4674/6674, Fahrtkosten Privat-PKW 4590/6590 (vorher 4560 = Mautgebühren); respektiert user_modified_skr03/04. ÖPNV Vorsteuer 0 → 100 %, USt 0 → 7 % (§ 35 UStDV, nur wo noch 0). Privat-PKW EÜR-Zeile 70 → 71 (nur wo noch 70). Ohne Migration: neue EÜR-Zeile 71 „Nutzungseinlage“ (Kz 147, 2026: 72) in `EUR_ZEILEN_META`, neue Kategorie „Fahrtkosten nicht betriebliche Fahrzeuge (Nutzungseinlage)“; `kategorien.py::_pruefe_euer_zeile()` lässt nur bekannte Zeilen zu (Frontend: `EuerZeileSelect`), `euer.py` meldet Altbestand auf unbekannten Zeilen in `nicht_zugeordnet` (vorher fielen die Beträge still aus der Summe) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot
