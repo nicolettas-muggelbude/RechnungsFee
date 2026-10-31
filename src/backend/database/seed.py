@@ -32,20 +32,20 @@ STANDARD_KATEGORIEN = [
     {"name": "Umsatzsteuer-Erstattung FA",     "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Vorsteuererstattung FA",         "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # ── Tabelle B Teil 1: Betriebsausgaben ───────────────────────────────
-    {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+    {"name": "Wareneinkauf",                   "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Wareneinkauf (7%)",              "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
     {"name": "Wareneinkauf EU",                "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige USt-IdNr
     # beim Verkäufer voraus. Ohne USt-IdNr (EU-Kleinunternehmer-Äquivalent, Privatperson)
     # stellt der Verkäufer brutto mit ausländischer USt - die ist in Deutschland nicht
     # abziehbar. Bewusst NICHT Konto 3425 (das triggert die ig_erwerb-Sonderbehandlung).
-    {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+    {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
      "beschreibung": "EU-Lieferant ohne USt-IdNr (z. B. EU-Kleinunternehmer-Äquivalent, Privatperson) – Rechnung enthält ausländische USt, die in Deutschland nicht als Vorsteuer abziehbar ist. Kein innergemeinschaftlicher Erwerb (§1a UStG setzt gültige USt-IdNr beim Verkäufer voraus)."},
     {"name": "Wareneinkauf Nicht-EU",          "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     # Drittland-Warenkäufe (Alibaba/Amazon/Ebay etc., Issue #315-Folgethema): zwei Fälle je
     # nachdem ob die USt beim Kauf schon im Preis steckte (Marktplatz als "deemed supplier",
     # IOSS-Verfahren bei Bestellwert ≤150 €) oder nicht (Direktimport, DHL kassiert ggf. nach).
-    {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+    {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
      "beschreibung": "z. B. Amazon/Ebay-Bestellungen aus Drittländern (China etc.) – USt steht schon auf der Rechnung/Bestellbestätigung (IOSS), ganz normal als Vorsteuer abziehbar."},
     {"name": "Wareneinkauf Drittland (ohne USt)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
      "beschreibung": "z. B. Alibaba-Direktkauf beim Hersteller – keine USt auf der Rechnung. Kommt später eine DHL-Nachforderung, diese getrennt über 'Zoll / Einfuhrabgaben' bzw. 'Einfuhrumsatzsteuer' buchen."},
@@ -53,7 +53,7 @@ STANDARD_KATEGORIEN = [
      "beschreibung": "Zollanteil einer DHL-Nachforderung – nicht als Vorsteuer abziehbar, reine Wareneinkaufs-Nebenkosten. Bei Kleinsendungen bis 150 € meist 0 €."},
     {"name": "Einfuhrumsatzsteuer (Zoll/DHL)", "kontenart": "Aufwand", "konto_skr03": "1588", "konto_skr04": "1433", "eks_kategorie": None, "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 0,
      "beschreibung": "EUSt-Anteil einer DHL-Nachforderung – zu 100 % als Vorsteuer abziehbar (§15 Abs. 1 Nr. 2 UStG, KZ 62). Vollen von DHL verlangten EUSt-Betrag eintragen, keine Aufteilung nötig."},
-    {"name": "Wareneinkauf §25a (privat)",     "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Wareneinkauf §25a (privat)",     "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # §25a Differenzbesteuerung Erlösseite – DATEV-Automatikkonto (Issue #303).
     # Schritt 1: nur Kategorie anlegen, noch nicht mit der Buchungslogik verdrahtet.
     {"name": "Differenzbesteuerung (§25a)",    "kontenart": "Erlös",   "konto_skr03": "8199", "konto_skr04": "4134", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -100,11 +100,11 @@ STANDARD_KATEGORIEN = [
     {"name": "Buchführungskosten",            "kontenart": "Aufwand", "konto_skr03": "4955", "konto_skr04": "6830", "eks_kategorie": "B12",   "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Fortbildung & Fachliteratur",   "kontenart": "Aufwand", "konto_skr03": "4945", "konto_skr04": "6821", "eks_kategorie": "B13",   "euer_zeile": 45,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Bankgebühren",                  "kontenart": "Aufwand", "konto_skr03": "4970", "konto_skr04": "6855", "eks_kategorie": "B14_3", "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Software & Abonnements",        "kontenart": "Aufwand", "konto_skr03": "4940", "konto_skr04": "6820", "eks_kategorie": "B14_5", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+    {"name": "Software & Abonnements",        "kontenart": "Aufwand", "konto_skr03": "4964", "konto_skr04": "6837", "eks_kategorie": "B14_5", "euer_zeile": 50,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Bewirtungskosten",              "kontenart": "Aufwand", "konto_skr03": "4650", "konto_skr04": "6640", "eks_kategorie": "B14_5", "euer_zeile": 63,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
     {"name": "Bewirtungskosten (nicht abzugsfähig)", "kontenart": "Aufwand", "konto_skr03": "4654", "konto_skr04": "6644", "eks_kategorie": None,    "euer_zeile": 63, "vorsteuer_prozent": 100, "ust_satz_standard": 0},
     {"name": "Sonstige Betriebsausgaben",     "kontenart": "Aufwand", "konto_skr03": "4980", "konto_skr04": "6850", "eks_kategorie": "B14_5", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-    {"name": "Zinsen & Darlehenskosten",      "kontenart": "Aufwand", "konto_skr03": "2140", "konto_skr04": "7330", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Zinsen & Darlehenskosten",      "kontenart": "Aufwand", "konto_skr03": "2120", "konto_skr04": "7320", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Kredittilgung",                 "kontenart": "Aufwand", "konto_skr03": "0630", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Umsatzsteuer-Zahlung FA",       "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # ── Tabelle B Ergänzungen ─────────────────────────────────────────────

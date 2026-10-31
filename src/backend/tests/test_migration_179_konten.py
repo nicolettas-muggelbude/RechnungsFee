@@ -43,6 +43,14 @@ ERWARTET = {
     "Eigenverbrauch von Waren (19%)": ("8910", "4620"),
     "EDV / Software (Sofortabschreibung)": ("0490", "0650"),
     "Gewerbesteuer": ("4320", "7610"),
+    # Migration 180 (Ermessensfälle, abgestimmt)
+    "Software & Abonnements": ("4964", "6837"),
+    "Zinsen & Darlehenskosten": ("2120", "7320"),
+    "Wareneinkauf": ("3200", "5200"),
+    "Wareneinkauf (7%)": ("3200", "5200"),
+    "Wareneinkauf EU (ohne USt-IdNr)": ("3200", "5200"),
+    "Wareneinkauf Drittland (USt bereits in Rechnung)": ("3200", "5200"),
+    "Wareneinkauf §25a (privat)": ("3200", "5200"),
 }
 
 
@@ -64,6 +72,7 @@ def _db(tmp_path: Path, monkeypatch):
             ("Privateinlage", "1890", "2100", False),
             ("Innergemeinschaftliche Lieferungen", "8125", "3125", False),
             ("Erhaltene Skonti", "2401", "3401", True),   # SKR04 selbst angepasst
+            ("Wareneinkauf", "3000", "5000", False),       # Migration 180
         ]:
             s.add(Kategorie(name=name, kontenart="Aufwand", konto_skr03=s03,
                             konto_skr04="9999" if mod04 else s04,
@@ -85,6 +94,7 @@ def test_migration_179(tmp_path, monkeypatch):
     assert z["Privateinlage"] == ("1890", "2180", "2180")
     assert z["Innergemeinschaftliche Lieferungen"] == ("8125", "4125", "4125")
     assert z["Erhaltene Skonti"] == ("3736", "9999", "5736")   # eigene Anpassung bleibt
+    assert z["Wareneinkauf"] == ("3200", "5200", "5200")
 
 
 @pytest.mark.parametrize("typ,satz,konten", [

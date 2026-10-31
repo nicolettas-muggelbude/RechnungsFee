@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 179
+SCHEMA_VERSION = 180
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -4034,6 +4034,37 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 179 (Issue #470: Systemkategorien am DATEV-Kontenrahmen 2026 korrigiert)")
 
+        if version < 180:
+            # Issue #470-Folgeprüfung, Ermessensfälle (mit Nicoletta abgestimmt 2026-10-31):
+            # Software & Abonnements 4940/6820 (Fachliteratur) → 4964/6837 (zeitlich befristete
+            # Überlassung von Rechten/Lizenzen, üblich für SaaS-Abos); Zinsen & Darlehenskosten
+            # 2140/7330 (zinsähnliche Aufwendungen) → 2120/7320 (Zinsaufwendungen langfristige
+            # Verbindlichkeiten); Wareneinkauf-Kategorien 3000/5000 (Roh-, Hilfs- und Betriebs-
+            # stoffe) → 3200/5200 (Wareneingang) - bewusst keine Automatikkonten (3400/5400).
+            # Eigene Anpassungen bleiben erhalten, gebuchte Einträge behalten ihren Snapshot.
+            _k180 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"konto_skr03_default", "konto_skr04_default", "user_modified_skr03", "user_modified_skr04"} <= _k180:
+                for _name, _s03, _s04 in [
+                    ("Software & Abonnements", "4964", "6837"),
+                    ("Zinsen & Darlehenskosten", "2120", "7320"),
+                    ("Wareneinkauf", "3200", "5200"),
+                    ("Wareneinkauf (7%)", "3200", "5200"),
+                    ("Wareneinkauf EU (ohne USt-IdNr)", "3200", "5200"),
+                    ("Wareneinkauf Drittland (USt bereits in Rechnung)", "3200", "5200"),
+                    ("Wareneinkauf §25a (privat)", "3200", "5200"),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET
+                            konto_skr03_default = :s03,
+                            konto_skr04_default = :s04,
+                            konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :s03 ELSE konto_skr03 END,
+                            konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :s04 ELSE konto_skr04 END
+                        WHERE name = :name
+                    """), {"s03": _s03, "s04": _s04, "name": _name})
+            conn.execute(text("PRAGMA user_version = 180"))
+            conn.commit()
+            print("[Migration] Schema auf Version 180 (Issue #470: Konten Software-Abos, Darlehenszinsen, Wareneingang)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4149,13 +4180,13 @@ def _migrate_kategorien() -> None:
             {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
             {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
             {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
-            {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+            {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "ig_erwerb"},
             # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige
             # USt-IdNr beim Verkäufer voraus. Ohne USt-IdNr stellt der Verkäufer brutto mit
             # ausländischer USt - in Deutschland nicht abziehbar. Bewusst NICHT Konto 3425.
-            {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+            {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "EU-Lieferant ohne USt-IdNr (z. B. EU-Kleinunternehmer-Äquivalent, Privatperson) – Rechnung enthält ausländische USt, die in Deutschland nicht als Vorsteuer abziehbar ist. Kein innergemeinschaftlicher Erwerb (§1a UStG setzt gültige USt-IdNr beim Verkäufer voraus)."},
             {"name": "Wareneinkauf Nicht-EU",                "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Miete Büro (0%)",                      "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 39,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
@@ -4190,7 +4221,7 @@ def _migrate_kategorien() -> None:
             # Issue #470: Konten "Reisekosten Unternehmer" (DATEV 2026), ÖPNV mit Vorsteuer (§ 35 UStDV)
             {"name": "Reisekosten – Nebenkosten",            "kontenart": "Aufwand", "konto_skr03": "4676", "konto_skr04": "6680", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4673", "konto_skr04": "6673", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
-            {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2140", "konto_skr04": "7330", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2120", "konto_skr04": "7320", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Kredittilgung",                        "kontenart": "Aufwand", "konto_skr03": "0630", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Zahlung FA",              "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Anlagevermögen (Kauf)",                "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0630", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
@@ -4265,13 +4296,13 @@ def _migrate_kategorien() -> None:
             {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3120", "konto_skr04": "5920", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "13b_abs2"},
             # §25a Differenzbesteuerung – Ankauf von Privatpersonen oder anderen ohne USt-Ausweis
             # Keine Vorsteuer abziehbar; EK-Preis ist Basis für Margenberechnung (VK − EK)
-            {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # §25a Differenzbesteuerung Erlösseite – DATEV-Automatikkonto (Issue #303).
             # Schritt 1: nur Kategorie anlegen, noch nicht mit der Buchungslogik verdrahtet.
             {"name": "Differenzbesteuerung (§25a)",           "kontenart": "Erlös",   "konto_skr03": "8199", "konto_skr04": "4134", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Drittland-Warenkäufe (Alibaba/Amazon/Ebay etc.): USt schon in Rechnung (IOSS)
             # vs. ohne USt (Direktimport, ggf. DHL-Nachforderung Zoll + Einfuhrumsatzsteuer)
-            {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+            {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
              "beschreibung": "z. B. Amazon/Ebay-Bestellungen aus Drittländern (China etc.) – USt steht schon auf der Rechnung/Bestellbestätigung (IOSS), ganz normal als Vorsteuer abziehbar."},
             {"name": "Wareneinkauf Drittland (ohne USt)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "z. B. Alibaba-Direktkauf beim Hersteller – keine USt auf der Rechnung. Kommt später eine DHL-Nachforderung, diese getrennt über 'Zoll / Einfuhrabgaben' bzw. 'Einfuhrumsatzsteuer' buchen."},
