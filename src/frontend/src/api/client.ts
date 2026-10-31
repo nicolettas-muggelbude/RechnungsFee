@@ -3037,6 +3037,8 @@ export type BankVorschauResponse = {
   encoding: string
   konto_iban: string | null
   erkanntes_konto_id: number | null
+  erkannte_email: string | null
+  email_konto_ids: number[]
   transaktionen: BankTransaktionVorschau[]
 }
 

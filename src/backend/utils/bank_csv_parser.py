@@ -261,6 +261,67 @@ def parse_csv(
     return ergebnis
 
 
+def _spalten_key(name: str) -> str:
+    """Spaltennamen vergleichbar machen: Großschreibung, Umlaute, Leerzeichen und Bindestriche fallen weg."""
+    s = name.strip().lower()
+    for alt, neu in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        s = s.replace(alt, neu)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def extract_eigene_email(raw: bytes) -> Optional[str]:
+    """Eigene Adresse aus Absender- und Empfänger-Spalte, wenn der Export keine IBAN trägt.
+
+    Die eigene Adresse steht in (fast) jeder Zeile, die Gegenstelle nur in einzelnen.
+    „Absender E-Mail-Adresse“ und „Absender-E-Mail-Adresse“ gelten als dieselbe Spalte.
+    Gibt None zurück, wenn die Spalten fehlen oder zwei Adressen gleich oft vorkommen.
+    """
+    enc = detect_encoding(raw)
+    text = decode_csv_text(raw, enc)
+    delim = detect_delimiter(text)
+    zeilen = list(csv.reader(io.StringIO(text), delimiter=delim, quotechar='"'))
+
+    header_idx = absender_i = empfaenger_i = None
+    for i, row in enumerate(zeilen[:_HEADER_SUCH_FENSTER]):
+        keys = [_spalten_key(zelle) for zelle in row]
+        absender = next((j for j, k in enumerate(keys) if k.startswith("absender") and "email" in k), None)
+        empfaenger = next((j for j, k in enumerate(keys) if k.startswith("empfaenger") and "email" in k), None)
+        if absender is not None and empfaenger is not None:
+            header_idx, absender_i, empfaenger_i = i, absender, empfaenger
+            break
+    if header_idx is None or absender_i is None or empfaenger_i is None:
+        return None
+
+    zaehler: dict[str, int] = {}
+    original: dict[str, str] = {}
+    for row in zeilen[header_idx + 1:]:
+        if not any(zelle.strip() for zelle in row):
+            continue
+        gesehen: set[str] = set()
+        for idx in (absender_i, empfaenger_i):
+            if idx >= len(row):
+                continue
+            wert = row[idx].strip()
+            if not _EMAIL_RE.match(wert):
+                continue
+            key = wert.lower()
+            if key in gesehen:
+                continue
+            gesehen.add(key)
+            zaehler[key] = zaehler.get(key, 0) + 1
+            original.setdefault(key, wert)
+    if not zaehler:
+        return None
+    beste = max(zaehler.values())
+    kandidaten = [key for key, anzahl in zaehler.items() if anzahl == beste]
+    if len(kandidaten) != 1:
+        return None
+    return original[kandidaten[0]]
+
+
 def extract_konto_iban(raw: bytes, template) -> Optional[str]:
     """
     Sucht in den übersprungenen Header-Zeilen (skip_rows) nach der eigenen Konto-IBAN.

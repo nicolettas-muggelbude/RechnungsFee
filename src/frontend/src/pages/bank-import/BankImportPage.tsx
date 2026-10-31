@@ -66,6 +66,8 @@ type AnalyseStatus =
   | { art: 'laden' }
   | { art: 'iban_match'; iban: string; kontoId: number; kontoName: string }
   | { art: 'iban_kein_konto'; iban: string }
+  | { art: 'email_match'; email: string; kontoId: number; kontoName: string }
+  | { art: 'email_auswahl'; email: string; kontoIds: number[] }
   | { art: 'kein_iban' }
 
 interface ImportDialogProps {
@@ -80,6 +82,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const [datei, setDatei] = useState<File | null>(null)
   const [templateId, setTemplateId] = useState<string>('')
   const [manuellKontoId, setManuellKontoId] = useState<number>(konten[0]?.id ?? 0)
+  const [freieKontoauswahl, setFreieKontoauswahl] = useState(false)
   const [analyseStatus, setAnalyseStatus] = useState<AnalyseStatus>({ art: 'idle' })
   const [vorschau, setVorschau] = useState<BankVorschauResponse | null>(null)
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set())
@@ -88,35 +91,56 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
 
   const geschaeftskonten = useMemo(() => konten.filter(k => k.kontotyp !== 'privat'), [konten])
 
-  // Welches kontoId wird letztendlich für den Import verwendet
+  // Welches kontoId wird letztendlich für den Import verwendet.
+  // Bei mehreren E-Mail-Treffern zählt nur die bewusste Auswahl, nicht das erste Konto der Liste.
   const aktuellesKontoId: number | null =
     analyseStatus.art === 'iban_match' ? analyseStatus.kontoId :
+    analyseStatus.art === 'email_match'
+      ? (freieKontoauswahl ? (manuellKontoId || null) : analyseStatus.kontoId) :
+    analyseStatus.art === 'email_auswahl' ? (manuellKontoId || null) :
     analyseStatus.art === 'kein_iban' ? manuellKontoId :
     null
+
+  function uebernehmeVorschau(result: BankVorschauResponse) {
+    if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
+    setVorschau(result)
+    setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
+
+    const emailIds = result.email_konto_ids ?? []
+    if (result.konto_iban && result.erkanntes_konto_id) {
+      const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
+      setAnalyseStatus({
+        art: 'iban_match',
+        iban: result.konto_iban,
+        kontoId: result.erkanntes_konto_id,
+        kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
+      })
+    } else if (result.konto_iban && !result.erkanntes_konto_id) {
+      setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
+    } else if (result.erkannte_email && emailIds.length > 1 && !result.erkanntes_konto_id) {
+      setManuellKontoId(0)
+      setAnalyseStatus({ art: 'email_auswahl', email: result.erkannte_email, kontoIds: emailIds })
+    } else if (result.erkanntes_konto_id && result.erkannte_email) {
+      const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
+      setAnalyseStatus({
+        art: 'email_match',
+        email: result.erkannte_email,
+        kontoId: result.erkanntes_konto_id,
+        kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
+      })
+    } else {
+      setManuellKontoId(prev => prev || geschaeftskonten[0]?.id || 0)
+      setAnalyseStatus({ art: 'kein_iban' })
+    }
+  }
 
   async function analysiere() {
     if (!datei) return
     setFehler(null)
+    setFreieKontoauswahl(false)
     setAnalyseStatus({ art: 'laden' })
     try {
-      const result = await vorschauBankImport(datei, undefined, templateId || undefined)
-      if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
-      setVorschau(result)
-      setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-
-      if (result.konto_iban && result.erkanntes_konto_id) {
-        const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
-        setAnalyseStatus({
-          art: 'iban_match',
-          iban: result.konto_iban,
-          kontoId: result.erkanntes_konto_id,
-          kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
-        })
-      } else if (result.konto_iban && !result.erkanntes_konto_id) {
-        setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
-      } else {
-        setAnalyseStatus({ art: 'kein_iban' })
-      }
+      uebernehmeVorschau(await vorschauBankImport(datei, undefined, templateId || undefined))
     } catch (e: unknown) {
       setFehler((e as Error).message)
       setAnalyseStatus({ art: 'idle' })
@@ -136,6 +160,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
       setFehler(null)
+      setFreieKontoauswahl(false)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
@@ -144,23 +169,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
         setDatei(f)
         // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
         // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
-        const result = await vorschauBankImport(f, undefined, undefined)
-        if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
-        setVorschau(result)
-        setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-        if (result.konto_iban && result.erkanntes_konto_id) {
-          const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
-          setAnalyseStatus({
-            art: 'iban_match',
-            iban: result.konto_iban,
-            kontoId: result.erkanntes_konto_id,
-            kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
-          })
-        } else if (result.konto_iban && !result.erkanntes_konto_id) {
-          setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
-        } else {
-          setAnalyseStatus({ art: 'kein_iban' })
-        }
+        // uebernehmeVorschau setzt erkanntes_template, Auswahl und den Analyse-Status
+        // (IBAN- wie E-Mail-Kontoerkennung, Security-Audit F5: Upload als Datei, nie als Pfad)
+        uebernehmeVorschau(await vorschauBankImport(f, undefined, undefined))
       } catch (e: unknown) {
         setFehler((e as Error).message)
       }
@@ -173,6 +184,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     const f = e.dataTransfer.files[0]
     if (f) {
       setDatei(f)
+      setFreieKontoauswahl(false)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setFehler(null)
@@ -284,6 +296,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
+                    setFreieKontoauswahl(false)
                     setAnalyseStatus({ art: 'idle' })
                     setVorschau(null)
                     setFehler(null)
@@ -354,26 +367,97 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                 </div>
               )}
 
-              {analyseStatus.art === 'kein_iban' && (
+              {analyseStatus.art === 'email_match' && (
                 <div className="space-y-2">
-                  <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                    <span className="text-blue-500 text-base leading-none mt-0.5">ℹ</span>
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      Kein Konto in der CSV erkannt. Bitte manuell auswählen.
+                  <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                    <span className="text-green-500 text-base leading-none mt-0.5">✓</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        {analyseStatus.kontoName} Konto über {analyseStatus.email} erkannt.
+                      </p>
+                      {!freieKontoauswahl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManuellKontoId(analyseStatus.kontoId)
+                            setFreieKontoauswahl(true)
+                          }}
+                          className="mt-1 text-xs font-medium text-green-700 dark:text-green-300 underline hover:no-underline"
+                        >
+                          Anderes Konto wählen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {freieKontoauswahl && (
+                    <div>
+                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
+                      <select
+                        value={manuellKontoId || ''}
+                        onChange={e => {
+                          const id = Number(e.target.value)
+                          setManuellKontoId(id)
+                          if (id) ladeVorschauMitKonto(id)
+                        }}
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                      >
+                        {geschaeftskonten.map(k => (
+                          <option key={k.id} value={k.id}>
+                            {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(analyseStatus.art === 'email_auswahl' || analyseStatus.art === 'kein_iban') && (
+                <div className="space-y-2">
+                  <div className={`flex items-start gap-2 p-3 rounded-xl border ${
+                    analyseStatus.art === 'kein_iban'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                      : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                  }`}>
+                    <span className={`text-base leading-none mt-0.5 ${analyseStatus.art === 'kein_iban' ? 'text-blue-500' : 'text-green-500'}`}>
+                      {analyseStatus.art === 'kein_iban' ? 'ℹ' : '✓'}
+                    </span>
+                    <p className={`text-xs ${
+                      analyseStatus.art === 'kein_iban'
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                    }`}>
+                      {analyseStatus.art === 'kein_iban' && 'Kein Konto in der CSV erkannt. Bitte manuell auswählen.'}
+                      {analyseStatus.art === 'email_auswahl' && `${analyseStatus.email} passt zu mehreren Konten. Bitte wähle das passende.`}
                     </p>
                   </div>
+                  {analyseStatus.art === 'email_auswahl' && !freieKontoauswahl && (
+                    <button
+                      type="button"
+                      onClick={() => setFreieKontoauswahl(true)}
+                      className="text-xs font-medium text-green-700 dark:text-green-300 underline hover:no-underline"
+                    >
+                      Anderes Konto wählen
+                    </button>
+                  )}
                   <div>
                     <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
                     <select
-                      value={manuellKontoId}
+                      value={manuellKontoId || ''}
                       onChange={e => {
                         const id = Number(e.target.value)
                         setManuellKontoId(id)
-                        ladeVorschauMitKonto(id)
+                        if (id) ladeVorschauMitKonto(id)
                       }}
                       className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
                     >
-                      {geschaeftskonten.map(k => (
+                      {analyseStatus.art === 'email_auswahl' && (
+                        <option value="">– Konto wählen –</option>
+                      )}
+                      {(analyseStatus.art === 'email_auswahl' && !freieKontoauswahl
+                        ? geschaeftskonten.filter(k => k.id != null && analyseStatus.kontoIds.includes(k.id))
+                        : geschaeftskonten
+                      ).map(k => (
                         <option key={k.id} value={k.id}>
                           {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
                         </option>
@@ -535,9 +619,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   >
                     {analyseStatus.art === 'laden' ? 'Analysiere…' : 'Analysieren'}
                   </button>
-                ) : analyseStatus.art === 'iban_match' || analyseStatus.art === 'kein_iban' ? (
+                ) : analyseStatus.art === 'iban_match' || analyseStatus.art === 'kein_iban' || analyseStatus.art === 'email_match' || analyseStatus.art === 'email_auswahl' ? (
                   <button
-                    disabled={analyseStatus.art === 'kein_iban' && !manuellKontoId}
+                    disabled={(analyseStatus.art === 'kein_iban' || analyseStatus.art === 'email_auswahl') && !manuellKontoId}
                     onClick={() => setSchritt(2)}
                     className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
                   >
