@@ -137,6 +137,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setTauriPfad(pfad)
+      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
       try {
         const result = await vorschauBankImportPfad(pfad, undefined, templateId || undefined)
         if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
@@ -161,7 +162,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }
-  }, [schritt, templateId, geschaeftskonten])
+  }, [schritt, geschaeftskonten])
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -172,6 +173,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setFehler(null)
+      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
     }
   }
 
@@ -285,6 +287,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                     setAnalyseStatus({ art: 'idle' })
                     setVorschau(null)
                     setFehler(null)
+                    setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
                   }}
                 />
               </div>
