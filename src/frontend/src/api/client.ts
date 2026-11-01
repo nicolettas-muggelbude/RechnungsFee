@@ -2156,6 +2156,11 @@ export type UStVAPosten = {
   beschreibung: string
   betrag: string
   rechnung_id: number | null
+  rechnungsnummer: string | null
+  storniert: boolean
+  storno_belegnr: string | null
+  ist_storno: boolean
+  storno_von_belegnr: string | null
 }
 
 export const getUStVAPosten = (zeitraum: string, kz: string) =>
@@ -2280,9 +2285,24 @@ export const getEUERPdfUrl = async (jahr: number): Promise<string> => {
   return mitDateiname(`${base}/euer/pdf?jahr=${jahr}`, `EÜR_${jahr}`)
 }
 
+export type EUERKatBuchung = {
+  id: number
+  datum: string
+  belegnr: string
+  beschreibung: string
+  betrag: string
+  rechnung_id: number | null
+  rechnungsnummer: string | null
+  storniert: boolean
+  storno_belegnr: string | null
+  ist_storno: boolean
+  storno_von_belegnr: string | null
+}
+
 export type EUERKatSumme = {
   name: string
   betrag: string
+  buchungen: EUERKatBuchung[]
 }
 
 export type EUERZeileDetail = {

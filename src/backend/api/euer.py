@@ -14,6 +14,7 @@ Besonderheiten:
 """
 
 import calendar
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Anlagegut, Journaleintrag, Kategorie, Unternehmen
+from api.journal import _storno_infos
 from utils.wirtschaftsjahr import wirtschaftsjahr_zeitraum
 
 router = APIRouter(prefix="/api/euer", tags=["EÜR"])
@@ -120,6 +122,111 @@ _EINNAHME_UST_KONTEN = {"1776", "3806", "1771", "3801", "1780", "1781", "1787", 
 # Berechnung
 # ---------------------------------------------------------------------------
 
+def _euer_haupt_beitrag(e: Journaleintrag) -> tuple[Optional[int], Decimal]:
+    """Hauptzeilen-Zuordnung einer Journalbuchung: (euer_zeile, beitrag) - die Summe der
+    Beiträge einer Zeile ist deren EÜR-Wert. Zeile None = keine Hauptzeilenzuordnung.
+
+    Gemeinsame Logik von _berechne_euer (Summen) und _euer_kategorien_beitraege
+    (Aufschlüsselung) - bisher doppelt gepflegt und auseinandergedriftet.
+
+    Abschnitt A (Einnahmen): Einnahme = +netto, Storno (art=Ausgabe) = −netto.
+    Abschnitt B (Ausgaben): Ausgabe = +, Storno (art=Einnahme) = −. Basis = netto +
+    nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich tatsächlich abgezogener
+    vorsteuer_betrag): fehlt der Vorsteuerabzug ganz (Kleinunternehmer §19, Issue #424)
+    oder teilweise (kat.vorsteuer_prozent < 100), ist dieser Anteil ein echter, nicht
+    erstattungsfähiger Kostenbestandteil und gehört in die Betriebsausgabe. Bei vollem
+    Vorsteuerabzug (vorsteuer_betrag == ust_betrag) ist der Zuschlag 0, Ergebnis bleibt
+    netto_betrag. Bei Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT
+    verwendet (dort ist brutto_betrag == netto_betrag, die additive USt wäre sonst
+    fälschlich nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller
+    Vorsteuerabzug).
+
+    WICHTIG (Storno-Spiegel): Storno-Gegenbuchungen einer AUSGABE tragen art=Einnahme
+    mit positivem netto/ust_betrag, aber NEGATIVEM vorsteuer_betrag
+    (vorsteuer_betrag = -original.vorsteuer_betrag, journal.storno / rechnungen.storno) -
+    die negative Vorsteuer korrigiert Zeile 57. In der Zeilen-B-Basis muss der tatsächlich
+    abgezogene Vorsteueranteil deshalb gespiegelt werden (bei art=Einnahme:
+    -vorsteuer_betrag), sonst geht die USt doppelt ein: das Storno einer 30-€-Zahlung
+    (netto 30, USt 5,70, Vorsteuer 5,70) wies -41,40 statt -30,00 aus.
+    """
+    kat: Optional[Kategorie] = e.kategorie
+    euer_zeile = kat.euer_zeile if kat else None
+    if euer_zeile is None:
+        return None, ZERO
+
+    ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
+    if ab == "A":
+        # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
+        vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
+        basis = e.netto_betrag or ZERO
+    elif ab == "B":
+        vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
+        # tatsächlich abgezogene Vorsteuer: bei Ausgabe positiv gespeichert, bei der
+        # Storno-Gegenbuchung (art=Einnahme) vorzeicheninvertiert (negativ)
+        if e.art == "Ausgabe":
+            vorsteuer_abgezogen = e.vorsteuer_betrag or ZERO
+        else:
+            vorsteuer_abgezogen = -(e.vorsteuer_betrag or ZERO)
+        basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - vorsteuer_abgezogen)
+        if e.ust_sonderfall:
+            # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
+            # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
+            # „Umsatzsteuer-Zahlung FA"). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
+            # hier sonst ein zweites Mal Betriebsausgabe.
+            basis = e.netto_betrag or ZERO
+    else:
+        vz = Decimal("1")
+        basis = e.netto_betrag or ZERO
+
+    return euer_zeile, vz * basis
+
+
+def _euer_ust_beitraege(e: Journaleintrag) -> list[tuple[int, str, Decimal]]:
+    """Unterzeilen-Beiträge einer Journalbuchung: (euer_zeile, kategorie, betrag) für die
+    vereinnahmte USt (Zeile 17) und die abziehbare Vorsteuer (Zeile 57). Gemeinsame Logik
+    von _berechne_euer (Summen) und _euer_kategorien_beitraege (Aufschlüsselung).
+
+    Zeile 17: reguläre Einnahmen addieren (ohne USt-Konto = Zahlung auf Ausgangsrechnung,
+    mit Einnahme-USt-Konto = manuelle Einnahme), Storno einer Einnahme (art=Ausgabe)
+    subtrahieren - bei Zahlungen auf Rechnungen ohne USt-Konto nur erkennbar am
+    "STORNO "-Präfix; der Abzug muss beide Muster erfassen, sonst bleibt die vereinnahmte
+    USt nach einem Zahlungs-Storno zu hoch.
+    Storno einer AUSGABE (art=Einnahme, Vorsteuer-Konto vom Original) darf Zeile 17 NICHT
+    addieren: diese USt war nie vereinnahmt, die Korrektur läuft ausschließlich über die
+    negative Vorsteuer in Zeile 57.
+    Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten
+    USt-Betrag.
+
+    Zeile 57: Summe aller vorsteuer_betrag-Werte (ohne art-Filter). Storno einer Ausgabe
+    hat art=Einnahme mit negativem vorsteuer_betrag → subtrahiert korrekt.
+    """
+    ist_reverse_charge = bool(e.ust_sonderfall)
+    if ist_reverse_charge:
+        # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
+        # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
+        # (Zu-/Abflussprinzip) sind solche Buchungen deshalb neutral und dürfen weder Zeile 17
+        # noch Zeile 57 berühren. Ohne diese Ausnahme greift unten die Storno-Heuristik, weil
+        # die §13b-Konten 1787/1789 in _EINNAHME_UST_KONTEN stehen (Issue #307).
+        return []
+
+    ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
+    beitraege: list[tuple[int, str, Decimal]] = []
+
+    if e.ust_betrag and e.ust_betrag != 0:
+        if e.art == "Einnahme":
+            if e.ust_betrag > 0 and (not ust_konto or ust_konto in _EINNAHME_UST_KONTEN):
+                beitraege.append((17, "Umsatzsteuer", e.ust_betrag))
+        elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
+            ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and e.beschreibung.startswith("STORNO "))
+        ):
+            beitraege.append((17, "Umsatzsteuer", -e.ust_betrag))
+
+    if e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
+        beitraege.append((57, "Vorsteuer", e.vorsteuer_betrag))
+
+    return beitraege
+
+
 def _berechne_euer(jahr: int, db: Session) -> dict:
     unt = db.query(Unternehmen).first()
     von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (
@@ -141,7 +248,6 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
         euer_zeile = kat.euer_zeile if kat else None
-        ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
         if euer_zeile is not None and euer_zeile not in EUR_ZEILEN_META and kat.kontenart != "Anlage":
             unbekannte_zeilen.setdefault(euer_zeile, set()).add(kat.name)
 
@@ -154,56 +260,12 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
             anlage_summe += vz * (e.brutto_betrag or ZERO)
             continue
 
-        if euer_zeile is not None:
-            ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
-            if ab == "A":
-                # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
-                vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
-                basis = e.netto_betrag or ZERO
-            elif ab == "B":
-                # Ausgaben-Zeile: Ausgabe = addieren, Storno (art=Einnahme) = subtrahieren.
-                # Basis = netto_betrag + nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich
-                # tatsächlich abgezogener vorsteuer_betrag) - fehlt der Vorsteuerabzug ganz
-                # (Kleinunternehmer §19, Issue #424) oder teilweise (kat.vorsteuer_prozent < 100),
-                # ist dieser Anteil ein echter, nicht erstattungsfähiger Kostenbestandteil und
-                # gehört in die Betriebsausgabe. Bei vollem Vorsteuerabzug (vorsteuer_betrag ==
-                # ust_betrag) ist der Zuschlag 0, Ergebnis bleibt netto_betrag wie bisher. Bei
-                # Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT verwendet (dort
-                # ist brutto_betrag == netto_betrag, die additive USt wäre sonst fälschlich
-                # nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller Vorsteuerabzug).
-                vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
-                    # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
-                    # „Umsatzsteuer-Zahlung FA“). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
-                    # hier sonst ein zweites Mal Betriebsausgabe.
-                    basis = e.netto_betrag or ZERO
-            else:
-                vz = Decimal("1")
-                basis = e.netto_betrag or ZERO
-            zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + vz * basis
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        if haupt_zeile is not None:
+            zeilen[haupt_zeile] = zeilen.get(haupt_zeile, ZERO) + haupt_beitrag
 
-        # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
-        # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
-        # (Zu-/Abflussprinzip) sind solche Buchungen deshalb neutral und dürfen weder Zeile 17
-        # noch Zeile 57 berühren. Ohne diese Ausnahme greift unten die Storno-Heuristik, weil
-        # die §13b-Konten 1787/1789 in _EINNAHME_UST_KONTEN stehen (Issue #307).
-        ist_reverse_charge = bool(e.ust_sonderfall)
-
-        # Zeile 17: vereinnahmte USt – reguläre Einnahmen addieren, Storno subtrahieren.
-        # Storno einer Einnahme hat art=Ausgabe + Einnahme-USt-Konto (1776/1771/…).
-        # Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten USt-Betrag.
-        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
-            if e.art == "Einnahme" and e.ust_betrag > 0:
-                zeilen[17] = zeilen.get(17, ZERO) + e.ust_betrag
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
-                zeilen[17] = zeilen.get(17, ZERO) - e.ust_betrag
-
-        # Zeile 57: abziehbare Vorsteuer – Summe aller vorsteuer_betrag-Werte (ohne art-Filter).
-        # Storno einer Ausgabe hat art=Einnahme mit negativem vorsteuer_betrag → subtrahiert korrekt.
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
-            zeilen[57] = zeilen.get(57, ZERO) + e.vorsteuer_betrag
+        for ust_zeile, _ust_name, ust_beitrag in _euer_ust_beitraege(e):
+            zeilen[ust_zeile] = zeilen.get(ust_zeile, ZERO) + ust_beitrag
 
     # AVEÜR: AfA aus dem Anlagenverzeichnis automatisch in Zeile 33 eintragen
     # (Zeile 33 = AfA bewegliche WG, nicht Zeile 36 = GWG – Issue #265)
@@ -414,11 +476,15 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
 # Kategorie-Aufschlüsselung
 # ---------------------------------------------------------------------------
 
-def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Decimal]]:
-    """Gleiche Logik wie _berechne_euer, aber gruppiert nach (euer_zeile, kategorie_name)."""
-    from datetime import date as _date
+def _euer_kategorien_beitraege(
+    jahr: int, db: Session
+) -> dict[int, dict[str, list[tuple[Decimal, Journaleintrag]]]]:
+    """Gleiche Logik wie _berechne_euer, aber gruppiert nach (euer_zeile, kategorie_name) mit
+    den einzelnen Beiträgen (Beitrag, Journaleintrag). Basis für die Kategorie-Summen
+    (_berechne_euer_kategorien) und die Einzelposten der Aufschlüsselung (Rechnungs- und
+    Zahlungsnummer mit Link)."""
     unt = db.query(Unternehmen).first()
-    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (_date(jahr, 1, 1), _date(jahr, 12, 31))
+    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (date(jahr, 1, 1), date(jahr, 12, 31))
 
     eintraege = (
         db.query(Journaleintrag)
@@ -426,54 +492,42 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
         .all()
     )
 
-    zeilen: dict[int, dict[str, Decimal]] = {}
+    zeilen: dict[int, dict[str, list[tuple[Decimal, Journaleintrag]]]] = {}
+
+    def add(zeile: int, kat_name: str, beitrag: Decimal, e: Journaleintrag) -> None:
+        zeilen.setdefault(zeile, {})
+        zeilen[zeile].setdefault(kat_name, [])
+        zeilen[zeile][kat_name].append((beitrag, e))
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
-        euer_zeile = kat.euer_zeile if kat else None
         kat_name = kat.name if kat else "Unbekannt"
-        ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
 
         if kat and kat.kontenart == "Anlage":
             continue
 
-        if euer_zeile is not None:
-            ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
-            if ab == "A":
-                vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
-                basis = e.netto_betrag or ZERO
-            elif ab == "B":
-                # Siehe ausführlicher Kommentar in _berechne_euer() (Issue #424) - gleiche Basis,
-                # damit Kategorie-Summen und EÜR-Zeilensumme konsistent bleiben.
-                vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    basis = e.netto_betrag or ZERO  # Reverse Charge, siehe _berechne_euer() (Issue #459)
-            else:
-                vz = Decimal("1")
-                basis = e.netto_betrag or ZERO
-            zeilen.setdefault(euer_zeile, {})
-            zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * basis
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        if haupt_zeile is not None:
+            add(haupt_zeile, kat_name, haupt_beitrag, e)
 
-        # Reverse Charge neutral halten, siehe Kommentar in _berechne_euer (Issue #307)
-        ist_reverse_charge = bool(e.ust_sonderfall)
+        for ust_zeile, ust_kat_name, ust_beitrag in _euer_ust_beitraege(e):
+            add(ust_zeile, ust_kat_name, ust_beitrag, e)
 
-        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
-            if e.art == "Einnahme" and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
-                zeilen.setdefault(17, {})
-                zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) + e.ust_betrag
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
-                zeilen.setdefault(17, {})
-                zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) - e.ust_betrag
+    return zeilen
 
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
-            zeilen.setdefault(57, {})
-            zeilen[57]["Vorsteuer"] = zeilen[57].get("Vorsteuer", ZERO) + e.vorsteuer_betrag
+
+def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Decimal]]:
+    """Summen je (euer_zeile, kategorie_name) - gleiche Logik wie _berechne_euer."""
+    beitraege = _euer_kategorien_beitraege(jahr, db)
 
     q = Decimal("0.01")
+    summen = {
+        z: {k: sum((b for b, _ in liste), ZERO).quantize(q, ROUND_HALF_UP) for k, liste in kats.items()}
+        for z, kats in beitraege.items()
+    }
     return {
-        z: {k: v.quantize(q, ROUND_HALF_UP) for k, v in kats.items() if v != ZERO}
-        for z, kats in zeilen.items()
+        z: {k: v for k, v in kats.items() if v != ZERO}
+        for z, kats in summen.items()
         if any(v != ZERO for v in kats.values())
     }
 
@@ -514,9 +568,26 @@ class EUERErgebnis(BaseModel):
     zeile_summe_ausgaben: int = 75
     zeile_afa: int = 33
 
+class EUERKatBuchung(BaseModel):
+    """Einzelposten einer Kategorie in der Aufschlüsselung - Journalbuchung mit
+    Rechnungs- und Zahlungsnummer (als Link-Ziel für die Oberfläche)."""
+    id: int                       # Journaleintrag-ID (Zahlungsbeleg /journal/{id}/beleg)
+    datum: date
+    belegnr: str                  # Zahlungs-/Belegnummer der Journalbuchung
+    beschreibung: str
+    betrag: Decimal               # Beitrag an dieser EÜR-Zeile (vorzeichenkorrigiert)
+    rechnung_id: int | None = None
+    rechnungsnummer: str | None = None
+    # Storno-Bündelung: Original wird mit seiner Gegenbuchung als Paar angezeigt
+    storniert: bool = False       # dieses Original hat eine Storno-Gegenbuchung
+    storno_belegnr: str | None = None
+    ist_storno: bool = False      # dieser Eintrag IST die Storno-Gegenbuchung
+    storno_von_belegnr: str | None = None
+
 class EUERKatSumme(BaseModel):
     name: str
     betrag: Decimal
+    buchungen: list[EUERKatBuchung] = []
 
 class EUERZeileDetail(BaseModel):
     zeile: int
@@ -582,8 +653,34 @@ def euer_kategorien(
     jahr: int = Query(..., ge=2020, le=2100),
     db: Session = Depends(get_db),
 ):
+    beitraege = _euer_kategorien_beitraege(jahr, db)
     kat_daten = _berechne_euer_kategorien(jahr, db)
     euer_daten = _berechne_euer(jahr, db)
+
+    q = Decimal("0.01")
+
+    def buchungen_fuer(zeile: int, kat_name: str) -> list[EUERKatBuchung]:
+        """Einzelposten einer Kategorie, chronologisch mit Belegnummer. Storno-Paarung
+        über dieselbe Erkennung wie im Journal (STORNO-Präfix + gruppe_id-Wurzel)."""
+        liste = beitraege.get(zeile, {}).get(kat_name, [])
+        storno_infos = _storno_infos(db, [e for _, e in liste])
+        return [
+            EUERKatBuchung(
+                id=e.id,
+                datum=e.datum,
+                belegnr=e.belegnr,
+                beschreibung=e.beschreibung,
+                betrag=b.quantize(q, ROUND_HALF_UP),
+                rechnung_id=e.rechnung_id,
+                rechnungsnummer=e.rechnung.rechnungsnummer if e.rechnung else None,
+                storniert=storno_infos[e.id]["storniert"],
+                storno_belegnr=storno_infos[e.id]["storno_belegnr"],
+                ist_storno=storno_infos[e.id]["ist_storno"],
+                storno_von_belegnr=storno_infos[e.id]["storno_von_belegnr"],
+            )
+            for b, e in sorted(liste, key=lambda t: (t[1].datum, t[1].belegnr))
+            if b != ZERO
+        ]
 
     zeilen_liste = []
     for z, kats in sorted(kat_daten.items()):
@@ -594,7 +691,7 @@ def euer_kategorien(
             abschnitt=EUR_ZEILEN_META[z][1] if z in EUR_ZEILEN_META else "?",
             betrag_gesamt=betrag_gesamt,
             kategorien=[
-                EUERKatSumme(name=k, betrag=v)
+                EUERKatSumme(name=k, betrag=v, buchungen=buchungen_fuer(z, k))
                 for k, v in sorted(kats.items(), key=lambda x: abs(x[1]), reverse=True)
             ],
         ))

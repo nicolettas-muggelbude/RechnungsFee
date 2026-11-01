@@ -182,3 +182,85 @@ def test_endpoint_unbekannte_kz_gibt_422(db):
     with pytest.raises(HTTPException) as exc:
         ustva_posten(zeitraum="2026-05", kz="999", db=db)
     assert exc.value.status_code == 422
+
+
+def test_storno_posten_tragen_buendelungsfelder(db):
+    """Bündelung in der UStVA-Aufschlüsselung (analog EÜR): das Original trägt
+    storniert/storno_belegnr, die Gegenbuchung ist_storno/storno_von_belegnr - und beide
+    Posten zeigen die Rechnungsnummer ihrer verknüpften Rechnung (falls vorhanden)."""
+    kat = _kategorie(db)
+    eintrag = create_eintrag(
+        JournalEintragCreate(
+            datum=date(2026, 4, 5), beschreibung="Hosting-Rechnung Q2",
+            kategorie_id=kat.id, art="Ausgabe", brutto_betrag=Decimal("119.00"),
+            ust_satz=Decimal("19"), vorsteuerabzug=True, zahlungsart="Bank",
+        ),
+        db,
+    )
+    storno = storno_eintrag(eintrag.id, StornoRequest(grund="Falscher Lieferant"), db)
+
+    kz, posten = _berechne_kz(date(2026, 4, 1), date(2026, 4, 30), db)
+    liste = posten["kz_66"]
+    assert len(liste) == 2
+
+    original = next(p for p in liste if p["quelle_id"] == eintrag.id)
+    gegenbuchung = next(p for p in liste if p["quelle_id"] == storno.id)
+
+    assert original["storniert"] is True
+    assert original["storno_belegnr"] == storno.belegnr
+    assert original["ist_storno"] is False
+    assert gegenbuchung["ist_storno"] is True
+    assert gegenbuchung["storno_von_belegnr"] == eintrag.belegnr
+    assert gegenbuchung["storniert"] is False
+    # Summenkonsistenz bleibt: Paar hebt sich auf
+    assert kz["kz_66"] == Decimal("0.00")
+
+
+def test_posten_ohne_rechnung_ohne_storno_haben_leere_buendelungsfelder(db):
+    """Normale Buchung (kein Storno beteiligt): Felder sind gesetzt/leer, Response-Schema
+    bleibt ohne Zusatzabfragen konsistent."""
+    kat = _kategorie(db)
+    eintrag = create_eintrag(
+        JournalEintragCreate(
+            datum=date(2026, 5, 5), beschreibung="Büromaterial",
+            kategorie_id=kat.id, art="Ausgabe", brutto_betrag=Decimal("119.00"),
+            ust_satz=Decimal("19"), vorsteuerabzug=True, zahlungsart="Bank",
+        ),
+        db,
+    )
+    _, posten = _berechne_kz(date(2026, 5, 1), date(2026, 5, 31), db)
+    p = posten["kz_66"][0]
+    assert p["quelle_id"] == eintrag.id
+    assert p["storniert"] is False and p["storno_belegnr"] is None
+    assert p["ist_storno"] is False and p["storno_von_belegnr"] is None
+    assert p["rechnungsnummer"] is None
+
+
+def test_posten_mit_rechnung_zeigen_rechnungsnummer(db):
+    """Zahlung mit rechnung_id: der Posten trägt die Rechnungsnummer als eigenes Feld
+    (Link-Text für die Oberfläche), nicht nur die rechnung_id."""
+    kat = _kategorie(db)
+    rechnung = Rechnung(typ="eingang", rechnungsnummer="ER-2026-0099", datum=date(2019, 6, 1),
+                        netto_gesamt=Decimal("100.00"), ust_gesamt=Decimal("19.00"),
+                        brutto_gesamt=Decimal("119.00"), ist_entwurf=False,
+                        partner_freitext="Lieferant GmbH")
+    db.add(rechnung)
+    db.commit()
+    db.refresh(rechnung)
+    # Journal-Eintrag direkt anlegen (create_eintrag kennt rechnung_id nicht - die Verknüpfung
+    # entsteht produktiv über den Zahlungsendpunkt); für den Test reicht die Modell-Erstellung.
+    # Rechnung vor CUTOVER_DATUM_VORSTEUER (fixture: 2020), sonst läuft ihre Vorsteuer
+    # über vorsteuer_ansprueche und der Journal-Posten wäre ausgeschlossen (Issue #338).
+    from database.models import Journaleintrag
+    db.add(Journaleintrag(
+        datum=date(2026, 6, 10), belegnr="2600100", beschreibung="Zahlung ER-2026-0099",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Ausgabe",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        vorsteuerabzug=True, vorsteuer_betrag=Decimal("19.00"), brutto_betrag=Decimal("119.00"),
+        konto_ust_skr03="1406", rechnung_id=rechnung.id,
+    ))
+    db.commit()
+    _, posten = _berechne_kz(date(2026, 6, 1), date(2026, 6, 30), db)
+    p = posten["kz_66"][0]
+    assert p["rechnung_id"] == rechnung.id
+    assert p["rechnungsnummer"] == "ER-2026-0099"
