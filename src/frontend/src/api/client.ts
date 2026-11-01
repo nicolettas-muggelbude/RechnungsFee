@@ -1826,8 +1826,8 @@ export const gutschriftVerrechnen = (gutschriftId: number, rechnungId: number) =
 export const ersatzrechnungErstellen = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ersatzrechnung`, { method: 'POST' })
 
-export const finalisiereRechnung = (id: number) =>
-  request<Rechnung>(`/rechnungen/${id}/finalisieren`, { method: 'POST' })
+export const finalisiereRechnung = (id: number, datumHeute = false) =>
+  request<Rechnung>(`/rechnungen/${id}/finalisieren${datumHeute ? '?datum_heute=true' : ''}`, { method: 'POST' })
 
 export const markiereRechnungAusgegeben = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ausgegeben`, { method: 'POST' })

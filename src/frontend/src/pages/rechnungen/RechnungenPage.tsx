@@ -92,6 +92,27 @@ function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+// Issue #485: Beim Finalisieren eines älteren Entwurfs nachfragen, ob das Rechnungsdatum auf
+// heute gesetzt werden soll - nie stillschweigend, weil bewusst rückdatiert nacherfasst werden
+// kann. true = auf heute setzen. Datumsvergleich als ISO-String (yyyy-mm-dd).
+function frageRechnungsdatumAufHeute(datum: string, leistungBis?: string | null): boolean {
+  const heute = heuteIso()
+  if (!datum || datum >= heute) return false
+  const de = (iso: string) => iso.split('-').reverse().join('.')
+  let text = `Das Rechnungsdatum ist der ${de(datum)}. Soll es beim Finalisieren auf heute (${de(heute)}) gesetzt werden?`
+  if (leistungBis && leistungBis > datum) {
+    text += `\n\nAchtung: Der Leistungszeitraum endet erst am ${de(leistungBis)}, also nach dem bisherigen Rechnungsdatum.`
+  }
+  text += '\n\nDie Fälligkeit verschiebt sich um dieselbe Anzahl Tage.\n\nOK = auf heute setzen\nAbbrechen = Datum beibehalten'
+  return window.confirm(text)
+}
+
+function verschiebeIso(iso: string, vonIso: string, bisIso: string): string {
+  const tage = (Date.parse(bisIso) - Date.parse(vonIso)) / 86_400_000
+  const d = new Date(Date.parse(iso) + tage * 86_400_000)
+  return d.toISOString().slice(0, 10)
+}
+
 
 // §14a Abs. 1 UStG: Rechnung über eine Leistung im Sinne des §3a Abs. 2 (Reverse Charge) oder
 // §6a (ig. Lieferung) muss bis zum 15. Tag des Monats ausgestellt werden, der auf den Monat der
@@ -1314,7 +1335,7 @@ function RechnungDetail({
   }
 
   const finalisiereMutation = useMutation({
-    mutationFn: () => finalisiereRechnung(rechnung.id),
+    mutationFn: (datumHeute: boolean) => finalisiereRechnung(rechnung.id, datumHeute),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       qc.invalidateQueries({ queryKey: ['auftraege'] })
@@ -1870,7 +1891,10 @@ function RechnungDetail({
                 if (steuerIdFehlt && !window.confirm(
                   'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
                 )) return
-                finalisiereMutation.mutate()
+                const datumHeute = rechnung.typ === 'ausgang' && !rechnung.import_quelle &&
+                  rechnung.dokument_typ !== 'Lieferschein' &&
+                  frageRechnungsdatumAufHeute(rechnung.datum, rechnung.leistung_bis)
+                finalisiereMutation.mutate(datumHeute)
               }}
               disabled={finalisiereMutation.isPending}
               className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 shrink-0"
@@ -3476,7 +3500,16 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
       )) return
     }
-    onSave(buildData(istEntwurf))
+    const daten = buildData(istEntwurf)
+    // Issue #485: älteres Rechnungsdatum beim Finalisieren auf heute setzen (nur auf Nachfrage)
+    if (!istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
+        dokumentTyp !== 'Lieferschein' &&
+        frageRechnungsdatumAufHeute(datum, leistungZeitraum ? leistungBis : null)) {
+      const heute = heuteIso()
+      if (daten.faellig_am) daten.faellig_am = verschiebeIso(daten.faellig_am, datum, heute)
+      daten.datum = heute
+    }
+    onSave(daten)
   }
 
   return (

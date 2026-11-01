@@ -13,7 +13,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
@@ -1960,13 +1960,33 @@ def _synchronisiere_abschlagsverrechnung(
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
-def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
-    """Entwurf finalisieren – danach nicht mehr bearbeitbar."""
+def finalisiere_rechnung(
+    rechnung_id: int,
+    db: Session = Depends(get_db),
+    # Annotated statt "= Query(False)": bei direkten Funktionsaufrufen (Tests, interne Aufrufer)
+    # wäre der Default sonst das Query-Objekt selbst und damit truthy
+    datum_heute: Annotated[bool, Query()] = False,
+):
+    """Entwurf finalisieren – danach nicht mehr bearbeitbar.
+
+    datum_heute (Issue #485): Rechnungsdatum eines älteren Entwurfs auf den Finalisierungstag
+    setzen – auf Nachfrage im Frontend, nie stillschweigend (bewusst rückdatiert nacherfasste
+    Rechnungen behalten ihr Datum). Die Fälligkeit verschiebt sich um dieselben Tage, das
+    Zahlungsziel bleibt also gleich. Nur eigene Ausgangsrechnungen – bei Eingangsrechnungen gilt
+    das Datum des Lieferanten, bei importierten/extern erstellten das Original."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if not rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+
+    heute = date.today()
+    if (datum_heute and rechnung.typ == "ausgang" and not rechnung.import_quelle
+            and rechnung.dokument_typ != "Lieferschein" and rechnung.datum < heute):
+        verschiebung = heute - rechnung.datum
+        rechnung.datum = heute
+        if rechnung.faellig_am:
+            rechnung.faellig_am = rechnung.faellig_am + verschiebung
 
     if rechnung.datum > date.today():
         raise HTTPException(
