@@ -283,6 +283,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
 - **hellocash-Anbindung** – REST-API (Issue #13)
+- **AQBanking als Option** – Kontoumsätze direkt von der Bank abrufen (FinTS/HBCI über AQBanking) als Alternative zum bestehenden CSV-/CAMT-Import; optional, der Datei-Import bleibt. Kein fester Zeitplan.
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
 - **Offline-Handbuch** – eingebettetes Handbuch direkt in der App (Tauri-Webview oder lokale HTML-Seiten); kein Internetzugang nötig; synchronisiert mit der installierten Version
