@@ -14,6 +14,7 @@ Besonderheiten:
 """
 
 import calendar
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
@@ -381,11 +382,15 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
 # Kategorie-Aufschlüsselung
 # ---------------------------------------------------------------------------
 
-def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Decimal]]:
-    """Gleiche Logik wie _berechne_euer, aber gruppiert nach (euer_zeile, kategorie_name)."""
-    from datetime import date as _date
+def _euer_kategorien_beitraege(
+    jahr: int, db: Session
+) -> dict[int, dict[str, list[tuple[Decimal, Journaleintrag]]]]:
+    """Gleiche Logik wie _berechne_euer, aber gruppiert nach (euer_zeile, kategorie_name) mit
+    den einzelnen Beiträgen (Beitrag, Journaleintrag). Basis für die Kategorie-Summen
+    (_berechne_euer_kategorien) und die Einzelposten der Aufschlüsselung (Rechnungs- und
+    Zahlungsnummer mit Link)."""
     unt = db.query(Unternehmen).first()
-    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (_date(jahr, 1, 1), _date(jahr, 12, 31))
+    von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (date(jahr, 1, 1), date(jahr, 12, 31))
 
     eintraege = (
         db.query(Journaleintrag)
@@ -393,7 +398,12 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
         .all()
     )
 
-    zeilen: dict[int, dict[str, Decimal]] = {}
+    zeilen: dict[int, dict[str, list[tuple[Decimal, Journaleintrag]]]] = {}
+
+    def add(zeile: int, kat_name: str, beitrag: Decimal, e: Journaleintrag) -> None:
+        zeilen.setdefault(zeile, {})
+        zeilen[zeile].setdefault(kat_name, [])
+        zeilen[zeile][kat_name].append((beitrag, e))
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
@@ -419,28 +429,35 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
             else:
                 vz = Decimal("1")
                 basis = e.netto_betrag or ZERO
-            zeilen.setdefault(euer_zeile, {})
-            zeilen[euer_zeile][kat_name] = zeilen[euer_zeile].get(kat_name, ZERO) + vz * basis
+            add(euer_zeile, kat_name, vz * basis, e)
 
         # Reverse Charge neutral halten, siehe Kommentar in _berechne_euer (Issue #307)
         ist_reverse_charge = bool(e.ust_sonderfall)
 
         if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
             if e.art == "Einnahme" and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
-                zeilen.setdefault(17, {})
-                zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) + e.ust_betrag
+                add(17, "Umsatzsteuer", e.ust_betrag, e)
             elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
-                zeilen.setdefault(17, {})
-                zeilen[17]["Umsatzsteuer"] = zeilen[17].get("Umsatzsteuer", ZERO) - e.ust_betrag
+                add(17, "Umsatzsteuer", -e.ust_betrag, e)
 
         if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
-            zeilen.setdefault(57, {})
-            zeilen[57]["Vorsteuer"] = zeilen[57].get("Vorsteuer", ZERO) + e.vorsteuer_betrag
+            add(57, "Vorsteuer", e.vorsteuer_betrag, e)
+
+    return zeilen
+
+
+def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Decimal]]:
+    """Summen je (euer_zeile, kategorie_name) - gleiche Logik wie _berechne_euer."""
+    beitraege = _euer_kategorien_beitraege(jahr, db)
 
     q = Decimal("0.01")
+    summen = {
+        z: {k: sum((b for b, _ in liste), ZERO).quantize(q, ROUND_HALF_UP) for k, liste in kats.items()}
+        for z, kats in beitraege.items()
+    }
     return {
-        z: {k: v.quantize(q, ROUND_HALF_UP) for k, v in kats.items() if v != ZERO}
-        for z, kats in zeilen.items()
+        z: {k: v for k, v in kats.items() if v != ZERO}
+        for z, kats in summen.items()
         if any(v != ZERO for v in kats.values())
     }
 
@@ -469,9 +486,21 @@ class EUERErgebnis(BaseModel):
     zeile_summe_ausgaben: int = 75
     zeile_afa: int = 33
 
+class EUERKatBuchung(BaseModel):
+    """Einzelposten einer Kategorie in der Aufschlüsselung - Journalbuchung mit
+    Rechnungs- und Zahlungsnummer (als Link-Ziel für die Oberfläche)."""
+    id: int                       # Journaleintrag-ID (Zahlungsbeleg /journal/{id}/beleg)
+    datum: date
+    belegnr: str                  # Zahlungs-/Belegnummer der Journalbuchung
+    beschreibung: str
+    betrag: Decimal               # Beitrag an dieser EÜR-Zeile (vorzeichenkorrigiert)
+    rechnung_id: int | None = None
+    rechnungsnummer: str | None = None
+
 class EUERKatSumme(BaseModel):
     name: str
     betrag: Decimal
+    buchungen: list[EUERKatBuchung] = []
 
 class EUERZeileDetail(BaseModel):
     zeile: int
@@ -530,8 +559,28 @@ def euer_kategorien(
     jahr: int = Query(..., ge=2020, le=2100),
     db: Session = Depends(get_db),
 ):
+    beitraege = _euer_kategorien_beitraege(jahr, db)
     kat_daten = _berechne_euer_kategorien(jahr, db)
     euer_daten = _berechne_euer(jahr, db)
+
+    q = Decimal("0.01")
+
+    def buchungen_fuer(zeile: int, kat_name: str) -> list[EUERKatBuchung]:
+        """Einzelposten einer Kategorie, chronologisch mit Belegnummer."""
+        liste = beitraege.get(zeile, {}).get(kat_name, [])
+        return [
+            EUERKatBuchung(
+                id=e.id,
+                datum=e.datum,
+                belegnr=e.belegnr,
+                beschreibung=e.beschreibung,
+                betrag=b.quantize(q, ROUND_HALF_UP),
+                rechnung_id=e.rechnung_id,
+                rechnungsnummer=e.rechnung.rechnungsnummer if e.rechnung else None,
+            )
+            for b, e in sorted(liste, key=lambda t: (t[1].datum, t[1].belegnr))
+            if b != ZERO
+        ]
 
     zeilen_liste = []
     for z, kats in sorted(kat_daten.items()):
@@ -542,7 +591,7 @@ def euer_kategorien(
             abschnitt=EUR_ZEILEN_META[z][1] if z in EUR_ZEILEN_META else "?",
             betrag_gesamt=betrag_gesamt,
             kategorien=[
-                EUERKatSumme(name=k, betrag=v)
+                EUERKatSumme(name=k, betrag=v, buchungen=buchungen_fuer(z, k))
                 for k, v in sorted(kats.items(), key=lambda x: abs(x[1]), reverse=True)
             ],
         ))

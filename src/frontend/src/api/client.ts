@@ -2199,9 +2199,20 @@ export const getEUERPdfUrl = async (jahr: number): Promise<string> => {
   return `${base}/euer/pdf?jahr=${jahr}`
 }
 
+export type EUERKatBuchung = {
+  id: number
+  datum: string
+  belegnr: string
+  beschreibung: string
+  betrag: string
+  rechnung_id: number | null
+  rechnungsnummer: string | null
+}
+
 export type EUERKatSumme = {
   name: string
   betrag: string
+  buchungen: EUERKatBuchung[]
 }
 
 export type EUERZeileDetail = {
