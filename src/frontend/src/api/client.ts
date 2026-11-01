@@ -2207,6 +2207,10 @@ export type EUERKatBuchung = {
   betrag: string
   rechnung_id: number | null
   rechnungsnummer: string | null
+  storniert: boolean
+  storno_belegnr: string | null
+  ist_storno: boolean
+  storno_von_belegnr: string | null
 }
 
 export type EUERKatSumme = {

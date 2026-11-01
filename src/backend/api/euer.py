@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Anlagegut, Journaleintrag, Kategorie, Unternehmen
+from api.journal import _storno_infos
 from utils.wirtschaftsjahr import wirtschaftsjahr_zeitraum
 
 router = APIRouter(prefix="/api/euer", tags=["EÜR"])
@@ -531,6 +532,11 @@ class EUERKatBuchung(BaseModel):
     betrag: Decimal               # Beitrag an dieser EÜR-Zeile (vorzeichenkorrigiert)
     rechnung_id: int | None = None
     rechnungsnummer: str | None = None
+    # Storno-Bündelung: Original wird mit seiner Gegenbuchung als Paar angezeigt
+    storniert: bool = False       # dieses Original hat eine Storno-Gegenbuchung
+    storno_belegnr: str | None = None
+    ist_storno: bool = False      # dieser Eintrag IST die Storno-Gegenbuchung
+    storno_von_belegnr: str | None = None
 
 class EUERKatSumme(BaseModel):
     name: str
@@ -601,8 +607,10 @@ def euer_kategorien(
     q = Decimal("0.01")
 
     def buchungen_fuer(zeile: int, kat_name: str) -> list[EUERKatBuchung]:
-        """Einzelposten einer Kategorie, chronologisch mit Belegnummer."""
+        """Einzelposten einer Kategorie, chronologisch mit Belegnummer. Storno-Paarung
+        über dieselbe Erkennung wie im Journal (STORNO-Präfix + gruppe_id-Wurzel)."""
         liste = beitraege.get(zeile, {}).get(kat_name, [])
+        storno_infos = _storno_infos(db, [e for _, e in liste])
         return [
             EUERKatBuchung(
                 id=e.id,
@@ -612,6 +620,10 @@ def euer_kategorien(
                 betrag=b.quantize(q, ROUND_HALF_UP),
                 rechnung_id=e.rechnung_id,
                 rechnungsnummer=e.rechnung.rechnungsnummer if e.rechnung else None,
+                storniert=storno_infos[e.id]["storniert"],
+                storno_belegnr=storno_infos[e.id]["storno_belegnr"],
+                ist_storno=storno_infos[e.id]["ist_storno"],
+                storno_von_belegnr=storno_infos[e.id]["storno_von_belegnr"],
             )
             for b, e in sorted(liste, key=lambda t: (t[1].datum, t[1].belegnr))
             if b != ZERO

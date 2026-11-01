@@ -314,3 +314,93 @@ def test_storno_ausgabe_ohne_vorsteuer_anteilspaßig(db):
     assert zeilen.get(51, Decimal("0.00")) == Decimal("0.00")
     assert zeilen.get(17, Decimal("0.00")) == Decimal("0.00")
     assert zeilen.get(57, Decimal("0.00")) == Decimal("0.00")
+
+
+def test_storno_buendelung_felder_in_buchungen(db):
+    """Bündelung der Aufschlüsselung: Original erhält storniert/storno_belegnr, die
+    Gegenbuchung ist_storno/storno_von_belegnr - dieselbe Paar-Erkennung (STORNO-Präfix +
+    gruppe_id-Wurzel) wie im Journal (Issue #321), damit die Oberfläche Original und
+    Storno als Paar anzeigen und gezielt ausblenden kann."""
+    kat = db.query(Kategorie).filter_by(name="Warenverkauf").one()
+    original = Journaleintrag(
+        datum=date(2025, 6, 1), belegnr="2500100", beschreibung="Zahlung RE-2025-0009",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("400.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("76.00"),
+        brutto_betrag=Decimal("476.00"),
+    )
+    db.add(original)
+    db.commit()
+    db.refresh(original)
+    # Gegenbuchung wie vom Storno erzeugt: gruppe_id = Wurzel, STORNO-Präfix + Original-Belegnr
+    db.add(Journaleintrag(
+        datum=date(2025, 6, 20), belegnr="2500101",
+        beschreibung=f"STORNO 2500100: RE-2025-0009 – Rückabwicklung",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Ausgabe",
+        netto_betrag=Decimal("400.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("76.00"),
+        brutto_betrag=Decimal("476.00"), immutable=True, gruppe_id=original.id,
+    ))
+    # unbeteiligte zweite Zahlung
+    db.add(Journaleintrag(
+        datum=date(2025, 6, 5), belegnr="2500102", beschreibung="Zahlung RE-2025-0010",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("150.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("28.50"),
+        brutto_betrag=Decimal("178.50"),
+    ))
+    db.commit()
+
+    detail = euer_kategorien(2025, db=db)
+    zeile15 = next(z for z in detail.zeilen if z.zeile == 15)
+    posten = {b.belegnr: b for k in zeile15.kategorien for b in k.buchungen}
+
+    orig = posten["2500100"]
+    storno = posten["2500101"]
+    zweite = posten["2500102"]
+    assert orig.storniert is True and orig.storno_belegnr == "2500101"
+    assert orig.ist_storno is False
+    assert storno.ist_storno is True and storno.storno_von_belegnr == "2500100"
+    assert storno.storniert is False
+    assert zweite.storniert is False and zweite.ist_storno is False
+    assert zweite.storno_belegnr is None and zweite.storno_von_belegnr is None
+
+    # Beträge unverändert (Paar zeigt +400/-400, Kategorie-Summe bleibt 150)
+    assert orig.betrag == Decimal("400.00") and storno.betrag == Decimal("-400.00")
+    assert zeile15.betrag_gesamt == Decimal("150.00")
+
+
+def test_storno_ohne_gruppe_id_wird_nicht_gepaart(db):
+    """Alte Bestands-Stornos ohne gruppe_id (vor Issue #321): das "STORNO "-Präfix ALLEIN darf
+    die Paar-Erkennung nicht triggern - sonst würde eine eigene Buchung, deren Text zufällig
+    mit "STORNO " beginnt, fälschlich als Gegenbuchung markiert. Beide Felder bleiben deshalb
+    unset; die rechnerische Korrektur (Zeile 15/17) läuft weiterhin über das Präfix
+    (siehe _euer_ust_beitraege und den A/B-Basis-Spiegel)."""
+    kat = db.query(Kategorie).filter_by(name="Warenverkauf").one()
+    # zweite, unbeteiligte Zahlung - hält die Zeile sichtbar (Original+Storno heben sich auf)
+    db.add(Journaleintrag(
+        datum=date(2025, 7, 5), belegnr="2500112", beschreibung="Zahlung RE-2025-0012",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("50.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("9.50"),
+        brutto_betrag=Decimal("59.50"),
+    ))
+    db.add(Journaleintrag(
+        datum=date(2025, 7, 1), belegnr="2500110", beschreibung="Zahlung RE-2025-0011",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        brutto_betrag=Decimal("119.00"),
+    ))
+    db.add(Journaleintrag(
+        datum=date(2025, 7, 10), belegnr="2500111", beschreibung="STORNO 2500110: Korrektur",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Ausgabe",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        brutto_betrag=Decimal("119.00"), immutable=True,
+    ))
+    db.commit()
+
+    detail = euer_kategorien(2025, db=db)
+    zeile15 = next(z for z in detail.zeilen if z.zeile == 15)
+    posten = {b.belegnr: b for k in zeile15.kategorien for b in k.buchungen}
+
+    assert posten["2500110"].storniert is False and posten["2500110"].storno_belegnr is None
+    assert posten["2500111"].ist_storno is False and posten["2500111"].storno_von_belegnr is None
+    # Beträge rechnerisch trotzdem korrekt gespiegelt: +100/-100 heben sich auf
+    assert posten["2500111"].betrag == Decimal("-100.00")
+    assert zeile15.betrag_gesamt == Decimal("50.00")
