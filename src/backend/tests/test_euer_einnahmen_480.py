@@ -171,3 +171,39 @@ def test_migration_181(tmp_path: Path, monkeypatch):
     assert z["Mahngebühren"][0] == 60
     assert z["Zuwendungen von Dritten"][0] == 16
     assert "Gründungszuschuss" in z["Zuwendungen von Dritten"][1]
+
+
+def test_zeile_13_nachrichtlich_nicht_in_summe(db):
+    """Kleinunternehmer: nicht steuerbare Einnahmen zusätzlich als Davon-Betrag in Zeile 13."""
+    _ku(db, True)
+    _einnahme(db, "Betriebseinnahmen (Kleinunternehmer)", "1000.00", grund="§19 UStG")
+    _einnahme(db, "Mahngebühren", "5.00", grund="§19 UStG")
+    _einnahme(db, "Sonstige Einnahmen", "20.00", grund="§19 UStG")
+    erg = _berechne_euer(2026, db)
+    assert erg["zeilen"][12] == D("1025.00")
+    assert erg["zeilen"][13] == D("25.00")
+    assert erg["summe_einnahmen"] == D("1025.00")      # Zeile 13 nicht doppelt gezählt
+    assert _berechne_euer_kategorien(2026, db)[13] == {"Mahngebühren": D("5.00"), "Sonstige Einnahmen": D("20.00")}
+
+
+def test_zeile_13_leer_bei_regelbesteuerung(db):
+    _einnahme(db, "Mahngebühren", "5.00")
+    z = _berechne_euer(2026, db)["zeilen"]
+    assert z[16] == D("5.00")
+    assert z.get(13, D("0")) == D("0")
+
+
+def test_zeile_13_storno_hebt_auf(db):
+    original = _einnahme(db, "Mahngebühren", "5.00", grund="§19 UStG")
+    _einnahme(db, "Mahngebühren", "5.00", art="Ausgabe",
+              beschreibung=f"STORNO {original.belegnr}: Korrektur", gruppe_id=original.id)
+    assert _berechne_euer(2026, db)["zeilen"].get(13, D("0")) == D("0")
+
+
+def test_zeile_13_nicht_als_kategorie_zeile_waehlbar():
+    from fastapi import HTTPException
+    from api.euer import euer_zeilen_auswahl
+    from api.kategorien import _pruefe_euer_zeile
+    assert 13 not in {z["zeile"] for z in euer_zeilen_auswahl()}
+    with pytest.raises(HTTPException):
+        _pruefe_euer_zeile(13)

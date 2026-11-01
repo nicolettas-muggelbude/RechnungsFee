@@ -41,6 +41,7 @@ ZERO = Decimal("0.00")
 # (bezeichnung, abschnitt)
 EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
     12:  ("Betriebseinnahmen als Kleinunternehmer (§19 Abs. 1 UStG)",           "A"),
+    13:  ("davon nicht steuerbare Umsätze (nachrichtlich, Kz 119)",             "A"),
     15:  ("Umsatzsteuerpflichtige Betriebseinnahmen (7 % und 19 %)",            "A"),
     16:  ("Steuerfreie / nicht steuerbare Betriebseinnahmen (§4 UStG)",         "A"),
     17:  ("Vereinnahmte Umsatzsteuer",                                          "A"),
@@ -111,7 +112,11 @@ ABSCHNITT_LABEL = {
     "H": "Entnahmen / Einlagen (nachrichtlich)",
 }
 
-EINNAHMEN_ZEILEN = {z for z, (_, ab) in EUR_ZEILEN_META.items() if ab == "A" and z not in (106, 107)}
+# Issue #480: Davon-Zeilen - nur nachrichtlich, fließen in keine Summe ein und sind keiner
+# Kategorie direkt zuordenbar (werden aus anderen Zeilen abgeleitet)
+ZEILEN_NACHRICHTLICH = {13}
+EINNAHMEN_ZEILEN = {z for z, (_, ab) in EUR_ZEILEN_META.items()
+                    if ab == "A" and z not in (106, 107) and z not in ZEILEN_NACHRICHTLICH}
 AUSGABEN_ZEILEN  = {z for z, (_, ab) in EUR_ZEILEN_META.items() if ab == "B" and z not in (106, 107)}
 
 # USt-Konten die Ausgangs-USt tragen (kein Vorsteuer-Konto) – für Zeile 17 Storno-Erkennung
@@ -157,6 +162,18 @@ def _ku_status_je_buchung(eintraege: list[Journaleintrag], db: Session, unt: Opt
         )
         status[e.id] = grund == "§19 UStG" or (grund is None and ist_ku_jetzt and not (ust or ZERO))
     return status
+
+
+def _zeile_13_beitrag(e: Journaleintrag, ku: Optional[bool], haupt_zeile: Optional[int], haupt_beitrag: Decimal) -> Decimal:
+    """Issue #480: Zeile 13 (Kz 119) - nachrichtlicher Davon-Betrag aus Zeile 12: nicht
+    steuerbare Einnahmen eines Kleinunternehmers. Erkannt an der Kategorie, die regulär in
+    Zeile 16 steht (Mahngebühren, Verzugszinsen, Sonstige Einnahmen, Zuschüsse, 0 %).
+    Steuerfreie Umsätze nach § 4 Nr. 14 (Heilberufe) brauchen eine Angabe in den Stammdaten
+    und sind hier noch nicht erfasst."""
+    kat = e.kategorie
+    if ku is True and haupt_zeile == _ZEILE_KLEINUNTERNEHMER and kat and kat.euer_zeile == _ZEILE_STEUERFREI:
+        return haupt_beitrag
+    return ZERO
 
 
 def _euer_haupt_beitrag(e: Journaleintrag, ku: Optional[bool] = None) -> tuple[Optional[int], Decimal]:
@@ -320,6 +337,9 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
         if haupt_zeile is not None:
             zeilen[haupt_zeile] = zeilen.get(haupt_zeile, ZERO) + haupt_beitrag
+        davon_13 = _zeile_13_beitrag(e, ku_status[e.id], haupt_zeile, haupt_beitrag)
+        if davon_13:
+            zeilen[13] = zeilen.get(13, ZERO) + davon_13
 
         for ust_zeile, _ust_name, ust_beitrag in _euer_ust_beitraege(e):
             zeilen[ust_zeile] = zeilen.get(ust_zeile, ZERO) + ust_beitrag
@@ -367,6 +387,7 @@ def euer_zeilen_auswahl() -> list[dict]:
     return [
         {"zeile": z, "bezeichnung": bez, "abschnitt": ab}
         for z, (bez, ab) in sorted(EUR_ZEILEN_META.items())
+        if z not in ZEILEN_NACHRICHTLICH
     ]
 
 
@@ -567,6 +588,9 @@ def _euer_kategorien_beitraege(
         haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
         if haupt_zeile is not None:
             add(haupt_zeile, kat_name, haupt_beitrag, e)
+        davon_13 = _zeile_13_beitrag(e, ku_status[e.id], haupt_zeile, haupt_beitrag)
+        if davon_13:
+            add(13, kat_name, davon_13, e)
 
         for ust_zeile, ust_kat_name, ust_beitrag in _euer_ust_beitraege(e):
             add(ust_zeile, ust_kat_name, ust_beitrag, e)

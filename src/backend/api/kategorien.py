@@ -16,8 +16,8 @@ router = APIRouter(prefix="/api/kategorien", tags=["Stammdaten"])
 def _pruefe_euer_zeile(zeile: int | None) -> None:
     """Issue #470: nur Zeilen zulassen, die die EÜR-Auswertung kennt - ein Betrag auf einer
     unbekannten Zeile fiele sonst still aus der Summe der Betriebseinnahmen/-ausgaben."""
-    from .euer import EUR_ZEILEN_META
-    if zeile is not None and zeile not in EUR_ZEILEN_META:
+    from .euer import EUR_ZEILEN_META, ZEILEN_NACHRICHTLICH
+    if zeile is not None and (zeile not in EUR_ZEILEN_META or zeile in ZEILEN_NACHRICHTLICH):
         raise HTTPException(
             status_code=422,
             detail=f"EÜR-Zeile {zeile} wird von RechnungsFee nicht ausgewertet. Bitte eine Zeile aus der Liste wählen (Nummerierung nach Vordruck 2025).",
