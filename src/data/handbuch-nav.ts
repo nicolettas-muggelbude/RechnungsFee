@@ -7,6 +7,7 @@ export const HANDBUCH_NAV: NavGroup[] = [
     items: [
       { label: 'Erste Schritte', slug: 'erste-schritte' },
       { label: 'Unternehmen einrichten', slug: 'unternehmen-einrichten' },
+      { label: 'Unterjähriger Start', slug: 'unterjaehriger-start' },
       { label: 'Dashboard', slug: 'dashboard' },
     ],
   },
