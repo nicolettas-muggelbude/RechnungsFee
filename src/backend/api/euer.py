@@ -212,9 +212,19 @@ def _euer_ust_beitraege(e: Journaleintrag) -> list[tuple[int, str, Decimal]]:
     ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
     beitraege: list[tuple[int, str, Decimal]] = []
 
+    # Echte Storno-Gegenbuchung: gruppe_id stammt ausschließlich aus der Storno-Erstellung,
+    # das Präfix allein könnte auch eine eigene Buchung sein (Erkennung wie _storno_infos, #321)
+    ist_storno = e.gruppe_id is not None and (e.beschreibung or "").startswith("STORNO ")
+
     if e.ust_betrag and e.ust_betrag != 0:
         if e.art == "Einnahme":
-            if e.ust_betrag > 0 and (not ust_konto or ust_konto in _EINNAHME_UST_KONTEN):
+            if ist_storno and e.ust_betrag > 0:
+                # Gespiegelter Storno einer AUSGABE - auch ohne USt-Konto (Issue #486):
+                # diese USt war nie vereinnahmt.
+                pass
+            elif (e.ust_betrag > 0 or ist_storno) and (not ust_konto or ust_konto in _EINNAHME_UST_KONTEN):
+                # negativ nur bei „Zahlung korrigieren“ (rechnungen.py: gleiche art, alle
+                # Beträge negiert) - mindert die vereinnahmte USt wie die Hauptzeile (Issue #486)
                 beitraege.append((17, "Umsatzsteuer", e.ust_betrag))
         elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
             ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and e.beschreibung.startswith("STORNO "))
