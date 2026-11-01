@@ -172,3 +172,5 @@ exports/
 *.Zone.Identifier
 .claude/settings.json
 *Zone.Identifier
+
+CLAUDE.md
