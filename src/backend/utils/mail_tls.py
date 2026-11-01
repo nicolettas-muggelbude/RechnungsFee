@@ -38,15 +38,40 @@ def create_mail_tls_context(*, public_cas: bool = True) -> ssl.SSLContext:
     return context
 
 
+# OpenSSL liefert den Verifikationsgrund nur auf Englisch (verify_message) – die häufigsten
+# Codes (X509_V_ERR_*) auf Deutsch, unbekannte mit Code-Nummer für die Fehlersuche.
+_VERIFY_GRUENDE = {
+    2: "Das Zertifikat der ausstellenden Stelle fehlt",
+    9: "Das Zertifikat ist noch nicht gültig (Systemdatum prüfen)",
+    10: "Das Zertifikat ist abgelaufen",
+    18: "Das Zertifikat ist selbstsigniert",
+    19: "Die Zertifikatskette enthält ein selbstsigniertes Zertifikat",
+    20: "Die ausstellende Zertifizierungsstelle ist im Zertifikatsspeicher nicht bekannt",
+    21: "Das Zertifikat lässt sich nicht verifizieren (Zertifikatskette unvollständig)",
+    23: "Das Zertifikat wurde widerrufen",
+    62: "Das Zertifikat gilt nicht für diesen Servernamen",
+}
+_SELBSTSIGNIERT = (18, 19)
+
+
 def certificate_verification_detail(
     protocol: str, host: str, error: ssl.SSLCertVerificationError
 ) -> str:
     """Fehlenden lokalen CA-Speicher nicht mit einem ungültigen Server verwechseln."""
-    reason = getattr(error, "verify_message", None) or "Unbekannter Zertifikatsfehler"
-    return (
+    code = getattr(error, "verify_code", None)
+    reason = _VERIFY_GRUENDE.get(code) or (
+        f"Unbekannter Zertifikatsfehler (OpenSSL-Code {code})" if code else "Unbekannter Zertifikatsfehler"
+    )
+    detail = (
         f"Zertifikatsprüfung fehlgeschlagen: RechnungsFee konnte das Zertifikat des "
         f"{protocol}-Servers „{host}“ nicht verifizieren. Ursache: {reason}. "
-        "Prüfe Servername, Systemdatum und den Zertifikatsspeicher von RechnungsFee. "
+        "Prüfe Servername und Systemdatum. "
         "Auch ein unvollständiges oder ungültiges Serverzertifikat kann die Ursache sein. "
         "Die Verbindung wurde vor der Anmeldung abgebrochen."
     )
+    if code in _SELBSTSIGNIERT:
+        detail += (
+            " Ist der Server vertrauenswürdig (z. B. eigener Mailserver), kannst du in den "
+            "Einstellungen „Selbstsigniertes Zertifikat akzeptieren“ aktivieren."
+        )
+    return detail

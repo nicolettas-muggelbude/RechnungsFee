@@ -228,8 +228,14 @@ def test_invalid_certificates_are_rejected_before_authentication(
         HTTPException, match="Zertifikatsprüfung fehlgeschlagen"
     ) as error:
         send(state, implicit_tls)
-    assert "Zertifikatsspeicher" in error.value.detail
+    erwartet = {
+        "unknown_ca": "im Zertifikatsspeicher nicht bekannt",
+        "expired": "abgelaufen",
+        "hostname": "nicht für diesen Servernamen",
+    }[invalid]
     assert "Ursache:" in error.value.detail
+    assert erwartet in error.value.detail
+    assert "Selbstsigniertes Zertifikat akzeptieren" not in error.value.detail
     assert "synthetic-password" not in error.value.detail
     assert "verwendet ein nicht vertrauenswürdiges Zertifikat" not in error.value.detail
     assert not state.authenticated
@@ -472,3 +478,21 @@ def test_imap_tofu_remains_independent_of_public_bundle_and_checks_pin(
         context.verify_mode == ssl.CERT_NONE and not context.check_hostname
         for context in contexts
     )
+
+
+@pytest.mark.parametrize("code,erwartet,hinweis", [
+    (18, "selbstsigniert", True),
+    (19, "selbstsigniertes Zertifikat", True),
+    (10, "abgelaufen", False),
+    (999, "OpenSSL-Code 999", False),
+])
+def test_fehlermeldung_deutsch_mit_hinweis_bei_selbstsigniert(code, erwartet, hinweis):
+    from utils.mail_tls import certificate_verification_detail
+
+    fehler = ssl.SSLCertVerificationError("certificate verify failed")
+    fehler.verify_code = code
+    fehler.verify_message = "english openssl text"
+    detail = certificate_verification_detail("IMAP", "mail.example.invalid", fehler)
+    assert erwartet in detail
+    assert "english openssl text" not in detail
+    assert ("Selbstsigniertes Zertifikat akzeptieren" in detail) is hinweis
