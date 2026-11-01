@@ -363,7 +363,9 @@ function LieferantenguthabenWidget() {
     select: (list) => list.filter((f: Forderung) => f.typ === 'lieferantenguthaben' || f.typ === 'kundenguthaben'),
   })
   const { data: kategorien } = useQuery({
-    queryKey: ['kategorien'],
+    // eigener Schlüssel für die gefilterte Liste - ['kategorien'] enthält überall sonst ALLE
+    // Kategorien (sonst fehlen z. B. im Positions-Tooltip deaktivierte Kategorien, #488)
+    queryKey: ['kategorien', 'aktiv'],
     queryFn: () => getKategorien(true),
     enabled: ausbuchenId !== null,
   })
