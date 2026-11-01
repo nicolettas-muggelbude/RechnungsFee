@@ -47,6 +47,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport, Rechnung, VorsteuerAnspruch
+from api.journal import _storno_infos
 from utils.elster import ElsterExportFehler, KZ_BEMESSUNGSGRUNDLAGE, build_ustva_xml, steuernummer_elster13
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 
@@ -241,6 +242,9 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
         .all()
     )
+    # Storno-Paarung je Eintrag (dieselbe Erkennung wie im Journal, Issue #321) - für die
+    # Bündelung/Ausblendung in der Posten-Aufschlüsselung, konstant 2 Zusatzabfragen.
+    storno_infos = _storno_infos(db, eintraege)
 
     # Eingangsrechnungen ab CUTOVER_DATUM_VORSTEUER: deren Vorsteuer läuft über
     # vorsteuer_ansprueche (Rechnungsdatum, Issue #338), nicht mehr über den
@@ -296,6 +300,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
 
     for e in eintraege:
         ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
+        _si = storno_infos[e.id]
         quelle = {
             "quelle": "journal",
             "quelle_id": e.id,
@@ -303,6 +308,11 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
             "referenz": e.belegnr,
             "beschreibung": e.beschreibung,
             "rechnung_id": e.rechnung_id,
+            "rechnungsnummer": e.rechnung.rechnungsnummer if e.rechnung else None,
+            "storniert": _si["storniert"],
+            "storno_belegnr": _si["storno_belegnr"],
+            "ist_storno": _si["ist_storno"],
+            "storno_von_belegnr": _si["storno_von_belegnr"],
         }
 
         # Reverse-Charge-Sonderfälle: separat behandeln, nicht in reguläre KZs
@@ -449,6 +459,7 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
                 or "Eingangsrechnung"
             ),
             "rechnung_id": va.rechnung_id,
+            "rechnungsnummer": va.rechnung.rechnungsnummer if va.rechnung else None,
         }
         if va.ust_sonderfall:
             ige_steuer_feste_saetze += _addiere_sonderfall_kz(
@@ -828,6 +839,12 @@ class UStVAPostenItem(BaseModel):
     beschreibung: str
     betrag: Decimal
     rechnung_id: Optional[int] = None
+    rechnungsnummer: Optional[str] = None
+    # Storno-Bündelung (wie EÜR-Aufschlüsselung): Original ↔ Gegenbuchung als Paar
+    storniert: bool = False
+    storno_belegnr: Optional[str] = None
+    ist_storno: bool = False
+    storno_von_belegnr: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

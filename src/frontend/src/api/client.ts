@@ -2092,6 +2092,11 @@ export type UStVAPosten = {
   beschreibung: string
   betrag: string
   rechnung_id: number | null
+  rechnungsnummer: string | null
+  storniert: boolean
+  storno_belegnr: string | null
+  ist_storno: boolean
+  storno_von_belegnr: string | null
 }
 
 export const getUStVAPosten = (zeitraum: string, kz: string) =>

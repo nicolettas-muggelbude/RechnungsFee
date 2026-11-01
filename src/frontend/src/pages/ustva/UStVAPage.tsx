@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   berechneUStVA, speichereUStVA, getUStVAHistorie, getUStVAPdfUrl, getUStVAPosten,
-  getUnternehmen, openUrl, downloadUstvaXml,
-  type UStVAErgebnis,
+  getJournalBelegUrl, getUnternehmen, openUrl, downloadUstvaXml,
+  type UStVAErgebnis, type UStVAPosten,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
@@ -68,11 +68,15 @@ function formatDatumKurz(iso: string): string {
 
 /** Aufklappbare KZ-Zeile (Issue #353) - zeigt bei Klick die einzelnen Journaleinträge/
  * Vorsteuer-Ansprüche, die zur Summe beigetragen haben. Nur aufklappbar wenn ein zeitraum
- * mitgegeben wurde (Zahllast-Zeile z.B. hat keine eigene KZ und bleibt starr). */
-function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, gerundetWert }:
-  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean; zeitraum?: string; gerundetWert?: string }) {
+ * mitgegeben wurde (Zahllast-Zeile z.B. hat keine eigene KZ und bleibt starr).
+ * Storno-Bündelung wie EÜR-Aufschlüsselung: Gegenbuchung eingerückt unter dem Original,
+ * Badge „storniert"; stornierteAusblenden entfernt beide Paar-Hälften aus ihren KZ-Listen
+ * (jeweils eine Zeile, Summen bleiben konsistent). */
+function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, gerundetWert, stornierteAusblenden = false }:
+  { kz: string; label: string; wert: string; istSteuer?: boolean; bold?: boolean; zeitraum?: string; gerundetWert?: string; stornierteAusblenden?: boolean }) {
   const navigate = useNavigate()
   const [offen, setOffen] = useState(false)
+  const [fehler, setFehler] = useState<string | null>(null)
   const n = parseFloat(wert)
   const negativ = n < 0
   const aufklappbar = !!zeitraum && kz !== '—' && n !== 0
@@ -82,6 +86,81 @@ function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, g
     queryFn: () => getUStVAPosten(zeitraum!, kz),
     enabled: offen && aufklappbar,
   })
+
+  // Paarbildung innerhalb dieser KZ-Liste: Gegenbuchung → Original (referenz = Belegnr.)
+  const sichtbar: { original: UStVAPosten; gegenbuchung: UStVAPosten | null }[] = []
+  if (posten?.length) {
+    const nachReferenz = new Map(posten.map(p => [p.referenz, p]))
+    for (const p of posten) {
+      if (p.ist_storno) {
+        const original = p.storno_von_belegnr ? nachReferenz.get(p.storno_von_belegnr) : undefined
+        if (original) {
+          const paar = sichtbar.find(g => g.original === original)
+          if (paar) paar.gegenbuchung = p
+          else sichtbar.push({ original, gegenbuchung: p })
+          continue
+        }
+      }
+      sichtbar.push({ original: p, gegenbuchung: null })
+    }
+  }
+  // Filter: komplette Paar-Hälften ausblenden (Original und Gegenbuchung können in
+  // unterschiedlichen KZ-Listen liegen - beide verschwinden, keine Liste verliert Konsistenz)
+  const gefiltert = stornierteAusblenden
+    ? sichtbar.filter(g => !(g.original.storniert || (g.original.ist_storno && !g.gegenbuchung)))
+    : sichtbar
+
+  async function oeffneZahlungsbeleg(id: number) {
+    setFehler(null)
+    try { await openUrl(await getJournalBelegUrl(id)) }
+    catch (e) { setFehler(e instanceof Error ? e.message : 'Zahlungsbeleg konnte nicht geöffnet werden') }
+  }
+
+  const postenZeile = (p: UStVAPosten, istGegenbuchung: boolean) => (
+    <div
+      key={`${p.quelle}-${p.quelle_id}`}
+      className={`flex items-center justify-between gap-2 text-xs bg-slate-50 dark:bg-slate-900 rounded-lg px-2.5 py-1.5 ${istGegenbuchung ? 'ml-5' : ''}`}
+    >
+      <div className="min-w-0 truncate">
+        <span className="text-slate-400 dark:text-slate-500 mr-2 tabular-nums">{formatDatumKurz(p.datum)}</span>
+        <span className={p.storniert ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-600 dark:text-slate-300'}>{p.beschreibung}</span>
+        {p.storniert && p.storno_belegnr && (
+          <span className="ml-1.5 inline-block align-baseline rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-[9px] px-1 py-px">
+            storniert ↯ {p.storno_belegnr}
+          </span>
+        )}
+        {istGegenbuchung && p.storno_von_belegnr && (
+          <span className="ml-1.5 inline-block align-baseline rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-[9px] px-1 py-px">
+            ↳ Storno zu {p.storno_von_belegnr}
+          </span>
+        )}
+        {!istGegenbuchung && p.referenz && <span className="text-slate-400 dark:text-slate-500 ml-1">({p.referenz})</span>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`tabular-nums font-medium ${parseFloat(p.betrag) < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{euroFmt(p.betrag)}</span>
+        {p.rechnung_id != null && p.rechnungsnummer && (
+          <button
+            type="button"
+            title={`Zur Rechnung ${p.rechnungsnummer} springen`}
+            onClick={(e) => { e.stopPropagation(); navigate(`/rechnungen?open=${p.rechnung_id}`) }}
+            className="text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+          >
+            🧾 {p.rechnungsnummer} ↗
+          </button>
+        )}
+        {p.quelle === 'journal' && (
+          <button
+            type="button"
+            title="Zahlungsbeleg öffnen"
+            onClick={(e) => { e.stopPropagation(); oeffneZahlungsbeleg(p.quelle_id) }}
+            className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors font-mono"
+          >
+            💳 {p.referenz} ↗
+          </button>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div>
@@ -107,34 +186,16 @@ function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, g
       )}
       {offen && aufklappbar && (
         <div className="pb-2 pl-12 pr-1 space-y-1">
+          {fehler && <p className="text-xs text-red-600 dark:text-red-400 py-1">{fehler}</p>}
           {isLoading ? (
-            <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Lade Posten…</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Lade Posten...</p>
           ) : !posten?.length ? (
             <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Keine Einzelposten gefunden.</p>
           ) : (
-            posten.map((p) => (
-              <div
-                key={`${p.quelle}-${p.quelle_id}`}
-                className="flex items-center justify-between gap-2 text-xs bg-slate-50 dark:bg-slate-900 rounded-lg px-2.5 py-1.5"
-              >
-                <div className="min-w-0 truncate">
-                  <span className="text-slate-400 dark:text-slate-500 mr-2 tabular-nums">{formatDatumKurz(p.datum)}</span>
-                  <span className="text-slate-600 dark:text-slate-300">{p.beschreibung}</span>
-                  {p.referenz && <span className="text-slate-400 dark:text-slate-500 ml-1">({p.referenz})</span>}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="tabular-nums text-slate-700 dark:text-slate-200 font-medium">{euroFmt(p.betrag)}</span>
-                  {p.rechnung_id != null && (
-                    <button
-                      type="button"
-                      title="Zur Rechnung springen"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/rechnungen?open=${p.rechnung_id}`) }}
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      ↗
-                    </button>
-                  )}
-                </div>
+            gefiltert.map(g => (
+              <div key={g.original.quelle + '-' + g.original.quelle_id} className={g.original.storniert ? 'opacity-60' : ''}>
+                {postenZeile(g.original, false)}
+                {g.gegenbuchung && postenZeile(g.gegenbuchung, true)}
               </div>
             ))
           )}
@@ -169,6 +230,7 @@ export function UStVAPage() {
   const [gespeichertMeldung, setGespeichertMeldung] = useState(false)
   const [exportFehler, setExportFehler] = useState<string | null>(null)
   const [pdfGeoeffnet, setPdfGeoeffnet] = useState(false)
+  const [stornierteAusblenden, setStornierteAusblenden] = useState(false)
   // Manuelle Korrekturen für nicht-auto-berechnete KZs
   const [manuell, setManuell] = useState<Partial<Record<string, string>>>({})
 
@@ -332,6 +394,15 @@ export function UStVAPage() {
           )}
           {ergebnis && (
             <div className="flex items-center gap-2 ml-auto">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={stornierteAusblenden}
+                  onChange={e => setStornierteAusblenden(e.target.checked)}
+                  className="accent-blue-600"
+                />
+                Stornierte ausblenden
+              </label>
               <ExportButtons formats={hatManuelleUeberschreibung ? ['pdf'] : ['pdf', 'xml']} onExport={handleExport} />
               {hatManuelleUeberschreibung && <span className="text-xs text-amber-600 dark:text-amber-400">ELSTER-XML nur ohne manuelle Felder – trag sie direkt in Mein ELSTER ein.</span>}
               {pdfGeoeffnet && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
@@ -377,7 +448,8 @@ export function UStVAPage() {
                   {zeilen.map(([, nr, bezeichnung, istSteuer]) => (
                     <KZZeile key={nr} kz={nr} label={bezeichnung}
                       wert={kzWert(nr)} istSteuer={istSteuer} zeitraum={zeitraum}
-                      gerundetWert={manuell[nr] === undefined ? ergebnis.gerundet?.[nr] : undefined} />
+                      gerundetWert={manuell[nr] === undefined ? ergebnis.gerundet?.[nr] : undefined}
+                      stornierteAusblenden={stornierteAusblenden} />
                   ))}
                 </Abschnitt>
               ))}
