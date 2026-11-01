@@ -1563,6 +1563,7 @@ export type ZahlungSplitPosition = {
   kategorie_id: number
   betrag: string
   beschreibung: string
+  position_id?: number   // USt-Satz der Position statt Kategorie-Standardsatz (Issue #486)
 }
 
 export type BarZahlungCreate = {

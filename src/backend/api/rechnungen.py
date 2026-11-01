@@ -3408,12 +3408,22 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             sp_kat = db.query(Kategorie).filter(Kategorie.id == sp.kategorie_id).first()
             if not sp_kat:
                 raise HTTPException(status_code=404, detail=f"Kategorie {sp.kategorie_id} nicht gefunden.")
-            # Jede Split-Zeile bekommt den USt-Satz IHRER eigenen Kategorie, nicht den
-            # dominanten Satz der Gesamtrechnung (sonst würde z.B. eine 0%-Kategorie wie
-            # "Zoll / Einfuhrabgaben" fälschlich mit dem Satz einer anderen Position der
-            # Rechnung aufgesplittet - genau der Grund für Split-Zahlungen ist ja, Positionen
-            # mit unterschiedlichen Sätzen/Kategorien sauber zu trennen).
-            sp_satz = Decimal("0") if steuerbefreiung_grund else Decimal(str(sp_kat.ust_satz_standard))
+            # Jede Split-Zeile bekommt den USt-Satz IHRER Position, nicht den dominanten Satz der
+            # Gesamtrechnung - genau der Grund für Split-Zahlungen ist ja, Positionen mit
+            # unterschiedlichen Sätzen/Kategorien sauber zu trennen. Issue #486-Folgefund: bisher
+            # galt der Standardsatz der Kategorie - eine 0-%-Position auf „Wareneinkauf Nicht-EU“
+            # (Standard 19 %) bekam dadurch 19 % Vorsteuer herausgerechnet. Ohne position_id
+            # (ältere Clients) bleibt es beim Kategorie-Standardsatz.
+            sp_pos = next((p for p in rechnung.positionen if p.id == sp.position_id), None) if sp.position_id else None
+            if steuerbefreiung_grund:
+                sp_satz = Decimal("0")
+            elif sp_pos is not None:
+                # §25a: pos.ust_satz ist 0 (kein Ausweis), der echte Satz für die Marge steht in ust_satz_25a
+                sp_satz = Decimal(str(
+                    sp_pos.ust_satz_25a if sp_pos.differenzbesteuerung and sp_pos.ust_satz_25a else sp_pos.ust_satz
+                ))
+            else:
+                sp_satz = Decimal(str(sp_kat.ust_satz_standard))
             sp_ust03, sp_ust04 = (_ust_konto(art, sp_satz) if sp_satz > 0 else (None, None))
             e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung,
                                   sp_satz, sp_ust03, sp_ust04, marge_25a=split_marge_25a)

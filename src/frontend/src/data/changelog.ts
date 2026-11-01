@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.6',
     datum: 'November 2026',
     eintraege: [
+      { typ: 'fix', text: 'Eingangsrechnungen: Bei einer nach Positionen aufgeteilten Zahlung galt für jede Zeile der Standard-Steuersatz der Kategorie statt des Satzes der Position. Eine Position ohne Umsatzsteuer auf einer 19-%-Kategorie bekam dadurch 19 % Vorsteuer herausgerechnet – zu viel Vorsteuer in der UStVA, zu wenig Ausgaben in der EÜR. Außerdem wurde der Betrag einer Zeile bei Mengen über 1 zu hoch vorbelegt. Bereits gebuchte Zahlungen bleiben unverändert und lassen sich bei Bedarf über Storno und neue Zahlung korrigieren (Issue #486).' },
       { typ: 'neu', text: 'Bank-Import: Vorlage für den N26-CSV-Export (englische Spalten), wird automatisch erkannt. Gebucht wird der Euro-Betrag, auch bei Kartenzahlungen in Fremdwährung (Beitrag von honiglinchen).' },
       { typ: 'fix', text: 'Bank-Import: Nach dem Import einer CSV blieb das erkannte Bank-Template ausgewählt und wurde auf die nächste Datei angewendet, auch wenn sie von einer anderen Bank stammte. Beim Dateiwechsel steht das Template jetzt wieder auf „automatisch erkennen“ (Beitrag von gitmacer).' },
       { typ: 'verbesserung', text: 'Rechnungsdetails: Mit der Maus auf einer Position siehst du jetzt, auf welche Kategorie sie gebucht wird – praktisch zum Nachprüfen (Issue #488, Beitrag von gitmacer).' },

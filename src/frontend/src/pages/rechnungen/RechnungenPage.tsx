@@ -530,7 +530,7 @@ function StatusMultiSelect({ value, onChange }: { value: string[]; onChange: (v:
 // Zahlungs-Dialog
 // ---------------------------------------------------------------------------
 
-type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string }
+type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string; position_id?: number }
 
 function ZahlungsDialog({
   rechnung,
@@ -600,8 +600,10 @@ function ZahlungsDialog({
   const [splitZeilen, setSplitZeilen] = useState<SplitZeile[]>(() =>
     rechnung.positionen.map((pos) => ({
       beschreibung: pos.beschreibung,
-      betrag: (parseFloat(pos.brutto) * parseFloat(pos.menge)).toFixed(2).replace('.', ','),
+      // pos.brutto ist seit Issue #332 bereits die Positionssumme - nicht nochmal × Menge
+      betrag: parseFloat(pos.brutto).toFixed(2).replace('.', ','),
       kategorie_id: String(pos.kategorie_id ?? ''),
+      position_id: pos.id,
     }))
   )
 
@@ -683,6 +685,7 @@ function ZahlungsDialog({
           kategorie_id: parseInt(z.kategorie_id),
           betrag: parseFloat(z.betrag.replace(',', '.')).toFixed(2),
           beschreibung: z.beschreibung,
+          position_id: z.position_id,
         }))
       } else {
         if (!kategorieId) {

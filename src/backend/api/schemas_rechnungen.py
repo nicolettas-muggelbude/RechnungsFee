@@ -820,6 +820,9 @@ class ZahlungSplitPosition(BaseModel):
     kategorie_id: int
     betrag: Decimal  # Brutto-Anteil dieser Split-Position
     beschreibung: str  # Positionsbeschreibung aus der Rechnungsposition
+    # Issue #486-Folgefund: Rechnungsposition dieser Split-Zeile - ihr USt-Satz gilt statt des
+    # Standardsatzes der Kategorie (fehlt sie, bleibt es beim Kategorie-Standardsatz)
+    position_id: Optional[int] = None
 
     @field_validator("betrag")
     @classmethod
