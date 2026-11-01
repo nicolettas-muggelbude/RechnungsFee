@@ -39,6 +39,11 @@ from sqlalchemy.orm import Session
 
 from database.connection import APP_DATA_DIR, get_db
 from database.models import Beleg, PostfachEingang, Rechnung, Unternehmen
+from utils.mail_tls import (
+    MailTLSConfigurationError,
+    certificate_verification_detail,
+    create_mail_tls_context,
+)
 
 router = APIRouter(prefix="/api/postfach", tags=["Postfach"])
 
@@ -121,7 +126,10 @@ def _pruefe_gepinntes_zertifikat(u: Unternehmen, sock, db: Session) -> None:
 
 
 def _verbinde(u: Unternehmen, db: Session) -> imaplib.IMAP4:
-    ctx = ssl.create_default_context()
+    try:
+        ctx = create_mail_tls_context(public_cas=not u.imap_zertifikat_ignorieren)
+    except MailTLSConfigurationError as e:
+        raise HTTPException(400, str(e)) from e
     if u.imap_zertifikat_ignorieren:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
@@ -150,13 +158,7 @@ def _verbinde(u: Unternehmen, db: Session) -> imaplib.IMAP4:
     except imaplib.IMAP4.error as e:
         raise HTTPException(400, f"Anmeldung am Postfach fehlgeschlagen – Benutzer oder Passwort prüfen ({_text(e)}).")
     except ssl.SSLCertVerificationError as e:
-        grund = "ein selbstsigniertes" if "self-signed certificate" in str(e) else "ein nicht vertrauenswürdiges"
-        raise HTTPException(
-            400,
-            f'Zertifikatsprüfung fehlgeschlagen: Der IMAP-Server „{u.imap_host}" verwendet {grund} Zertifikat. '
-            "Ist der Server vertrauenswürdig (z. B. eigener Mailserver), kannst du in den Einstellungen "
-            "„Selbstsigniertes Zertifikat akzeptieren“ aktivieren.",
-        )
+        raise HTTPException(400, certificate_verification_detail("IMAP", u.imap_host, e))
     except ssl.SSLError as e:
         raise HTTPException(400, f"TLS/SSL-Fehler bei der Verbindung zu {u.imap_host}:{port}: {e}")
     except socket.gaierror:
