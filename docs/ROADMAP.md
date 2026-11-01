@@ -131,6 +131,14 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Regelbesteuerung. **Vorher klären:** gelten damit alle Einnahmen als steuerfrei oder nur bestimmte
   Kategorien/Positionen (gemischte Fälle, z. B. Ärztin mit steuerpflichtigen Gutachten)?
   Neues `unternehmen`-Feld → 5-Stellen-Checkliste + Setup-Wizard mit leerer DB testen.
+- [ ] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, zusammen mit #492) – bisher nur
+  100.000 € fürs laufende Jahr aus Ausgangsrechnungen (`api/setup.py::kleinunternehmer_umsatz`).
+  Neu: Gesamtumsatz nach § 19 Abs. 2 UStG aus der EÜR (Zeile 12 minus Zeile 13, enthält auch
+  Journal-Einnahmen, Zahlungsdatum statt Rechnungsdatum), ohne steuerfreie § 4-Umsätze aus #492;
+  Gründungsjahr 25.000 € (braucht Feld „Beginn der Tätigkeit“ in `unternehmen` – bisher nur
+  `taetigkeitsbeginn` in den EKS-Einstellungen), Vorjahr > 25.000 € → Hinweis, optional
+  „Umsatz vor RechnungsFee“ für Umsteiger. Felder gemeinsam mit #492 anlegen (einmal Checkliste +
+  Setup-Wizard-Test).
 
 ---
 
