@@ -184,12 +184,19 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         ist_reverse_charge = bool(e.ust_sonderfall)
 
         # Zeile 17: vereinnahmte USt – reguläre Einnahmen addieren, Storno subtrahieren.
-        # Storno einer Einnahme hat art=Ausgabe + Einnahme-USt-Konto (1776/1771/…).
+        # Storno einer Einnahme hat art=Ausgabe + Einnahme-USt-Konto (1776/1771/...) oder -
+        # bei Zahlungen auf Rechnungen - gar kein USt-Konto; der Abzug muss beide Muster
+        # erfassen, sonst bleibt die vereinnahmte USt nach einem Zahlungs-Storno zu hoch.
+        # Normale Ausgaben ohne USt-Konto (Wareneinkauf ohne Vorsteuerabzug) bleiben außen
+        # vor: der Abzug setzt zusätzlich das STORNO-Präfix voraus.
         # Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten USt-Betrag.
+        ist_storno = e.beschreibung.startswith("STORNO ")
         if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
             if e.art == "Einnahme" and e.ust_betrag > 0:
                 zeilen[17] = zeilen.get(17, ZERO) + e.ust_betrag
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
+            elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
+                ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and ist_storno)
+            ):
                 zeilen[17] = zeilen.get(17, ZERO) - e.ust_betrag
 
         # Zeile 57: abziehbare Vorsteuer – Summe aller vorsteuer_betrag-Werte (ohne art-Filter).
@@ -437,7 +444,9 @@ def _euer_kategorien_beitraege(
         if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
             if e.art == "Einnahme" and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
                 add(17, "Umsatzsteuer", e.ust_betrag, e)
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and ust_konto in _EINNAHME_UST_KONTEN and e.zahlungsart != "Skonto":
+            elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
+                ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and e.beschreibung.startswith("STORNO "))
+            ):
                 add(17, "Umsatzsteuer", -e.ust_betrag, e)
 
         if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:

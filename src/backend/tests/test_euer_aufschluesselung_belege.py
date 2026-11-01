@@ -29,6 +29,9 @@ def db():
                           konto_skr04="4400", euer_zeile=15, ust_satz_standard=19))
     session.add(Kategorie(name="Bürobedarf", kontenart="Aufwand", konto_skr03="4925",
                           konto_skr04="6820", euer_zeile=51, ust_satz_standard=19))
+    session.add(Kategorie(name="Wareneinkauf", kontenart="Aufwand", konto_skr03="3400",
+                          konto_skr04="5400", euer_zeile=51, ust_satz_standard=19,
+                          vorsteuer_prozent=0))
     session.commit()
     yield session
     session.close()
@@ -133,3 +136,94 @@ def test_kategorie_summen_ohne_beitraege_unverändert(db):
     assert erg[15]["Warenverkauf"] == Decimal("500.00")
     # USt des Zahlungseingangs zusätzlich in Zeile 17
     assert erg[17]["Umsatzsteuer"] == Decimal("95.00")
+
+
+def test_storno_zahlung_ust_zeile_17_ohne_ust_konto(db):
+    """Zahlungen auf Rechnungen haben kein USt-Konto - ihr Storno (art=Ausgabe, "STORNO "-Präfix)
+    muss die vereinnahmte USt (Zeile 17) trotzdem abziehen. Sonst bleibt nach einem
+    Zahlungs-Storno eine USt stehen, die nie vereinnahmt wurde."""
+    kat = db.query(Kategorie).filter_by(name="Warenverkauf").one()
+    db.add(Journaleintrag(
+        datum=date(2025, 2, 10), belegnr="2500050", beschreibung="Zahlung RE-2025-0003",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("1000.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("190.00"),
+        brutto_betrag=Decimal("1190.00"),
+    ))
+    # Zweite, nicht stornierte Zahlung - hält die Zeilen sichtbar (Summe ungleich 0)
+    db.add(Journaleintrag(
+        datum=date(2025, 2, 15), belegnr="2500052", beschreibung="Zahlung RE-2025-0004",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Einnahme",
+        netto_betrag=Decimal("500.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("95.00"),
+        brutto_betrag=Decimal("595.00"),
+    ))
+    # Storno-Gegenbuchung, exakt wie von journal.storno/rechnungen.storno erzeugt:
+    # art gespiegelt (Ausgabe), Beträge positiv, KEIN USt-Konto (wie das Original).
+    db.add(Journaleintrag(
+        datum=date(2025, 3, 5), belegnr="2500051", beschreibung="STORNO 2500050: RE-2025-0003 – Widerruf",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Ausgabe",
+        netto_betrag=Decimal("1000.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("190.00"),
+        brutto_betrag=Decimal("1190.00"), immutable=True,
+    ))
+    db.commit()
+
+    detail = euer_kategorien(2025, db=db)
+
+    # Zeile 15 (Einnahmen): 500 verbleibt; Einzelposten zeigen Original + Storno + Rest
+    zeile15 = next(z for z in detail.zeilen if z.zeile == 15)
+    assert zeile15.betrag_gesamt == Decimal("500.00")
+    posten15 = {b.belegnr: b.betrag for k in zeile15.kategorien for b in k.buchungen}
+    assert posten15 == {"2500050": Decimal("1000.00"), "2500051": Decimal("-1000.00"),
+                        "2500052": Decimal("500.00")}
+
+    # Zeile 17 (vereinnahmte USt): 95 verbleibt (190 + 95 - 190); das Storno zieht seine 190 ab
+    zeile17 = next(z for z in detail.zeilen if z.zeile == 17)
+    assert zeile17.betrag_gesamt == Decimal("95.00")
+    posten17 = {b.belegnr: b.betrag for k in zeile17.kategorien for b in k.buchungen}
+    assert posten17 == {"2500050": Decimal("190.00"), "2500051": Decimal("-190.00"),
+                        "2500052": Decimal("95.00")}
+
+    # Summenfunktion identisch
+    from api.euer import _berechne_euer
+    assert _berechne_euer(2025, db)["zeilen"].get(17) == Decimal("95.00")
+
+
+def test_storno_zahlung_ust_zeile_17_mit_ust_konto(db):
+    """Storno einer manuellen Einnahme mit Einnahme-USt-Konto (1776): bestehender Zweig,
+    darf durch den Fix nicht beeinträchtigt werden."""
+    kat = db.query(Kategorie).filter_by(name="Warenverkauf").one()
+    db.add(Journaleintrag(
+        datum=date(2025, 2, 10), belegnr="2500060", beschreibung="Bar-Einnahme",
+        kategorie_id=kat.id, zahlungsart="Bar", art="Einnahme",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        brutto_betrag=Decimal("119.00"), konto_ust_skr03="1776",
+    ))
+    db.add(Journaleintrag(
+        datum=date(2025, 2, 20), belegnr="2500061", beschreibung="STORNO 2500060: Korrektur",
+        kategorie_id=kat.id, zahlungsart="Bar", art="Ausgabe",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        brutto_betrag=Decimal("119.00"), konto_ust_skr03="1776", immutable=True,
+    ))
+    db.commit()
+
+    from api.euer import _berechne_euer
+    assert _berechne_euer(2025, db)["zeilen"].get(17, Decimal("0.00")) == Decimal("0.00")
+
+
+def test_normale_ausgabe_ohne_ust_konto_veraendert_zeile_17_nicht(db):
+    """Sicherheitsnetz: Eine normale Ausgabe mit USt aber ohne USt-Konto und ohne
+    STORNO-Präfix (z. B. Wareneinkauf ohne Vorsteuerabzug) darf die vereinnahmte
+    USt (Zeile 17) NICHT mindern."""
+    kat = db.query(Kategorie).filter_by(name="Wareneinkauf").one()
+    db.add(Journaleintrag(
+        datum=date(2025, 4, 2), belegnr="2500070", beschreibung="Wareneinkauf ohne Vorsteuerabzug",
+        kategorie_id=kat.id, zahlungsart="Bank", art="Ausgabe",
+        netto_betrag=Decimal("100.00"), ust_satz=Decimal("19"), ust_betrag=Decimal("19.00"),
+        brutto_betrag=Decimal("119.00"), vorsteuerabzug=False,
+    ))
+    db.commit()
+
+    from api.euer import _berechne_euer
+    zeilen = _berechne_euer(2025, db)["zeilen"]
+    assert zeilen.get(17, Decimal("0.00")) == Decimal("0.00")
+    # Die Ausgabe selbst landet voll in der Ausgaben-Zeile (netto + nicht abzugsfähige USt)
+    assert zeilen.get(51, Decimal("0.00")) == Decimal("119.00")
