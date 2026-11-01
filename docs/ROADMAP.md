@@ -122,6 +122,16 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
+## 📋 v0.7.7 – vorgemerkt
+
+- [ ] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480) –
+  Auswahlfeld z. B. „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“. Steuert: EÜR-Zeile 13
+  (Kz 119) bei Kleinunternehmern, Pflichthinweis auf der Rechnung (§ 14 Abs. 4 Nr. 8 UStG, im
+  absender_snapshot eingefroren), Kleinunternehmergrenze (#491), EÜR-Zeile 16 statt 15 bei
+  Regelbesteuerung. **Vorher klären:** gelten damit alle Einnahmen als steuerfrei oder nur bestimmte
+  Kategorien/Positionen (gemischte Fälle, z. B. Ärztin mit steuerpflichtigen Gutachten)?
+  Neues `unternehmen`-Feld → 5-Stellen-Checkliste + Setup-Wizard mit leerer DB testen.
+
 ---
 
 ## 📋 ELSTER-Export: Umsatzsteuer-Voranmeldung und Zusammenfassende Meldung (Issue #360)
