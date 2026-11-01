@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.6',
     datum: 'November 2026',
     eintraege: [
+      { typ: 'fix', text: 'Bank-Import: Nach dem Import einer CSV blieb das erkannte Bank-Template ausgewählt und wurde auf die nächste Datei angewendet, auch wenn sie von einer anderen Bank stammte. Beim Dateiwechsel steht das Template jetzt wieder auf „automatisch erkennen“ (Beitrag von gitmacer).' },
       { typ: 'verbesserung', text: 'Rechnungsdetails: Mit der Maus auf einer Position siehst du jetzt, auf welche Kategorie sie gebucht wird – praktisch zum Nachprüfen (Issue #488, Beitrag von gitmacer).' },
       { typ: 'verbesserung', text: 'Finalisieren einer Ausgangsrechnung mit älterem Rechnungsdatum (z. B. Entwurf über Wochen fortgeschrieben): RechnungsFee fragt jetzt, ob das Datum auf heute gesetzt werden soll, und verschiebt die Fälligkeit entsprechend. Endet der Leistungszeitraum nach dem Rechnungsdatum, weist die Nachfrage darauf hin. Bewusst rückdatierte Rechnungen behalten ihr Datum (Issue #485).' },
       { typ: 'neu', text: 'EÜR- und UStVA-Aufschlüsselung zeigen jetzt die einzelnen Buchungen jeder Kategorie bzw. Kennzahl – mit Link zur Rechnung und zum Zahlungsbeleg. Stornierte Buchungen erscheinen zusammen mit ihrer Gegenbuchung und lassen sich ausblenden (Beitrag von gitmacer).' },
