@@ -1201,6 +1201,9 @@ function RechnungDetail({
     await openUrl(url)
   }
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+  // Kategorien für den Kategorie-Tooltip an den Positionen - bewusst alle (nicht nur aktive),
+  // damit auch deaktivierte Kategorien alter Rechnungen noch ihren Namen zeigen
+  const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
 
   // Datenübernahme: „extern erstellt" nachträglich umschalten - nur solange RechnungsFee noch nichts
   // gedruckt/versendet hat (Backend prüft zusätzlich das gespeicherte Original-PDF)
@@ -2038,10 +2041,19 @@ function RechnungDetail({
                         ? gesamtVorRabatt - (effBrutto - parseFloat(pos.ust_betrag))
                         : gesamtVorRabatt - effBrutto
                       : 0
+                    // Kategorie-Tooltip: Kategorie der Position, Fallback auf Rechnungs-Kategorie
+                    // (analog zur Buchungslogik: pos.kategorie_id or rechnung.kategorie_id)
+                    const katFuerPos = pos.kategorie_id ?? rechnung.kategorie_id
+                    const posKatName = katFuerPos != null
+                      ? (kategorien ?? []).find((k) => k.id === katFuerPos)?.name
+                      : undefined
                     return (
                     <Fragment key={pos.id}>
                     <tr className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                      <td
+                        className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap"
+                        title={posKatName ? `Kategorie: ${posKatName}` : undefined}
+                      >
                         {pos.beschreibung}
                         {pos.artikelcode && (
                           <div className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">Art.-Nr.: {pos.artikelcode}</div>
