@@ -139,7 +139,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setTauriPfad(pfad)
       setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
       try {
-        const result = await vorschauBankImportPfad(pfad, undefined, templateId || undefined)
+        // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
+        // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
+        const result = await vorschauBankImportPfad(pfad, undefined, undefined)
         if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
         setVorschau(result)
         setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
