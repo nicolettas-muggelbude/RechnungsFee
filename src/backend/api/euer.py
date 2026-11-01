@@ -117,6 +117,111 @@ _EINNAHME_UST_KONTEN = {"1776", "3806", "1771", "3801", "1780", "1781", "1787", 
 # Berechnung
 # ---------------------------------------------------------------------------
 
+def _euer_haupt_beitrag(e: Journaleintrag) -> tuple[Optional[int], Decimal]:
+    """Hauptzeilen-Zuordnung einer Journalbuchung: (euer_zeile, beitrag) - die Summe der
+    Beiträge einer Zeile ist deren EÜR-Wert. Zeile None = keine Hauptzeilenzuordnung.
+
+    Gemeinsame Logik von _berechne_euer (Summen) und _euer_kategorien_beitraege
+    (Aufschlüsselung) - bisher doppelt gepflegt und auseinandergedriftet.
+
+    Abschnitt A (Einnahmen): Einnahme = +netto, Storno (art=Ausgabe) = −netto.
+    Abschnitt B (Ausgaben): Ausgabe = +, Storno (art=Einnahme) = −. Basis = netto +
+    nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich tatsächlich abgezogener
+    vorsteuer_betrag): fehlt der Vorsteuerabzug ganz (Kleinunternehmer §19, Issue #424)
+    oder teilweise (kat.vorsteuer_prozent < 100), ist dieser Anteil ein echter, nicht
+    erstattungsfähiger Kostenbestandteil und gehört in die Betriebsausgabe. Bei vollem
+    Vorsteuerabzug (vorsteuer_betrag == ust_betrag) ist der Zuschlag 0, Ergebnis bleibt
+    netto_betrag. Bei Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT
+    verwendet (dort ist brutto_betrag == netto_betrag, die additive USt wäre sonst
+    fälschlich nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller
+    Vorsteuerabzug).
+
+    WICHTIG (Storno-Spiegel): Storno-Gegenbuchungen einer AUSGABE tragen art=Einnahme
+    mit positivem netto/ust_betrag, aber NEGATIVEM vorsteuer_betrag
+    (vorsteuer_betrag = -original.vorsteuer_betrag, journal.storno / rechnungen.storno) -
+    die negative Vorsteuer korrigiert Zeile 57. In der Zeilen-B-Basis muss der tatsächlich
+    abgezogene Vorsteueranteil deshalb gespiegelt werden (bei art=Einnahme:
+    -vorsteuer_betrag), sonst geht die USt doppelt ein: das Storno einer 30-€-Zahlung
+    (netto 30, USt 5,70, Vorsteuer 5,70) wies -41,40 statt -30,00 aus.
+    """
+    kat: Optional[Kategorie] = e.kategorie
+    euer_zeile = kat.euer_zeile if kat else None
+    if euer_zeile is None:
+        return None, ZERO
+
+    ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
+    if ab == "A":
+        # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
+        vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
+        basis = e.netto_betrag or ZERO
+    elif ab == "B":
+        vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
+        # tatsächlich abgezogene Vorsteuer: bei Ausgabe positiv gespeichert, bei der
+        # Storno-Gegenbuchung (art=Einnahme) vorzeicheninvertiert (negativ)
+        if e.art == "Ausgabe":
+            vorsteuer_abgezogen = e.vorsteuer_betrag or ZERO
+        else:
+            vorsteuer_abgezogen = -(e.vorsteuer_betrag or ZERO)
+        basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - vorsteuer_abgezogen)
+        if e.ust_sonderfall:
+            # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
+            # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
+            # „Umsatzsteuer-Zahlung FA"). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
+            # hier sonst ein zweites Mal Betriebsausgabe.
+            basis = e.netto_betrag or ZERO
+    else:
+        vz = Decimal("1")
+        basis = e.netto_betrag or ZERO
+
+    return euer_zeile, vz * basis
+
+
+def _euer_ust_beitraege(e: Journaleintrag) -> list[tuple[int, str, Decimal]]:
+    """Unterzeilen-Beiträge einer Journalbuchung: (euer_zeile, kategorie, betrag) für die
+    vereinnahmte USt (Zeile 17) und die abziehbare Vorsteuer (Zeile 57). Gemeinsame Logik
+    von _berechne_euer (Summen) und _euer_kategorien_beitraege (Aufschlüsselung).
+
+    Zeile 17: reguläre Einnahmen addieren (ohne USt-Konto = Zahlung auf Ausgangsrechnung,
+    mit Einnahme-USt-Konto = manuelle Einnahme), Storno einer Einnahme (art=Ausgabe)
+    subtrahieren - bei Zahlungen auf Rechnungen ohne USt-Konto nur erkennbar am
+    "STORNO "-Präfix; der Abzug muss beide Muster erfassen, sonst bleibt die vereinnahmte
+    USt nach einem Zahlungs-Storno zu hoch.
+    Storno einer AUSGABE (art=Einnahme, Vorsteuer-Konto vom Original) darf Zeile 17 NICHT
+    addieren: diese USt war nie vereinnahmt, die Korrektur läuft ausschließlich über die
+    negative Vorsteuer in Zeile 57.
+    Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten
+    USt-Betrag.
+
+    Zeile 57: Summe aller vorsteuer_betrag-Werte (ohne art-Filter). Storno einer Ausgabe
+    hat art=Einnahme mit negativem vorsteuer_betrag → subtrahiert korrekt.
+    """
+    ist_reverse_charge = bool(e.ust_sonderfall)
+    if ist_reverse_charge:
+        # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
+        # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
+        # (Zu-/Abflussprinzip) sind solche Buchungen deshalb neutral und dürfen weder Zeile 17
+        # noch Zeile 57 berühren. Ohne diese Ausnahme greift unten die Storno-Heuristik, weil
+        # die §13b-Konten 1787/1789 in _EINNAHME_UST_KONTEN stehen (Issue #307).
+        return []
+
+    ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
+    beitraege: list[tuple[int, str, Decimal]] = []
+
+    if e.ust_betrag and e.ust_betrag != 0:
+        if e.art == "Einnahme":
+            if e.ust_betrag > 0 and (not ust_konto or ust_konto in _EINNAHME_UST_KONTEN):
+                beitraege.append((17, "Umsatzsteuer", e.ust_betrag))
+        elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
+            ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and e.beschreibung.startswith("STORNO "))
+        ):
+            beitraege.append((17, "Umsatzsteuer", -e.ust_betrag))
+
+    if e.vorsteuer_betrag and e.vorsteuer_betrag != 0:
+        beitraege.append((57, "Vorsteuer", e.vorsteuer_betrag))
+
+    return beitraege
+
+
 def _berechne_euer(jahr: int, db: Session) -> dict:
     unt = db.query(Unternehmen).first()
     von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (
@@ -134,8 +239,6 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
-        euer_zeile = kat.euer_zeile if kat else None
-        ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
 
         # Anlage-Buchungen (KFZ-Kauf, EDV etc.) → AVEÜR-Hinweis
         # Issue #439: Vorzeichen nach art – die Storno-Gegenbuchung eines Kaufs ist eine Einnahme
@@ -146,63 +249,12 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
             anlage_summe += vz * (e.brutto_betrag or ZERO)
             continue
 
-        if euer_zeile is not None:
-            ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
-            if ab == "A":
-                # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
-                vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
-                basis = e.netto_betrag or ZERO
-            elif ab == "B":
-                # Ausgaben-Zeile: Ausgabe = addieren, Storno (art=Einnahme) = subtrahieren.
-                # Basis = netto_betrag + nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich
-                # tatsächlich abgezogener vorsteuer_betrag) - fehlt der Vorsteuerabzug ganz
-                # (Kleinunternehmer §19, Issue #424) oder teilweise (kat.vorsteuer_prozent < 100),
-                # ist dieser Anteil ein echter, nicht erstattungsfähiger Kostenbestandteil und
-                # gehört in die Betriebsausgabe. Bei vollem Vorsteuerabzug (vorsteuer_betrag ==
-                # ust_betrag) ist der Zuschlag 0, Ergebnis bleibt netto_betrag wie bisher. Bei
-                # Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT verwendet (dort
-                # ist brutto_betrag == netto_betrag, die additive USt wäre sonst fälschlich
-                # nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller Vorsteuerabzug).
-                vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
-                    # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
-                    # „Umsatzsteuer-Zahlung FA“). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
-                    # hier sonst ein zweites Mal Betriebsausgabe.
-                    basis = e.netto_betrag or ZERO
-            else:
-                vz = Decimal("1")
-                basis = e.netto_betrag or ZERO
-            zeilen[euer_zeile] = zeilen.get(euer_zeile, ZERO) + vz * basis
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        if haupt_zeile is not None:
+            zeilen[haupt_zeile] = zeilen.get(haupt_zeile, ZERO) + haupt_beitrag
 
-        # Reverse Charge (§13b, i.g. Erwerb): geschuldete Steuer und Vorsteuerabzug entstehen
-        # in derselben Voranmeldung und saldieren sich dort - es fließt kein Geld. In der EÜR
-        # (Zu-/Abflussprinzip) sind solche Buchungen deshalb neutral und dürfen weder Zeile 17
-        # noch Zeile 57 berühren. Ohne diese Ausnahme greift unten die Storno-Heuristik, weil
-        # die §13b-Konten 1787/1789 in _EINNAHME_UST_KONTEN stehen (Issue #307).
-        ist_reverse_charge = bool(e.ust_sonderfall)
-
-        # Zeile 17: vereinnahmte USt – reguläre Einnahmen addieren, Storno subtrahieren.
-        # Storno einer Einnahme hat art=Ausgabe + Einnahme-USt-Konto (1776/1771/...) oder -
-        # bei Zahlungen auf Rechnungen - gar kein USt-Konto; der Abzug muss beide Muster
-        # erfassen, sonst bleibt die vereinnahmte USt nach einem Zahlungs-Storno zu hoch.
-        # Normale Ausgaben ohne USt-Konto (Wareneinkauf ohne Vorsteuerabzug) bleiben außen
-        # vor: der Abzug setzt zusätzlich das STORNO-Präfix voraus.
-        # Skonto-Einträge ausschließen: Zahlung (Zuflussprinzip) enthält bereits reduzierten USt-Betrag.
-        ist_storno = e.beschreibung.startswith("STORNO ")
-        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
-            if e.art == "Einnahme" and e.ust_betrag > 0:
-                zeilen[17] = zeilen.get(17, ZERO) + e.ust_betrag
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
-                ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and ist_storno)
-            ):
-                zeilen[17] = zeilen.get(17, ZERO) - e.ust_betrag
-
-        # Zeile 57: abziehbare Vorsteuer – Summe aller vorsteuer_betrag-Werte (ohne art-Filter).
-        # Storno einer Ausgabe hat art=Einnahme mit negativem vorsteuer_betrag → subtrahiert korrekt.
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
-            zeilen[57] = zeilen.get(57, ZERO) + e.vorsteuer_betrag
+        for ust_zeile, _ust_name, ust_beitrag in _euer_ust_beitraege(e):
+            zeilen[ust_zeile] = zeilen.get(ust_zeile, ZERO) + ust_beitrag
 
     # AVEÜR: AfA aus dem Anlagenverzeichnis automatisch in Zeile 33 eintragen
     # (Zeile 33 = AfA bewegliche WG, nicht Zeile 36 = GWG – Issue #265)
@@ -414,43 +466,17 @@ def _euer_kategorien_beitraege(
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
-        euer_zeile = kat.euer_zeile if kat else None
         kat_name = kat.name if kat else "Unbekannt"
-        ust_konto = e.konto_ust_skr03 or e.konto_ust_skr04 or ""
 
         if kat and kat.kontenart == "Anlage":
             continue
 
-        if euer_zeile is not None:
-            ab = EUR_ZEILEN_META.get(euer_zeile, ("", ""))[1]
-            if ab == "A":
-                vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
-                basis = e.netto_betrag or ZERO
-            elif ab == "B":
-                # Siehe ausführlicher Kommentar in _berechne_euer() (Issue #424) - gleiche Basis,
-                # damit Kategorie-Summen und EÜR-Zeilensumme konsistent bleiben.
-                vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    basis = e.netto_betrag or ZERO  # Reverse Charge, siehe _berechne_euer() (Issue #459)
-            else:
-                vz = Decimal("1")
-                basis = e.netto_betrag or ZERO
-            add(euer_zeile, kat_name, vz * basis, e)
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        if haupt_zeile is not None:
+            add(haupt_zeile, kat_name, haupt_beitrag, e)
 
-        # Reverse Charge neutral halten, siehe Kommentar in _berechne_euer (Issue #307)
-        ist_reverse_charge = bool(e.ust_sonderfall)
-
-        if e.ust_betrag and e.ust_betrag != 0 and not ist_reverse_charge:
-            if e.art == "Einnahme" and (ust_konto in _EINNAHME_UST_KONTEN or not ust_konto):
-                add(17, "Umsatzsteuer", e.ust_betrag, e)
-            elif e.art == "Ausgabe" and e.ust_betrag > 0 and e.zahlungsart != "Skonto" and (
-                ust_konto in _EINNAHME_UST_KONTEN or (not ust_konto and e.beschreibung.startswith("STORNO "))
-            ):
-                add(17, "Umsatzsteuer", -e.ust_betrag, e)
-
-        if e.vorsteuer_betrag and e.vorsteuer_betrag != 0 and not ist_reverse_charge:
-            add(57, "Vorsteuer", e.vorsteuer_betrag, e)
+        for ust_zeile, ust_kat_name, ust_beitrag in _euer_ust_beitraege(e):
+            add(ust_zeile, ust_kat_name, ust_beitrag, e)
 
     return zeilen
 
