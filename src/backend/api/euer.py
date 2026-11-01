@@ -116,6 +116,29 @@ AUSGABEN_ZEILEN  = {z for z, (_, ab) in EUR_ZEILEN_META.items() if ab == "B" and
 _EINNAHME_UST_KONTEN = {"1776", "3806", "1771", "3801", "1780", "1781", "1787", "1789"}
 
 
+def ausgabe_basis(e: Journaleintrag) -> Decimal:
+    """Betrag einer Ausgaben-Zeile vor Vorzeichen: netto + nicht abzugsfähiger USt-Anteil.
+
+    Fehlt der Vorsteuerabzug ganz (Kleinunternehmer §19, Issue #424) oder teilweise
+    (kat.vorsteuer_prozent < 100), ist dieser Anteil ein echter Kostenbestandteil. Bei vollem
+    Vorsteuerabzug ist der Zuschlag 0, Ergebnis bleibt netto_betrag.
+
+    Issue #486: Die gespiegelte Storno-Gegenbuchung (journal.py/rechnungen.py) übernimmt
+    ust_betrag positiv, negiert aber vorsteuer_betrag – „ust - vorsteuer“ ergab dort die doppelte
+    USt statt 0 (Storno über 30 € netto/5,70 € USt minderte die Ausgaben um 41,40 €). Deshalb
+    Beträge vergleichen, Vorzeichen von ust_betrag übernehmen.
+
+    Reverse Charge (ig_erwerb/§13b, Issue #459): nur netto – die selbst geschuldete USt fließt
+    nicht an den Lieferanten, sondern später ans Finanzamt (Zeile 58).
+    """
+    netto = e.netto_betrag or ZERO
+    if e.ust_sonderfall:
+        return netto
+    ust = e.ust_betrag or ZERO
+    zuschlag = abs(ust) - abs(e.vorsteuer_betrag or ZERO)
+    return netto + (zuschlag if ust >= 0 else -zuschlag)
+
+
 # ---------------------------------------------------------------------------
 # Berechnung
 # ---------------------------------------------------------------------------
@@ -162,23 +185,9 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
                 basis = e.netto_betrag or ZERO
             elif ab == "B":
                 # Ausgaben-Zeile: Ausgabe = addieren, Storno (art=Einnahme) = subtrahieren.
-                # Basis = netto_betrag + nicht abzugsfähiger USt-Anteil (ust_betrag abzüglich
-                # tatsächlich abgezogener vorsteuer_betrag) - fehlt der Vorsteuerabzug ganz
-                # (Kleinunternehmer §19, Issue #424) oder teilweise (kat.vorsteuer_prozent < 100),
-                # ist dieser Anteil ein echter, nicht erstattungsfähiger Kostenbestandteil und
-                # gehört in die Betriebsausgabe. Bei vollem Vorsteuerabzug (vorsteuer_betrag ==
-                # ust_betrag) ist der Zuschlag 0, Ergebnis bleibt netto_betrag wie bisher. Bei
-                # Reverse-Charge (ig_erwerb/§13b) ist brutto_betrag bewusst NICHT verwendet (dort
-                # ist brutto_betrag == netto_betrag, die additive USt wäre sonst fälschlich
-                # nochmal abgezogen) - der Zuschlag ist dort ohnehin 0 (voller Vorsteuerabzug).
+                # Basis siehe ausgabe_basis() (Issue #424/#459/#486).
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    # Issue #459: bei Reverse Charge fließt die selbst geschuldete USt nicht mit der
-                    # Zahlung an den Lieferanten, sondern später ans Finanzamt (Zeile 58, Kategorie
-                    # „Umsatzsteuer-Zahlung FA“). Ohne Vorsteuerabzug (Kleinunternehmer) wäre sie
-                    # hier sonst ein zweites Mal Betriebsausgabe.
-                    basis = e.netto_betrag or ZERO
+                basis = ausgabe_basis(e)
             else:
                 vz = Decimal("1")
                 basis = e.netto_betrag or ZERO
@@ -446,9 +455,7 @@ def _berechne_euer_kategorien(jahr: int, db: Session) -> dict[int, dict[str, Dec
                 # Siehe ausführlicher Kommentar in _berechne_euer() (Issue #424) - gleiche Basis,
                 # damit Kategorie-Summen und EÜR-Zeilensumme konsistent bleiben.
                 vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-                basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - (e.vorsteuer_betrag or ZERO))
-                if e.ust_sonderfall:
-                    basis = e.netto_betrag or ZERO  # Reverse Charge, siehe _berechne_euer() (Issue #459)
+                basis = ausgabe_basis(e)
             else:
                 vz = Decimal("1")
                 basis = e.netto_betrag or ZERO
