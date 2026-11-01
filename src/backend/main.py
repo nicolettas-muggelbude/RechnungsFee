@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 180
+SCHEMA_VERSION = 181
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -4065,6 +4065,37 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 180 (Issue #470: Konten Software-Abos, Darlehenszinsen, Wareneingang)")
 
+    if version < 181:
+        with engine.connect() as conn:
+            # Issue #480: Einnahme-Kategorien ohne EÜR-Zeile fielen komplett aus der EÜR (Gewinn zu
+            # niedrig) → Zeile 16 (nicht steuerbare BE); bei Kleinunternehmern schlüsselt
+            # api/euer.py je Buchung auf Zeile 12 um. Guard IS NULL - eine bewusst gesetzte
+            # eigene Zeile bleibt. „Betriebseinnahmen (0%)“ 12 → 16 und die neue Kategorie
+            # „Betriebseinnahmen (Kleinunternehmer)“ (8192/4184) laufen über _migrate_kategorien().
+            # Beschreibungen nur ersetzen, solange sie noch dem alten Standardtext entsprechen.
+            _k181 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"euer_zeile", "beschreibung"} <= _k181:
+                conn.execute(text("""
+                    UPDATE kategorien SET euer_zeile = 16
+                    WHERE euer_zeile IS NULL AND name IN
+                        ('Sonstige Einnahmen', 'Mahngebühren', 'Verzugszinsen (Einnahme)', 'Zuwendungen von Dritten')
+                """))
+                for _name, _alt, _neu in [
+                    ("Zuwendungen von Dritten",
+                     "z. B. Fördermittel, Zuschüsse, Transferleistungen",
+                     "z. B. Fördermittel, betriebliche Zuschüsse. Steuerfreie Zuschüsse wie der Gründungszuschuss (§ 93 SGB III) sind keine Betriebseinnahme – als Privateinlage buchen."),
+                    ("Betriebseinnahmen (0%)",
+                     "z. B. Einnahmen als Kleinunternehmer (§ 19 UStG) oder steuerfreie Umsätze",
+                     "Umsatzsteuerfreie (§ 4 UStG) oder nicht steuerbare Umsätze, 0 % nach § 12 Abs. 3 UStG (z. B. Photovoltaik), Reverse Charge. Als Kleinunternehmer „Betriebseinnahmen (Kleinunternehmer)“ verwenden."),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET beschreibung = :neu
+                        WHERE name = :name AND (beschreibung IS NULL OR beschreibung = :alt)
+                    """), {"name": _name, "alt": _alt, "neu": _neu})
+            conn.execute(text("PRAGMA user_version = 181"))
+            conn.commit()
+            print("[Migration] Schema auf Version 181 (Issue #480: EÜR-Zeile 16 für sonstige Einnahmen)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4141,7 +4172,7 @@ def _migrate_kategorien() -> None:
             ("Betriebseinnahmen", 15),           # Issue #185: umsatzsteuerpflichtige BE → Zeile 15
             ("Betriebseinnahmen (19%)", 15),     # Datenfix #132: ältere DBs + Issue #185
             ("Betriebseinnahmen (7%)", 15),      # Issue #185: 7% gemeinsam mit 19% in Zeile 15
-            ("Betriebseinnahmen (0%)", 12),      # Issue #185: Kleinunternehmer §19 → Zeile 12
+            ("Betriebseinnahmen (0%)", 16),      # Issue #480: Regelbesteuerte 0 % → Zeile 16 (Kleinunternehmer: eigene Kategorie, Zeile 12)
             # Gewährte Skonti: euer_zeile → NULL (Issue #132, Migration 73 – kein Doppelabzug)
         ]
         for name, zeile in euer_korrekturen:
@@ -4179,8 +4210,12 @@ def _migrate_kategorien() -> None:
             # Betriebseinnahmen: müssen VOR _migrate_signaturen() existieren (Datenfix kategorie_id=NULL)
             {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
             {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
-            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
-            {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 16, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "Umsatzsteuerfreie (§ 4 UStG) oder nicht steuerbare Umsätze, 0 % nach § 12 Abs. 3 UStG (z. B. Photovoltaik), Reverse Charge. Als Kleinunternehmer „Betriebseinnahmen (Kleinunternehmer)“ verwenden."},
+            # Issue #480: eigenes DATEV-Konto für Kleinunternehmer-Erlöse (AM 8192/4184)
+            {"name": "Betriebseinnahmen (Kleinunternehmer)", "kontenart": "Erlös", "konto_skr03": "8192", "konto_skr04": "4184", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "Einnahmen als Kleinunternehmer (§ 19 Abs. 1 UStG) – wird bei Rechnungen automatisch verwendet."},
+            {"name": "Wareneinkauf",                       "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "ig_erwerb"},
             # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige
@@ -4194,15 +4229,16 @@ def _migrate_kategorien() -> None:
             {"name": "Eigenverbrauch von Waren (19%)",       "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4620", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
             {"name": "Eigenverbrauch von Waren (7%)",        "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
             {"name": "USt auf Eigenverbrauch",               "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8603", "konto_skr04": "4830", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8603", "konto_skr04": "4830", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Mahnwesen (docs/plan-mahnwesen.md): Mahngebühren = Schadensersatz (§288 BGB),
             # Verzugszinsen = Zinsertrag - beides nicht umsatzsteuerbar. eks_kategorie A3
             # (Sonstige Einnahmen): echter Geldzufluss, keine der engen SGB-II-Ausnahmen
             # nach §11a Abs. 1 SGB II (Grundrente, Entschädigungen n. BEG/IfSG etc.) greift.
-            # euer_zeile noch offen (TODO im Plan).
-            {"name": "Mahngebühren",                         "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Verzugszinsen (Einnahme)",             "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # EÜR-Zeile 16 (nicht steuerbare BE), bei Kleinunternehmern Zeile 12 (Issue #480).
+            {"name": "Mahngebühren",                         "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Verzugszinsen (Einnahme)",             "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0,
+             "beschreibung": "z. B. Fördermittel, betriebliche Zuschüsse. Steuerfreie Zuschüsse wie der Gründungszuschuss (§ 93 SGB III) sind keine Betriebseinnahme – als Privateinlage buchen."},
             {"name": "Umsatzsteuer (vereinnahmt)",           "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Erstattung FA",           "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Löhne & Gehälter Teilzeit",           "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6020", "eks_kategorie": "B2_2",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

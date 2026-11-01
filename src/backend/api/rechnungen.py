@@ -145,6 +145,16 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     """
     if not rechnung.positionen:
         return None, None
+    # Issue #480: Kleinunternehmer (§ 19 UStG) - eigene Kategorie mit DATEV-Konto 8192/4184
+    # („Steuerfreie Erlöse Kleinunternehmer“) statt „Betriebseinnahmen (0%)“ (8100/4100 =
+    # steuerfreie Umsätze § 4 Nr. 8 ff.); Kleinunternehmer haben keine ig. Lieferung/Ausfuhr.
+    unternehmen = db.query(Unternehmen).first()
+    if unternehmen and unternehmen.ist_kleinunternehmer:
+        kat_ku = db.query(Kategorie).filter(
+            Kategorie.name == "Betriebseinnahmen (Kleinunternehmer)", Kategorie.aktiv == True
+        ).first()
+        if kat_ku:
+            return kat_ku.id, kat_ku
     if getattr(rechnung, "ist_eu_lieferung", False):
         kat_eu = db.query(Kategorie).filter(
             Kategorie.name == "Innergemeinschaftliche Lieferungen", Kategorie.aktiv == True

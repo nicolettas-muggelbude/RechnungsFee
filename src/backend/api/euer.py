@@ -122,9 +122,51 @@ _EINNAHME_UST_KONTEN = {"1776", "3806", "1771", "3801", "1780", "1781", "1787", 
 # Berechnung
 # ---------------------------------------------------------------------------
 
-def _euer_haupt_beitrag(e: Journaleintrag) -> tuple[Optional[int], Decimal]:
+# Issue #480: Betriebseinnahmen-Zeilen je nach Umsatzsteuer-Status der Buchung
+_ZEILE_KLEINUNTERNEHMER = 12
+_ZEILEN_REGEL_EINNAHMEN = (15, 16)
+_ZEILE_STEUERFREI = 16
+
+
+def _ku_status_je_buchung(eintraege: list[Journaleintrag], db: Session, unt: Optional[Unternehmen]) -> dict[int, bool]:
+    """Issue #480: War die Buchung eine Einnahme als Kleinunternehmer (§ 19 UStG)?
+
+    Quelle ist der Steuerbefreiungsgrund „§19 UStG“, den Journal und Zahlungsbuchung bei
+    Kleinunternehmern setzen - so wird ein Wechsel zwischen Kleinunternehmer und
+    Regelbesteuerung im Laufe des Jahres richtig aufgeteilt. Storno-Gegenbuchungen tragen
+    keinen Grund und übernehmen den Status ihres Originals (gruppe_id, Erkennung wie #321).
+    Altbuchungen ohne Grund ohne USt: aktueller Status aus den Stammdaten."""
+    ist_ku_jetzt = bool(unt and unt.ist_kleinunternehmer)
+
+    def _ist_storno(e: Journaleintrag) -> bool:
+        return e.gruppe_id is not None and (e.beschreibung or "").startswith("STORNO ")
+
+    original_ids = {e.gruppe_id for e in eintraege if _ist_storno(e)}
+    originale = {
+        oid: (grund, ust)
+        for oid, grund, ust in db.query(
+            Journaleintrag.id, Journaleintrag.steuerbefreiung_grund, Journaleintrag.ust_betrag
+        ).filter(Journaleintrag.id.in_(original_ids)).all()
+    } if original_ids else {}
+
+    status: dict[int, bool] = {}
+    for e in eintraege:
+        grund, ust = (
+            originale.get(e.gruppe_id, (None, e.ust_betrag)) if _ist_storno(e)
+            else (e.steuerbefreiung_grund, e.ust_betrag)
+        )
+        status[e.id] = grund == "§19 UStG" or (grund is None and ist_ku_jetzt and not (ust or ZERO))
+    return status
+
+
+def _euer_haupt_beitrag(e: Journaleintrag, ku: Optional[bool] = None) -> tuple[Optional[int], Decimal]:
     """Hauptzeilen-Zuordnung einer Journalbuchung: (euer_zeile, beitrag) - die Summe der
     Beiträge einer Zeile ist deren EÜR-Wert. Zeile None = keine Hauptzeilenzuordnung.
+
+    ku (Issue #480, aus _ku_status_je_buchung): Betriebseinnahmen eines Kleinunternehmers
+    gehören vollständig in Zeile 12, auch steuerfreie/nicht steuerbare; bei Regelbesteuerung
+    gehören 0-%-Einnahmen in Zeile 16 statt in die Kleinunternehmer-Zeile 12. None = keine
+    Umschlüsselung (Aufrufer, die nur Ausgaben auswerten).
 
     Gemeinsame Logik von _berechne_euer (Summen) und _euer_kategorien_beitraege
     (Aufschlüsselung) - bisher doppelt gepflegt und auseinandergedriftet.
@@ -159,6 +201,10 @@ def _euer_haupt_beitrag(e: Journaleintrag) -> tuple[Optional[int], Decimal]:
         # Einnahmen-Zeile: Einnahme = addieren, Storno (art=Ausgabe) = subtrahieren
         vz = Decimal("1") if e.art == "Einnahme" else Decimal("-1")
         basis = e.netto_betrag or ZERO
+        if ku is True and euer_zeile in _ZEILEN_REGEL_EINNAHMEN:
+            euer_zeile = _ZEILE_KLEINUNTERNEHMER
+        elif ku is False and euer_zeile == _ZEILE_KLEINUNTERNEHMER:
+            euer_zeile = _ZEILE_STEUERFREI
     elif ab == "B":
         vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
         # tatsächlich abgezogene Vorsteuer: bei Ausgabe positiv gespeichert, bei der
@@ -254,6 +300,7 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
     # Issue #470: Kategorien mit einer Zeile, die RechnungsFee nicht kennt - ihr Betrag fließt in
     # keine Summe ein und muss in der Auswertung deutlich gemeldet werden
     unbekannte_zeilen: dict[int, set[str]] = {}
+    ku_status = _ku_status_je_buchung(eintraege, db, unt)
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
@@ -270,7 +317,7 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
             anlage_summe += vz * (e.brutto_betrag or ZERO)
             continue
 
-        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
         if haupt_zeile is not None:
             zeilen[haupt_zeile] = zeilen.get(haupt_zeile, ZERO) + haupt_beitrag
 
@@ -509,6 +556,7 @@ def _euer_kategorien_beitraege(
         zeilen[zeile].setdefault(kat_name, [])
         zeilen[zeile][kat_name].append((beitrag, e))
 
+    ku_status = _ku_status_je_buchung(eintraege, db, unt)
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
         kat_name = kat.name if kat else "Unbekannt"
@@ -516,7 +564,7 @@ def _euer_kategorien_beitraege(
         if kat and kat.kontenart == "Anlage":
             continue
 
-        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e)
+        haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
         if haupt_zeile is not None:
             add(haupt_zeile, kat_name, haupt_beitrag, e)
 

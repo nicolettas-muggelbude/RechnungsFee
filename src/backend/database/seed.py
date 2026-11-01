@@ -13,18 +13,24 @@ STANDARD_KATEGORIEN = [
     # ── Tabelle A: Betriebseinnahmen ──────────────────────────────────────
     {"name": "Betriebseinnahmen",              "kontenart": "Erlös",   "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
     {"name": "Betriebseinnahmen (7%)",         "kontenart": "Erlös",   "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
-    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Issue #480: 0-%-Einnahmen Regelbesteuerter → Zeile 16; Kleinunternehmer haben eine eigene
+    # Kategorie (DATEV 8192/4184). Die EÜR schlüsselt zusätzlich je Buchung nach §19-Status um.
+    {"name": "Betriebseinnahmen (0%)",         "kontenart": "Erlös",   "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0,
+     "beschreibung": "Umsatzsteuerfreie (§ 4 UStG) oder nicht steuerbare Umsätze, 0 % nach § 12 Abs. 3 UStG (z. B. Photovoltaik), Reverse Charge. Als Kleinunternehmer „Betriebseinnahmen (Kleinunternehmer)“ verwenden."},
+    {"name": "Betriebseinnahmen (Kleinunternehmer)", "kontenart": "Erlös", "konto_skr03": "8192", "konto_skr04": "4184", "eks_kategorie": "A1",  "euer_zeile": 12,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0,
+     "beschreibung": "Einnahmen als Kleinunternehmer (§ 19 Abs. 1 UStG) – wird bei Rechnungen automatisch verwendet."},
     {"name": "Privatentnahme",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2100", "eks_kategorie": None,    "euer_zeile": 106,  "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Eigenverbrauch von Waren (19%)", "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4620", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
     {"name": "Eigenverbrauch von Waren (7%)",  "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
     {"name": "USt auf Eigenverbrauch",         "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8603", "konto_skr04": "4830", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Sonstige Einnahmen",             "kontenart": "Erlös",   "konto_skr03": "8603", "konto_skr04": "4830", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # Mahnwesen (docs/plan-mahnwesen.md): Mahngebühren gelten steuerlich als Schadensersatz
     # (§288 BGB), Verzugszinsen als Zinsertrag - beides nicht umsatzsteuerbar, daher getrennt
     # von den umsatzsteuerpflichtigen Betriebseinnahmen. euer_zeile noch offen (TODO im Plan).
-    {"name": "Mahngebühren",                   "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Verzugszinsen (Einnahme)",       "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-    {"name": "Zuwendungen von Dritten",        "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Mahngebühren",                   "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Verzugszinsen (Einnahme)",       "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    {"name": "Zuwendungen von Dritten",        "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0,
+     "beschreibung": "z. B. Fördermittel, betriebliche Zuschüsse. Steuerfreie Zuschüsse wie der Gründungszuschuss (§ 93 SGB III) sind keine Betriebseinnahme – als Privateinlage buchen."},
     # Privateinlage ist kein EKS-Feld (nicht im offiziellen Formular)
     {"name": "Privateinlage",                  "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2180", "eks_kategorie": None,    "euer_zeile": 107,  "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Umsatzsteuer (vereinnahmt)",     "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
