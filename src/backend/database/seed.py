@@ -511,6 +511,33 @@ SYSTEM_BANK_TEMPLATES = [
         "erkennungs_spalten": ["Completed date", "Counterparty name", "Reference", "Payment amount", "Payment currency"],
     },
     {
+        "id": "n26",
+        "name": "N26",
+        "bank": "N26",
+        "format": "Standard",
+        "delimiter": ",",
+        "encoding": "UTF-8",
+        "decimal_separator": ".",
+        "date_format": "%Y-%m-%d",
+        "skip_rows": 0,
+        # Maßgeblich ist der gebuchte EUR-Betrag, nicht der Fremdwährungsbetrag.
+        # Account Name bezeichnet das eigene Konto und bleibt ungemappt.
+        "column_mapping": {
+            "Booking Date":      "datum",
+            "Value Date":        "valuta",
+            "Partner Name":      "partner_name",
+            "Partner Iban":      "partner_iban",
+            "Type":              "buchungstext",
+            "Payment Reference": "verwendungszweck",
+            "Amount (EUR)":       "betrag",
+        },
+        "erkennungs_spalten": [
+            "Booking Date", "Value Date", "Partner Name", "Partner Iban", "Type",
+            "Payment Reference", "Account Name", "Amount (EUR)", "Original Amount",
+            "Original Currency", "Exchange Rate",
+        ],
+    },
+    {
         # bunq (Issue #466): CSV-Export "Umsätze". MT940 bietet bunq ebenfalls an, dafür gibt es
         # (wie bei Finom) keinen SWIFT-Tag-Parser. Die Spalte "Description" schreibt bunq doppelt
         # gequotet (""Text"") - wird vor dem Einlesen in utils/bank_csv_parser.py repariert.
