@@ -17,6 +17,7 @@ pytesseract
 ocrmypdf
 markdown
 cryptography
+certifi
 smbprotocol
 # --no-binary erzwingt die reine Python-Variante: das vorkompilierte mypyc-Wheel bringt ein
 # Modul mit hash-basiertem Namen mit (z.B. "ada92cb5d92a588d1b93__mypyc"), das PyInstaller

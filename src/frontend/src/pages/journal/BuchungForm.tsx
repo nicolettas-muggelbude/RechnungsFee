@@ -303,7 +303,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const istPrivatKategorie = gewaehlteKat?.kontenart === 'Privat'
   const ist25aAnkauf = gewaehlteKat?.name?.includes('§25a')
   const istFahrtkostenKat = gewaehlteKat?.eks_kategorie === 'B6_5'
-  const istIgLieferung = gewaehlteKat?.konto_skr03 === '8125' || gewaehlteKat?.konto_skr04 === '3125'
+  // SKR04 4125 seit Migration 179 (vorher fälschlich 3125, kann bei eigenen Anpassungen noch stehen)
+  const istIgLieferung = gewaehlteKat?.konto_skr03 === '8125' || gewaehlteKat?.konto_skr04 === '4125' || gewaehlteKat?.konto_skr04 === '3125'
   const kunde_id = watch('kunde_id')
   const gewaehlterKunde = (kunden ?? []).find((k) => String(k.id) === kunde_id)
   const igLieferungOhneUstIdNr = istIgLieferung && gewaehlterKunde && !gewaehlterKunde.ust_idnr

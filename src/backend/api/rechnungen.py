@@ -13,7 +13,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
@@ -130,7 +130,7 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     für Bestandsdaten ist ein separater, späterer Schritt).
 
     Ausnahme innergemeinschaftliche Lieferung (Issue #316): ist rechnung.ist_eu_lieferung
-    gesetzt, wird die Kategorie "Innergemeinschaftliche Lieferungen" (Konto 8125/3125)
+    gesetzt, wird die Kategorie "Innergemeinschaftliche Lieferungen" (Konto 8125/4125)
     verwendet statt der generischen 0%-USt-Satz-Kategorie "Betriebseinnahmen (0%)" - sonst
     würde die Lieferung zwar korrekt mit 0% USt gebucht, aber mit falschem Konto und in der
     falschen EÜR-Zeile (12 statt 16) auftauchen.
@@ -145,6 +145,16 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     """
     if not rechnung.positionen:
         return None, None
+    # Issue #480: Kleinunternehmer (§ 19 UStG) - eigene Kategorie mit DATEV-Konto 8192/4184
+    # („Steuerfreie Erlöse Kleinunternehmer“) statt „Betriebseinnahmen (0%)“ (8100/4100 =
+    # steuerfreie Umsätze § 4 Nr. 8 ff.); Kleinunternehmer haben keine ig. Lieferung/Ausfuhr.
+    unternehmen = db.query(Unternehmen).first()
+    if unternehmen and unternehmen.ist_kleinunternehmer:
+        kat_ku = db.query(Kategorie).filter(
+            Kategorie.name == "Betriebseinnahmen (Kleinunternehmer)", Kategorie.aktiv == True
+        ).first()
+        if kat_ku:
+            return kat_ku.id, kat_ku
     if getattr(rechnung, "ist_eu_lieferung", False):
         kat_eu = db.query(Kategorie).filter(
             Kategorie.name == "Innergemeinschaftliche Lieferungen", Kategorie.aktiv == True
@@ -400,15 +410,17 @@ def _pruefe_und_erzeuge_vorsteuer_soll(rechnung: "Rechnung", db: Session) -> Non
 
 def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str | None]:
     """Gibt (konto_skr03, konto_skr04) für die Skonto-Gegenbuchung zurück."""
+    # Konten gegengeprüft am DATEV-Kontenrahmen 2026 (Issue #470-Folgeprüfung) - vorher lagen
+    # hier u. a. Erlöskonten (SKR04 4300/4310/4320) und Forderungsverluste (SKR03 2400/2401)
     satz = int(ust_satz)
     if rechnung_typ == "ausgang":
-        # Erlösschmälerungen
-        skr03 = {19: "8736", 7: "8727", 0: "8720"}.get(satz)
-        skr04 = {19: "4310", 7: "4320", 0: "4300"}.get(satz)
+        # Gewährte Skonti
+        skr03 = {19: "8736", 7: "8731", 0: "8734"}.get(satz)
+        skr04 = {19: "4736", 7: "4731", 0: "4734"}.get(satz)
     else:
         # Erhaltene Skonti (Eingangsrechnung)
-        skr03 = {19: "2401", 7: "2400", 0: "2400"}.get(satz)
-        skr04 = {19: "3401", 7: "3400", 0: "3400"}.get(satz)
+        skr03 = {19: "3736", 7: "3731", 0: "3730"}.get(satz)
+        skr04 = {19: "5736", 7: "5731", 0: "5730"}.get(satz)
     return skr03, skr04
 
 
@@ -1600,7 +1612,12 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         dokument_typ=data.dokument_typ,
         lieferadresse_id=data.lieferadresse_id if data.dokument_typ == "Lieferschein" else None,
         gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
-        dokumentenpaket_id=data.dokumentenpaket_id if data.dokument_typ == "Angebot" else None,
+        # Issue #477: Pakete auch für Rechnungen und Proforma (Lieferschein/Gutschrift/Eingang nicht)
+        dokumentenpaket_id=(
+            data.dokumentenpaket_id
+            if data.typ == "ausgang" and data.dokument_typ in ("Angebot", "Rechnung", "Abschlagsrechnung", "Proforma")
+            else None
+        ),
         angebot_status="offen" if data.dokument_typ == "Angebot" else None,
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
@@ -1728,12 +1745,22 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
-                  "skonto_prozent", "skonto_tage", "gueltig_bis", "dokumentenpaket_id",
+                  "skonto_prozent", "skonto_tage", "gueltig_bis",
                   "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
                   "eingabemodus"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
+
+    # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
+    # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
+    # und das "val is not None"-Muster oben ließ die alte ID stehen; da kunde_name überall
+    # Vorrang vor partner_freitext hat, war der neue Empfänger nach dem Speichern wieder weg.
+    # Nur bei gesetztem Freitext ohne ID - reine Teil-Updates (z. B. nur notizen) bleiben unberührt.
+    if data.partner_freitext and not data.kunde_id and not data.lieferant_id:
+        rechnung.kunde_id = None
+        rechnung.lieferant_id = None
+        rechnung.lieferadresse_id = None  # gehörte zum bisherigen Kunden
 
     # Issue #368: einleitungstext/schlusstext bewusst NICHT im obigen "val is not None"-
     # Muster - das würde ein absichtliches Leeren (Frontend schickt explizit null) nicht von
@@ -1747,6 +1774,9 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.schlusstext = data.schlusstext
     if "bemerkung_erechnung" in data.model_fields_set:
         rechnung.bemerkung_erechnung = (data.bemerkung_erechnung or "").strip() or None
+    # Issue #477: Paket muss sich auch wieder abwählen lassen (Frontend schickt dann null)
+    if "dokumentenpaket_id" in data.model_fields_set and rechnung.typ == "ausgang":
+        rechnung.dokumentenpaket_id = data.dokumentenpaket_id
 
     if sum([
         rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,
@@ -1940,13 +1970,33 @@ def _synchronisiere_abschlagsverrechnung(
 
 
 @router.post("/{rechnung_id}/finalisieren", response_model=RechnungResponse)
-def finalisiere_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
-    """Entwurf finalisieren – danach nicht mehr bearbeitbar."""
+def finalisiere_rechnung(
+    rechnung_id: int,
+    db: Session = Depends(get_db),
+    # Annotated statt "= Query(False)": bei direkten Funktionsaufrufen (Tests, interne Aufrufer)
+    # wäre der Default sonst das Query-Objekt selbst und damit truthy
+    datum_heute: Annotated[bool, Query()] = False,
+):
+    """Entwurf finalisieren – danach nicht mehr bearbeitbar.
+
+    datum_heute (Issue #485): Rechnungsdatum eines älteren Entwurfs auf den Finalisierungstag
+    setzen – auf Nachfrage im Frontend, nie stillschweigend (bewusst rückdatiert nacherfasste
+    Rechnungen behalten ihr Datum). Die Fälligkeit verschiebt sich um dieselben Tage, das
+    Zahlungsziel bleibt also gleich. Nur eigene Ausgangsrechnungen – bei Eingangsrechnungen gilt
+    das Datum des Lieferanten, bei importierten/extern erstellten das Original."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if not rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
+
+    heute = date.today()
+    if (datum_heute and rechnung.typ == "ausgang" and not rechnung.import_quelle
+            and rechnung.dokument_typ != "Lieferschein" and rechnung.datum < heute):
+        verschiebung = heute - rechnung.datum
+        rechnung.datum = heute
+        if rechnung.faellig_am:
+            rechnung.faellig_am = rechnung.faellig_am + verschiebung
 
     if rechnung.datum > date.today():
         raise HTTPException(
@@ -3368,12 +3418,22 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             sp_kat = db.query(Kategorie).filter(Kategorie.id == sp.kategorie_id).first()
             if not sp_kat:
                 raise HTTPException(status_code=404, detail=f"Kategorie {sp.kategorie_id} nicht gefunden.")
-            # Jede Split-Zeile bekommt den USt-Satz IHRER eigenen Kategorie, nicht den
-            # dominanten Satz der Gesamtrechnung (sonst würde z.B. eine 0%-Kategorie wie
-            # "Zoll / Einfuhrabgaben" fälschlich mit dem Satz einer anderen Position der
-            # Rechnung aufgesplittet - genau der Grund für Split-Zahlungen ist ja, Positionen
-            # mit unterschiedlichen Sätzen/Kategorien sauber zu trennen).
-            sp_satz = Decimal("0") if steuerbefreiung_grund else Decimal(str(sp_kat.ust_satz_standard))
+            # Jede Split-Zeile bekommt den USt-Satz IHRER Position, nicht den dominanten Satz der
+            # Gesamtrechnung - genau der Grund für Split-Zahlungen ist ja, Positionen mit
+            # unterschiedlichen Sätzen/Kategorien sauber zu trennen. Issue #486-Folgefund: bisher
+            # galt der Standardsatz der Kategorie - eine 0-%-Position auf „Wareneinkauf Nicht-EU“
+            # (Standard 19 %) bekam dadurch 19 % Vorsteuer herausgerechnet. Ohne position_id
+            # (ältere Clients) bleibt es beim Kategorie-Standardsatz.
+            sp_pos = next((p for p in rechnung.positionen if p.id == sp.position_id), None) if sp.position_id else None
+            if steuerbefreiung_grund:
+                sp_satz = Decimal("0")
+            elif sp_pos is not None:
+                # §25a: pos.ust_satz ist 0 (kein Ausweis), der echte Satz für die Marge steht in ust_satz_25a
+                sp_satz = Decimal(str(
+                    sp_pos.ust_satz_25a if sp_pos.differenzbesteuerung and sp_pos.ust_satz_25a else sp_pos.ust_satz
+                ))
+            else:
+                sp_satz = Decimal(str(sp_kat.ust_satz_standard))
             sp_ust03, sp_ust04 = (_ust_konto(art, sp_satz) if sp_satz > 0 else (None, None))
             e = _erstelle_eintrag(sp.kategorie_id, sp_kat, sp.betrag, sp.beschreibung,
                                   sp_satz, sp_ust03, sp_ust04, marge_25a=split_marge_25a)
@@ -4999,7 +5059,6 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         brutto_gesamt=angebot.brutto_gesamt,
         skonto_prozent=angebot.skonto_prozent,
         skonto_tage=angebot.skonto_tage,
-        dokumentenpaket_id=angebot.dokumentenpaket_id,
     )
     db.add(auftrag)
     db.flush()

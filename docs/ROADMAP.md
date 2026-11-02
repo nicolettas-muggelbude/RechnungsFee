@@ -122,6 +122,24 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
+## 📋 v0.7.7 – vorgemerkt
+
+- [ ] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480) –
+  Auswahlfeld z. B. „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“. Steuert: EÜR-Zeile 13
+  (Kz 119) bei Kleinunternehmern, Pflichthinweis auf der Rechnung (§ 14 Abs. 4 Nr. 8 UStG, im
+  absender_snapshot eingefroren), Kleinunternehmergrenze (#491), EÜR-Zeile 16 statt 15 bei
+  Regelbesteuerung. **Vorher klären:** gelten damit alle Einnahmen als steuerfrei oder nur bestimmte
+  Kategorien/Positionen (gemischte Fälle, z. B. Ärztin mit steuerpflichtigen Gutachten)?
+  Neues `unternehmen`-Feld → 5-Stellen-Checkliste + Setup-Wizard mit leerer DB testen.
+- [ ] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, zusammen mit #492) – bisher nur
+  100.000 € fürs laufende Jahr aus Ausgangsrechnungen (`api/setup.py::kleinunternehmer_umsatz`).
+  Neu: Gesamtumsatz nach § 19 Abs. 2 UStG aus der EÜR (Zeile 12 minus Zeile 13, enthält auch
+  Journal-Einnahmen, Zahlungsdatum statt Rechnungsdatum), ohne steuerfreie § 4-Umsätze aus #492;
+  Gründungsjahr 25.000 € (braucht Feld „Beginn der Tätigkeit“ in `unternehmen` – bisher nur
+  `taetigkeitsbeginn` in den EKS-Einstellungen), Vorjahr > 25.000 € → Hinweis, optional
+  „Umsatz vor RechnungsFee“ für Umsteiger. Felder gemeinsam mit #492 anlegen (einmal Checkliste +
+  Setup-Wizard-Test).
+
 ---
 
 ## 📋 ELSTER-Export: Umsatzsteuer-Voranmeldung und Zusammenfassende Meldung (Issue #360)
@@ -283,6 +301,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
 - **hellocash-Anbindung** – REST-API (Issue #13)
+- **AQBanking als Option** – Kontoumsätze direkt von der Bank abrufen (FinTS/HBCI über AQBanking) als Alternative zum bestehenden CSV-/CAMT-Import; optional, der Datei-Import bleibt. Kein fester Zeitplan.
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
 - **Offline-Handbuch** – eingebettetes Handbuch direkt in der App (Tauri-Webview oder lokale HTML-Seiten); kein Internetzugang nötig; synchronisiert mit der installierten Version

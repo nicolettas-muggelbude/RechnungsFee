@@ -7,6 +7,7 @@ import {
   type Kategorie, type KategorieCreate,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { EuerZeileSelect } from '../../components/EuerZeileSelect'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 const KONTENART_META: Record<string, { label: string; cls: string; beschreibung: string }> = {
@@ -199,12 +200,10 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
 
           <div>
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400">EÜR-Zeile</label>
-            <input
-              type="number"
+            <EuerZeileSelect
               className="mt-1 w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-lg px-3 py-2 text-sm"
-              value={form.euer_zeile ?? ''}
-              onChange={e => set('euer_zeile', e.target.value ? Number(e.target.value) : undefined)}
-              placeholder="optional"
+              value={form.euer_zeile}
+              onChange={v => set('euer_zeile', v ?? undefined)}
             />
             {/* Issue #470: Basis ist der Vordruck 2025, die EÜR rechnet für spätere Jahre selbst um */}
             <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
@@ -325,22 +324,12 @@ function EuerZeileEdit({
   value: number | undefined
   onSave: (v: number | null) => void
 }) {
-  const [local, setLocal] = useState(value != null ? String(value) : '')
-
   return (
-    <input
-      type="number"
-      min={1}
-      max={200}
-      className="w-16 text-xs border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-      value={local}
-      placeholder="—"
-      onChange={e => setLocal(e.target.value)}
-      onBlur={() => {
-        const n = local.trim() ? Number(local) : null
-        if (n !== (value ?? null)) onSave(n)
-      }}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+    <EuerZeileSelect
+      kompakt
+      className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+      value={value}
+      onChange={v => { if (v !== (value ?? null)) onSave(v) }}
     />
   )
 }

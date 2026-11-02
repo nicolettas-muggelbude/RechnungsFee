@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 177
+SCHEMA_VERSION = 181
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -52,6 +52,10 @@ app.add_middleware(
         "X-GoBD-Belege",
     ],
 )
+
+# Issue #476: angehängten Dateinamen ("/_datei/<name>") vor dem Routing entfernen
+from utils.pdf_dateiname_pfad import PdfDateinameMiddleware  # noqa: E402
+app.add_middleware(PdfDateinameMiddleware)
 
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
@@ -3930,6 +3934,168 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 177 (Issue #474: rechnungen.bemerkung_erechnung)")
 
+        if version < 178:
+            # Issue #470 (Folgemeldung): Reise- und Fahrtkosten-Kategorien.
+            # 1. Konten gegengeprüft am DATEV-Kontenrahmen 2026 (vorlagen/kategorien/): der
+            #    Reisekosten-Block lag seit Migration 25 auf Arbeitnehmer- bzw. Bewirtungskonten
+            #    (z. B. SKR04 6644 = Nicht abzugsfähige Bewirtungskosten, SKR03 4560 = Mautgebühren).
+            #    Richtig für Unternehmer: 4673/6673 Fahrtkosten, 4674/6674 Verpflegungsmehraufwand,
+            #    4676/6680 Übernachtung und Reisenebenkosten, 4590/6590 Kosten für betrieblich
+            #    genutzte, zum Privatvermögen gehörende Fahrzeuge. Eigene Anpassungen
+            #    (user_modified_skr03/04) bleiben erhalten, gebuchte Einträge behalten ihren
+            #    Konto-Snapshot (GoBD).
+            # 2. "Reisekosten – ÖPNV": Fahrausweise berechtigen zum Vorsteuerabzug (§ 35 UStDV),
+            #    Nah- und Fernverkehr meist 7 % - war 0 % Vorsteuer / 0 % USt. Bereits gebuchte
+            #    Einträge bleiben unverändert (vorsteuer_betrag ist je Buchung gespeichert).
+            # 3. "Fahrtkosten Privat-PKW": EÜR-Zeile 70 → 71 (Kz 147 Nutzungseinlage, Fahrzeug
+            #    gehört nicht zum Betriebsvermögen) - nur wo noch die alte Standardzeile steht.
+            _k178 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"konto_skr03_default", "konto_skr04_default", "user_modified_skr03", "user_modified_skr04"} <= _k178:
+                for _name, _s03, _s04 in [
+                    ("Reisekosten – Übernachtung", "4676", "6680"),
+                    ("Reisekosten – Nebenkosten", "4676", "6680"),
+                    ("Reisekosten – ÖPNV", "4673", "6673"),
+                    ("Verpflegungsmehraufwand", "4674", "6674"),
+                    ("Fahrtkosten Privat-PKW (0,10 €/km)", "4590", "6590"),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET
+                            konto_skr03_default = :s03,
+                            konto_skr04_default = :s04,
+                            konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :s03 ELSE konto_skr03 END,
+                            konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :s04 ELSE konto_skr04 END
+                        WHERE name = :name
+                    """), {"s03": _s03, "s04": _s04, "name": _name})
+            if _k178:
+                conn.execute(text("""
+                    UPDATE kategorien SET vorsteuer_prozent = 100, ust_satz_standard = 7
+                    WHERE name = 'Reisekosten – ÖPNV' AND vorsteuer_prozent = 0
+                """))
+                conn.execute(text("""
+                    UPDATE kategorien SET euer_zeile = 71
+                    WHERE name = 'Fahrtkosten Privat-PKW (0,10 €/km)' AND euer_zeile = 70
+                """))
+            conn.execute(text("PRAGMA user_version = 178"))
+            conn.commit()
+            print("[Migration] Schema auf Version 178 (Issue #470: Reise-/Fahrtkostenkonten, ÖPNV-Vorsteuer, Nutzungseinlage Zeile 71)")
+
+        if version < 179:
+            # Issue #470-Folgeprüfung: alle Systemkategorien gegen den DATEV-Kontenrahmen 2026
+            # (vorlagen/kategorien/) abgeglichen. Korrigiert werden nur eindeutige Fehler - Konten
+            # mit anderer Bedeutung (z. B. Privateinlage auf SKR04 2100 = Privatentnahmen,
+            # ig. Lieferung auf SKR04 3125 = Verbindlichkeit, Erhaltene Skonti auf SKR03 2401 =
+            # Forderungsverluste), nicht existierende (Forderungsausfall 4803/6403) und reservierte
+            # Konten (SKR04 4900, 3500/5500). Eigene Anpassungen (user_modified_skr03/04) bleiben
+            # erhalten, gebuchte Einträge behalten ihren Konto-Snapshot (GoBD) - die Erkennung der
+            # ig. Lieferung kennt deshalb beide SKR04-Nummern (utils/konten.py).
+            _k179 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"konto_skr03_default", "konto_skr04_default", "user_modified_skr03", "user_modified_skr04"} <= _k179:
+                for _name, _s03, _s04 in [
+                    ("Privatentnahme", "1800", "2100"),
+                    ("Privateinlage", "1890", "2180"),
+                    ("Einkommensteuer-Vorauszahlung", "1810", "2150"),
+                    ("Krankenversicherung (Pflicht)", "1820", "2200"),
+                    ("Pflegeversicherung (Pflicht)", "1820", "2200"),
+                    ("Rentenversicherung (freiwillig)", "1820", "2200"),
+                    ("Riester-Beiträge", "1820", "2200"),
+                    ("Sonstige Absetzungen", "1800", "2100"),
+                    ("Innergemeinschaftliche Lieferungen", "8125", "4125"),
+                    ("Gewährte Skonti", "8736", "4736"),
+                    ("Erhaltene Skonti", "3736", "5736"),
+                    ("Forderungsausfall", "2400", "6930"),
+                    ("Sonstige Einnahmen", "8603", "4830"),
+                    ("Wareneinkauf Nicht-EU", "3200", "5200"),
+                    ("Wareneinkauf Drittland (ohne USt)", "3200", "5200"),
+                    ("Kredittilgung", "0630", "3150"),
+                    ("KFZ-Reparatur", "4540", "6540"),
+                    ("KFZ-Steuer", "4510", "7685"),
+                    ("KFZ (Kauf)", "0320", "0520"),
+                    ("Anlagevermögen (Kauf)", "0400", "0630"),
+                    ("Investition aus Zuwendung Dritter", "0400", "0630"),
+                    ("Mitgliedsbeiträge", "4380", "6420"),
+                    ("Berufsgenossenschaft", "4138", "6120"),
+                    ("Arbeitszimmer (anteilig)", "4288", "6348"),
+                    ("Miete Einrichtung", "4960", "6835"),
+                    ("Minijob / geringfügige Beschäftigung", "4195", "6035"),
+                    ("Personalkosten Familienangehörige", "4125", "6050"),
+                    ("Löhne & Gehälter", "4120", "6020"),
+                    ("Löhne & Gehälter Teilzeit", "4120", "6020"),
+                    ("Eigenverbrauch von Waren (19%)", "8910", "4620"),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET
+                            konto_skr03_default = :s03,
+                            konto_skr04_default = :s04,
+                            konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :s03 ELSE konto_skr03 END,
+                            konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :s04 ELSE konto_skr04 END
+                        WHERE name = :name
+                    """), {"s03": _s03, "s04": _s04, "name": _name})
+            conn.execute(text("PRAGMA user_version = 179"))
+            conn.commit()
+            print("[Migration] Schema auf Version 179 (Issue #470: Systemkategorien am DATEV-Kontenrahmen 2026 korrigiert)")
+
+        if version < 180:
+            # Issue #470-Folgeprüfung, Ermessensfälle (mit Nicoletta abgestimmt 2026-10-31):
+            # Software & Abonnements 4940/6820 (Fachliteratur) → 4964/6837 (zeitlich befristete
+            # Überlassung von Rechten/Lizenzen, üblich für SaaS-Abos); Zinsen & Darlehenskosten
+            # 2140/7330 (zinsähnliche Aufwendungen) → 2120/7320 (Zinsaufwendungen langfristige
+            # Verbindlichkeiten); Wareneinkauf-Kategorien 3000/5000 (Roh-, Hilfs- und Betriebs-
+            # stoffe) → 3200/5200 (Wareneingang) - bewusst keine Automatikkonten (3400/5400).
+            # Eigene Anpassungen bleiben erhalten, gebuchte Einträge behalten ihren Snapshot.
+            _k180 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"konto_skr03_default", "konto_skr04_default", "user_modified_skr03", "user_modified_skr04"} <= _k180:
+                for _name, _s03, _s04 in [
+                    ("Software & Abonnements", "4964", "6837"),
+                    ("Zinsen & Darlehenskosten", "2120", "7320"),
+                    ("Wareneinkauf", "3200", "5200"),
+                    ("Wareneinkauf (7%)", "3200", "5200"),
+                    ("Wareneinkauf EU (ohne USt-IdNr)", "3200", "5200"),
+                    ("Wareneinkauf Drittland (USt bereits in Rechnung)", "3200", "5200"),
+                    ("Wareneinkauf §25a (privat)", "3200", "5200"),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET
+                            konto_skr03_default = :s03,
+                            konto_skr04_default = :s04,
+                            konto_skr03 = CASE WHEN user_modified_skr03 = 0 THEN :s03 ELSE konto_skr03 END,
+                            konto_skr04 = CASE WHEN user_modified_skr04 = 0 THEN :s04 ELSE konto_skr04 END
+                        WHERE name = :name
+                    """), {"s03": _s03, "s04": _s04, "name": _name})
+            conn.execute(text("PRAGMA user_version = 180"))
+            conn.commit()
+            print("[Migration] Schema auf Version 180 (Issue #470: Konten Software-Abos, Darlehenszinsen, Wareneingang)")
+
+    if version < 181:
+        with engine.connect() as conn:
+            # Issue #480: Einnahme-Kategorien ohne EÜR-Zeile fielen komplett aus der EÜR (Gewinn zu
+            # niedrig) → Zeile 16 (nicht steuerbare BE); bei Kleinunternehmern schlüsselt
+            # api/euer.py je Buchung auf Zeile 12 um. Guard IS NULL - eine bewusst gesetzte
+            # eigene Zeile bleibt. „Betriebseinnahmen (0%)“ 12 → 16 und die neue Kategorie
+            # „Betriebseinnahmen (Kleinunternehmer)“ (8192/4184) laufen über _migrate_kategorien().
+            # Beschreibungen nur ersetzen, solange sie noch dem alten Standardtext entsprechen.
+            _k181 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if {"euer_zeile", "beschreibung"} <= _k181:
+                conn.execute(text("""
+                    UPDATE kategorien SET euer_zeile = 16
+                    WHERE euer_zeile IS NULL AND name IN
+                        ('Sonstige Einnahmen', 'Mahngebühren', 'Verzugszinsen (Einnahme)', 'Zuwendungen von Dritten')
+                """))
+                for _name, _alt, _neu in [
+                    ("Zuwendungen von Dritten",
+                     "z. B. Fördermittel, Zuschüsse, Transferleistungen",
+                     "z. B. Fördermittel, betriebliche Zuschüsse. Steuerfreie Zuschüsse wie der Gründungszuschuss (§ 93 SGB III) sind keine Betriebseinnahme – als Privateinlage buchen."),
+                    ("Betriebseinnahmen (0%)",
+                     "z. B. Einnahmen als Kleinunternehmer (§ 19 UStG) oder steuerfreie Umsätze",
+                     "Umsatzsteuerfreie (§ 4 UStG) oder nicht steuerbare Umsätze, 0 % nach § 12 Abs. 3 UStG (z. B. Photovoltaik), Reverse Charge. Als Kleinunternehmer „Betriebseinnahmen (Kleinunternehmer)“ verwenden."),
+                ]:
+                    conn.execute(text("""
+                        UPDATE kategorien SET beschreibung = :neu
+                        WHERE name = :name AND (beschreibung IS NULL OR beschreibung = :alt)
+                    """), {"name": _name, "alt": _alt, "neu": _neu})
+            conn.execute(text("PRAGMA user_version = 181"))
+            conn.commit()
+            print("[Migration] Schema auf Version 181 (Issue #480: EÜR-Zeile 16 für sonstige Einnahmen)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4006,7 +4172,7 @@ def _migrate_kategorien() -> None:
             ("Betriebseinnahmen", 15),           # Issue #185: umsatzsteuerpflichtige BE → Zeile 15
             ("Betriebseinnahmen (19%)", 15),     # Datenfix #132: ältere DBs + Issue #185
             ("Betriebseinnahmen (7%)", 15),      # Issue #185: 7% gemeinsam mit 19% in Zeile 15
-            ("Betriebseinnahmen (0%)", 12),      # Issue #185: Kleinunternehmer §19 → Zeile 12
+            ("Betriebseinnahmen (0%)", 16),      # Issue #480: Regelbesteuerte 0 % → Zeile 16 (Kleinunternehmer: eigene Kategorie, Zeile 12)
             # Gewährte Skonti: euer_zeile → NULL (Issue #132, Migration 73 – kein Doppelabzug)
         ]
         for name, zeile in euer_korrekturen:
@@ -4044,80 +4210,89 @@ def _migrate_kategorien() -> None:
             # Betriebseinnahmen: müssen VOR _migrate_signaturen() existieren (Datenfix kategorie_id=NULL)
             {"name": "Betriebseinnahmen",     "kontenart": "Erlös",  "konto_skr03": "8400", "konto_skr04": "4400", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 19},
             {"name": "Betriebseinnahmen (7%)", "kontenart": "Erlös", "konto_skr03": "8300", "konto_skr04": "4300", "eks_kategorie": "A1", "euer_zeile": 15, "vorsteuer_prozent": 0, "ust_satz_standard": 7},
-            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0},
-            {"name": "Wareneinkauf",                         "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+            {"name": "Betriebseinnahmen (0%)", "kontenart": "Erlös", "konto_skr03": "8100", "konto_skr04": "4100", "eks_kategorie": "A1", "euer_zeile": 16, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "Umsatzsteuerfreie (§ 4 UStG) oder nicht steuerbare Umsätze, 0 % nach § 12 Abs. 3 UStG (z. B. Photovoltaik), Reverse Charge. Als Kleinunternehmer „Betriebseinnahmen (Kleinunternehmer)“ verwenden."},
+            # Issue #480: eigenes DATEV-Konto für Kleinunternehmer-Erlöse (AM 8192/4184)
+            {"name": "Betriebseinnahmen (Kleinunternehmer)", "kontenart": "Erlös", "konto_skr03": "8192", "konto_skr04": "4184", "eks_kategorie": "A1", "euer_zeile": 12, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+             "beschreibung": "Einnahmen als Kleinunternehmer (§ 19 Abs. 1 UStG) – wird bei Rechnungen automatisch verwendet."},
+            {"name": "Wareneinkauf",                       "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf (7%)",                    "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Wareneinkauf EU",                      "kontenart": "Aufwand", "konto_skr03": "3425", "konto_skr04": "5425", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "ig_erwerb"},
             # Issue #325: ig. Erwerb (§1a UStG, obige "Wareneinkauf EU") setzt eine gültige
             # USt-IdNr beim Verkäufer voraus. Ohne USt-IdNr stellt der Verkäufer brutto mit
             # ausländischer USt - in Deutschland nicht abziehbar. Bewusst NICHT Konto 3425.
-            {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+            {"name": "Wareneinkauf EU (ohne USt-IdNr)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "EU-Lieferant ohne USt-IdNr (z. B. EU-Kleinunternehmer-Äquivalent, Privatperson) – Rechnung enthält ausländische USt, die in Deutschland nicht als Vorsteuer abziehbar ist. Kein innergemeinschaftlicher Erwerb (§1a UStG setzt gültige USt-IdNr beim Verkäufer voraus)."},
-            {"name": "Wareneinkauf Nicht-EU",                "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Wareneinkauf Nicht-EU",                "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Miete Büro (0%)",                      "kontenart": "Aufwand", "konto_skr03": "4210", "konto_skr04": "6310", "eks_kategorie": "B3",    "euer_zeile": 39,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "KFZ-Leasing",                          "kontenart": "Aufwand", "konto_skr03": "4570", "konto_skr04": "6560", "eks_kategorie": "B6_3",  "euer_zeile": 68,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Eigenverbrauch von Waren (19%)",       "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4640", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+            {"name": "Eigenverbrauch von Waren (19%)",       "kontenart": "Erlös",   "konto_skr03": "8910", "konto_skr04": "4620", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
             {"name": "Eigenverbrauch von Waren (7%)",        "kontenart": "Erlös",   "konto_skr03": "8915", "konto_skr04": "4610", "eks_kategorie": "A2",    "euer_zeile": 21,   "vorsteuer_prozent": 0,   "ust_satz_standard": 7},
             {"name": "USt auf Eigenverbrauch",               "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_2",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8900", "konto_skr04": "4900", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Sonstige Einnahmen",                   "kontenart": "Erlös",   "konto_skr03": "8603", "konto_skr04": "4830", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Mahnwesen (docs/plan-mahnwesen.md): Mahngebühren = Schadensersatz (§288 BGB),
             # Verzugszinsen = Zinsertrag - beides nicht umsatzsteuerbar. eks_kategorie A3
             # (Sonstige Einnahmen): echter Geldzufluss, keine der engen SGB-II-Ausnahmen
             # nach §11a Abs. 1 SGB II (Grundrente, Entschädigungen n. BEG/IfSG etc.) greift.
-            # euer_zeile noch offen (TODO im Plan).
-            {"name": "Mahngebühren",                         "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Verzugszinsen (Einnahme)",             "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # EÜR-Zeile 16 (nicht steuerbare BE), bei Kleinunternehmern Zeile 12 (Issue #480).
+            {"name": "Mahngebühren",                         "kontenart": "Erlös",   "konto_skr03": "2742", "konto_skr04": "4970", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Verzugszinsen (Einnahme)",             "kontenart": "Erlös",   "konto_skr03": "2650", "konto_skr04": "7100", "eks_kategorie": "A3",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Zuwendungen von Dritten",              "kontenart": "Erlös",   "konto_skr03": "2747", "konto_skr04": "4982", "eks_kategorie": "A4",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0,
+             "beschreibung": "z. B. Fördermittel, betriebliche Zuschüsse. Steuerfreie Zuschüsse wie der Gründungszuschuss (§ 93 SGB III) sind keine Betriebseinnahme – als Privateinlage buchen."},
             {"name": "Umsatzsteuer (vereinnahmt)",           "kontenart": "Aufwand", "konto_skr03": "1776", "konto_skr04": "3806", "eks_kategorie": "A5_1",  "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Erstattung FA",           "kontenart": "Erlös",   "konto_skr03": "1790", "konto_skr04": "3841", "eks_kategorie": "A5_3",  "euer_zeile": 18,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Löhne & Gehälter Teilzeit",           "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6010", "eks_kategorie": "B2_2",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Löhne & Gehälter Teilzeit",           "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6020", "eks_kategorie": "B2_2",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "AG-Anteil Sozialversicherung",        "kontenart": "Aufwand", "konto_skr03": "4130", "konto_skr04": "6110", "eks_kategorie": "B2_1",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Minijob / geringfügige Beschäftigung", "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6030", "eks_kategorie": "B2_3",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Personalkosten Familienangehörige",  "kontenart": "Aufwand", "konto_skr03": "4120", "konto_skr04": "6050", "eks_kategorie": "B2_4",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Minijob / geringfügige Beschäftigung", "kontenart": "Aufwand", "konto_skr03": "4195", "konto_skr04": "6035", "eks_kategorie": "B2_3",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Personalkosten Familienangehörige",  "kontenart": "Aufwand", "konto_skr03": "4125", "konto_skr04": "6050", "eks_kategorie": "B2_4",  "euer_zeile": 30,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Rechts- & Beratungskosten",           "kontenart": "Aufwand", "konto_skr03": "4950", "konto_skr04": "6825", "eks_kategorie": "B12",   "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Buchführungskosten",                   "kontenart": "Aufwand", "konto_skr03": "4955", "konto_skr04": "6830", "eks_kategorie": "B12",   "euer_zeile": 46,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # Issue #470: Tagespauschale für die Tätigkeit in der häuslichen Wohnung (EÜR-Zeile 66)
             {"name": "Homeoffice-Tagespauschale",         "kontenart": "Aufwand", "konto_skr03": "4287", "konto_skr04": "6347", "eks_kategorie": "B3",    "euer_zeile": 66,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": "Tagespauschale für die Tätigkeit in der häuslichen Wohnung: 6 € je Tag, höchstens 1.260 € im Jahr – auch ohne eigenes Arbeitszimmer. Kein Zahlungsfluss, als Buchung ohne Beleg erfassen."},
-            {"name": "KFZ-Steuer",                           "kontenart": "Aufwand", "konto_skr03": "4510", "konto_skr04": "6500", "eks_kategorie": "B6_1",  "euer_zeile": 69,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "KFZ-Reparatur",                        "kontenart": "Aufwand", "konto_skr03": "4540", "konto_skr04": "6450", "eks_kategorie": "B6_4",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "KFZ-Steuer",                           "kontenart": "Aufwand", "konto_skr03": "4510", "konto_skr04": "7685", "eks_kategorie": "B6_1",  "euer_zeile": 69,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "KFZ-Reparatur",                        "kontenart": "Aufwand", "konto_skr03": "4540", "konto_skr04": "6540", "eks_kategorie": "B6_4",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Reparatur Anlagevermögen",              "kontenart": "Aufwand", "konto_skr03": "4805", "konto_skr04": "6470", "eks_kategorie": "B14_1", "euer_zeile": 48,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Miete Einrichtung",                     "kontenart": "Aufwand", "konto_skr03": "4200", "konto_skr04": "6318", "eks_kategorie": "B14_2", "euer_zeile": 47,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Miete Einrichtung",                     "kontenart": "Aufwand", "konto_skr03": "4960", "konto_skr04": "6835", "eks_kategorie": "B14_2", "euer_zeile": 47,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Betriebliche Abfallbeseitigung",        "kontenart": "Aufwand", "konto_skr03": "4969", "konto_skr04": "6859", "eks_kategorie": "B14_4", "euer_zeile": 52,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Reisekosten – Nebenkosten",            "kontenart": "Aufwand", "konto_skr03": "4663", "konto_skr04": "6644", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4664", "konto_skr04": "6644", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2140", "konto_skr04": "7330", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Kredittilgung",                        "kontenart": "Aufwand", "konto_skr03": "2100", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Issue #470: Konten "Reisekosten Unternehmer" (DATEV 2026), ÖPNV mit Vorsteuer (§ 35 UStDV)
+            {"name": "Reisekosten – Nebenkosten",            "kontenart": "Aufwand", "konto_skr03": "4676", "konto_skr04": "6680", "eks_kategorie": "B7_2",  "euer_zeile": 44,   "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4673", "konto_skr04": "6673", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
+            {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2120", "konto_skr04": "7320", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Kredittilgung",                        "kontenart": "Aufwand", "konto_skr03": "0630", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Umsatzsteuer-Zahlung FA",              "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Anlagevermögen (Kauf)",                "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0400", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Investition aus Zuwendung Dritter",   "kontenart": "Anlage",  "konto_skr03": "0435", "konto_skr04": "0435", "eks_kategorie": "B9",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
-            {"name": "Einkommensteuer-Vorauszahlung",        "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Gewerbesteuer",                        "kontenart": "Aufwand", "konto_skr03": "7600", "konto_skr04": "7610", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Krankenversicherung (Pflicht)",        "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Pflegeversicherung (Pflicht)",         "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Rentenversicherung (freiwillig)",      "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Riester-Beiträge",                     "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C9",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Sonstige Absetzungen",                 "kontenart": "Privat",  "konto_skr03": "1890", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Anlagevermögen (Kauf)",                "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0630", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Investition aus Zuwendung Dritter",   "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0630", "eks_kategorie": "B9",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Einkommensteuer-Vorauszahlung",        "kontenart": "Privat",  "konto_skr03": "1810", "konto_skr04": "2150", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Gewerbesteuer",                        "kontenart": "Aufwand", "konto_skr03": "4320", "konto_skr04": "7610", "eks_kategorie": "C1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Krankenversicherung (Pflicht)",        "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Pflegeversicherung (Pflicht)",         "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C2",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Rentenversicherung (freiwillig)",      "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Riester-Beiträge",                     "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C9",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Sonstige Absetzungen",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Issue #61 – Forderungsausfall
-            {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "4803", "konto_skr04": "6403", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "2400", "konto_skr04": "6930", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Issue #106 – fehlende EÜR-Zeilen
             {"name": "Abschreibungen (AfA)",             "kontenart": "Aufwand", "konto_skr03": "4830", "konto_skr04": "6220", "eks_kategorie": None,    "euer_zeile": 33,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4560", "konto_skr04": "6530", "eks_kategorie": "B6_5",  "euer_zeile": 70,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4661", "konto_skr04": "6645", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
-            {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4390", "konto_skr04": "6405", "eks_kategorie": "B14_5", "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Issue #470: Privat-PKW gehört nicht zum Betriebsvermögen → Zeile 71 (Kz 147 Nutzungseinlage),
+            # Konten 4590/6590 bzw. 4674/6674 laut DATEV-Kontenrahmen 2026
+            {"name": "Fahrtkosten Privat-PKW (0,10 €/km)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": "B6_5",  "euer_zeile": 71,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Fahrtkosten nicht betriebliche Fahrzeuge (Nutzungseinlage)", "kontenart": "Aufwand", "konto_skr03": "4590", "konto_skr04": "6590", "eks_kategorie": None, "euer_zeile": 71, "vorsteuer_prozent": 0, "ust_satz_standard": 0, "beschreibung": "Betrieblicher Anteil an den tatsächlichen Kosten eines privaten Fahrzeugs, z. B. Reparatur des privaten Fahrrads oder Autos. Für gefahrene Kilometer mit dem privaten PKW gibt es die Kategorie „Fahrtkosten Privat-PKW“."},
+            {"name": "Verpflegungsmehraufwand",          "kontenart": "Aufwand", "konto_skr03": "4674", "konto_skr04": "6674", "eks_kategorie": "B7_2",  "euer_zeile": 64,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Mitgliedsbeiträge",               "kontenart": "Aufwand", "konto_skr03": "4380", "konto_skr04": "6420", "eks_kategorie": "B14_5", "euer_zeile": 49,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Spenden (betrieblich)",            "kontenart": "Aufwand", "konto_skr03": "1840", "konto_skr04": "2250", "eks_kategorie": "B14_5", "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Skonti
-            {"name": "Gewährte Skonti",                  "kontenart": "Erlös",   "konto_skr03": "8736", "konto_skr04": "4310", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
-            {"name": "Erhaltene Skonti",                 "kontenart": "Aufwand", "konto_skr03": "2401", "konto_skr04": "3401", "eks_kategorie": "B1",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "Gewährte Skonti",                  "kontenart": "Erlös",   "konto_skr03": "8736", "konto_skr04": "4736", "eks_kategorie": "A1",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 19},
+            {"name": "Erhaltene Skonti",                 "kontenart": "Aufwand", "konto_skr03": "3736", "konto_skr04": "5736", "eks_kategorie": "B1",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # Bewirtungskosten nicht abzugsfähiger Anteil
             {"name": "Bewirtungskosten (nicht abzugsfähig)", "kontenart": "Aufwand", "konto_skr03": "4654", "konto_skr04": "6644", "eks_kategorie": None,    "euer_zeile": 63, "vorsteuer_prozent": 100, "ust_satz_standard": 0},
             # Anlagevermögen KFZ (Anlage AVEÜR: eigene Kategorie „Kraftfahrzeuge")
-            {"name": "KFZ (Kauf)",                           "kontenart": "Anlage",  "konto_skr03": "0320", "konto_skr04": "0540", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
+            {"name": "KFZ (Kauf)",                           "kontenart": "Anlage",  "konto_skr03": "0320", "konto_skr04": "0520", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # Digitale Wirtschaftsgüter: Wahlrecht Nutzungsdauer 1 Jahr (BMF 26.02.2021, § 7 Abs. 1 EStG)
             # KEIN GWG – muss ins Bestandsverzeichnis! Buchung: 1. Kauf hier (Anlage 0650), 2. volle AfA
             {"name": "EDV / Software (Sofortabschreibung)",  "kontenart": "Anlage",  "konto_skr03": "0490", "konto_skr04": "0650", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             # EU-Handel – innergemeinschaftliche Lieferungen (§4 Nr. 1b UStG)
             # Käufer muss gültige USt-IdNr haben; UStVA KZ 41; Zusammenfassende Meldung (ZM) nötig
-            {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "3125", "eks_kategorie": "A1",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Innergemeinschaftliche Lieferungen",   "kontenart": "Erlös",   "konto_skr03": "8125", "konto_skr04": "4125", "eks_kategorie": "A1",    "euer_zeile": 16,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Drittland-Dienstleistungen (§3a Abs. 2 UStG) - z.B. Schweiz, GB, USA (Issue #315)
             # Leistungsort beim Empfaenger, nicht steuerbar in Deutschland - anders als beim
             # EU-Fall oben KEINE Zusammenfassende Meldung (die ist EU-exklusiv) und kein
@@ -4157,15 +4332,15 @@ def _migrate_kategorien() -> None:
             {"name": "Bauleistungen / §13b Abs. 2",          "kontenart": "Aufwand", "konto_skr03": "3120", "konto_skr04": "5920", "eks_kategorie": "B14_1", "euer_zeile": 60,   "vorsteuer_prozent": 100, "ust_satz_standard": 19, "ust_sonderfall": "13b_abs2"},
             # §25a Differenzbesteuerung – Ankauf von Privatpersonen oder anderen ohne USt-Ausweis
             # Keine Vorsteuer abziehbar; EK-Preis ist Basis für Margenberechnung (VK − EK)
-            {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Wareneinkauf §25a (privat)",            "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1",    "euer_zeile": 27,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # §25a Differenzbesteuerung Erlösseite – DATEV-Automatikkonto (Issue #303).
             # Schritt 1: nur Kategorie anlegen, noch nicht mit der Buchungslogik verdrahtet.
             {"name": "Differenzbesteuerung (§25a)",           "kontenart": "Erlös",   "konto_skr03": "8199", "konto_skr04": "4134", "eks_kategorie": "A1",    "euer_zeile": 15,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Drittland-Warenkäufe (Alibaba/Amazon/Ebay etc.): USt schon in Rechnung (IOSS)
             # vs. ohne USt (Direktimport, ggf. DHL-Nachforderung Zoll + Einfuhrumsatzsteuer)
-            {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3000", "konto_skr04": "5000", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
+            {"name": "Wareneinkauf Drittland (USt bereits in Rechnung)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 100, "ust_satz_standard": 19,
              "beschreibung": "z. B. Amazon/Ebay-Bestellungen aus Drittländern (China etc.) – USt steht schon auf der Rechnung/Bestellbestätigung (IOSS), ganz normal als Vorsteuer abziehbar."},
-            {"name": "Wareneinkauf Drittland (ohne USt)", "kontenart": "Aufwand", "konto_skr03": "3500", "konto_skr04": "5500", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
+            {"name": "Wareneinkauf Drittland (ohne USt)", "kontenart": "Aufwand", "konto_skr03": "3200", "konto_skr04": "5200", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "z. B. Alibaba-Direktkauf beim Hersteller – keine USt auf der Rechnung. Kommt später eine DHL-Nachforderung, diese getrennt über 'Zoll / Einfuhrabgaben' bzw. 'Einfuhrumsatzsteuer' buchen."},
             {"name": "Zoll / Einfuhrabgaben", "kontenart": "Aufwand", "konto_skr03": "3850", "konto_skr04": "5840", "eks_kategorie": "B1", "euer_zeile": 27, "vorsteuer_prozent": 0, "ust_satz_standard": 0,
              "beschreibung": "Zollanteil einer DHL-Nachforderung – nicht als Vorsteuer abziehbar, reine Wareneinkaufs-Nebenkosten. Bei Kleinsendungen bis 150 € meist 0 €."},

@@ -24,6 +24,11 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
+from utils.mail_tls import (
+    MailTLSConfigurationError,
+    certificate_verification_detail,
+    create_mail_tls_context,
+)
 
 router = APIRouter(prefix="/api/mail", tags=["Mail"])
 logger = logging.getLogger(__name__)
@@ -219,7 +224,10 @@ def _pruefe_gepinntes_zertifikat(u: Unternehmen, srv, db: Session) -> None:
 
 def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
     port = u.smtp_port or 587
-    ctx = ssl.create_default_context()
+    try:
+        ctx = create_mail_tls_context(public_cas=not u.smtp_zertifikat_ignorieren)
+    except MailTLSConfigurationError as e:
+        raise HTTPException(400, str(e)) from e
     if u.smtp_zertifikat_ignorieren:
         # Opt-in (Issue #336, z.B. TLS-Interception durch lokale Security-Software mit
         # selbstsigniertem Zertifikat) - die CA-Kettenprüfung entfällt, dafür übernimmt
@@ -254,17 +262,7 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
     # ssl.SSLCertVerificationError ist eine Unterklasse von ssl.SSLError, die wiederum eine
     # Unterklasse von OSError ist - muss deshalb vor den allgemeineren Fällen geprüft werden.
     except ssl.SSLCertVerificationError as e:
-        selbstsigniert = "self-signed certificate" in str(e)
-        grund = "ein selbstsigniertes Zertifikat" if selbstsigniert else "ein nicht vertrauenswürdiges Zertifikat"
-        raise HTTPException(
-            400,
-            f'Zertifikatsprüfung fehlgeschlagen: Der SMTP-Server „{u.smtp_host}" verwendet {grund}, '
-            "dem RechnungsFee nicht automatisch vertraut - auch wenn dein E-Mail-Programm oder "
-            "Windows die Verbindung akzeptiert (z. B. weil das Zertifikat dort manuell als "
-            "vertrauenswürdig hinterlegt wurde). Das kommt häufiger bei einem eigenen/internen "
-            "Mailserver vor. Bitte beim E-Mail-Anbieter bzw. der IT nachfragen, ob stattdessen "
-            "ein gültiges Zertifikat einer öffentlichen Zertifizierungsstelle verwendet werden kann.",
-        )
+        raise HTTPException(400, certificate_verification_detail("SMTP", u.smtp_host, e))
     except ssl.SSLError as e:
         raise HTTPException(400, f"TLS/SSL-Fehler bei der Verbindung zu {u.smtp_host}:{port}: {e}")
     except socket.gaierror:

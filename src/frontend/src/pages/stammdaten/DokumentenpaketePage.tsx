@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDokumentenPakete, createDokumentenPaket, updateDokumentenPaket, deleteDokumentenPaket,
-  uploadPaketDatei, updatePaketDatei, deletePaketDatei, getPaketDateiUrl,
+  uploadPaketDatei, updatePaketDatei, deletePaketDatei, getPaketDateiUrl, getPaketVorschauUrl,
   type DokumentenPaket, type PaketDatei,
 } from '../../api/client'
 import { openUrl } from '../../api/client'
@@ -246,6 +246,13 @@ function GruppenKarte({ paket }: { paket: DokumentenPaket }) {
               )}
             </div>
             <div className="flex gap-1 flex-shrink-0">
+              {paket.dateien.length > 0 && (
+                <button onClick={async () => openUrl(await getPaketVorschauUrl(paket.id, paket.name))}
+                  title="Alle Dokumente als ein PDF ansehen und drucken"
+                  className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                  Paket ansehen
+                </button>
+              )}
               <button onClick={() => setEditModus(true)}
                 className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
                 Umbenennen
@@ -320,7 +327,7 @@ export function DokumentenpaketePage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Dokumentenpakete</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm">
-          Gruppen von Anhängen für Angebote und Auftragsbestätigungen – z.B. Gruppe „B2B" mit AGB, Datenschutzerklärung und Leistungsverzeichnis.
+          Gruppen von Anhängen für Angebote, Aufträge, Rechnungen und Proforma-Rechnungen – z.B. Gruppe „B2B" mit AGB, Datenschutzerklärung und Leistungsverzeichnis.
         </p>
       </div>
 
@@ -385,7 +392,7 @@ export function DokumentenpaketePage() {
           <p className="text-slate-600 dark:text-slate-300 font-medium">Noch keine Gruppen angelegt</p>
           <p className="text-slate-400 dark:text-slate-500 text-sm">
             Lege z.B. eine Gruppe „B2B" an und füge AGB, Datenschutzerklärung und Leistungsverzeichnis hinzu.
-            Diese Gruppe kannst du später bei Angeboten und Auftragsbestätigungen auswählen.
+            Diese Gruppe kannst du später bei Angeboten, Aufträgen, Rechnungen und Proforma-Rechnungen auswählen.
           </p>
         </div>
       ) : (

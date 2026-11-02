@@ -22,6 +22,7 @@ import {
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
+  dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -32,7 +33,8 @@ import { ArtikelFormModal } from '../artikel/ArtikelPage'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
-import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
+import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
@@ -88,6 +90,27 @@ function formatPreis(preis: string): string {
 
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+// Issue #485: Beim Finalisieren eines älteren Entwurfs nachfragen, ob das Rechnungsdatum auf
+// heute gesetzt werden soll - nie stillschweigend, weil bewusst rückdatiert nacherfasst werden
+// kann. true = auf heute setzen. Datumsvergleich als ISO-String (yyyy-mm-dd).
+function frageRechnungsdatumAufHeute(datum: string, leistungBis?: string | null): boolean {
+  const heute = heuteIso()
+  if (!datum || datum >= heute) return false
+  const de = (iso: string) => iso.split('-').reverse().join('.')
+  let text = `Das Rechnungsdatum ist der ${de(datum)}. Soll es beim Finalisieren auf heute (${de(heute)}) gesetzt werden?`
+  if (leistungBis && leistungBis > datum) {
+    text += `\n\nAchtung: Der Leistungszeitraum endet erst am ${de(leistungBis)}, also nach dem bisherigen Rechnungsdatum.`
+  }
+  text += '\n\nDie Fälligkeit verschiebt sich um dieselbe Anzahl Tage.\n\nOK = auf heute setzen\nAbbrechen = Datum beibehalten'
+  return window.confirm(text)
+}
+
+function verschiebeIso(iso: string, vonIso: string, bisIso: string): string {
+  const tage = (Date.parse(bisIso) - Date.parse(vonIso)) / 86_400_000
+  const d = new Date(Date.parse(iso) + tage * 86_400_000)
+  return d.toISOString().slice(0, 10)
 }
 
 
@@ -507,7 +530,7 @@ function StatusMultiSelect({ value, onChange }: { value: string[]; onChange: (v:
 // Zahlungs-Dialog
 // ---------------------------------------------------------------------------
 
-type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string }
+type SplitZeile = { beschreibung: string; betrag: string; kategorie_id: string; position_id?: number }
 
 function ZahlungsDialog({
   rechnung,
@@ -577,8 +600,10 @@ function ZahlungsDialog({
   const [splitZeilen, setSplitZeilen] = useState<SplitZeile[]>(() =>
     rechnung.positionen.map((pos) => ({
       beschreibung: pos.beschreibung,
-      betrag: (parseFloat(pos.brutto) * parseFloat(pos.menge)).toFixed(2).replace('.', ','),
+      // pos.brutto ist seit Issue #332 bereits die Positionssumme - nicht nochmal × Menge
+      betrag: parseFloat(pos.brutto).toFixed(2).replace('.', ','),
       kategorie_id: String(pos.kategorie_id ?? ''),
+      position_id: pos.id,
     }))
   )
 
@@ -660,6 +685,7 @@ function ZahlungsDialog({
           kategorie_id: parseInt(z.kategorie_id),
           betrag: parseFloat(z.betrag.replace(',', '.')).toFixed(2),
           beschreibung: z.beschreibung,
+          position_id: z.position_id,
         }))
       } else {
         if (!kategorieId) {
@@ -1178,6 +1204,9 @@ function RechnungDetail({
     await openUrl(url)
   }
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+  // Kategorien für den Kategorie-Tooltip an den Positionen - bewusst alle (nicht nur aktive),
+  // damit auch deaktivierte Kategorien alter Rechnungen noch ihren Namen zeigen
+  const { data: kategorien } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
 
   // Datenübernahme: „extern erstellt" nachträglich umschalten - nur solange RechnungsFee noch nichts
   // gedruckt/versendet hat (Backend prüft zusätzlich das gespeicherte Original-PDF)
@@ -1312,7 +1341,7 @@ function RechnungDetail({
   }
 
   const finalisiereMutation = useMutation({
-    mutationFn: () => finalisiereRechnung(rechnung.id),
+    mutationFn: (datumHeute: boolean) => finalisiereRechnung(rechnung.id, datumHeute),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       qc.invalidateQueries({ queryKey: ['auftraege'] })
@@ -1363,7 +1392,7 @@ function RechnungDetail({
 
   async function handleDrucken() {
     const base = await getApiBase()
-    const url = `${base}/rechnungen/${rechnung.id}/pdf`
+    const url = dokumentPdfUrl(base, rechnung)
     // Archivierung passiert serverseitig beim Laden der URL, unabhängig vom Aufrufer -
     // kurze Verzögerung damit die Liste den neuen "ausgegeben"-Status zuverlässig zeigt.
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
@@ -1378,7 +1407,7 @@ function RechnungDetail({
   async function handlePdfOeffnen() {
     const base = await getApiBase()
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
-    _zeigePdf(`${base}/rechnungen/${rechnung.id}/pdf`, 'Rechnung')
+    _zeigePdf(dokumentPdfUrl(base, rechnung), 'Rechnung')
   }
 
   async function handleAnsehen() {
@@ -1386,7 +1415,7 @@ function RechnungDetail({
     if (isTauri()) {
       openInPdfWindow(`${base}/rechnungen/${rechnung.id}/pdf-ansehen`, rechnung.rechnungsnummer ?? 'Dokument')
     } else {
-      window.open(`${base}/rechnungen/${rechnung.id}/pdf?nur_ansehen=true`, '_blank')
+      window.open(dokumentPdfUrl(base, rechnung, '?nur_ansehen=true'), '_blank')
     }
   }
 
@@ -1437,7 +1466,7 @@ function RechnungDetail({
           anhaenge: [{
             url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
             dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
-          }],
+          }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
         })
         qc.invalidateQueries({ queryKey: ['rechnungen'] })
         setZeigMailEingabe(false)
@@ -1481,7 +1510,7 @@ function RechnungDetail({
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
-    setTimeout(() => setZeigSmtpHinweis(false), 6000)
+    if (!rechnung.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)
   }
 
   return (
@@ -1662,6 +1691,15 @@ function RechnungDetail({
           {rechnung.storniert && (
             <span className="self-center text-xs text-slate-400 italic">Storniert</span>
           )}
+          {!!rechnung.dokumentenpaket_id && (
+            <button
+              onClick={() => oeffnePaketVorschau(rechnung.dokumentenpaket_id!)}
+              title="Alle Dokumente des Pakets als ein PDF ansehen und drucken"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              📎 Paket ansehen
+            </button>
+          )}
         </div>
 
         {fehler && (
@@ -1669,6 +1707,11 @@ function RechnungDetail({
             <span>{fehler}</span>
             <button onClick={() => setFehler(null)} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300">×</button>
           </div>
+        )}
+
+        {/* Issue #477: per mailto kann kein Paket mitgehen - vorher sichtbar machen statt still weglassen */}
+        {!!rechnung.dokumentenpaket_id && !unternehmen?.smtp_aktiv && !unternehmen?.thunderbird_aktiv && !rechnung.ist_entwurf && (
+          <PaketMailtoWarnung onEinrichten={() => navigate('/unternehmen?tab=email')} />
         )}
 
         {zeigThunderbirdHinweis && (
@@ -1679,8 +1722,14 @@ function RechnungDetail({
           <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 shadow-lg flex gap-3 items-start">
             <span className="text-lg">💡</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tipp: SMTP einrichten</p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                {rechnung.dokumentenpaket_id ? 'Dokumentenpaket nicht angehängt' : 'Tipp: SMTP einrichten'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                {rechnung.dokumentenpaket_id
+                  ? 'Über dein Standard-Mailprogramm lassen sich keine Anhänge übergeben. Mit SMTP oder Thunderbird gehen PDF und Dokumentenpaket automatisch mit.'
+                  : 'Mit SMTP-Versand werden PDF und Dokumentenpakete automatisch als Anhang beigefügt.'}
+              </p>
               <button onClick={() => { setZeigSmtpHinweis(false); navigate('/unternehmen?tab=email') }}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline">
                 Jetzt einrichten →
@@ -1848,7 +1897,10 @@ function RechnungDetail({
                 if (steuerIdFehlt && !window.confirm(
                   'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
                 )) return
-                finalisiereMutation.mutate()
+                const datumHeute = rechnung.typ === 'ausgang' && !rechnung.import_quelle &&
+                  rechnung.dokument_typ !== 'Lieferschein' &&
+                  frageRechnungsdatumAufHeute(rechnung.datum, rechnung.leistung_bis)
+                finalisiereMutation.mutate(datumHeute)
               }}
               disabled={finalisiereMutation.isPending}
               className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 shrink-0"
@@ -1992,10 +2044,19 @@ function RechnungDetail({
                         ? gesamtVorRabatt - (effBrutto - parseFloat(pos.ust_betrag))
                         : gesamtVorRabatt - effBrutto
                       : 0
+                    // Kategorie-Tooltip: Kategorie der Position, Fallback auf Rechnungs-Kategorie
+                    // (analog zur Buchungslogik: pos.kategorie_id or rechnung.kategorie_id)
+                    const katFuerPos = pos.kategorie_id ?? rechnung.kategorie_id
+                    const posKatName = katFuerPos != null
+                      ? (kategorien ?? []).find((k) => k.id === katFuerPos)?.name
+                      : undefined
                     return (
                     <Fragment key={pos.id}>
                     <tr className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                      <td
+                        className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap"
+                        title={posKatName ? `Kategorie: ${posKatName}` : undefined}
+                      >
                         {pos.beschreibung}
                         {pos.artikelcode && (
                           <div className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">Art.-Nr.: {pos.artikelcode}</div>
@@ -2760,6 +2821,8 @@ function RechnungForm({
   const [externeBelegnr, setExterneBelegnr] = useState(pf?.externe_belegnr ?? initial?.externe_belegnr ?? '')
   const [kundenBestellnummer, setKundenBestellnummer] = useState(initial?.kunden_bestellnummer ?? '')
   const [bemerkungErechnung, setBemerkungErechnung] = useState(initial?.bemerkung_erechnung ?? '')
+  const [paketId, setPaketId] = useState(initial?.dokumentenpaket_id?.toString() ?? '')
+  const { data: pakete } = useQuery({ queryKey: ['dokumentenpakete'], queryFn: getDokumentenPakete, enabled: typ === 'ausgang' })
   const [externErstellt, setExternErstellt] = useState(false)
   const [positionen, setPositionen] = useState<Positionszeile[]>(() => {
     if (prefillFromAnalyse?.positionen?.length) {
@@ -3386,6 +3449,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
+      dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
       ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
@@ -3451,7 +3515,16 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
       )) return
     }
-    onSave(buildData(istEntwurf))
+    const daten = buildData(istEntwurf)
+    // Issue #485: älteres Rechnungsdatum beim Finalisieren auf heute setzen (nur auf Nachfrage)
+    if (!istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
+        dokumentTyp !== 'Lieferschein' &&
+        frageRechnungsdatumAufHeute(datum, leistungZeitraum ? leistungBis : null)) {
+      const heute = heuteIso()
+      if (daten.faellig_am) daten.faellig_am = verschiebeIso(daten.faellig_am, datum, heute)
+      daten.datum = heute
+    }
+    onSave(daten)
   }
 
   return (
@@ -4516,6 +4589,26 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             placeholder="Bestell-/Referenznummer des Kunden"
           />
+        </div>
+      )}
+
+      {/* Issue #477: nur wenn überhaupt ein aktives Paket existiert (oder schon eins gewählt ist) */}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (!!paketId || !!pakete?.some(p => p.aktiv)) && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+            Dokumentenpaket
+            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">(optional, geht beim Mailversand mit)</span>
+          </label>
+          <select
+            value={paketId}
+            onChange={(e) => setPaketId(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          >
+            <option value="">— Kein Paket —</option>
+            {pakete?.filter(p => p.aktiv || p.id.toString() === paketId).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
       )}
 
