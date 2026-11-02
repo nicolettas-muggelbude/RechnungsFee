@@ -4630,5 +4630,27 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="RechnungsFee Backend")
     parser.add_argument("--port", type=int, default=8002)
+    parser.add_argument("--selbsttest", action="store_true",
+                        help="Bibliotheken im gebündelten Sidecar laden und beenden (Build-Prüfung)")
     args = parser.parse_args()
+    if args.selbsttest:
+        # Issue #493: PyInstaller packt Datendateien nur auf Anweisung mit - ein Import kann im
+        # Sidecar scheitern, obwohl er im venv (und damit in allen Tests) funktioniert. Die
+        # Buildskripte rufen das direkt nach dem Bauen auf und brechen bei Exit-Code 1 ab.
+        import sys
+        import traceback
+        try:
+            import fitz
+            _doc = fitz.open()
+            _doc.new_page()
+            _doc.tobytes()
+            import certifi
+            assert Path(certifi.where()).exists(), "certifi-Bundle fehlt"
+            import pypdf, pdfplumber, fpdf, facturx, segno, pytesseract, resvg_py  # noqa: F401
+            print(f"[Selbsttest] ok (PyMuPDF {fitz.VersionBind})")
+            sys.exit(0)
+        except Exception:
+            traceback.print_exc()
+            print("[Selbsttest] FEHLER")
+            sys.exit(1)
     uvicorn.run(app, host="127.0.0.1", port=args.port)

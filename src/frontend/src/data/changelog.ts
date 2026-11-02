@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.7',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'fix', text: '„Paket ansehen“ bei Dokumentenpaketen zeigte nur „Internal Server Error“, und das Einlesen gescannter PDF-Belege per Texterkennung (OCR) brach ab. Ursache war eine neue Hauptversion der PDF-Bibliothek, die im Installationspaket unvollständig war (betraf v0.7.5 und v0.7.6). Der Build prüft die Bibliotheken jetzt vor jeder Veröffentlichung selbst. Danke an ludgerknorps (Issue #493).' },
+    ],
+  },
+  {
     version: 'v0.7.6',
     datum: 'November 2026',
     eintraege: [

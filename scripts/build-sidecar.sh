@@ -97,6 +97,9 @@ if [ -f "$BINARY_SRC" ]; then
     mv "$BINARY_SRC" "$BINARY_DST"
     chmod +x "$BINARY_DST"
     echo "[Sidecar] Fertig: $BINARY_DST"
+    # Issue #493: Bibliotheken im fertigen Binary laden - fehlende Datendateien fallen sonst erst
+    # beim Nutzer auf (Tests laufen im venv, nicht im Bundle)
+    "$BINARY_DST" --selbsttest
 else
     echo "[Sidecar] Fehler: Binary nicht gefunden in $BINARIES_DIR" >&2
     exit 1

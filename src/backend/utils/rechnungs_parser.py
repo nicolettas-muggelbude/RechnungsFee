@@ -898,6 +898,10 @@ def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
         import fitz  # pymupdf
     except ImportError:
         return "", "OCR nicht verfügbar: 'pymupdf' fehlt (pip install pymupdf)."
+    except Exception as e:
+        # Issue #493: ein Import kann auch mit anderen Fehlern scheitern (z. B. fehlende
+        # Datendateien im gebündelten Sidecar) - lesbare Meldung statt Serverfehler
+        return "", f"OCR nicht verfügbar: PDF-Bibliothek konnte nicht geladen werden ({type(e).__name__})."
 
     try:
         import pytesseract
