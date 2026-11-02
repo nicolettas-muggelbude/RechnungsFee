@@ -105,6 +105,13 @@ $BinaryDst = Join-Path $BinariesDir "backend-$Triple.exe"
 if (Test-Path $BinarySrc) {
     Move-Item -Force $BinarySrc $BinaryDst
     Write-Host "[Sidecar] Fertig: $BinaryDst"
+    # Issue #493: Bibliotheken im fertigen Binary laden - fehlende Datendateien fallen sonst erst
+    # beim Nutzer auf (Tests laufen im venv, nicht im Bundle)
+    & $BinaryDst --selbsttest
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "[Sidecar] Selbsttest fehlgeschlagen"
+        exit 1
+    }
 } else {
     Write-Error "[Sidecar] Fehler: Binary nicht gefunden in $BinariesDir"
     exit 1

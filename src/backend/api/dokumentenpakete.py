@@ -262,7 +262,15 @@ def paket_als_pdf(p: DokumentenPaket) -> bytes:
     Bilder (JPEG/PNG) werden je zu einer Seite in Bildgröße. Fehlende oder
     unlesbare Dateien werden übersprungen statt die ganze Vorschau abzubrechen.
     """
-    import fitz  # pymupdf
+    try:
+        import fitz  # pymupdf
+    except Exception as e:
+        # Issue #493: lesbare Meldung statt "Internal Server Error", falls die PDF-Bibliothek im
+        # gebündelten Sidecar nicht geladen werden kann
+        raise HTTPException(
+            status_code=500,
+            detail=f"Die PDF-Bibliothek konnte nicht geladen werden ({type(e).__name__}) - bitte als Fehler melden.",
+        )
 
     ziel = fitz.open()
     for eintrag in p.dateien:

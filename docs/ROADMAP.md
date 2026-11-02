@@ -122,7 +122,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
-## 📋 v0.7.7 – vorgemerkt
+## 📋 v0.7.8 – vorgemerkt
 
 - [ ] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480) –
   Auswahlfeld z. B. „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“. Steuert: EÜR-Zeile 13

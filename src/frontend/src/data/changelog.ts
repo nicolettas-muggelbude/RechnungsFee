@@ -27,9 +27,16 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'in Arbeit',
     eintraege: [
       { typ: 'verbesserung', text: 'Barrierefreiheit: Die Dialoge „Kunde anlegen“, „Lieferant anlegen“, „Kategorie anlegen“, Import, E-Mail und Mahnung-Mail sind jetzt für Screenreader und Tastatur erschlossen – der Fokus springt beim Öffnen in den Dialog und bleibt dort, Escape schließt ihn (bzw. zuerst eine geöffnete Auswahlliste), danach kehrt der Fokus zum Auslöser zurück. Formularfelder sind mit ihren Beschriftungen verknüpft, Pflichtfelder und Fehlermeldungen werden vorgelesen; die Länderauswahl ist eine vollwertige, per Tastatur bedienbare Auswahlliste. Danke an Simperdy für die Umsetzung (PR #452, Sammel-Issue #455).' },
-      ],
-    },
-    {
+    ],
+  },
+  {
+    version: 'v0.7.7',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'fix', text: '„Paket ansehen“ bei Dokumentenpaketen zeigte nur „Internal Server Error“, und das Einlesen gescannter PDF-Belege per Texterkennung (OCR) brach ab. Ursache war eine neue Hauptversion der PDF-Bibliothek, die im Installationspaket unvollständig war (betraf v0.7.5 und v0.7.6). Der Build prüft die Bibliotheken jetzt vor jeder Veröffentlichung selbst. Danke an ludgerknorps (Issue #493).' },
+    ],
+  },
+  {
     version: 'v0.7.6',
     datum: 'November 2026',
     eintraege: [
