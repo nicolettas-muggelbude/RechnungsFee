@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.8',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'fix', text: '„Zahlung korrigieren“ bei Rechnungen buchte die Stornobuchung auf das heutige Datum statt auf das Datum der Originalzahlung. Wurde eine Zahlung aus einem früheren UStVA-Zeitraum oder dem Vorjahr korrigiert, blieb der alte Betrag dort stehen, und der laufende Zeitraum wurde um ihn gemindert – derselbe Fehler wie in Issue #320, nur in diesem einen Pfad. Danke an 5eBeKs (PR #494).' },
+    ],
+  },
+  {
     version: 'v0.7.7',
     datum: 'November 2026',
     eintraege: [
