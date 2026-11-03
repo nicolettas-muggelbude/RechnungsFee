@@ -3630,14 +3630,17 @@ def zahlung_korrigieren(
     else:
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
 
-    heute = date.today()
+    # Storno-Datum = Datum der Originalbuchung, nicht heute (wie journal.py, Issue #320):
+    # korrigiert wird eine fehlerhafte Erfassung, kein Geldfluss von heute - sonst bliebe der
+    # alte Betrag im Ursprungszeitraum (EÜR-Jahr, UStVA) stehen.
+    storno_datum = e.datum
 
     # Art bleibt gleich, alle Beträge werden negiert: _aktualisiere_zahlungsstatus()
     # summiert brutto_betrag über alle verknüpften Einträge OHNE Art-Filter (wie bei
     # Gutschriften) – nur ein echtes Vorzeichen-Gegenstück hebt den Original-Betrag auf.
     storno = Journaleintrag(
-        datum=heute,
-        belegnr=_naechste_belegnr_journal(db, heute),
+        datum=storno_datum,
+        belegnr=_naechste_belegnr_journal(db, storno_datum),
         beschreibung=f"STORNO {e.belegnr}: Korrektur",
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
