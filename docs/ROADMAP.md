@@ -98,7 +98,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – siehe Abschnitt ELSTER-Export unten.
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
@@ -147,12 +147,12 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
 
 - [x] **Stufe 1 – Datei für den Upload in Mein ELSTER** (keine Registrierung, kein Zertifikat) – umgesetzt von herrschmidt (PR #460), Kennzahlen-Fehler davor behoben (#456 ZM, #457 KZ 43/87, #458 KZ 41, #459 §13b/Kleinunternehmer):
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (nach v0.7.4, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
-  - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung
-  - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum)
-  - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle
-  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr)
-  - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Vorschlag: Beginn eines Meldezeitraums (z. B. 01.01.2027)
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, nach v0.7.4, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
+  - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung – umgesetzt
+  - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum) – umgesetzt
+  - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle (`utils/zm_meldezeitraum.py`); Abschlagsrechnungen melden 0, die Schlussrechnung die volle Leistung (#419) – umgesetzt
+  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr) – Storno, Gutschrift und Skonto umgesetzt; Forderungsausfall offen (braucht ein Ausfalldatum)
+  - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Stichtag 01.01.2027 (`CUTOVER_DATUM`); Leistungen vor dem Stichtag mit Rechnung danach melden im ersten Monat ab Stichtag, nicht rückwirkend – umgesetzt
   - nicht betroffen: KZ 43 (Ausfuhr) und KZ 45 (Drittland) – nicht in §18b
   - UStVA als XML: nur der Nutzdatenteil `Anmeldungssteuern` (Namensraum
     `http://finkonsens.de/elster/elsteranmeldung/ustva/v20xx`, passendes `version`-Attribut je
