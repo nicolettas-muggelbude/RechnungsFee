@@ -3896,6 +3896,12 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         rabatt_betrag=original.rabatt_betrag,
         skonto_prozent=original.skonto_prozent,
         skonto_tage=original.skonto_tage,
+        # Steuerliche Einordnung wie beim Original - sonst fiele eine ersetzte ig. Lieferung
+        # oder EU-Dienstleistung aus UStVA KZ 41/21/43/45 und der ZM (Issue #497)
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_eu_lieferung=original.ist_eu_lieferung,
+        ist_drittland_leistung=original.ist_drittland_leistung,
+        ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
         ist_entwurf=True,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),

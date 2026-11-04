@@ -488,12 +488,10 @@ def test_x22_ersatzrechnung_nach_storno(db, heute):
     heute(date(2025, 3, 10))
     _storno(db, rid)
     eid = ersatzrechnung_erstellen(rid, db).id
-    # ersatzrechnung_erstellen() übernimmt die EU-Kennzeichen nicht - im Entwurf neu gesetzt
-    db.get(Rechnung, eid).ist_eu_lieferung = True
-    db.commit()
     finalisiere_rechnung(eid, db)
     ersatz = db.get(Rechnung, eid)
     assert ersatz.datum == date(2025, 3, 10)
+    assert ersatz.ist_eu_lieferung
     # Lieferung im Januar, aber die Ersatzrechnung meldet nicht vor dem Storno des Originals:
     # Februar bleibt unverändert, im März heben sich Storno und Ersatz auf
     assert _kz(db, 2025, 1, "kz_41") == T
@@ -515,14 +513,25 @@ def test_x22_ersatzrechnung_fuer_alte_rechnung_ohne_sperre(db, heute):
     _storno(db, rid)  # alt: Gegenbuchung auf dem Zahlungsdatum (#320), wie bisher
     heute(date(2025, 3, 10))
     eid = ersatzrechnung_erstellen(rid, db).id
-    db.get(Rechnung, eid).ist_eu_lieferung = True
-    db.commit()
     finalisiere_rechnung(eid, db)
     # Original nach altem Verfahren (Dezember gemeldet und dort storniert) - keine Sperre bis
     # zum Storno; der Ersatz meldet nach eigener Regel im ersten Monat ab dem Stichtag (X16)
     assert _kz(db, 2024, 12, "kz_41") == NULL
     assert _kz(db, 2025, 1, "kz_41") == T
     assert _zm(db, "2025-01") == [(UID, "L", T)]
+
+
+@pytest.mark.parametrize("art, feld", [
+    ("L", "ist_eu_lieferung"), ("S", "ist_reverse_charge"),
+    ("ausfuhr", "ist_ausfuhrlieferung"), ("drittland", "ist_drittland_leistung"),
+])
+def test_ersatzrechnung_uebernimmt_steuerkennzeichen(db, heute, art, feld):
+    rid = _rechnung(db, art, date(2025, 1, 15))
+    heute(date(2025, 3, 10))
+    _storno(db, rid)
+    ersatz = db.get(Rechnung, ersatzrechnung_erstellen(rid, db).id)
+    flags = ("ist_eu_lieferung", "ist_reverse_charge", "ist_ausfuhrlieferung", "ist_drittland_leistung")
+    assert {f: bool(getattr(ersatz, f)) for f in flags} == {f: f == feld for f in flags}
 
 
 def test_x23_storno_alter_rechnung_wie_bisher(db, heute):
