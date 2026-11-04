@@ -2150,7 +2150,7 @@ export const downloadUstvaXml = (zeitraum: string): Promise<string> =>
   _downloadElsterDatei(`/ustva/xml?zeitraum=${encodeURIComponent(zeitraum)}`, `UStVA_${zeitraum}_ELSTER.xml`)
 
 export type UStVAPosten = {
-  quelle: 'journal' | 'vorsteuer_anspruch'
+  quelle: 'journal' | 'vorsteuer_anspruch' | 'rechnung'
   quelle_id: number
   datum: string
   referenz: string | null
