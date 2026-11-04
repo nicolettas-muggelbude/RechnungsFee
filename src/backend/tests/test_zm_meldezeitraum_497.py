@@ -22,9 +22,11 @@ import api.rechnungen as rechnungen_api
 import api.ustva as ustva_api
 from api.journal import create_eintrag
 from api.rechnungen import (
-    ZahlungKorrigieren, create_rechnung, finalisiere_rechnung, zahlung_bar_erstellen, zahlung_korrigieren,
+    GutschriftVerrechnenRequest, ZahlungKorrigieren, create_gutschrift, create_rechnung, ersatzrechnung_erstellen,
+    finalisiere_rechnung, forderungsausfall_buchen, gutschrift_verrechnen, storno_rechnung, zahlung_bar_erstellen,
+    zahlung_korrigieren,
 )
-from api.schemas import JournalEintragCreate
+from api.schemas import JournalEintragCreate, StornoRequest
 from api.schemas_rechnungen import BarZahlungCreate, RechnungCreate, RechnungspositionCreate
 from api.ustva import _berechne_kz, _berechne_kz_fuer, jahresumsatzsteuer, ustva_posten
 from api.zm import _hat_ig_eintraege_gesamt, zm_berechnen
@@ -74,9 +76,10 @@ def _rechnung(db, art, datum, leistung_von=None, leistung_bis=None, netto="1000.
     return resp.id
 
 
-def _zahlung(db, rechnung_id, datum, betrag=None):
+def _zahlung(db, rechnung_id, datum, betrag=None, skonto=None):
     zahlung_bar_erstellen(rechnung_id, BarZahlungCreate(
         datum=datum, zahlungsart="Bank", betrag=Decimal(betrag) if betrag else None,
+        skonto_betrag=Decimal(skonto) if skonto else None,
     ), db)
 
 
@@ -316,7 +319,7 @@ def test_x41_freie_buchung_ohne_rechnung_bleibt_beim_buchungsdatum(db):
     assert _zm(db, "2025-03") == [("unbekannt", "L", T)]
 
 
-@pytest.mark.parametrize("dokument_typ", ["Proforma", "Angebot"])
+@pytest.mark.parametrize("dokument_typ", ["Proforma", "Angebot", "Auftrag", "Lieferschein"])
 def test_x42_andere_dokumenttypen_melden_nichts(db, dokument_typ):
     _rechnung(db, "L", date(2025, 1, 15), dokument_typ=dokument_typ)
     assert _kz(db, 2025, 1, "kz_41") == Decimal("0.00")
@@ -364,6 +367,7 @@ def test_x47_posten_und_jahreserklaerung(db):
     assert posten[0].rechnung_id == rid
     assert posten[0].datum == date(2025, 2, 28)
     assert posten[0].betrag == T
+    assert posten[0].beschreibung == "Rechnung vom 10.03.2025 (Meldezeitraum nach §18a Abs. 8 UStG)"
     assert ustva_posten(zeitraum="2025-03", kz="41", db=db) == []
     assert jahresumsatzsteuer(jahr=2025, db=db).kz_41 == T
 
@@ -374,3 +378,344 @@ def test_zm_und_ustva_aus_derselben_quelle(db):
     kz, _ = _berechne_kz(date(2025, 1, 1), date(2025, 3, 31), db)
     zm = zm_berechnen("2025-Q1", db=db)
     assert zm.gesamt == kz["kz_41"] + kz["kz_21"] == Decimal("2000.00")
+
+
+# ---------------------------------------------------------------------------
+# Korrekturen nach §17 UStG (X18-X30, X34, X37)
+#
+# storno_rechnung(), create_gutschrift() und zahlung_korrigieren() datieren auf "heute" - das
+# Ereignisdatum wird über date in api.rechnungen gesetzt.
+# ---------------------------------------------------------------------------
+
+class _Datum(date):
+    heute = None
+
+    @classmethod
+    def today(cls):
+        return cls.heute or date.today()
+
+
+@pytest.fixture
+def heute(monkeypatch):
+    monkeypatch.setattr(rechnungen_api, "date", _Datum)
+
+    def setze(d):
+        _Datum.heute = d
+    yield setze
+    _Datum.heute = None
+
+
+def _storno(db, rechnung_id):
+    storno_rechnung(rechnung_id, StornoRequest(grund="Fehler"), db)
+
+
+def _gutschrift(db, rechnung_id, netto="200.00", finalisieren=True) -> int:
+    gid = create_gutschrift(rechnung_id, db).id
+    gs = db.get(Rechnung, gid)
+    betrag = -Decimal(netto)
+    pos = gs.positionen[0]
+    pos.netto = Decimal(netto)
+    pos.brutto = betrag
+    gs.netto_gesamt = gs.brutto_gesamt = betrag
+    db.commit()
+    if finalisieren:
+        finalisiere_rechnung(gid, db)
+    return gid
+
+
+def _texte(db, jahr, monat, nr):
+    _, posten = _berechne_kz(*_monat(jahr, monat), db)
+    return sorted((p["beschreibung"], p["betrag"]) for p in posten[nr])
+
+
+NULL = Decimal("0.00")
+
+
+def test_x18_storno_in_spaeterem_monat(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 3, 10))
+    _storno(db, rid)
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 3, "kz_41") == -T
+    assert _zm(db, "2025-01") == [(UID, "L", T)]
+    assert _zm(db, "2025-03") == [(UID, "L", -T)]
+    assert _zm(db, "2025-Q1") == []
+    assert _texte(db, 2025, 3, "kz_41") == [("Storno der Rechnung (§17 UStG)", -T)]
+
+
+def test_x19_storno_im_selben_monat(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 1, 25))
+    _storno(db, rid)
+    assert _kz(db, 2025, 1, "kz_41") == NULL
+    assert _zm(db, "2025-01") == []
+
+
+def test_x20_storno_einer_bezahlten_rechnung(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    _zahlung(db, rid, date(2025, 2, 1))
+    heute(date(2025, 3, 10))
+    _storno(db, rid)  # Gegenbuchung auf dem Zahlungsdatum (#320) - zählt nicht
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 3, "kz_41") == -T
+    assert _zm(db, "2025-02") == []
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x20_storno_nach_skonto_steht_auf_null(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    _zahlung(db, rid, date(2025, 2, 5), "980.00", skonto="20.00")
+    heute(date(2025, 3, 10))
+    _storno(db, rid)
+    assert _kz(db, 2025, 2, "kz_41") == Decimal("-20.00")
+    assert _kz(db, 2025, 3, "kz_41") == Decimal("-980.00")
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x21_storno_vor_dem_meldemonat(db, heute):
+    rid = _rechnung(db, "S", date(2025, 1, 15), leistung_bis=date(2025, 4, 30))
+    heute(date(2025, 2, 10))
+    _storno(db, rid)
+    for monat in (1, 2, 4):
+        assert _kz(db, 2025, monat, "kz_21") == NULL
+    assert _zm(db, "2025-Q1") == []
+    assert _zm(db, "2025-Q2") == []
+
+
+def test_x22_ersatzrechnung_nach_storno(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 3, 10))
+    _storno(db, rid)
+    eid = ersatzrechnung_erstellen(rid, db).id
+    # ersatzrechnung_erstellen() übernimmt die EU-Kennzeichen nicht - im Entwurf neu gesetzt
+    db.get(Rechnung, eid).ist_eu_lieferung = True
+    db.commit()
+    finalisiere_rechnung(eid, db)
+    ersatz = db.get(Rechnung, eid)
+    assert ersatz.datum == date(2025, 3, 10)
+    # Lieferung im Januar, aber die Ersatzrechnung meldet nicht vor dem Storno des Originals:
+    # Februar bleibt unverändert, im März heben sich Storno und Ersatz auf
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 3, "kz_41") == NULL
+    assert _zm(db, "2025-02") == []
+    assert _zm(db, "2025-03") == []
+    assert _zm(db, "2025-Q1") == [(UID, "L", T)]
+    assert _texte(db, 2025, 3, "kz_41") == [
+        ("Rechnung vom 10.03.2025 (Ersatzrechnung, gemeldet im Monat des Stornos der Originalrechnung)", T),
+        ("Storno der Rechnung (§17 UStG)", -T),
+    ]
+
+
+def test_x22_ersatzrechnung_fuer_alte_rechnung_ohne_sperre(db, heute):
+    rid = _rechnung(db, "L", date(2024, 12, 15), leistung_bis=date(2024, 12, 10))
+    _zahlung(db, rid, date(2024, 12, 20))
+    heute(date(2025, 2, 10))
+    _storno(db, rid)  # alt: Gegenbuchung auf dem Zahlungsdatum (#320), wie bisher
+    heute(date(2025, 3, 10))
+    eid = ersatzrechnung_erstellen(rid, db).id
+    db.get(Rechnung, eid).ist_eu_lieferung = True
+    db.commit()
+    finalisiere_rechnung(eid, db)
+    # Original nach altem Verfahren (Dezember gemeldet und dort storniert) - keine Sperre bis
+    # zum Storno; der Ersatz meldet nach eigener Regel im ersten Monat ab dem Stichtag (X16)
+    assert _kz(db, 2024, 12, "kz_41") == NULL
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _zm(db, "2025-01") == [(UID, "L", T)]
+
+
+def test_x23_storno_alter_rechnung_wie_bisher(db, heute):
+    rid = _rechnung(db, "L", date(2024, 12, 15))
+    _zahlung(db, rid, date(2024, 12, 20))
+    heute(date(2025, 2, 10))
+    _storno(db, rid)
+    kz, posten = _berechne_kz(*_monat(2024, 12), db)
+    assert kz["kz_41"] == NULL
+    assert sorted((p["quelle"], p["betrag"]) for p in posten["kz_41"]) == [("journal", -T), ("journal", T)]
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x24_gutschrift_meldet_minus_am_gutschriftsdatum(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid)
+    heute(date(2025, 5, 20))
+    _zahlung(db, gid, date(2025, 5, 20))  # Auszahlung zählt nicht
+    assert db.get(Rechnung, gid).netto_gesamt == Decimal("-200.00")
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("-200.00")
+    assert _zm(db, "2025-05") == [(UID, "L", Decimal("-200.00"))]
+    assert _zm(db, "2025-Q2") == [(UID, "L", Decimal("-200.00"))]
+    posten = ustva_posten(zeitraum="2025-05", kz="41", db=db)
+    assert [(p.quelle, p.rechnung_id, p.beschreibung) for p in posten] == [
+        ("rechnung", gid, "Gutschrift (§17 UStG)")]
+
+
+def test_x24_verrechnung_einer_gutschrift_zaehlt_nicht(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    zweite = _rechnung(db, "L", date(2025, 2, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid)
+    gutschrift_verrechnen(gid, GutschriftVerrechnenRequest(rechnung_id=zweite), db)
+    assert db.query(Journaleintrag).filter(Journaleintrag.zahlungsart == "Verrechnung").count() == 2
+    assert _kz(db, 2025, 2, "kz_41") == T
+    assert _texte(db, 2025, 5, "kz_41") == [("Gutschrift (§17 UStG)", Decimal("-200.00"))]
+    assert _zm(db, "2025-Q2") == [(UID, "L", Decimal("-200.00"))]
+
+
+def test_x25_gutschrift_zu_alter_rechnung_wie_bisher(db, heute):
+    rid = _rechnung(db, "L", date(2024, 12, 15))
+    _zahlung(db, rid, date(2024, 12, 20))
+    heute(date(2025, 2, 10))
+    gid = _gutschrift(db, rid)
+    assert _kz(db, 2025, 2, "kz_41") == NULL  # noch nicht ausgezahlt: wie bisher nichts
+    _zahlung(db, gid, date(2025, 2, 10))
+    kz, posten = _berechne_kz(*_monat(2025, 2), db)
+    assert kz["kz_41"] == Decimal("-200.00")
+    assert [p["quelle"] for p in posten["kz_41"]] == ["journal"]
+    assert _zm(db, "2025-Q1") == [(UID, "L", Decimal("-200.00"))]
+
+
+def test_x26_gutschrift_entwurf_meldet_nichts(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    _gutschrift(db, rid, finalisieren=False)
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 5, "kz_41") == NULL
+    assert _zm(db, "2025-Q2") == []
+
+
+def test_x27_storno_der_gutschrift_meldet_plus(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid)
+    heute(date(2025, 6, 10))
+    _storno(db, gid)
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("-200.00")
+    assert _kz(db, 2025, 6, "kz_41") == Decimal("200.00")
+    assert _zm(db, "2025-06") == [(UID, "L", Decimal("200.00"))]
+    assert _zm(db, "2025-Q2") == []
+
+
+def test_x28_skonto_meldet_minus_am_skontodatum(db):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    _zahlung(db, rid, date(2025, 2, 5), "980.00", skonto="20.00")
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 2, "kz_41") == Decimal("-20.00")
+    assert _zm(db, "2025-02") == [(UID, "L", Decimal("-20.00"))]
+    assert _zm(db, "2025-Q1") == [(UID, "L", Decimal("980.00"))]
+    assert _texte(db, 2025, 2, "kz_41") == [("Skonto (§17 UStG)", Decimal("-20.00"))]
+
+
+def test_x29_skonto_alter_rechnung_wie_bisher(db):
+    rid = _rechnung(db, "L", date(2024, 12, 15))
+    _zahlung(db, rid, date(2025, 2, 5), "980.00", skonto="20.00")
+    assert _kz(db, 2024, 12, "kz_41") == NULL
+    assert _kz(db, 2025, 2, "kz_41") == Decimal("980.00")
+    assert _zm(db, "2025-Q1") == [(UID, "L", Decimal("980.00"))]
+
+
+def test_x30_korrektur_der_skontobuchung(db, heute):
+    rid = _rechnung(db, "S", date(2025, 1, 15))
+    _zahlung(db, rid, date(2025, 2, 5), "980.00", skonto="20.00")
+    skonto_id = db.query(Journaleintrag.id).filter(
+        Journaleintrag.rechnung_id == rid, Journaleintrag.zahlungsart == "Skonto").scalar()
+    heute(date(2025, 3, 10))
+    zahlung_korrigieren(rid, skonto_id, ZahlungKorrigieren(
+        neues_datum=date(2025, 3, 10), neuer_betrag=Decimal("15.00")), db)
+    assert _kz(db, 2025, 2, "kz_21") == Decimal("-20.00")
+    assert _texte(db, 2025, 3, "kz_21") == [
+        ("Skonto (§17 UStG)", Decimal("-15.00")), ("Skonto (§17 UStG)", Decimal("20.00"))]
+    assert _kz(db, 2025, 3, "kz_21") == Decimal("5.00")
+    assert _zm(db, "2025-Q1") == [(UID, "S", Decimal("985.00"))]
+
+
+def test_x34_forderungsausfall_alter_rechnung_meldet_nichts(db):
+    rid = _rechnung(db, "L", date(2024, 11, 15))
+    forderungsausfall_buchen(rid, db)
+    for jahr, monat in [(2024, 11), (2024, 12), (2025, 1)]:
+        assert _kz(db, jahr, monat, "kz_41") == NULL
+    assert _zm(db, "2024-Q4") == []
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x37_storno_der_schlussrechnung(db, heute):
+    aid = _abschlag(db, date(2025, 2, 15))
+    _zahlung(db, aid, date(2025, 2, 20))
+    sid = _schlussrechnung(db, date(2025, 5, 15), aid, leistung_bis=date(2025, 4, 30))
+    heute(date(2025, 7, 10))
+    _storno(db, sid)
+    assert db.get(Rechnung, aid).verrechnet_in_rechnung_id is None
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("1500.00")
+    assert _kz(db, 2025, 7, "kz_41") == Decimal("-1500.00")
+    assert _zm(db, "2025-07") == [(UID, "L", Decimal("-1500.00"))]
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x27_storno_der_gutschrift_nach_storno_der_rechnung(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid)
+    heute(date(2025, 6, 10))
+    _storno(db, rid)
+    heute(date(2025, 7, 10))
+    _storno(db, gid)
+    # nach dem Storno steht die Rechnung auf 0 - das spätere Storno der Gutschrift meldet nichts
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("-200.00")
+    assert _kz(db, 2025, 6, "kz_41") == Decimal("-800.00")
+    assert _kz(db, 2025, 7, "kz_41") == NULL
+    assert _zm(db, "2025-06") == [(UID, "L", Decimal("-800.00"))]
+    assert _zm(db, "2025-07") == []
+    assert sum(_kz(db, 2025, m, "kz_41") for m in range(1, 13)) == NULL
+
+
+def test_gutschrift_nach_storno_der_rechnung_meldet_nichts(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid, finalisieren=False)
+    heute(date(2025, 6, 10))
+    _storno(db, rid)
+    # Entwurf vor dem Storno angelegt, mit späterem Datum erst danach finalisiert
+    heute(date(2025, 7, 10))
+    db.get(Rechnung, gid).datum = date(2025, 7, 10)
+    db.commit()
+    finalisiere_rechnung(gid, db)
+    assert _kz(db, 2025, 6, "kz_41") == -T
+    assert _kz(db, 2025, 7, "kz_41") == NULL
+    assert _zm(db, "2025-07") == []
+    assert sum(_kz(db, 2025, m, "kz_41") for m in range(1, 13)) == NULL
+
+
+# ---------------------------------------------------------------------------
+# Alte und neue Rechnungen nebeneinander (Stichtag-Übergang)
+# ---------------------------------------------------------------------------
+
+def test_alte_und_neue_rechnung_im_selben_quartal(db):
+    alt = _rechnung(db, "L", date(2024, 12, 15))
+    _zahlung(db, alt, date(2025, 2, 10))      # alt: meldet bei Zahlung (Februar)
+    neu = _rechnung(db, "L", date(2025, 1, 15), netto="300.00")
+    _zahlung(db, neu, date(2025, 2, 10))      # neu: Zahlung zählt nicht
+    s_alt = _rechnung(db, "S", date(2024, 12, 20), netto="50.00")
+    _zahlung(db, s_alt, date(2025, 3, 5))
+    _rechnung(db, "S", date(2025, 3, 20), leistung_bis=date(2025, 3, 15), netto="70.00")
+    assert _kz(db, 2025, 1, "kz_41") == Decimal("300.00")
+    assert _kz(db, 2025, 2, "kz_41") == T
+    assert _kz(db, 2025, 3, "kz_21") == Decimal("120.00")
+    assert _zm(db, "2025-Q1") == [(UID, "L", Decimal("1300.00")), (UID, "S", Decimal("120.00"))]
+    kz, _ = _berechne_kz(date(2025, 1, 1), date(2025, 3, 31), db)
+    assert zm_berechnen("2025-Q1", db=db).gesamt == kz["kz_41"] + kz["kz_21"]
+
+
+def test_storno_alter_und_neuer_rechnung_im_selben_monat(db, heute):
+    alt = _rechnung(db, "L", date(2024, 12, 15))
+    _zahlung(db, alt, date(2025, 1, 10))
+    neu = _rechnung(db, "L", date(2025, 1, 20), netto="400.00")
+    heute(date(2025, 3, 10))
+    _storno(db, alt)  # alt: Gegenbuchung auf dem Zahlungsdatum (#320), Januar steht auf 0
+    _storno(db, neu)  # neu: Minus im März
+    assert _kz(db, 2025, 1, "kz_41") == Decimal("400.00")
+    assert _kz(db, 2025, 3, "kz_41") == Decimal("-400.00")
+    assert _zm(db, "2025-Q1") == []

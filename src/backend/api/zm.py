@@ -222,7 +222,7 @@ class ZMPruefung(BaseModel):
 def _hat_ig_eintraege_gesamt(db: Session) -> bool:
     """True wenn überhaupt je ig-Buchungen existieren (für Sidebar-Sichtbarkeit). Seit #497
     zählt auch eine noch unbezahlte Rechnung ab dem Stichtag - sie ist bereits meldepflichtig."""
-    if zm_meldezeitraum.neue_rechnung_ids(db):
+    if zm_meldezeitraum.hat_neue_rechnungen(db):
         return True
     return db.query(Journaleintrag).filter(
         Journaleintrag.art == "Einnahme",

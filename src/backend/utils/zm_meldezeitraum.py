@@ -29,9 +29,9 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from database.models import Rechnung
+from database.models import Journaleintrag, Rechnung
 
 # TODO vor Release prüfen/anpassen: Beginn eines Meldezeitraums, mindestens 4-6 Wochen nach dem
 # geplanten Release-Datum, damit realistisch alle Nutzer das Update vorher erhalten haben.
@@ -41,7 +41,7 @@ ZERO = Decimal("0.00")
 
 # Dokumenttypen, die nach der neuen Regel gemeldet werden. Abschlagsrechnungen gehören dazu,
 # melden selbst aber 0 - gemeldet wird die Schlussrechnung (Issue #419, siehe _betrag()).
-# Gutschriften kommen mit den Korrekturen nach §17 hinzu (siehe _korrekturen()).
+# Gutschriften zu diesen Rechnungen melden als Korrektur nach §17 (siehe _korrekturen()).
 _DOKUMENT_TYPEN = ("Rechnung", "Abschlagsrechnung")
 
 
@@ -53,7 +53,10 @@ class IgUmsatz:
     kennzeichen: str    # "L" (KZ 41) oder "S" (KZ 21)
     betrag: Decimal     # vorzeichenbehaftet (Korrekturen nach §17 negativ)
     datum: date         # Meldedatum - bestimmt den Monat der UStVA bzw. ZM
-    art: str            # "rechnung"; Korrekturen nach §17 bringen eigene Arten mit
+    art: str            # "rechnung" | "storno" | "gutschrift" | "gutschrift_storno" | "skonto"
+    rechnungsdatum: date | None = None  # nur bei art="rechnung": Datum der Rechnung (Posten-Text)
+    nach_storno_original: bool = False  # nur bei art="rechnung": Ersatzrechnung, die erst im
+                                        # Monat des Stornos ihres Originals meldet (meldedatum())
 
 
 def _monatsende(jahr: int, monat: int) -> date:
@@ -81,7 +84,7 @@ def kennzeichen(rechnung: Rechnung) -> str | None:
     return None
 
 
-def meldedatum(rechnung: Rechnung) -> date:
+def meldedatum(rechnung: Rechnung, original: Rechnung | None = None) -> date:
     """Datum, dessen Monat die Rechnung in ZM und UStVA KZ 41/21 meldet.
 
     L: Rechnungsdatum, spätestens das Ende des Monats nach der Lieferung (§18a Abs. 8 Satz 1) -
@@ -91,34 +94,72 @@ def meldedatum(rechnung: Rechnung) -> date:
     Nie vor CUTOVER_DATUM: eine Rechnung ab dem Stichtag über eine Leistung davor wird im ersten
     Monat des neuen Verfahrens gemeldet, nicht rückwirkend in einem Zeitraum, der nach altem
     Verfahren schon abgegeben ist (Rahmen zu #497: nichts rückwirkend, keine Doppel- oder
-    Fehlmeldungen)."""
+    Fehlmeldungen).
+
+    original: die stornierte Rechnung des neuen Verfahrens, die diese Ersatzrechnung ersetzt
+    (ersatz_fuer_rechnung_id, Issue #304). Die Ersatzrechnung meldet nicht vor deren Storno -
+    sonst stünde die Leistung bis zum Storno-Monat doppelt in der Meldung und ein bereits
+    abgegebener Monat müsste nachträglich berichtigt werden."""
     if kennzeichen(rechnung) == "L":
         d = min(rechnung.datum, _ende_folgemonat(leistungsdatum(rechnung)))
     else:
         d = leistungsdatum(rechnung)
+    if original is not None and original.storniert and original.storno_datum:
+        d = max(d, original.storno_datum)
     return max(d, CUTOVER_DATUM)
 
 
+def _neu_filter(query):
+    """Filter für finalisierte Ausgangsrechnungen mit ig. Lieferung oder EU-B2B-Dienstleistung
+    ab dem Stichtag - die nach neuer Regel gemeldet werden."""
+    return query.filter(
+        Rechnung.typ == "ausgang",
+        Rechnung.ist_entwurf == False,  # noqa: E712
+        Rechnung.dokument_typ.in_(_DOKUMENT_TYPEN),
+        Rechnung.datum >= CUTOVER_DATUM,
+        (Rechnung.ist_eu_lieferung == True) | (Rechnung.ist_reverse_charge == True),  # noqa: E712
+    )
+
+
 def neue_rechnungen(db: Session) -> list[Rechnung]:
-    """Finalisierte Ausgangsrechnungen mit ig. Lieferung oder EU-B2B-Dienstleistung ab dem
-    Stichtag - die nach neuer Regel gemeldet werden."""
+    """Rechnungen des neuen Verfahrens (siehe _neu_filter), Positionen gleich mitgeladen."""
+    return _neu_filter(db.query(Rechnung)).options(selectinload(Rechnung.positionen)).all()
+
+
+def hat_neue_rechnungen(db: Session) -> bool:
+    """True, sobald es mindestens eine Rechnung des neuen Verfahrens gibt (Menüpunkt ZM)."""
+    return _neu_filter(db.query(Rechnung.id)).first() is not None
+
+
+def _gutschriften(db: Session, neue_ids: set[int]) -> list[Rechnung]:
+    """Gutschriften (auch Entwürfe) zu Rechnungen des neuen Verfahrens - das Verfahren richtet
+    sich nach dem Datum der Originalrechnung, nicht nach dem der Gutschrift."""
+    if not neue_ids:
+        return []
     return (
         db.query(Rechnung)
-        .filter(
-            Rechnung.typ == "ausgang",
-            Rechnung.ist_entwurf == False,  # noqa: E712
-            Rechnung.dokument_typ.in_(_DOKUMENT_TYPEN),
-            Rechnung.datum >= CUTOVER_DATUM,
-            (Rechnung.ist_eu_lieferung == True) | (Rechnung.ist_reverse_charge == True),  # noqa: E712
-        )
+        .filter(Rechnung.dokument_typ == "Gutschrift", Rechnung.gutschrift_zu_rechnung_id.in_(neue_ids))
         .all()
     )
 
 
 def neue_rechnung_ids(db: Session) -> set[int]:
-    """IDs der Rechnungen aus neue_rechnungen(). Deren Journalbuchungen (Zahlung, Storno-
-    Gegenbuchung, Skonto) zählen in ZM und KZ 41/21 nicht mehr - sonst doppelt."""
-    return {r.id for r in neue_rechnungen(db)}
+    """IDs der Rechnungen des neuen Verfahrens und ihrer Gutschriften. Deren Journalbuchungen
+    (Zahlung, Storno-Gegenbuchung, Skonto, Auszahlung/Verrechnung einer Gutschrift) zählen in ZM
+    und KZ 41/21 nicht mehr - sonst doppelt; gemeldet wird über ig_umsaetze()."""
+    ids = {i for (i,) in _neu_filter(db.query(Rechnung.id)).all()}
+    if not ids:
+        return ids
+    return ids | {i for (i,) in db.query(Rechnung.id).filter(
+        Rechnung.dokument_typ == "Gutschrift", Rechnung.gutschrift_zu_rechnung_id.in_(ids),
+    ).all()}
+
+
+def _meldedaten(rechnungen: list[Rechnung]) -> dict[int, date]:
+    """meldedatum() je Rechnung; eine Ersatzrechnung sucht ihr Original unter den Rechnungen
+    des neuen Verfahrens (ein Original vor dem Stichtag wird nach altem Verfahren storniert)."""
+    nach_id = {r.id: r for r in rechnungen}
+    return {r.id: meldedatum(r, nach_id.get(r.ersatz_fuer_rechnung_id)) for r in rechnungen}
 
 
 def _betrag(rechnung: Rechnung, neue_ids: set[int]) -> Decimal:
@@ -136,11 +177,72 @@ def _betrag(rechnung: Rechnung, neue_ids: set[int]) -> Decimal:
     return betrag
 
 
-def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], db: Session) -> list[IgUmsatz]:
+def _ist_storno_gegenbuchung(e: Journaleintrag, rechnung: Rechnung) -> bool:
+    """Gegenbuchung aus storno_rechnung() ("STORNO <Beleg>: <Re-Nr> – <Grund>"). Sie steht für
+    EÜR auf dem Datum der Originalbuchung (#320); für §17 ist sie im Storno-Betrag enthalten.
+    Die Storno-Buchung einer Zahlungskorrektur ("STORNO <Beleg>: Korrektur") ist keine."""
+    re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
+    return bool(rechnung.storniert and e.beschreibung
+                and e.beschreibung.startswith("STORNO ") and f": {re_nr} – " in e.beschreibung)
+
+
+def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], meldedaten: dict[int, date],
+                 db: Session) -> list[IgUmsatz]:
     """Korrekturen nach §17 UStG (§18a Abs. 7, §18b Satz 4) für Rechnungen des neuen
-    Verfahrens: eigene Beträge im Monat des Ereignisses (Storno, Gutschrift, Skonto).
-    Noch leer - folgt als eigener Schritt."""
-    return []
+    Verfahrens - eigene Beträge im Monat des Ereignisses, nie vor dem Meldedatum der Rechnung
+    (ein Ereignis davor mindert die Meldung im Meldemonat selbst):
+
+    - Skonto: minus am Datum der Skonto-Buchung; deren Storno per Zahlungskorrektur plus.
+    - Gutschrift (finalisiert): ihr Netto (negativ) am Gutschriftsdatum; Storno der Gutschrift
+      plus am storno_datum.
+    - Storno der Rechnung: am storno_datum minus alles, was die Rechnung bis dahin gemeldet hat
+      (Netto bzw. Schlussrechnung nach _betrag(), abzüglich Skonti und Gutschriften bis zum
+      Storno) - danach steht sie auf 0. Beiträge mit späterem Datum (etwa eine erst nach dem
+      Storno finalisierte Gutschrift oder das Storno einer Gutschrift) entfallen: zu einer
+      stornierten Rechnung gibt es nichts mehr zu berichtigen.
+
+    Abschlagsrechnungen melden 0 (Issue #419) und damit auch keine Korrekturen; gemeldet und
+    korrigiert wird die Schlussrechnung. Forderungsausfall (§17 Abs. 2 Nr. 1) ist hier noch
+    nicht enthalten."""
+    ids = [r.id for r in rechnungen if r.dokument_typ != "Abschlagsrechnung"]
+    if not ids:
+        return []
+    skonti: dict[int, list[Journaleintrag]] = {}
+    for e in db.query(Journaleintrag).filter(
+        Journaleintrag.rechnung_id.in_(ids), Journaleintrag.zahlungsart == "Skonto",
+    ).all():
+        skonti.setdefault(e.rechnung_id, []).append(e)
+    gutschriften: dict[int, list[Rechnung]] = {}
+    for g in _gutschriften(db, set(ids)):
+        if not g.ist_entwurf:
+            gutschriften.setdefault(g.gutschrift_zu_rechnung_id, []).append(g)
+
+    ergebnis: list[IgUmsatz] = []
+    for r in rechnungen:
+        if r.dokument_typ == "Abschlagsrechnung":
+            continue
+        kz, ab = kennzeichen(r), meldedaten[r.id]
+        beitraege: list[IgUmsatz] = []
+        for e in skonti.get(r.id, []):
+            if _ist_storno_gegenbuchung(e, r):
+                continue
+            netto = e.netto_betrag or ZERO
+            beitraege.append(IgUmsatz(r.id, r.rechnungsnummer, kz,
+                                      -netto if e.art == "Ausgabe" else netto, max(e.datum, ab), "skonto"))
+        for g in gutschriften.get(r.id, []):
+            netto = g.netto_gesamt or ZERO
+            beitraege.append(IgUmsatz(g.id, g.rechnungsnummer, kz, netto, max(g.datum, ab), "gutschrift"))
+            if g.storniert and g.storno_datum:
+                beitraege.append(IgUmsatz(g.id, g.rechnungsnummer, kz, -netto,
+                                          max(g.storno_datum, ab), "gutschrift_storno"))
+        if r.storniert and r.storno_datum:
+            storno_am = max(r.storno_datum, ab)
+            # nach dem Storno steht die Rechnung auf 0 - spätere Beiträge melden nichts mehr
+            beitraege = [b for b in beitraege if b.datum <= storno_am]
+            gemeldet = _betrag(r, neue_ids) + sum((b.betrag for b in beitraege), ZERO)
+            beitraege.append(IgUmsatz(r.id, r.rechnungsnummer, kz, -gemeldet, storno_am, "storno"))
+        ergebnis += beitraege
+    return ergebnis
 
 
 def ig_umsaetze(von: date, bis: date, db: Session) -> list[IgUmsatz]:
@@ -148,9 +250,11 @@ def ig_umsaetze(von: date, bis: date, db: Session) -> list[IgUmsatz]:
     alle Beiträge, deren Meldedatum im Zeitraum [von, bis] liegt."""
     rechnungen = neue_rechnungen(db)
     neue_ids = {r.id for r in rechnungen}
+    meldedaten = _meldedaten(rechnungen)
     umsaetze = [
-        IgUmsatz(r.id, r.rechnungsnummer, kennzeichen(r), _betrag(r, neue_ids), meldedatum(r), "rechnung")
+        IgUmsatz(r.id, r.rechnungsnummer, kennzeichen(r), _betrag(r, neue_ids), meldedaten[r.id], "rechnung",
+                 r.datum, meldedaten[r.id] > meldedatum(r))
         for r in rechnungen
     ]
-    umsaetze += _korrekturen(rechnungen, neue_ids, db)
+    umsaetze += _korrekturen(rechnungen, neue_ids, meldedaten, db)
     return [u for u in umsaetze if von <= u.datum <= bis and u.betrag != 0]

@@ -56,6 +56,22 @@ from utils import zm_meldezeitraum
 
 router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
 
+# Posten-Text je Beitrag aus zm_meldezeitraum.ig_umsaetze() (Issue #497)
+_IG_UMSATZ_TEXT = {
+    "rechnung": "Rechnung (Meldezeitraum nach §18a Abs. 8 UStG)",
+    "storno": "Storno der Rechnung (§17 UStG)",
+    "gutschrift": "Gutschrift (§17 UStG)",
+    "gutschrift_storno": "Storno der Gutschrift (§17 UStG)",
+    "skonto": "Skonto (§17 UStG)",
+}
+
+
+def _ig_umsatz_meldezeitraum(u: zm_meldezeitraum.IgUmsatz) -> str:
+    """Klammertext im Posten einer Rechnung: warum sie in diesem Monat meldet."""
+    if u.nach_storno_original:
+        return "Ersatzrechnung, gemeldet im Monat des Stornos der Originalrechnung"
+    return "Meldezeitraum nach §18a Abs. 8 UStG"
+
 ZERO = Decimal("0.00")
 
 # ---------------------------------------------------------------------------
@@ -239,7 +255,12 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
     einzelnen Journaleinträge/Vorsteuer-Ansprüche, die zu ihrer Summe beigetragen haben (für
     die Anzeigehilfe-Aufschlüsselung /posten). Wird immer mitberechnet (keine Zusatzabfrage,
     nur zusätzliche Listen-Einträge während der ohnehin laufenden Schleife) - Aufrufer, die
-    nur die Summen brauchen, ignorieren den zweiten Rückgabewert einfach."""
+    nur die Summen brauchen, ignorieren den zweiten Rückgabewert einfach.
+
+    KZ 41/21 für Ausgangsrechnungen ab zm_meldezeitraum.CUTOVER_DATUM (Issue #497) kommen nicht
+    aus dem Journal, sondern aus zm_meldezeitraum.ig_umsaetze() - dieselbe Quelle wie die ZM.
+    Ihre Posten haben quelle="rechnung", quelle_id = Rechnung bzw. Gutschrift, datum = Meldedatum
+    (eine Rechnung kann im selben Monat mehrere Posten haben: Rechnung, Storno, Skonto)."""
     eintraege = (
         db.query(Journaleintrag)
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
@@ -459,7 +480,10 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
             "quelle_id": u.rechnung_id,
             "datum": u.datum,
             "referenz": u.rechnungsnummer,
-            "beschreibung": "Rechnung (Meldezeitraum nach §18a Abs. 8 UStG)",
+            # datum ist das Meldedatum (bestimmt den Monat), das Rechnungsdatum steht im Text
+            "beschreibung": (f"Rechnung vom {u.rechnungsdatum:%d.%m.%Y} ({_ig_umsatz_meldezeitraum(u)})"
+                             if u.art == "rechnung" and u.rechnungsdatum
+                             else _IG_UMSATZ_TEXT.get(u.art, _IG_UMSATZ_TEXT["rechnung"])),
             "rechnung_id": u.rechnung_id,
             "rechnungsnummer": u.rechnungsnummer,
             "betrag": u.betrag,

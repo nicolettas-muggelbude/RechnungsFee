@@ -3746,6 +3746,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
         gegenbuchung = Journaleintrag(
             datum=gb_datum,
             belegnr=belegnr,
+            # Format wird ausgewertet: "bereits storniert"-Prüfung oben und
+            # utils/zm_meldezeitraum._ist_storno_gegenbuchung() (Issue #497) - dort mit anpassen
             beschreibung=f"STORNO {eintrag.belegnr}: {re_nr} – {data.grund.strip()}",
             kategorie_id=eintrag.kategorie_id,
             konto_skr03=eintrag.konto_skr03,
