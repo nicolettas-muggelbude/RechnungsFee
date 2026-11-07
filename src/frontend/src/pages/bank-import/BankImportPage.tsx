@@ -27,6 +27,7 @@ import {
   type BankAbgleichVorschlag,
 } from '../../api/client'
 import { BuchungForm } from '../journal/BuchungForm'
+import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 // Bei sehr großen Import-Dateien werden nur die ersten N Zeilen gerendert – ungebremstes
@@ -507,6 +508,13 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                       </p>
                     </div>
                   )}
+                  {autoBuchenMut.data.hinweis && (
+                    <div className="col-span-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        ⚠️ {autoBuchenMut.data.hinweis}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -899,6 +907,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     rechnungId: number; rechnungsnummer: string; partner: string; ueberzahlung: number
   } | null>(null)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
+  const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat' | 'ignoriert'>('alle')
 
@@ -962,6 +971,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
       qc.invalidateQueries({ queryKey: ['zm-pruefen'] })
       setAbgleichDialog(null)
       setBuchungTx(null)
+      if (tx.hinweis) setBuchungsHinweis(tx.hinweis)  // Issue #497: freie ig. Lieferung ab Stichtag
 
       if (tx.forderung_id) {
         qc.invalidateQueries({ queryKey: ['forderungen'] })
@@ -1323,9 +1333,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             kategorie_id: buchungTx.kategorie_id ? String(buchungTx.kategorie_id) : '',
           }}
           onClose={() => setBuchungTx(null)}
-          onSuccess={(journalId) => {
+          onSuccess={(journalId, hinweis) => {
             const tx = buchungTx
             setBuchungTx(null)
+            if (hinweis) setBuchungsHinweis(hinweis)  // Issue #497
             qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
             zeigToast('Buchung erstellt', true)
             if (tx && journalId) {
@@ -1335,6 +1346,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             }
           }}
         />
+      )}
+
+      {buchungsHinweis && (
+        <BuchungsHinweisDialog text={buchungsHinweis} onClose={() => setBuchungsHinweis(null)} />
       )}
     </>
   )

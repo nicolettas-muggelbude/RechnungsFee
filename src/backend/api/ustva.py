@@ -52,8 +52,25 @@ from database.models import Journaleintrag, Kategorie, Unternehmen, UstvaExport,
 from api.journal import _storno_infos
 from utils.elster import ElsterExportFehler, KZ_BEMESSUNGSGRUNDLAGE, build_ustva_xml, steuernummer_elster13
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
+from utils import zm_meldezeitraum
 
 router = APIRouter(prefix="/api/ustva", tags=["UStVA"])
+
+# Posten-Text je Beitrag aus zm_meldezeitraum.ig_umsaetze() (Issue #497)
+_IG_UMSATZ_TEXT = {
+    "rechnung": "Rechnung (Meldezeitraum nach §18a Abs. 8 UStG)",
+    "storno": "Storno der Rechnung (§17 UStG)",
+    "gutschrift": "Gutschrift (§17 UStG)",
+    "gutschrift_storno": "Storno der Gutschrift (§17 UStG)",
+    "skonto": "Skonto (§17 UStG)",
+}
+
+
+def _ig_umsatz_meldezeitraum(u: zm_meldezeitraum.IgUmsatz) -> str:
+    """Klammertext im Posten einer Rechnung: warum sie in diesem Monat meldet."""
+    if u.nach_storno_original:
+        return "Ersatzrechnung, gemeldet im Monat des Stornos der Originalrechnung"
+    return "Meldezeitraum nach §18a Abs. 8 UStG"
 
 ZERO = Decimal("0.00")
 
@@ -242,7 +259,12 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
     einzelnen Journaleinträge/Vorsteuer-Ansprüche, die zu ihrer Summe beigetragen haben (für
     die Anzeigehilfe-Aufschlüsselung /posten). Wird immer mitberechnet (keine Zusatzabfrage,
     nur zusätzliche Listen-Einträge während der ohnehin laufenden Schleife) - Aufrufer, die
-    nur die Summen brauchen, ignorieren den zweiten Rückgabewert einfach."""
+    nur die Summen brauchen, ignorieren den zweiten Rückgabewert einfach.
+
+    KZ 41/21 für Ausgangsrechnungen ab zm_meldezeitraum.CUTOVER_DATUM (Issue #497) kommen nicht
+    aus dem Journal, sondern aus zm_meldezeitraum.ig_umsaetze() - dieselbe Quelle wie die ZM.
+    Ihre Posten haben quelle="rechnung", quelle_id = Rechnung bzw. Gutschrift, datum = Meldedatum
+    (eine Rechnung kann im selben Monat mehrere Posten haben: Rechnung, Storno, Skonto)."""
     eintraege = (
         db.query(Journaleintrag)
         .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
@@ -301,6 +323,14 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         r[0] for r in db.query(Rechnung.id)
         .filter(Rechnung.typ == "ausgang", Rechnung.steuerfrei_4 == True).all()  # noqa: E712
     }
+
+    # KZ 41/21 nach Rechnung statt Zahlung (Issue #497): Ausgangsrechnungen ab
+    # zm_meldezeitraum.CUTOVER_DATUM melden über zm_meldezeitraum.ig_umsaetze() (unten, dieselbe
+    # Quelle wie die ZM) - ihre Journalbuchungen (Zahlung, Storno-Gegenbuchung) zählen für
+    # KZ 41/21 nicht mehr, sonst doppelt. Ältere Rechnungen bleiben auf dem Zahlungsdatum-Pfad.
+    _ig_neu_rechnung_ids = zm_meldezeitraum.neue_rechnung_ids(db)
+    _eu_dl_rechnung_ids -= _ig_neu_rechnung_ids
+    _ig_lieferung_rechnung_ids -= _ig_neu_rechnung_ids
 
     # Lookup-Cache: Original-id (gruppe_id) → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
     _marge_cache: dict[int, Decimal | None] = {}
@@ -394,7 +424,8 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         if e.art == "Einnahme" and (
             e.rechnung_id in _ig_lieferung_rechnung_ids
             or (ist_ig_lieferung_konto(e.konto_skr03, e.konto_skr04)
-                and e.steuerbefreiung_grund == "§4 Nr. 1b UStG")
+                and e.steuerbefreiung_grund == "§4 Nr. 1b UStG"
+                and e.rechnung_id not in _ig_neu_rechnung_ids)
         ):
             kz["kz_41"] += e.netto_betrag
             posten["kz_41"].append({**quelle, "betrag": e.netto_betrag})
@@ -460,6 +491,25 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
             vst_kz = _KONTO_AUSGABE_VST.get(ust_konto, "kz_66")
             kz[vst_kz] += e.vorsteuer_betrag  # negativer Wert → reduziert KZ
             posten[vst_kz].append({**quelle, "betrag": e.vorsteuer_betrag})
+
+    # KZ 41/21 aus Rechnungen ab dem Stichtag (Issue #497) - Meldemonat nach §18a Abs. 8 /
+    # §18b UStG statt Zahlungsdatum, gleiche Quelle wie api/zm.py.
+    for u in zm_meldezeitraum.ig_umsaetze(von, bis, db):
+        nr = "kz_41" if u.kennzeichen == "L" else "kz_21"
+        kz[nr] += u.betrag
+        posten[nr].append({
+            "quelle": "rechnung",
+            "quelle_id": u.rechnung_id,
+            "datum": u.datum,
+            "referenz": u.rechnungsnummer,
+            # datum ist das Meldedatum (bestimmt den Monat), das Rechnungsdatum steht im Text
+            "beschreibung": (f"Rechnung vom {u.rechnungsdatum:%d.%m.%Y} ({_ig_umsatz_meldezeitraum(u)})"
+                             if u.art == "rechnung" and u.rechnungsdatum
+                             else _IG_UMSATZ_TEXT.get(u.art, _IG_UMSATZ_TEXT["rechnung"])),
+            "rechnung_id": u.rechnung_id,
+            "rechnungsnummer": u.rechnungsnummer,
+            "betrag": u.betrag,
+        })
 
     # Vorsteuer nach Soll-Prinzip (Rechnungsdatum statt Zahlungsdatum, Issue #338): Eingangs-
     # rechnungen ab CUTOVER_DATUM_VORSTEUER wurden oben aus der Journal-Aggregation
@@ -859,7 +909,7 @@ class UStVASpeichernRequest(BaseModel):
 
 class UStVAPostenItem(BaseModel):
     """Einzelner Beitrag zu einer Kennziffer (Issue #353 – Anzeigehilfe aufschlüsseln)."""
-    quelle: str            # "journal" | "vorsteuer_anspruch"
+    quelle: str            # "journal" | "vorsteuer_anspruch" | "rechnung" (Issue #497)
     quelle_id: int
     datum: date
     referenz: Optional[str] = None       # Belegnr. (Journal) bzw. Rechnungsnummer

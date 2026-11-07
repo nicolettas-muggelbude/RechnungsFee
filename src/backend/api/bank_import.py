@@ -37,6 +37,7 @@ from utils.bank_csv_parser import (
 )
 from utils.signatur import signatur_journaleintrag
 from utils.mahngebuehr_verrechnung import verrechne_mahngebuehren
+from utils.zm_meldezeitraum import hinweis_freie_ig_buchung
 from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
@@ -137,6 +138,7 @@ class BankTransaktionResponse(BaseModel):
     forderung_id: Optional[int] = None
     dedupe_hash: Optional[str] = None
     rechnung_info: Optional[RechnungKurzinfo] = None
+    hinweis: Optional[str] = None  # nur in der Antwort auf das Buchen (Issue #497)
 
     model_config = {"from_attributes": True}
 
@@ -184,6 +186,7 @@ class AutoBuchenResult(BaseModel):
     import_id: Optional[int] = None
     forderungen: int
     fehler: int
+    hinweis: Optional[str] = None  # Issue #497: mind. eine freie Buchung auf ig. Lieferung ab Stichtag
 
 
 # ---------------------------------------------------------------------------
@@ -1054,6 +1057,7 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
 
     unternehmen = db.query(Unternehmen).first()
     gebucht = offen = forderungen = fehler = 0
+    hinweis = None
 
     for tx in pending:
         try:
@@ -1107,17 +1111,20 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
                 else:
                     logger.info("auto_buchen: kein Surplus → keine Forderung")
             elif tx.kategorie_id:
-                _buche_pfad_b(db, tx)
+                eintrag_b = _buche_pfad_b(db, tx)
+                hinweis = hinweis or hinweis_freie_ig_buchung(eintrag_b)
                 gebucht += 1
             else:
                 offen += 1
         except Exception:
             logger.exception("auto_buchen tx=%s Fehler", tx.id if tx else "?")
             db.rollback()
+            hinweis = None  # Rollback verwirft auch die bisher gebuchten Transaktionen
             fehler += 1
 
     db.commit()
-    return AutoBuchenResult(gebucht=gebucht, offen=offen, forderungen=forderungen, fehler=fehler, import_id=import_id)
+    return AutoBuchenResult(gebucht=gebucht, offen=offen, forderungen=forderungen, fehler=fehler, import_id=import_id,
+                            hinweis=hinweis)
 
 
 @router.get("/{konto_id}", response_model=BankTransaktionenListResponse)
@@ -1234,6 +1241,7 @@ def buche_transaktion(
         raise HTTPException(status_code=409, detail="bereits_gebucht")
 
     forderung = None
+    hinweis = None
     if data.rechnung_id:
         rechnung = db.query(Rechnung).filter(Rechnung.id == data.rechnung_id).first()
         if not rechnung:
@@ -1258,7 +1266,7 @@ def buche_transaktion(
     else:
         if not tx.kategorie_id:
             raise HTTPException(status_code=422, detail="keine_kategorie")
-        _buche_pfad_b(db, tx)
+        hinweis = hinweis_freie_ig_buchung(_buche_pfad_b(db, tx))
 
     db.commit()
     db.refresh(tx)
@@ -1276,6 +1284,7 @@ def buche_transaktion(
             )
     if forderung:
         resp.forderung_id = forderung.id
+    resp.hinweis = hinweis
 
     return resp
 

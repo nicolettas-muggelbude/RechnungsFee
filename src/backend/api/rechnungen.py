@@ -3794,6 +3794,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
         gegenbuchung = Journaleintrag(
             datum=gb_datum,
             belegnr=belegnr,
+            # Format wird ausgewertet: "bereits storniert"-Prüfung oben und
+            # utils/zm_meldezeitraum._ist_storno_gegenbuchung() (Issue #497) - dort mit anpassen
             beschreibung=f"STORNO {eintrag.belegnr}: {re_nr} – {data.grund.strip()}",
             kategorie_id=eintrag.kategorie_id,
             konto_skr03=eintrag.konto_skr03,
@@ -3942,6 +3944,12 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         rabatt_betrag=original.rabatt_betrag,
         skonto_prozent=original.skonto_prozent,
         skonto_tage=original.skonto_tage,
+        # Steuerliche Einordnung wie beim Original - sonst fiele eine ersetzte ig. Lieferung
+        # oder EU-Dienstleistung aus UStVA KZ 41/21/43/45 und der ZM (Issue #497)
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_eu_lieferung=original.ist_eu_lieferung,
+        ist_drittland_leistung=original.ist_drittland_leistung,
+        ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
         ist_entwurf=True,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),

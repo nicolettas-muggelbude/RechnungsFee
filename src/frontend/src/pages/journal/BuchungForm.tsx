@@ -77,7 +77,8 @@ interface InitialWerte {
 
 interface Props {
   onClose: () => void
-  onSuccess: (journalId?: number) => void
+  // hinweis (Issue #497): vom Server, der Aufrufer zeigt ihn nach dem Schliessen an
+  onSuccess: (journalId?: number, hinweis?: string | null) => void
   bearbeiten?: JournalEintrag
   initialDatum?: string
   initialWerte?: InitialWerte
@@ -448,7 +449,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
-      onSuccess(data.id)
+      onSuccess(data.id, data.hinweis)
     },
   })
 
@@ -473,7 +474,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
       // Issue #506: ID des ersten Split-Eintrags zurückgeben - der Bank-Import verknüpft die
       // Transaktion damit (sonst blieb sie trotz Buchung auf „Zuordnung nötig“)
-      onSuccess(eintraege[0]?.id)
+      onSuccess(eintraege[0]?.id, eintraege.find((e) => e.hinweis)?.hinweis)  // Issue #497
     },
   })
 

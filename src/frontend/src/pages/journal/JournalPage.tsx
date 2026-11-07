@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getJournal, getKategorien, getKassenbuchExportUrl, getJournalExportUrl, openUrl, type JournalEintrag, type Schnellbuchung } from '../../api/client'
 import { BuchungForm } from './BuchungForm'
+import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
 import { BuchungDetail } from './BuchungDetail'
 import { SchnellbuchungenLeiste } from './SchnellbuchungenLeiste'
@@ -62,6 +63,7 @@ export function JournalPage() {
   const setNurBebuchte = (v: boolean) => { journalFilter.nurBebuchte = v; _setNurBebuchte(v) }
   const [gruppeIdFilter, setGruppeIdFilter] = useState<number | null>(null)
   const [showBuchung, setShowBuchung] = useState(false)
+  const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
   const [schnellbuchungWerte, setSchnellbuchungWerte] = useState<Schnellbuchung | null>(null)
   const [showAbschluss, setShowAbschluss] = useState(false)
   const [bearbeitenEintrag, setBearbeitenEintrag] = useState<JournalEintrag | null>(null)
@@ -619,8 +621,11 @@ export function JournalPage() {
             kategorie_id: String(schnellbuchungWerte.kategorie_id),
           } : undefined}
           onClose={() => { setShowBuchung(false); setBearbeitenEintrag(null); setSchnellbuchungWerte(null) }}
-          onSuccess={() => { setShowBuchung(false); setBearbeitenEintrag(null); setSchnellbuchungWerte(null) }}
+          onSuccess={(_id, hinweis) => { setShowBuchung(false); setBearbeitenEintrag(null); setSchnellbuchungWerte(null); setBuchungsHinweis(hinweis ?? null) }}
         />
+      )}
+      {buchungsHinweis && (
+        <BuchungsHinweisDialog text={buchungsHinweis} onClose={() => setBuchungsHinweis(null)} />
       )}
       {showAbschluss && (
         <TagesabschlussDialog

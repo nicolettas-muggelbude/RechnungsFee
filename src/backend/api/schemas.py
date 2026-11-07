@@ -455,6 +455,9 @@ class JournalEintragResponse(BaseModel):
     storno_belegnr: Optional[str] = None  # Belegnr der Gegenbuchung, falls storniert
     ist_storno: bool = False              # True wenn dieser Eintrag selbst eine Gegenbuchung ist
     storno_von_belegnr: Optional[str] = None  # Belegnr der Originalbuchung, falls ist_storno
+    # Hinweis beim Buchen (Issue #497, zm_meldezeitraum.hinweis_freie_ig_buchung) - nur in der
+    # Antwort auf das Anlegen/Korrigieren gesetzt, nicht in Listen
+    hinweis: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -194,8 +194,10 @@ function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, g
           ) : !posten?.length ? (
             <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Keine Einzelposten gefunden.</p>
           ) : (
-            gefiltert.map(g => (
-              <div key={g.original.quelle + '-' + g.original.quelle_id} className={g.original.storniert ? 'opacity-60' : ''}>
+            // Index im Key: eine Rechnung ab dem Stichtag (Issue #497) kann im selben Monat mehrere
+            // Posten mit gleicher quelle_id haben (Rechnung, Storno, Skonto)
+            gefiltert.map((g, i) => (
+              <div key={g.original.quelle + '-' + g.original.quelle_id + '-' + i} className={g.original.storniert ? 'opacity-60' : ''}>
                 {postenZeile(g.original, false)}
                 {g.gegenbuchung && postenZeile(g.gegenbuchung, true)}
               </div>
