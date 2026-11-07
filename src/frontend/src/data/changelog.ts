@@ -36,6 +36,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'verbesserung', text: 'Lieferscheine aus einem Angebot oder Auftrag werden jetzt als Entwurf angelegt (Standard-Lieferadresse vorausgewählt). So lässt sich vor dem Finalisieren noch die passende Lieferadresse wählen – z. B. der Standort eines Kunden mit vielen Filialen. Am Lagerbestand ändert sich dadurch nichts. Danke an Gerti (Issue #495).' },
       { typ: 'fix', text: 'Lieferschein-Entwurf: Eine beim Bearbeiten gewählte Lieferadresse ging beim Speichern verloren.' },
       { typ: 'fix', text: 'Eingangsrechnungen bekamen im PDF die eigenen Standard-Einleitungs- und Schlusstexte der Ausgangsrechnung, in Vorlage 1 zusätzlich eine Anrede an den Lieferanten und den Satz „Vielen Dank für Dein Vertrauen …“. Diese Texte entfallen jetzt bei Eingangsrechnungen. Danke an thomaskron (Issue #504).' },
+      { typ: 'fix', text: 'UStVA: „Speichern“ einer Voranmeldung schlug immer fehl – der Zeitraum wurde nicht mitgeschickt. Dadurch fehlten gespeicherte Voranmeldungen auch bei der Anrechnung der Vorauszahlungen in der Jahres-USt.' },
       { typ: 'fix', text: 'DATEV-Export: Die Anzahl der Buchungen ohne Sachkonto und der mitexportierten Belege wurde in der installierten App nie angezeigt (nur im Entwicklungsmodus).' },
     ],
   },
