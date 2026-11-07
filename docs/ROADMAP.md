@@ -142,6 +142,33 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ---
 
+## 📋 GbR / Personengesellschaften – Gesellschafter und Gewinnverteilung (Issue #402)
+
+Vorarbeit für die gesonderte und einheitliche Feststellung (§§ 179, 180 AO: ESt 1 B, Anlage FB, Anlage FE 1).
+Bedarf von mehreren GbRs gemeldet (derdobbi, melvinionair mit 4 Gesellschaftern), daher aus den Ideen
+eingeplant. Version noch offen. Keine ELSTER-Übermittlung – Berechnung und Auswertung reichen.
+
+Ausgangslage: Buchhaltung, Rechnungen und EÜR laufen rechtsformunabhängig, eine GbR kann RechnungsFee
+für den Gesamtbetrieb schon nutzen. Es fehlt die Ebene darunter: `unternehmen` ist ein Singleton,
+Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
+
+- [ ] **Stufe 1 – Gesellschafter und Verteilung**
+  - Opt-in-Schalter (Standard aus, nicht im Setup-Wizard), nur für Personengesellschaften sinnvoll
+  - Gesellschafter-Stammdaten: Name, Anschrift, Steuernummer/IdNr. (Anlage FB), Beteiligungsquote und
+    Gewinn-/Verlustquote getrennt, Gültigkeit je Wirtschaftsjahr (Ein-/Austritt im Jahr)
+  - Privatentnahmen und -einlagen je Gesellschafter: Personenbezug an der Journalbuchung (Auswahlfeld
+    bei Privat-Kategorien), Altbuchungen ohne Bezug in der Auswertung als „nicht zugeordnet“
+  - Jahresauswertung: EÜR-Gewinn der Gesellschaft, Anteil je Gesellschafter, Entnahmen/Einlagen je
+    Gesellschafter, als Vorlage für Anlage FE 1 (PDF/CSV)
+- [ ] **Stufe 2 – Vorabgewinn und Sonderbereich**
+  - Vorabgewinn/Tätigkeitsvergütung je Gesellschafter vor der Quotenverteilung
+  - Sonderbetriebseinnahmen/-ausgaben je Gesellschafter (z. B. eigenes Fahrzeug, Arbeitszimmer,
+    Darlehenszinsen) – nicht in der EÜR der Gesellschaft, aber im Ergebnisanteil
+  - später denkbar: Sonderbetriebsvermögen, Ergänzungsrechnungen
+- Nicht betroffen: Umsatzsteuer und Gewerbesteuer – Steuerschuldner bleibt die Gesellschaft.
+
+---
+
 ## 📋 ELSTER-Export: Umsatzsteuer-Voranmeldung und Zusammenfassende Meldung (Issue #360)
 
 Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
@@ -313,8 +340,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Konfigurierbarer Speicherort für archivierte Original-PDFs** (Issue #390) – Dateiname nach Rechnungsnummer statt interner DB-ID (z. B. `RE-260103_42.pdf`) ist seit v0.6.12 erledigt. Offen bleibt: selbst wählbarer Speicherort statt fest `uploads/rechnungen/` im Profil-Datenordner. Setzt eine Lösung für bereits archivierte Bestandsdateien voraus (alte Pfade bleiben in `rechnung.original_pdf_pfad` referenziert).
 
 - **Zeiterfassungssystem** (Issue #395) – optional aktivierbares Zeiterfassungs-Modul mit eigenem Dashboard: Start/Stopp-Zeiterfassung, Zuordnung zu Kunde (idealerweise Projekt), Notizen/Tätigkeitsbeschreibung pro Eintrag; am Periodenende unberechnete Zeiten pro Kunde auswerten und direkt in eine Rechnung mit Stunden-/Projekt-Aufschlüsselung überführen. Größerer Scope (eigenes Datenmodell für Zeiteinträge/Projekte, neue Seite, Rechnungs-Workflow-Integration), kein fester Zeitplan.
-
-- **GbR / Personengesellschaften: Gesellschafter + Gewinnverteilung** (Issue #402) – Stammdatenbereich je Gesellschafter (Name, Beteiligungsquote, Gewinn-/Verlustverteilungsquote getrennt geführt, Gültigkeit je Wirtschaftsjahr, Zuordnung von Privateinlagen/-entnahmen); darauf aufbauend eine Jahresauswertung (EÜR-Gewinn der Gesellschaft, Gewinn-/Verlustanteil je Gesellschafter, Privateinlagen/-entnahmen je Gesellschafter, steuerlicher Ergebnisanteil) als Vorarbeit für die gesonderte und einheitliche Feststellung – keine ELSTER-Übermittlung nötig, reine Berechnung/Auswertung reicht laut Melder. Kein kleines Formularfeld: Buchhaltung/Rechnungen/EÜR laufen unternehmens- bzw. tätigkeitsbezogen und damit unabhängig von der Rechtsform – eine GbR kann RechnungsFee für den Gesamtbetrieb also schon heute nutzen. Es fehlt aber die Ebene darunter: die Aufteilung des bereits ermittelten Gesamtgewinns auf mehrere Personen. `unternehmen` ist als Singleton angelegt und Privatentnahme/-einlage laufen rein kategorienbasiert ohne Personenbezug (Anlage EKS ist zudem ein reines Einzelpersonen-Zusatzformular für Transferleistungsempfänger, damit für GbRs ohnehin irrelevant) – „Gesellschafter" wäre eine neue Dimension quer durch Stammdaten und Auswertung. Später denkbar: Sonderbetriebseinnahmen/-ausgaben, Sonderbetriebsvermögen, Ergänzungsrechnungen. Zurückgestellt bis sich zeigt, wie groß die Nachfrage über den einen Melder hinaus ist.
 
 - **Abschlagsrechnungen: eigener PDF-Abzugs-Block + ZUGFeRD BT-113** (Folge-Issue nach v0.7.0) –
   aktuell erscheint der Abzug einer verrechneten Abschlagsrechnung als normale (read-only)
