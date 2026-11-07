@@ -304,6 +304,9 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] Navigation: Seitenleiste per Tab, aktiver Punkt per Enter
 - [ ] Listen (Rechnungen, Kunden …) per Pfeiltasten, Enter öffnet das Detail-Panel
 - [ ] Rechnung schreiben und finalisieren (inkl. Positionszeilen: Tab durch alle Spalten)
+- [ ] Positionen verschieben (Issue #504, thomaskron): ↑/↓-Knöpfe je Zeile + Alt+↑/↓, Positionsnummern
+  folgen automatisch; alle Positionstabellen (Rechnung, Angebot, Auftrag, Proforma, Lieferschein,
+  Wiederkehrend). Kein Drag-and-drop ohne Tastaturalternative
 - [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
 - [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
 
