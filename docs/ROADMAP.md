@@ -122,6 +122,29 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
+## 📋 v0.7.9 – Reverse Charge mit privatem Anteil (Issue #503)
+
+Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.9 – beides Steuer-/Buchungslogik ohne
+größere neue Oberfläche.
+
+Rechtslage: Bei § 13b wird die USt auch für den privaten Anteil voll geschuldet (§ 13b Abs. 5 UStG) →
+KZ 46/47 immer voll, Vorsteuer (KZ 67) nur für den betrieblichen Anteil. Heute: Vorsteuer-Anteil hängt
+nur an der Kategorie (`vorsteuer_prozent`) und wird bei Reverse Charge bewusst ignoriert
+(`_berechne_vorsteuer`, #339); eine Splitbuchung mit Privat-Kategorie verliert die §13b-Steuer
+(Privat erzwingt 0 % in `_felder_aus_data`) → KZ 46/47 zu niedrig.
+
+- [ ] Feld **„privater Anteil %“** an der Buchung (Journal-Buchungsformular und Zahlungsdialog der
+  Eingangsrechnung), nur bei Kategorien mit `ust_sonderfall` sichtbar
+- [ ] erzeugt zwei verknüpfte Einträge (`gruppe_id`): betrieblicher Teil wie bisher (Vorsteuer voll
+  auf diesen Teil), privater Teil auf „Privatentnahme“ mit `ust_sonderfall` und voller §13b-Steuer,
+  `vorsteuerabzug=False`
+- [ ] vor dem Umsetzen prüfen: EÜR-Behandlung der §13b-Steuer (Zeile 17/57/58) – der private Teil
+  samt seiner Steuer darf keine Betriebsausgabe werden; DATEV-BU-Schlüssel des privaten Teils;
+  `vorsteuer_ansprueche` (Soll-Prinzip ab 01.10.2026, #338) für Eingangsrechnungen anteilig
+- [ ] Storno und „Zahlung korrigieren“ beider Teile gemeinsam
+- Bis dahin: Wertabgabe-Weg (voll abziehen, privaten Anteil als unentgeltliche Wertabgabe mit
+  19 % versteuern) ergibt dieselbe Zahllast
+
 ## 📋 v0.7.9 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
 
 Guthaben aus Überzahlungen (Lieferanten-/Kundenguthaben, auch aus dem Mahnwesen) stehen nur als
