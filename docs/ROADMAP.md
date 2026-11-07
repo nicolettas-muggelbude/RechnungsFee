@@ -309,7 +309,9 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ### 1. Fundament
 - [ ] Alle Dialoge auf die gemeinsame Modal-Basis (`components/Modal.tsx`, PR #452: `role="dialog"`,
-  `aria-modal`, `aria-labelledby`, Startfokus, Focus-Trap, Esc, Fokus zurück) – ca. 21 Dialoge
+  `aria-modal`, `aria-labelledby`, Startfokus, Focus-Trap, Esc, Fokus zurück) – ca. 21 Dialoge.
+  Neu seit dem Abzweig von `release/0.8.0` (auf `main`, kommen mit dem Merge): `BuchungsHinweisDialog`
+  (PR #498, Hinweis bei freier ig. Lieferung) – bisher ohne `role="dialog"`/`aria-modal`/Focus-Trap
 - [ ] Esc in offenen Auswahllisten (Land, Stammdaten, Datum) schließt nur die Liste, nicht den Dialog
 - [ ] `aria-live="polite"` für Statusmeldungen (Gespeichert, Fehler, Import-Ergebnisse)
 - [ ] Landmarken in `AppLayout.tsx`: `<main>`, `<nav>`, `<header>`
