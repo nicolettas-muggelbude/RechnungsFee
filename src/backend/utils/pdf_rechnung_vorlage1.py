@@ -13,7 +13,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _fmt_ust_satz, _iso_zu_de, _adresszeilen, _md, _standardtext, anrede_zeile,
+    _fmt_euro, _fmt_ust_satz, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -47,20 +47,20 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         anrede = anrede_zeile(r, self._unt)
 
         dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
-        einleitungstext = (getattr(r, "einleitungstext", None) or
-                           _standardtext(self._unt, "einleitungstext", dokument_typ)).strip()
+        einleitungstext = dokument_text(r, self._unt, "einleitungstext")
 
         self.ln(5)
         self.set_font("DejaVu", "", 9.5)
         self.set_text_color(*TEXT_DUNKEL)
-        self.cell(0, 6, anrede, new_x="LMARGIN", new_y="NEXT")
-        self.ln(1)
+        if anrede:
+            self.cell(0, 6, anrede, new_x="LMARGIN", new_y="NEXT")
+            self.ln(1)
         self.set_font("DejaVu", "", 9)
         if einleitungstext:
             self.set_text_color(*TEXT_DUNKEL)
             self.set_x(L_MARGIN)
             self.multi_cell(NUTZ_W, 5, _md(einleitungstext), markdown=True, align="L")
-        elif dokument_typ == "Rechnung":
+        elif dokument_typ == "Rechnung" and r.typ != "eingang":
             # Eingebauter Vorlage-1-Standardtext gilt bewusst nur für Rechnung (Issue #368) -
             # für die anderen Dokumenttypen ohne konfigurierten Text lieber gar nichts zeigen
             # als fälschlich "...in Rechnung" auf einem Angebot/Auftrag/einer Proforma.
