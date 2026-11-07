@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment, type ComponentProps } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -17,7 +17,7 @@ import {
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
-  type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
+  type Rechnung, type RechnungCreate, type RechnungUpdate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   getPostfachEingang, postfachAbrufen, postfachVerwerfen, postfachUebernommen, postfachDateiPfad, ladePostfachDatei,
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
@@ -1742,7 +1742,7 @@ function RechnungDetail({
         {zeigMailDialog && (
           <MailDialog
             dokument={rechnung}
-            dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as any) ?? 'Rechnung'}
+            dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as ComponentProps<typeof MailDialog>['dokumentTyp']) ?? 'Rechnung'}
             unternehmen={unternehmen}
             onClose={() => { setZeigMailDialog(false); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }}
           />
@@ -2624,10 +2624,13 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
   const istBekannt = EINHEITEN.includes(value)
   const [freitext, setFreitext] = useState(!istBekannt)
 
-  // Wenn der Wert von außen auf einen bekannten zurückgesetzt wird (z.B. Formular-Reset)
-  useEffect(() => {
+  // Wenn der Wert von außen auf einen bekannten zurückgesetzt wird (z.B. Formular-Reset) -
+  // State beim Prop-Wechsel direkt im Rendern anpassen statt per Effekt (kein Zusatz-Render)
+  const [vorherigerWert, setVorherigerWert] = useState(value)
+  if (value !== vorherigerWert) {
+    setVorherigerWert(value)
     if (EINHEITEN.includes(value)) setFreitext(false)
-  }, [value])
+  }
 
   if (freitext) {
     return (
@@ -3051,10 +3054,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   useEffect(() => {
     if (initial || typ !== 'ausgang') return
     if (partnerId && kunden) {
-      const k = kunden.find((c: any) => String(c.id) === partnerId)
-      if (k && (k as any).skonto_prozent != null) {
-        setSkontoProzent(String((k as any).skonto_prozent))
-        setSkontoTage(String((k as any).skonto_tage ?? ''))
+      const k = kunden.find((c) => String(c.id) === partnerId)
+      if (k && k.skonto_prozent != null) {
+        setSkontoProzent(String(k.skonto_prozent))
+        setSkontoTage(String(k.skonto_tage ?? ''))
         return
       }
     }
@@ -3086,7 +3089,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // sehen Nutzer:innen ohne EU-Geschäft zwei Häkchen die sie nie brauchen (Issue #316-Feedback).
   // Ausnahme: ist eines der Flags bereits aktiv (z.B. Kunde nachträglich geändert), bleibt es
   // sichtbar, damit man es sieht/abwählen kann statt dass es "unsichtbar" aktiv bleibt.
-  const kunde = kunden?.find((k: any) => String(k.id) === partnerId)
+  const kunde = kunden?.find((k) => String(k.id) === partnerId)
   const kundeEuFaehig = !!(
     unternehmen?.ust_idnr?.trim() &&
     !istKleinunternehmer &&
@@ -3112,7 +3115,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // Umschalten der Kategorie (aus dem Land allein lässt sich nicht ableiten ob USt im
   // Kaufpreis steckt, z.B. Amazon/Ebay-IOSS vs. Alibaba-Direktimport) - nur ein Hinweis,
   // solange noch eine der unspezifischen Standard-Wareneinkauf-Kategorien gewählt ist.
-  const lieferant = lieferanten?.find((l: any) => String(l.id) === partnerId)
+  const lieferant = lieferanten?.find((l) => String(l.id) === partnerId)
   const lieferantLand = typ === 'eingang' ? (partnerId ? lieferant?.land : partnerLand) : undefined
   const lieferantDrittland = !!(lieferantLand && lieferantLand !== 'DE' && !istEuLand(lieferantLand))
   const positionenMitUnspezifischerKat = positionen.some((p) => {
@@ -3721,7 +3724,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         <div className="flex gap-1">
           <div className={`flex-1 ${pfRing('lieferant_name')} ${fehlerRing(partnerFehlt)}`}>
             <StammdatenCombobox
-              items={partnerListe.map((p: any) => ({
+              items={partnerListe.map((p) => ({
                 id: p.id as number,
                 label: p.firmenname ?? [p.vorname, p.nachname].filter(Boolean).join(' '),
               }))}
@@ -4856,7 +4859,6 @@ function ImportDialog({
 
   useEffect(() => {
     if (startDatei) handleDatei(startDatei)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDatei])
 
   async function handleDatei(original: File) {
@@ -4868,8 +4870,8 @@ function ImportDialog({
       const res = await analysiereRechnung(f)
       setErgebnis(res)
       setSchritt('ergebnis')
-    } catch (e: any) {
-      setLadeFehler(e.message)
+    } catch (e) {
+      setLadeFehler(e instanceof Error ? e.message : String(e))
     } finally {
       setLaedt(false)
     }
@@ -4989,7 +4991,7 @@ function ImportDialog({
                 <span className="text-sm text-slate-500 dark:text-slate-400">
                   {ergebnis.format === 'zugferd' || ergebnis.format === 'xrechnung'
                     ? 'Strukturierte Daten erkannt'
-                    : felder && Object.keys(felder).some(k => k !== 'konfidenz' && (felder as any)[k])
+                    : felder && Object.keys(felder).some(k => k !== 'konfidenz' && felder[k as keyof typeof felder])
                       ? 'Felder aus PDF-Text extrahiert – bitte prüfen'
                       : 'Keine Daten erkannt – bitte manuell ausfüllen'}
                 </span>
@@ -5008,7 +5010,7 @@ function ImportDialog({
               )}
 
               {/* Erkannte Felder */}
-              {felder && Object.keys(felder).some(k => k !== 'konfidenz' && (felder as any)[k]) && (
+              {felder && Object.keys(felder).some(k => k !== 'konfidenz' && felder[k as keyof typeof felder]) && (
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 space-y-2 text-sm">
                   {felder.lieferant_name && (
                     <div className="space-y-1">
@@ -5323,7 +5325,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     mutationFn: createRechnung,
     onSuccess: async (r) => {
       if (importDatei) {
-        try { await uploadBeleg(r.id, importDatei) } catch {}
+        try { await uploadBeleg(r.id, importDatei) } catch { /* Rechnung ist gespeichert, Beleg lässt sich nachträglich anhängen */ }
         setImportDatei(null)
       }
       if (importPostfachId) {
@@ -5343,7 +5345,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         }
       }
       if (activeVorlageId) {
-        try { await erledigtVorlage(activeVorlageId) } catch {}
+        try { await erledigtVorlage(activeVorlageId) } catch { /* Vorlage bleibt fällig, die Rechnung ist trotzdem gespeichert */ }
         setActiveVorlageId(null)
         qc.invalidateQueries({ queryKey: ['buchungsvorlagen'] })
       }
@@ -5356,7 +5358,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => updateRechnung(id, data),
+    mutationFn: ({ id, data }: { id: number; data: RechnungUpdate }) => updateRechnung(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setFormModus(null)
@@ -5841,7 +5843,8 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                               checked={selectedLsIds.has(r.id)}
                               onChange={e => setSelectedLsIds(prev => {
                                 const next = new Set(prev)
-                                e.target.checked ? next.add(r.id) : next.delete(r.id)
+                                if (e.target.checked) next.add(r.id)
+                                else next.delete(r.id)
                                 return next
                               })}
                             />
