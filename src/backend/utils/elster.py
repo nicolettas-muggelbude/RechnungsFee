@@ -114,7 +114,7 @@ def steuernummer_elster13(steuernummer: str | None, bundesland: str | None) -> s
 
 # ELSTER-Typ GeldBetragOhneCent (Bemessungsgrundlagen, volle Euro nach §123 AO);
 # alle übrigen Kennzahlen sind GeldBetragMitCent.
-KZ_BEMESSUNGSGRUNDLAGE = frozenset({"21", "41", "43", "45", "46", "81", "84", "86", "87", "89", "90", "93", "95"})
+KZ_BEMESSUNGSGRUNDLAGE = frozenset({"21", "41", "43", "45", "48", "46", "81", "84", "86", "87", "89", "90", "93", "95"})
 
 # Kz09 ist laut XSD Pflicht, wird beim Mein-ELSTER-Upload aber ausdrücklich
 # ignoriert (offizielle Hilfe, Ausschlussliste). RechnungsFee hat keine

@@ -168,8 +168,8 @@ def _zeile_13_beitrag(e: Journaleintrag, ku: Optional[bool], haupt_zeile: Option
     """Issue #480: Zeile 13 (Kz 119) - nachrichtlicher Davon-Betrag aus Zeile 12: nicht
     steuerbare Einnahmen eines Kleinunternehmers. Erkannt an der Kategorie, die regulär in
     Zeile 16 steht (Mahngebühren, Verzugszinsen, Sonstige Einnahmen, Zuschüsse, 0 %).
-    Steuerfreie Umsätze nach § 4 Nr. 14 (Heilberufe) brauchen eine Angabe in den Stammdaten
-    und sind hier noch nicht erfasst."""
+    Steuerfreie Umsätze nach § 4 UStG (Heilberufe, Unterricht) laufen seit Issue #492 über
+    Rechnungen mit dem Kennzeichen steuerfrei_4 auf „Betriebseinnahmen (0%)“ und damit ebenfalls hier."""
     kat = e.kategorie
     if ku is True and haupt_zeile == _ZEILE_KLEINUNTERNEHMER and kat and kat.euer_zeile == _ZEILE_STEUERFREI:
         return haupt_beitrag

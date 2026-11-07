@@ -76,6 +76,10 @@ KZ_META = [
     ("", "43",
      "Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen, §4 Nr. 1a i. V. m. §6 UStG)", False, True),
 
+    # Issue #492: Heilberufe (§4 Nr. 14), Unterricht (§4 Nr. 21) u. a.
+    ("Steuerfreie Umsätze ohne Vorsteuerabzug", "48",
+     "Umsätze nach §4 Nr. 8 bis 29 UStG (z. B. Heilberufe, Unterricht)", False, True),
+
     ("Nicht im Inland steuerbare Umsätze", "21",
      "Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)", False, True),
     ("", "45",
@@ -290,6 +294,14 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         .filter(Rechnung.typ == "ausgang", Rechnung.ist_ausfuhrlieferung == True).all()  # noqa: E712
     }
 
+    # KZ 48 (Issue #492): steuerfreie Leistungen nach §4 UStG ohne Vorsteuerabzug - Erkennung über
+    # die Rechnung (Kennzeichen steuerfrei_4), analog zu KZ 41/43; die Zahlung hat 0 % USt und kein
+    # USt-Konto, fällt also in keine andere Kennzahl.
+    _steuerfrei_4_rechnung_ids = {
+        r[0] for r in db.query(Rechnung.id)
+        .filter(Rechnung.typ == "ausgang", Rechnung.steuerfrei_4 == True).all()  # noqa: E712
+    }
+
     # Lookup-Cache: Original-id (gruppe_id) → marge_25a_brutto (für Storno-Fallback bei alten Einträgen)
     _marge_cache: dict[int, Decimal | None] = {}
 
@@ -399,6 +411,16 @@ def _berechne_kz(von: date, bis: date, db: Session) -> tuple[dict[str, Decimal],
         elif e.art == "Ausgabe" and e.zahlungsart != "Skonto" and e.rechnung_id in _ausfuhr_rechnung_ids:
             kz["kz_43"] -= e.netto_betrag
             posten["kz_43"].append({**quelle, "betrag": -e.netto_betrag})
+
+        # KZ 48 (Issue #492) – steuerfreie Umsätze nach §4 UStG; Kleinunternehmer-Buchungen
+        # (§19 UStG) gehören nicht in die Voranmeldung
+        if e.rechnung_id in _steuerfrei_4_rechnung_ids and e.steuerbefreiung_grund != "§19 UStG":
+            if e.art == "Einnahme":
+                kz["kz_48"] += e.netto_betrag
+                posten["kz_48"].append({**quelle, "betrag": e.netto_betrag})
+            elif e.zahlungsart != "Skonto":
+                kz["kz_48"] -= e.netto_betrag
+                posten["kz_48"].append({**quelle, "betrag": -e.netto_betrag})
 
         # KZ 21/45 (Issue #372) – nicht steuerbare Auslands-Dienstleistungen. Erkennung über
         # rechnung_id statt Konto/steuerbefreiung_grund, da diese Buchungen kein eigenes
@@ -766,6 +788,8 @@ class UStVAErgebnis(BaseModel):
     # B – Steuerfreie Umsätze mit Vorsteuerabzug
     kz_41: Decimal = ZERO
     kz_43: Decimal = ZERO   # Ausfuhrlieferungen (Issue #457)
+    # Steuerfreie Umsätze ohne Vorsteuerabzug (Issue #492)
+    kz_48: Decimal = ZERO
     # Nicht im Inland steuerbare Umsätze (Issue #372)
     kz_21: Decimal = ZERO
     kz_45: Decimal = ZERO
@@ -813,6 +837,7 @@ class UStVASpeichernRequest(BaseModel):
     kz_88: Decimal = ZERO
     kz_41: Decimal = ZERO
     kz_43: Decimal = ZERO
+    kz_48: Decimal = ZERO  # Issue #492
     kz_87: Decimal = ZERO
     kz_21: Decimal = ZERO
     kz_45: Decimal = ZERO
@@ -1309,6 +1334,7 @@ def jahresumsatzsteuer(
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
         kz, _ = _berechne_kz(von, bis, db)
+        kz_48 = kz.get("kz_48", ZERO)  # Issue #492: steuerfreie Umsätze nach §4
 
     # Gespeicherte Voranmeldungen für Vorauszahlungsanrechnung
     voranmeldungen = (
@@ -1367,6 +1393,7 @@ def jahresumsatzsteuer_pdf(
         kz_48 = _berechne_ku_kz48(von, bis, db)
     else:
         kz, _ = _berechne_kz(von, bis, db)
+        kz_48 = kz.get("kz_48", ZERO)  # Issue #492: steuerfreie Umsätze nach §4
 
     voranmeldungen = (
         db.query(UstvaExport)

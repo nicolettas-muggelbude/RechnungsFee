@@ -1524,6 +1524,7 @@ export type Rechnung = {
   ist_eu_lieferung: boolean
   ist_drittland_leistung: boolean
   ist_ausfuhrlieferung: boolean
+  steuerfrei_4?: boolean  // Issue #492
 }
 
 export type RechnungCreate = {
@@ -1561,6 +1562,7 @@ export type RechnungCreate = {
   ist_eu_lieferung?: boolean
   ist_drittland_leistung?: boolean
   ist_ausfuhrlieferung?: boolean
+  steuerfrei_4?: boolean  // Issue #492
   positionen: RechnungspositionCreate[]
   rabatt_prozent?: number
   rabatt_betrag?: number
@@ -1791,6 +1793,7 @@ export type RechnungVorschauRequest = {
   ist_eu_lieferung?: boolean
   ist_drittland_leistung?: boolean
   ist_ausfuhrlieferung?: boolean
+  steuerfrei_4?: boolean  // Issue #492
 }
 export type RechnungVorschauPosition = {
   ust_satz: string

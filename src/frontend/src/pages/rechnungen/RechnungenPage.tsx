@@ -17,7 +17,7 @@ import {
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
-  type Rechnung, type RechnungCreate, type RechnungUpdate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
+  STEUERBEFREIUNGEN_4, type Rechnung, type RechnungCreate, type RechnungUpdate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   getPostfachEingang, postfachAbrufen, postfachVerwerfen, postfachUebernommen, postfachDateiPfad, ladePostfachDatei,
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
@@ -3084,6 +3084,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const [istDrittlandLeistung, setIstDrittlandLeistung] = useState(initial?.ist_drittland_leistung ?? false)
   const [istAusfuhrlieferung, setIstAusfuhrlieferung] = useState(initial?.ist_ausfuhrlieferung ?? false)
   const [sonderfallManuell, setSonderfallManuell] = useState(false)
+  // Issue #492: steuerfreie Leistung nach § 4 UStG - bei neuen Rechnungen vorbelegt, wenn in den
+  // Stammdaten ein Befreiungsgrund steht (Unternehmensdaten laden asynchron → per Effekt)
+  const [steuerfrei4, setSteuerfrei4] = useState<boolean>(initial?.steuerfrei_4 ?? false)
+  const [steuerfrei4Manuell, setSteuerfrei4Manuell] = useState(false)
+  const befreiung4 = STEUERBEFREIUNGEN_4.find((s) => s.wert === unternehmen?.steuerbefreiung_4)
+  useEffect(() => {
+    if (initial || steuerfrei4Manuell || typ !== 'ausgang' || dokumentTyp === 'Lieferschein') return
+    setSteuerfrei4(!!befreiung4)
+  }, [befreiung4, initial, steuerfrei4Manuell, typ, dokumentTyp])
   // Checkboxen nur einblenden wenn Kunde + Unternehmen überhaupt für ig. Lieferung/Reverse
   // Charge in Frage kommen (gültige USt-IdNr. beidseitig, Kunde in anderem EU-Land) - sonst
   // sehen Nutzer:innen ohne EU-Geschäft zwei Häkchen die sie nie brauchen (Issue #316-Feedback).
@@ -3218,13 +3227,19 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // automatisch) aktiv wird, auf 0% nachziehen, damit die Live-Anzeige nicht von dem abweicht, was
   // beim Speichern ohnehin passiert (das Backend erzwingt 0% serverseitig unabhaengig davon).
   useEffect(() => {
-    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung)) return
+    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4)) return
     setPositionen((prev) => {
       const geaendert = prev.some((p) => p.ust_satz !== '0')
       if (!geaendert) return prev
       return prev.map((p) => (p.ust_satz === '0' ? p : { ...p, ust_satz: '0' }))
     })
-  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung, typ])
+  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung, steuerfrei4, typ])
+
+  // Issue #492: die Auslands-Sonderfälle schließen „steuerfrei nach § 4“ aus (auch wenn sie
+  // automatisch für einen EU-/Drittlandkunden gesetzt werden)
+  useEffect(() => {
+    if (istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) setSteuerfrei4(false)
+  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung])
 
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
@@ -3278,6 +3293,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
     ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
     ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
+    steuerfrei_4: typ === 'ausgang' ? steuerfrei4 : undefined,
   } : null
   const { vorschau } = useRechnungVorschau(vorschauRequest)
 
@@ -3399,7 +3415,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     // §25a: kein USt-Ausweis, VK brutto = VK netto
     const istDiff = a.differenzbesteuerung
-    const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : String(parseInt(a.steuersatz))
+    const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : String(parseInt(a.steuersatz))
     const preis = istDiff ? a.vk_brutto : (eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto)
     setPositionen((prev) => prev.map((p, idx) =>
       idx === i
@@ -3458,6 +3474,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
       ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
       ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
+      steuerfrei_4: typ === 'ausgang' ? steuerfrei4 : undefined,
       eingabemodus: eingabeModus,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen – aber nur wenn die
       // Positionen noch mit dem OCR/XML-Wert übereinstimmen (overridePasst, oben aus der
@@ -3476,7 +3493,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       // oben (Issue #332: keine zweite, abweichende Umrechnung mehr im Frontend).
       positionen: positionen.map((p) => {
         const istDiff = p.differenzbesteuerung ?? false
-        const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : (p.ust_satz || '0')
+        const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : (p.ust_satz || '0')
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung,
@@ -3947,6 +3964,29 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </div>
           )}
         </div>
+      )}
+
+      {/* Issue #492: steuerfreie Leistung nach § 4 UStG - nur mit Befreiungsgrund in den Stammdaten
+          (oder wenn das Kennzeichen an dieser Rechnung schon gesetzt ist) */}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (!!befreiung4 || steuerfrei4) && (
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={steuerfrei4}
+            onChange={(e) => {
+              setSteuerfrei4(e.target.checked)
+              setSteuerfrei4Manuell(true)
+              if (e.target.checked) {
+                setIstReverseCharge(false); setIstEuLieferung(false); setIstDrittlandLeistung(false); setIstAusfuhrlieferung(false)
+              }
+            }}
+            className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
+          />
+          <span className="text-slate-600 dark:text-slate-300">
+            Steuerfreie Leistung nach {befreiung4?.paragraph ?? '§ 4 UStG'}
+            <InfoTooltip text="Die Rechnung wird ohne Umsatzsteuer gestellt und trägt den Pflichthinweis auf die Steuerbefreiung. Steuerpflichtige Leistungen – z. B. ein Gutachten – bitte auf einer eigenen Rechnung ohne diesen Haken abrechnen." side="bottom" />
+          </span>
+        </label>
       )}
 
       {/* Einmalkunde/Freitext-Lieferant-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
@@ -4484,7 +4524,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onSaveArtikel={(neu) => {
             setShowNeuArtikel(false)
             const istDiff = neu.differenzbesteuerung
-            const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : String(parseInt(neu.steuersatz))
+            const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : String(parseInt(neu.steuersatz))
             const preis = istDiff ? neu.vk_brutto : (eingabeModus === 'netto' ? neu.vk_netto : neu.vk_brutto)
             setPositionen(prev => {
               const letzteIdx = prev.length - 1

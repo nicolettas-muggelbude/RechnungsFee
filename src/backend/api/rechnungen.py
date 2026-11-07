@@ -145,6 +145,16 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     """
     if not rechnung.positionen:
         return None, None
+    # Issue #492: steuerfreie Leistung nach § 4 UStG (Heilberufe, Unterricht) → „Betriebseinnahmen
+    # (0%)“ (8100/4100, EÜR-Basiszeile 16) - auch bei Kleinunternehmern: dort schlüsselt die EÜR
+    # auf Zeile 12 um und weist den Betrag nachrichtlich in Zeile 13 aus (nicht Teil des
+    # Gesamtumsatzes nach § 19 Abs. 2 UStG).
+    if getattr(rechnung, "steuerfrei_4", False):
+        kat_frei = db.query(Kategorie).filter(
+            Kategorie.name == "Betriebseinnahmen (0%)", Kategorie.aktiv == True  # noqa: E712
+        ).first()
+        if kat_frei:
+            return kat_frei.id, kat_frei
     # Issue #480: Kleinunternehmer (§ 19 UStG) - eigene Kategorie mit DATEV-Konto 8192/4184
     # („Steuerfreie Erlöse Kleinunternehmer“) statt „Betriebseinnahmen (0%)“ (8100/4100 =
     # steuerfreie Umsätze § 4 Nr. 8 ff.); Kleinunternehmer haben keine ig. Lieferung/Ausfuhr.
@@ -458,6 +468,7 @@ def _absender_snapshot(db: Session) -> str:
         "berufsbezeichnung":       unt.berufsbezeichnung or "",
         "kammer_mitgliedschaft":   unt.kammer_mitgliedschaft or "",
         "ist_kleinunternehmer":    bool(unt.ist_kleinunternehmer),
+        "steuerbefreiung_4":       unt.steuerbefreiung_4 or "",  # Issue #492: Hinweistext der Rechnung
         "zahlungshinweis_aktiv":   bool(unt.zahlungshinweis_aktiv),
         "zahlungshinweis_text":    unt.zahlungshinweis_text or "",
         "anrede_text":             unt.anrede_text or "",
@@ -1324,6 +1335,7 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     auftrag.eingabemodus = data.eingabemodus
     auftrag.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
@@ -1463,6 +1475,7 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)
     summen = _berechne_rechnung(
@@ -1623,6 +1636,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         ist_eu_lieferung=data.ist_eu_lieferung,
         ist_drittland_leistung=data.ist_drittland_leistung,
         ist_ausfuhrlieferung=data.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(data.steuerfrei_4) and data.typ == "ausgang",
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -1640,6 +1654,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     rc_positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)  # Issue #459
     override_summen = None
@@ -1746,7 +1761,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
                   "skonto_prozent", "skonto_tage", "gueltig_bis",
-                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
+                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "steuerfrei_4",
                   "eingabemodus"):
         val = getattr(data, field, None)
         if val is not None:
@@ -1791,17 +1806,19 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 
     if sum([
         rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,
-        rechnung.ist_drittland_leistung, rechnung.ist_ausfuhrlieferung,
+        rechnung.ist_drittland_leistung, rechnung.ist_ausfuhrlieferung, rechnung.steuerfrei_4,
     ]) > 1:
         raise HTTPException(status_code=422, detail=(
             "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware), "
-            "Drittland-Dienstleistung und Ausfuhrlieferung (Drittland-Ware) schließen sich "
-            "gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+            "Drittland-Dienstleistung, Ausfuhrlieferung (Drittland-Ware) und steuerfreie Leistung "
+            "nach § 4 UStG schließen sich gegenseitig aus - bei gemischten Rechnungen bitte zwei "
+            "Rechnungen erstellen."
         ))
 
     ist_steuerfrei_ausland = (
         rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung
         or rechnung.ist_drittland_leistung or rechnung.ist_ausfuhrlieferung
+        or rechnung.steuerfrei_4  # Issue #492
     )
 
     if data.positionen is not None:
@@ -3930,6 +3947,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
         ersatz_fuer_rechnung_id=original.id,
+        steuerfrei_4=bool(original.steuerfrei_4),  # Issue #492
         netto_gesamt=original.netto_gesamt,
         ust_gesamt=original.ust_gesamt,
         brutto_gesamt=original.brutto_gesamt,
@@ -4071,6 +4089,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         ist_eu_lieferung=original.ist_eu_lieferung,
         ist_drittland_leistung=original.ist_drittland_leistung,
         ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(original.steuerfrei_4),
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4552,6 +4571,9 @@ def _lieferschein_zu_rechnung_konvertieren(
 
     for ls in lieferscheine:
         ls.lieferschein_zu_rechnung_id = rechnung.id
+    rechnung.steuerfrei_4 = steuerfrei_4_vorgabe(
+        db, False, [pos for ls in lieferscheine for pos in ls.positionen],
+    )
 
     db.commit()
     db.refresh(rechnung)
@@ -5066,6 +5088,22 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             ust_satz_25a=pos.ust_satz_25a,
         )
         db.add(neue_pos)
+    if ziel.typ == "ausgang" and ziel.dokument_typ in ("Rechnung", "Abschlagsrechnung", "Proforma"):
+        ziel.steuerfrei_4 = steuerfrei_4_vorgabe(db, bool(getattr(quell, "steuerfrei_4", False)), quell.positionen)
+
+
+def steuerfrei_4_vorgabe(db: Session, quelle_steuerfrei: bool, positionen) -> bool:
+    """Issue #492: Kennzeichen „steuerfrei nach § 4 UStG“ für eine Rechnung, die aus einem anderen
+    Dokument entsteht (Angebot, Auftrag, Proforma, Lieferschein, wiederkehrende Vorlage). Angebot,
+    Auftrag und Lieferschein haben kein eigenes Kennzeichen: steuerfrei, wenn die Stammdaten einen
+    Befreiungsgrund haben und alle Positionen schon 0 % tragen - Beträge ändern sich dadurch nie."""
+    if quelle_steuerfrei:
+        return True
+    unternehmen = db.query(Unternehmen).first()
+    if not (unternehmen and unternehmen.steuerbefreiung_4):
+        return False
+    saetze = [Decimal(str(p.ust_satz or 0)) for p in positionen]
+    return bool(saetze) and all(s == 0 for s in saetze)
 
 
 @router.post("/{angebot_id}/auftrag-aus-angebot", response_model=RechnungResponse, status_code=201)

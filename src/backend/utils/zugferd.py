@@ -60,12 +60,18 @@ _SONDERFALL_KATEGORIE = {
 }
 
 
-def _sonderfall(rechnung) -> tuple[str, str, str] | None:
+def _sonderfall(rechnung, unternehmen: dict | None = None) -> tuple[str, str | None, str] | None:
     """(Kategorie, Befreiungsgrund-Code, Befreiungsgrund-Text) des Rechnungs-Sonderfalls oder None.
     Die Flags schließen sich im Formular gegenseitig aus."""
     for flag, werte in _SONDERFALL_KATEGORIE.items():
         if getattr(rechnung, flag, False):
             return werte
+    # Issue #492: steuerfreie Leistung nach § 4 UStG → Kategorie E mit Befreiungsgrund als Text
+    # (BT-120); ein BT-121-Code ist bei E nicht Pflicht und für § 4 Nr. 14/21 nicht eindeutig
+    if getattr(rechnung, "steuerfrei_4", False):
+        from utils.pdf_rechnung_base import steuerfrei_4_hinweis
+        text = steuerfrei_4_hinweis((unternehmen or {}).get("steuerbefreiung_4")).rstrip(".")
+        return ("E", None, text)
     return None
 
 
@@ -106,7 +112,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     from drafthorse.models.references import AdditionalReferencedDocument
 
     ist_ku = unternehmen.get("ist_kleinunternehmer", False)
-    sonderfall = _sonderfall(rechnung)
+    sonderfall = _sonderfall(rechnung, unternehmen)
     # Kategorie O (nicht steuerbar): die Rechnung darf keine USt-IdNr. von Verkäufer oder Käufer
     # enthalten (BR-O-02) und die Positionen keinen Steuersatz (BR-O-05)
     ist_nicht_steuerbar = bool(sonderfall and sonderfall[0] == "O")
@@ -350,7 +356,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         tax.basis_amount = _d(eintrag["basis"])
         tax.calculated_amount = _d(eintrag["betrag"])
         if sonderfall and kategorie == sonderfall[0]:
-            tax.exemption_reason_code = sonderfall[1]
+            if sonderfall[1]:
+                tax.exemption_reason_code = sonderfall[1]
             tax.exemption_reason = sonderfall[2]
         elif ist_ku and eintrag["satz"] == 0:
             tax.exemption_reason = "Umsatzsteuerbefreiung gemäß §19 UStG"
