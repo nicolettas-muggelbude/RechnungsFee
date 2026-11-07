@@ -30,6 +30,8 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'CSV-Import von Belegen: Offene Belege wurden ohne Kategorie übernommen, obwohl die Spalte „Kategorien“ gefüllt war – ab dem 01.10.2026 brach der Import dadurch ab. Die Kategorie wird jetzt auch bei offenen Belegen erkannt und zur Zuordnung angeboten. Außerdem wurden Kategorien mit großem Umlaut (z. B. „Reisekosten – ÖPNV“) nicht gefunden. Danke an David (Issue #499).' },
       { typ: 'neu', text: 'Bank-Abgleich: Ist eine Abbuchung größer als die Eingangsrechnung (z. B. anteiliger Beleg vom Mischkonto oder private Artikel auf dem Bon), lässt sich der Rest jetzt als privater Anteil buchen statt als Lieferantenguthaben – als Privatentnahme mit Datum und Bankkonto der Abbuchung, damit sie auch im DATEV-Export erscheint. Danke an David (Issue #502).' },
       { typ: 'fix', text: 'Guthaben ausbuchen im Dashboard: Die Kategorienauswahl war immer leer. Sie zeigt jetzt Aufwand-Kategorien für einen Forderungsausfall und Entnahme-Kategorien für einen privaten Anteil; ein privater Anteil wird mit Datum und Bankkonto der ursprünglichen Zahlung gebucht (Issue #502).' },
+      { typ: 'verbesserung', text: 'DATEV-Export: Mit einer Rechnung verrechnete Guthaben haben noch kein Gegenkonto und fehlen deshalb im Buchungsstapel. Der Export nennt sie jetzt ausdrücklich mit Belegnummer, damit du sie deinem Steuerbüro melden kannst – die vollständige Lösung über ein Verrechnungskonto folgt in v0.7.9.' },
+      { typ: 'fix', text: 'DATEV-Export: Die Anzahl der Buchungen ohne Sachkonto und der mitexportierten Belege wurde in der installierten App nie angezeigt (nur im Entwicklungsmodus).' },
     ],
   },
   {

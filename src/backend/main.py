@@ -47,6 +47,12 @@ app.add_middleware(
         "Content-Disposition",
         "X-Datev-Eintraege",
         "X-Datev-Uebersprungen",
+        # fehlten bis Issue #502: in der installierten App (anderer Origin als das Backend)
+        # waren sie für das Frontend unlesbar - „ohne Sachkonto“ zeigte immer 0
+        "X-Datev-LeerKonto",
+        "X-Datev-Belege",
+        "X-Datev-Verrechnung",
+        "X-Datev-Verrechnung-Belege",
         "X-Buchhalter-Eintraege",
         "X-GoBD-Buchungen",
         "X-GoBD-Belege",

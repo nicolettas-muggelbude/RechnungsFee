@@ -99,12 +99,6 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
 - [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
-- [ ] **Überzahlungen über ein Verrechnungskonto buchen** (Nebenfund Issue #502) – der überzahlte
-  Betrag einer Bank-Zahlung (Lieferanten-/Kundenguthaben) steht nur als offener Posten in
-  `forderungen`, nicht im Journal. Im DATEV-Export weicht das Bankkonto dadurch bis zur
-  Rückzahlung vom Kontoauszug ab; die Rückerstattung schließt den Posten ebenfalls ohne Buchung.
-  Lösung prüfen: Überschuss als erfolgsneutrale Buchung auf ein Verrechnungskonto (z. B. SKR03
-  1590 / SKR04 1370), Rückerstattung und Verrechnung lösen es auf; EÜR unberührt.
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
@@ -127,6 +121,30 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   „Steuerschuldnerschaft des Leistungsempfängers“ auf der Rechnung, USt-IdNr. nötig, Zusammenfassende
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
+
+## 📋 v0.7.9 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
+
+Guthaben aus Überzahlungen (Lieferanten-/Kundenguthaben, auch aus dem Mahnwesen) stehen nur als
+offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
+1. Überzahlung: Bankkonto weicht bis zur Rückzahlung vom Kontoauszug ab.
+2. Verrechnung mit der nächsten Rechnung (`zahlungsart="Verrechnung"`): kein Gegenkonto →
+   **übersprungen**, echter Aufwand/Erlös samt Steuer fehlt dauerhaft im Export. Seit v0.7.8
+   meldet der Export diese Buchungen einzeln mit Belegnummer (Sofortmaßnahme).
+3. Rückerstattung (`ist_rueckerstattung`): schließt den Posten ohne Buchung.
+
+- [ ] Überschuss als erfolgsneutrale Buchung Bank → Verrechnungskonto (SKR03/SKR04 am
+  DATEV-Kontenrahmen 2026 in `vorlagen/kategorien/` prüfen), Verrechnung gegen das
+  Verrechnungskonto statt ohne Gegenkonto, Rückerstattung Verrechnungskonto → Bank
+- [ ] EÜR/UStVA/Cockpit/Kontokorrent unberührt (erfolgsneutral) – eigene Kontenart bzw.
+  `euer_zeile` NULL ohne Meldung unter `nicht_zugeordnet`
+- [ ] Alle Entstehungs- und Auflösungswege: `bank_import._buche_pfad_a`, `auto_buchen`
+  (Rückerstattungs-Erkennung), `mahnwesen.verteile_mahnung_zahlung`, `forderungen` (verrechnen,
+  ausgleichen, ausbuchen), Kundenguthaben aus `rechnungen.py`
+- [ ] Übergang: offene Guthaben von vor dem Umbau haben keine Verrechnungskonto-Buchung →
+  erkennbar (z. B. Verweis auf die Überschuss-Buchung an der Forderung) auf dem alten Weg auflösen,
+  sonst Saldo ohne Gegenstück auf dem Verrechnungskonto
+- Eigenes Release, da Geldflüsse an vielen Stellen betroffen; Backend-lastig, daher nicht von der
+  Oberflächen-Zurückstellung bis v0.8.0 erfasst
 
 ## 📋 v0.7.8 – vorgemerkt
 

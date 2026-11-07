@@ -20,6 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -365,14 +366,20 @@ def datev_buchungsstapel(
     zeilen: list[str] = [_zeile1(unt, von, bis), ";".join(_COLS)]
     uebersprungen = 0
     leer_konto = 0
+    verrechnung_belege: list[str] = []
 
     for j in eintraege:
         konto = _sachkonto(j, skr, db)
         gegenkonto = _gegenkonto(j, unt, db)
 
         if not gegenkonto:
-            # zahlungsart='Keine' → kein Zahlungskonto, Buchung nicht exportierbar
+            # zahlungsart='Keine' → kein Zahlungskonto, Buchung nicht exportierbar.
+            # 'Verrechnung' (Guthaben mit einer Rechnung verrechnet) hat ebenfalls kein
+            # Gegenkonto - dort fehlt aber echter Aufwand/Erlös samt Steuer im Export, deshalb
+            # einzeln melden, bis es ein Verrechnungskonto gibt (Roadmap, Nebenfund Issue #502)
             uebersprungen += 1
+            if j.zahlungsart == "Verrechnung":
+                verrechnung_belege.append(j.belegnr)
             continue
         if not konto:
             # Kein Sachkonto ermittelbar → leeres Konto exportieren.
@@ -429,6 +436,9 @@ def datev_buchungsstapel(
         "X-Datev-Eintraege": str(len(eintraege) - uebersprungen),
         "X-Datev-Uebersprungen": str(uebersprungen),
         "X-Datev-LeerKonto": str(leer_konto),
+        "X-Datev-Verrechnung": str(len(verrechnung_belege)),
+        # Belegnummern können Nicht-ASCII enthalten (frei wählbares Nummernkreis-Format)
+        "X-Datev-Verrechnung-Belege": quote(",".join(verrechnung_belege[:50])),
     }
 
     if not mit_belegen:

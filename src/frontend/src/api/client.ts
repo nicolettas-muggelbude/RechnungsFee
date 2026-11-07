@@ -1037,13 +1037,16 @@ export async function downloadDatevBuchungsstapel(
   von: string,
   bis: string,
   mitBelegen: boolean = true,
-): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null }> {
+): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null; verrechnung: number; verrechnung_belege: string[] }> {
   const base = await getBaseUrl()
   const res = await fetch(`${base}/datev/buchungsstapel?von=${von}&bis=${bis}&mit_belegen=${mitBelegen}`)
   if (!res.ok) throw new Error('DATEV-Export fehlgeschlagen')
   const eintraege = Number(res.headers.get('X-Datev-Eintraege') ?? '0')
   const uebersprungen = Number(res.headers.get('X-Datev-Uebersprungen') ?? '0')
   const leer_konto = Number(res.headers.get('X-Datev-LeerKonto') ?? '0')
+  const verrechnung = Number(res.headers.get('X-Datev-Verrechnung') ?? '0')
+  const verrechnung_belege = decodeURIComponent(res.headers.get('X-Datev-Verrechnung-Belege') ?? '')
+    .split(',').filter(Boolean)
   const belegeHeader = res.headers.get('X-Datev-Belege')
   const belege = belegeHeader !== null ? Number(belegeHeader) : null
   const blob = await res.blob()
@@ -1051,7 +1054,7 @@ export async function downloadDatevBuchungsstapel(
   const match = cd.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] ?? `DATEV_Buchungsstapel_${von}_${bis}.${mitBelegen ? 'zip' : 'csv'}`
   await _triggerBlobDownload(blob, filename)
-  return { filename, eintraege, uebersprungen, leer_konto, belege }
+  return { filename, eintraege, uebersprungen, leer_konto, belege, verrechnung, verrechnung_belege }
 }
 
 // --- Backup ---
