@@ -387,7 +387,11 @@ function LieferantenguthabenWidget() {
       typeof v === 'string' ? parseFloat(v) : v
     )
 
-  const ausgabeKats = kategorien?.filter(k => k.kontenart === 'Ausgabe') ?? []
+  // Kontenart „Ausgabe“ gibt es nicht (Aufwand/Erlös/Privat/Anlage) – die Liste war dadurch
+  // immer leer (Issue #502). Privateinlage (EÜR-Zeile 107) passt nicht zu einem Guthaben.
+  const ausgabeKats = kategorien?.filter(k => k.kontenart === 'Aufwand') ?? []
+  const privatKats = kategorien?.filter(k => k.kontenart === 'Privat' && k.euer_zeile !== 107) ?? []
+  const gewaehltePrivat = privatKats.some(k => String(k.id) === kategorieId)
 
   return (
     <div className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-4 mb-4">
@@ -432,18 +436,29 @@ function LieferantenguthabenWidget() {
             {ausbuchenId === f.id && (
               <div className="mt-2 p-3 bg-white dark:bg-zinc-800 rounded-lg border border-orange-200 dark:border-orange-700 space-y-2">
                 <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Forderungsausfall buchen ({fmt(f.betrag)})
+                  Guthaben ausbuchen ({fmt(f.betrag)})
                 </p>
                 <select
                   value={kategorieId}
                   onChange={e => setKategorieId(e.target.value)}
+                  aria-label="Kategorie zum Ausbuchen"
                   className="w-full text-xs border rounded p-1.5 bg-white dark:bg-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
                 >
                   <option value="">Kategorie wählen …</option>
-                  {ausgabeKats.map((k: { id: number; name: string }) => (
-                    <option key={k.id} value={k.id}>{k.name}</option>
-                  ))}
+                  <optgroup label="Forderungsausfall">
+                    {ausgabeKats.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </optgroup>
+                  {f.typ === 'lieferantenguthaben' && privatKats.length > 0 && (
+                    <optgroup label="Privater Anteil">
+                      {privatKats.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                    </optgroup>
+                  )}
                 </select>
+                {gewaehltePrivat && (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Wird mit Datum und Bankkonto der ursprünglichen Zahlung gebucht.
+                  </p>
+                )}
                 <input
                   value={notiz}
                   onChange={e => setNotiz(e.target.value)}

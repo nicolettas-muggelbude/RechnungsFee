@@ -2905,6 +2905,8 @@ export type BankTransaktion = {
 
 export type BankAbgleichVorschlag = {
   rechnung_id: number
+  typ: 'eingang' | 'ausgang'
+  dokument_typ: string
   rechnungsnummer: string
   externe_belegnr?: string | null
   partner: string
@@ -3024,10 +3026,11 @@ export const bucheTransaktion = (
   txId: number,
   rechnungId: number | null = null,
   betragZuBuchen?: number,
+  restPrivat = false,
 ) =>
   request<BankTransaktion>(`/bank-import/transaktion/${txId}/buchen`, {
     method: 'POST',
-    body: JSON.stringify({ rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null }),
+    body: JSON.stringify({ rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null, rest_privat: restPrivat }),
   })
 
 export const verknuepfeBankTransaktionMitJournal = (txId: number, journalId: number) =>

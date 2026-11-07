@@ -154,20 +154,43 @@ def forderung_ausbuchen(
     if not kat:
         raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
 
-    beschreibung = data.notiz or f"Forderungsausfall Lieferantenguthaben #{f.id}"
+    # Issue #502: Lieferantenguthaben als privater Anteil ausbuchen. Das Geld hat das Bankkonto
+    # bereits mit der ursprünglichen Zahlung verlassen - die Entnahme gehört auf deren Datum und
+    # Bankkonto (sonst fehlt sie im DATEV-Export, Zahlungsart „Keine“ wird übersprungen, und
+    # landet ggf. im falschen EÜR-Jahr). Alle anderen Fälle (Forderungsausfall auf Aufwand,
+    # Guthaben ohne Bank-Zahlung) bleiben unverändert: heutiges Datum, Zahlungsart „Keine“.
+    datum, zahlungsart, konto_id = date_type.today(), "Keine", None
+    beschreibung_standard = f"Forderungsausfall Lieferantenguthaben #{f.id}"
+    if kat.kontenart == "Privat":
+        if f.typ != "lieferantenguthaben":
+            raise HTTPException(
+                status_code=422,
+                detail="Nur ein Lieferantenguthaben kann als privater Anteil ausgebucht werden.",
+            )
+        if kat.euer_zeile == 107:
+            raise HTTPException(
+                status_code=422,
+                detail="Eine Privateinlage passt hier nicht – bitte eine Entnahme-Kategorie wählen.",
+            )
+        zahlung = db.query(Journaleintrag).filter(Journaleintrag.id == f.journal_id).first() if f.journal_id else None
+        if zahlung and zahlung.zahlungsart == "Bank":
+            datum, zahlungsart, konto_id = zahlung.datum, "Bank", zahlung.konto_id
+        beschreibung_standard = f"Privater Anteil Lieferantenguthaben #{f.id}"
+
+    beschreibung = data.notiz or beschreibung_standard
     journal_data = JournalEintragCreate(
-        datum=date_type.today(),
+        datum=datum,
         beschreibung=beschreibung,
         kategorie_id=data.kategorie_id,
-        zahlungsart="Keine",
+        zahlungsart=zahlungsart,
         art="Ausgabe",
         brutto_betrag=f.betrag,
         ust_satz=Decimal("0"),
         vorsteuerabzug=False,
     )
     felder = _felder_aus_data(journal_data, db)
-    belegnr = _naechste_belegnr(db, date_type.today())
-    eintrag = Journaleintrag(belegnr=belegnr, immutable=False, **felder)
+    belegnr = _naechste_belegnr(db, datum)
+    eintrag = Journaleintrag(belegnr=belegnr, konto_id=konto_id, immutable=False, **felder)
     eintrag.signatur = signatur_journaleintrag(eintrag)
     db.add(eintrag)
     db.flush()

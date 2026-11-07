@@ -99,6 +99,12 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
 - [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Überzahlungen über ein Verrechnungskonto buchen** (Nebenfund Issue #502) – der überzahlte
+  Betrag einer Bank-Zahlung (Lieferanten-/Kundenguthaben) steht nur als offener Posten in
+  `forderungen`, nicht im Journal. Im DATEV-Export weicht das Bankkonto dadurch bis zur
+  Rückzahlung vom Kontoauszug ab; die Rückerstattung schließt den Posten ebenfalls ohne Buchung.
+  Lösung prüfen: Überschuss als erfolgsneutrale Buchung auf ein Verrechnungskonto (z. B. SKR03
+  1590 / SKR04 1370), Rückerstattung und Verrechnung lösen es auf; EÜR unberührt.
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).

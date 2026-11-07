@@ -149,10 +149,15 @@ class BankTransaktionenListResponse(BaseModel):
 class BuchungsRequest(BaseModel):
     rechnung_id: Optional[int] = None
     betrag_zu_buchen: Optional[Decimal] = None
+    # Issue #502: Rest einer Abbuchung über den offenen Rechnungsbetrag hinaus ist privater
+    # Anteil (Mischkonto-Beleg, private Artikel auf dem Bon) statt Lieferantenguthaben
+    rest_privat: bool = False
 
 
 class AbgleichVorschlag(BaseModel):
     rechnung_id: int
+    typ: str = "eingang"
+    dokument_typ: str = "Rechnung"
     rechnungsnummer: str
     externe_belegnr: Optional[str] = None
     partner: str
@@ -436,8 +441,10 @@ def _buche_pfad_a(
     rechnung: Rechnung,
     betrag_zu_buchen: Optional[Decimal] = None,
     unternehmen: Optional[Unternehmen] = None,
+    rest_privat: bool = False,
 ) -> tuple[Journaleintrag, Optional[Forderung]]:
-    """Bucht Transaktion gegen Rechnung. Bei Überzahlung: Split + Forderung (Lieferanten-/Kundenguthaben)."""
+    """Bucht Transaktion gegen Rechnung. Bei Überzahlung: Split + Forderung (Lieferanten-/Kundenguthaben),
+    bei rest_privat (nur Eingangsrechnung) statt des Lieferantenguthabens eine Privatentnahme."""
     if unternehmen is None:
         unternehmen = db.query(Unternehmen).first()
 
@@ -644,7 +651,9 @@ def _buche_pfad_a(
 
     # Guthaben bei Überzahlung: Lieferantenguthaben (Eingang) oder Kundenguthaben (Ausgang)
     forderung = None
-    if surplus > Decimal("0.02"):
+    if surplus > Decimal("0.02") and rest_privat and rechnung.typ == "eingang" and not ist_gutschrift:
+        _buche_privatanteil(db, tx, rechnung, surplus)
+    elif surplus > Decimal("0.02"):
         if rechnung.typ == "eingang":
             forderung = Forderung(
                 typ="lieferantenguthaben",
@@ -669,6 +678,47 @@ def _buche_pfad_a(
         db.flush()
 
     return eintrag, forderung
+
+
+def _privatentnahme_kategorie(db: Session) -> Optional[Kategorie]:
+    """Standardkategorie „Privatentnahme“, sonst eine andere Entnahme-Kategorie (Privat, EÜR-Zeile 106)."""
+    kat = db.query(Kategorie).filter(Kategorie.name == "Privatentnahme", Kategorie.kontenart == "Privat").first()
+    if kat:
+        return kat
+    return (
+        db.query(Kategorie)
+        .filter(Kategorie.kontenart == "Privat", Kategorie.euer_zeile == 106)
+        .order_by(Kategorie.id)
+        .first()
+    )
+
+
+def _buche_privatanteil(db: Session, tx: BankTransaktion, rechnung: Rechnung, betrag: Decimal) -> Journaleintrag:
+    """Privater Anteil einer Abbuchung als Privatentnahme vom Bankkonto der Transaktion (Issue #502).
+
+    Bewusst ohne rechnung_id: _aktualisiere_zahlungsstatus() summiert alle verknüpften Einträge,
+    die Entnahme würde sonst als Zahlung auf die Rechnung zählen."""
+    kat = _privatentnahme_kategorie(db)
+    if not kat:
+        raise HTTPException(status_code=422, detail="Kategorie „Privatentnahme“ nicht gefunden.")
+    journal_data = JournalEintragCreate(
+        datum=tx.datum,
+        beschreibung=f"Privatanteil zu Zahlung {rechnung.rechnungsnummer}: {_partner_name(rechnung)}"[:255],
+        kategorie_id=kat.id,
+        zahlungsart="Bank",
+        art="Ausgabe",
+        brutto_betrag=betrag,
+        ust_satz=Decimal("0"),
+        vorsteuerabzug=False,
+    )
+    felder = _felder_aus_data(journal_data, db)
+    eintrag = Journaleintrag(
+        belegnr=_naechste_belegnr(db, tx.datum), konto_id=tx.konto_id, immutable=False, **felder,
+    )
+    eintrag.signatur = signatur_journaleintrag(eintrag)
+    db.add(eintrag)
+    db.flush()
+    return eintrag
 
 
 def _buche_pfad_b(db: Session, tx: BankTransaktion) -> Journaleintrag:
@@ -1148,6 +1198,8 @@ def abgleich_transaktion(tx_id: int, db: Session = Depends(get_db)):
             restbetrag = rechnung.brutto_gesamt - rechnung.bezahlt_betrag
             vorschlaege.append(AbgleichVorschlag(
                 rechnung_id=rechnung.id,
+                typ=rechnung.typ,
+                dokument_typ=rechnung.dokument_typ or "Rechnung",
                 rechnungsnummer=rechnung.rechnungsnummer or "?",
                 externe_belegnr=rechnung.externe_belegnr or None,
                 partner=_partner_name(rechnung),
@@ -1193,8 +1245,16 @@ def buche_transaktion(
         restbetrag = abs(rechnung.brutto_gesamt - rechnung.bezahlt_betrag)
         if restbetrag <= Decimal("0.004"):
             raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt.")
+        if data.rest_privat:
+            if rechnung.typ != "eingang" or rechnung.dokument_typ == "Gutschrift" or tx.betrag >= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Ein privater Anteil ist nur bei Abbuchungen für Eingangsrechnungen möglich.",
+                )
+            if not _privatentnahme_kategorie(db):
+                raise HTTPException(status_code=422, detail="Kategorie „Privatentnahme“ nicht gefunden.")
 
-        _, forderung = _buche_pfad_a(db, tx, rechnung, data.betrag_zu_buchen)
+        _, forderung = _buche_pfad_a(db, tx, rechnung, data.betrag_zu_buchen, rest_privat=data.rest_privat)
     else:
         if not tx.kategorie_id:
             raise HTTPException(status_code=422, detail="keine_kategorie")

@@ -28,6 +28,8 @@ export const CHANGELOG: ChangelogVersion[] = [
     eintraege: [
       { typ: 'fix', text: '„Zahlung korrigieren“ bei Rechnungen buchte die Stornobuchung auf das heutige Datum statt auf das Datum der Originalzahlung. Wurde eine Zahlung aus einem früheren UStVA-Zeitraum oder dem Vorjahr korrigiert, blieb der alte Betrag dort stehen, und der laufende Zeitraum wurde um ihn gemindert – derselbe Fehler wie in Issue #320, nur in diesem einen Pfad. Danke an 5eBeKs (PR #494).' },
       { typ: 'fix', text: 'CSV-Import von Belegen: Offene Belege wurden ohne Kategorie übernommen, obwohl die Spalte „Kategorien“ gefüllt war – ab dem 01.10.2026 brach der Import dadurch ab. Die Kategorie wird jetzt auch bei offenen Belegen erkannt und zur Zuordnung angeboten. Außerdem wurden Kategorien mit großem Umlaut (z. B. „Reisekosten – ÖPNV“) nicht gefunden. Danke an David (Issue #499).' },
+      { typ: 'neu', text: 'Bank-Abgleich: Ist eine Abbuchung größer als die Eingangsrechnung (z. B. anteiliger Beleg vom Mischkonto oder private Artikel auf dem Bon), lässt sich der Rest jetzt als privater Anteil buchen statt als Lieferantenguthaben – als Privatentnahme mit Datum und Bankkonto der Abbuchung, damit sie auch im DATEV-Export erscheint. Danke an David (Issue #502).' },
+      { typ: 'fix', text: 'Guthaben ausbuchen im Dashboard: Die Kategorienauswahl war immer leer. Sie zeigt jetzt Aufwand-Kategorien für einen Forderungsausfall und Entnahme-Kategorien für einen privaten Anteil; ein privater Anteil wird mit Datum und Bankkonto der ursprünglichen Zahlung gebucht (Issue #502).' },
     ],
   },
   {
