@@ -153,11 +153,12 @@ für den Gesamtbetrieb schon nutzen. Es fehlt die Ebene darunter: `unternehmen` 
 Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
 
 - [ ] **Stufe 1 – Gesellschafter und Verteilung**
-  - Schalter „Gesellschafter“ automatisch an, sobald Rechtsform = GbR gewählt wird (Stammdaten und
-    Setup-Wizard), manuell abwählbar; die Automatik greift nur beim Wechsel der Rechtsform, eine
-    Abwahl bleibt bestehen. Bestehende GbR-Installationen per Migration einschalten. Für andere
-    Personengesellschaften manuell aktivierbar – OHG, KG und PartG fehlen bisher in der
-    Rechtsform-Auswahl (nur „Sonstige“), beim Umsetzen ergänzen
+  - Schalter „Gesellschafter“ automatisch an, sobald eine Personengesellschaft als Rechtsform
+    gewählt wird – GbR, OHG, KG, PartG (Stammdaten und Setup-Wizard), manuell abwählbar; die
+    Automatik greift nur beim Wechsel der Rechtsform, eine Abwahl bleibt bestehen. Bestehende
+    Installationen mit diesen Rechtsformen per Migration einschalten. Bei „Sonstige“ manuell
+    aktivierbar. OHG, KG und PartG fehlen bisher in der Rechtsform-Auswahl – beim Umsetzen ergänzen
+    (UnternehmenPage + StepSteuern)
   - Gesellschafter-Stammdaten: Name, Anschrift, Steuernummer/IdNr. (Anlage FB), Beteiligungsquote und
     Gewinn-/Verlustquote getrennt, Gültigkeit je Wirtschaftsjahr (Ein-/Austritt im Jahr)
   - Privatentnahmen und -einlagen je Gesellschafter: Personenbezug an der Journalbuchung (Auswahlfeld
