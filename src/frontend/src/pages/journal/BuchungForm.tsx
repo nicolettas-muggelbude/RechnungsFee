@@ -467,11 +467,13 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   const splitMutation = useMutation({
     mutationFn: createSplitBuchung,
-    onSuccess: () => {
+    onSuccess: (eintraege) => {
       qc.invalidateQueries({ queryKey: ['journal'] })
       qc.invalidateQueries({ queryKey: ['monats-uebersicht'] })
       qc.invalidateQueries({ queryKey: ['kassenstand'] })
-      onSuccess()
+      // Issue #506: ID des ersten Split-Eintrags zurückgeben - der Bank-Import verknüpft die
+      // Transaktion damit (sonst blieb sie trotz Buchung auf „Zuordnung nötig“)
+      onSuccess(eintraege[0]?.id)
     },
   })
 
