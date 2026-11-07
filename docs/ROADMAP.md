@@ -365,6 +365,14 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
   gelöscht. Hinweis beim Einschalten, neue Frage im Setup-Wizard („Rechnungen schreiben / Rechnungen
   und Buchhaltung“) → Wizard mit leerer DB testen. Bewusst nach v0.8.0: neue Oberfläche erst auf der
   barrierefreien Basis, v0.8.0 baut `AppLayout.tsx`-Navigation und Dialoge um.
+- [ ] **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs und TD1; Duplikat
+  #500 aus PR #473) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern).
+  Vor dem Übernehmen immer erst lokal sichern (TD1). Gilt für alle externen Ziele (lokal, SMB, FTPS).
+- [ ] **FTPS als externes Backup-Ziel** (Issue #461, TD1) – viele haben über ihre Webseite einen
+  FTP-Zugang. FTPS (`ftplib.FTP_TLS`, keine zusätzliche Bibliothek) als Standard; unverschlüsseltes FTP
+  nur als bewusst gewählte Option mit Warnung (Zugangsdaten gehen im Klartext übers Netz – die
+  Backup-Datei selbst ist AES-256-verschlüsselt). Zugangsdaten wie bei SMB (`backup_smb_*`), Rotation
+  über `_EXTERN_BACKUP_RE` wie bei lokal/SMB, Zertifikatsprüfung mit TOFU-Option wie bei SMTP/IMAP.
 
 ---
 
@@ -426,8 +434,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Rich-Text-Editor für Einleitungstext** – WYSIWYG-Editor (z. B. TipTap oder Quill) statt Markdown-Textarea für den Einleitungstext auf Rechnungen; aktuell: Markdown mit `**fett**`-Unterstützung im PDF
 
 - **Thunderbird-Versand auf weitere Dokumenttypen ausweiten** – bisher nur für Rechnungen umgesetzt (Issue #147); Angebote, Proforma, Aufträge, Mahnungen und Belege laufen weiterhin ausschließlich über SMTP/mailto. Gleiches Muster (`sendeUeberThunderbird()` in `utils/thunderbirdVersand.ts`), nur die jeweilige `handleMail()`-Stelle ergänzen.
-
-- **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern). Nicht trivial, daher zurückgestellt.
 
 - **§13b-/Reverse-Charge-Kennzeichen für eigene Kategorien** (Issue #459) – die Sonderfall-Behandlung (§13b Abs. 1/2, ig. Erwerb, Einfuhrumsatzsteuer) hängt an `kategorien.ust_sonderfall`, das bisher nur die mitgelieferten Kategorien tragen; selbst angelegte Kategorien (z. B. „Plattformgebühren Airbnb“) werden nur über das SKR-Konto (3123/5923 usw.) erkannt. Auswahlfeld in der Kategorienverwaltung (Schema/API/Formular), Konto-Heuristik bleibt Fallback.
 
