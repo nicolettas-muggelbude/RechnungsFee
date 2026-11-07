@@ -21,6 +21,8 @@ const KZ_META: KZMeta[] = [
   ['', '87', 'Umsätze zum Steuersatz von 0 % (§12 Abs. 3 UStG, z. B. Photovoltaik)', false, false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.', false, true],
   ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen, §4 Nr. 1a i. V. m. §6 UStG)', false, true],
+  // Issue #492
+  ['Steuerfreie Umsätze ohne Vorsteuerabzug', '48', 'Umsätze nach §4 Nr. 8 bis 29 UStG (z. B. Heilberufe, Unterricht)', false, true],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false, true],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false, true],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false, true],

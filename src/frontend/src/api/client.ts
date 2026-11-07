@@ -2123,6 +2123,7 @@ export type UStVAErgebnis = {
   kz_87: string  // 0 % (manuell)
   // B – steuerfreie Umsätze mit Vorsteuerabzug
   kz_41: string; kz_43: string
+  kz_48?: string  // Issue #492: steuerfreie Umsätze ohne Vorsteuerabzug
   // Nicht im Inland steuerbare Umsätze
   kz_21: string; kz_45: string
   // C – ig. Erwerb

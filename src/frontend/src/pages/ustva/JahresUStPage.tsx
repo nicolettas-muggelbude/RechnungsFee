@@ -12,6 +12,8 @@ const KZ_META: [string, string, string, boolean][] = [
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b)', false],
   ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen)', false],
+  // Issue #492 - bei Kleinunternehmern zeigt die Seite Kz 48 gesondert (§19-Umsätze)
+  ['Steuerfreie Umsätze ohne Vorsteuerabzug', '48', 'Umsätze nach §4 Nr. 8 bis 29 UStG (z. B. Heilberufe, Unterricht)', false],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false],
