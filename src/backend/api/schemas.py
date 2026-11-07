@@ -15,6 +15,14 @@ from .schemas_rechnungen import BelegResponse
 # Unternehmen
 # ---------------------------------------------------------------------------
 
+# Issue #492: Befreiungsgründe für steuerfreie Umsätze → Pflichthinweis auf der Rechnung
+# (§ 14 Abs. 4 Nr. 8 UStG) und Befreiungsgrund der E-Rechnung (BT-120)
+STEUERBEFREIUNGEN_4: dict[str, str] = {
+    "4_nr_14": "§ 4 Nr. 14 UStG",
+    "4_nr_21": "§ 4 Nr. 21 UStG",
+}
+
+
 class UnternehmenBase(BaseModel):
     firmenname: str
     vorname: Optional[str] = None
@@ -34,6 +42,13 @@ class UnternehmenBase(BaseModel):
     est_vorauszahlungen_aktiv: bool = False
     gewst_vorauszahlungen_aktiv: bool = False
     ist_kleinunternehmer: bool = False
+    # Issue #491: Gründungsjahr + Umsatz vor RechnungsFee (nur für die Kleinunternehmer-Warnung)
+    taetigkeit_beginn: Optional[date] = None
+    umsatz_extern_jahr: Optional[int] = None
+    umsatz_extern_vorjahr: Optional[Decimal] = None
+    umsatz_extern_startjahr: Optional[Decimal] = None
+    # Issue #492: steuerfreie Umsätze nach § 4 UStG
+    steuerbefreiung_4: Optional[str] = None
     bezieht_transferleistungen: bool = False
     geburtsdatum: Optional[date] = None
     bg_nummer: Optional[str] = None
@@ -169,6 +184,22 @@ class UnternehmenBase(BaseModel):
     def check_geschaeftsjahr(cls, v: int) -> int:
         if not 1 <= v <= 12:
             raise ValueError("geschaeftsjahr_beginn muss zwischen 1 und 12 liegen")
+        return v
+
+    @field_validator("steuerbefreiung_4")
+    @classmethod
+    def check_steuerbefreiung_4(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return None
+        if v not in STEUERBEFREIUNGEN_4:
+            raise ValueError(f"steuerbefreiung_4 muss einer von {', '.join(STEUERBEFREIUNGEN_4)} sein")
+        return v
+
+    @field_validator("umsatz_extern_vorjahr", "umsatz_extern_startjahr")
+    @classmethod
+    def check_umsatz_extern(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("Umsatz vor RechnungsFee darf nicht negativ sein")
         return v
 
     @field_validator("backup_extern_anzahl")

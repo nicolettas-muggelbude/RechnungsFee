@@ -1,10 +1,12 @@
 import { useForm } from 'react-hook-form'
-import type { Unternehmen } from '../../api/client'
+import { STEUERBEFREIUNGEN_4, type SteuerbefreiungSchluessel, type Unternehmen } from '../../api/client'
 
 type FormData = {
   rechtsform: string
   taetigkeitsart: string
   ist_kleinunternehmer: boolean
+  taetigkeit_beginn: string
+  steuerbefreiung_4: SteuerbefreiungSchluessel | ''
   kontenrahmen: 'SKR03' | 'SKR04' | 'SKR49'
   bezieht_transferleistungen: boolean
   ust_idnr: string
@@ -22,6 +24,8 @@ export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
       rechtsform: defaultValues?.rechtsform ?? 'Einzelunternehmer',
       taetigkeitsart: defaultValues?.taetigkeitsart ?? 'freiberuflich',
       ist_kleinunternehmer: defaultValues?.ist_kleinunternehmer ?? false,
+      taetigkeit_beginn: defaultValues?.taetigkeit_beginn ?? '',
+      steuerbefreiung_4: defaultValues?.steuerbefreiung_4 ?? '',
       kontenrahmen: defaultValues?.kontenrahmen ?? 'SKR03',
       bezieht_transferleistungen: defaultValues?.bezieht_transferleistungen ?? false,
       ust_idnr: defaultValues?.ust_idnr ?? '',
@@ -31,7 +35,15 @@ export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
   const istKleinunternehmer = watch('ist_kleinunternehmer')
 
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
+    <form
+      onSubmit={handleSubmit((data) => onNext({
+        ...data,
+        // leere Eingaben als null - das Backend erwartet ein Datum bzw. einen gültigen Schlüssel
+        taetigkeit_beginn: data.taetigkeit_beginn || null,
+        steuerbefreiung_4: data.steuerbefreiung_4 || null,
+      }))}
+      className="space-y-5"
+    >
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Rechtsform</label>
@@ -68,10 +80,34 @@ export function StepSteuern({ onNext, onBack, defaultValues }: Props) {
           <div>
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Ich bin Kleinunternehmer (§19 UStG)</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Jahresumsatz &lt; 25.000 € (ab 2025). Keine USt auf Rechnungen, kein Vorsteuerabzug.
+              Umsatz im Vorjahr höchstens 25.000 €, im laufenden Jahr höchstens 100.000 € (im Gründungsjahr 25.000 €). Keine USt auf Rechnungen, kein Vorsteuerabzug.
             </p>
           </div>
         </label>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="setup-taetigkeit-beginn" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+              Beginn der Tätigkeit
+            </label>
+            <input id="setup-taetigkeit-beginn" type="date" {...register('taetigkeit_beginn')}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 dark:text-slate-100" />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Für die Umsatzgrenze im Gründungsjahr.</p>
+          </div>
+          <div>
+            <label htmlFor="setup-steuerbefreiung-4" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+              Steuerfreie Umsätze (§ 4 UStG)
+            </label>
+            <select id="setup-steuerbefreiung-4" {...register('steuerbefreiung_4')}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 dark:text-slate-100">
+              <option value="">keine</option>
+              {STEUERBEFREIUNGEN_4.map(s => (
+                <option key={s.wert} value={s.wert}>{s.paragraph} – {s.label.split(' (')[0]}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">z. B. Heilberufe oder Unterricht.</p>
+          </div>
+        </div>
 
         {!istKleinunternehmer && (
           <>

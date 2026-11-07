@@ -60,6 +60,14 @@ class Unternehmen(Base):
     gewst_vorauszahlungen_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Status
     ist_kleinunternehmer: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Issue #491: Kleinunternehmergrenze - Gründungsjahr (25.000 €) erkennen, Umsatz aus der Zeit
+    # vor RechnungsFee (nur für die Warnung, nicht für die EÜR) mit Bezugsjahr
+    taetigkeit_beginn: Mapped[date | None] = mapped_column(Date)
+    umsatz_extern_jahr: Mapped[int | None] = mapped_column(Integer)
+    umsatz_extern_vorjahr: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    umsatz_extern_startjahr: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # Issue #492: Befreiungsgrund für steuerfreie Umsätze (None | "4_nr_14" | "4_nr_21")
+    steuerbefreiung_4: Mapped[str | None] = mapped_column(String(20))
     bezieht_transferleistungen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Bürgergeld / Transferleistungen (für Anlage EKS)
     geburtsdatum: Mapped[date | None] = mapped_column(Date)
@@ -769,6 +777,9 @@ class Rechnung(Base):
     import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, nicht neu ausgeben/mahnen
     kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
     bemerkung_erechnung: Mapped[str | None] = mapped_column(Text)  # eigene Bemerkung -> ZUGFeRD BT-22, Vorrang vor notizen (Issue #474)
+    # Issue #492: steuerfreie Leistung nach § 4 UStG (Grund aus unternehmen.steuerbefreiung_4,
+    # im absender_snapshot eingefroren) - Positionen 0 %, Pflichthinweis, ZUGFeRD-Kategorie E
+    steuerfrei_4: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     leistung_von: Mapped[date | None] = mapped_column(Date)
     leistung_bis: Mapped[date | None] = mapped_column(Date)
     # Einleitungstext (überschreibt globalen Text aus unternehmen.einleitungstext/-typspezifisch)

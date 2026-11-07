@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 181
+SCHEMA_VERSION = 182
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -4101,6 +4101,38 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 181"))
             conn.commit()
             print("[Migration] Schema auf Version 181 (Issue #480: EÜR-Zeile 16 für sonstige Einnahmen)")
+
+    if version < 182:
+        with engine.connect() as conn:
+            # Issue #491: Kleinunternehmergrenze - Beginn der Tätigkeit (Gründungsjahr 25.000 €)
+            # und Umsatz vor RechnungsFee (Vorjahr + Startjahr, nur für die Warnung).
+            # Issue #492: Befreiungsgrund für steuerfreie Umsätze nach § 4 UStG am Unternehmen,
+            # Kennzeichen „steuerfrei nach § 4“ an der Rechnung.
+            _u182 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for _spalte, _typ in [
+                ("taetigkeit_beginn", "DATE"),
+                ("umsatz_extern_jahr", "INTEGER"),
+                ("umsatz_extern_vorjahr", "NUMERIC(12,2)"),
+                ("umsatz_extern_startjahr", "NUMERIC(12,2)"),
+                ("steuerbefreiung_4", "VARCHAR(20)"),
+            ]:
+                if _u182 and _spalte not in _u182:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {_spalte} {_typ}"))
+            _r182 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r182 and "steuerfrei_4" not in _r182:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN steuerfrei_4 BOOLEAN NOT NULL DEFAULT 0"))
+            # Beginn der Tätigkeit aus den EKS-Einstellungen übernehmen (Format YYYY-MM), falls
+            # dort schon eingetragen - nur wenn am Unternehmen noch leer
+            _e182 = {r[1] for r in conn.execute(text("PRAGMA table_info(eks_einstellungen)")).fetchall()}
+            if _u182 and "taetigkeitsbeginn" in _e182:
+                _tb = conn.execute(text("SELECT taetigkeitsbeginn FROM eks_einstellungen WHERE id = 1")).scalar()
+                if _tb and len(_tb) == 7 and _tb[4] == "-":
+                    conn.execute(text(
+                        "UPDATE unternehmen SET taetigkeit_beginn = :d WHERE taetigkeit_beginn IS NULL"
+                    ), {"d": f"{_tb}-01"})
+            conn.execute(text("PRAGMA user_version = 182"))
+            conn.commit()
+            print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
 
 
 def _migrate_kategorien() -> None:

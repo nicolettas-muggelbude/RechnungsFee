@@ -87,7 +87,14 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
   const inp = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400'
 
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
+    <form
+      onSubmit={handleSubmit((data) => onNext({
+        ...data,
+        // Issue #492: Heilberufe sind nach § 4 Nr. 14 UStG steuerfrei - im nächsten Schritt änderbar
+        ...(selectedBeruf?.label === 'Arzt / Ärztin' ? { steuerbefreiung_4: '4_nr_14' as const } : {}),
+      }))}
+      className="space-y-5"
+    >
 
       {/* Berufsauswahl */}
       <div>
