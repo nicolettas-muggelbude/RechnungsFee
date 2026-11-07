@@ -153,6 +153,7 @@ Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht m
   - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle
   - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr)
   - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. **Stichtag festgelegt: Rechnungsdatum ab 01.01.2027** (Issue #497, PR von 5eBeKs angekündigt)
+  - Abgestimmt in #497: Forderungsausfall (`ausfall_datum` + Migration, Minus im Ausfallmonat, Plus bei späterer Zahlung nach § 17 Abs. 2 Nr. 1 Satz 2) als eigener PR danach; freie Journal-/Bank-Buchungen auf ig. Lieferung/EU-Dienstleistung ohne Rechnungsbezug zählen weiter nach Buchungsdatum, ab Stichtag nur Hinweis beim Buchen (keine Sperre, keine Zuordnung)
   - nicht betroffen: KZ 43 (Ausfuhr) und KZ 45 (Drittland) – nicht in §18b
   - UStVA als XML: nur der Nutzdatenteil `Anmeldungssteuern` (Namensraum
     `http://finkonsens.de/elster/elsteranmeldung/ustva/v20xx`, passendes `version`-Attribut je
