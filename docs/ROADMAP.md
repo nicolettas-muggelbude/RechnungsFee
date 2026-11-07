@@ -180,14 +180,13 @@ offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
 
 ## 📋 v0.7.8 – vorgemerkt
 
-- [ ] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480) –
-  Auswahlfeld z. B. „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“. Steuert: EÜR-Zeile 13
-  (Kz 119) bei Kleinunternehmern, Pflichthinweis auf der Rechnung (§ 14 Abs. 4 Nr. 8 UStG, im
-  absender_snapshot eingefroren), Kleinunternehmergrenze (#491), EÜR-Zeile 16 statt 15 bei
-  Regelbesteuerung. **Vorher klären:** gelten damit alle Einnahmen als steuerfrei oder nur bestimmte
-  Kategorien/Positionen (gemischte Fälle, z. B. Ärztin mit steuerpflichtigen Gutachten)?
-  Neues `unternehmen`-Feld → 5-Stellen-Checkliste + Setup-Wizard mit leerer DB testen.
-- [ ] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, zusammen mit #492) – bisher nur
+- [x] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480,
+  erledigt für v0.7.8) – Auswahlfeld „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“.
+  Entschieden: Kennzeichen **je Rechnung** (`rechnungen.steuerfrei_4`, vorbelegt aus den Stammdaten),
+  gemischte Fälle über getrennte Rechnungen. Wirkt auf Positionen 0 %, Pflichthinweis (im
+  absender_snapshot eingefroren), E-Rechnung Kategorie E, EÜR Zeile 16 bzw. 12 + 13, UStVA Kz 48,
+  Kleinunternehmergrenze. Setup-Wizard mit leerer DB getestet.
+- [x] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, erledigt für v0.7.8) – bisher nur
   100.000 € fürs laufende Jahr aus Ausgangsrechnungen (`api/setup.py::kleinunternehmer_umsatz`).
   Neu: Gesamtumsatz nach § 19 Abs. 2 UStG aus der EÜR (Zeile 12 minus Zeile 13, enthält auch
   Journal-Einnahmen, Zahlungsdatum statt Rechnungsdatum), ohne steuerfreie § 4-Umsätze aus #492;
