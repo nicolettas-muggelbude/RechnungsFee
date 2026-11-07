@@ -1752,6 +1752,17 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         if val is not None:
             setattr(rechnung, field, val)
 
+    # Issue #495: Lieferadresse am Lieferschein-Entwurf ändern - fehlte bisher in der Feldliste
+    # oben, eine im Formular gewählte Adresse ging beim Speichern verloren. Über model_fields_set,
+    # damit „keine Lieferadresse“ (null) die Auswahl auch wieder entfernen kann.
+    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == "Lieferschein":
+        if data.lieferadresse_id is not None:
+            from database.models import KundeLieferadresse
+            la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == data.lieferadresse_id).first()
+            if not la or la.kunde_id != (data.kunde_id or rechnung.kunde_id):
+                raise HTTPException(status_code=422, detail="Die Lieferadresse gehört nicht zu diesem Kunden.")
+        rechnung.lieferadresse_id = data.lieferadresse_id
+
     # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
     # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
     # und das "val is not None"-Muster oben ließ die alte ID stehen; da kunde_name überall
@@ -2039,8 +2050,12 @@ def finalisiere_rechnung(
         if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
             _auftrag.auftrag_status = "rechnung_gestellt"
 
-    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung)
-    _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung).
+    # Ausnahme Issue #495: Lieferscheine aus Angebot/Auftrag entstehen seitdem als Entwurf - vorher
+    # wurden sie sofort final und ohne Lagerabgang angelegt, der Abgang läuft dort über die
+    # Rechnung. Das bleibt so, sonst würde die spätere Rechnung den Bestand doppelt mindern.
+    if not (rechnung.dokument_typ == "Lieferschein" and _ist_umgewandelter_lieferschein(db, rechnung)):
+        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
     _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
@@ -2713,6 +2728,15 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
         {"auftrag_zu_angebot_id": None}
     )
+    # Issue #495: Lieferscheine aus Angebot/Auftrag sind jetzt Entwürfe und damit löschbar -
+    # der Rückverweis am Angebot muss weg, sonst blockiert er das Angebot dauerhaft
+    db.query(Rechnung).filter(Rechnung.lieferschein_zu_angebot_id == rechnung_id).update(
+        {"lieferschein_zu_angebot_id": None}
+    )
+    _auftrag_ls = db.query(Rechnung).filter(
+        Rechnung.lieferschein_zu_auftrag_id == rechnung_id,
+        Rechnung.dokument_typ == "Auftrag",
+    ).first()
     # Auftrag-Rückverweis bereinigen und Status zurücksetzen wenn keine Dokumente mehr
     _auftrag_ref = db.query(Rechnung).filter(
         Rechnung.proforma_zu_auftrag_id == rechnung_id,
@@ -2724,6 +2748,10 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             _RV.auftrag_id == auftrag_id, _RV.aktiv == True  # noqa: E712
         ).first())
 
+    if _auftrag_ls:
+        _auftrag_ls.lieferschein_zu_auftrag_id = None
+        if not _auftrag_ls.rechnung_zu_auftrag_id and not _auftrag_ls.proforma_zu_auftrag_id:
+            _auftrag_ls.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ls.id) else "offen"
     if _auftrag_ref:
         _auftrag_ref.proforma_zu_auftrag_id = None
         if not _auftrag_ref.rechnung_zu_auftrag_id and not _auftrag_ref.lieferschein_zu_auftrag_id:
@@ -4655,9 +4683,31 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 # Angebot → Lieferschein
 # ---------------------------------------------------------------------------
 
+def _standard_lieferadresse_id(db: Session, kunde_id: Optional[int]) -> Optional[int]:
+    """Standard-Lieferadresse des Kunden - dieselbe Vorbelegung wie im Lieferschein-Formular."""
+    if not kunde_id:
+        return None
+    from database.models import KundeLieferadresse
+    la = db.query(KundeLieferadresse).filter(
+        KundeLieferadresse.kunde_id == kunde_id, KundeLieferadresse.ist_standard == True,  # noqa: E712
+    ).first()
+    return la.id if la else None
+
+
+def _ist_umgewandelter_lieferschein(db: Session, rechnung: Rechnung) -> bool:
+    """Lieferschein, der aus einem Angebot oder Auftrag entstanden ist (Issue #495)."""
+    return db.query(Rechnung).filter(or_(
+        Rechnung.lieferschein_zu_angebot_id == rechnung.id,
+        Rechnung.lieferschein_zu_auftrag_id == rechnung.id,
+    )).first() is not None
+
+
 @router.post("/{angebot_id}/lieferschein-aus-angebot", response_model=RechnungResponse, status_code=201)
 def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
-    """Erstellt einen Lieferschein aus einem Angebot (Positionen ohne Preise übernommen)."""
+    """Erstellt einen Lieferschein aus einem Angebot (Positionen ohne Preise übernommen).
+
+    Issue #495: als Entwurf, damit vor dem Finalisieren noch die Lieferadresse (z. B. der
+    Standort eines Filialkunden) gewählt werden kann."""
     angebot = db.query(Rechnung).filter(
         Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
     ).first()
@@ -4680,7 +4730,8 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         dokument_typ="Lieferschein",
-        ist_entwurf=False,
+        ist_entwurf=True,
+        lieferadresse_id=_standard_lieferadresse_id(db, angebot.kunde_id),
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4698,7 +4749,6 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     _kopiere_positionen(angebot, ls, db)
 
     angebot.lieferschein_zu_angebot_id = ls.id
-    ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(ls)
     return RechnungResponse.from_orm_extended(ls)
@@ -5139,7 +5189,8 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{auftrag_id}/lieferschein-aus-auftrag", response_model=RechnungResponse, status_code=201)
 def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
-    """Erstellt einen Lieferschein aus einem Auftrag."""
+    """Erstellt einen Lieferschein aus einem Auftrag - als Entwurf, damit vor dem Finalisieren
+    noch die Lieferadresse gewählt werden kann (Issue #495)."""
     auftrag = db.query(Rechnung).filter(
         Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
     ).first()
@@ -5181,7 +5232,8 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         notizen=auftrag.notizen,
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
-        ist_entwurf=False,
+        ist_entwurf=True,
+        lieferadresse_id=_standard_lieferadresse_id(db, auftrag.kunde_id),
         dokument_typ="Lieferschein",
         eingabemodus=auftrag.eingabemodus,
         rabatt_prozent=auftrag.rabatt_prozent,
@@ -5196,7 +5248,6 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     auftrag.lieferschein_zu_auftrag_id = lieferschein.id
     if auftrag.auftrag_status == "offen":
         auftrag.auftrag_status = "in_bearbeitung"
-    lieferschein.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(lieferschein)
     return RechnungResponse.from_orm_extended(lieferschein)

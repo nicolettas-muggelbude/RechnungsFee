@@ -3448,7 +3448,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
-      lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
+      // null statt undefined: „keine Lieferadresse“ muss beim Bearbeiten eines Entwurfs ankommen (Issue #495)
+      lieferadresse_id: dokumentTyp === 'Lieferschein' ? (lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
       dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,

@@ -222,6 +222,8 @@ class RechnungUpdate(BaseModel):
     externe_belegnr: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
     bemerkung_erechnung: Optional[str] = None
+    # Issue #495: fehlte - eine beim Bearbeiten gewählte Lieferadresse wurde verworfen
+    lieferadresse_id: Optional[int] = None
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
