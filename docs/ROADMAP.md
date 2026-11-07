@@ -281,6 +281,20 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ---
 
+## 📋 v0.8.1 – vorgemerkt
+
+- [ ] **Modus „Nur Rechnungsstellung“** (Issue #501, Wunsch aus der Community) – Buchhaltung,
+  Auswertungen und Eingangsrechnungen ausblenden, sichtbar bleiben Fakturierung und Stammdaten.
+  Feld `unternehmen.ausgeblendete_bereiche` als Liste (vorbereitet für getrennte Schalter, Muster wie
+  `dashboard_config`), vorerst ein Schalter für alle drei Bereiche; gemeinsame Prüfung
+  `bereichSichtbar()` für Menü, Seiten (auch Direktaufruf), Dashboard-Widgets, Tastenkürzel und das
+  Tagesabschluss-Banner. Im Hintergrund wird weiter gebucht (Zahlungsstatus, Mahnwesen), nichts
+  gelöscht. Hinweis beim Einschalten, neue Frage im Setup-Wizard („Rechnungen schreiben / Rechnungen
+  und Buchhaltung“) → Wizard mit leerer DB testen. Bewusst nach v0.8.0: neue Oberfläche erst auf der
+  barrierefreien Basis, v0.8.0 baut `AppLayout.tsx`-Navigation und Dialoge um.
+
+---
+
 ## 🌿 Release-Strategie nach 1.0 – Stable/Beta-Trennung
 
 **Anlass:** Nach dem 1.0-Release soll die Weiterentwicklung (Beta/2.x) strikt von der stabilen 1.x-Linie getrennt werden. In der Vergangenheit gab es Testversionen (Branches `testing/backend-shutdown`, `testing/qr-code-debug`), bei denen Änderungen versehentlich im `main` landeten – das darf mit dem 1.x-Stable-Branch nicht mehr passieren, reine Disziplin/Worktree-Trennung reicht nicht (siehe auch die frühere `web`-Branch-Worktree-Verwechslung).
