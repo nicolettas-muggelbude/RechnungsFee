@@ -86,7 +86,7 @@ function LogoSektion({
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [fehler, setFehler] = useState<string | null>(null)
-  const [cacheBust, setCacheBust] = useState(Date.now())
+  const [cacheBust, setCacheBust] = useState(() => Date.now())
   const [logoSrc, setLogoSrc] = useState<string>('')
   // Issue #454: Logo hinterlegt, Datei aber nicht auffindbar (z. B. nach Wiederherstellung nur der
   // Datenbank) - einmal neu versuchen, dann Hinweis statt endloser Neuladeversuche
@@ -200,7 +200,9 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
   })
   const mehrereProfile = (profilListe?.profile.length ?? 0) > 1
   const [form, setForm] = useState<Partial<Unternehmen>>(() => {
-    const { logo_pfad: _logo, ...rest } = data
+    // logo_pfad gehört nicht ins Formular (eigener Upload-Weg)
+    const rest: Partial<Unternehmen> = { ...data }
+    delete rest.logo_pfad
     if (rest.iban) {
       const raw = rest.iban.replace(/\s/g, '').toUpperCase()
       rest.iban = raw.replace(/(.{4})/g, '$1 ').trimEnd()
@@ -319,6 +321,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
 
   // Firma-Tab: Name, Anschrift, IBAN. Gibt eine Fehlermeldung zurück oder null.
   function pruefeFirma(): string | null {
+    // Steuerzeichen bewusst gesucht: in ZUGFeRD/XRechnung (XML) ungültig
+    // eslint-disable-next-line no-control-regex
     const steuerzeichen = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
 
     const hatFirma = !!(form.firmenname?.trim())
@@ -1528,9 +1532,9 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
       await sendeTestMail(testMail.trim())
       setTestStatus('ok')
       setTimeout(() => setTestStatus('idle'), 3000)
-    } catch (e: any) {
+    } catch (e) {
       setTestStatus('error')
-      setTestFehler(e?.message ?? 'Unbekannter Fehler')
+      setTestFehler(e instanceof Error ? e.message : 'Unbekannter Fehler')
     }
   }
 
@@ -1699,9 +1703,9 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
       setTestStatus('ok')
       setTestText(`Verbindung OK – Ordner „${r.ordner}" enthält ${r.anzahl_mails} Mail${r.anzahl_mails === 1 ? '' : 's'}.`)
       qc.invalidateQueries({ queryKey: ['unternehmen'] })  // ggf. neu gemerktes Zertifikat anzeigen
-    } catch (e: any) {
+    } catch (e) {
       setTestStatus('error')
-      setTestText(e?.message ?? 'Unbekannter Fehler')
+      setTestText(e instanceof Error ? e.message : 'Unbekannter Fehler')
     }
   }
 

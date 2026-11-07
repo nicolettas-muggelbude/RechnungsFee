@@ -29,6 +29,7 @@ type Berufsgruppe = typeof BERUFSGRUPPEN[number]
 
 // Erlaubte Zeichen für ZUGFeRD/XRechnung: keine XML-Steuerzeichen (außer Tab, LF, CR)
 const xmlSauber = (label: string) =>
+  // eslint-disable-next-line no-control-regex -- Steuerzeichen bewusst ausgeschlossen (siehe oben)
   z.string().regex(/^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$/, `${label} enthält ungültige Zeichen`)
 
 const schema = z.object({
