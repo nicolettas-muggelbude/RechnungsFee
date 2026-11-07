@@ -99,6 +99,15 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
 - [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
+  buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
+  Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
+- [ ] **Empfänger und Standort je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten) –
+  Lieferadressen im Kundenstamm zu „weiteren Adressen / Standorten“ ausbauen; je Dokument
+  `empfaenger_adresse_id` (neu, Adressfeld bei Angebot/Auftrag/Proforma/Lieferschein) und
+  `lieferadresse_id` (eigene Zeile, auch auf der Rechnung); Rechnung immer an den Kunden (§ 14 UStG);
+  beide Felder wandern bei Umwandlungen mit. Erste Hilfe in v0.7.8: Lieferscheine aus Angebot/Auftrag
+  als Entwurf. Rückfragen an Gerti offen (Empfänger Lieferschein, feste oder wechselnde Empfänger)
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
