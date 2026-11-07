@@ -131,6 +131,21 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
+## 📋 v0.7.9 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+
+Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
+Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
+nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen das Bankkonto.
+
+- [ ] Zahlungsart „Privat bezahlt“ in „Zahlung erfassen“ (Eingangsrechnung), Buchungsformular und
+  Bank-/CSV-Import
+- [ ] DATEV: Gegenkonto = Privateinlage-Konto (SKR03 1890 / SKR04 2180, aus der Kategorie
+  „Privateinlage“, damit eigene Anpassungen greifen)
+- [ ] EÜR Zeile 107 (Basis) / 108 (2026): Summe dieser Ausgaben (brutto) als Einlage, zusätzlich zur
+  Kategorie „Privateinlage“; Betriebsausgabe und Vorsteuer bleiben wie gebucht
+- [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
+- [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
+
 ## 📋 v0.7.9 – Reverse Charge mit privatem Anteil (Issue #503)
 
 Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.9 – beides Steuer-/Buchungslogik ohne
@@ -350,6 +365,20 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
   gelöscht. Hinweis beim Einschalten, neue Frage im Setup-Wizard („Rechnungen schreiben / Rechnungen
   und Buchhaltung“) → Wizard mit leerer DB testen. Bewusst nach v0.8.0: neue Oberfläche erst auf der
   barrierefreien Basis, v0.8.0 baut `AppLayout.tsx`-Navigation und Dialoge um.
+
+---
+
+## 📋 Vor v1.0 – Konto je Zahlung (Issue #162)
+
+Zusammen mit der POS-Anbindung (jede POS-Buchung bucht auf eine bestimmte Kasse), nach v0.8.0.
+Bereits vorhanden (Migration 110): `journal.konto_id`, `konten.datev_kontonummer`; der Bank-Import setzt
+das Konto, der DATEV-Export nutzt dann dessen Nummer als Gegenkonto.
+
+- [ ] Kontowahl bei „Zahlung erfassen“, im Buchungsformular und im CSV-Import statt nur Zahlungsart
+- [ ] Kassen als Konten (Kontoart `bar`), Mehrfach-Kasse inkl. Kassenbuch/Tagesabschluss je Kasse
+- [ ] weitere Zahlungsdienste (Klarna, Mollie, Stripe) ohne Code-Änderung als Konto anlegbar
+- [ ] DATEV-Gegenkonto immer aus dem Konto; globale `unternehmen.datev_konto_*` danach entfernen
+- [ ] „Privat bezahlt“ (v0.7.9) als Konto-Variante übernehmen
 
 ---
 
