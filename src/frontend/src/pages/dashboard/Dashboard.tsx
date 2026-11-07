@@ -610,8 +610,29 @@ function KleinunternehmerWarnung() {
   if (!unt?.ist_kleinunternehmer || !ku) return null
 
   const prozent = Math.min((ku.umsatz_netto / ku.grenze_kritisch) * 100, 100)
-  const ueberschritten = ku.umsatz_netto >= ku.grenze_kritisch
+  // Grenze selbst ist noch erlaubt („nicht überschreitet“) - erst darüber gilt die Regelbesteuerung
+  const ueberschritten = ku.umsatz_netto > ku.grenze_kritisch
   const kritisch = ku.umsatz_netto >= ku.grenze_warnung
+  const grenzeText = `${formatEuro(ku.grenze_kritisch)}-Grenze${ku.ist_gruendungsjahr ? ' im Gründungsjahr' : ''}`
+
+  // Issue #491: Vorjahr über 25.000 € → § 19 gilt im laufenden Jahr gar nicht
+  if (ku.vorjahr_ueberschritten) {
+    return (
+      <div role="alert" className="rounded-lg border p-4 mb-4 bg-red-50 border-red-300 dark:bg-red-950 dark:border-red-800">
+        <div className="flex items-start gap-3">
+          <span className="text-xl" aria-hidden="true">🚨</span>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-red-800 dark:text-red-300">Kleinunternehmerregelung gilt {ku.jahr} nicht</p>
+            <p className="text-sm mt-0.5 text-red-700 dark:text-red-400">
+              Dein Umsatz {ku.vorjahr} lag mit {formatEuro(ku.umsatz_vorjahr)} über {formatEuro(ku.grenze_vorjahr)}. Damit bist
+              du {ku.jahr} regelbesteuert: Stelle Rechnungen mit Umsatzsteuer aus, nimm in den Unternehmensdaten den Haken
+              „Kleinunternehmer“ heraus und sprich mit deinem Steuerbüro oder Finanzamt.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!kritisch) return null
 
@@ -631,8 +652,8 @@ function KleinunternehmerWarnung() {
           </p>
           <p className={`text-sm mt-0.5 ${ueberschritten ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
             {ueberschritten
-              ? `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} und hat die 100.000 €-Grenze überschritten. Ab diesem Zeitpunkt bist du regelbesteuert – stelle ab sofort Rechnungen mit Umsatzsteuer aus und informiere dein Finanzamt.`
-              : `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} (${prozent.toFixed(1)} % der 100.000 €-Grenze). Bei Überschreitung wechselst du sofort zur Regelbesteuerung.`
+              ? `Dein Umsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} und hat die ${grenzeText} überschritten. Ab dem Umsatz, mit dem die Grenze überschritten wurde, bist du regelbesteuert – stelle ab sofort Rechnungen mit Umsatzsteuer aus und informiere dein Finanzamt.`
+              : `Dein Umsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} (${prozent.toFixed(1)} % der ${grenzeText}). Bei Überschreitung wechselst du sofort zur Regelbesteuerung.`
             }
           </p>
           <div className="mt-2 h-1.5 rounded-full bg-amber-200 dark:bg-amber-900 overflow-hidden">

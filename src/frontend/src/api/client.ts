@@ -173,7 +173,12 @@ export const setKassenbestand = (betrag: string) =>
     body: JSON.stringify({ betrag }),
   })
 export const getKleinunternehmerUmsatz = () =>
-  request<{ jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number }>('/setup/kleinunternehmer-umsatz')
+  request<{
+    jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number
+    // Issue #491
+    ist_gruendungsjahr: boolean; umsatz_extern: number
+    vorjahr: number; umsatz_vorjahr: number; grenze_vorjahr: number; vorjahr_ueberschritten: boolean
+  }>('/setup/kleinunternehmer-umsatz')
 
 // --- Profilmanager ---
 export type ProfilItem = { name: string; aktiv: boolean }

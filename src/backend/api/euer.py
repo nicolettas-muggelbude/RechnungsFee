@@ -300,6 +300,37 @@ def _euer_ust_beitraege(e: Journaleintrag) -> list[tuple[int, str, Decimal]]:
     return beitraege
 
 
+def kleinunternehmer_gesamtumsatz(jahr: int, db: Session) -> Decimal:
+    """Issue #491: Gesamtumsatz nach § 19 Abs. 2 UStG eines Kalenderjahres für die
+    Kleinunternehmergrenze - aus derselben Zuordnung je Buchung wie die EÜR.
+
+    - immer Kalenderjahr: die Grenze gilt je Kalenderjahr, auch bei abweichendem Wirtschaftsjahr
+    - nach vereinnahmten Entgelten (Journal = Zahlungsdatum), netto
+    - Kleinunternehmer-Buchungen: Zeile 12 abzüglich Zeile 13 - Zeile 13 enthält nicht steuerbare
+      Einnahmen (Mahngebühren, Zuschüsse …) und steuerfreie Umsätze nach § 4 (Issue #492), die
+      nicht zum Gesamtumsatz zählen
+    - regelbesteuerte Buchungen (Wechsel im Jahr): Zeile 15 (steuerpflichtige Umsätze)
+    - Anlagevermögen bleibt unberücksichtigt (§ 19 Abs. 2 Satz 2 UStG)"""
+    from datetime import date as _date
+    unt = db.query(Unternehmen).first()
+    eintraege = (
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.datum >= _date(jahr, 1, 1), Journaleintrag.datum <= _date(jahr, 12, 31))
+        .all()
+    )
+    ku_status = _ku_status_je_buchung(eintraege, db, unt)
+    summe = ZERO
+    for e in eintraege:
+        kat: Optional[Kategorie] = e.kategorie
+        if kat is None or kat.kontenart == "Anlage":
+            continue
+        zeile, beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
+        if zeile in (_ZEILE_KLEINUNTERNEHMER, 15):
+            summe += beitrag
+        summe -= _zeile_13_beitrag(e, ku_status[e.id], zeile, beitrag)
+    return summe.quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+
 def _berechne_euer(jahr: int, db: Session) -> dict:
     unt = db.query(Unternehmen).first()
     von, bis = wirtschaftsjahr_zeitraum(unt, jahr) if unt else (
