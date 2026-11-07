@@ -1202,7 +1202,10 @@ export function Dashboard() {
   const qc = useQueryClient()
   const [konfModus, setKonfModus] = useState(false)
 
-  // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende
+  // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende.
+  // Das Schreiben in den modulweiten Store ist gewollt (überlebt das Unmount der Seite) und
+  // passiert nur in Event-Handlern, nie beim Rendern - deshalb hier bewusst freigegeben.
+  /* eslint-disable react-hooks/immutability */
   const [filterModus, _setFilterModus] = useState<FilterModus>(() => (dashboardFilter.modus as FilterModus) ?? 'monat')
   const setFilterModus = (m: FilterModus) => { dashboardFilter.modus = m; _setFilterModus(m) }
 
@@ -1217,6 +1220,7 @@ export function Dashboard() {
 
   const [datumBis, _setDatumBis] = useState<string>(() => dashboardFilter.datumBis)
   const setDatumBis = (d: string) => { dashboardFilter.datumBis = d; _setDatumBis(d) }
+  /* eslint-enable react-hooks/immutability */
 
   const aktivesJahr = new Date().getFullYear()
   const filterParams =

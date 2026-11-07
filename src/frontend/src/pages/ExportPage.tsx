@@ -172,7 +172,7 @@ export function ExportPage() {
   async function handleGobd() {
     setGobdLaedt(true); setGobdErfolg(null); setGobdFehler(null)
     try { setGobdErfolg(await downloadGobdExport(gobdJahr)) }
-    catch (e: any) { setGobdFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setGobdFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setGobdLaedt(false) }
   }
 
@@ -192,7 +192,7 @@ export function ExportPage() {
     const [von, bis] = zeitraumZuDaten(datevZeitraum, datevJahr, datevVon, datevBis)
     if (!von || !bis) { setDatevFehler('Bitte Von- und Bis-Datum angeben'); setDatevLaedt(false); return }
     try { setDatevErgebnis(await downloadDatevBuchungsstapel(von, bis, datevMitBelegen)) }
-    catch (e: any) { setDatevFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setDatevFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setDatevLaedt(false) }
   }
 
@@ -201,7 +201,7 @@ export function ExportPage() {
     const [von, bis] = zeitraumZuDaten(csvZeitraum, csvJahr, csvVon, csvBis)
     if (!von || !bis) { setCsvFehler('Bitte Von- und Bis-Datum angeben'); setCsvLaedt(false); return }
     try { setCsvErgebnis(await downloadBuchhalterCsv(von, bis)) }
-    catch (e: any) { setCsvFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setCsvFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setCsvLaedt(false) }
   }
 
