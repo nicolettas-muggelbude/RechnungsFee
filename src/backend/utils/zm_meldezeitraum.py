@@ -32,6 +32,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session, selectinload
 
 from database.models import Journaleintrag, Rechnung
+from utils.konten import ist_ig_lieferung_konto
 
 # TODO vor Release prüfen/anpassen: Beginn eines Meldezeitraums, mindestens 4-6 Wochen nach dem
 # geplanten Release-Datum, damit realistisch alle Nutzer das Update vorher erhalten haben.
@@ -57,6 +58,30 @@ class IgUmsatz:
     rechnungsdatum: date | None = None  # nur bei art="rechnung": Datum der Rechnung (Posten-Text)
     nach_storno_original: bool = False  # nur bei art="rechnung": Ersatzrechnung, die erst im
                                         # Monat des Stornos ihres Originals meldet (meldedatum())
+
+
+# Hinweis beim Buchen (Issue #497): eine freie Buchung auf ig. Lieferung ohne Rechnungsbezug
+# zählt weiter nach Buchungsdatum (z. B. wenn die Rechnungen in einem anderen Programm
+# entstehen). Gibt es zur selben Leistung eine Rechnung ab CUTOVER_DATUM, meldet diese bereits
+# selbst - der Umsatz stünde doppelt in KZ 41 und der ZM. Keine Sperre, nur ein Hinweis.
+HINWEIS_FREIE_IG_BUCHUNG = (
+    "Gibt es zu diesem Umsatz eine Rechnung in RechnungsFee, buche die Zahlung bitte an der "
+    "Rechnung, sonst steht er doppelt in KZ 41/21 und der ZM."
+)
+
+
+def hinweis_freie_ig_buchung(eintrag: Journaleintrag) -> str | None:
+    """HINWEIS_FREIE_IG_BUCHUNG für eine Einnahme auf ig. Lieferung (8125/4125) ohne
+    rechnung_id ab CUTOVER_DATUM, sonst None. Freie Buchungen auf eine EU-Dienstleistung gibt es
+    nicht: KZ 21 und ZM S erkennen die Leistung nur über die Rechnung (ist_reverse_charge)."""
+    if (
+        eintrag.rechnung_id is None
+        and eintrag.art == "Einnahme"
+        and eintrag.datum >= CUTOVER_DATUM
+        and ist_ig_lieferung_konto(eintrag.konto_skr03, eintrag.konto_skr04)
+    ):
+        return HINWEIS_FREIE_IG_BUCHUNG
+    return None
 
 
 def _monatsende(jahr: int, monat: int) -> date:

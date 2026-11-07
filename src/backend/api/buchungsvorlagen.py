@@ -31,6 +31,7 @@ from api.rechnungen import (
     APP_DATA_DIR, BELEG_DIR, ERLAUBTE_MIME_TYPES, _beleg_loeschen_wenn_unbenutzt, _dateien_entfernen,
 )
 from utils.signatur import signatur_journaleintrag
+from utils.zm_meldezeitraum import hinweis_freie_ig_buchung
 
 router = APIRouter(prefix="/api/buchungsvorlagen", tags=["Buchungsvorlagen"])
 
@@ -333,7 +334,9 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
     db.commit()
     db.refresh(eintrag)
     from api.schemas import JournalEintragResponse
-    return JournalEintragResponse.model_validate(eintrag)
+    resp = JournalEintragResponse.model_validate(eintrag)
+    resp.hinweis = hinweis_freie_ig_buchung(eintrag)  # Issue #497
+    return resp
 
 
 # ---------------------------------------------------------------------------

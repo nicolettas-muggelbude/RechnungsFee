@@ -492,6 +492,8 @@ export type JournalEintrag = {
   storno_belegnr?: string | null
   ist_storno?: boolean
   storno_von_belegnr?: string | null
+  // Issue #497: Hinweis beim Buchen einer freien ig. Lieferung ab dem Stichtag (nur in der Antwort aufs Buchen)
+  hinweis?: string | null
 }
 
 export type JournalEintragCreate = {
@@ -2591,7 +2593,7 @@ export const updateBuchungsvorlage = (id: number, data: Partial<BuchungsvorlageC
 export const deleteBuchungsvorlage = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}`, { method: 'DELETE' })
 export const buchungAusfuehren = (id: number, belegId?: number) =>
-  request<unknown>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
+  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
 export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)
@@ -2901,6 +2903,7 @@ export type BankTransaktion = {
   forderung_id?: number | null
   dedupe_hash?: string | null
   rechnung_info?: RechnungKurzinfo | null
+  hinweis?: string | null  // Issue #497, nur in der Antwort aufs Buchen
 }
 
 export type BankAbgleichVorschlag = {
@@ -2995,6 +2998,7 @@ export type AutoBuchenResult = {
   offen: number
   forderungen: number
   fehler: number
+  hinweis?: string | null  // Issue #497
 }
 
 export const autoBuchen = (kontoId: number, importId?: number) =>
