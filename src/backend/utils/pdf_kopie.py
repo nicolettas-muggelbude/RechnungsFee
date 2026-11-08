@@ -62,16 +62,14 @@ def _wasserzeichen_seite(breite_mm: float, hoehe_mm: float) -> bytes:
 
 def _overlay_kopie(original_bytes: bytes) -> bytes:
     """Legt das KOPIE-Wasserzeichen auf Seite 1 des PDFs."""
-    reader = PdfReader(BytesIO(original_bytes))
-    writer = PdfWriter()
-
-    for i, page in enumerate(reader.pages):
-        if i == 0:
-            w_mm = float(page.mediabox.width) * 0.352778   # pt → mm
-            h_mm = float(page.mediabox.height) * 0.352778
-            stamp = PdfReader(BytesIO(_wasserzeichen_seite(w_mm, h_mm))).pages[0]
-            page.merge_page(stamp)
-        writer.add_page(page)
+    # Seiten erst im Writer stempeln: pypdf 7 erlaubt merge_page() nur noch auf Seiten,
+    # die einem Writer gehören (vorher: Reader-Seite stempeln, dann add_page()).
+    writer = PdfWriter(clone_from=PdfReader(BytesIO(original_bytes)))
+    seite = writer.pages[0]
+    w_mm = float(seite.mediabox.width) * 0.352778   # pt → mm
+    h_mm = float(seite.mediabox.height) * 0.352778
+    stamp = PdfReader(BytesIO(_wasserzeichen_seite(w_mm, h_mm))).pages[0]
+    seite.merge_page(stamp)
 
     out = BytesIO()
     writer.write(out)

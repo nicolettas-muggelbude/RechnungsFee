@@ -131,7 +131,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
-## 📋 v0.7.9 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## 📋 v0.7.10 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
@@ -146,9 +146,9 @@ nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen 
 - [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
 - [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
 
-## 📋 v0.7.9 – Reverse Charge mit privatem Anteil (Issue #503)
+## 📋 v0.7.10 – Reverse Charge mit privatem Anteil (Issue #503)
 
-Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.9 – beides Steuer-/Buchungslogik ohne
+Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.10 – beides Steuer-/Buchungslogik ohne
 größere neue Oberfläche.
 
 Rechtslage: Bei § 13b wird die USt auch für den privaten Anteil voll geschuldet (§ 13b Abs. 5 UStG) →
@@ -169,7 +169,7 @@ nur an der Kategorie (`vorsteuer_prozent`) und wird bei Reverse Charge bewusst i
 - Bis dahin: Wertabgabe-Weg (voll abziehen, privaten Anteil als unentgeltliche Wertabgabe mit
   19 % versteuern) ergibt dieselbe Zahllast
 
-## 📋 v0.7.9 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
+## 📋 v0.7.10 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
 
 Guthaben aus Überzahlungen (Lieferanten-/Kundenguthaben, auch aus dem Mahnwesen) stehen nur als
 offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
@@ -390,7 +390,7 @@ das Konto, der DATEV-Export nutzt dann dessen Nummer als Gegenkonto.
 - [ ] Kassen als Konten (Kontoart `bar`), Mehrfach-Kasse inkl. Kassenbuch/Tagesabschluss je Kasse
 - [ ] weitere Zahlungsdienste (Klarna, Mollie, Stripe) ohne Code-Änderung als Konto anlegbar
 - [ ] DATEV-Gegenkonto immer aus dem Konto; globale `unternehmen.datev_konto_*` danach entfernen
-- [ ] „Privat bezahlt“ (v0.7.9) als Konto-Variante übernehmen
+- [ ] „Privat bezahlt“ (v0.7.10) als Konto-Variante übernehmen
 
 ---
 
