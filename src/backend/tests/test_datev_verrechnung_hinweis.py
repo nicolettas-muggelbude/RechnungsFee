@@ -2,7 +2,7 @@
 Nebenfund Issue #502: Buchungen mit Zahlungsart „Verrechnung“ (Guthaben mit einer Rechnung
 verrechnet) haben kein Gegenkonto und werden im DATEV-Export übersprungen - anders als
 „Keine“ fehlt dort aber echter Aufwand/Erlös samt Steuer. Bis zum Verrechnungskonto
-(Roadmap v0.7.9) meldet der Export sie einzeln mit Belegnummer.
+(Roadmap v0.7.10) meldet der Export sie einzeln mit Belegnummer.
 """
 import asyncio
 from datetime import date

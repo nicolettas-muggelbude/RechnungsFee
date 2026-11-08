@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.9',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Kopie einer Rechnung drucken oder mailen schlug fehl: Eine am Release-Tag von v0.7.8 erschienene neue Version der PDF-Bibliothek pypdf hat die bisherige Art, das Wasserzeichen „KOPIE“ aufzubringen, entfernt. Das Wasserzeichen wird jetzt so aufgebracht, dass es mit alter und neuer Version funktioniert. v0.7.8 wurde deshalb nur für macOS gebaut und nicht über die Update-Prüfung verteilt – alle Neuerungen aus v0.7.8 sind in v0.7.9 enthalten.' },
+    ],
+  },
+  {
     version: 'v0.7.8',
     datum: 'November 2026',
     eintraege: [
@@ -34,7 +41,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'CSV-Import von Belegen: Offene Belege wurden ohne Kategorie übernommen, obwohl die Spalte „Kategorien“ gefüllt war – ab dem 01.10.2026 brach der Import dadurch ab. Die Kategorie wird jetzt auch bei offenen Belegen erkannt und zur Zuordnung angeboten. Außerdem wurden Kategorien mit großem Umlaut (z. B. „Reisekosten – ÖPNV“) nicht gefunden. Danke an David (Issue #499).' },
       { typ: 'neu', text: 'Bank-Abgleich: Ist eine Abbuchung größer als die Eingangsrechnung (z. B. anteiliger Beleg vom Mischkonto oder private Artikel auf dem Bon), lässt sich der Rest jetzt als privater Anteil buchen statt als Lieferantenguthaben – als Privatentnahme mit Datum und Bankkonto der Abbuchung, damit sie auch im DATEV-Export erscheint. Danke an David (Issue #502).' },
       { typ: 'fix', text: 'Guthaben ausbuchen im Dashboard: Die Kategorienauswahl war immer leer. Sie zeigt jetzt Aufwand-Kategorien für einen Forderungsausfall und Entnahme-Kategorien für einen privaten Anteil; ein privater Anteil wird mit Datum und Bankkonto der ursprünglichen Zahlung gebucht (Issue #502).' },
-      { typ: 'verbesserung', text: 'DATEV-Export: Mit einer Rechnung verrechnete Guthaben haben noch kein Gegenkonto und fehlen deshalb im Buchungsstapel. Der Export nennt sie jetzt ausdrücklich mit Belegnummer, damit du sie deinem Steuerbüro melden kannst – die vollständige Lösung über ein Verrechnungskonto folgt in v0.7.9.' },
+      { typ: 'verbesserung', text: 'DATEV-Export: Mit einer Rechnung verrechnete Guthaben haben noch kein Gegenkonto und fehlen deshalb im Buchungsstapel. Der Export nennt sie jetzt ausdrücklich mit Belegnummer, damit du sie deinem Steuerbüro melden kannst – die vollständige Lösung über ein Verrechnungskonto folgt in v0.7.10.' },
       { typ: 'verbesserung', text: 'Lieferscheine aus einem Angebot oder Auftrag werden jetzt als Entwurf angelegt (Standard-Lieferadresse vorausgewählt). So lässt sich vor dem Finalisieren noch die passende Lieferadresse wählen – z. B. der Standort eines Kunden mit vielen Filialen. Am Lagerbestand ändert sich dadurch nichts. Danke an Gerti (Issue #495).' },
       { typ: 'fix', text: 'Lieferschein-Entwurf: Eine beim Bearbeiten gewählte Lieferadresse ging beim Speichern verloren.' },
       { typ: 'fix', text: 'Eingangsrechnungen bekamen im PDF die eigenen Standard-Einleitungs- und Schlusstexte der Ausgangsrechnung, in Vorlage 1 zusätzlich eine Anrede an den Lieferanten und den Satz „Vielen Dank für Dein Vertrauen …“. Diese Texte entfallen jetzt bei Eingangsrechnungen. Danke an thomaskron (Issue #504).' },
