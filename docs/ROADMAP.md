@@ -484,7 +484,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
   gibt die Seriennummer wieder frei; passt zu §25a (Gebrauchtwarenhandel).
   Offen: nur Rückverfolgung oder auch Garantiefristen mit Ablauf und Erinnerung?
 
-- **Öffentliche REST-API** – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
+- **Öffentliche REST-API** (Issue #513; Anwendungsfälle Zammad/paperless #473, MCP #429, Etsy #469, POS) – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
   aber unversioniert, ohne Anmeldung und auf zufälligem Port. Für Dritte nötig: stabile, versionierte
   Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von der internen), API-Tokens mit Rechten
   (lesen / schreiben), in den Einstellungen erzeug- und widerrufbar; feste Adresse, standardmäßig
