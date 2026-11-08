@@ -63,6 +63,11 @@ app.add_middleware(
 from utils.pdf_dateiname_pfad import PdfDateinameMiddleware  # noqa: E402
 app.add_middleware(PdfDateinameMiddleware)
 
+# Security-Audit F2/F4/F7: Host- und Origin-Prüfung, nosniff + CSP für Datei-Antworten.
+# Zuletzt hinzugefügt = äußerste Schicht → fremde Requests werden vor allem anderen abgewiesen.
+from utils.sicherheit_middleware import SicherheitMiddleware  # noqa: E402
+app.add_middleware(SicherheitMiddleware)
+
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
 app.include_router(konten.router)

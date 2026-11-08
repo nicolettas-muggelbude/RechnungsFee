@@ -56,7 +56,8 @@ def test_analysiere_pfad_xml_erzeugt_temp_url(tmp_path, monkeypatch, db):
 
     token = ergebnis.temp_url.rsplit("/", 1)[-1]
     resp = get_temp_pdf(token)
-    assert resp.media_type == "application/xml"
+    # Security-Audit F2: XML nur als Text ausliefern (kein Skript im API-Ursprung)
+    assert resp.media_type == "text/plain; charset=utf-8"
 
 
 def test_temp_datei_ohne_erkanntes_format_bleibt_ohne_url(tmp_path, monkeypatch, db):
