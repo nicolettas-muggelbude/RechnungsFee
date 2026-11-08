@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.10',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Sicherheit und Technik: Alle verwendeten Bibliotheken auf aktuellen Stand gebracht – Oberfläche (React 19.3, React Router, Formularprüfung), Desktop-Rahmen Tauri samt Update-Funktion, Server (FastAPI, SQLAlchemy 2.1, uvicorn) und Build-Werkzeuge (Vite 8). Damit sind bekannte Sicherheitslücken in mehreren Paketen geschlossen.' },
+    ],
+  },
+  {
     version: 'v0.7.9',
     datum: 'November 2026',
     eintraege: [
