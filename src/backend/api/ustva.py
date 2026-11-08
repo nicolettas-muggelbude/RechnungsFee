@@ -63,6 +63,8 @@ _IG_UMSATZ_TEXT = {
     "gutschrift": "Gutschrift (§17 UStG)",
     "gutschrift_storno": "Storno der Gutschrift (§17 UStG)",
     "skonto": "Skonto (§17 UStG)",
+    "forderungsausfall": "Forderungsausfall (§17 Abs. 2 Nr. 1 UStG)",
+    "ausfall_zahlung": "Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG)",
 }
 
 
