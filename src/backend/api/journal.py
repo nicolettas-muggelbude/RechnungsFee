@@ -10,7 +10,10 @@ from typing import Optional
 
 import csv
 import hashlib
+import html
 import io
+import re
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -1069,11 +1072,23 @@ def get_beleg(eintrag_id: int, drucken: bool = Query(False), download: bool = Qu
 
     datum = eintrag.datum.strftime("%d.%m.%Y")
     ust_satz = float(eintrag.ust_satz)
-    print_script = "<script>window.addEventListener('load', () => { window.print() })</script>" if drucken else ""
+    # Security-Audit F3: Texte stammen u. a. aus Bank-Verwendungszwecken (frei wählbar für
+    # jeden Überweisenden) → immer escapen. Die CSP lässt zusätzlich nur das eigene
+    # Druck-Skript (Nonce) laufen, falls doch einmal ein Wert unescaped durchrutscht.
+    belegnr      = html.escape(eintrag.belegnr or "")
+    art          = html.escape(eintrag.art or "")
+    beschreibung = html.escape(eintrag.beschreibung or "")
+    zahlungsart  = html.escape(eintrag.zahlungsart or "")
+    befreiung    = html.escape(eintrag.steuerbefreiung_grund or "")
+    nonce = secrets.token_urlsafe(16)
+    print_script = (
+        f"<script nonce=\"{nonce}\">window.addEventListener('load', () => {{ window.print() }})</script>"
+        if drucken else ""
+    )
 
-    html = f"""<!DOCTYPE html><html><head>
+    inhalt = f"""<!DOCTYPE html><html><head>
     <meta charset="utf-8">
-    <title>Beleg {eintrag.belegnr}</title>
+    <title>Beleg {belegnr}</title>
     {print_script}
     <style>
       body {{ font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }}
@@ -1088,22 +1103,25 @@ def get_beleg(eintrag_id: int, drucken: bool = Query(False), download: bool = Qu
     </style>
     </head><body>
     <h1>RechnungsFee – Beleg</h1>
-    <div class="meta">{eintrag.belegnr} &nbsp;·&nbsp; {datum} &nbsp;·&nbsp; {eintrag.art}</div>
+    <div class="meta">{belegnr} &nbsp;·&nbsp; {datum} &nbsp;·&nbsp; {art}</div>
     <table>
-      <tr><td class="label">Beschreibung</td><td>{eintrag.beschreibung}</td></tr>
-      <tr><td class="label">Zahlungsart</td><td>{eintrag.zahlungsart}</td></tr>
+      <tr><td class="label">Beschreibung</td><td>{beschreibung}</td></tr>
+      <tr><td class="label">Zahlungsart</td><td>{zahlungsart}</td></tr>
       <tr><td class="label">Netto</td><td>{float(eintrag.netto_betrag):.2f} €</td></tr>
       <tr><td class="label">USt ({ust_satz:.0f} %)</td><td>{float(eintrag.ust_betrag):.2f} €</td></tr>
-      {"" if not eintrag.steuerbefreiung_grund else f'<tr><td class="label">Steuerbefreiung</td><td>{eintrag.steuerbefreiung_grund}</td></tr>'}
+      {"" if not befreiung else f'<tr><td class="label">Steuerbefreiung</td><td>{befreiung}</td></tr>'}
       <tr class="total"><td>Brutto</td><td>{float(eintrag.brutto_betrag):.2f} €</td></tr>
     </table>
     <div class="footer">Erstellt mit RechnungsFee &nbsp;·&nbsp; {datetime.now().strftime("%d.%m.%Y")}</div>
     </body></html>"""
 
-    headers = {}
+    headers = {
+        "Content-Security-Policy": f"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{nonce}'",
+    }
     if download:
-        headers["Content-Disposition"] = f'attachment; filename="Beleg_{eintrag.belegnr}.html"'
-    return HTMLResponse(content=html, headers=headers)
+        dateiname = re.sub(r"[^A-Za-z0-9._-]", "_", eintrag.belegnr or "beleg")
+        headers["Content-Disposition"] = f'attachment; filename="Beleg_{dateiname}.html"'
+    return HTMLResponse(content=inhalt, headers=headers)
 
 
 @router.get("/{eintrag_id}", response_model=JournalEintragResponse)
