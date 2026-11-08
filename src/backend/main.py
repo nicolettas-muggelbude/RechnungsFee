@@ -3,6 +3,7 @@ import logging.handlers
 import os
 import re
 import sqlite3
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,15 @@ from api import unternehmen, konten, kategorien, setup, journal, kunden, liefera
 
 SCHEMA_VERSION = 182
 
-app = FastAPI(title="RechnungsFee API", version="0.1.0")
+# Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
+# nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
+_IST_RELEASE = getattr(sys, "frozen", False)
+app = FastAPI(
+    title="RechnungsFee API", version="0.1.0",
+    docs_url=None if _IST_RELEASE else "/docs",
+    redoc_url=None if _IST_RELEASE else "/redoc",
+    openapi_url=None if _IST_RELEASE else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,

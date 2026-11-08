@@ -29,6 +29,12 @@ _LESEND = {"GET", "HEAD", "OPTIONS"}
 
 _OHNE_SANDBOX = ("application/json", "text/html", "application/pdf")
 
+# F10: Größenlimit per Content-Length (Uploads werden per await datei.read() komplett in den
+# Speicher gelesen). Großzügig, damit echte Belege/Backups nie scheitern.
+MAX_UPLOAD = 500 * 1024 ** 2                    # 500 MB
+MAX_UPLOAD_BACKUP = 10 * 1024 ** 3              # 10 GB – wie das Entpack-Limit beim Restore
+_BACKUP_PFADE = ("/api/backup/wiederherstellen",)
+
 
 def _hostname(host_header: str) -> str:
     """Hostname ohne Port; IPv6-Literal behält die Klammern."""
@@ -85,6 +91,13 @@ class SicherheitMiddleware:
         if scope.get("method", "GET") not in _LESEND and origin is not None and not origin_erlaubt(origin):
             await _abweisen(send, 403, "Anfrage von fremder Herkunft abgelehnt.")
             return
+
+        laenge = headers.get("content-length", "")
+        if laenge.isdigit():
+            grenze = MAX_UPLOAD_BACKUP if scope.get("path", "").startswith(_BACKUP_PFADE) else MAX_UPLOAD
+            if int(laenge) > grenze:
+                await _abweisen(send, 413, "Datei zu groß.")
+                return
 
         async def send_mit_headern(message):
             if message["type"] == "http.response.start":

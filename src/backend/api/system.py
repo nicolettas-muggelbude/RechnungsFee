@@ -7,7 +7,8 @@ import os
 import platform
 import shutil
 import subprocess
-from fastapi import APIRouter, UploadFile, File
+import sys
+from fastapi import APIRouter, HTTPException, UploadFile, File
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -17,7 +18,10 @@ async def ocr_debug(datei: UploadFile = File(...)):
     """
     Gibt den rohen OCR-Text zurück den Tesseract aus einer PDF/Bilddatei liest.
     Nur für Entwicklungszwecke – hilft beim Debuggen von Parser-Problemen.
+    Im ausgelieferten Sidecar abgeschaltet (Security-Audit F10).
     """
+    if getattr(sys, "frozen", False):
+        raise HTTPException(status_code=404)
     from utils.rechnungs_parser import _ocr_pdf, _finde_tesseract_binary
     import fitz  # pymupdf
     import pytesseract

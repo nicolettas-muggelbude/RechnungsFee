@@ -122,6 +122,61 @@ def test_eigene_csp_bleibt_erhalten():
     assert headers["content-security-policy"] == "default-src 'none'"
 
 
+# ── F10: Upload-Limit, API-Doku und Debug-Endpunkt ─────────────────────────────
+
+def _mit_laenge(laenge: int, pfad: str = "/api/x"):
+    import utils.sicherheit_middleware as sm
+    aufgerufen = []
+
+    async def app(scope, receive, send):
+        aufgerufen.append(True)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    nachrichten = []
+
+    async def send(m):
+        nachrichten.append(m)
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    scope = {"type": "http", "method": "POST", "path": pfad,
+             "headers": [(b"host", b"127.0.0.1:1"), (b"content-length", str(laenge).encode())]}
+    asyncio.run(sm.SicherheitMiddleware(app)(scope, receive, send))
+    return nachrichten[0]["status"], bool(aufgerufen)
+
+
+def test_upload_zu_gross_abgewiesen():
+    from utils.sicherheit_middleware import MAX_UPLOAD
+    assert _mit_laenge(MAX_UPLOAD + 1) == (413, False)
+    assert _mit_laenge(MAX_UPLOAD) == (200, True)
+
+
+def test_backup_restore_darf_groesser_sein():
+    from utils.sicherheit_middleware import MAX_UPLOAD, MAX_UPLOAD_BACKUP
+    assert _mit_laenge(MAX_UPLOAD * 4, "/api/backup/wiederherstellen") == (200, True)
+    assert _mit_laenge(MAX_UPLOAD_BACKUP + 1, "/api/backup/wiederherstellen") == (413, False)
+
+
+def test_ocr_debug_im_release_aus(monkeypatch):
+    import sys
+
+    from fastapi import HTTPException as HE
+
+    from api.system import ocr_debug
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    with pytest.raises(HE) as exc:
+        asyncio.run(ocr_debug(datei=None))
+    assert exc.value.status_code == 404
+
+
+def test_api_doku_nur_ohne_release():
+    # Testlauf ist kein PyInstaller-Build → Doku an; im Release (sys.frozen) aus
+    assert main._IST_RELEASE is False
+    assert main.app.docs_url == "/docs"
+
+
 def test_middleware_ist_in_der_app_registriert():
     assert any(m.cls is SicherheitMiddleware for m in main.app.user_middleware)
 
