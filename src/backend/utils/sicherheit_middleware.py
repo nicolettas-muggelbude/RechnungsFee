@@ -1,5 +1,5 @@
 """
-Sicherheits-Middleware für die lokale API (Security-Audit Stefan Lindecke, 2026-11-07).
+Sicherheits-Middleware für die lokale API (Security-Audit lindesbs, 2026-11-07).
 
 F4 Teil 1 – Host-Prüfung gegen DNS-Rebinding: Eine Angreifer-Domain, die per DNS plötzlich
   auf 127.0.0.1 zeigt, gilt im Browser als „gleicher Ursprung“ und könnte alle Antworten
