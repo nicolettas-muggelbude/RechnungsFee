@@ -1492,10 +1492,20 @@ def _x(elem, xpath: str, ns: dict) -> Optional[str]:
 # ZUGFeRD / Factur-X / XRechnung – CII-Format (Cross-Industry Invoice)
 # ---------------------------------------------------------------------------
 
+def _xml_parser():
+    """Gehärteter lxml-Parser für fremde E-Rechnungen (Security-Audit F9).
+
+    lxml löst seit Version 5 keine externen Entitäten mehr auf – darauf soll sich die Sicherheit
+    aber nicht allein verlassen: keine Entitäten, kein Netzwerk, keine DTD, kein huge_tree
+    (Entity-Expansion/„Billion Laughs“, XXE auf lokale Dateien)."""
+    from lxml import etree
+    return etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
+
+
 def _parse_cii_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     from lxml import etree
 
-    root = etree.fromstring(xml_bytes)
+    root = etree.fromstring(xml_bytes, parser=_xml_parser())
     ns = {
         "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
         "ram": "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
@@ -1681,7 +1691,7 @@ def _zugferd1_zu_cii(root) -> bytes:
 def _parse_ubl_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     from lxml import etree
 
-    root = etree.fromstring(xml_bytes)
+    root = etree.fromstring(xml_bytes, parser=_xml_parser())
     ns = {
         "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
         "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
@@ -1851,7 +1861,7 @@ def _analysiere_xml(xml_bytes: bytes) -> AnalyseErgebnis:
     """Erkennt CII vs. UBL anhand des Root-Elements."""
     try:
         from lxml import etree
-        root = etree.fromstring(xml_bytes)
+        root = etree.fromstring(xml_bytes, parser=_xml_parser())
         tag = root.tag or ""
         if "CrossIndustryInvoice" in tag:
             return _parse_cii_xml(xml_bytes)
