@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 import api.rechnungen as rechnungen_api
 import api.ustva as ustva_api
+from api.bank_import import _buche_pfad_a
 from api.journal import create_eintrag
 from api.rechnungen import (
     GutschriftVerrechnenRequest, ZahlungKorrigieren, create_gutschrift, create_rechnung, ersatzrechnung_erstellen,
@@ -31,7 +32,10 @@ from api.schemas_rechnungen import BarZahlungCreate, RechnungCreate, Rechnungspo
 from api.ustva import _berechne_kz, _berechne_kz_fuer, jahresumsatzsteuer, ustva_posten
 from api.zm import _hat_ig_eintraege_gesamt, zm_berechnen
 from database.connection import Base
-from database.models import Journaleintrag, Kategorie, Kunde, Rechnung, Unternehmen
+from database.models import (
+    BankImport, BankTemplate, BankTransaktion, Journaleintrag, Kategorie, Konto, Kunde, Rechnung,
+    Unternehmen,
+)
 from utils import zm_meldezeitraum
 
 STICHTAG = date(2025, 1, 1)
@@ -731,3 +735,354 @@ def test_storno_alter_und_neuer_rechnung_im_selben_monat(db, heute):
     assert _kz(db, 2025, 1, "kz_41") == Decimal("400.00")
     assert _kz(db, 2025, 3, "kz_41") == Decimal("-400.00")
     assert _zm(db, "2025-Q1") == []
+
+
+# ---------------------------------------------------------------------------
+# Forderungsausfall nach §17 Abs. 2 Nr. 1 UStG (X48-X65)
+#
+# forderungsausfall_buchen() datiert ausfall_datum auf "heute": minus im Ausfallmonat, was
+# gemeldet und noch nicht bezahlt war; eine spätere Zahlung meldet plus in ihrem Monat (Satz 2).
+# ---------------------------------------------------------------------------
+
+def _ausfall(db, rechnung_id):
+    forderungsausfall_buchen(rechnung_id, db)
+
+
+def _summe(db, jahr, nr="kz_41"):
+    return sum((_kz(db, jahr, m, nr) for m in range(1, 13)), NULL)
+
+
+def _quellen_gleich(db, jahr=2025):
+    """ZM und UStVA KZ 41/21 aus derselben Quelle - in jedem Quartal gleich."""
+    for q in range(1, 5):
+        kz, _ = _berechne_kz(date(jahr, 3 * q - 2, 1), zm_meldezeitraum._monatsende(jahr, 3 * q), db)
+        assert zm_berechnen(f"{jahr}-Q{q}", db=db).gesamt == kz["kz_41"] + kz["kz_21"]
+
+
+def test_x48_ausfall_unbezahlte_ig_lieferung(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    r = db.get(Rechnung, rid)
+    assert r.zahlungsstatus == "uneinbringlich"
+    assert r.ausfall_datum == date(2025, 5, 20)
+    assert _kz(db, 2025, 1, "kz_41") == T
+    assert _kz(db, 2025, 5, "kz_41") == -T
+    assert _texte(db, 2025, 5, "kz_41") == [("Forderungsausfall (§17 Abs. 2 Nr. 1 UStG)", -T)]
+    assert _zm(db, "2025-Q1") == [(UID, "L", T)]
+    assert _zm(db, "2025-Q2") == [(UID, "L", -T)]
+    _quellen_gleich(db)
+
+
+def test_x49_ausfall_eu_dienstleistung(db, heute):
+    rid = _rechnung(db, "S", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    assert _kz(db, 2025, 1, "kz_21") == T
+    assert _kz(db, 2025, 5, "kz_21") == -T
+    assert _kz(db, 2025, 5, "kz_41") == NULL
+    assert _zm(db, "2025-Q1") == [(UID, "S", T)]
+    assert _zm(db, "2025-Q2") == [(UID, "S", -T)]
+    _quellen_gleich(db)
+
+
+def test_x50_ausfall_nach_teilzahlung_nur_der_offene_betrag(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    _zahlung(db, rid, date(2025, 2, 10), betrag="400.00")
+    heute(date(2025, 6, 10))
+    _ausfall(db, rid)
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 6, "kz_41") == Decimal("-600.00")
+    assert _zm(db, "2025-Q2") == [(UID, "L", Decimal("-600.00"))]
+    assert _summe(db, 2025) == Decimal("400.00")
+    _quellen_gleich(db)
+
+
+def test_x51_teilzahlung_nach_ausfall_meldet_plus(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15), betrag="300.00")
+    r = db.get(Rechnung, rid)
+    # bleibt ausgebucht - ein zweiter Ausfall würde das Minus doppelt melden
+    assert r.zahlungsstatus == "uneinbringlich"
+    assert r.ausfall_datum == date(2025, 5, 20)
+    with pytest.raises(HTTPException) as exc:
+        _ausfall(db, rid)
+    assert exc.value.status_code == 409
+    assert _kz(db, 2025, 9, "kz_41") == Decimal("300.00")
+    assert _texte(db, 2025, 9, "kz_41") == [
+        ("Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG)", Decimal("300.00"))]
+    assert _zm(db, "2025-Q3") == [(UID, "L", Decimal("300.00"))]
+    assert _summe(db, 2025) == Decimal("300.00")
+    _quellen_gleich(db)
+
+
+def test_x52_vollstaendige_zahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15))
+    assert db.get(Rechnung, rid).zahlungsstatus == "bezahlt"
+    assert _kz(db, 2025, 5, "kz_41") == -T
+    assert _kz(db, 2025, 9, "kz_41") == T
+    assert _summe(db, 2025) == T
+    _quellen_gleich(db)
+
+
+def test_x53_korrektur_einer_zahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15), betrag="300.00")
+    zid = db.query(Journaleintrag).filter(Journaleintrag.rechnung_id == rid).one().id
+    zahlung_korrigieren(rid, zid, ZahlungKorrigieren(neues_datum=date(2025, 10, 15),
+                                                     neuer_betrag=Decimal("250.00")), db)
+    # Storno der Zahlung auf ihrem Originaldatum (#320), neue Zahlung in ihrem Monat
+    assert _kz(db, 2025, 9, "kz_41") == NULL
+    assert _kz(db, 2025, 10, "kz_41") == Decimal("250.00")
+    assert _summe(db, 2025) == Decimal("250.00")
+    assert db.get(Rechnung, rid).zahlungsstatus == "uneinbringlich"
+    _quellen_gleich(db)
+
+
+def test_x54_storno_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    heute(date(2025, 7, 10))
+    _storno(db, rid)
+    # der Ausfall hat schon alles berichtigt - das Storno meldet nichts mehr
+    assert _kz(db, 2025, 5, "kz_41") == -T
+    assert _kz(db, 2025, 7, "kz_41") == NULL
+    assert _summe(db, 2025) == NULL
+    _quellen_gleich(db)
+
+
+def test_x54_storno_nach_zahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15), betrag="300.00")
+    heute(date(2025, 10, 10))
+    _storno(db, rid)
+    assert _kz(db, 2025, 9, "kz_41") == Decimal("300.00")
+    assert _kz(db, 2025, 10, "kz_41") == Decimal("-300.00")
+    assert _summe(db, 2025) == NULL
+    _quellen_gleich(db)
+
+
+def test_x55_ausfall_alter_rechnung_nur_datum(db, heute):
+    rid = _rechnung(db, "L", date(2024, 11, 15))
+    heute(date(2025, 2, 10))
+    _ausfall(db, rid)
+    assert db.get(Rechnung, rid).ausfall_datum == date(2025, 2, 10)
+    for jahr, monat in [(2024, 11), (2025, 2)]:
+        assert _kz(db, jahr, monat, "kz_41") == NULL
+    assert _zm(db, "2025-Q1") == []
+
+
+def test_x56_zahlung_nach_ausfall_alter_rechnung_beim_zahlungsdatum(db, heute):
+    rid = _rechnung(db, "L", date(2024, 11, 15))
+    heute(date(2025, 2, 10))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 3, 10), betrag="300.00")
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 3, "kz_41") == Decimal("300.00")
+    assert _zm(db, "2025-Q1") == [(UID, "L", Decimal("300.00"))]
+
+
+def test_x57_nach_skonto_bezahlt_kein_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    _zahlung(db, rid, date(2025, 2, 10), betrag="980.00", skonto="20.00")
+    assert db.get(Rechnung, rid).zahlungsstatus == "bezahlt"
+    heute(date(2025, 5, 20))
+    with pytest.raises(HTTPException) as exc:
+        _ausfall(db, rid)
+    assert exc.value.status_code == 409
+    assert db.get(Rechnung, rid).ausfall_datum is None
+    assert _kz(db, 2025, 5, "kz_41") == NULL
+
+
+def test_x58_ausfall_der_ersatzrechnung_nicht_vor_ihrem_meldedatum(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15), leistung_bis=date(2025, 1, 10))
+    heute(date(2025, 3, 10))
+    _storno(db, rid)
+    eid = ersatzrechnung_erstellen(rid, db).id
+    finalisiere_rechnung(eid, db)
+    _ausfall(db, eid)
+    # Ausfalldatum vor dem Meldedatum der Ersatzrechnung (Storno des Originals im März)
+    db.get(Rechnung, eid).ausfall_datum = date(2025, 2, 20)
+    db.commit()
+    assert _kz(db, 2025, 2, "kz_41") == NULL
+    assert _kz(db, 2025, 3, "kz_41") == -T  # Storno -T, Ersatz +T, Ausfall -T
+    assert _summe(db, 2025) == NULL
+    _quellen_gleich(db)
+
+
+def test_x59_ausfall_eines_abschlags_meldet_nichts(db, heute):
+    aid = _abschlag(db, date(2025, 2, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, aid)
+    assert _summe(db, 2025) == NULL
+    assert _zm(db, "2025-Q2") == []
+
+
+def test_x60_ausfall_der_schlussrechnung_bei_bezahltem_abschlag(db, heute):
+    aid = _abschlag(db, date(2025, 2, 15))
+    _zahlung(db, aid, date(2025, 2, 20))
+    sid = _schlussrechnung(db, date(2025, 5, 15), aid, leistung_bis=date(2025, 4, 30))
+    heute(date(2025, 7, 10))
+    _ausfall(db, sid)
+    # offen ist nur die Schlussrechnung (1.000), der Abschlag ist bezahlt
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("1500.00")
+    assert _kz(db, 2025, 7, "kz_41") == -T
+    assert _summe(db, 2025) == Decimal("500.00")
+    _quellen_gleich(db)
+
+
+def test_x61_gutschrift_und_ihre_verrechnung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 12))
+    gid = _gutschrift(db, rid)
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    heute(date(2025, 6, 10))
+    gutschrift_verrechnen(gid, GutschriftVerrechnenRequest(rechnung_id=rid), db)
+    # die Verrechnung ist keine Zahlung - die Gutschrift hat schon selbst gemeldet
+    assert _texte(db, 2025, 5, "kz_41") == [
+        ("Forderungsausfall (§17 Abs. 2 Nr. 1 UStG)", Decimal("-800.00")),
+        ("Gutschrift (§17 UStG)", Decimal("-200.00")),
+    ]
+    assert _kz(db, 2025, 6, "kz_41") == NULL
+    assert db.get(Rechnung, rid).zahlungsstatus == "uneinbringlich"
+    assert _summe(db, 2025) == NULL
+    _quellen_gleich(db)
+
+
+def test_x62_verrechnung_mit_gutschrift_einer_anderen_rechnung_vor_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    zweite = _rechnung(db, "L", date(2025, 2, 15))
+    heute(date(2025, 3, 12))
+    gid = _gutschrift(db, rid, netto="300.00")
+    gutschrift_verrechnen(gid, GutschriftVerrechnenRequest(rechnung_id=zweite), db)
+    heute(date(2025, 5, 20))
+    _ausfall(db, zweite)
+    # die Gutschrift gehört zur ersten Rechnung - an der zweiten ist die Verrechnung eine Zahlung
+    assert _texte(db, 2025, 5, "kz_41") == [("Forderungsausfall (§17 Abs. 2 Nr. 1 UStG)", Decimal("-700.00"))]
+    assert _kz(db, 2025, 3, "kz_41") == Decimal("-300.00")
+    assert _summe(db, 2025) == T
+    _quellen_gleich(db)
+
+
+def test_x63_verrechnung_mit_gutschrift_einer_anderen_rechnung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    zweite = _rechnung(db, "L", date(2025, 2, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, zweite)
+    heute(date(2025, 6, 10))
+    gid = _gutschrift(db, rid, netto="300.00")
+    gutschrift_verrechnen(gid, GutschriftVerrechnenRequest(rechnung_id=zweite), db)
+    assert _kz(db, 2025, 5, "kz_41") == -T
+    assert _texte(db, 2025, 6, "kz_41") == [
+        ("Gutschrift (§17 UStG)", Decimal("-300.00")),
+        ("Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG)", Decimal("300.00")),
+    ]
+    assert _summe(db, 2025) == T
+    _quellen_gleich(db)
+
+
+def test_x64_skonto_bei_zahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15), betrag="980.00", skonto="20.00")
+    # nach dem Ausfall steht die Rechnung auf 0 - gemeldet wird nur, was gezahlt wurde
+    assert db.get(Rechnung, rid).zahlungsstatus == "bezahlt"
+    assert _texte(db, 2025, 9, "kz_41") == [
+        ("Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG)", Decimal("980.00"))]
+    assert _summe(db, 2025) == Decimal("980.00")
+    _quellen_gleich(db)
+
+
+def test_x65_gutschrift_und_storno_einer_gutschrift_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 3, 12))
+    alte = _gutschrift(db, rid)
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    heute(date(2025, 6, 10))
+    _gutschrift(db, rid, netto="100.00")
+    _storno(db, alte)
+    # beides mindert bzw. erhöht eine Forderung, die schon auf 0 steht - nichts zu melden
+    assert _kz(db, 2025, 3, "kz_41") == Decimal("-200.00")
+    assert _kz(db, 2025, 5, "kz_41") == Decimal("-800.00")
+    assert _kz(db, 2025, 6, "kz_41") == NULL
+    assert _summe(db, 2025) == NULL
+    _quellen_gleich(db)
+
+
+def test_x66_gutschrift_nach_voller_zahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15))
+    heute(date(2025, 10, 10))
+    gid = _gutschrift(db, rid)
+    heute(date(2025, 11, 10))
+    _storno(db, gid)
+    # die Zahlung hat die Meldung wieder auf 1.000 gebracht - die Gutschrift mindert sie, ihr Storno hebt sie
+    assert _kz(db, 2025, 9, "kz_41") == T
+    assert _texte(db, 2025, 10, "kz_41") == [("Gutschrift (§17 UStG)", Decimal("-200.00"))]
+    assert _kz(db, 2025, 11, "kz_41") == Decimal("200.00")
+    assert _summe(db, 2025) == T
+    _quellen_gleich(db)
+
+
+def test_x66_gutschrift_nach_teilzahlung_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    _zahlung(db, rid, date(2025, 9, 15), betrag="800.00")
+    heute(date(2025, 10, 10))
+    _gutschrift(db, rid)
+    # Forderung 800, gezahlt 800 - gemeldet bleibt, was gezahlt ist
+    assert _kz(db, 2025, 9, "kz_41") == Decimal("800.00")
+    assert _kz(db, 2025, 10, "kz_41") == NULL
+    assert _summe(db, 2025) == Decimal("800.00")
+    _quellen_gleich(db)
+
+
+def test_x67_ausfall_vor_dem_leistungsdatum(db, heute):
+    rid = _rechnung(db, "S", date(2025, 1, 15), leistung_bis=date(2025, 3, 20))
+    heute(date(2025, 2, 10))
+    _ausfall(db, rid)
+    # gemeldet wird im Monat der Leistung - der Ausfall davor mindert dort, nicht im Februar
+    assert _kz(db, 2025, 2, "kz_21") == NULL
+    assert ("Forderungsausfall (§17 Abs. 2 Nr. 1 UStG)", -T) in _texte(db, 2025, 3, "kz_21")
+    assert _kz(db, 2025, 3, "kz_21") == NULL
+    assert _summe(db, 2025, "kz_21") == NULL
+    _quellen_gleich(db)
+
+
+def test_x68_bankimport_nach_ausfall(db, heute):
+    rid = _rechnung(db, "L", date(2025, 1, 15))
+    heute(date(2025, 5, 20))
+    _ausfall(db, rid)
+    konto = Konto(name="Testkonto", anbieter="Testbank")
+    db.add(konto)
+    db.add(BankTemplate(id="test-tmpl", name="Test", bank="Testbank", format="Standard", column_mapping="{}"))
+    db.flush()
+    imp = BankImport(konto_id=konto.id, template_id="test-tmpl", dateiname="test.csv")
+    db.add(imp)
+    db.flush()
+    tx = BankTransaktion(konto_id=konto.id, import_id=imp.id, datum=date(2025, 9, 15), betrag=Decimal("300.00"))
+    db.add(tx)
+    db.flush()
+    _buche_pfad_a(db, tx, db.get(Rechnung, rid))
+    db.commit()
+    assert db.get(Rechnung, rid).zahlungsstatus == "uneinbringlich"
+    assert _texte(db, 2025, 9, "kz_41") == [
+        ("Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG)", Decimal("300.00"))]
+    assert _summe(db, 2025) == Decimal("300.00")
+    _quellen_gleich(db)

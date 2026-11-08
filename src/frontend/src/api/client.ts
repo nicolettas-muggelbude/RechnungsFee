@@ -1464,6 +1464,7 @@ export type Rechnung = {
   storniert: boolean
   storno_grund: string | null
   storno_datum: string | null
+  ausfall_datum: string | null  // Forderungsausfall (uneinbringlich), Issue #497
   storno_rechnungsnummer: string | null
   ersatzrechnung_id: number | null
   ersatzrechnung_nr: string | null
