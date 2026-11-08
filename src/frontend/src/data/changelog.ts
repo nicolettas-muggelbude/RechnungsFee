@@ -42,7 +42,7 @@ export const CHANGELOG: ChangelogVersion[] = [
       { typ: 'fix', text: 'Bank-Import: Eine ohne Rechnungsbezug als Splitbuchung gebuchte Transaktion (z. B. Darlehenszinsen und Tilgung in einer Abbuchung) blieb auf „Zuordnung nötig“, obwohl die Buchungen im Journal standen. Danke an melvinionair (Issue #506).' },
       { typ: 'fix', text: 'UStVA: „Speichern“ einer Voranmeldung schlug immer fehl – der Zeitraum wurde nicht mitgeschickt. Dadurch fehlten gespeicherte Voranmeldungen auch bei der Anrechnung der Vorauszahlungen in der Jahres-USt.' },
       { typ: 'fix', text: 'DATEV-Export: Die Anzahl der Buchungen ohne Sachkonto und der mitexportierten Belege wurde in der installierten App nie angezeigt (nur im Entwicklungsmodus).' },
-      { typ: 'verbesserung', text: 'Sicherheitsupdates: Pillow 13.0.0 (Bildverarbeitung für Belege, Logo, Unterschrift und Texterkennung) und die TLS-Bibliotheken der Update-Prüfung (rustls, rustls-webpki, webpki-root-certs).' },
+      { typ: 'verbesserung', text: 'Sicherheitsupdates: Pillow 13.0.0 (Bildverarbeitung für Belege, Logo, Unterschrift und Texterkennung) die TLS-Bibliotheken der Update-Prüfung (rustls, rustls-webpki, webpki-root-certs) sowie zod 4.6.7 (Formularprüfung) und Vite 7.3.7.' },
     ],
   },
   {
