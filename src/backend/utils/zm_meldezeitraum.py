@@ -34,8 +34,8 @@ from sqlalchemy.orm import Session, selectinload
 from database.models import Journaleintrag, Rechnung
 from utils.konten import ist_ig_lieferung_konto
 
-# TODO vor Release prüfen/anpassen: Beginn eines Meldezeitraums, mindestens 4-6 Wochen nach dem
-# geplanten Release-Datum, damit realistisch alle Nutzer das Update vorher erhalten haben.
+# Beginn eines Meldezeitraums, mindestens 4-6 Wochen nach dem Release, damit realistisch alle
+# Nutzer das Update vorher erhalten haben. Geprüft beim Release v0.7.8 (08.11.2026): knapp 8 Wochen.
 CUTOVER_DATUM = date(2027, 1, 1)
 
 ZERO = Decimal("0.00")

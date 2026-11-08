@@ -98,7 +98,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), offen nur der Forderungsausfall; siehe Abschnitt ELSTER-Export unten.
 - [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
   buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
   Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
@@ -251,7 +251,7 @@ Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
 Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
 
 - [x] **Stufe 1 – Datei für den Upload in Mein ELSTER** (keine Registrierung, kein Zertifikat) – umgesetzt von herrschmidt (PR #460), Kennzahlen-Fehler davor behoben (#456 ZM, #457 KZ 43/87, #458 KZ 41, #459 §13b/Kleinunternehmer):
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, nach v0.7.4, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, v0.7.8 mit PR #498 von 5eBeKs bis auf den Forderungsausfall, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
   - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung – umgesetzt
   - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum) – umgesetzt
   - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle (`utils/zm_meldezeitraum.py`); Abschlagsrechnungen melden 0, die Schlussrechnung die volle Leistung (#419) – umgesetzt
