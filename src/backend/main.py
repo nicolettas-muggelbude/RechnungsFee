@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 182
+SCHEMA_VERSION = 183
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -4133,6 +4133,17 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 182"))
             conn.commit()
             print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
+
+    if version < 183:
+        with engine.connect() as conn:
+            # Issue #497: Datum des Forderungsausfalls - Korrektur nach §17 Abs. 2 Nr. 1 UStG in
+            # ZM und UStVA KZ 41/21. Bereits ausgebuchte Rechnungen bleiben ohne Datum (NULL).
+            _r183 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r183 and "ausfall_datum" not in _r183:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN ausfall_datum DATE"))
+            conn.execute(text("PRAGMA user_version = 183"))
+            conn.commit()
+            print("[Migration] Schema auf Version 183 (Issue #497: rechnungen.ausfall_datum)")
 
 
 def _migrate_kategorien() -> None:

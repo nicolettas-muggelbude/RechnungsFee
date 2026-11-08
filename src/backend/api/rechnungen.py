@@ -732,6 +732,12 @@ def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
                     _auftrag.auftrag_status = "abgeschlossen"
         except Exception:
             pass
+    elif rechnung.ausfall_datum is not None:
+        # Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG): bleibt ausgebucht, bis
+        # vollständig bezahlt - sonst ließe sich die Forderung ein zweites Mal ausbuchen und der
+        # Ausfall stünde doppelt in ZM und KZ 41/21 (Issue #497)
+        rechnung.zahlungsstatus = "uneinbringlich"
+        rechnung.bezahlt = False
     elif abs_bezahlt > Decimal("0.004"):
         rechnung.zahlungsstatus = "teilweise"
         rechnung.bezahlt = False
@@ -3991,11 +3997,13 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{rechnung_id}/forderungsausfall", response_model=RechnungResponse)
 def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
-    """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich.
-    Reine Status-Änderung, keine Journalbuchung: Unter Ist-Versteuerung (§20 UStG, die
-    einzige von RechnungsFee unterstützte Versteuerungsart) entsteht USt erst bei
-    tatsächlichem Zahlungseingang – für den nie gezahlten Restbetrag wurde nie USt fällig,
-    es gibt also nichts zu korrigieren (Issue #252)."""
+    """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich (ausfall_datum = heute).
+    Keine Journalbuchung: Unter Ist-Versteuerung (§20 UStG, die einzige von RechnungsFee
+    unterstützte Versteuerungsart) entsteht USt erst bei tatsächlichem Zahlungseingang – für den
+    nie gezahlten Restbetrag wurde nie USt fällig, KZ 81/86 sind nicht zu korrigieren (Issue #252).
+    Anders bei ig. Lieferungen und EU-Dienstleistungen ab dem Stichtag: sie melden in ZM und
+    KZ 41/21 nach der Rechnung (Issue #497), der Ausfall mindert die Meldung im Ausfallmonat
+    (§17 Abs. 2 Nr. 1 UStG, utils/zm_meldezeitraum.py)."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -4015,6 +4023,7 @@ def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Forderung ist bereits ausgebucht.")
 
     rechnung.zahlungsstatus = "uneinbringlich"
+    rechnung.ausfall_datum = date.today()
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)

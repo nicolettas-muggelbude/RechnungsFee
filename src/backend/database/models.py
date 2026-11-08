@@ -806,6 +806,9 @@ class Rechnung(Base):
     mahnstufe_aktuell: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     storno_grund: Mapped[str | None] = mapped_column(String(500))
     storno_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Tag des Forderungsausfalls (zahlungsstatus "uneinbringlich", §17 Abs. 2 Nr. 1 UStG) - Monat
+    # der Korrektur in ZM und UStVA KZ 41/21 (Issue #497, utils/zm_meldezeitraum.py)
+    ausfall_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     storno_rechnungsnummer: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ausgegeben_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

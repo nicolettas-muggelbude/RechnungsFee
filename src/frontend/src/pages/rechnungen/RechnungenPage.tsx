@@ -1854,6 +1854,12 @@ function RechnungDetail({
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Restbetrag: <strong>{formatEuro(Math.abs(parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)))}</strong> – wird ohne Buchung als uneinbringlich markiert (Ist-Versteuerung: nie gezahltes Geld wurde nie versteuert)
             </p>
+            {/* Stichtag = CUTOVER_DATUM in utils/zm_meldezeitraum.py (Issue #497) */}
+            {(rechnung.ist_eu_lieferung || rechnung.ist_reverse_charge) && rechnung.dokument_typ !== 'Abschlagsrechnung' && rechnung.datum >= '2027-01-01' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Zusammenfassende Meldung und UStVA (Kennzahl 41/21) werden im Monat des Ausfalls um den offenen Betrag berichtigt (§17 Abs. 2 Nr. 1 UStG); eine spätere Zahlung meldet wieder in ihrem Monat.
+              </p>
+            )}
             <div className="flex gap-2 pt-0.5">
               <button
                 onClick={() => forderungsausfallMutation.mutate()}
