@@ -947,7 +947,9 @@ def get_temp_pdf(token: str):
     import re
     if not re.fullmatch(r"[0-9a-f\-]{36}", token):
         raise HTTPException(status_code=404)
-    for ext, media_type in ((".pdf", "application/pdf"), (".xml", "application/xml")):
+    # XML als text/plain (Security-Audit F2): als application/xml würde das Webview-Fenster
+    # eingebettete XHTML-Skripte (<h:script>) einer fremden E-Rechnung im API-Ursprung ausführen.
+    for ext, media_type in ((".pdf", "application/pdf"), (".xml", "text/plain; charset=utf-8")):
         pfad = TEMP_DIR / f"{token}{ext}"
         if pfad.exists():
             return FileResponse(pfad, media_type=media_type, content_disposition_type="inline")

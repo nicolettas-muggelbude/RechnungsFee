@@ -535,9 +535,11 @@ def postfach_datei(eintrag_id: int, db: Session = Depends(get_db)):
     e = _eintrag(eintrag_id, db)
     if not e.datei_pfad or not (UPLOADS / e.datei_pfad).exists():
         raise HTTPException(404, "Datei nicht mehr vorhanden.")
-    # inline: PDFs werden per openUrl() im WebviewWindow angezeigt (CLAUDE.md)
+    # inline: PDFs werden per openUrl() im WebviewWindow angezeigt (CLAUDE.md).
+    # XML aus fremden Mails nur als Text (Security-Audit F2, sonst laufen <h:script>-Elemente).
+    media_type = "text/plain; charset=utf-8" if e.mime_type in _MIME_XML else e.mime_type
     return FileResponse(
-        UPLOADS / e.datei_pfad, media_type=e.mime_type,
+        UPLOADS / e.datei_pfad, media_type=media_type,
         headers={"Content-Disposition": f'inline; filename="{Path(e.datei_pfad).name}"'},
     )
 

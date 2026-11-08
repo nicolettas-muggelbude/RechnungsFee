@@ -3,6 +3,7 @@ import logging.handlers
 import os
 import re
 import sqlite3
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,15 @@ from api import unternehmen, konten, kategorien, setup, journal, kunden, liefera
 
 SCHEMA_VERSION = 182
 
-app = FastAPI(title="RechnungsFee API", version="0.1.0")
+# Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
+# nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
+_IST_RELEASE = getattr(sys, "frozen", False)
+app = FastAPI(
+    title="RechnungsFee API", version="0.1.0",
+    docs_url=None if _IST_RELEASE else "/docs",
+    redoc_url=None if _IST_RELEASE else "/redoc",
+    openapi_url=None if _IST_RELEASE else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +71,11 @@ app.add_middleware(
 # Issue #476: angehängten Dateinamen ("/_datei/<name>") vor dem Routing entfernen
 from utils.pdf_dateiname_pfad import PdfDateinameMiddleware  # noqa: E402
 app.add_middleware(PdfDateinameMiddleware)
+
+# Security-Audit F2/F4/F7: Host- und Origin-Prüfung, nosniff + CSP für Datei-Antworten.
+# Zuletzt hinzugefügt = äußerste Schicht → fremde Requests werden vor allem anderen abgewiesen.
+from utils.sicherheit_middleware import SicherheitMiddleware  # noqa: E402
+app.add_middleware(SicherheitMiddleware)
 
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
@@ -349,11 +363,68 @@ async def backup_wiederherstellen(
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             if "rechnungsfee.db" not in zf.namelist():
                 raise HTTPException(status_code=400, detail="Ungültiges Backup: rechnungsfee.db nicht gefunden")
+            _pruefe_backup_eintraege(zf, APP_DATA_DIR / "uploads")
+            _pruefe_backup_datenbank(zf)
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Ungültige ZIP-Datei (oder falsches Passwort)")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Ungültiges Backup: {e}")
 
     RESTORE_MARKER_ZIP.write_bytes(content)
     return {"ok": True, "neustart_erforderlich": True}
+
+
+# Obergrenzen gegen ZIP-Bomben (Security-Audit F1). Großzügig, da ein Backup alle Belege enthält.
+_BACKUP_MAX_EINTRAEGE = 100_000
+_BACKUP_MAX_GROESSE   = 10 * 1024 ** 3   # 10 GB entpackt
+
+
+def _pruefe_backup_eintraege(zf, uploads_dir: Path) -> list[tuple[str, Path]]:
+    """Prüft alle Einträge eines Backup-ZIPs und liefert (Name, Zielpfad) der Belege.
+
+    Security-Audit F1 (ZIP-Slip): Ein Eintrag wie „uploads/../../.config/autostart/x.desktop“
+    oder „uploads//absoluter/pfad“ würde beim Entpacken außerhalb des Uploads-Ordners
+    schreiben. Jeder Zielpfad muss aufgelöst innerhalb von uploads_dir liegen – sonst wird
+    das ganze Backup abgelehnt (ValueError), nicht nur der Eintrag übersprungen.
+    """
+    infos = zf.infolist()
+    if len(infos) > _BACKUP_MAX_EINTRAEGE:
+        raise ValueError(f"zu viele Einträge ({len(infos)})")
+    if sum(i.file_size for i in infos) > _BACKUP_MAX_GROESSE:
+        raise ValueError("entpackte Größe überschreitet 10 GB")
+
+    basis = uploads_dir.resolve()
+    ziele: list[tuple[str, Path]] = []
+    for info in infos:
+        name = info.filename
+        if not name.startswith("uploads/") or name.endswith("/"):
+            continue
+        # Windows-Backups koennen "\" statt "/" in Unterordnern enthalten
+        # (Path.__str__ von WindowsPath) – hier unabhaengig vom Erstellungs-OS normalisieren.
+        rel = name[len("uploads/"):].replace("\\", "/")
+        ziel = (basis / rel).resolve()
+        if ziel == basis or not ziel.is_relative_to(basis):
+            raise ValueError(f"unzulässiger Pfad {name!r}")
+        ziele.append((name, ziel))
+    return ziele
+
+
+def _pruefe_backup_datenbank(zf) -> None:
+    """Prüft rechnungsfee.db im Backup-ZIP mit PRAGMA integrity_check (Security-Audit F1)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        pfad = Path(tmp) / "pruefung.db"
+        pfad.write_bytes(zf.read("rechnungsfee.db"))
+        try:
+            con = sqlite3.connect(str(pfad))
+            try:
+                ergebnis = con.execute("PRAGMA integrity_check").fetchone()
+            finally:
+                con.close()
+        except sqlite3.DatabaseError:
+            raise ValueError("rechnungsfee.db ist keine gültige Datenbank")
+        if not ergebnis or ergebnis[0] != "ok":
+            raise ValueError("rechnungsfee.db ist beschädigt")
 
 
 def _ist_systemlaufwerk(pfad: str) -> bool:
@@ -420,19 +491,17 @@ def _prüfe_wiederherstellung() -> None:
         if marker_zip.exists():
             with zipfile.ZipFile(marker_zip, "r") as zf:
                 names = zf.namelist()
+                uploads_dir = APP_DATA_DIR / "uploads"
+                # Erneut prüfen, BEVOR irgendetwas ersetzt wird: der Marker liegt auf der Platte
+                # und könnte nach dem Upload ausgetauscht worden sein (Security-Audit F1).
+                upload_entries = _pruefe_backup_eintraege(zf, uploads_dir)
                 if "rechnungsfee.db" in names:
                     zf.extract("rechnungsfee.db", APP_DATA_DIR)
                     print("[Wiederherstellung] Datenbank (ZIP) wiederhergestellt")
-                upload_entries = [n for n in names if n.startswith("uploads/") and not n.endswith("/")]
                 if upload_entries:
-                    uploads_dir = APP_DATA_DIR / "uploads"
                     if uploads_dir.exists():
                         shutil.rmtree(uploads_dir)
-                    for name in upload_entries:
-                        # Windows-Backups koennen "\" statt "/" in Unterordnern enthalten
-                        # (Path.__str__ von WindowsPath) – hier unabhaengig vom Erstellungs-OS normalisieren.
-                        rel = name[len("uploads/"):].replace("\\", "/")
-                        ziel = uploads_dir / rel
+                    for name, ziel in upload_entries:
                         ziel.parent.mkdir(parents=True, exist_ok=True)
                         ziel.write_bytes(zf.read(name))
                     print(f"[Wiederherstellung] {len(upload_entries)} Belege wiederhergestellt")

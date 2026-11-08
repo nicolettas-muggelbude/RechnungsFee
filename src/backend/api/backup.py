@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -78,9 +79,15 @@ class LokalWiederherstellenBody(BaseModel):
 @router.post("/wiederherstellen-lokal")
 def backup_wiederherstellen_lokal(body: LokalWiederherstellenBody):
     """Kopiert einen lokalen DB-Snapshot als restore_pending.db – wird beim Neustart eingespielt."""
-    if not body.dateiname.startswith("rechnungsfee_") or not body.dateiname.endswith(".db"):
+    # Security-Audit F8: Präfix + Endung allein ließen „rechnungsfee_\..\..\x.db“ durch
+    # (Windows löst „..“ rein textuell auf) → exaktes Namensmuster aus _backup_datenbank()
+    # und zusätzlich der aufgelöste Pfad muss direkt im backups-Ordner liegen.
+    if not re.fullmatch(r"rechnungsfee_\d{8}_\d{6}\.db", body.dateiname):
         raise HTTPException(400, "Ungültiger Dateiname")
-    backup_pfad = APP_DATA_DIR / "backups" / body.dateiname
+    backups_dir = (APP_DATA_DIR / "backups").resolve()
+    backup_pfad = (backups_dir / body.dateiname).resolve()
+    if backup_pfad.parent != backups_dir:
+        raise HTTPException(400, "Ungültiger Dateiname")
     if not backup_pfad.exists():
         raise HTTPException(404, "Backup nicht gefunden")
     shutil.copy2(str(backup_pfad), str(APP_DATA_DIR / "restore_pending.db"))

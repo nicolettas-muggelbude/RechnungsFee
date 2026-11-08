@@ -9,19 +9,34 @@ unbenutzbar war.
 """
 import asyncio
 import io
+import sqlite3
+import tempfile
 import zipfile
+from pathlib import Path
 
 import pytest
 
 import main
 
 
-def _zip_bytes(mit_db: bool = True) -> bytes:
+def _db_bytes() -> bytes:
+    """Kleine, gültige SQLite-Datenbank (der Upload prüft PRAGMA integrity_check)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        pfad = Path(tmp) / "x.db"
+        con = sqlite3.connect(str(pfad))
+        con.execute("CREATE TABLE t (id INTEGER)")
+        con.commit()
+        con.close()
+        return pfad.read_bytes()
+
+
+def _zip_bytes(mit_db: bool = True, eintraege: dict[str, bytes] | None = None, db: bytes | None = None) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         if mit_db:
-            zf.writestr("rechnungsfee.db", b"fake-sqlite-bytes")
-        zf.writestr("uploads/dummy.txt", b"x")
+            zf.writestr("rechnungsfee.db", db if db is not None else _db_bytes())
+        for name, inhalt in (eintraege or {"uploads/dummy.txt": b"x"}).items():
+            zf.writestr(name, inhalt)
     return buf.getvalue()
 
 

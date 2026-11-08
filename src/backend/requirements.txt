@@ -1,15 +1,15 @@
-fastapi==0.139.2
-uvicorn==0.41.0
-sqlalchemy==2.0.46
+fastapi==0.162.0
+uvicorn==0.54.0
+sqlalchemy==2.1.8
 aiofiles==25.1.0
-python-multipart==0.0.31
+python-multipart==0.0.33
 fpdf2
 Pillow==13.0.0
 resvg_py
-segno==1.6.1
+segno==1.6.6
 drafthorse
 factur-x
-lxml
+lxml>=5
 pypdf
 pdfplumber
 # Issue #493: PyMuPDF 2.0 zieht pymupdf-layout (+ onnxruntime, numpy, networkx) mit und lädt beim

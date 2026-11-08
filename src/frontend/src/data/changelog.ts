@@ -30,6 +30,14 @@ export const CHANGELOG: ChangelogVersion[] = [
     ],
   },
   {
+    version: 'v0.7.10',
+    datum: 'November 2026',
+    eintraege: [
+      { typ: 'fix', text: 'Sicherheit: Mehrere Lücken in der lokalen Schnittstelle zwischen Oberfläche und Datenhaltung geschlossen, gefunden durch ein Sicherheits-Audit von lindesbs – vielen Dank! Ein präpariertes Backup kann beim Wiederherstellen keine Dateien mehr außerhalb des Datenordners ablegen. Fremde Inhalte (E-Rechnungen, Mail-Anhänge, Verwendungszwecke aus Bankumsätzen) können beim Ansehen keine Skripte mehr ausführen. Webseiten im Browser können die App nicht mehr ansprechen. Die Wiederherstellung lokaler Sicherungen akzeptiert nur noch echte Sicherungsdateien. Unter Linux und macOS ist der Datenordner nur noch für den eigenen Benutzer lesbar. Bitte zeitnah aktualisieren.' },
+      { typ: 'verbesserung', text: 'Sicherheit und Technik: Alle verwendeten Bibliotheken auf aktuellen Stand gebracht – Oberfläche (React 19.3, React Router, Formularprüfung), Desktop-Rahmen Tauri samt Update-Funktion, Server (FastAPI, SQLAlchemy 2.1, uvicorn) und Build-Werkzeuge (Vite 8). Damit sind bekannte Sicherheitslücken in mehreren Paketen geschlossen.' },
+    ],
+  },
+  {
     version: 'v0.7.9',
     datum: 'November 2026',
     eintraege: [

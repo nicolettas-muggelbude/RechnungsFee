@@ -139,9 +139,21 @@ def _ermittle_aktives_profil_verzeichnis(base_dir: Path) -> Path:
     return ziel
 
 
+# Security-Audit F11: Datenbank, WAL, Snapshots und Uploads entstanden unter Linux/macOS mit
+# umask 022 als 0644/0755 – lesbar für andere Benutzer, sofern das Home-Verzeichnis es zulässt.
+# Neue Dateien nur noch für den eigenen Benutzer; der Basisordner wird auf 0700 gesetzt, damit
+# auch bereits bestehende Dateien darin nicht mehr erreichbar sind. Windows: ACL von %APPDATA%.
+if os.name == "posix":
+    os.umask(0o077)
+
 # Plattformübergreifender Basis-Datenpfad (unverändert wie bisher)
 _BASE_DIR_ROH = _resolve_app_data_dir(platform.system(), Path.home())
 _BASE_DIR_ROH.mkdir(parents=True, exist_ok=True)
+if os.name == "posix":
+    try:
+        _BASE_DIR_ROH.chmod(0o700)
+    except OSError:
+        pass
 
 # Öffentlich, wird von api/profile.py gebraucht um Geschwister-Profile aufzulisten.
 BASE_DIR = _BASE_DIR_ROH
