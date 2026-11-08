@@ -346,6 +346,12 @@ def _erstelle_entwurf(vorlage: Rechnungsvorlage, db: Session) -> tuple[int, str,
     rechnung.netto_gesamt = netto_sum.quantize(Q, ROUND_HALF_UP)
     rechnung.ust_gesamt = ust_sum.quantize(Q, ROUND_HALF_UP)
     rechnung.brutto_gesamt = (rechnung.netto_gesamt + rechnung.ust_gesamt).quantize(Q, ROUND_HALF_UP)
+    # Issue #492: steuerfrei nach § 4 UStG, wenn Befreiungsgrund in den Stammdaten und alle
+    # erzeugten Positionen 0 % tragen (gleiche Regel wie bei Umwandlungen)
+    from .rechnungen import steuerfrei_4_vorgabe
+    db.flush()
+    db.refresh(rechnung)
+    rechnung.steuerfrei_4 = steuerfrei_4_vorgabe(db, False, rechnung.positionen)
     db.commit()
     db.refresh(rechnung)
     return rechnung.id, rechnungsnummer, preisaenderungen

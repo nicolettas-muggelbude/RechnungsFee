@@ -15,6 +15,7 @@ import {
   type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
 } from '../../api/client'
 import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
+import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 
 // ---------------------------------------------------------------------------
 // Konstanten
@@ -641,6 +642,7 @@ export default function BuchungsvorlagenPage() {
   const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string } | null>(null)
   const [buchenBelegDatei, setBuchenBelegDatei] = useState<File | null>(null)
   const [buchenBelegHochladen, setBuchenBelegHochladen] = useState(false)
+  const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
 
   const { data: vorlagen = [] } = useQuery({ queryKey: ['buchungsvorlagen'], queryFn: getBuchungsvorlagen })
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
@@ -681,7 +683,10 @@ export default function BuchungsvorlagenPage() {
   })
   const buchenMut = useMutation({
     mutationFn: ({ id, belegId }: { id: number; belegId?: number }) => buchungAusfuehren(id, belegId),
-    onSuccess: () => invalidieren(),
+    onSuccess: (eintrag) => {
+      invalidieren()
+      if (eintrag.hinweis) setBuchungsHinweis(eintrag.hinweis)  // Issue #497: freie ig. Lieferung ab Stichtag
+    },
   })
 
   async function handleBuchenBestaetigen(id: number) {
@@ -837,6 +842,10 @@ export default function BuchungsvorlagenPage() {
             onBelegLoeschen={() => belegLoeschenMut.mutate(selVorlage.id)}
           />
         </div>
+      )}
+
+      {buchungsHinweis && (
+        <BuchungsHinweisDialog text={buchungsHinweis} onClose={() => setBuchungsHinweis(null)} />
       )}
 
       {/* Buchungs-Bestätigungsdialog (ersetzt window.confirm – funktioniert in Tauri) */}

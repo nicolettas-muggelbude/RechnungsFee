@@ -114,7 +114,7 @@ export function ExportPage() {
   const [datevBis, setDatevBis] = useState('')
   const [datevLaedt, setDatevLaedt] = useState(false)
   const [datevMitBelegen, setDatevMitBelegen] = useState(true)
-  const [datevErgebnis, setDatevErgebnis] = useState<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null } | null>(null)
+  const [datevErgebnis, setDatevErgebnis] = useState<Awaited<ReturnType<typeof downloadDatevBuchungsstapel>> | null>(null)
   const [datevFehler, setDatevFehler] = useState<string | null>(null)
   const [konfigOffen, setKonfigOffen] = useState(false)
   const [konfigGespeichert, setKonfigGespeichert] = useState(false)
@@ -172,7 +172,7 @@ export function ExportPage() {
   async function handleGobd() {
     setGobdLaedt(true); setGobdErfolg(null); setGobdFehler(null)
     try { setGobdErfolg(await downloadGobdExport(gobdJahr)) }
-    catch (e: any) { setGobdFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setGobdFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setGobdLaedt(false) }
   }
 
@@ -192,7 +192,7 @@ export function ExportPage() {
     const [von, bis] = zeitraumZuDaten(datevZeitraum, datevJahr, datevVon, datevBis)
     if (!von || !bis) { setDatevFehler('Bitte Von- und Bis-Datum angeben'); setDatevLaedt(false); return }
     try { setDatevErgebnis(await downloadDatevBuchungsstapel(von, bis, datevMitBelegen)) }
-    catch (e: any) { setDatevFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setDatevFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setDatevLaedt(false) }
   }
 
@@ -201,7 +201,7 @@ export function ExportPage() {
     const [von, bis] = zeitraumZuDaten(csvZeitraum, csvJahr, csvVon, csvBis)
     if (!von || !bis) { setCsvFehler('Bitte Von- und Bis-Datum angeben'); setCsvLaedt(false); return }
     try { setCsvErgebnis(await downloadBuchhalterCsv(von, bis)) }
-    catch (e: any) { setCsvFehler(e?.message ?? 'Unbekannter Fehler') }
+    catch (e) { setCsvFehler(e instanceof Error ? e.message : 'Unbekannter Fehler') }
     finally { setCsvLaedt(false) }
   }
 
@@ -356,6 +356,15 @@ export function ExportPage() {
                     </span>
                   )}
                 </p>
+                {datevErgebnis.verrechnung > 0 && (
+                  <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">
+                    Davon {datevErgebnis.verrechnung} Guthaben-Verrechnung{datevErgebnis.verrechnung !== 1 ? 'en' : ''}:
+                    Diese Buchungen enthalten Aufwand bzw. Erlös samt Steuer, haben aber noch kein Gegenkonto und
+                    fehlen deshalb im Export. Bitte deinem Steuerbüro melden
+                    {datevErgebnis.verrechnung_belege.length > 0 && <> (Belegnummern: {datevErgebnis.verrechnung_belege.join(', ')}
+                      {datevErgebnis.verrechnung > datevErgebnis.verrechnung_belege.length && ' …'})</>}.
+                  </p>
+                )}
                 <p className="mt-0.5 text-xs opacity-70">Datei gespeichert im Downloads-Ordner</p>
               </Erfolg>
             )}

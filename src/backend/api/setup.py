@@ -5,6 +5,7 @@ ob der Einrichtungs-Assistent gezeigt werden soll.
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -84,28 +85,60 @@ def set_kassenbestand(data: KassenbestandRequest, db: Session = Depends(get_db))
     return {"belegnr": belegnr, "betrag": str(data.betrag)}
 
 
+KU_GRENZE_VORJAHR = Decimal("25000")
+KU_GRENZE_LAUFEND = Decimal("100000")
+KU_GRENZE_GRUENDUNGSJAHR = Decimal("25000")
+KU_WARNSCHWELLE = Decimal("0.8")
+
+
+def _umsatz_extern(unt: Optional[Unternehmen], jahr: int) -> Decimal:
+    """Umsatz vor RechnungsFee (Stammdaten) für ein Kalenderjahr - nur Startjahr und Vorjahr."""
+    if not unt or not unt.umsatz_extern_jahr:
+        return Decimal("0")
+    if jahr == unt.umsatz_extern_jahr:
+        return Decimal(unt.umsatz_extern_startjahr or 0)
+    if jahr == unt.umsatz_extern_jahr - 1:
+        return Decimal(unt.umsatz_extern_vorjahr or 0)
+    return Decimal("0")
+
+
 @router.get("/kleinunternehmer-umsatz")
-def kleinunternehmer_umsatz(db: Session = Depends(get_db)):
-    """
-    Netto-Jahresumsatz aus bezahlten Ausgangsrechnungen im laufenden Kalenderjahr.
-    Nur relevant für Kleinunternehmer (§19 UStG).
-    """
-    from sqlalchemy import func, extract
-    from database.models import Rechnung
+def kleinunternehmer_umsatz(db: Session = Depends(get_db), heute: Optional[date] = None):
+    """Kleinunternehmergrenze nach § 19 UStG (seit 2025) für die Dashboard-Warnung (Issue #491).
 
-    jahr = datetime.now().year
-    ergebnis = db.query(func.sum(Rechnung.netto_gesamt)).filter(
-        Rechnung.typ == "ausgang",
-        Rechnung.ist_entwurf == False,
-        Rechnung.storniert == False,
-        Rechnung.zahlungsstatus.in_(["bezahlt", "teilweise"]),
-        extract("year", Rechnung.datum) == jahr,
-    ).scalar()
+    Gesamtumsatz nach vereinnahmten Entgelten aus der EÜR-Zuordnung (inkl. Journal-Einnahmen,
+    ohne nicht steuerbare und § 4-steuerfreie Umsätze, ohne Anlagevermögen) zuzüglich des in
+    den Stammdaten eingetragenen Umsatzes vor RechnungsFee.
+    - Gründungsjahr (Beginn der Tätigkeit im laufenden Jahr): 25.000 €, keine Hochrechnung
+    - sonst laufendes Jahr: 100.000 €; Vorjahr über 25.000 € → § 19 gilt im laufenden Jahr nicht
+    Wer die Grenze im laufenden Jahr überschreitet, ist ab diesem Umsatz regelbesteuert.
+    `heute` nur für Tests."""
+    from .euer import kleinunternehmer_gesamtumsatz
 
-    umsatz = float(ergebnis or 0)
+    jahr = (heute or date.today()).year
+    unt = db.query(Unternehmen).first()
+    beginn = unt.taetigkeit_beginn if unt else None
+    ist_gruendungsjahr = bool(beginn and beginn.year == jahr)
+
+    umsatz = kleinunternehmer_gesamtumsatz(jahr, db) + _umsatz_extern(unt, jahr)
+    grenze = KU_GRENZE_GRUENDUNGSJAHR if ist_gruendungsjahr else KU_GRENZE_LAUFEND
+
+    # Vorjahr nur prüfen, wenn es eines gab (nicht im Gründungsjahr, nicht vor dem Beginn)
+    vorjahr_relevant = not ist_gruendungsjahr and not (beginn and beginn.year > jahr - 1)
+    umsatz_vorjahr = (
+        kleinunternehmer_gesamtumsatz(jahr - 1, db) + _umsatz_extern(unt, jahr - 1)
+        if vorjahr_relevant else Decimal("0")
+    )
+
     return {
         "jahr": jahr,
-        "umsatz_netto": umsatz,
-        "grenze_kritisch": 100000.0,
-        "grenze_warnung": 80000.0,
+        "umsatz_netto": float(umsatz),
+        "grenze_kritisch": float(grenze),
+        "grenze_warnung": float(grenze * KU_WARNSCHWELLE),
+        "ist_gruendungsjahr": ist_gruendungsjahr,
+        "umsatz_extern": float(_umsatz_extern(unt, jahr)),
+        "vorjahr": jahr - 1,
+        "umsatz_vorjahr": float(umsatz_vorjahr),
+        "grenze_vorjahr": float(KU_GRENZE_VORJAHR),
+        "vorjahr_ueberschritten": vorjahr_relevant and umsatz_vorjahr > KU_GRENZE_VORJAHR,
     }

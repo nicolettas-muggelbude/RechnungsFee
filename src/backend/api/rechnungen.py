@@ -145,6 +145,16 @@ def _erloes_kategorie(db: Session, rechnung: "Rechnung") -> tuple[int | None, "K
     """
     if not rechnung.positionen:
         return None, None
+    # Issue #492: steuerfreie Leistung nach § 4 UStG (Heilberufe, Unterricht) → „Betriebseinnahmen
+    # (0%)“ (8100/4100, EÜR-Basiszeile 16) - auch bei Kleinunternehmern: dort schlüsselt die EÜR
+    # auf Zeile 12 um und weist den Betrag nachrichtlich in Zeile 13 aus (nicht Teil des
+    # Gesamtumsatzes nach § 19 Abs. 2 UStG).
+    if getattr(rechnung, "steuerfrei_4", False):
+        kat_frei = db.query(Kategorie).filter(
+            Kategorie.name == "Betriebseinnahmen (0%)", Kategorie.aktiv == True  # noqa: E712
+        ).first()
+        if kat_frei:
+            return kat_frei.id, kat_frei
     # Issue #480: Kleinunternehmer (§ 19 UStG) - eigene Kategorie mit DATEV-Konto 8192/4184
     # („Steuerfreie Erlöse Kleinunternehmer“) statt „Betriebseinnahmen (0%)“ (8100/4100 =
     # steuerfreie Umsätze § 4 Nr. 8 ff.); Kleinunternehmer haben keine ig. Lieferung/Ausfuhr.
@@ -458,6 +468,7 @@ def _absender_snapshot(db: Session) -> str:
         "berufsbezeichnung":       unt.berufsbezeichnung or "",
         "kammer_mitgliedschaft":   unt.kammer_mitgliedschaft or "",
         "ist_kleinunternehmer":    bool(unt.ist_kleinunternehmer),
+        "steuerbefreiung_4":       unt.steuerbefreiung_4 or "",  # Issue #492: Hinweistext der Rechnung
         "zahlungshinweis_aktiv":   bool(unt.zahlungshinweis_aktiv),
         "zahlungshinweis_text":    unt.zahlungshinweis_text or "",
         "anrede_text":             unt.anrede_text or "",
@@ -1324,6 +1335,7 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     auftrag.eingabemodus = data.eingabemodus
     auftrag.rabatt_prozent = getattr(data, "rabatt_prozent", Decimal("0")) or Decimal("0")
@@ -1463,6 +1475,7 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)
     summen = _berechne_rechnung(
@@ -1623,6 +1636,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         ist_eu_lieferung=data.ist_eu_lieferung,
         ist_drittland_leistung=data.ist_drittland_leistung,
         ist_ausfuhrlieferung=data.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(data.steuerfrei_4) and data.typ == "ausgang",
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -1640,6 +1654,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
+        or data.steuerfrei_4  # Issue #492: steuerfrei nach § 4 UStG - ebenfalls 0 %
     )
     rc_positionen, ust_additiv = _reverse_charge_positionen(db, data.typ, data.positionen, data.kategorie_id)  # Issue #459
     override_summen = None
@@ -1746,11 +1761,22 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                   "partner_plz", "partner_ort", "partner_land",
                   "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
                   "skonto_prozent", "skonto_tage", "gueltig_bis",
-                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung",
+                  "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "steuerfrei_4",
                   "eingabemodus"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(rechnung, field, val)
+
+    # Issue #495: Lieferadresse am Lieferschein-Entwurf ändern - fehlte bisher in der Feldliste
+    # oben, eine im Formular gewählte Adresse ging beim Speichern verloren. Über model_fields_set,
+    # damit „keine Lieferadresse“ (null) die Auswahl auch wieder entfernen kann.
+    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == "Lieferschein":
+        if data.lieferadresse_id is not None:
+            from database.models import KundeLieferadresse
+            la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == data.lieferadresse_id).first()
+            if not la or la.kunde_id != (data.kunde_id or rechnung.kunde_id):
+                raise HTTPException(status_code=422, detail="Die Lieferadresse gehört nicht zu diesem Kunden.")
+        rechnung.lieferadresse_id = data.lieferadresse_id
 
     # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
     # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
@@ -1780,17 +1806,19 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
 
     if sum([
         rechnung.ist_reverse_charge, rechnung.ist_eu_lieferung,
-        rechnung.ist_drittland_leistung, rechnung.ist_ausfuhrlieferung,
+        rechnung.ist_drittland_leistung, rechnung.ist_ausfuhrlieferung, rechnung.steuerfrei_4,
     ]) > 1:
         raise HTTPException(status_code=422, detail=(
             "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware), "
-            "Drittland-Dienstleistung und Ausfuhrlieferung (Drittland-Ware) schließen sich "
-            "gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+            "Drittland-Dienstleistung, Ausfuhrlieferung (Drittland-Ware) und steuerfreie Leistung "
+            "nach § 4 UStG schließen sich gegenseitig aus - bei gemischten Rechnungen bitte zwei "
+            "Rechnungen erstellen."
         ))
 
     ist_steuerfrei_ausland = (
         rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung
         or rechnung.ist_drittland_leistung or rechnung.ist_ausfuhrlieferung
+        or rechnung.steuerfrei_4  # Issue #492
     )
 
     if data.positionen is not None:
@@ -2039,8 +2067,12 @@ def finalisiere_rechnung(
         if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
             _auftrag.auftrag_status = "rechnung_gestellt"
 
-    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung)
-    _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung).
+    # Ausnahme Issue #495: Lieferscheine aus Angebot/Auftrag entstehen seitdem als Entwurf - vorher
+    # wurden sie sofort final und ohne Lagerabgang angelegt, der Abgang läuft dort über die
+    # Rechnung. Das bleibt so, sonst würde die spätere Rechnung den Bestand doppelt mindern.
+    if not (rechnung.dokument_typ == "Lieferschein" and _ist_umgewandelter_lieferschein(db, rechnung)):
+        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
     _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
@@ -2713,6 +2745,15 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
         {"auftrag_zu_angebot_id": None}
     )
+    # Issue #495: Lieferscheine aus Angebot/Auftrag sind jetzt Entwürfe und damit löschbar -
+    # der Rückverweis am Angebot muss weg, sonst blockiert er das Angebot dauerhaft
+    db.query(Rechnung).filter(Rechnung.lieferschein_zu_angebot_id == rechnung_id).update(
+        {"lieferschein_zu_angebot_id": None}
+    )
+    _auftrag_ls = db.query(Rechnung).filter(
+        Rechnung.lieferschein_zu_auftrag_id == rechnung_id,
+        Rechnung.dokument_typ == "Auftrag",
+    ).first()
     # Auftrag-Rückverweis bereinigen und Status zurücksetzen wenn keine Dokumente mehr
     _auftrag_ref = db.query(Rechnung).filter(
         Rechnung.proforma_zu_auftrag_id == rechnung_id,
@@ -2724,6 +2765,10 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             _RV.auftrag_id == auftrag_id, _RV.aktiv == True  # noqa: E712
         ).first())
 
+    if _auftrag_ls:
+        _auftrag_ls.lieferschein_zu_auftrag_id = None
+        if not _auftrag_ls.rechnung_zu_auftrag_id and not _auftrag_ls.proforma_zu_auftrag_id:
+            _auftrag_ls.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ls.id) else "offen"
     if _auftrag_ref:
         _auftrag_ref.proforma_zu_auftrag_id = None
         if not _auftrag_ref.rechnung_zu_auftrag_id and not _auftrag_ref.lieferschein_zu_auftrag_id:
@@ -3630,14 +3675,17 @@ def zahlung_korrigieren(
     else:
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
 
-    heute = date.today()
+    # Storno-Datum = Datum der Originalbuchung, nicht heute (wie journal.py, Issue #320):
+    # korrigiert wird eine fehlerhafte Erfassung, kein Geldfluss von heute - sonst bliebe der
+    # alte Betrag im Ursprungszeitraum (EÜR-Jahr, UStVA) stehen.
+    storno_datum = e.datum
 
     # Art bleibt gleich, alle Beträge werden negiert: _aktualisiere_zahlungsstatus()
     # summiert brutto_betrag über alle verknüpften Einträge OHNE Art-Filter (wie bei
     # Gutschriften) – nur ein echtes Vorzeichen-Gegenstück hebt den Original-Betrag auf.
     storno = Journaleintrag(
-        datum=heute,
-        belegnr=_naechste_belegnr_journal(db, heute),
+        datum=storno_datum,
+        belegnr=_naechste_belegnr_journal(db, storno_datum),
         beschreibung=f"STORNO {e.belegnr}: Korrektur",
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
@@ -3746,6 +3794,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
         gegenbuchung = Journaleintrag(
             datum=gb_datum,
             belegnr=belegnr,
+            # Format wird ausgewertet: "bereits storniert"-Prüfung oben und
+            # utils/zm_meldezeitraum._ist_storno_gegenbuchung() (Issue #497) - dort mit anpassen
             beschreibung=f"STORNO {eintrag.belegnr}: {re_nr} – {data.grund.strip()}",
             kategorie_id=eintrag.kategorie_id,
             konto_skr03=eintrag.konto_skr03,
@@ -3894,11 +3944,18 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         rabatt_betrag=original.rabatt_betrag,
         skonto_prozent=original.skonto_prozent,
         skonto_tage=original.skonto_tage,
+        # Steuerliche Einordnung wie beim Original - sonst fiele eine ersetzte ig. Lieferung
+        # oder EU-Dienstleistung aus UStVA KZ 41/21/43/45 und der ZM (Issue #497)
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_eu_lieferung=original.ist_eu_lieferung,
+        ist_drittland_leistung=original.ist_drittland_leistung,
+        ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
         ist_entwurf=True,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
         ersatz_fuer_rechnung_id=original.id,
+        steuerfrei_4=bool(original.steuerfrei_4),  # Issue #492
         netto_gesamt=original.netto_gesamt,
         ust_gesamt=original.ust_gesamt,
         brutto_gesamt=original.brutto_gesamt,
@@ -4040,6 +4097,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         ist_eu_lieferung=original.ist_eu_lieferung,
         ist_drittland_leistung=original.ist_drittland_leistung,
         ist_ausfuhrlieferung=original.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(original.steuerfrei_4),
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4521,6 +4579,9 @@ def _lieferschein_zu_rechnung_konvertieren(
 
     for ls in lieferscheine:
         ls.lieferschein_zu_rechnung_id = rechnung.id
+    rechnung.steuerfrei_4 = steuerfrei_4_vorgabe(
+        db, False, [pos for ls in lieferscheine for pos in ls.positionen],
+    )
 
     db.commit()
     db.refresh(rechnung)
@@ -4652,9 +4713,31 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 # Angebot → Lieferschein
 # ---------------------------------------------------------------------------
 
+def _standard_lieferadresse_id(db: Session, kunde_id: Optional[int]) -> Optional[int]:
+    """Standard-Lieferadresse des Kunden - dieselbe Vorbelegung wie im Lieferschein-Formular."""
+    if not kunde_id:
+        return None
+    from database.models import KundeLieferadresse
+    la = db.query(KundeLieferadresse).filter(
+        KundeLieferadresse.kunde_id == kunde_id, KundeLieferadresse.ist_standard == True,  # noqa: E712
+    ).first()
+    return la.id if la else None
+
+
+def _ist_umgewandelter_lieferschein(db: Session, rechnung: Rechnung) -> bool:
+    """Lieferschein, der aus einem Angebot oder Auftrag entstanden ist (Issue #495)."""
+    return db.query(Rechnung).filter(or_(
+        Rechnung.lieferschein_zu_angebot_id == rechnung.id,
+        Rechnung.lieferschein_zu_auftrag_id == rechnung.id,
+    )).first() is not None
+
+
 @router.post("/{angebot_id}/lieferschein-aus-angebot", response_model=RechnungResponse, status_code=201)
 def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
-    """Erstellt einen Lieferschein aus einem Angebot (Positionen ohne Preise übernommen)."""
+    """Erstellt einen Lieferschein aus einem Angebot (Positionen ohne Preise übernommen).
+
+    Issue #495: als Entwurf, damit vor dem Finalisieren noch die Lieferadresse (z. B. der
+    Standort eines Filialkunden) gewählt werden kann."""
     angebot = db.query(Rechnung).filter(
         Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
     ).first()
@@ -4677,7 +4760,8 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         dokument_typ="Lieferschein",
-        ist_entwurf=False,
+        ist_entwurf=True,
+        lieferadresse_id=_standard_lieferadresse_id(db, angebot.kunde_id),
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4695,7 +4779,6 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     _kopiere_positionen(angebot, ls, db)
 
     angebot.lieferschein_zu_angebot_id = ls.id
-    ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(ls)
     return RechnungResponse.from_orm_extended(ls)
@@ -5013,6 +5096,22 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             ust_satz_25a=pos.ust_satz_25a,
         )
         db.add(neue_pos)
+    if ziel.typ == "ausgang" and ziel.dokument_typ in ("Rechnung", "Abschlagsrechnung", "Proforma"):
+        ziel.steuerfrei_4 = steuerfrei_4_vorgabe(db, bool(getattr(quell, "steuerfrei_4", False)), quell.positionen)
+
+
+def steuerfrei_4_vorgabe(db: Session, quelle_steuerfrei: bool, positionen) -> bool:
+    """Issue #492: Kennzeichen „steuerfrei nach § 4 UStG“ für eine Rechnung, die aus einem anderen
+    Dokument entsteht (Angebot, Auftrag, Proforma, Lieferschein, wiederkehrende Vorlage). Angebot,
+    Auftrag und Lieferschein haben kein eigenes Kennzeichen: steuerfrei, wenn die Stammdaten einen
+    Befreiungsgrund haben und alle Positionen schon 0 % tragen - Beträge ändern sich dadurch nie."""
+    if quelle_steuerfrei:
+        return True
+    unternehmen = db.query(Unternehmen).first()
+    if not (unternehmen and unternehmen.steuerbefreiung_4):
+        return False
+    saetze = [Decimal(str(p.ust_satz or 0)) for p in positionen]
+    return bool(saetze) and all(s == 0 for s in saetze)
 
 
 @router.post("/{angebot_id}/auftrag-aus-angebot", response_model=RechnungResponse, status_code=201)
@@ -5136,7 +5235,8 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{auftrag_id}/lieferschein-aus-auftrag", response_model=RechnungResponse, status_code=201)
 def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
-    """Erstellt einen Lieferschein aus einem Auftrag."""
+    """Erstellt einen Lieferschein aus einem Auftrag - als Entwurf, damit vor dem Finalisieren
+    noch die Lieferadresse gewählt werden kann (Issue #495)."""
     auftrag = db.query(Rechnung).filter(
         Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
     ).first()
@@ -5178,7 +5278,8 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         notizen=auftrag.notizen,
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
-        ist_entwurf=False,
+        ist_entwurf=True,
+        lieferadresse_id=_standard_lieferadresse_id(db, auftrag.kunde_id),
         dokument_typ="Lieferschein",
         eingabemodus=auftrag.eingabemodus,
         rabatt_prozent=auftrag.rabatt_prozent,
@@ -5193,7 +5294,6 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     auftrag.lieferschein_zu_auftrag_id = lieferschein.id
     if auftrag.auftrag_status == "offen":
         auftrag.auftrag_status = "in_bearbeitung"
-    lieferschein.absender_snapshot = _absender_snapshot(db)
     db.commit()
     db.refresh(lieferschein)
     return RechnungResponse.from_orm_extended(lieferschein)

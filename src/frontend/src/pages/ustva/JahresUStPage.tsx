@@ -12,6 +12,8 @@ const KZ_META: [string, string, string, boolean][] = [
   ['', '86', 'Umsätze 7 % – Bemessungsgrundlage', false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b)', false],
   ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen)', false],
+  // Issue #492 - bei Kleinunternehmern zeigt die Seite Kz 48 gesondert (§19-Umsätze)
+  ['Steuerfreie Umsätze ohne Vorsteuerabzug', '48', 'Umsätze nach §4 Nr. 8 bis 29 UStG (z. B. Heilberufe, Unterricht)', false],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false],
@@ -86,13 +88,17 @@ export function JahresUStPage() {
     enabled: !!unt,
   })
 
+  // Kennzahlwert per Nummer (z. B. "81") - die Felder heißen kz_81, kz_86 …
+  const kzWert = (nr: string): string =>
+    String((data as unknown as Record<string, string | number | undefined> | undefined)?.[`kz_${nr}`] ?? '0')
+
   async function handlePdf() {
     setPdfFehler(null); setPdfOk(false)
     try {
       await openUrl(await getJahresUStVAPdfUrl(jahr))
       setPdfOk(true)
-    } catch (e: any) {
-      setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen')
+    } catch (e) {
+      setPdfFehler(e instanceof Error ? e.message : 'PDF-Export fehlgeschlagen')
     }
   }
 
@@ -102,7 +108,7 @@ export function JahresUStPage() {
     let aktGruppe: { abschnitt: string; zeilen: typeof KZ_META } | null = null
     for (const meta of KZ_META) {
       const [abschnitt, nr] = meta
-      const wert = parseFloat(String((data as any)[`kz_${nr}`] ?? '0'))
+      const wert = parseFloat(kzWert(nr))
       if (wert === 0) continue
       const eff: string = abschnitt || aktGruppe?.abschnitt || ''
       if (!aktGruppe || (abschnitt && abschnitt !== aktGruppe.abschnitt)) {
@@ -168,13 +174,13 @@ export function JahresUStPage() {
                 das Finanzamt prüft damit, ob du die §19-Grenze eingehalten hast.
               </div>
               {/* Issue #459: Steuer als Leistungsempfänger schuldet auch der Kleinunternehmer */}
-              {KU_SONDERFALL_KZ.some(([nr]) => parseFloat(String((data as any)[`kz_${nr}`] ?? '0')) !== 0) && (
+              {KU_SONDERFALL_KZ.some(([nr]) => parseFloat(kzWert(nr)) !== 0) && (
                 <>
                   <Abschnitt titel="Steuer als Leistungsempfänger (§13b UStG / ig. Erwerb)">
-                    {KU_SONDERFALL_KZ.filter(([nr]) => parseFloat(String((data as any)[`kz_${nr}`] ?? '0')) !== 0)
+                    {KU_SONDERFALL_KZ.filter(([nr]) => parseFloat(kzWert(nr)) !== 0)
                       .map(([nr, label, istSteuer]) => (
                         <KZZeile key={nr} kz={nr} label={label}
-                          wert={String((data as any)[`kz_${nr}`] ?? '0')} istSteuer={istSteuer} />
+                          wert={kzWert(nr)} istSteuer={istSteuer} />
                       ))}
                   </Abschnitt>
                   <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
@@ -195,7 +201,7 @@ export function JahresUStPage() {
                 <Abschnitt key={abschnitt} titel={abschnitt}>
                   {zeilen.map(([, nr, bezeichnung, istSteuer]) => (
                     <KZZeile key={nr} kz={nr} label={bezeichnung}
-                      wert={String((data as any)[`kz_${nr}`] ?? '0')} istSteuer={istSteuer} />
+                      wert={kzWert(nr)} istSteuer={istSteuer} />
                   ))}
                 </Abschnitt>
               ))}

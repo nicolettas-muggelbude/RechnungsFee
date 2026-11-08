@@ -29,6 +29,7 @@ type Berufsgruppe = typeof BERUFSGRUPPEN[number]
 
 // Erlaubte Zeichen für ZUGFeRD/XRechnung: keine XML-Steuerzeichen (außer Tab, LF, CR)
 const xmlSauber = (label: string) =>
+  // eslint-disable-next-line no-control-regex -- Steuerzeichen bewusst ausgeschlossen (siehe oben)
   z.string().regex(/^[^\x00-\x08\x0B\x0C\x0E-\x1F\x7F]*$/, `${label} enthält ungültige Zeichen`)
 
 const schema = z.object({
@@ -87,7 +88,14 @@ export function StepUnternehmen({ onNext, defaultValues }: Props) {
   const inp = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400'
 
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-5">
+    <form
+      onSubmit={handleSubmit((data) => onNext({
+        ...data,
+        // Issue #492: Heilberufe sind nach § 4 Nr. 14 UStG steuerfrei - im nächsten Schritt änderbar
+        ...(selectedBeruf?.label === 'Arzt / Ärztin' ? { steuerbefreiung_4: '4_nr_14' as const } : {}),
+      }))}
+      className="space-y-5"
+    >
 
       {/* Berufsauswahl */}
       <div>

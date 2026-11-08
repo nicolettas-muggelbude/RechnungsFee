@@ -173,7 +173,12 @@ export const setKassenbestand = (betrag: string) =>
     body: JSON.stringify({ betrag }),
   })
 export const getKleinunternehmerUmsatz = () =>
-  request<{ jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number }>('/setup/kleinunternehmer-umsatz')
+  request<{
+    jahr: number; umsatz_netto: number; grenze_kritisch: number; grenze_warnung: number
+    // Issue #491
+    ist_gruendungsjahr: boolean; umsatz_extern: number
+    vorjahr: number; umsatz_vorjahr: number; grenze_vorjahr: number; vorjahr_ueberschritten: boolean
+  }>('/setup/kleinunternehmer-umsatz')
 
 // --- Profilmanager ---
 export type ProfilItem = { name: string; aktiv: boolean }
@@ -212,6 +217,13 @@ export const loescheArchiviertesProfil = (name: string, bestaetigung: string) =>
   })
 
 // --- Unternehmen ---
+// Issue #492: Befreiungsgründe nach § 4 UStG (Schlüssel wie STEUERBEFREIUNGEN_4 im Backend)
+export type SteuerbefreiungSchluessel = '4_nr_14' | '4_nr_21'
+export const STEUERBEFREIUNGEN_4: { wert: SteuerbefreiungSchluessel; label: string; paragraph: string }[] = [
+  { wert: '4_nr_14', label: 'Heilberufe (Ärzte, Heilpraktiker, Physiotherapie, Hebammen …)', paragraph: '§ 4 Nr. 14 UStG' },
+  { wert: '4_nr_21', label: 'Unterricht (Schulen, Bildungseinrichtungen, freie Lehrkräfte)', paragraph: '§ 4 Nr. 21 UStG' },
+]
+
 export type Unternehmen = {
   id?: number
   firmenname: string
@@ -232,6 +244,13 @@ export type Unternehmen = {
   est_vorauszahlungen_aktiv: boolean
   gewst_vorauszahlungen_aktiv: boolean
   ist_kleinunternehmer: boolean
+  // Issue #491: Gründungsjahr + Umsatz vor RechnungsFee (nur für die Kleinunternehmer-Warnung)
+  taetigkeit_beginn?: string | null
+  umsatz_extern_jahr?: number | null
+  umsatz_extern_vorjahr?: string | number | null
+  umsatz_extern_startjahr?: string | number | null
+  // Issue #492: steuerfreie Umsätze nach § 4 UStG
+  steuerbefreiung_4?: SteuerbefreiungSchluessel | null
   bezieht_transferleistungen: boolean
   geburtsdatum?: string | null
   bg_nummer?: string | null
@@ -492,6 +511,8 @@ export type JournalEintrag = {
   storno_belegnr?: string | null
   ist_storno?: boolean
   storno_von_belegnr?: string | null
+  // Issue #497: Hinweis beim Buchen einer freien ig. Lieferung ab dem Stichtag (nur in der Antwort aufs Buchen)
+  hinweis?: string | null
 }
 
 export type JournalEintragCreate = {
@@ -1037,13 +1058,16 @@ export async function downloadDatevBuchungsstapel(
   von: string,
   bis: string,
   mitBelegen: boolean = true,
-): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null }> {
+): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null; verrechnung: number; verrechnung_belege: string[] }> {
   const base = await getBaseUrl()
   const res = await fetch(`${base}/datev/buchungsstapel?von=${von}&bis=${bis}&mit_belegen=${mitBelegen}`)
   if (!res.ok) throw new Error('DATEV-Export fehlgeschlagen')
   const eintraege = Number(res.headers.get('X-Datev-Eintraege') ?? '0')
   const uebersprungen = Number(res.headers.get('X-Datev-Uebersprungen') ?? '0')
   const leer_konto = Number(res.headers.get('X-Datev-LeerKonto') ?? '0')
+  const verrechnung = Number(res.headers.get('X-Datev-Verrechnung') ?? '0')
+  const verrechnung_belege = decodeURIComponent(res.headers.get('X-Datev-Verrechnung-Belege') ?? '')
+    .split(',').filter(Boolean)
   const belegeHeader = res.headers.get('X-Datev-Belege')
   const belege = belegeHeader !== null ? Number(belegeHeader) : null
   const blob = await res.blob()
@@ -1051,7 +1075,7 @@ export async function downloadDatevBuchungsstapel(
   const match = cd.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] ?? `DATEV_Buchungsstapel_${von}_${bis}.${mitBelegen ? 'zip' : 'csv'}`
   await _triggerBlobDownload(blob, filename)
-  return { filename, eintraege, uebersprungen, leer_konto, belege }
+  return { filename, eintraege, uebersprungen, leer_konto, belege, verrechnung, verrechnung_belege }
 }
 
 // --- Backup ---
@@ -1502,6 +1526,7 @@ export type Rechnung = {
   ist_eu_lieferung: boolean
   ist_drittland_leistung: boolean
   ist_ausfuhrlieferung: boolean
+  steuerfrei_4?: boolean  // Issue #492
 }
 
 export type RechnungCreate = {
@@ -1539,6 +1564,7 @@ export type RechnungCreate = {
   ist_eu_lieferung?: boolean
   ist_drittland_leistung?: boolean
   ist_ausfuhrlieferung?: boolean
+  steuerfrei_4?: boolean  // Issue #492
   positionen: RechnungspositionCreate[]
   rabatt_prozent?: number
   rabatt_betrag?: number
@@ -1769,6 +1795,7 @@ export type RechnungVorschauRequest = {
   ist_eu_lieferung?: boolean
   ist_drittland_leistung?: boolean
   ist_ausfuhrlieferung?: boolean
+  steuerfrei_4?: boolean  // Issue #492
 }
 export type RechnungVorschauPosition = {
   ust_satz: string
@@ -2098,6 +2125,7 @@ export type UStVAErgebnis = {
   kz_87: string  // 0 % (manuell)
   // B – steuerfreie Umsätze mit Vorsteuerabzug
   kz_41: string; kz_43: string
+  kz_48?: string  // Issue #492: steuerfreie Umsätze ohne Vorsteuerabzug
   // Nicht im Inland steuerbare Umsätze
   kz_21: string; kz_45: string
   // C – ig. Erwerb
@@ -2150,7 +2178,7 @@ export const downloadUstvaXml = (zeitraum: string): Promise<string> =>
   _downloadElsterDatei(`/ustva/xml?zeitraum=${encodeURIComponent(zeitraum)}`, `UStVA_${zeitraum}_ELSTER.xml`)
 
 export type UStVAPosten = {
-  quelle: 'journal' | 'vorsteuer_anspruch'
+  quelle: 'journal' | 'vorsteuer_anspruch' | 'rechnung'
   quelle_id: number
   datum: string
   referenz: string | null
@@ -2591,7 +2619,7 @@ export const updateBuchungsvorlage = (id: number, data: Partial<BuchungsvorlageC
 export const deleteBuchungsvorlage = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}`, { method: 'DELETE' })
 export const buchungAusfuehren = (id: number, belegId?: number) =>
-  request<unknown>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
+  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
 export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)
@@ -2901,10 +2929,13 @@ export type BankTransaktion = {
   forderung_id?: number | null
   dedupe_hash?: string | null
   rechnung_info?: RechnungKurzinfo | null
+  hinweis?: string | null  // Issue #497, nur in der Antwort aufs Buchen
 }
 
 export type BankAbgleichVorschlag = {
   rechnung_id: number
+  typ: 'eingang' | 'ausgang'
+  dokument_typ: string
   rechnungsnummer: string
   externe_belegnr?: string | null
   partner: string
@@ -2995,6 +3026,7 @@ export type AutoBuchenResult = {
   offen: number
   forderungen: number
   fehler: number
+  hinweis?: string | null  // Issue #497
 }
 
 export const autoBuchen = (kontoId: number, importId?: number) =>
@@ -3024,10 +3056,11 @@ export const bucheTransaktion = (
   txId: number,
   rechnungId: number | null = null,
   betragZuBuchen?: number,
+  restPrivat = false,
 ) =>
   request<BankTransaktion>(`/bank-import/transaktion/${txId}/buchen`, {
     method: 'POST',
-    body: JSON.stringify({ rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null }),
+    body: JSON.stringify({ rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null, rest_privat: restPrivat }),
   })
 
 export const verknuepfeBankTransaktionMitJournal = (txId: number, journalId: number) =>

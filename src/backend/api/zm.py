@@ -10,6 +10,10 @@ Kennzeichen (wie ELSTER):
       ist_reverse_charge, Kunde schuldet die Steuer) – gleiche Quelle wie UStVA KZ 21
   (D = Dreiecksgeschäft – nicht unterstützt)
 
+Meldezeitraum (Issue #497): Ausgangsrechnungen ab zm_meldezeitraum.CUTOVER_DATUM melden nach
+§18a Abs. 8 UStG über die Rechnung (L: Rechnungsmonat, spätestens Monat nach der Lieferung;
+S: Monat der Leistung), ältere weiter über das Datum der Zahlungsbuchung.
+
 Rhythmus / Frist:
   < 50.000 € ig. Lieferungen pro Quartal → quartalsweise, bis 25. des Folgemonats
   ≥ 50.000 € ig. Lieferungen pro Quartal → monatlich,    bis 25. des Folgemonats
@@ -31,6 +35,7 @@ from database.connection import get_db
 from utils.konten import IG_LIEFERUNG_SKR04
 from database.models import Journaleintrag, Rechnung, Kunde, Unternehmen
 from utils.elster import ElsterExportFehler, build_zm_csv
+from utils import zm_meldezeitraum
 
 router = APIRouter(prefix="/api/zm", tags=["ZM"])
 
@@ -122,14 +127,21 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
 
     Eingangsseitige §13b-/ig.-Erwerb-Buchungen (wir als Leistungsempfänger) gehören nie in die
     ZM - auch nicht deren Storno-Gegenbuchung (art="Einnahme", ust_sonderfall="13b_abs1"), die
-    ein früherer Sonderfall-Filter fälschlich als Dienstleistung gemeldet hatte."""
+    ein früherer Sonderfall-Filter fälschlich als Dienstleistung gemeldet hatte.
+
+    Rechnungen ab zm_meldezeitraum.CUTOVER_DATUM (Issue #497) kommen nicht über ihre Buchungen,
+    sondern über zm_meldezeitraum.ig_umsaetze() - dieselbe Quelle wie UStVA KZ 41/21. Ihre
+    Journalbuchungen werden in allen drei Abfragen übersprungen, sonst doppelt."""
     ergebnis: list[_IgBuchung] = []
+    neu_ids = zm_meldezeitraum.neue_rechnung_ids(db)
 
     einnahmen = db.query(Journaleintrag).filter(
         Journaleintrag.datum >= von, Journaleintrag.datum <= bis,
         Journaleintrag.art == "Einnahme", _ig_lieferung_filter(Journaleintrag),
     ).all()
     for e in einnahmen:
+        if e.rechnung_id in neu_ids:
+            continue
         ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, "L", e.rechnung_id))
 
     Original = aliased(Journaleintrag)
@@ -145,6 +157,8 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
         .all()
     )
     for storno_e, orig_e in stornos:
+        if orig_e.rechnung_id in neu_ids:
+            continue
         ergebnis.append(_IgBuchung(-(storno_e.netto_betrag or ZERO), "L", orig_e.rechnung_id))
 
     # Über die Rechnung erkannt: sonstige Leistungen (S) und ig. Lieferungen (L) aus Rechnungen,
@@ -158,11 +172,16 @@ def _ig_eintraege(von: date, bis: date, db: Session) -> list[_IgBuchung]:
         # schon oben als L über das Konto gezählt (in Python statt per SQL-NOT: Konten sind hier oft NULL)
         if e.konto_skr03 == "8125" or e.konto_skr04 in IG_LIEFERUNG_SKR04:
             continue
+        if e.rechnung_id in neu_ids:
+            continue
         kz = "L" if e.rechnung_id in lieferung_ids else "S"
         if e.art == "Einnahme":
             ergebnis.append(_IgBuchung(e.netto_betrag or ZERO, kz, e.rechnung_id))
         elif e.art == "Ausgabe" and e.zahlungsart != "Skonto":
             ergebnis.append(_IgBuchung(-(e.netto_betrag or ZERO), kz, e.rechnung_id))
+
+    for u in zm_meldezeitraum.ig_umsaetze(von, bis, db):
+        ergebnis.append(_IgBuchung(u.betrag, u.kennzeichen, u.rechnung_id))
 
     return ergebnis
 
@@ -201,7 +220,10 @@ class ZMPruefung(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _hat_ig_eintraege_gesamt(db: Session) -> bool:
-    """True wenn überhaupt je ig-Buchungen existieren (für Sidebar-Sichtbarkeit)."""
+    """True wenn überhaupt je ig-Buchungen existieren (für Sidebar-Sichtbarkeit). Seit #497
+    zählt auch eine noch unbezahlte Rechnung ab dem Stichtag - sie ist bereits meldepflichtig."""
+    if zm_meldezeitraum.hat_neue_rechnungen(db):
+        return True
     return db.query(Journaleintrag).filter(
         Journaleintrag.art == "Einnahme",
         _ig_lieferung_filter(Journaleintrag)

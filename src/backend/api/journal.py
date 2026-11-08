@@ -22,6 +22,7 @@ from database.connection import get_db, APP_DATA_DIR
 from database.models import BankTransaktion, Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
 from utils.signatur import signatur_journaleintrag
 from utils.konten import ist_ig_lieferung_konto
+from utils.zm_meldezeitraum import hinweis_freie_ig_buchung
 from utils.pdfa_konverter import konvertiere_zu_pdfa
 from utils.rechnungs_parser import analysiere_datei
 from .schemas import (
@@ -427,7 +428,13 @@ def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
     db.add(journaleintrag)
     db.commit()
     db.refresh(journaleintrag)
-    return JournalEintragResponse.from_orm_with_kunde(journaleintrag)
+    return _mit_hinweis(JournalEintragResponse.from_orm_with_kunde(journaleintrag), journaleintrag)
+
+
+def _mit_hinweis(response: JournalEintragResponse, eintrag: Journaleintrag) -> JournalEintragResponse:
+    """Hinweis beim Buchen einer freien ig. Lieferung ab dem Stichtag (Issue #497)."""
+    response.hinweis = hinweis_freie_ig_buchung(eintrag)
+    return response
 
 
 KORREKTUR_FENSTER_SEKUNDEN = 300  # 5 Minuten
@@ -466,7 +473,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
         original.signatur = signatur_journaleintrag(original)
         db.commit()
         db.refresh(original)
-        return JournalEintragResponse.from_orm_with_kunde(original)
+        return _mit_hinweis(JournalEintragResponse.from_orm_with_kunde(original), original)
 
     # Nach Fristablauf: Original versiegeln (falls noch offen), dann Storno + Neubuchung
     if not original.immutable:
@@ -524,7 +531,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
 
     db.commit()
     db.refresh(neu)
-    return JournalEintragResponse.from_orm_with_kunde(neu)
+    return _mit_hinweis(JournalEintragResponse.from_orm_with_kunde(neu), neu)
 
 
 async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
@@ -807,7 +814,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
     db.commit()
     for e in ergebnisse:
         db.refresh(e)
-    return [JournalEintragResponse.from_orm_with_kunde(e) for e in ergebnisse]
+    return [_mit_hinweis(JournalEintragResponse.from_orm_with_kunde(e), e) for e in ergebnisse]
 
 
 # ---------------------------------------------------------------------------

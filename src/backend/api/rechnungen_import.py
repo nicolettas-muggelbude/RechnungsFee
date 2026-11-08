@@ -22,11 +22,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Kunde, Lieferant, Kategorie, Rechnung
+from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 
 from .rechnungen import _create_rechnung, zahlung_bar_erstellen
 from .schemas_rechnungen import BarZahlungCreate, RechnungCreate, RechnungspositionCreate
@@ -202,17 +202,21 @@ def _matche_kategorie(db: Session, raw: Optional[str], mapping: Optional[dict[st
     # Erst die ganze Zeichenkette (Kategorienamen dürfen Kommas enthalten!),
     # erst dann Multiple-Category-Versuch über Komma/Semikolon-Split.
     candidates = [raw.strip()] + [p.strip() for p in re.split(r"[;,]", raw) if p.strip()]
+    # Vergleich in Python statt per SQL-lower(): SQLite verkleinert nur ASCII, „ÖPNV“ blieb
+    # dort „Öpnv“ und passte nie zum Python-lower() „öpnv“ (Issue #499)
+    kategorien = db.query(Kategorie).all()
+    nach_name = {}
+    for k in kategorien:
+        nach_name.setdefault(k.name.casefold(), k)
     for part in candidates:
         if not part:
             continue
         ziel = (mapping or {}).get(part) or (mapping or {}).get(part.lower())
         if ziel:
-            kat = db.query(Kategorie).filter(Kategorie.name == ziel).first()
+            kat = next((k for k in kategorien if k.name == ziel), None) or nach_name.get(ziel.casefold())
             if kat:
                 return kat
-        kat = db.query(Kategorie).filter(
-            sa_func.lower(Kategorie.name) == part.lower()
-        ).first()
+        kat = nach_name.get(part.casefold())
         if kat:
             return kat
     return None
@@ -337,25 +341,39 @@ def _auswerte_zeile(db: Session, typ: str, row: dict, kategorie_mapping: Optiona
         if z.externe_belegnr and db.query(Rechnung).filter(Rechnung.externe_belegnr == z.externe_belegnr).first():
             z.fehler.append(f"Externe Belegnummer {z.externe_belegnr} existiert bereits.")
         _pruefe_betaege(z)
-        if status in ("paid", "bezahlt", "überbezahlt", "ueberbezahlt") and z.brutto is not None:
+        bezahlt = status in ("paid", "bezahlt", "überbezahlt", "ueberbezahlt") and z.brutto is not None
+        if bezahlt:
             if z.bezahlt_betrag is None or z.bezahlt_betrag <= 0:
                 z.bezahlt_betrag = z.brutto
             if z.bezahlt_am is None:
                 z.bezahlt_am = z.faellig_am or z.datum
                 if z.bezahlt_am:
                     z.warnungen.append("Kein Zahlungsdatum in der CSV – Zahlungsdatum der Fälligkeit/des Belegdatums verwendet.")
-            if z.brutto is not None:
-                z.kategorie = _matche_kategorie(db, kategorie_raw, kategorie_mapping)
-                if z.kategorie and z.kategorie.kontenart == "Erlös":
-                    z.fehler.append(
-                        f"Kategorie '{z.kategorie.name}' ist eine Erlöskategorie – "
-                        "Eingangsbelege können nicht darauf gebucht werden."
-                    )
-                    z.kategorie = None
-                if not z.kategorie and not z.fehler:
-                    z.warnungen.append("Kategorie nicht in den Stammdaten gefunden – Zahlung wird nicht gebucht (bitte manuell kategorisieren).")
         else:
             z.bezahlt_betrag = None
+
+        # Kategorie auch für offene Belege: ab dem Vorsteuer-Stichtag ist sie beim Anlegen
+        # Pflicht (Vorsteuer nach Rechnungsdatum), davor braucht sie spätestens die Zahlung
+        # (Issue #499 - bisher nur bei bezahlten Belegen gesucht)
+        z.kategorie = _matche_kategorie(db, kategorie_raw, kategorie_mapping)
+        if z.kategorie and z.kategorie.kontenart == "Erlös":
+            z.fehler.append(
+                f"Kategorie '{z.kategorie.name}' ist eine Erlöskategorie – "
+                "Eingangsbelege können nicht darauf gebucht werden."
+            )
+            z.kategorie = None
+        if not z.kategorie and not z.fehler:
+            grund = ("Kategorie nicht in den Stammdaten gefunden" if kategorie_raw
+                     else "Keine Kategorie in der CSV")
+            if bezahlt:
+                z.warnungen.append(f"{grund} – Zahlung wird nicht gebucht (bitte manuell kategorisieren).")
+            elif z.datum and z.datum >= CUTOVER_DATUM_VORSTEUER:
+                z.fehler.append(
+                    f"{grund} – offene Belege ab {CUTOVER_DATUM_VORSTEUER.strftime('%d.%m.%Y')} "
+                    "brauchen eine Kategorie, weil die Vorsteuer mit dem Belegdatum geltend gemacht wird."
+                )
+            else:
+                z.warnungen.append(f"{grund} – bitte vor dem Buchen der Zahlung kategorisieren.")
 
     return z
 
@@ -459,11 +477,7 @@ async def import_vorschau(
             bezahlt_betrag=z.bezahlt_betrag,
             bezahlt_am=z.bezahlt_am,
             kategorie=z.kategorie.name if z.kategorie else None,
-            kategorie_quelle=(
-                _get(row, "Kategorien", "Kategorie")
-                if typ == TYP_BELEGE and z.bezahlt_betrag and z.bezahlt_betrag > 0
-                else None
-            ),
+            kategorie_quelle=_get(row, "Kategorien", "Kategorie") if typ == TYP_BELEGE else None,
             kategorie_match=z.kategorie is not None,
             fehler=z.fehler,
             warnungen=z.warnungen,

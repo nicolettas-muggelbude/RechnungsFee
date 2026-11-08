@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -21,6 +21,8 @@ const KZ_META: KZMeta[] = [
   ['', '87', 'Umsätze zum Steuersatz von 0 % (§12 Abs. 3 UStG, z. B. Photovoltaik)', false, false],
   ['B. Steuerfreie Umsätze mit Vorsteuerabzug', '41', 'Innergemeinschaftliche Lieferungen (§4 Nr. 1b) an Abnehmer mit USt-IdNr.', false, true],
   ['', '43', 'Weitere steuerfreie Umsätze mit Vorsteuerabzug (z. B. Ausfuhrlieferungen, §4 Nr. 1a i. V. m. §6 UStG)', false, true],
+  // Issue #492
+  ['Steuerfreie Umsätze ohne Vorsteuerabzug', '48', 'Umsätze nach §4 Nr. 8 bis 29 UStG (z. B. Heilberufe, Unterricht)', false, true],
   ['Nicht im Inland steuerbare Umsätze', '21', 'Nicht steuerbare sonstige Leistungen im übrigen Gemeinschaftsgebiet (§3a Abs. 2 UStG)', false, true],
   ['', '45', 'Übrige nicht im Inland steuerbare Umsätze (u. a. §3a Abs. 2 UStG Drittland)', false, true],
   ['C. Innergemeinschaftliche Erwerbe', '89', 'Steuerpflichtige Erwerbe 19 % – Bemessungsgrundlage', false, true],
@@ -192,8 +194,10 @@ function KZZeile({ kz, label, wert, istSteuer = false, bold = false, zeitraum, g
           ) : !posten?.length ? (
             <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Keine Einzelposten gefunden.</p>
           ) : (
-            gefiltert.map(g => (
-              <div key={g.original.quelle + '-' + g.original.quelle_id} className={g.original.storniert ? 'opacity-60' : ''}>
+            // Index im Key: eine Rechnung ab dem Stichtag (Issue #497) kann im selben Monat mehrere
+            // Posten mit gleicher quelle_id haben (Rechnung, Storno, Skonto)
+            gefiltert.map((g, i) => (
+              <div key={g.original.quelle + '-' + g.original.quelle_id + '-' + i} className={g.original.storniert ? 'opacity-60' : ''}>
                 {postenZeile(g.original, false)}
                 {g.gegenbuchung && postenZeile(g.gegenbuchung, true)}
               </div>
@@ -223,7 +227,7 @@ export function UStVAPage() {
   const qc = useQueryClient()
   const now = new Date()
   const [modus, setModus] = useState<'monat' | 'quartal'>('quartal')
-  const modusInitRef = useRef(false)
+  const [modusInitialisiert, setModusInitialisiert] = useState(false)
   const [jahr, setJahr] = useState(now.getFullYear())
   const [monat, setMonat] = useState(now.getMonth() + 1)
   const [quartal, setQuartal] = useState(Math.ceil((now.getMonth() + 1) / 3))
@@ -241,13 +245,13 @@ export function UStVAPage() {
   const { data: unt } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const { data: historie } = useQuery({ queryKey: ['ustva-historie'], queryFn: getUStVAHistorie })
 
-  useEffect(() => {
-    if (unt && !modusInitRef.current) {
-      modusInitRef.current = true
-      const r = (unt as any).voranmeldungsrhythmus as 'monat' | 'quartal' | undefined
-      if (r === 'monat' || r === 'quartal') setModus(r)
-    }
-  }, [unt])
+  // Modus einmalig aus den Stammdaten übernehmen, sobald sie geladen sind - State beim Laden
+  // direkt im Rendern anpassen statt per Effekt (kein Zusatz-Render)
+  if (unt && !modusInitialisiert) {
+    setModusInitialisiert(true)
+    const r = unt.voranmeldungsrhythmus
+    if (r === 'monat' || r === 'quartal') setModus(r)
+  }
 
   const { data: ergebnis, isLoading, error } = useQuery({
     queryKey: ['ustva-berechnen', zeitraum],
@@ -297,6 +301,12 @@ export function UStVAPage() {
     return base
   }
 
+  // Speichern braucht zusätzlich den Zeitraum (Pflichtfeld im Backend) - fehlte bisher, versteckt
+  // hinter einem „as any“: jede gespeicherte Voranmeldung scheiterte mit einem Validierungsfehler
+  function speicherDaten(): Parameters<typeof speichereUStVA>[0] {
+    return { ...alleKZ(), zeitraum } as unknown as Parameters<typeof speichereUStVA>[0]
+  }
+
   function berechneZahllast(): string {
     // kz_89/93/90 sind reine Bemessungsgrundlagen (feste Sätze 19%/7%/0% – die Steuer wird
     // bei festen Sätzen nicht separat gemeldet, siehe Backend-Kommentar). Für die Zahllast
@@ -308,7 +318,7 @@ export function UStVAPage() {
   }
 
   const jahre = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i)
-  const rhythmus = (unt as any)?.voranmeldungsrhythmus ?? 'quartal'
+  const rhythmus = unt?.voranmeldungsrhythmus ?? 'quartal'
 
   // Abschnitte mit mindestens einem Nicht-Null-Wert für die Anzeige ermitteln
   function renderKZTabelle() {
@@ -407,7 +417,7 @@ export function UStVAPage() {
               {hatManuelleUeberschreibung && <span className="text-xs text-amber-600 dark:text-amber-400">ELSTER-XML nur ohne manuelle Felder – trag sie direkt in Mein ELSTER ein.</span>}
               {pdfGeoeffnet && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ geöffnet</span>}
               {exportFehler && <span className="text-xs text-red-600 dark:text-red-400">{exportFehler}</span>}
-              <button type="button" onClick={() => speichernMut.mutate(alleKZ() as any)}
+              <button type="button" onClick={() => speichernMut.mutate(speicherDaten())}
                 disabled={speichernMut.isPending || ergebnis.befreit}
                 className="px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">
                 {gespeichertMeldung ? '✓ Gespeichert' : 'Speichern'}

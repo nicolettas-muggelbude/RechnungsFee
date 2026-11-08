@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   getUnternehmen, updateUnternehmen, uploadLogo, deleteLogo, getLogoUrl, sendeTestMail, postfachTesten, getProfile, isTauri,
-  type Unternehmen,
+  STEUERBEFREIUNGEN_4, type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { DateInput } from '../../components/DateInput'
@@ -86,7 +86,7 @@ function LogoSektion({
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [fehler, setFehler] = useState<string | null>(null)
-  const [cacheBust, setCacheBust] = useState(Date.now())
+  const [cacheBust, setCacheBust] = useState(() => Date.now())
   const [logoSrc, setLogoSrc] = useState<string>('')
   // Issue #454: Logo hinterlegt, Datei aber nicht auffindbar (z. B. nach Wiederherstellung nur der
   // Datenbank) - einmal neu versuchen, dann Hinweis statt endloser Neuladeversuche
@@ -200,7 +200,9 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
   })
   const mehrereProfile = (profilListe?.profile.length ?? 0) > 1
   const [form, setForm] = useState<Partial<Unternehmen>>(() => {
-    const { logo_pfad: _logo, ...rest } = data
+    // logo_pfad gehört nicht ins Formular (eigener Upload-Weg)
+    const rest: Partial<Unternehmen> = { ...data }
+    delete rest.logo_pfad
     if (rest.iban) {
       const raw = rest.iban.replace(/\s/g, '').toUpperCase()
       rest.iban = raw.replace(/(.{4})/g, '$1 ').trimEnd()
@@ -319,6 +321,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
 
   // Firma-Tab: Name, Anschrift, IBAN. Gibt eine Fehlermeldung zurück oder null.
   function pruefeFirma(): string | null {
+    // Steuerzeichen bewusst gesucht: in ZUGFeRD/XRechnung (XML) ungültig
+    // eslint-disable-next-line no-control-regex
     const steuerzeichen = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
 
     const hatFirma = !!(form.firmenname?.trim())
@@ -582,6 +586,67 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Keine USt auf Rechnungen, kein Vorsteuerabzug.</p>
           </div>
         </label>
+
+        {/* Issue #491: Grundlage der Kleinunternehmer-Warnung im Dashboard */}
+        <Field label={<>Beginn der Tätigkeit <InfoTooltip text="Im Jahr der Gründung gilt für Kleinunternehmer eine Grenze von 25.000 € statt 100.000 € – ohne Hochrechnung auf ein volles Jahr. RechnungsFee warnt im Dashboard rechtzeitig." /></>}>
+          <DateInput
+            value={form.taetigkeit_beginn ?? ''}
+            onChange={(v) => set('taetigkeit_beginn', v || null)}
+            className={inputCls}
+          />
+        </Field>
+
+        {form.ist_kleinunternehmer && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              Umsatz vor RechnungsFee
+              <InfoTooltip text="Nur wenn du mitten im Jahr von einem anderen Programm umsteigst: Umsätze, die nicht in RechnungsFee gebucht sind. Sie fließen nur in die Kleinunternehmer-Warnung ein, nicht in die EÜR." side="bottom" />
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Startjahr mit RechnungsFee">
+                <input
+                  type="number" min={2000} max={2100} step={1}
+                  value={form.umsatz_extern_jahr ?? ''}
+                  onChange={ev => set('umsatz_extern_jahr', ev.target.value === '' ? null : parseInt(ev.target.value))}
+                  placeholder={String(new Date().getFullYear())}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Umsatz im Vorjahr (€)">
+                <input
+                  type="number" min={0} step={0.01}
+                  value={form.umsatz_extern_vorjahr ?? ''}
+                  onChange={ev => set('umsatz_extern_vorjahr', ev.target.value === '' ? null : ev.target.value)}
+                  placeholder="0,00"
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Umsatz im Startjahr vor RechnungsFee (€)">
+                <input
+                  type="number" min={0} step={0.01}
+                  value={form.umsatz_extern_startjahr ?? ''}
+                  onChange={ev => set('umsatz_extern_startjahr', ev.target.value === '' ? null : ev.target.value)}
+                  placeholder="0,00"
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {/* Issue #492: steuerfreie Umsätze nach § 4 UStG */}
+        <Field label={<>Steuerfreie Umsätze nach § 4 UStG <InfoTooltip text="Für Heilberufe oder Unterricht: Neue Rechnungen werden als steuerfrei vorbelegt (Hinweis auf der Rechnung, 0 % USt). Einzelne steuerpflichtige Leistungen – z. B. ein Gutachten – stellst du auf einer eigenen Rechnung ohne den Haken aus." side="bottom" /></>}>
+          <select
+            value={form.steuerbefreiung_4 ?? ''}
+            onChange={ev => set('steuerbefreiung_4', ev.target.value || null)}
+            className={selectCls}
+          >
+            <option value="">keine</option>
+            {STEUERBEFREIUNGEN_4.map(s => (
+              <option key={s.wert} value={s.wert}>{s.paragraph} – {s.label}</option>
+            ))}
+          </select>
+        </Field>
 
         <label className="flex items-start gap-3 cursor-pointer">
           <input
@@ -1467,9 +1532,9 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
       await sendeTestMail(testMail.trim())
       setTestStatus('ok')
       setTimeout(() => setTestStatus('idle'), 3000)
-    } catch (e: any) {
+    } catch (e) {
       setTestStatus('error')
-      setTestFehler(e?.message ?? 'Unbekannter Fehler')
+      setTestFehler(e instanceof Error ? e.message : 'Unbekannter Fehler')
     }
   }
 
@@ -1638,9 +1703,9 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
       setTestStatus('ok')
       setTestText(`Verbindung OK – Ordner „${r.ordner}" enthält ${r.anzahl_mails} Mail${r.anzahl_mails === 1 ? '' : 's'}.`)
       qc.invalidateQueries({ queryKey: ['unternehmen'] })  // ggf. neu gemerktes Zertifikat anzeigen
-    } catch (e: any) {
+    } catch (e) {
       setTestStatus('error')
-      setTestText(e?.message ?? 'Unbekannter Fehler')
+      setTestText(e instanceof Error ? e.message : 'Unbekannter Fehler')
     }
   }
 

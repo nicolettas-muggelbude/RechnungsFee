@@ -128,6 +128,7 @@ class RechnungCreate(BaseModel):
     ist_eu_lieferung: bool = False
     ist_drittland_leistung: bool = False
     ist_ausfuhrlieferung: bool = False
+    steuerfrei_4: bool = False  # Issue #492: steuerfreie Leistung nach § 4 UStG
     eingabemodus: str = "netto"  # netto|brutto - siehe Rechnung.eingabemodus (Issue #332)
     positionen: List[RechnungspositionCreate]
 
@@ -140,11 +141,13 @@ class RechnungCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_eu_flags(self) -> "RechnungCreate":
-        if sum([self.ist_reverse_charge, self.ist_eu_lieferung, self.ist_drittland_leistung, self.ist_ausfuhrlieferung]) > 1:
+        if sum([self.ist_reverse_charge, self.ist_eu_lieferung, self.ist_drittland_leistung,
+                self.ist_ausfuhrlieferung, self.steuerfrei_4]) > 1:
             raise ValueError(
                 "Reverse Charge (EU-Dienstleistung), innergemeinschaftliche Lieferung (EU-Ware), "
-                "Drittland-Dienstleistung und Ausfuhrlieferung (Drittland-Ware) schließen sich "
-                "gegenseitig aus - bei gemischten Rechnungen bitte zwei Rechnungen erstellen."
+                "Drittland-Dienstleistung, Ausfuhrlieferung (Drittland-Ware) und steuerfreie "
+                "Leistung nach § 4 UStG schließen sich gegenseitig aus - bei gemischten "
+                "Rechnungen bitte zwei Rechnungen erstellen."
             )
         return self
 
@@ -222,6 +225,8 @@ class RechnungUpdate(BaseModel):
     externe_belegnr: Optional[str] = None
     kunden_bestellnummer: Optional[str] = None
     bemerkung_erechnung: Optional[str] = None
+    # Issue #495: fehlte - eine beim Bearbeiten gewählte Lieferadresse wurde verworfen
+    lieferadresse_id: Optional[int] = None
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
@@ -231,6 +236,7 @@ class RechnungUpdate(BaseModel):
     ist_eu_lieferung: Optional[bool] = None
     ist_drittland_leistung: Optional[bool] = None
     ist_ausfuhrlieferung: Optional[bool] = None
+    steuerfrei_4: Optional[bool] = None  # Issue #492
     eingabemodus: Optional[str] = None  # netto|brutto - siehe Rechnung.eingabemodus (Issue #332)
     rabatt_prozent: Optional[Decimal] = None
     rabatt_betrag: Optional[Decimal] = None
@@ -266,6 +272,7 @@ class RechnungVorschauRequest(BaseModel):
     ist_eu_lieferung: bool = False
     ist_drittland_leistung: bool = False
     ist_ausfuhrlieferung: bool = False
+    steuerfrei_4: bool = False  # Issue #492
 
     @field_validator("eingabemodus")
     @classmethod
@@ -367,6 +374,7 @@ class RechnungResponse(BaseModel):
     ist_eu_lieferung: bool = False
     ist_drittland_leistung: bool = False
     ist_ausfuhrlieferung: bool = False
+    steuerfrei_4: bool = False  # Issue #492
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
     positionen: List[RechnungspositionResponse] = []

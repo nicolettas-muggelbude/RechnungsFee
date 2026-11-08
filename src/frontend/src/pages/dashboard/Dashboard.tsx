@@ -387,7 +387,11 @@ function LieferantenguthabenWidget() {
       typeof v === 'string' ? parseFloat(v) : v
     )
 
-  const ausgabeKats = kategorien?.filter(k => k.kontenart === 'Ausgabe') ?? []
+  // Kontenart „Ausgabe“ gibt es nicht (Aufwand/Erlös/Privat/Anlage) – die Liste war dadurch
+  // immer leer (Issue #502). Privateinlage (EÜR-Zeile 107) passt nicht zu einem Guthaben.
+  const ausgabeKats = kategorien?.filter(k => k.kontenart === 'Aufwand') ?? []
+  const privatKats = kategorien?.filter(k => k.kontenart === 'Privat' && k.euer_zeile !== 107) ?? []
+  const gewaehltePrivat = privatKats.some(k => String(k.id) === kategorieId)
 
   return (
     <div className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-4 mb-4">
@@ -432,18 +436,29 @@ function LieferantenguthabenWidget() {
             {ausbuchenId === f.id && (
               <div className="mt-2 p-3 bg-white dark:bg-zinc-800 rounded-lg border border-orange-200 dark:border-orange-700 space-y-2">
                 <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Forderungsausfall buchen ({fmt(f.betrag)})
+                  Guthaben ausbuchen ({fmt(f.betrag)})
                 </p>
                 <select
                   value={kategorieId}
                   onChange={e => setKategorieId(e.target.value)}
+                  aria-label="Kategorie zum Ausbuchen"
                   className="w-full text-xs border rounded p-1.5 bg-white dark:bg-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
                 >
                   <option value="">Kategorie wählen …</option>
-                  {ausgabeKats.map((k: { id: number; name: string }) => (
-                    <option key={k.id} value={k.id}>{k.name}</option>
-                  ))}
+                  <optgroup label="Forderungsausfall">
+                    {ausgabeKats.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </optgroup>
+                  {f.typ === 'lieferantenguthaben' && privatKats.length > 0 && (
+                    <optgroup label="Privater Anteil">
+                      {privatKats.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                    </optgroup>
+                  )}
                 </select>
+                {gewaehltePrivat && (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Wird mit Datum und Bankkonto der ursprünglichen Zahlung gebucht.
+                  </p>
+                )}
                 <input
                   value={notiz}
                   onChange={e => setNotiz(e.target.value)}
@@ -595,8 +610,29 @@ function KleinunternehmerWarnung() {
   if (!unt?.ist_kleinunternehmer || !ku) return null
 
   const prozent = Math.min((ku.umsatz_netto / ku.grenze_kritisch) * 100, 100)
-  const ueberschritten = ku.umsatz_netto >= ku.grenze_kritisch
+  // Grenze selbst ist noch erlaubt („nicht überschreitet“) - erst darüber gilt die Regelbesteuerung
+  const ueberschritten = ku.umsatz_netto > ku.grenze_kritisch
   const kritisch = ku.umsatz_netto >= ku.grenze_warnung
+  const grenzeText = `${formatEuro(ku.grenze_kritisch)}-Grenze${ku.ist_gruendungsjahr ? ' im Gründungsjahr' : ''}`
+
+  // Issue #491: Vorjahr über 25.000 € → § 19 gilt im laufenden Jahr gar nicht
+  if (ku.vorjahr_ueberschritten) {
+    return (
+      <div role="alert" className="rounded-lg border p-4 mb-4 bg-red-50 border-red-300 dark:bg-red-950 dark:border-red-800">
+        <div className="flex items-start gap-3">
+          <span className="text-xl" aria-hidden="true">🚨</span>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-red-800 dark:text-red-300">Kleinunternehmerregelung gilt {ku.jahr} nicht</p>
+            <p className="text-sm mt-0.5 text-red-700 dark:text-red-400">
+              Dein Umsatz {ku.vorjahr} lag mit {formatEuro(ku.umsatz_vorjahr)} über {formatEuro(ku.grenze_vorjahr)}. Damit bist
+              du {ku.jahr} regelbesteuert: Stelle Rechnungen mit Umsatzsteuer aus, nimm in den Unternehmensdaten den Haken
+              „Kleinunternehmer“ heraus und sprich mit deinem Steuerbüro oder Finanzamt.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!kritisch) return null
 
@@ -616,8 +652,8 @@ function KleinunternehmerWarnung() {
           </p>
           <p className={`text-sm mt-0.5 ${ueberschritten ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
             {ueberschritten
-              ? `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} und hat die 100.000 €-Grenze überschritten. Ab diesem Zeitpunkt bist du regelbesteuert – stelle ab sofort Rechnungen mit Umsatzsteuer aus und informiere dein Finanzamt.`
-              : `Dein Netto-Jahresumsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} (${prozent.toFixed(1)} % der 100.000 €-Grenze). Bei Überschreitung wechselst du sofort zur Regelbesteuerung.`
+              ? `Dein Umsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} und hat die ${grenzeText} überschritten. Ab dem Umsatz, mit dem die Grenze überschritten wurde, bist du regelbesteuert – stelle ab sofort Rechnungen mit Umsatzsteuer aus und informiere dein Finanzamt.`
+              : `Dein Umsatz ${ku.jahr} beträgt ${formatEuro(ku.umsatz_netto)} (${prozent.toFixed(1)} % der ${grenzeText}). Bei Überschreitung wechselst du sofort zur Regelbesteuerung.`
             }
           </p>
           <div className="mt-2 h-1.5 rounded-full bg-amber-200 dark:bg-amber-900 overflow-hidden">
@@ -1187,7 +1223,10 @@ export function Dashboard() {
   const qc = useQueryClient()
   const [konfModus, setKonfModus] = useState(false)
 
-  // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende
+  // Filter: Lazy-Init aus Store → bleibt beim Navigieren erhalten bis Programmende.
+  // Das Schreiben in den modulweiten Store ist gewollt (überlebt das Unmount der Seite) und
+  // passiert nur in Event-Handlern, nie beim Rendern - deshalb hier bewusst freigegeben.
+  /* eslint-disable react-hooks/immutability */
   const [filterModus, _setFilterModus] = useState<FilterModus>(() => (dashboardFilter.modus as FilterModus) ?? 'monat')
   const setFilterModus = (m: FilterModus) => { dashboardFilter.modus = m; _setFilterModus(m) }
 
@@ -1202,6 +1241,7 @@ export function Dashboard() {
 
   const [datumBis, _setDatumBis] = useState<string>(() => dashboardFilter.datumBis)
   const setDatumBis = (d: string) => { dashboardFilter.datumBis = d; _setDatumBis(d) }
+  /* eslint-enable react-hooks/immutability */
 
   const aktivesJahr = new Date().getFullYear()
   const filterParams =

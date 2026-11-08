@@ -42,6 +42,25 @@ def _standardtext(unt: dict, feld: str, dokument_typ: str) -> str:
     return (unt.get(f"{feld}{suffix}") or "").strip()
 
 
+def steuerfrei_4_hinweis(schluessel: str | None) -> str:
+    """Issue #492: Hinweis auf die Steuerbefreiung nach § 4 UStG (Rechnung und E-Rechnung BT-120).
+    Schlüssel aus dem Absender-Snapshot; fehlt er, bleibt der allgemeine Hinweis."""
+    from api.schemas import STEUERBEFREIUNGEN_4
+    paragraph = STEUERBEFREIUNGEN_4.get(schluessel or "")
+    return f"Steuerfreie Leistung nach {paragraph}." if paragraph else "Steuerfreie Leistung nach § 4 UStG."
+
+
+def dokument_text(r, unt: dict, feld: str) -> str:
+    """Einleitungs-/Schlusstext eines Dokuments: eigener Text, sonst der Standard des Dokumenttyps.
+    Eingangsrechnungen bilden das Dokument des Lieferanten ab - die eigenen Standardtexte
+    („Vielen Dank für Ihren Auftrag …“) gehören dort nicht hinein (Issue #504)."""
+    eigener = (getattr(r, feld, None) or "").strip()
+    if eigener or getattr(r, "typ", None) == "eingang":
+        return eigener
+    dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
+    return _standardtext(unt, feld, dokument_typ)
+
+
 ANREDE_STANDARD = "Hallo {vorname} {nachname},"
 ANREDE_FALLBACK_STANDARD = "Hallo,"
 # Finalisierte Dokumente mit einem Snapshot von vor Issue #440 kennen den Schlüssel
@@ -62,7 +81,10 @@ def anrede_zeile(r, unt: dict, nur_wenn_konfiguriert: bool = False) -> str:
     {anrede} ohne Herr/Frau), greift die Ersatzanrede statt eines halben Satzes.
     nur_wenn_konfiguriert: Vorlage 0 zeigt die Anrede nur, wenn etwas eingestellt ist.
     Bewusst str.replace statt str.format (unbekannte {…} bleiben stehen, kein KeyError).
+    Eingangsrechnungen: keine Anrede - das Dokument stammt vom Lieferanten (Issue #504).
     """
+    if r.typ == "eingang":
+        return ""
     partner = getattr(r, "kunde", None) if r.typ == "ausgang" else getattr(r, "lieferant", None)
     if "anrede_text" in unt:
         individuell = (getattr(partner, "anrede_individuell", None) or "").strip()
@@ -659,9 +681,7 @@ class RechnungPDFBase(FPDF):
             self.set_x(L_MARGIN)
             self.cell(0, 6, anrede, new_x="LMARGIN", new_y="NEXT")
             self.ln(1)
-        dokument_typ = getattr(self._r, "dokument_typ", "Rechnung") or "Rechnung"
-        text = (getattr(self._r, "einleitungstext", None) or
-                _standardtext(self._unt, "einleitungstext", dokument_typ)).strip()
+        text = dokument_text(self._r, self._unt, "einleitungstext")
         if text:
             self.set_font("DejaVu", "", 9)
             self.set_text_color(*TEXT_DUNKEL)
@@ -687,9 +707,7 @@ class RechnungPDFBase(FPDF):
         """Issue #368: Hook kurz vor den Notizen - Pendant zu _render_nach_titel(), aber
         NACH Positionen/Summenblock/Zahlungsblock statt davor. Läuft unabhängig vom
         Dokumenttyp, genau wie der Einleitungstext-Hook auch immer aufgerufen wird."""
-        dokument_typ = getattr(self._r, "dokument_typ", "Rechnung") or "Rechnung"
-        text = (getattr(self._r, "schlusstext", None) or
-                _standardtext(self._unt, "schlusstext", dokument_typ)).strip()
+        text = dokument_text(self._r, self._unt, "schlusstext")
         if text:
             abstand, x, breite = self._schlusstext_layout()
             if abstand:
@@ -794,7 +812,13 @@ class RechnungPDFBase(FPDF):
         r = self._r
         self.set_font("DejaVu", "", 7.5)
         self.set_text_color(*TEXT_GRAU)
-        if unt.get("ist_kleinunternehmer"):
+        # Issue #492: Pflichthinweis auf die Steuerbefreiung (§ 14 Abs. 4 Nr. 8 UStG) - ersetzt bei
+        # Kleinunternehmern den § 19-Hinweis, die Befreiung nach § 4 geht vor
+        steuerfrei_4 = bool(getattr(r, "steuerfrei_4", False))
+        if steuerfrei_4:
+            self.cell(0, 5, steuerfrei_4_hinweis(unt.get("steuerbefreiung_4")),
+                      new_x="LMARGIN", new_y="NEXT")
+        elif unt.get("ist_kleinunternehmer"):
             self.cell(0, 5, "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.",
                       new_x="LMARGIN", new_y="NEXT")
         # §13b Reverse Charge: innergemeinschaftliche Dienstleistung an Unternehmer im EU-Ausland
@@ -842,7 +866,7 @@ class RechnungPDFBase(FPDF):
                             "Differenzbesteuerung (Gebrauchtgegenstände). "
                             "Der Umsatzsteuerbetrag wird nicht gesondert ausgewiesen.",
                             new_x="LMARGIN", new_y="NEXT", align="L")
-        if unt.get("ist_kleinunternehmer") or ist_reverse_charge or ist_eu_lieferung or ist_drittland_leistung or ist_ausfuhrlieferung or hat_diff:
+        if unt.get("ist_kleinunternehmer") or steuerfrei_4 or ist_reverse_charge or ist_eu_lieferung or ist_drittland_leistung or ist_ausfuhrlieferung or hat_diff:
             self.ln(self._ln_nach_19)
 
     def _render_zahlungsblock(self):

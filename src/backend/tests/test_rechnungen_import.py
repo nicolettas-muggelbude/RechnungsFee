@@ -368,11 +368,59 @@ def test_beleg_nicht_inland_wird_mit_hinweis_abgelehnt(db):
     assert any("Herkunftsort" in f and "Reverse-Charge" in f for f in zeile.fehler)
 
 
-def test_offener_beleg_erfordert_keine_kategoriezuordnung(db):
-    csv_inhalt = BELEGE_CSV.replace(b";paid;", b";open;")
+def test_offener_beleg_uebernimmt_kategorie(db):
+    """Issue #499: Kategorie auch bei offenen Belegen erkennen und zur Zuordnung anbieten."""
+    csv_inhalt = BELEGE_CSV.replace(b";paid;", b";unpaid;")
     zeile = asyncio.run(import_vorschau(_FakeUpload(csv_inhalt), TYP_BELEGE, "", db=db))[0]
-    assert zeile.kategorie_quelle is None
+    assert zeile.kategorie_quelle == "Bürobedarf"
+    assert zeile.kategorie == "Bürobedarf"
+    assert zeile.bezahlt_betrag is None
     assert not zeile.fehler
+
+    result = asyncio.run(import_durchfuehren(_FakeUpload(csv_inhalt), TYP_BELEGE, "", db=db))
+    assert result.importiert == 1
+    rechnung = db.query(Rechnung).filter(Rechnung.externe_belegnr == "B-00001").one()
+    assert rechnung.kategorie_id is not None
+    assert rechnung.zahlungsstatus == "offen"
+
+
+def _offener_beleg_nach_stichtag(kategorie: bytes) -> bytes:
+    return BELEGE_CSV.replace(b";paid;", b";unpaid;").replace(
+        b"03.08.2026;03.08.2026;2026-07-19", b"15.10.2026;15.10.2026;"
+    ).replace("domestic;Bürobedarf".encode(), b"domestic;" + kategorie)
+
+
+def test_offener_beleg_nach_stichtag_mit_kategorie_wird_angelegt(db):
+    """Issue #499: offene Belege ab dem Vorsteuer-Stichtag brachen ab, weil die Kategorie
+    nur bei bezahlten Belegen gesucht wurde."""
+    from database.models import VorsteuerAnspruch
+
+    unternehmen = db.query(Unternehmen).first()
+    unternehmen.ist_kleinunternehmer = False
+    db.commit()
+    csv_inhalt = _offener_beleg_nach_stichtag("Bürobedarf".encode())
+    result = asyncio.run(import_durchfuehren(_FakeUpload(csv_inhalt), TYP_BELEGE, "", db=db))
+    assert result.fehler == 0, result.zeilen[0].begruendung
+    rechnung = db.query(Rechnung).filter(Rechnung.externe_belegnr == "B-00001").one()
+    assert rechnung.zahlungsstatus == "offen"
+    assert db.query(VorsteuerAnspruch).filter(VorsteuerAnspruch.rechnung_id == rechnung.id).count() == 1
+
+
+def test_offener_beleg_nach_stichtag_ohne_kategorie_schon_in_vorschau_fehler(db):
+    csv_inhalt = _offener_beleg_nach_stichtag(b"Unbekannt")
+    zeile = asyncio.run(import_vorschau(_FakeUpload(csv_inhalt), TYP_BELEGE, "", db=db))[0]
+    assert zeile.kategorie_quelle == "Unbekannt"
+    assert any("offene Belege ab 01.10.2026" in f for f in zeile.fehler)
+
+
+def test_kategorie_mit_grossem_umlaut_wird_gefunden(db):
+    """Issue #499: SQLite-lower() verkleinert nur ASCII – „ÖPNV“ wurde nie gefunden."""
+    db.add(Kategorie(name="Reisekosten – ÖPNV", kontenart="Aufwand", konto_skr03="4673", konto_skr04="6673"))
+    db.commit()
+    csv_inhalt = BELEGE_CSV.replace("domestic;Bürobedarf".encode(), "domestic;Reisekosten – ÖPNV".encode())
+    zeile = asyncio.run(import_vorschau(_FakeUpload(csv_inhalt), TYP_BELEGE, "", db=db))[0]
+    assert zeile.kategorie == "Reisekosten – ÖPNV"
+    assert not zeile.warnungen
 
 
 def test_beleg_kann_nicht_auf_erloeskategorie_gebucht_werden(db):

@@ -34,7 +34,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 181
+SCHEMA_VERSION = 182
 
 app = FastAPI(title="RechnungsFee API", version="0.1.0")
 
@@ -47,6 +47,12 @@ app.add_middleware(
         "Content-Disposition",
         "X-Datev-Eintraege",
         "X-Datev-Uebersprungen",
+        # fehlten bis Issue #502: in der installierten App (anderer Origin als das Backend)
+        # waren sie für das Frontend unlesbar - „ohne Sachkonto“ zeigte immer 0
+        "X-Datev-LeerKonto",
+        "X-Datev-Belege",
+        "X-Datev-Verrechnung",
+        "X-Datev-Verrechnung-Belege",
         "X-Buchhalter-Eintraege",
         "X-GoBD-Buchungen",
         "X-GoBD-Belege",
@@ -4096,6 +4102,38 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 181 (Issue #480: EÜR-Zeile 16 für sonstige Einnahmen)")
 
+    if version < 182:
+        with engine.connect() as conn:
+            # Issue #491: Kleinunternehmergrenze - Beginn der Tätigkeit (Gründungsjahr 25.000 €)
+            # und Umsatz vor RechnungsFee (Vorjahr + Startjahr, nur für die Warnung).
+            # Issue #492: Befreiungsgrund für steuerfreie Umsätze nach § 4 UStG am Unternehmen,
+            # Kennzeichen „steuerfrei nach § 4“ an der Rechnung.
+            _u182 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for _spalte, _typ in [
+                ("taetigkeit_beginn", "DATE"),
+                ("umsatz_extern_jahr", "INTEGER"),
+                ("umsatz_extern_vorjahr", "NUMERIC(12,2)"),
+                ("umsatz_extern_startjahr", "NUMERIC(12,2)"),
+                ("steuerbefreiung_4", "VARCHAR(20)"),
+            ]:
+                if _u182 and _spalte not in _u182:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {_spalte} {_typ}"))
+            _r182 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r182 and "steuerfrei_4" not in _r182:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN steuerfrei_4 BOOLEAN NOT NULL DEFAULT 0"))
+            # Beginn der Tätigkeit aus den EKS-Einstellungen übernehmen (Format YYYY-MM), falls
+            # dort schon eingetragen - nur wenn am Unternehmen noch leer
+            _e182 = {r[1] for r in conn.execute(text("PRAGMA table_info(eks_einstellungen)")).fetchall()}
+            if _u182 and "taetigkeitsbeginn" in _e182:
+                _tb = conn.execute(text("SELECT taetigkeitsbeginn FROM eks_einstellungen WHERE id = 1")).scalar()
+                if _tb and len(_tb) == 7 and _tb[4] == "-":
+                    conn.execute(text(
+                        "UPDATE unternehmen SET taetigkeit_beginn = :d WHERE taetigkeit_beginn IS NULL"
+                    ), {"d": f"{_tb}-01"})
+            conn.execute(text("PRAGMA user_version = 182"))
+            conn.commit()
+            print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4259,6 +4297,7 @@ def _migrate_kategorien() -> None:
             {"name": "Reisekosten – ÖPNV",                  "kontenart": "Aufwand", "konto_skr03": "4673", "konto_skr04": "6673", "eks_kategorie": "B7_3",  "euer_zeile": 70,   "vorsteuer_prozent": 100, "ust_satz_standard": 7},
             {"name": "Zinsen & Darlehenskosten",             "kontenart": "Aufwand", "konto_skr03": "2120", "konto_skr04": "7320", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Kredittilgung",                        "kontenart": "Aufwand", "konto_skr03": "0630", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            {"name": "Instandhaltungsrücklage (WEG)",          "kontenart": "Aufwand", "konto_skr03": "1500", "konto_skr04": "1300", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": "Rücklagen-Anteil des Hausgelds einer Wohnungseigentümergemeinschaft – Vermögen bei der WEG, beim Bezahlen keine Betriebsausgabe. Den laut Jahresabrechnung verwendeten Betrag als Ausgabe ohne Geldbewegung buchen (Issue #507)."},
             {"name": "Umsatzsteuer-Zahlung FA",              "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Anlagevermögen (Kauf)",                "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0630", "eks_kategorie": "B8",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},
             {"name": "Investition aus Zuwendung Dritter",   "kontenart": "Anlage",  "konto_skr03": "0400", "konto_skr04": "0630", "eks_kategorie": "B9",    "euer_zeile": None, "vorsteuer_prozent": 100, "ust_satz_standard": 19},

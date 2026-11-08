@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment, type ComponentProps } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -17,7 +17,7 @@ import {
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
-  type Rechnung, type RechnungCreate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
+  STEUERBEFREIUNGEN_4, type Rechnung, type RechnungCreate, type RechnungUpdate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   getPostfachEingang, postfachAbrufen, postfachVerwerfen, postfachUebernommen, postfachDateiPfad, ladePostfachDatei,
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
@@ -1742,7 +1742,7 @@ function RechnungDetail({
         {zeigMailDialog && (
           <MailDialog
             dokument={rechnung}
-            dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as any) ?? 'Rechnung'}
+            dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as ComponentProps<typeof MailDialog>['dokumentTyp']) ?? 'Rechnung'}
             unternehmen={unternehmen}
             onClose={() => { setZeigMailDialog(false); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }}
           />
@@ -2624,10 +2624,13 @@ function EinheitZelle({ value, onChange }: { value: string; onChange: (v: string
   const istBekannt = EINHEITEN.includes(value)
   const [freitext, setFreitext] = useState(!istBekannt)
 
-  // Wenn der Wert von außen auf einen bekannten zurückgesetzt wird (z.B. Formular-Reset)
-  useEffect(() => {
+  // Wenn der Wert von außen auf einen bekannten zurückgesetzt wird (z.B. Formular-Reset) -
+  // State beim Prop-Wechsel direkt im Rendern anpassen statt per Effekt (kein Zusatz-Render)
+  const [vorherigerWert, setVorherigerWert] = useState(value)
+  if (value !== vorherigerWert) {
+    setVorherigerWert(value)
     if (EINHEITEN.includes(value)) setFreitext(false)
-  }, [value])
+  }
 
   if (freitext) {
     return (
@@ -3051,10 +3054,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   useEffect(() => {
     if (initial || typ !== 'ausgang') return
     if (partnerId && kunden) {
-      const k = kunden.find((c: any) => String(c.id) === partnerId)
-      if (k && (k as any).skonto_prozent != null) {
-        setSkontoProzent(String((k as any).skonto_prozent))
-        setSkontoTage(String((k as any).skonto_tage ?? ''))
+      const k = kunden.find((c) => String(c.id) === partnerId)
+      if (k && k.skonto_prozent != null) {
+        setSkontoProzent(String(k.skonto_prozent))
+        setSkontoTage(String(k.skonto_tage ?? ''))
         return
       }
     }
@@ -3081,12 +3084,21 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const [istDrittlandLeistung, setIstDrittlandLeistung] = useState(initial?.ist_drittland_leistung ?? false)
   const [istAusfuhrlieferung, setIstAusfuhrlieferung] = useState(initial?.ist_ausfuhrlieferung ?? false)
   const [sonderfallManuell, setSonderfallManuell] = useState(false)
+  // Issue #492: steuerfreie Leistung nach § 4 UStG - bei neuen Rechnungen vorbelegt, wenn in den
+  // Stammdaten ein Befreiungsgrund steht (Unternehmensdaten laden asynchron → per Effekt)
+  const [steuerfrei4, setSteuerfrei4] = useState<boolean>(initial?.steuerfrei_4 ?? false)
+  const [steuerfrei4Manuell, setSteuerfrei4Manuell] = useState(false)
+  const befreiung4 = STEUERBEFREIUNGEN_4.find((s) => s.wert === unternehmen?.steuerbefreiung_4)
+  useEffect(() => {
+    if (initial || steuerfrei4Manuell || typ !== 'ausgang' || dokumentTyp === 'Lieferschein') return
+    setSteuerfrei4(!!befreiung4)
+  }, [befreiung4, initial, steuerfrei4Manuell, typ, dokumentTyp])
   // Checkboxen nur einblenden wenn Kunde + Unternehmen überhaupt für ig. Lieferung/Reverse
   // Charge in Frage kommen (gültige USt-IdNr. beidseitig, Kunde in anderem EU-Land) - sonst
   // sehen Nutzer:innen ohne EU-Geschäft zwei Häkchen die sie nie brauchen (Issue #316-Feedback).
   // Ausnahme: ist eines der Flags bereits aktiv (z.B. Kunde nachträglich geändert), bleibt es
   // sichtbar, damit man es sieht/abwählen kann statt dass es "unsichtbar" aktiv bleibt.
-  const kunde = kunden?.find((k: any) => String(k.id) === partnerId)
+  const kunde = kunden?.find((k) => String(k.id) === partnerId)
   const kundeEuFaehig = !!(
     unternehmen?.ust_idnr?.trim() &&
     !istKleinunternehmer &&
@@ -3112,7 +3124,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // Umschalten der Kategorie (aus dem Land allein lässt sich nicht ableiten ob USt im
   // Kaufpreis steckt, z.B. Amazon/Ebay-IOSS vs. Alibaba-Direktimport) - nur ein Hinweis,
   // solange noch eine der unspezifischen Standard-Wareneinkauf-Kategorien gewählt ist.
-  const lieferant = lieferanten?.find((l: any) => String(l.id) === partnerId)
+  const lieferant = lieferanten?.find((l) => String(l.id) === partnerId)
   const lieferantLand = typ === 'eingang' ? (partnerId ? lieferant?.land : partnerLand) : undefined
   const lieferantDrittland = !!(lieferantLand && lieferantLand !== 'DE' && !istEuLand(lieferantLand))
   const positionenMitUnspezifischerKat = positionen.some((p) => {
@@ -3215,13 +3227,19 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // automatisch) aktiv wird, auf 0% nachziehen, damit die Live-Anzeige nicht von dem abweicht, was
   // beim Speichern ohnehin passiert (das Backend erzwingt 0% serverseitig unabhaengig davon).
   useEffect(() => {
-    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung)) return
+    if (typ !== 'ausgang' || !(istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4)) return
     setPositionen((prev) => {
       const geaendert = prev.some((p) => p.ust_satz !== '0')
       if (!geaendert) return prev
       return prev.map((p) => (p.ust_satz === '0' ? p : { ...p, ust_satz: '0' }))
     })
-  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung, typ])
+  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung, steuerfrei4, typ])
+
+  // Issue #492: die Auslands-Sonderfälle schließen „steuerfrei nach § 4“ aus (auch wenn sie
+  // automatisch für einen EU-/Drittlandkunden gesetzt werden)
+  useEffect(() => {
+    if (istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) setSteuerfrei4(false)
+  }, [istReverseCharge, istEuLieferung, istDrittlandLeistung, istAusfuhrlieferung])
 
   // Leistungsdatum synchron mit Rechnungsdatum halten (solange nicht manuell geändert)
   useEffect(() => {
@@ -3275,6 +3293,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
     ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
     ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
+    steuerfrei_4: typ === 'ausgang' ? steuerfrei4 : undefined,
   } : null
   const { vorschau } = useRechnungVorschau(vorschauRequest)
 
@@ -3396,7 +3415,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   function fillPositionFromArtikel(i: number, a: ArtikelSuche) {
     // §25a: kein USt-Ausweis, VK brutto = VK netto
     const istDiff = a.differenzbesteuerung
-    const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : String(parseInt(a.steuersatz))
+    const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : String(parseInt(a.steuersatz))
     const preis = istDiff ? a.vk_brutto : (eingabeModus === 'netto' ? a.vk_netto : a.vk_brutto)
     setPositionen((prev) => prev.map((p, idx) =>
       idx === i
@@ -3448,12 +3467,14 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_prozent: dokumentTyp === 'Lieferschein' ? undefined : (skontoProzent ? parseFloat(skontoProzent) : undefined),
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
-      lieferadresse_id: dokumentTyp === 'Lieferschein' && lieferadresseId ? parseInt(lieferadresseId) : undefined,
+      // null statt undefined: „keine Lieferadresse“ muss beim Bearbeiten eines Entwurfs ankommen (Issue #495)
+      lieferadresse_id: dokumentTyp === 'Lieferschein' ? (lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
       dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
       ist_drittland_leistung: typ === 'ausgang' ? istDrittlandLeistung : undefined,
       ist_ausfuhrlieferung: typ === 'ausgang' ? istAusfuhrlieferung : undefined,
+      steuerfrei_4: typ === 'ausgang' ? steuerfrei4 : undefined,
       eingabemodus: eingabeModus,
       // XML-Import: Gesamtbeträge direkt aus der Rechnung übernehmen – aber nur wenn die
       // Positionen noch mit dem OCR/XML-Wert übereinstimmen (overridePasst, oben aus der
@@ -3472,7 +3493,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       // oben (Issue #332: keine zweite, abweichende Umrechnung mehr im Frontend).
       positionen: positionen.map((p) => {
         const istDiff = p.differenzbesteuerung ?? false
-        const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : (p.ust_satz || '0')
+        const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : (p.ust_satz || '0')
         const rabatt = parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || 0
         return {
           beschreibung: p.beschreibung,
@@ -3720,7 +3741,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         <div className="flex gap-1">
           <div className={`flex-1 ${pfRing('lieferant_name')} ${fehlerRing(partnerFehlt)}`}>
             <StammdatenCombobox
-              items={partnerListe.map((p: any) => ({
+              items={partnerListe.map((p) => ({
                 id: p.id as number,
                 label: p.firmenname ?? [p.vorname, p.nachname].filter(Boolean).join(' '),
               }))}
@@ -3943,6 +3964,29 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </div>
           )}
         </div>
+      )}
+
+      {/* Issue #492: steuerfreie Leistung nach § 4 UStG - nur mit Befreiungsgrund in den Stammdaten
+          (oder wenn das Kennzeichen an dieser Rechnung schon gesetzt ist) */}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (!!befreiung4 || steuerfrei4) && (
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={steuerfrei4}
+            onChange={(e) => {
+              setSteuerfrei4(e.target.checked)
+              setSteuerfrei4Manuell(true)
+              if (e.target.checked) {
+                setIstReverseCharge(false); setIstEuLieferung(false); setIstDrittlandLeistung(false); setIstAusfuhrlieferung(false)
+              }
+            }}
+            className="mt-0.5 rounded border-slate-300 dark:border-slate-600"
+          />
+          <span className="text-slate-600 dark:text-slate-300">
+            Steuerfreie Leistung nach {befreiung4?.paragraph ?? '§ 4 UStG'}
+            <InfoTooltip text="Die Rechnung wird ohne Umsatzsteuer gestellt und trägt den Pflichthinweis auf die Steuerbefreiung. Steuerpflichtige Leistungen – z. B. ein Gutachten – bitte auf einer eigenen Rechnung ohne diesen Haken abrechnen." side="bottom" />
+          </span>
+        </label>
       )}
 
       {/* Einmalkunde/Freitext-Lieferant-Adresse – nur wenn kein Stammdatensatz gewählt (Freitext-Modus) */}
@@ -4480,7 +4524,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           onSaveArtikel={(neu) => {
             setShowNeuArtikel(false)
             const istDiff = neu.differenzbesteuerung
-            const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung) ? '0' : String(parseInt(neu.steuersatz))
+            const ust_satz = (sperreUstAufNull || istDiff || istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4) ? '0' : String(parseInt(neu.steuersatz))
             const preis = istDiff ? neu.vk_brutto : (eingabeModus === 'netto' ? neu.vk_netto : neu.vk_brutto)
             setPositionen(prev => {
               const letzteIdx = prev.length - 1
@@ -4855,7 +4899,6 @@ function ImportDialog({
 
   useEffect(() => {
     if (startDatei) handleDatei(startDatei)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDatei])
 
   async function handleDatei(original: File) {
@@ -4867,8 +4910,8 @@ function ImportDialog({
       const res = await analysiereRechnung(f)
       setErgebnis(res)
       setSchritt('ergebnis')
-    } catch (e: any) {
-      setLadeFehler(e.message)
+    } catch (e) {
+      setLadeFehler(e instanceof Error ? e.message : String(e))
     } finally {
       setLaedt(false)
     }
@@ -4988,7 +5031,7 @@ function ImportDialog({
                 <span className="text-sm text-slate-500 dark:text-slate-400">
                   {ergebnis.format === 'zugferd' || ergebnis.format === 'xrechnung'
                     ? 'Strukturierte Daten erkannt'
-                    : felder && Object.keys(felder).some(k => k !== 'konfidenz' && (felder as any)[k])
+                    : felder && Object.keys(felder).some(k => k !== 'konfidenz' && felder[k as keyof typeof felder])
                       ? 'Felder aus PDF-Text extrahiert – bitte prüfen'
                       : 'Keine Daten erkannt – bitte manuell ausfüllen'}
                 </span>
@@ -5007,7 +5050,7 @@ function ImportDialog({
               )}
 
               {/* Erkannte Felder */}
-              {felder && Object.keys(felder).some(k => k !== 'konfidenz' && (felder as any)[k]) && (
+              {felder && Object.keys(felder).some(k => k !== 'konfidenz' && felder[k as keyof typeof felder]) && (
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 space-y-2 text-sm">
                   {felder.lieferant_name && (
                     <div className="space-y-1">
@@ -5322,7 +5365,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     mutationFn: createRechnung,
     onSuccess: async (r) => {
       if (importDatei) {
-        try { await uploadBeleg(r.id, importDatei) } catch {}
+        try { await uploadBeleg(r.id, importDatei) } catch { /* Rechnung ist gespeichert, Beleg lässt sich nachträglich anhängen */ }
         setImportDatei(null)
       }
       if (importPostfachId) {
@@ -5342,7 +5385,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         }
       }
       if (activeVorlageId) {
-        try { await erledigtVorlage(activeVorlageId) } catch {}
+        try { await erledigtVorlage(activeVorlageId) } catch { /* Vorlage bleibt fällig, die Rechnung ist trotzdem gespeichert */ }
         setActiveVorlageId(null)
         qc.invalidateQueries({ queryKey: ['buchungsvorlagen'] })
       }
@@ -5355,7 +5398,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => updateRechnung(id, data),
+    mutationFn: ({ id, data }: { id: number; data: RechnungUpdate }) => updateRechnung(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setFormModus(null)
@@ -5840,7 +5883,8 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                               checked={selectedLsIds.has(r.id)}
                               onChange={e => setSelectedLsIds(prev => {
                                 const next = new Set(prev)
-                                e.target.checked ? next.add(r.id) : next.delete(r.id)
+                                if (e.target.checked) next.add(r.id)
+                                else next.delete(r.id)
                                 return next
                               })}
                             />

@@ -98,7 +98,16 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** – siehe Abschnitt ELSTER-Export unten.
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), offen nur der Forderungsausfall; siehe Abschnitt ELSTER-Export unten.
+- [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
+  buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
+  Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
+- [ ] **Empfänger und Standort je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten) –
+  Lieferadressen im Kundenstamm zu „weiteren Adressen / Standorten“ ausbauen; je Dokument
+  `empfaenger_adresse_id` (neu, Adressfeld bei Angebot/Auftrag/Proforma/Lieferschein) und
+  `lieferadresse_id` (eigene Zeile, auch auf der Rechnung); Rechnung immer an den Kunden (§ 14 UStG);
+  beide Felder wandern bei Umwandlungen mit. Erste Hilfe in v0.7.8: Lieferscheine aus Angebot/Auftrag
+  als Entwurf. Rückfragen an Gerti offen (Empfänger Lieferschein, feste oder wechselnde Empfänger)
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
@@ -122,16 +131,77 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Meldung (ZM-Menü bisher für §19 gesperrt). Vor Umsetzung fachlich prüfen (u. a. ob eigene USt-IdNr.
   Voraussetzung ist, Zusammenspiel mit §19-Hinweis auf der Rechnung, UStVA bleibt unberührt).
 
+## 📋 v0.7.9 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+
+Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
+Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
+nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen das Bankkonto.
+
+- [ ] Zahlungsart „Privat bezahlt“ in „Zahlung erfassen“ (Eingangsrechnung), Buchungsformular und
+  Bank-/CSV-Import
+- [ ] DATEV: Gegenkonto = Privateinlage-Konto (SKR03 1890 / SKR04 2180, aus der Kategorie
+  „Privateinlage“, damit eigene Anpassungen greifen)
+- [ ] EÜR Zeile 107 (Basis) / 108 (2026): Summe dieser Ausgaben (brutto) als Einlage, zusätzlich zur
+  Kategorie „Privateinlage“; Betriebsausgabe und Vorsteuer bleiben wie gebucht
+- [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
+- [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
+
+## 📋 v0.7.9 – Reverse Charge mit privatem Anteil (Issue #503)
+
+Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.9 – beides Steuer-/Buchungslogik ohne
+größere neue Oberfläche.
+
+Rechtslage: Bei § 13b wird die USt auch für den privaten Anteil voll geschuldet (§ 13b Abs. 5 UStG) →
+KZ 46/47 immer voll, Vorsteuer (KZ 67) nur für den betrieblichen Anteil. Heute: Vorsteuer-Anteil hängt
+nur an der Kategorie (`vorsteuer_prozent`) und wird bei Reverse Charge bewusst ignoriert
+(`_berechne_vorsteuer`, #339); eine Splitbuchung mit Privat-Kategorie verliert die §13b-Steuer
+(Privat erzwingt 0 % in `_felder_aus_data`) → KZ 46/47 zu niedrig.
+
+- [ ] Feld **„privater Anteil %“** an der Buchung (Journal-Buchungsformular und Zahlungsdialog der
+  Eingangsrechnung), nur bei Kategorien mit `ust_sonderfall` sichtbar
+- [ ] erzeugt zwei verknüpfte Einträge (`gruppe_id`): betrieblicher Teil wie bisher (Vorsteuer voll
+  auf diesen Teil), privater Teil auf „Privatentnahme“ mit `ust_sonderfall` und voller §13b-Steuer,
+  `vorsteuerabzug=False`
+- [ ] vor dem Umsetzen prüfen: EÜR-Behandlung der §13b-Steuer (Zeile 17/57/58) – der private Teil
+  samt seiner Steuer darf keine Betriebsausgabe werden; DATEV-BU-Schlüssel des privaten Teils;
+  `vorsteuer_ansprueche` (Soll-Prinzip ab 01.10.2026, #338) für Eingangsrechnungen anteilig
+- [ ] Storno und „Zahlung korrigieren“ beider Teile gemeinsam
+- Bis dahin: Wertabgabe-Weg (voll abziehen, privaten Anteil als unentgeltliche Wertabgabe mit
+  19 % versteuern) ergibt dieselbe Zahllast
+
+## 📋 v0.7.9 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
+
+Guthaben aus Überzahlungen (Lieferanten-/Kundenguthaben, auch aus dem Mahnwesen) stehen nur als
+offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
+1. Überzahlung: Bankkonto weicht bis zur Rückzahlung vom Kontoauszug ab.
+2. Verrechnung mit der nächsten Rechnung (`zahlungsart="Verrechnung"`): kein Gegenkonto →
+   **übersprungen**, echter Aufwand/Erlös samt Steuer fehlt dauerhaft im Export. Seit v0.7.8
+   meldet der Export diese Buchungen einzeln mit Belegnummer (Sofortmaßnahme).
+3. Rückerstattung (`ist_rueckerstattung`): schließt den Posten ohne Buchung.
+
+- [ ] Überschuss als erfolgsneutrale Buchung Bank → Verrechnungskonto (SKR03/SKR04 am
+  DATEV-Kontenrahmen 2026 in `vorlagen/kategorien/` prüfen), Verrechnung gegen das
+  Verrechnungskonto statt ohne Gegenkonto, Rückerstattung Verrechnungskonto → Bank
+- [ ] EÜR/UStVA/Cockpit/Kontokorrent unberührt (erfolgsneutral) – eigene Kontenart bzw.
+  `euer_zeile` NULL ohne Meldung unter `nicht_zugeordnet`
+- [ ] Alle Entstehungs- und Auflösungswege: `bank_import._buche_pfad_a`, `auto_buchen`
+  (Rückerstattungs-Erkennung), `mahnwesen.verteile_mahnung_zahlung`, `forderungen` (verrechnen,
+  ausgleichen, ausbuchen), Kundenguthaben aus `rechnungen.py`
+- [ ] Übergang: offene Guthaben von vor dem Umbau haben keine Verrechnungskonto-Buchung →
+  erkennbar (z. B. Verweis auf die Überschuss-Buchung an der Forderung) auf dem alten Weg auflösen,
+  sonst Saldo ohne Gegenstück auf dem Verrechnungskonto
+- Eigenes Release, da Geldflüsse an vielen Stellen betroffen; Backend-lastig, daher nicht von der
+  Oberflächen-Zurückstellung bis v0.8.0 erfasst
+
 ## 📋 v0.7.8 – vorgemerkt
 
-- [ ] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480) –
-  Auswahlfeld z. B. „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“. Steuert: EÜR-Zeile 13
-  (Kz 119) bei Kleinunternehmern, Pflichthinweis auf der Rechnung (§ 14 Abs. 4 Nr. 8 UStG, im
-  absender_snapshot eingefroren), Kleinunternehmergrenze (#491), EÜR-Zeile 16 statt 15 bei
-  Regelbesteuerung. **Vorher klären:** gelten damit alle Einnahmen als steuerfrei oder nur bestimmte
-  Kategorien/Positionen (gemischte Fälle, z. B. Ärztin mit steuerpflichtigen Gutachten)?
-  Neues `unternehmen`-Feld → 5-Stellen-Checkliste + Setup-Wizard mit leerer DB testen.
-- [ ] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, zusammen mit #492) – bisher nur
+- [x] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480,
+  erledigt für v0.7.8) – Auswahlfeld „keine / § 4 Nr. 14 Heilberufe / § 4 Nr. 21 Unterricht“.
+  Entschieden: Kennzeichen **je Rechnung** (`rechnungen.steuerfrei_4`, vorbelegt aus den Stammdaten),
+  gemischte Fälle über getrennte Rechnungen. Wirkt auf Positionen 0 %, Pflichthinweis (im
+  absender_snapshot eingefroren), E-Rechnung Kategorie E, EÜR Zeile 16 bzw. 12 + 13, UStVA Kz 48,
+  Kleinunternehmergrenze. Setup-Wizard mit leerer DB getestet.
+- [x] **Kleinunternehmer-Warnung im Dashboard** (Issue #491, erledigt für v0.7.8) – bisher nur
   100.000 € fürs laufende Jahr aus Ausgangsrechnungen (`api/setup.py::kleinunternehmer_umsatz`).
   Neu: Gesamtumsatz nach § 19 Abs. 2 UStG aus der EÜR (Zeile 12 minus Zeile 13, enthält auch
   Journal-Einnahmen, Zahlungsdatum statt Rechnungsdatum), ohne steuerfreie § 4-Umsätze aus #492;
@@ -142,17 +212,52 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ---
 
+## 📋 GbR / Personengesellschaften – Gesellschafter und Gewinnverteilung (Issue #402)
+
+Vorarbeit für die gesonderte und einheitliche Feststellung (§§ 179, 180 AO: ESt 1 B, Anlage FB, Anlage FE 1).
+Bedarf von mehreren GbRs gemeldet (derdobbi, melvinionair mit 4 Gesellschaftern), daher aus den Ideen
+eingeplant. Version noch offen. Keine ELSTER-Übermittlung – Berechnung und Auswertung reichen.
+Rückmeldung melvinionair (2026-11-08): Stufe 1 reicht dort vollständig (kein Vorabgewinn, keine
+Sonderbetriebseinnahmen/-ausgaben) → Stufe 1 eigenständig ausliefern, Stufe 2 erst bei konkretem Bedarf.
+
+Ausgangslage: Buchhaltung, Rechnungen und EÜR laufen rechtsformunabhängig, eine GbR kann RechnungsFee
+für den Gesamtbetrieb schon nutzen. Es fehlt die Ebene darunter: `unternehmen` ist ein Singleton,
+Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
+
+- [ ] **Stufe 1 – Gesellschafter und Verteilung**
+  - Schalter „Gesellschafter“ automatisch an, sobald eine Personengesellschaft als Rechtsform
+    gewählt wird – GbR, OHG, KG, PartG (Stammdaten und Setup-Wizard), manuell abwählbar; die
+    Automatik greift nur beim Wechsel der Rechtsform, eine Abwahl bleibt bestehen. Bestehende
+    Installationen mit diesen Rechtsformen per Migration einschalten. Bei „Sonstige“ manuell
+    aktivierbar. OHG, KG und PartG fehlen bisher in der Rechtsform-Auswahl – beim Umsetzen ergänzen
+    (UnternehmenPage + StepSteuern)
+  - Gesellschafter-Stammdaten: Name, Anschrift, Steuernummer/IdNr. (Anlage FB), Beteiligungsquote und
+    Gewinn-/Verlustquote getrennt, Gültigkeit je Wirtschaftsjahr (Ein-/Austritt im Jahr)
+  - Privatentnahmen und -einlagen je Gesellschafter: Personenbezug an der Journalbuchung (Auswahlfeld
+    bei Privat-Kategorien), Altbuchungen ohne Bezug in der Auswertung als „nicht zugeordnet“
+  - Jahresauswertung: EÜR-Gewinn der Gesellschaft, Anteil je Gesellschafter, Entnahmen/Einlagen je
+    Gesellschafter, als Vorlage für Anlage FE 1 (PDF/CSV)
+- [ ] **Stufe 2 – Vorabgewinn und Sonderbereich** (nur bei konkretem Bedarf, Rückmeldung derdobbi offen)
+  - Vorabgewinn/Tätigkeitsvergütung je Gesellschafter vor der Quotenverteilung
+  - Sonderbetriebseinnahmen/-ausgaben je Gesellschafter (z. B. eigenes Fahrzeug, Arbeitszimmer,
+    Darlehenszinsen) – nicht in der EÜR der Gesellschaft, aber im Ergebnisanteil
+  - später denkbar: Sonderbetriebsvermögen, Ergänzungsrechnungen
+- Nicht betroffen: Umsatzsteuer und Gewerbesteuer – Steuerschuldner bleibt die Gesellschaft.
+
+---
+
 ## 📋 ELSTER-Export: Umsatzsteuer-Voranmeldung und Zusammenfassende Meldung (Issue #360)
 
 Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
 
 - [x] **Stufe 1 – Datei für den Upload in Mein ELSTER** (keine Registrierung, kein Zertifikat) – umgesetzt von herrschmidt (PR #460), Kennzahlen-Fehler davor behoben (#456 ZM, #457 KZ 43/87, #458 KZ 41, #459 §13b/Kleinunternehmer):
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (nach v0.7.4, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
-  - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung
-  - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum)
-  - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle
-  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr)
-  - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Vorschlag: Beginn eines Meldezeitraums (z. B. 01.01.2027)
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, v0.7.8 mit PR #498 von 5eBeKs bis auf den Forderungsausfall, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
+  - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung – umgesetzt
+  - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum) – umgesetzt
+  - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle (`utils/zm_meldezeitraum.py`); Abschlagsrechnungen melden 0, die Schlussrechnung die volle Leistung (#419) – umgesetzt
+  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr) – Storno, Gutschrift und Skonto umgesetzt; Forderungsausfall offen (braucht ein Ausfalldatum)
+  - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Stichtag 01.01.2027 (`CUTOVER_DATUM`); Leistungen vor dem Stichtag mit Rechnung danach melden im ersten Monat ab Stichtag, nicht rückwirkend – umgesetzt
+  - Abgestimmt in #497: Forderungsausfall (`ausfall_datum` + Migration, Minus im Ausfallmonat, Plus bei späterer Zahlung nach § 17 Abs. 2 Nr. 1 Satz 2) als eigener PR danach; freie Journal-/Bank-Buchungen auf ig. Lieferung/EU-Dienstleistung ohne Rechnungsbezug zählen weiter nach Buchungsdatum, ab Stichtag nur Hinweis beim Buchen (keine Sperre, keine Zuordnung)
   - nicht betroffen: KZ 43 (Ausfuhr) und KZ 45 (Drittland) – nicht in §18b
   - UStVA als XML: nur der Nutzdatenteil `Anmeldungssteuern` (Namensraum
     `http://finkonsens.de/elster/elsteranmeldung/ustva/v20xx`, passendes `version`-Attribut je
@@ -206,7 +311,9 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ### 1. Fundament
 - [ ] Alle Dialoge auf die gemeinsame Modal-Basis (`components/Modal.tsx`, PR #452: `role="dialog"`,
-  `aria-modal`, `aria-labelledby`, Startfokus, Focus-Trap, Esc, Fokus zurück) – ca. 21 Dialoge
+  `aria-modal`, `aria-labelledby`, Startfokus, Focus-Trap, Esc, Fokus zurück) – ca. 21 Dialoge.
+  Neu seit dem Abzweig von `release/0.8.0` (auf `main`, kommen mit dem Merge): `BuchungsHinweisDialog`
+  (PR #498, Hinweis bei freier ig. Lieferung) – bisher ohne `role="dialog"`/`aria-modal`/Focus-Trap
 - [ ] Esc in offenen Auswahllisten (Land, Stammdaten, Datum) schließt nur die Liste, nicht den Dialog
 - [ ] `aria-live="polite"` für Statusmeldungen (Gespeichert, Fehler, Import-Ergebnisse)
 - [ ] Landmarken in `AppLayout.tsx`: `<main>`, `<nav>`, `<header>`
@@ -224,6 +331,9 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] Navigation: Seitenleiste per Tab, aktiver Punkt per Enter
 - [ ] Listen (Rechnungen, Kunden …) per Pfeiltasten, Enter öffnet das Detail-Panel
 - [ ] Rechnung schreiben und finalisieren (inkl. Positionszeilen: Tab durch alle Spalten)
+- [ ] Positionen verschieben (Issue #504, thomaskron): ↑/↓-Knöpfe je Zeile + Alt+↑/↓, Positionsnummern
+  folgen automatisch; alle Positionstabellen (Rechnung, Angebot, Auftrag, Proforma, Lieferschein,
+  Wiederkehrend). Kein Drag-and-drop ohne Tastaturalternative
 - [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
 - [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
 
@@ -245,6 +355,42 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 ### Später (0.8.x, kein Muss für 0.8.0)
 - Selten genutzte Bereiche (Anlage EKS, Inventur, DATEV-Details …) schrittweise nachziehen
 - Komfort-Kürzel: Strg + N (neues Dokument), Strg + S (speichern), Strg + Enter (finalisieren)
+
+---
+
+## 📋 v0.8.1 – vorgemerkt
+
+- [ ] **Modus „Nur Rechnungsstellung“** (Issue #501, Wunsch aus der Community) – Buchhaltung,
+  Auswertungen und Eingangsrechnungen ausblenden, sichtbar bleiben Fakturierung und Stammdaten.
+  Feld `unternehmen.ausgeblendete_bereiche` als Liste (vorbereitet für getrennte Schalter, Muster wie
+  `dashboard_config`), vorerst ein Schalter für alle drei Bereiche; gemeinsame Prüfung
+  `bereichSichtbar()` für Menü, Seiten (auch Direktaufruf), Dashboard-Widgets, Tastenkürzel und das
+  Tagesabschluss-Banner. Im Hintergrund wird weiter gebucht (Zahlungsstatus, Mahnwesen), nichts
+  gelöscht. Hinweis beim Einschalten, neue Frage im Setup-Wizard („Rechnungen schreiben / Rechnungen
+  und Buchhaltung“) → Wizard mit leerer DB testen. Bewusst nach v0.8.0: neue Oberfläche erst auf der
+  barrierefreien Basis, v0.8.0 baut `AppLayout.tsx`-Navigation und Dialoge um.
+- [ ] **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs und TD1; Duplikat
+  #500 aus PR #473) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern).
+  Vor dem Übernehmen immer erst lokal sichern (TD1). Gilt für alle externen Ziele (lokal, SMB, FTPS).
+- [ ] **FTPS als externes Backup-Ziel** (Issue #461, TD1) – viele haben über ihre Webseite einen
+  FTP-Zugang. FTPS (`ftplib.FTP_TLS`, keine zusätzliche Bibliothek) als Standard; unverschlüsseltes FTP
+  nur als bewusst gewählte Option mit Warnung (Zugangsdaten gehen im Klartext übers Netz – die
+  Backup-Datei selbst ist AES-256-verschlüsselt). Zugangsdaten wie bei SMB (`backup_smb_*`), Rotation
+  über `_EXTERN_BACKUP_RE` wie bei lokal/SMB, Zertifikatsprüfung mit TOFU-Option wie bei SMTP/IMAP.
+
+---
+
+## 📋 Vor v1.0 – Konto je Zahlung (Issue #162)
+
+Zusammen mit der POS-Anbindung (jede POS-Buchung bucht auf eine bestimmte Kasse), nach v0.8.0.
+Bereits vorhanden (Migration 110): `journal.konto_id`, `konten.datev_kontonummer`; der Bank-Import setzt
+das Konto, der DATEV-Export nutzt dann dessen Nummer als Gegenkonto.
+
+- [ ] Kontowahl bei „Zahlung erfassen“, im Buchungsformular und im CSV-Import statt nur Zahlungsart
+- [ ] Kassen als Konten (Kontoart `bar`), Mehrfach-Kasse inkl. Kassenbuch/Tagesabschluss je Kasse
+- [ ] weitere Zahlungsdienste (Klarna, Mollie, Stripe) ohne Code-Änderung als Konto anlegbar
+- [ ] DATEV-Gegenkonto immer aus dem Konto; globale `unternehmen.datev_konto_*` danach entfernen
+- [ ] „Privat bezahlt“ (v0.7.9) als Konto-Variante übernehmen
 
 ---
 
@@ -293,8 +439,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 - **Thunderbird-Versand auf weitere Dokumenttypen ausweiten** – bisher nur für Rechnungen umgesetzt (Issue #147); Angebote, Proforma, Aufträge, Mahnungen und Belege laufen weiterhin ausschließlich über SMTP/mailto. Gleiches Muster (`sendeUeberThunderbird()` in `utils/thunderbirdVersand.ts`), nur die jeweilige `handleMail()`-Stelle ergänzen.
 
-- **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern). Nicht trivial, daher zurückgestellt.
-
 - **§13b-/Reverse-Charge-Kennzeichen für eigene Kategorien** (Issue #459) – die Sonderfall-Behandlung (§13b Abs. 1/2, ig. Erwerb, Einfuhrumsatzsteuer) hängt an `kategorien.ust_sonderfall`, das bisher nur die mitgelieferten Kategorien tragen; selbst angelegte Kategorien (z. B. „Plattformgebühren Airbnb“) werden nur über das SKR-Konto (3123/5923 usw.) erkannt. Auswahlfeld in der Kategorienverwaltung (Schema/API/Formular), Konto-Heuristik bleibt Fallback.
 
 - **Erweiterbare Kontenpläne** – Built-in-Pakete (SKR03 vollständig) und CSV-Import eigener Kontenpläne
@@ -312,8 +456,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Konfigurierbarer Speicherort für archivierte Original-PDFs** (Issue #390) – Dateiname nach Rechnungsnummer statt interner DB-ID (z. B. `RE-260103_42.pdf`) ist seit v0.6.12 erledigt. Offen bleibt: selbst wählbarer Speicherort statt fest `uploads/rechnungen/` im Profil-Datenordner. Setzt eine Lösung für bereits archivierte Bestandsdateien voraus (alte Pfade bleiben in `rechnung.original_pdf_pfad` referenziert).
 
 - **Zeiterfassungssystem** (Issue #395) – optional aktivierbares Zeiterfassungs-Modul mit eigenem Dashboard: Start/Stopp-Zeiterfassung, Zuordnung zu Kunde (idealerweise Projekt), Notizen/Tätigkeitsbeschreibung pro Eintrag; am Periodenende unberechnete Zeiten pro Kunde auswerten und direkt in eine Rechnung mit Stunden-/Projekt-Aufschlüsselung überführen. Größerer Scope (eigenes Datenmodell für Zeiteinträge/Projekte, neue Seite, Rechnungs-Workflow-Integration), kein fester Zeitplan.
-
-- **GbR / Personengesellschaften: Gesellschafter + Gewinnverteilung** (Issue #402) – Stammdatenbereich je Gesellschafter (Name, Beteiligungsquote, Gewinn-/Verlustverteilungsquote getrennt geführt, Gültigkeit je Wirtschaftsjahr, Zuordnung von Privateinlagen/-entnahmen); darauf aufbauend eine Jahresauswertung (EÜR-Gewinn der Gesellschaft, Gewinn-/Verlustanteil je Gesellschafter, Privateinlagen/-entnahmen je Gesellschafter, steuerlicher Ergebnisanteil) als Vorarbeit für die gesonderte und einheitliche Feststellung – keine ELSTER-Übermittlung nötig, reine Berechnung/Auswertung reicht laut Melder. Kein kleines Formularfeld: Buchhaltung/Rechnungen/EÜR laufen unternehmens- bzw. tätigkeitsbezogen und damit unabhängig von der Rechtsform – eine GbR kann RechnungsFee für den Gesamtbetrieb also schon heute nutzen. Es fehlt aber die Ebene darunter: die Aufteilung des bereits ermittelten Gesamtgewinns auf mehrere Personen. `unternehmen` ist als Singleton angelegt und Privatentnahme/-einlage laufen rein kategorienbasiert ohne Personenbezug (Anlage EKS ist zudem ein reines Einzelpersonen-Zusatzformular für Transferleistungsempfänger, damit für GbRs ohnehin irrelevant) – „Gesellschafter" wäre eine neue Dimension quer durch Stammdaten und Auswertung. Später denkbar: Sonderbetriebseinnahmen/-ausgaben, Sonderbetriebsvermögen, Ergänzungsrechnungen. Zurückgestellt bis sich zeigt, wie groß die Nachfrage über den einen Melder hinaus ist.
 
 - **Abschlagsrechnungen: eigener PDF-Abzugs-Block + ZUGFeRD BT-113** (Folge-Issue nach v0.7.0) –
   aktuell erscheint der Abzug einer verrechneten Abschlagsrechnung als normale (read-only)
@@ -342,7 +484,7 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
   gibt die Seriennummer wieder frei; passt zu §25a (Gebrauchtwarenhandel).
   Offen: nur Rückverfolgung oder auch Garantiefristen mit Ablauf und Erinnerung?
 
-- **Öffentliche REST-API** – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
+- **Öffentliche REST-API** (Issue #513; Anwendungsfälle Zammad/paperless #473, MCP #429, Etsy #469, POS) – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
   aber unversioniert, ohne Anmeldung und auf zufälligem Port. Für Dritte nötig: stabile, versionierte
   Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von der internen), API-Tokens mit Rechten
   (lesen / schreiben), in den Einstellungen erzeug- und widerrufbar; feste Adresse, standardmäßig

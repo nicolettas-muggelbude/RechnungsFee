@@ -27,6 +27,7 @@ import {
   type BankAbgleichVorschlag,
 } from '../../api/client'
 import { BuchungForm } from '../journal/BuchungForm'
+import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 // Bei sehr großen Import-Dateien werden nur die ersten N Zeilen gerendert – ungebremstes
@@ -507,6 +508,13 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                       </p>
                     </div>
                   )}
+                  {autoBuchenMut.data.hinweis && (
+                    <div className="col-span-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        ⚠️ {autoBuchenMut.data.hinweis}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -632,13 +640,16 @@ function KlassifizierungAktionen({ tx, onSetzen, pending }: KlassifizierungAktio
 interface AbgleichDialogProps {
   tx: BankTransaktion
   vorschlaege: BankAbgleichVorschlag[]
-  onZuordnen: (rechnungId: number) => void
+  onZuordnen: (rechnungId: number, restPrivat: boolean) => void
   onOhneRechnung: () => void
   onClose: () => void
   buchePending: boolean
 }
 
 function AbgleichDialog({ tx, vorschlaege, onZuordnen, onOhneRechnung, onClose, buchePending }: AbgleichDialogProps) {
+  // Issue #502: Rest einer Abbuchung über den offenen Betrag hinaus – Guthaben oder privater Anteil.
+  // State hier statt in VorschlagKarte, die bei jedem Rendern neu definiert wird.
+  const [restPrivat, setRestPrivat] = useState<Record<number, boolean>>({})
   const hatScore3 = vorschlaege.some(v => v.score === 3)
   const guteMatches = vorschlaege.filter(v => hatScore3 ? v.score === 3 : v.score >= 2)
   const schwacheMatches = hatScore3 ? [] : vorschlaege.filter(v => v.score === 1)
@@ -654,6 +665,9 @@ function AbgleichDialog({ tx, vorschlaege, onZuordnen, onOhneRechnung, onClose, 
   }
 
   function VorschlagKarte({ v }: { v: BankAbgleichVorschlag }) {
+    const rest = Math.abs(parseFloat(tx.betrag)) - parseFloat(v.restbetrag)
+    const zeigeRestWahl = parseFloat(tx.betrag) < 0 && v.typ === 'eingang' && v.dokument_typ !== 'Gutschrift' && rest > 0.02
+    const privat = restPrivat[v.rechnung_id] ?? false
     return (
       <div className="border border-slate-200 dark:border-slate-600 rounded-xl p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
@@ -674,8 +688,26 @@ function AbgleichDialog({ tx, vorschlaege, onZuordnen, onOhneRechnung, onClose, 
           <Chip label="Rechnungsnr." aktiv={v.nummer_match} />
           <Chip label="Name" aktiv={v.name_match} />
         </div>
+        {zeigeRestWahl && (
+          <fieldset className="rounded-lg bg-slate-50 dark:bg-slate-700/40 px-3 py-2 space-y-1">
+            <legend className="sr-only">Was ist der Rest von {euroFmt(rest)}?</legend>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Abgebucht wurden {euroFmt(rest)} mehr als offen. Der Rest ist …
+            </p>
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+              <input type="radio" name={`rest-${v.rechnung_id}`} checked={!privat}
+                onChange={() => setRestPrivat(s => ({ ...s, [v.rechnung_id]: false }))} />
+              Guthaben beim Lieferanten (Überzahlung, kommt zurück)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+              <input type="radio" name={`rest-${v.rechnung_id}`} checked={privat}
+                onChange={() => setRestPrivat(s => ({ ...s, [v.rechnung_id]: true }))} />
+              privater Anteil (wird als Privatentnahme gebucht)
+            </label>
+          </fieldset>
+        )}
         <button
-          onClick={() => onZuordnen(v.rechnung_id)}
+          onClick={() => onZuordnen(v.rechnung_id, zeigeRestWahl && privat)}
           disabled={buchePending}
           className="w-full mt-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium transition-colors"
         >
@@ -875,6 +907,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     rechnungId: number; rechnungsnummer: string; partner: string; ueberzahlung: number
   } | null>(null)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
+  const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat' | 'ignoriert'>('alle')
 
@@ -930,18 +963,23 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   })
 
   const bucheMut = useMutation({
-    mutationFn: ({ txId, rechnungId }: { txId: number; rechnungId: number | null }) =>
-      bucheTransaktion(txId, rechnungId),
-    onSuccess: (tx, { rechnungId }) => {
+    mutationFn: ({ txId, rechnungId, restPrivat = false }: { txId: number; rechnungId: number | null; restPrivat?: boolean }) =>
+      bucheTransaktion(txId, rechnungId, undefined, restPrivat),
+    onSuccess: (tx, { rechnungId, restPrivat }) => {
       qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
       qc.invalidateQueries({ queryKey: ['ueberzahlungen'] })
       qc.invalidateQueries({ queryKey: ['zm-pruefen'] })
       setAbgleichDialog(null)
       setBuchungTx(null)
+      if (tx.hinweis) setBuchungsHinweis(tx.hinweis)  // Issue #497: freie ig. Lieferung ab Stichtag
 
       if (tx.forderung_id) {
         qc.invalidateQueries({ queryKey: ['forderungen'] })
         zeigToast('Lieferantenguthaben angelegt – im Dashboard sichtbar', true)
+        return
+      }
+      if (restPrivat) {
+        zeigToast('Rechnung als bezahlt markiert – privater Anteil als Privatentnahme gebucht', true)
         return
       }
 
@@ -1269,7 +1307,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
           tx={abgleichDialog.tx}
           vorschlaege={abgleichDialog.vorschlaege}
           buchePending={bucheMut.isPending}
-          onZuordnen={rechnungId => bucheMut.mutate({ txId: abgleichDialog.tx.id, rechnungId })}
+          onZuordnen={(rechnungId, restPrivat) => bucheMut.mutate({ txId: abgleichDialog.tx.id, rechnungId, restPrivat })}
           onOhneRechnung={() => { setAbgleichDialog(null); proceedOhneAbgleich(abgleichDialog.tx) }}
           onClose={() => setAbgleichDialog(null)}
         />
@@ -1295,9 +1333,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             kategorie_id: buchungTx.kategorie_id ? String(buchungTx.kategorie_id) : '',
           }}
           onClose={() => setBuchungTx(null)}
-          onSuccess={(journalId) => {
+          onSuccess={(journalId, hinweis) => {
             const tx = buchungTx
             setBuchungTx(null)
+            if (hinweis) setBuchungsHinweis(hinweis)  // Issue #497
             qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
             zeigToast('Buchung erstellt', true)
             if (tx && journalId) {
@@ -1307,6 +1346,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
             }
           }}
         />
+      )}
+
+      {buchungsHinweis && (
+        <BuchungsHinweisDialog text={buchungsHinweis} onClose={() => setBuchungsHinweis(null)} />
       )}
     </>
   )
