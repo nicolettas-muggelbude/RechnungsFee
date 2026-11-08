@@ -217,6 +217,8 @@ offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
 Vorarbeit für die gesonderte und einheitliche Feststellung (§§ 179, 180 AO: ESt 1 B, Anlage FB, Anlage FE 1).
 Bedarf von mehreren GbRs gemeldet (derdobbi, melvinionair mit 4 Gesellschaftern), daher aus den Ideen
 eingeplant. Version noch offen. Keine ELSTER-Übermittlung – Berechnung und Auswertung reichen.
+Rückmeldung melvinionair (2026-11-08): Stufe 1 reicht dort vollständig (kein Vorabgewinn, keine
+Sonderbetriebseinnahmen/-ausgaben) → Stufe 1 eigenständig ausliefern, Stufe 2 erst bei konkretem Bedarf.
 
 Ausgangslage: Buchhaltung, Rechnungen und EÜR laufen rechtsformunabhängig, eine GbR kann RechnungsFee
 für den Gesamtbetrieb schon nutzen. Es fehlt die Ebene darunter: `unternehmen` ist ein Singleton,
@@ -235,7 +237,7 @@ Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
     bei Privat-Kategorien), Altbuchungen ohne Bezug in der Auswertung als „nicht zugeordnet“
   - Jahresauswertung: EÜR-Gewinn der Gesellschaft, Anteil je Gesellschafter, Entnahmen/Einlagen je
     Gesellschafter, als Vorlage für Anlage FE 1 (PDF/CSV)
-- [ ] **Stufe 2 – Vorabgewinn und Sonderbereich**
+- [ ] **Stufe 2 – Vorabgewinn und Sonderbereich** (nur bei konkretem Bedarf, Rückmeldung derdobbi offen)
   - Vorabgewinn/Tätigkeitsvergütung je Gesellschafter vor der Quotenverteilung
   - Sonderbetriebseinnahmen/-ausgaben je Gesellschafter (z. B. eigenes Fahrzeug, Arbeitszimmer,
     Darlehenszinsen) – nicht in der EÜR der Gesellschaft, aber im Ergebnisanteil
