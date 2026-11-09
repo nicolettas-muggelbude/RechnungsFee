@@ -63,6 +63,8 @@ npm run tauri:dev
 cd src/frontend && npm run dev   # dann http://localhost:5173
 ```
 
+**Mit Sitzungstoken (wie im Release, Security-Audit F4 Teil 2):** `scripts/dev-start.sh` bzw. `scripts/dev-start.fish` erzeugen ein Token, starten Backend und Frontend mit demselben `RECHNUNGSFEE_TOKEN` und beenden das Backend bei Strg+C mit. Optionen: ohne = Browser (Vite), `--tauri` = Desktop-Fenster, `--backend` = nur Backend (gibt das Token für curl-Tests aus). Ohne gesetztes `RECHNUNGSFEE_TOKEN` läuft das Dev-Backend weiterhin ohne Token-Prüfung; der gebündelte Sidecar startet ohne Token nicht.
+
 **Bekannte Begleiterscheinungen im Dev-Modus (Stand 2026-10-17):**
 - `tauri:dev` startet zusätzlich den Sidecar aus `src-tauri/binaries/` (lokaler PyInstaller-Build vom 2026-08-04). Der ist veraltet und bricht mit `ModuleNotFoundError: No module named '…__mypyc'` (charset_normalizer) ab – **harmlos**, das Frontend nutzt im Dev-Modus ohnehin den Vite-Proxy auf `localhost:8002` (`client.ts::getBaseUrl`). Release-Builds sind nicht betroffen (CI baut den Sidecar frisch; v0.7.2-AppImage geprüft). Bei Bedarf neu bauen: `scripts/build-sidecar.sh`.
 - App erscheint in der Windows-Taskleiste, aber kein Fenster sichtbar → WSLg-Anzeigeproblem (nicht die App): Taskleiste Umschalt+Rechtsklick → „Maximieren“, sonst App + Backend beenden und `wsl --shutdown` in PowerShell.
