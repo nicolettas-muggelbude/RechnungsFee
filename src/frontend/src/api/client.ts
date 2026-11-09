@@ -790,6 +790,7 @@ export type KundeLieferadresse = {
   kunde_id?: number
   bezeichnung?: string
   z_hd?: string
+  email?: string
   strasse?: string
   hausnummer?: string
   plz?: string

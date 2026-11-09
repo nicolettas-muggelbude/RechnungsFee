@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Unternehmen, Rechnung, DokumentenPaket, KundeLieferadresse
+from database.models import Unternehmen, Rechnung, DokumentenPaket
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
@@ -80,11 +80,6 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
 
     u = db.query(Unternehmen).first()
     unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
-
-    if r.lieferadresse_id:
-        r._lieferadresse = db.query(KundeLieferadresse).filter(
-            KundeLieferadresse.id == r.lieferadresse_id
-        ).first()
 
     _dok = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
     if _dok == "Auftrag":

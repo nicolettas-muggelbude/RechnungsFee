@@ -336,6 +336,7 @@ class LieferadresseCreate(BaseModel):
     plz: Optional[str] = None
     ort: Optional[str] = None
     land: str = "DE"
+    email: Optional[str] = None  # Issue #495
     ist_standard: bool = False
 
 class LieferadresseResponse(BaseModel):
@@ -348,6 +349,7 @@ class LieferadresseResponse(BaseModel):
     plz: Optional[str] = None
     ort: Optional[str] = None
     land: str
+    email: Optional[str] = None
     ist_standard: bool
     model_config = {"from_attributes": True}
 

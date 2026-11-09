@@ -547,6 +547,7 @@ class KundeLieferadresse(Base):
     plz: Mapped[str | None] = mapped_column(String(10))
     ort: Mapped[str | None] = mapped_column(String(100))
     land: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
+    email: Mapped[str | None] = mapped_column(String(200))  # Issue #495: eigene Mailadresse je Adresse
     ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -816,7 +817,8 @@ class Rechnung(Base):
     gutschrift_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferschein_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferadresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
-    # Issue #495: Empfänger im Adressfeld (Angebot/Auftrag/Proforma/Lieferschein) – Standort statt Kunde
+    # Issue #495: Adresse im Adressfeld (Empfänger bzw. Rechnungsadresse) – Filiale/Standort statt Kunde,
+    # siehe utils/dokument_adressen.py (beim Lieferschein steht stattdessen die Lieferadresse im Adressfeld)
     empfaenger_adresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
     # Angebote
     angebot_status: Mapped[str | None] = mapped_column(String(20), default="offen")   # offen|akzeptiert|abgelehnt|abgelaufen
@@ -856,6 +858,7 @@ class Rechnung(Base):
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
     empfaenger_adresse: Mapped["KundeLieferadresse | None"] = relationship(foreign_keys=[empfaenger_adresse_id])
+    lieferadresse: Mapped["KundeLieferadresse | None"] = relationship(foreign_keys=[lieferadresse_id])
     positionen: Mapped[list["Rechnungsposition"]] = relationship(
         back_populates="rechnung", cascade="all, delete-orphan",
         foreign_keys="Rechnungsposition.rechnung_id",

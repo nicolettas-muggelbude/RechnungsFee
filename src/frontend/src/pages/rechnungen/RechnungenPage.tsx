@@ -36,7 +36,7 @@ import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHi
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
-import { EmpfaengerAuswahl } from '../../components/EmpfaengerAuswahl'
+import { LieferadresseAuswahl, RechnungsadresseAuswahl } from '../../components/EmpfaengerAuswahl'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
@@ -2880,7 +2880,8 @@ function RechnungForm({
   const [lieferadresseId, setLieferadresseId] = useState<string>(
     initial?.lieferadresse_id ? String(initial.lieferadresse_id) : ''
   )
-  // Issue #495: Standort des Kunden im Adressfeld des Lieferscheins ('' = Kunde selbst)
+  // Issue #495: Rechnungsadresse (Filiale statt Stammanschrift) bei Rechnung/Abschlag – der
+  // Lieferschein trägt den Wert aus Angebot/Auftrag nur zur Rechnung weiter
   const [empfaengerId, setEmpfaengerId] = useState<string>(
     initial?.empfaenger_adresse_id ? String(initial.empfaenger_adresse_id) : ''
   )
@@ -3473,8 +3474,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       // null statt undefined: „keine Lieferadresse“ muss beim Bearbeiten eines Entwurfs ankommen (Issue #495)
-      lieferadresse_id: dokumentTyp === 'Lieferschein' ? (lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
-      empfaenger_adresse_id: dokumentTyp === 'Lieferschein' ? (kundeIdNum && empfaengerId ? parseInt(empfaengerId) : null) : undefined,
+      lieferadresse_id: typ === 'ausgang' ? (kundeIdNum && lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
+      empfaenger_adresse_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein'
+        ? (kundeIdNum && empfaengerId ? parseInt(empfaengerId) : null)
+        : undefined,
       dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
@@ -4049,34 +4052,31 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
-      {dokumentTyp === 'Lieferschein' && (
-        <EmpfaengerAuswahl
+      {/* Issue #495: Adressrollen – Lieferschein: Lieferadresse im Adressfeld;
+          Rechnung/Abschlag: Rechnungsadresse im Adressfeld + Lieferadresse als eigene Zeile */}
+      {typ === 'ausgang' && dokumentTyp === 'Lieferschein' && (
+        <LieferadresseAuswahl
           kundeId={kundeIdNum}
-          value={empfaengerId}
-          onChange={(v) => {
-            setEmpfaengerId(v)
-            if (v) setLieferadresseId(v)  // Lieferung geht an denselben Standort
-          }}
+          value={lieferadresseId}
+          onChange={setLieferadresseId}
+          leerText="Kunde (Stammanschrift)"
           className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
         />
       )}
-
-      {/* Lieferadresse – nur bei Lieferschein mit ausgewähltem Kunden */}
-      {dokumentTyp === 'Lieferschein' && kundeIdNum && lieferadressen.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Lieferadresse</label>
-          <select
-            value={lieferadresseId}
-            onChange={e => setLieferadresseId(e.target.value)}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <RechnungsadresseAuswahl
+            kundeId={kundeIdNum}
+            value={empfaengerId}
+            onChange={setEmpfaengerId}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-          >
-            <option value="">Rechnungsadresse (Standard)</option>
-            {lieferadressen.map(la => (
-              <option key={la.id} value={String(la.id)}>
-                {la.bezeichnung || 'Lieferadresse'}{la.ist_standard ? ' ★' : ''} – {[la.strasse, la.hausnummer, la.plz, la.ort].filter(Boolean).join(' ')}
-              </option>
-            ))}
-          </select>
+          />
+          <LieferadresseAuswahl
+            kundeId={kundeIdNum}
+            value={lieferadresseId}
+            onChange={setLieferadresseId}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          />
         </div>
       )}
 

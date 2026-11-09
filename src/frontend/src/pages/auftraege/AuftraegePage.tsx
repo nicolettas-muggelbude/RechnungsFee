@@ -15,7 +15,7 @@ import {
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
-import { EmpfaengerAuswahl } from '../../components/EmpfaengerAuswahl'
+import { LieferadresseAuswahl, RechnungsadresseAuswahl } from '../../components/EmpfaengerAuswahl'
 import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import type { RechnungVorschauRequest } from '../../api/client'
@@ -267,8 +267,9 @@ function AuftragFormular({
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
 
   const [partnerId, setPartnerId] = useState(initial?.kunde_id?.toString() ?? vorKundeId ?? '')
-  // Issue #495: Standort des Kunden statt Kunde im Adressfeld ('' = Kunde selbst)
+  // Issue #495: Rechnungsadresse (Filiale statt Stammanschrift) und Lieferadresse ('' = keine)
   const [empfaengerId, setEmpfaengerId] = useState(initial?.empfaenger_adresse_id?.toString() ?? '')
+  const [lieferadresseId, setLieferadresseId] = useState(initial?.lieferadresse_id?.toString() ?? '')
   const [partnerFreitext, setPartnerFreitext] = useState(initial?.partner_freitext ?? '')
   const [partnerStrasse, setPartnerStrasse] = useState(initial?.partner_strasse ?? '')
   const [partnerHausnummer, setPartnerHausnummer] = useState(initial?.partner_hausnummer ?? '')
@@ -411,6 +412,7 @@ function AuftragFormular({
         partner_freitext: partnerFreitext || undefined,
         // null statt undefined: „wieder an den Kunden“ muss beim Bearbeiten ankommen
         empfaenger_adresse_id: partnerId && empfaengerId ? parseInt(empfaengerId) : null,
+        lieferadresse_id: partnerId && lieferadresseId ? parseInt(lieferadresseId) : null,
         partner_strasse: !partnerId && partnerStrasse ? partnerStrasse : undefined,
         partner_hausnummer: !partnerId && partnerHausnummer ? partnerHausnummer : undefined,
         partner_plz: !partnerId && partnerPlz ? partnerPlz : undefined,
@@ -509,12 +511,20 @@ function AuftragFormular({
         )}
       </div>
 
-      <EmpfaengerAuswahl
-        kundeId={partnerId ? parseInt(partnerId) : null}
-        value={empfaengerId}
-        onChange={setEmpfaengerId}
-        className={selectCls}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <RechnungsadresseAuswahl
+          kundeId={partnerId ? parseInt(partnerId) : null}
+          value={empfaengerId}
+          onChange={setEmpfaengerId}
+          className={selectCls}
+        />
+        <LieferadresseAuswahl
+          kundeId={partnerId ? parseInt(partnerId) : null}
+          value={lieferadresseId}
+          onChange={setLieferadresseId}
+          className={selectCls}
+        />
+      </div>
 
       {/* Einmalkunde-Adresse */}
       {!partnerId && partnerFreitext.trim() && (

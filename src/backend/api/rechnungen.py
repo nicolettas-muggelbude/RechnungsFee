@@ -32,6 +32,7 @@ from database.models import (
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 from utils.mahngebuehr_verrechnung import offene_mahngebuehr_summe, verrechne_mahngebuehren
+from utils.dokument_adressen import EMPFAENGER_DOKUMENTE, LIEFERADRESSE_DOKUMENTE
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf
@@ -1320,6 +1321,7 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
         kunden_bestellnummer=data.kunden_bestellnummer,
         bemerkung_erechnung=(data.bemerkung_erechnung or "").strip() or None,
         empfaenger_adresse_id=_pruefe_empfaenger_adresse(db, data.empfaenger_adresse_id, data.kunde_id),  # Issue #495
+        lieferadresse_id=_pruefe_kundenadresse(db, data.lieferadresse_id, data.kunde_id, "Die Lieferadresse"),
         ist_entwurf=data.ist_entwurf,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -1626,10 +1628,13 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
         skonto_tage=None if data.dokument_typ == "Proforma" else data.skonto_tage,
         dokument_typ=data.dokument_typ,
-        lieferadresse_id=data.lieferadresse_id if data.dokument_typ == "Lieferschein" else None,
+        lieferadresse_id=(
+            _pruefe_kundenadresse(db, data.lieferadresse_id, data.kunde_id, "Die Lieferadresse")
+            if data.typ == "ausgang" and data.dokument_typ in LIEFERADRESSE_DOKUMENTE else None
+        ),
         empfaenger_adresse_id=(
             _pruefe_empfaenger_adresse(db, data.empfaenger_adresse_id, data.kunde_id)
-            if data.dokument_typ in EMPFAENGER_DOKUMENTE else None
+            if data.typ == "ausgang" and data.dokument_typ in EMPFAENGER_DOKUMENTE else None
         ),
         gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
         # Issue #477: Pakete auch für Rechnungen und Proforma (Lieferschein/Gutschrift/Eingang nicht)
@@ -1777,13 +1782,10 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     # Issue #495: Lieferadresse am Lieferschein-Entwurf ändern - fehlte bisher in der Feldliste
     # oben, eine im Formular gewählte Adresse ging beim Speichern verloren. Über model_fields_set,
     # damit „keine Lieferadresse“ (null) die Auswahl auch wieder entfernen kann.
-    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == "Lieferschein":
-        if data.lieferadresse_id is not None:
-            from database.models import KundeLieferadresse
-            la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == data.lieferadresse_id).first()
-            if not la or la.kunde_id != (data.kunde_id or rechnung.kunde_id):
-                raise HTTPException(status_code=422, detail="Die Lieferadresse gehört nicht zu diesem Kunden.")
-        rechnung.lieferadresse_id = data.lieferadresse_id
+    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ in LIEFERADRESSE_DOKUMENTE:
+        rechnung.lieferadresse_id = _pruefe_kundenadresse(
+            db, data.lieferadresse_id, data.kunde_id or rechnung.kunde_id, "Die Lieferadresse",
+        )
 
     # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
     # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
@@ -1805,6 +1807,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
             _pruefe_empfaenger_adresse(db, rechnung.empfaenger_adresse_id, rechnung.kunde_id)
         except HTTPException:
             rechnung.empfaenger_adresse_id = None  # Kunde gewechselt – Standort gehörte zum bisherigen
+    if rechnung.lieferadresse_id and "lieferadresse_id" not in data.model_fields_set:
+        try:
+            _pruefe_kundenadresse(db, rechnung.lieferadresse_id, rechnung.kunde_id)
+        except HTTPException:
+            rechnung.lieferadresse_id = None  # dito
 
     # Issue #368: einleitungstext/schlusstext bewusst NICHT im obigen "val is not None"-
     # Muster - das würde ein absichtliches Leeren (Frontend schickt explizit null) nicht von
@@ -2324,13 +2331,6 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             Rechnung.dokument_typ == "Angebot",
         ).first()
         rechnung._quell_angebot_nr = _angebot_des_auftrags.rechnungsnummer if _angebot_des_auftrags else None
-
-    # Lieferschein: Lieferadresse am Objekt hinterlegen (für PDF + Response)
-    if rechnung.lieferadresse_id:
-        from database.models import KundeLieferadresse
-        rechnung._lieferadresse = db.query(KundeLieferadresse).filter(
-            KundeLieferadresse.id == rechnung.lieferadresse_id
-        ).first()
 
     ist_entwurf = rechnung.ist_entwurf
     _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
@@ -3957,6 +3957,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         einleitungstext=original.einleitungstext,
         schlusstext=original.schlusstext,
         kunden_bestellnummer=original.kunden_bestellnummer,
+        empfaenger_adresse_id=original.empfaenger_adresse_id,  # Issue #495
         bemerkung_erechnung=original.bemerkung_erechnung,
         rabatt_prozent=original.rabatt_prozent,
         rabatt_betrag=original.rabatt_betrag,
@@ -4107,6 +4108,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         kategorie_id=original.kategorie_id,
         notizen=None,
         kunden_bestellnummer=original.kunden_bestellnummer,
+        empfaenger_adresse_id=original.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=original.lieferadresse_id,
         bemerkung_erechnung=original.bemerkung_erechnung,
         skonto_prozent=None,
         skonto_tage=None,
@@ -4543,6 +4546,11 @@ def _lieferschein_zu_rechnung_konvertieren(
         partner_land=lieferscheine[0].partner_land,
         notizen=merged_notizen,
         kunden_bestellnummer=lieferscheine[0].kunden_bestellnummer,
+        # Issue #495: Rechnungsadresse aus Auftrag/Angebot (über den Lieferschein weitergereicht),
+        # Lieferadresse nur, wenn alle Lieferscheine dieselbe haben
+        empfaenger_adresse_id=lieferscheine[0].empfaenger_adresse_id,
+        lieferadresse_id=(lieferscheine[0].lieferadresse_id
+                          if len({ls.lieferadresse_id for ls in lieferscheine}) == 1 else None),
         bemerkung_erechnung=lieferscheine[0].bemerkung_erechnung,
         dokument_typ="Rechnung",
         ist_entwurf=True,
@@ -4701,6 +4709,8 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         partner_land=r.partner_land,
         notizen=f"Zu Rechnung {r.rechnungsnummer}" if r.rechnungsnummer else None,
         kunden_bestellnummer=r.kunden_bestellnummer,
+        empfaenger_adresse_id=r.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=r.lieferadresse_id,
         bemerkung_erechnung=r.bemerkung_erechnung,
         dokument_typ="Lieferschein",
         lieferschein_zu_rechnung_id=rechnung_id,
@@ -4742,20 +4752,20 @@ def _standard_lieferadresse_id(db: Session, kunde_id: Optional[int]) -> Optional
     return la.id if la else None
 
 
-# Issue #495: Dokumente, deren Adressfeld statt an den Kunden an einen seiner Standorte gehen
-# kann. Rechnung/Abschlag/Gutschrift bewusst nicht – dort muss der Leistungsempfänger stehen.
-EMPFAENGER_DOKUMENTE = ("Angebot", "Auftrag", "Proforma", "Lieferschein")
-
-
-def _pruefe_empfaenger_adresse(db: Session, adresse_id: Optional[int], kunde_id: Optional[int]) -> Optional[int]:
-    """Gewählter Empfänger-Standort muss eine Lieferadresse genau dieses Kunden sein."""
+def _pruefe_kundenadresse(db: Session, adresse_id: Optional[int], kunde_id: Optional[int],
+                          rolle: str = "Die Adresse") -> Optional[int]:
+    """Issue #495: Eine gewählte weitere Adresse (Filiale/Standort) muss genau zu diesem Kunden gehören."""
     if adresse_id is None:
         return None
     from database.models import KundeLieferadresse
     la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == adresse_id).first()
     if not la or not kunde_id or la.kunde_id != kunde_id:
-        raise HTTPException(status_code=422, detail="Der Empfänger gehört nicht zu diesem Kunden.")
+        raise HTTPException(status_code=422, detail=f"{rolle} gehört nicht zu diesem Kunden.")
     return adresse_id
+
+
+def _pruefe_empfaenger_adresse(db: Session, adresse_id: Optional[int], kunde_id: Optional[int]) -> Optional[int]:
+    return _pruefe_kundenadresse(db, adresse_id, kunde_id, "Die Rechnungs- bzw. Empfängeradresse")
 
 
 def _lieferadresse_nach_umwandlung(db: Session, quelle: Rechnung) -> Optional[int]:
@@ -4867,6 +4877,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_land=angebot.partner_land,
         notizen=angebot.notizen,
         kunden_bestellnummer=angebot.kunden_bestellnummer,
+        empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495: Leistungsempfänger aus dem Angebot
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -4933,6 +4944,7 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=_lieferadresse_nach_umwandlung(db, angebot),
         ist_entwurf=False,
         dokument_typ="Proforma",
         bezahlt=False,
@@ -4995,6 +5007,8 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
         partner_land=proforma.partner_land,
         notizen=proforma.notizen,
         kunden_bestellnummer=proforma.kunden_bestellnummer,
+        empfaenger_adresse_id=proforma.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=proforma.lieferadresse_id,
         bemerkung_erechnung=proforma.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -5190,6 +5204,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=_lieferadresse_nach_umwandlung(db, angebot),
         ist_entwurf=False,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -5249,6 +5264,8 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         partner_land=auftrag.partner_land,
         notizen=auftrag.notizen,
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
+        empfaenger_adresse_id=auftrag.empfaenger_adresse_id,  # Issue #495: Auftraggeber
+        lieferadresse_id=auftrag.lieferadresse_id,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -5322,7 +5339,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
-        lieferadresse_id=_lieferadresse_nach_umwandlung(db, auftrag),
+        lieferadresse_id=auftrag.lieferadresse_id or _lieferadresse_nach_umwandlung(db, auftrag),
         empfaenger_adresse_id=auftrag.empfaenger_adresse_id,
         dokument_typ="Lieferschein",
         eingabemodus=auftrag.eingabemodus,
@@ -5388,6 +5405,7 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         empfaenger_adresse_id=auftrag.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=auftrag.lieferadresse_id,
         ist_entwurf=False,
         dokument_typ="Proforma",
         eingabemodus=auftrag.eingabemodus,

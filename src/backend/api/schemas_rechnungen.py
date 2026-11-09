@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Optional
 from pydantic import BaseModel, field_validator, model_validator
+from utils.dokument_adressen import empfaenger_email
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +464,8 @@ class RechnungResponse(BaseModel):
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
-            data.kunde_email = obj.kunde.email
+            # Issue #495: Mailadresse der Filiale/des Standorts im Adressfeld, sonst die des Kunden
+            data.kunde_email = empfaenger_email(obj)
             data.kunde_zugferd_aktiv = bool(getattr(obj.kunde, "zugferd_aktiv", False))
         if obj.lieferant:
             parts = [obj.lieferant.firmenname or "", obj.lieferant.vorname or "", obj.lieferant.nachname or ""]
@@ -574,8 +576,8 @@ class RechnungResponse(BaseModel):
                         data.gutschrift_zu_rechnung_nr = original.rechnungsnummer if original else None
                 except Exception:
                     pass
-        if obj.lieferadresse_id and hasattr(obj, "_lieferadresse"):
-            la = obj._lieferadresse
+        if obj.lieferadresse_id:
+            la = obj.lieferadresse
             if la:
                 teile = [la.bezeichnung, la.z_hd,
                          " ".join(filter(None, [la.strasse, la.hausnummer])),

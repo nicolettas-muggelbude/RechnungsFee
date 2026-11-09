@@ -102,13 +102,12 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
   buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
   Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
-- [x] **Empfänger je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten, v0.7.11) –
-  `empfaenger_adresse_id`: Lieferadresse des Kunden als Empfänger im Adressfeld bei
-  Angebot/Auftrag/Proforma/Lieferschein, wandert bei Umwandlungen mit, Lieferschein bekommt den
-  Standort zugleich als Lieferort; Rechnung immer an den Kunden (§ 14 UStG). Erste Hilfe in v0.7.8:
-  Lieferscheine aus Angebot/Auftrag als Entwurf.
-- [ ] **Standort auf der Rechnung** (Folge #495) – `lieferadresse_id` als eigene Zeile auch auf der
-  Rechnung (bisher nur Lieferschein); erst bei Bedarf
+- [x] **Adressrollen je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten, v0.7.11) –
+  weitere Adressen des Kunden (Filialen/Standorte) als Empfänger (Angebot), Rechnungs- und
+  Lieferadresse (Auftrag/Proforma/Rechnung), Lieferadresse im Adressfeld (Lieferschein); eigene
+  Mailadresse je Adresse; Weitergabe bei allen Umwandlungen; E-Rechnung Käufer/ShipTo.
+- [ ] **Folge #495:** Suche statt Auswahlliste bei vielen Filialen; Filiale in Dokumentlisten
+  anzeigen/filtern; Anrede je Adresse (Ansprechpartner der Filiale) – erst bei Rückmeldung
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).

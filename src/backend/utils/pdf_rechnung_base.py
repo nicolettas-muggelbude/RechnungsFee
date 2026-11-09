@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from utils.dokument_adressen import adressfeld_adresse, adresszeilen_weitere_adresse, lieferzeile_adresse
 from utils.logo import logo_datei
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
 
@@ -267,32 +268,6 @@ def _logo_abmessungen(pfad: str, max_h: float = 25.0, max_w: float = 55.0) -> tu
         return round(w, 2), round(h, 2)
     except Exception:
         return 0.0, 0.0
-
-
-_EMPFAENGER_DOKUMENTE = ("Angebot", "Auftrag", "Proforma", "Lieferschein")
-
-
-def _empfaenger_adresse(r):
-    """Issue #495: gewählter Standort des Kunden als Empfänger – nur bei Angebot, Auftrag,
-    Proforma und Lieferschein (eine Rechnung geht immer an den Kunden selbst)."""
-    if (getattr(r, "dokument_typ", None) or "Rechnung") not in _EMPFAENGER_DOKUMENTE:
-        return None
-    return getattr(r, "empfaenger_adresse", None)
-
-
-def _standort_adresszeilen(la, kunde) -> list[str]:
-    """Adressfeld für einen Standort: Bezeichnung (sonst Kundenname), z. Hd., Anschrift."""
-    erste = (la.bezeichnung or "").strip() or next(iter(_adresszeilen(kunde)), "")
-    zeilen = [erste] if erste else []
-    if (la.z_hd or "").strip():
-        zeilen.append(f"z.Hd. {la.z_hd.strip()}")
-    if la.strasse:
-        zeilen.append(f"{la.strasse} {la.hausnummer or ''}".strip())
-    if la.plz or la.ort:
-        zeilen.append(f"{la.plz or ''} {la.ort or ''}".strip())
-    if (la.land or "DE").upper() != "DE":
-        zeilen.append(la.land.upper())
-    return zeilen
 
 
 def _adresszeilen(obj) -> list[str]:
@@ -550,8 +525,10 @@ class RechnungPDFBase(FPDF):
 
         partner_obj = r.kunde if r.typ == "ausgang" else r.lieferant
         freitext    = r.partner_freitext
-        empfaenger  = _empfaenger_adresse(r)
-        adresszeilen = _standort_adresszeilen(empfaenger, partner_obj) if empfaenger else _adresszeilen(partner_obj)
+        # Issue #495: Filiale/Standort im Adressfeld (Empfänger, Rechnungs- bzw. beim Lieferschein Lieferadresse)
+        feld_adresse = adressfeld_adresse(r)
+        adresszeilen = (adresszeilen_weitere_adresse(feld_adresse, partner_obj) if feld_adresse
+                        else _adresszeilen(partner_obj))
         if not adresszeilen and freitext:
             adresszeilen = [freitext]
             strasse = getattr(r, "partner_strasse", None) or ""
@@ -635,14 +612,18 @@ class RechnungPDFBase(FPDF):
                 _meta("Gültig bis", _iso_zu_de(str(gueltig_bis)))
         elif r.faellig_am:
             _meta(self._faellig_label, _iso_zu_de(str(r.faellig_am)))
-        la = getattr(r, "_lieferadresse", None)
-        # Steht der Standort schon im Adressfeld (Issue #495), nicht noch einmal als Lieferadresse
-        if la and not (empfaenger and la.id == empfaenger.id):
-            strasse_nr = " ".join(filter(None, [la.strasse, la.hausnummer]))
-            plz_ort = " ".join(filter(None, [la.plz, la.ort]))
-            la_label = la.bezeichnung or "Lieferadresse"
-            la_zeile = ", ".join(filter(None, [strasse_nr, plz_ort]))
-            _meta(la_label, la_zeile)
+        # Issue #495: Lieferadresse bei Auftrag/Proforma/Rechnung – nicht, wenn sie schon im Adressfeld steht
+        la = lieferzeile_adresse(r)
+        if la:
+            la_zeilen = [z for z in [
+                (la.bezeichnung or "").strip(),
+                f"z.Hd. {la.z_hd.strip()}" if (la.z_hd or "").strip() else "",
+                " ".join(filter(None, [la.strasse, la.hausnummer])),
+                " ".join(filter(None, [la.plz, la.ort])),
+                la.land.upper() if (la.land or "DE").upper() != "DE" else "",
+            ] if z]
+            for i, zeile in enumerate(la_zeilen):
+                _meta("Lieferadresse" if i == 0 else "", zeile)
         quell_angebot_nr = getattr(r, "_quell_angebot_nr", None)
         if quell_angebot_nr:
             _meta("Angebot", quell_angebot_nr, dim=True)
