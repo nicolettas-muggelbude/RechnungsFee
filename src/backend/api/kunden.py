@@ -330,6 +330,7 @@ def kunde_mahnungen(kunde_id: int, db: Session = Depends(get_db)):
 
 class LieferadresseCreate(BaseModel):
     bezeichnung: Optional[str] = None
+    name: Optional[str] = None  # Issue #495: leer = Name/Firma aus den Stammdaten
     z_hd: Optional[str] = None
     strasse: Optional[str] = None
     hausnummer: Optional[str] = None
@@ -343,6 +344,7 @@ class LieferadresseResponse(BaseModel):
     id: int
     kunde_id: int
     bezeichnung: Optional[str] = None
+    name: Optional[str] = None
     z_hd: Optional[str] = None
     strasse: Optional[str] = None
     hausnummer: Optional[str] = None

@@ -12,7 +12,7 @@ import base64
 from decimal import Decimal
 
 from database.connection import APP_DATA_DIR
-from utils.dokument_adressen import adressfeld_adresse, empfaenger_email
+from utils.dokument_adressen import adressfeld_adresse, empfaenger_email, name_fuer_adresse
 
 # UN/ECE Rec 20 Einheitencodes
 _EINHEIT_CODE: dict[str, str] = {
@@ -174,10 +174,11 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     buyer = doc.trade.agreement.buyer
     if rechnung.kunde:
         k = rechnung.kunde
-        kaeufer_name = _kunde_name(k)
-        buyer.name = kaeufer_name
-        # Issue #495: gewählte Rechnungsadresse (Filiale) statt Stammanschrift – Name bleibt der Kunde
+        # Issue #495: gewählte Rechnungsadresse (Filiale) statt Stammanschrift; Name wie im PDF –
+        # eigener Name/Firma der Adresse, sonst der Kunde
         anschrift = adressfeld_adresse(rechnung) or k
+        kaeufer_name = name_fuer_adresse(anschrift, k) if anschrift is not k else _kunde_name(k)
+        buyer.name = kaeufer_name
         if anschrift.strasse:
             buyer.address.line_one = f"{anschrift.strasse} {anschrift.hausnummer or ''}".strip()
         if anschrift is not k and (anschrift.bezeichnung or "").strip():
@@ -210,7 +211,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         ship_to = doc.trade.delivery.ship_to
         if quelle is not None:
             # Als Text – buyer.name liefert ein drafthorse-Element, das sich nicht erneut zuweisen lässt
-            ship_to.name = getattr(quelle, "firmenname", None) or kaeufer_name
+            ship_to.name = (getattr(quelle, "firmenname", None) or (getattr(quelle, "name", None) or "").strip()
+                            or kaeufer_name)
             if quelle.strasse:
                 ship_to.address.line_one = f"{quelle.strasse} {quelle.hausnummer or ''}".strip()
             if quelle.plz:

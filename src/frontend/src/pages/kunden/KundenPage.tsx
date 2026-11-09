@@ -44,7 +44,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
   const qc = useQueryClient()
   const [editId, setEditId] = useState<number | 'neu' | null>(null)
   const [form, setForm] = useState<Omit<KundeLieferadresse, 'id' | 'kunde_id'>>({
-    bezeichnung: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false,
+    bezeichnung: '', name: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false,
   })
 
   const { data: adressen = [] } = useQuery({
@@ -67,7 +67,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
 
   function startEdit(la: KundeLieferadresse) {
     setEditId(la.id!)
-    setForm({ bezeichnung: la.bezeichnung ?? '', z_hd: la.z_hd ?? '', email: la.email ?? '', strasse: la.strasse ?? '',
+    setForm({ bezeichnung: la.bezeichnung ?? '', name: la.name ?? '', z_hd: la.z_hd ?? '', email: la.email ?? '', strasse: la.strasse ?? '',
       hausnummer: la.hausnummer ?? '', plz: la.plz ?? '', ort: la.ort ?? '', land: la.land, ist_standard: la.ist_standard })
   }
 
@@ -77,7 +77,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Weitere Adressen (Filialen, Lieferadressen)</span>
-        <button type="button" onClick={() => { setEditId('neu'); setForm({ bezeichnung: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false }) }}
+        <button type="button" onClick={() => { setEditId('neu'); setForm({ bezeichnung: '', name: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false }) }}
           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Hinzufügen</button>
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -92,6 +92,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
           {editId === la.id ? (
             <div className="space-y-2">
               <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+              <input placeholder="Firma / Name (leer = aus den Stammdaten)" value={form.name ?? ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={`${inp} w-full`} />
               <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
               <input type="email" placeholder="E-Mail (wird beim Versand vorgeschlagen)" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={`${inp} w-full`} />
               <div className="grid grid-cols-3 gap-2">
@@ -117,6 +118,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
               <div>
                 {la.ist_standard && <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded px-1 mr-1">Standard-Lieferadresse</span>}
                 <span className="font-medium text-slate-800 dark:text-slate-100">{la.bezeichnung || 'Adresse'}</span>
+                {la.name && <div className="text-slate-600 dark:text-slate-300 text-xs">{la.name}</div>}
                 {la.z_hd && <div className="text-slate-500 dark:text-slate-400 text-xs">z.Hd. {la.z_hd}</div>}
                 {la.email && <div className="text-slate-500 dark:text-slate-400 text-xs">{la.email}</div>}
                 <div className="text-slate-600 dark:text-slate-300 text-xs">{[la.strasse, la.hausnummer].filter(Boolean).join(' ')}</div>
@@ -134,6 +136,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
       {editId === 'neu' && (
         <div className="border border-blue-300 dark:border-blue-700 rounded-lg p-3 space-y-2">
           <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+          <input placeholder="Firma / Name (leer = aus den Stammdaten)" value={form.name ?? ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={`${inp} w-full`} />
           <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
           <input type="email" placeholder="E-Mail (wird beim Versand vorgeschlagen)" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={`${inp} w-full`} />
           <div className="grid grid-cols-3 gap-2">

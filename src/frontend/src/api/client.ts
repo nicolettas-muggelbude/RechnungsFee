@@ -789,6 +789,7 @@ export type KundeLieferadresse = {
   id?: number
   kunde_id?: number
   bezeichnung?: string
+  name?: string  // Issue #495: leer = Name/Firma aus den Stammdaten
   z_hd?: string
   email?: string
   strasse?: string

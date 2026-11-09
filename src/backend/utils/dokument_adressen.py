@@ -11,9 +11,9 @@ Lieferadressen – Tabelle kunden_lieferadressen). Jedes Ausgangsdokument kann z
 | Lieferschein                     | Lieferadresse (lieferadresse_id)  | (= Adressfeld)       |
 | Rechnung, Abschlag, Gutschrift   | Rechnungsadresse (empfaenger_…)   | lieferadresse_id     |
 
-Leer = Stammanschrift des Kunden. Der Name im Adressfeld ist immer der Kunde (Firmenname bzw.
-bei Privatkunden der Name) – Leistungsempfänger im Sinne von § 14 UStG ist der Auftraggeber,
-die Filiale ist nur dessen Anschrift.
+Leer = Stammanschrift des Kunden. Oben im Adressfeld steht der Name/die Firma der Adresse, falls
+dort eingetragen (z. B. eine eigene Gesellschaft der Filiale), sonst der des Kunden (Firmenname
+bzw. bei Privatkunden der Name).
 """
 
 # Dokumente, deren Adressfeld über empfaenger_adresse_id auf eine weitere Adresse zeigen kann.
@@ -67,10 +67,15 @@ def kundenname(kunde) -> str:
                                   (getattr(kunde, "nachname", None) or "").strip()]))
 
 
+def name_fuer_adresse(la, kunde) -> str:
+    """Eigener Name/Firma der Adresse, sonst Name/Firma aus den Kundenstammdaten."""
+    return (getattr(la, "name", None) or "").strip() or kundenname(kunde)
+
+
 def adresszeilen_weitere_adresse(la, kunde) -> list[str]:
-    """Adressfeld für eine weitere Adresse: Kundenname, Bezeichnung der Filiale, z. Hd., Anschrift."""
+    """Adressfeld für eine weitere Adresse: Name/Firma, Bezeichnung der Filiale, z. Hd., Anschrift."""
     zeilen = []
-    name = kundenname(kunde)
+    name = name_fuer_adresse(la, kunde)
     if name:
         zeilen.append(name)
     bezeichnung = (getattr(la, "bezeichnung", None) or "").strip()

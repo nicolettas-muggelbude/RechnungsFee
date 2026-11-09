@@ -300,3 +300,43 @@ def test_ungenutzte_adresse_loeschbar(db):
     la = _adresse(db, "Ostwestfalen Center")
     delete_lieferadresse(_kunde(db).id, la.id, db)
     assert db.query(KundeLieferadresse).filter(KundeLieferadresse.id == la.id).first() is None
+
+
+# ── Eigener Name/Firma je Adresse (optional) ──────────────────────────────────
+
+def _mit_name(db, name="OWC Center Betriebs KG"):
+    la = _adresse(db, "Ostwestfalen Center")
+    la.name = name
+    db.commit()
+    return la
+
+
+def test_pdf_eigener_name_statt_stammdaten(db):
+    _mit_name(db)
+    text = _pdf_text(_obj(db, create_rechnung(_daten(db, "Angebot"), db).id))
+    zeilen = [z.strip() for z in text.splitlines()]
+    i = zeilen.index("OWC Center Betriebs KG")
+    assert zeilen[i + 1] == "Ostwestfalen Center"
+    assert "FDF Management GmbH" not in text
+
+
+def test_pdf_ohne_eigenen_namen_bleibt_stammdatenname(db):
+    _mit_name(db, name="   ")
+    text = _pdf_text(_obj(db, create_rechnung(_daten(db, "Angebot"), db).id))
+    assert "FDF Management GmbH" in text
+
+
+def test_lieferzeile_und_erechnung_mit_eigenem_namen(db):
+    _mit_name(db)
+    d = _daten(db, "Rechnung", empfaenger=None)
+    d.lieferadresse_id = _adresse(db, "Ostwestfalen Center").id
+    r = _obj(db, create_rechnung(d, db).id)
+    text = _pdf_text(r)
+    assert "FDF Management GmbH" in text and "OWC Center Betriebs KG" in text  # Lieferzeile
+    xml = generate_zugferd_xml(r, dict(UNT, ust_idnr="DE123456789")).decode()
+    assert "<ram:Name>FDF Management GmbH</ram:Name>" in xml       # Käufer
+    assert "<ram:Name>OWC Center Betriebs KG</ram:Name>" in xml    # Lieferanschrift
+
+    r2 = _obj(db, create_rechnung(_daten(db, "Rechnung"), db).id)    # Rechnungsadresse mit eigenem Namen
+    xml2 = generate_zugferd_xml(r2, dict(UNT, ust_idnr="DE123456789")).decode()
+    assert "<ram:Name>OWC Center Betriebs KG</ram:Name>" in xml2

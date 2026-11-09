@@ -541,6 +541,8 @@ class KundeLieferadresse(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kunde_id: Mapped[int] = mapped_column(ForeignKey("kunden.id"), nullable=False)
     bezeichnung: Mapped[str | None] = mapped_column(String(100))   # z.B. „Lager Nord", „Filiale Berlin"
+    # Issue #495: abweichender Name/Firma im Adressfeld – leer = Name/Firma aus den Kundenstammdaten
+    name: Mapped[str | None] = mapped_column(String(200))
     z_hd: Mapped[str | None] = mapped_column(String(200))
     strasse: Mapped[str | None] = mapped_column(String(200))
     hausnummer: Mapped[str | None] = mapped_column(String(20))

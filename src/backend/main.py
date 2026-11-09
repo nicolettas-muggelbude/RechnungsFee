@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 184
+SCHEMA_VERSION = 185
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4227,6 +4227,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 184"))
             conn.commit()
             print("[Migration] Schema auf Version 184 (Issue #495: kunden_lieferadressen.email)")
+
+    if version < 185:
+        # Issue #495: optionaler eigener Name/Firma je Adresse (leer = aus den Kundenstammdaten)
+        with engine.connect() as conn:
+            la185 = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden_lieferadressen)")).fetchall()}
+            if la185 and "name" not in la185:
+                conn.execute(text("ALTER TABLE kunden_lieferadressen ADD COLUMN name VARCHAR(200)"))
+            conn.execute(text("PRAGMA user_version = 185"))
+            conn.commit()
+            print("[Migration] Schema auf Version 185 (Issue #495: kunden_lieferadressen.name)")
 
 
 def _migrate_kategorien() -> None:

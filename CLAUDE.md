@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 184` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 185` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -329,6 +329,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 182 | Issue #491/#492: unternehmen.taetigkeit_beginn DATE (Gründungsjahr → Kleinunternehmergrenze 25.000 € ohne Hochrechnung; aus eks_einstellungen.taetigkeitsbeginn übernommen, falls leer), umsatz_extern_jahr/_vorjahr/_startjahr (Umsatz vor RechnungsFee, nur für die Warnung, nicht für die EÜR), steuerbefreiung_4 VARCHAR(20) (NULL \| 4_nr_14 \| 4_nr_21, Schlüssel in `schemas.py::STEUERBEFREIUNGEN_4`); rechnungen.steuerfrei_4 BOOLEAN DEFAULT 0 (steuerfreie Leistung nach § 4 UStG je Rechnung) |
 | 183 | Issue #495: rechnungen.empfaenger_adresse_id FK → kunden_lieferadressen – Adresse im Adressfeld (Angebot: Empfänger; Auftrag/Proforma/Rechnung/Abschlag/Gutschrift: Rechnungsadresse). Adressrollen zentral in `utils/dokument_adressen.py` (`adressfeld_adresse`, `lieferzeile_adresse`, `empfaenger_email`): Lieferschein hat die Lieferadresse im Adressfeld, Auftrag/Proforma/Rechnung zusätzlich `lieferadresse_id` als eigene Angabe; Name im Adressfeld immer der Kunde (Leistungsempfänger), darunter die Filiale. Beide Felder wandern bei allen Umwandlungen mit (Rechnungsadresse aus Auftrag, sonst Angebot; in der Rechnung änderbar). Relationships `Rechnung.empfaenger_adresse`/`.lieferadresse` statt der früheren `_lieferadresse`-Hilfsattribute. ZUGFeRD: Käuferanschrift = Rechnungsadresse, ShipTo = Lieferadresse (auch ohne ig. Lieferung); `kaeufer_name` als Text, weil `buyer.name` ein drafthorse-Element liefert (Lieferadresse ohne Firmenname brach vorher ab). Nebenfund: `delete_lieferadresse` trug seit #25 den Return-Block von `anonymisiere_kunde` (NameError beim Löschen, Anonymisierung lieferte null); genutzte Adressen jetzt 409 statt IntegrityError |
 | 184 | Issue #495: kunden_lieferadressen.email VARCHAR(200) – eigene Mailadresse je Adresse; `RechnungResponse.kunde_email` liefert die Adresse im Adressfeld (Filiale) vor der des Kunden, dadurch schlagen alle Versandwege (SMTP-Dialog, mailto, Thunderbird) sie ohne Frontend-Änderung vor |
+| 185 | Issue #495: kunden_lieferadressen.name VARCHAR(200) – optionaler eigener Name/Firma je Adresse; leer = Name/Firma aus den Kundenstammdaten (`dokument_adressen.py::name_fuer_adresse`); gilt für Adressfeld, Lieferzeile und ZUGFeRD (Käufername bei gewählter Rechnungsadresse, ShipTo-Name) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

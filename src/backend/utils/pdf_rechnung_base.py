@@ -616,6 +616,7 @@ class RechnungPDFBase(FPDF):
         la = lieferzeile_adresse(r)
         if la:
             la_zeilen = [z for z in [
+                (getattr(la, "name", None) or "").strip(),
                 (la.bezeichnung or "").strip(),
                 f"z.Hd. {la.z_hd.strip()}" if (la.z_hd or "").strip() else "",
                 " ".join(filter(None, [la.strasse, la.hausnummer])),
