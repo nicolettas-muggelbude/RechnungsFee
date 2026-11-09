@@ -1034,7 +1034,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <code>{'{anrede}'}</code> (Herr/Frau), <code>{'{sehr_geehrte}'}</code> („Sehr geehrte Frau" / „Sehr geehrter Herr",
               bei divers oder ohne Angabe „Guten Tag" + Vorname). Herr/Frau/divers stellst du beim Kunden ein.
               Beispiel: <code>{'{sehr_geehrte} {nachname},'}</code>.
-              Fehlt ein benötigter Wert (z. B. kein Name beim Kunden), wird die Ersatzanrede gedruckt.
+              Fehlt ein benötigter Wert (z. B. kein Name beim Kunden), wird die Ersatzanrede gedruckt –
+              sie darf ebenfalls Platzhalter enthalten, etwa <code>{'Moin {firma},'}</code> für Firmenkunden.
               Leer lassen für den Standard (grau im Feld). Die grüne Vorlage zeigt die Anrede immer, die
               Standardvorlage nur, wenn du hier einen Satz einträgst. Pro Kunde kannst du die Anrede in den
               Kundenstammdaten zusätzlich überschreiben.

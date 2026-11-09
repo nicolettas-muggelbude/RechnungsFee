@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'November 2026',
     eintraege: [
       { typ: 'neu', text: 'Angebot, Auftrag, Proforma und Lieferschein lassen sich an einen Standort des Kunden richten: Neues Feld „Empfänger (Adressfeld)“ mit den Lieferadressen aus dem Kundenstamm. Im Adressfeld steht dann der Standort mit Bezeichnung, z. Hd. und Anschrift statt der Rechnungsanschrift des Kunden. Beim Umwandeln wandert der Empfänger mit, am Lieferschein ist der Standort zugleich als Lieferadresse vorausgewählt. Die Rechnung geht weiterhin an den Kunden. Danke an Gerti (Issue #495).' },
+      { typ: 'fix', text: 'Anrede im PDF: Platzhalter in der Ersatzanrede wurden nicht ersetzt – bei einem Firmenkunden ohne Ansprechpartner stand z. B. wörtlich „Moin {firma}“ im Dokument. Die Ersatzanrede setzt jetzt Firmenname und die anderen Platzhalter ein; fehlt auch dafür ein Wert, erscheint „Hallo,“.' },
       { typ: 'fix', text: 'Kundenstamm: Beim Löschen einer Lieferadresse erschien eine Fehlermeldung, obwohl die Adresse gelöscht war. Wird die Adresse noch in einem Dokument verwendet, nennt RechnungsFee jetzt die betroffenen Belegnummern, statt mit einem Fehler abzubrechen.' },
       { typ: 'fix', text: 'Kundenstamm: Nach dem Anonymisieren eines Kunden (DSGVO) fehlte die Bestätigung, wie viele Buchungen und Rechnungen anonymisiert wurden, samt Hinweis auf gesperrte Buchungen nach Tagesabschluss.' },
     ],

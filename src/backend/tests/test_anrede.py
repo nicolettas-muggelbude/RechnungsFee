@@ -81,3 +81,29 @@ def test_alter_snapshot_ohne_schluessel_behaelt_alte_anrede():
     assert anrede_zeile(_r(k), alt) == "Hallo Sandra,"
     assert anrede_zeile(_r(_kunde(vorname=None)), alt) == "Hallo,"
     assert anrede_zeile(_r(k), alt, nur_wenn_konfiguriert=True) == ""
+
+
+# Ersatzanrede mit eigenen Platzhaltern (Nutzer-Feedback 2026-11-09: „Moin {firma}“ wurde bei
+# einem Firmenkunden ohne Ansprechpartner wörtlich mit „{firma}“ gedruckt)
+
+UNT_MOIN = {"anrede_text": "Moin {vorname} {nachname}", "anrede_fallback": "Moin {firma}"}
+
+
+def test_ersatzanrede_ersetzt_firma():
+    k = _kunde(vorname=None, nachname=None, firmenname="Onx GmbH")
+    assert anrede_zeile(_r(k), UNT_MOIN) == "Moin Onx GmbH"
+
+
+def test_ersatzanrede_einmalkunde_freitext():
+    assert anrede_zeile(_r(None, partner_freitext="Bäckerei Krume"), UNT_MOIN) == "Moin Bäckerei Krume"
+
+
+def test_ersatzanrede_ohne_wert_nimmt_standard():
+    k = _kunde(vorname=None, nachname=None, firmenname=None)
+    assert anrede_zeile(_r(k), UNT_MOIN) == "Hallo,"
+
+
+def test_ersatzanrede_ohne_platzhalter_unveraendert():
+    k = _kunde(vorname=None, nachname=None, firmenname="Onx GmbH")
+    unt = {"anrede_text": "Moin {vorname},", "anrede_fallback": "Sehr geehrte Damen und Herren,"}
+    assert anrede_zeile(_r(k), unt) == "Sehr geehrte Damen und Herren,"

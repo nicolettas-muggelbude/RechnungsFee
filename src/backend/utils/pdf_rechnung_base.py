@@ -111,20 +111,30 @@ def anrede_zeile(r, unt: dict, nur_wenn_konfiguriert: bool = False) -> str:
         "{sehr_geehrte}": _ANREDE_SEHR_GEEHRTE.get(geschlecht) or f"Guten Tag {vorname}".strip(),
     }
 
-    benutzt = [p for p in werte if p in vorlage]
     hat_name = bool(vorname or nachname)
-    if (any(p in benutzt for p in ("{vorname}", "{nachname}", "{sehr_geehrte}")) and not hat_name) \
-            or ("{anrede}" in benutzt and not werte["{anrede}"]) \
-            or ("{firma}" in benutzt and not firma):
-        return fallback
 
-    text = vorlage
-    for p, w in werte.items():
-        text = text.replace(p, w)
-    # Leerer Vor- oder Nachname hinterlässt sonst doppelte Leerzeichen / " ,"
-    text = re.sub(r" {2,}", " ", text)
-    text = re.sub(r" +([,.!])", r"\1", text)
-    return text.strip()
+    def _unvollstaendig(text: str) -> bool:
+        benutzt = [p for p in werte if p in text]
+        return (any(p in benutzt for p in ("{vorname}", "{nachname}", "{sehr_geehrte}")) and not hat_name) \
+            or ("{anrede}" in benutzt and not werte["{anrede}"]) \
+            or ("{firma}" in benutzt and not firma)
+
+    def _ersetzen(text: str) -> str:
+        for p, w in werte.items():
+            text = text.replace(p, w)
+        # Leerer Vor- oder Nachname hinterlässt sonst doppelte Leerzeichen / " ,"
+        text = re.sub(r" {2,}", " ", text)
+        text = re.sub(r" +([,.!])", r"\1", text)
+        return text.strip()
+
+    if _unvollstaendig(vorlage):
+        # Die Ersatzanrede darf selbst Platzhalter tragen (z. B. „Moin {firma}“ für Firmenkunden
+        # ohne Ansprechpartner) – wurde bis v0.7.10 roh mit „{firma}“ gedruckt. Fehlt auch dafür
+        # ein Wert, bleibt nur der neutrale Standard.
+        if _unvollstaendig(fallback):
+            return ANREDE_FALLBACK_STANDARD
+        return _ersetzen(fallback)
+    return _ersetzen(vorlage)
 
 
 # ---------------------------------------------------------------------------
