@@ -42,6 +42,7 @@ Diese Dokumentation beschreibt alle Anforderungen, Konzepte und Entscheidungen f
 |----------|--------------|-----------|
 | **[07-dsgvo.md](07-dsgvo.md)** | Datenschutzerklärung, DSGVO-Konformität | - |
 | **[09-backup-updates.md](09-backup-updates.md)** | Backup-Strategie, Software-Updates, Exit-Backup | Kategorie 10 |
+| **[sicherheit-sitzungstoken.md](sicherheit-sitzungstoken.md)** | Sitzungstoken zwischen Tauri, Frontend und Backend (Security-Audit F4 Teil 2) | - |
 
 ### ❓ Hilfe & Support
 
