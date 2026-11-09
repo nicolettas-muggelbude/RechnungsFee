@@ -82,6 +82,11 @@ app.add_middleware(PdfDateinameMiddleware)
 from utils.sicherheit_middleware import SicherheitMiddleware  # noqa: E402
 app.add_middleware(SicherheitMiddleware)
 
+# Security-Audit F4 Teil 2: Sitzungstoken. Dev-Modus (uvicorn main:app) liest es optional aus
+# RECHNUNGSFEE_TOKEN; der Sidecar bekommt es von Tauri über stdin (siehe __main__ unten).
+from utils import sitzungstoken  # noqa: E402
+sitzungstoken.aus_umgebung()
+
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
 app.include_router(konten.router)
@@ -4841,6 +4846,8 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8002)
     parser.add_argument("--selbsttest", action="store_true",
                         help="Bibliotheken im gebündelten Sidecar laden und beenden (Build-Prüfung)")
+    parser.add_argument("--token-stdin", action="store_true",
+                        help="Sitzungstoken als erste Zeile von stdin lesen (so startet Tauri den Sidecar)")
     args = parser.parse_args()
     if args.selbsttest:
         # Issue #493: PyInstaller packt Datendateien nur auf Anweisung mit - ein Import kann im
@@ -4862,4 +4869,20 @@ if __name__ == "__main__":
             traceback.print_exc()
             print("[Selbsttest] FEHLER")
             sys.exit(1)
+    if args.token_stdin:
+        try:
+            sitzungstoken.aus_stdin()
+        except ValueError as e:
+            print(f"[Start] {e}", file=sys.stderr)
+            sys.exit(2)
+    if sitzungstoken.ist_gebuendelt() and not sitzungstoken.pruefung_aktiv():
+        # Ohne Token wäre die API für jeden lokalen Prozess offen – lieber gar nicht starten.
+        print("[Start] Kein Sitzungstoken erhalten – Backend wird nur von RechnungsFee gestartet.",
+              file=sys.stderr)
+        sys.exit(2)
+    if not sitzungstoken.pruefung_aktiv():
+        logging.getLogger(__name__).warning(
+            "Entwicklungsmodus ohne Sitzungstoken: API ohne Authentifizierung erreichbar "
+            "(RECHNUNGSFEE_TOKEN setzen, um die Prüfung zu testen)."
+        )
     uvicorn.run(app, host="127.0.0.1", port=args.port)

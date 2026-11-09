@@ -25,13 +25,38 @@ async function getBaseUrl(): Promise<string> {
   return _baseUrl
 }
 
+// --- Sitzungstoken (Security-Audit F4 Teil 2) ---
+// Tauri erzeugt pro App-Start ein Zufallstoken und gibt es nur dem Hauptfenster per IPC.
+// Jeder API-Aufruf schickt es als „Authorization: Bearer …“ mit, sonst antwortet das Backend 401.
+// Im Vite-Dev-Modus hängt der Vite-Proxy den Header an (RECHNUNGSFEE_TOKEN, vite.config.ts).
+let _token: Promise<string | null> | null = null
+
+function getBackendToken(): Promise<string | null> {
+  if (_token === null) {
+    _token = !isTauri() || import.meta.env.DEV
+      ? Promise.resolve(null)
+      : invoke<string>('get_backend_token')
+  }
+  return _token
+}
+
+/** fetch() gegen die lokale API – ergänzt das Sitzungstoken. Für alle Aufrufe ans Backend
+ *  verwenden statt fetch() direkt (sonst 401). Fremde URLs (https://…) nicht hierüber laden. */
+export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const token = await getBackendToken()
+  if (!token) return fetch(url, init)
+  const headers = new Headers(init?.headers)
+  headers.set('Authorization', `Bearer ${token}`)
+  return fetch(url, { ...init, headers })
+}
+
 /** Wartet bis das Backend antwortet (max. 300 × 200 ms = 60 s).
  *  Nach einem Update scannt Windows Defender die neue backend.exe und PyInstaller
  *  extrahiert sich neu – das dauert typisch 20–60 s. */
 async function waitForBackend(baseUrl: string): Promise<void> {
   for (let i = 0; i < 300; i++) {
     try {
-      const res = await fetch(`${baseUrl}/setup/status`)
+      const res = await apiFetch(`${baseUrl}/setup/status`)
       if (res.ok) return
     } catch {
       // Backend noch nicht bereit
@@ -56,7 +81,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   await _backendReady  // Wartet bis Backend bereit ist (nach Update kann das 30–60 s dauern)
   const base = await getBaseUrl()
   const isFormData = options?.body instanceof FormData
-  const res = await fetch(`${base}${path}`, {
+  const res = await apiFetch(`${base}${path}`, {
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     ...options,
   })
@@ -84,7 +109,7 @@ export async function getApiBase(): Promise<string> {
 export async function openUrl(url: string) {
   const isDownload = url.includes('format=csv') || /\.(csv|zip)(\?|$)/i.test(url)
   if (isDownload) {
-    const res = await fetch(url)
+    const res = await apiFetch(url)
     if (!res.ok) throw new Error(`Download fehlgeschlagen: ${res.status}`)
     const blob = await res.blob()
     const cd = res.headers.get('Content-Disposition') ?? ''
@@ -380,7 +405,7 @@ export async function uploadLogo(file: File): Promise<Unternehmen> {
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${base}/unternehmen/logo`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/unternehmen/logo`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Logo-Upload fehlgeschlagen')
@@ -390,7 +415,7 @@ export async function uploadLogo(file: File): Promise<Unternehmen> {
 
 export async function deleteLogo(): Promise<void> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/unternehmen/logo`, { method: 'DELETE' })
+  const res = await apiFetch(`${base}/unternehmen/logo`, { method: 'DELETE' })
   if (!res.ok && res.status !== 204) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Logo löschen fehlgeschlagen')
@@ -847,7 +872,7 @@ export const uploadKundeBeleg = async (kundeId: number, datei: File, bezeichnung
   fd.append('bezeichnung', bezeichnung)
   if (loeschdatum) fd.append('loeschdatum', loeschdatum)
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/kunden/${kundeId}/belege`, { method: 'POST', body: fd })
+  const res = await apiFetch(`${base}/kunden/${kundeId}/belege`, { method: 'POST', body: fd })
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<KundeBeleg>
 }
@@ -881,7 +906,7 @@ export const uploadZugferdAnhang = async (rechnungId: number, datei: File, bezei
   fd.append('datei', datei)
   fd.append('bezeichnung', bezeichnung)
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen/${rechnungId}/zugferd-anhaenge`, { method: 'POST', body: fd })
+  const res = await apiFetch(`${base}/rechnungen/${rechnungId}/zugferd-anhaenge`, { method: 'POST', body: fd })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Anhang-Upload fehlgeschlagen')
@@ -1047,7 +1072,7 @@ export async function eksHalbjahresPdf(start: string, art: string, zeitraum?: { 
 // --- Export ---
 export async function downloadGobdExport(jahr: number): Promise<string> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/export/gobd?jahr=${jahr}`)
+  const res = await apiFetch(`${base}/export/gobd?jahr=${jahr}`)
   if (!res.ok) throw new Error('Export fehlgeschlagen')
   const blob = await res.blob()
   const filename = `gobd_export_${jahr}.zip`
@@ -1060,7 +1085,7 @@ export async function downloadBuchhalterCsv(
   bis: string,
 ): Promise<{ filename: string; eintraege: number }> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/export/buchhalter-csv?von=${von}&bis=${bis}`)
+  const res = await apiFetch(`${base}/export/buchhalter-csv?von=${von}&bis=${bis}`)
   if (!res.ok) throw new Error('CSV-Export fehlgeschlagen')
   const eintraege = Number(res.headers.get('X-Buchhalter-Eintraege') ?? '0')
   const blob = await res.blob()
@@ -1077,7 +1102,7 @@ export async function downloadDatevBuchungsstapel(
   mitBelegen: boolean = true,
 ): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null; verrechnung: number; verrechnung_belege: string[] }> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/datev/buchungsstapel?von=${von}&bis=${bis}&mit_belegen=${mitBelegen}`)
+  const res = await apiFetch(`${base}/datev/buchungsstapel?von=${von}&bis=${bis}&mit_belegen=${mitBelegen}`)
   if (!res.ok) throw new Error('DATEV-Export fehlgeschlagen')
   const eintraege = Number(res.headers.get('X-Datev-Eintraege') ?? '0')
   const uebersprungen = Number(res.headers.get('X-Datev-Uebersprungen') ?? '0')
@@ -1098,7 +1123,7 @@ export async function downloadDatevBuchungsstapel(
 // --- Backup ---
 export async function downloadBackup(): Promise<string> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/backup/download`)
+  const res = await apiFetch(`${base}/backup/download`)
   if (!res.ok) throw new Error('Backup-Download fehlgeschlagen')
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
@@ -1127,7 +1152,7 @@ export async function uploadBackupWiederherstellen(datei: File, passwort?: strin
   const form = new FormData()
   form.append('datei', datei)
   if (passwort) form.append('passwort', passwort)
-  const res = await fetch(`${base}/backup/wiederherstellen`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/backup/wiederherstellen`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail ?? 'Wiederherstellung fehlgeschlagen')
@@ -1184,7 +1209,7 @@ export const speichereBlob = (blob: Blob, filename: string) => _triggerBlobDownl
 
 /** Lädt eine ELSTER-Exportdatei; die Backend-Meldung (z. B. 422) wird als Fehlertext durchgereicht. */
 async function _downloadElsterDatei(pfad: string, fallbackName: string): Promise<string> {
-  const res = await fetch(`${await getBaseUrl()}${pfad}`)
+  const res = await apiFetch(`${await getBaseUrl()}${pfad}`)
   if (!res.ok) {
     const detail = await res.json().then(j => j.detail).catch(() => null)
     throw new Error(typeof detail === 'string' ? detail : `Export fehlgeschlagen (${res.status})`)
@@ -1198,7 +1223,7 @@ async function _downloadElsterDatei(pfad: string, fallbackName: string): Promise
  *  Für den Mail-Workflow: User speichert die PDF und hängt sie manuell an. */
 export async function downloadPdfForMail(rechnungId: number): Promise<void> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen/${rechnungId}/pdf?download=1`)
+  const res = await apiFetch(`${base}/rechnungen/${rechnungId}/pdf?download=1`)
   if (!res.ok) throw new Error(`PDF-Download fehlgeschlagen: ${res.status}`)
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
@@ -1240,7 +1265,7 @@ export async function uploadBeleg(rechnungId: number, datei: File): Promise<Bele
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('datei', datei)
-  const res = await fetch(`${base}/rechnungen/${rechnungId}/beleg`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/rechnungen/${rechnungId}/beleg`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Beleg-Upload fehlgeschlagen')
@@ -1268,7 +1293,7 @@ export async function uploadJournalAnhang(eintragId: number, datei: File): Promi
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('datei', datei)
-  const res = await fetch(`${base}/journal/${eintragId}/anhang`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/journal/${eintragId}/anhang`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Beleg-Upload fehlgeschlagen')
@@ -1287,7 +1312,7 @@ export async function uploadJournalAnhangVorab(datei: File): Promise<Beleg> {
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('datei', datei)
-  const res = await fetch(`${base}/journal/anhang-vorab`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/journal/anhang-vorab`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Beleg-Upload fehlgeschlagen')
@@ -1359,7 +1384,7 @@ export async function analysiereRechnung(datei: File): Promise<AnalyseErgebnis> 
   const base = await getBaseUrl()
   const form = new FormData()
   form.append('datei', datei)
-  const res = await fetch(`${base}/rechnungen/analysieren`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/rechnungen/analysieren`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Analyse fehlgeschlagen')
@@ -1369,7 +1394,7 @@ export async function analysiereRechnung(datei: File): Promise<AnalyseErgebnis> 
 
 export async function analysiereRechnungPfad(pfad: string): Promise<AnalyseErgebnis> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen/analysieren-pfad`, {
+  const res = await apiFetch(`${base}/rechnungen/analysieren-pfad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pfad }),
@@ -1896,7 +1921,7 @@ export const setzeRechnungExternErstellt = (id: number, extern_erstellt: boolean
 
 export async function getRechnungPdf(id: number): Promise<Blob> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen/${id}/pdf`)
+  const res = await apiFetch(`${base}/rechnungen/${id}/pdf`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'PDF-Export fehlgeschlagen')
@@ -1906,7 +1931,7 @@ export async function getRechnungPdf(id: number): Promise<Blob> {
 
 export async function getRechnungZugferd(id: number): Promise<Blob> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen/${id}/zugferd`)
+  const res = await apiFetch(`${base}/rechnungen/${id}/zugferd`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'ZUGFeRD-Export fehlgeschlagen')
@@ -2527,7 +2552,7 @@ export const postfachVerwerfen = (id: number) =>
 /** Datei eines Postfach-Eintrags als File holen - für den unveränderten Einzelimport. */
 export async function ladePostfachDatei(e: PostfachEintrag): Promise<File> {
   const base = await getApiBase()
-  const res = await fetch(`${base}${postfachDateiPfad(e.id)}`)
+  const res = await apiFetch(`${base}${postfachDateiPfad(e.id)}`)
   if (!res.ok) throw new Error('Datei aus dem Postfach-Eingang konnte nicht geladen werden.')
   return new File([await res.blob()], e.original_name, { type: e.mime_type })
 }
@@ -3015,7 +3040,7 @@ export async function vorschauBankImport(
   form.append('datei', datei)
   if (kontoId != null) form.append('konto_id', String(kontoId))
   if (templateId) form.append('template_id', templateId)
-  const res = await fetch(`${base}/bank-import/vorschau`, { method: 'POST', body: form })
+  const res = await apiFetch(`${base}/bank-import/vorschau`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail ?? `Fehler ${res.status}`)
@@ -3029,7 +3054,7 @@ export async function vorschauBankImportPfad(
   templateId?: string,
 ): Promise<BankVorschauResponse> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/bank-import/vorschau-pfad`, {
+  const res = await apiFetch(`${base}/bank-import/vorschau-pfad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pfad, konto_id: kontoId ?? null, template_id: templateId ?? null }),
@@ -3266,7 +3291,7 @@ export type ImportZeileAktion = {
 
 export async function getMusterCsv(typ: string): Promise<Blob> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/datenmigration/muster-csv/${typ}`)
+  const res = await apiFetch(`${base}/datenmigration/muster-csv/${typ}`)
   if (!res.ok) throw new Error(await res.text())
   return res.blob()
 }
@@ -3347,7 +3372,7 @@ export type RechnungenImportErgebnis = {
 
 export async function getRechnungenImportMuster(typ: 'rechnungen' | 'belege'): Promise<Blob> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/rechnungen-import/muster-csv/${typ}`)
+  const res = await apiFetch(`${base}/rechnungen-import/muster-csv/${typ}`)
   if (!res.ok) throw new Error(await res.text())
   return res.blob()
 }
@@ -3554,7 +3579,7 @@ export const getMahnungPdfUrl = async (mahnungId: number, nurAnsehen = false, ma
 /** Lädt das Inkasso-Paket (ZIP: Deckblatt, Kontokorrent, Rechnungs-/Mahnungs-PDFs) eines Kunden herunter. */
 export async function downloadInkassoPaket(kundeId: number): Promise<void> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/mahnwesen/kunden/${kundeId}/inkasso-paket`)
+  const res = await apiFetch(`${base}/mahnwesen/kunden/${kundeId}/inkasso-paket`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(String(err.detail ?? 'Inkasso-Paket fehlgeschlagen'))
@@ -3569,7 +3594,7 @@ export async function downloadInkassoPaket(kundeId: number): Promise<void> {
  *  analog downloadPdfForMail(). Zählt wie Drucken/SMTP-Versand als "verlässt das Haus". */
 export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void> {
   const base = await getBaseUrl()
-  const res = await fetch(`${base}/mahnwesen/${mahnungId}/pdf?download=true`)
+  const res = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf?download=true`)
   if (!res.ok) throw new Error(`PDF-Download fehlgeschlagen: ${res.status}`)
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''

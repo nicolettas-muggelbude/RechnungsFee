@@ -31,7 +31,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     proxy: {
-      '/api': 'http://localhost:8002',
+      // RECHNUNGSFEE_TOKEN gesetzt (gleicher Wert wie beim Backend) → Vite hängt das
+      // Sitzungstoken an jeden API-Request an, auch an PDF-Fenster (Security-Audit F4 Teil 2).
+      '/api': {
+        target: 'http://localhost:8002',
+        headers: process.env.RECHNUNGSFEE_TOKEN
+          ? { Authorization: `Bearer ${process.env.RECHNUNGSFEE_TOKEN}` }
+          : {},
+      },
     },
   },
 })

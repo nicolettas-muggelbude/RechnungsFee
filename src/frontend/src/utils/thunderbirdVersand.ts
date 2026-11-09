@@ -8,7 +8,7 @@
 import { tempDir, join } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
-import { getDokumentenPaket, getPaketDateiUrl } from '../api/client'
+import { apiFetch, getDokumentenPaket, getPaketDateiUrl } from '../api/client'
 
 export class ThunderbirdNichtGefundenError extends Error {
   /** Fehlermeldung je versuchtem Kandidaten, in derselben Reihenfolge wie kandidaten() - zur
@@ -66,7 +66,7 @@ function escapeThunderbirdFeld(wert: string): string {
  *  ohne Aufräum-Logik: derselbe Dateiname wird beim nächsten Versand desselben Dokuments
  *  einfach überschrieben, es sammelt sich also nichts nennenswert an. */
 async function schreibeTempDatei(url: string, dateiname: string): Promise<string> {
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Anhang konnte nicht geladen werden: ${res.status}`)
   const bytes = new Uint8Array(await res.arrayBuffer())
 

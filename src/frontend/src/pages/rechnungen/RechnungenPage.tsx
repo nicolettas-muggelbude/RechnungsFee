@@ -24,6 +24,7 @@ import {
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
   dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete,
+  apiFetch,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -5043,7 +5044,7 @@ function ImportDialog({
         // "Rechnung erstellen" tat wirkungslos nichts).
         if (res.temp_url) {
           const base = await getApiBase()
-          const blob = await fetch(`${base}${res.temp_url}`).then(r => r.blob())
+          const blob = await apiFetch(`${base}${res.temp_url}`).then(r => r.blob())
           const mime = pfad.toLowerCase().endsWith('.xml') ? 'application/xml' : 'application/pdf'
           setDatei(new File([blob], name, { type: mime }))
         }

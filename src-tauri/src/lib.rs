@@ -13,10 +13,61 @@ struct BackendPort(Mutex<u16>);
 /// Globaler State: Handle des laufenden Sidecar-Prozesses
 struct BackendChild(Mutex<Option<CommandChild>>);
 
+/// Globaler State: Sitzungstoken für die lokale API (Security-Audit F4 Teil 2).
+///
+/// Pro App-Start 32 Zufallsbytes aus dem Zufallsgenerator des Betriebssystems, hex-kodiert.
+/// Der Sidecar bekommt es über stdin (nicht über argv – die Kommandozeile ist per `ps` für
+/// alle Benutzer sichtbar), das Hauptfenster per IPC (`get_backend_token`). Jeder API-Request
+/// schickt es als `Authorization: Bearer <token>` mit. Bewusst kein JWT: ein Aussteller,
+/// ein Prüfer, keine Claims – ein Zufallstoken ist einfacher und hat weniger Fallstricke.
+struct BackendToken(String);
+
+fn neues_sitzungstoken() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).expect("Zufallsgenerator des Betriebssystems nicht verfügbar");
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// POST /api/shutdown mit Sitzungstoken – direkt über TCP statt per curl, damit das Token
+/// nicht in der Kommandozeile eines Hilfsprozesses auftaucht (dort für alle Benutzer sichtbar).
+/// Liefert true bei HTTP 200.
+fn sende_shutdown(port: u16, token: &str, timeout: std::time::Duration) -> bool {
+    use std::io::{Read, Write};
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let mut stream = match std::net::TcpStream::connect_timeout(&addr, timeout) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+    let anfrage = format!(
+        "POST /api/shutdown HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        port, token
+    );
+    if stream.write_all(anfrage.as_bytes()).is_err() {
+        return false;
+    }
+    let mut puffer = [0u8; 32];
+    match stream.read(&mut puffer) {
+        Ok(n) if n > 0 => {
+            let antwort = String::from_utf8_lossy(&puffer[..n]);
+            antwort.starts_with("HTTP/1.1 200") || antwort.starts_with("HTTP/1.0 200")
+        }
+        _ => false,
+    }
+}
+
 /// IPC-Command: Frontend fragt den Backend-Port ab
 #[tauri::command]
 fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
     *state.0.lock().unwrap()
+}
+
+/// IPC-Command: Frontend holt das Sitzungstoken (nur Fenster „main“ hat IPC-Rechte,
+/// siehe capabilities/default.json – PDF-Fenster bekommen es nicht).
+#[tauri::command]
+fn get_backend_token(state: tauri::State<BackendToken>) -> String {
+    state.0.clone()
 }
 
 /// Backend-Prozessbaum beenden.
@@ -38,7 +89,7 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
 ///
 /// wait=true  → blockiert komplett (IPC vor exit(0), NSIS wartet)
 /// wait=false → non-blocking (CloseRequested / RunEvent::Exit)
-fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
+fn kill_backend_inner(child: CommandChild, port: u16, token: String, wait: bool) {
     #[cfg(target_os = "windows")]
     {
         let pid = child.pid();
@@ -48,14 +99,11 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
         log::info!("Sende Shutdown-Request an {} (PID {})", shutdown_url, pid);
 
         if wait {
-            // 1. Graceful: HTTP POST an /api/shutdown – curl.exe blockiert bis Antwort
-            let status = std::process::Command::new("curl.exe")
-                .args(["-s", "-m", "3", "-X", "POST", &shutdown_url])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
-            match &status {
-                Ok(o) if o.status.success() => log::info!("Graceful shutdown OK"),
-                _ => log::warn!("Graceful shutdown fehlgeschlagen – fahre mit taskkill fort"),
+            // 1. Graceful: HTTP POST an /api/shutdown – blockiert bis Antwort (max. 3 s)
+            if sende_shutdown(port, &token, std::time::Duration::from_secs(3)) {
+                log::info!("Graceful shutdown OK");
+            } else {
+                log::warn!("Graceful shutdown fehlgeschlagen – fahre mit taskkill fort");
             }
 
             // 2. Kurz warten: Prozess beendet sich nach /shutdown selbst
@@ -70,10 +118,9 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
             log::info!("Backend (PID {}) beendet (wait=true)", pid);
         } else {
             // Non-blocking: Shutdown-Request feuern und nicht warten
-            let _ = std::process::Command::new("curl.exe")
-                .args(["-s", "-m", "2", "-X", "POST", &shutdown_url])
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn();
+            std::thread::spawn(move || {
+                sende_shutdown(port, &token, std::time::Duration::from_secs(2));
+            });
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .creation_flags(CREATE_NO_WINDOW)
@@ -90,13 +137,11 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
         log::info!("Sende Shutdown-Request an {} (PID {})", shutdown_url, pid);
 
         if wait {
-            // 1. Graceful: HTTP POST an /api/shutdown
-            let status = std::process::Command::new("curl")
-                .args(["-s", "-m", "3", "-X", "POST", &shutdown_url])
-                .output();
-            match &status {
-                Ok(o) if o.status.success() => log::info!("Graceful shutdown OK"),
-                _ => log::warn!("Graceful shutdown fehlgeschlagen – fahre mit Kill fort"),
+            // 1. Graceful: HTTP POST an /api/shutdown (max. 3 s)
+            if sende_shutdown(port, &token, std::time::Duration::from_secs(3)) {
+                log::info!("Graceful shutdown OK");
+            } else {
+                log::warn!("Graceful shutdown fehlgeschlagen – fahre mit Kill fort");
             }
 
             // 2. Kurz warten: Bootloader beendet sich nach /shutdown selbst (wartet auf sein Kind)
@@ -113,9 +158,9 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
             log::info!("Backend (PID {}) beendet (wait=true)", pid);
         } else {
             // Non-blocking: Shutdown-Request feuern und nicht warten
-            let _ = std::process::Command::new("curl")
-                .args(["-s", "-m", "2", "-X", "POST", &shutdown_url])
-                .spawn();
+            std::thread::spawn(move || {
+                sende_shutdown(port, &token, std::time::Duration::from_secs(2));
+            });
             let _ = std::process::Command::new("pkill")
                 .args(["-9", "-P", &pid.to_string()])
                 .spawn();
@@ -135,10 +180,14 @@ fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
 
 /// IPC-Command: vom Frontend vor exit(0) aufgerufen – wartet bis Backend wirklich beendet ist
 #[tauri::command]
-fn kill_backend(child_state: tauri::State<BackendChild>, port_state: tauri::State<BackendPort>) {
+fn kill_backend(
+    child_state: tauri::State<BackendChild>,
+    port_state: tauri::State<BackendPort>,
+    token_state: tauri::State<BackendToken>,
+) {
     let port = *port_state.0.lock().unwrap();
     if let Some(child) = child_state.0.lock().unwrap().take() {
-        kill_backend_inner(child, port, true);  // wait=true: blockiert bis Backend weg ist
+        kill_backend_inner(child, port, token_state.0.clone(), true);  // wait=true: blockiert bis Backend weg ist
     }
 }
 
@@ -152,10 +201,11 @@ fn write_bytes_to_path(path: String, data: Vec<u8>) -> Result<(), String> {
 fn confirm_close(
     child_state: tauri::State<BackendChild>,
     port_state: tauri::State<BackendPort>,
+    token_state: tauri::State<BackendToken>,
 ) {
     let port = *port_state.0.lock().unwrap();
     if let Some(child) = child_state.0.lock().unwrap().take() {
-        kill_backend_inner(child, port, false);
+        kill_backend_inner(child, port, token_state.0.clone(), false);
     }
     // Fenster wird von JS nach diesem Return geschlossen
 }
@@ -484,15 +534,23 @@ pub fn run() {
             log::info!("Backend-Port: {}", port);
             app.manage(BackendPort(Mutex::new(port)));
 
+            let token = neues_sitzungstoken();
+            app.manage(BackendToken(token.clone()));
+
             let sidecar_cmd = app
                 .shell()
                 .sidecar("backend")
                 .expect("Backend-Sidecar nicht gefunden")
-                .args(["--port", &port.to_string()]);
+                .args(["--port", &port.to_string(), "--token-stdin"]);
 
-            let (rx, child) = sidecar_cmd
+            let (rx, mut child) = sidecar_cmd
                 .spawn()
                 .expect("Backend-Sidecar konnte nicht gestartet werden");
+
+            // Token als erste Zeile über stdin – der Sidecar liest es vor dem Start von uvicorn.
+            child
+                .write(format!("{}\n", token).as_bytes())
+                .expect("Sitzungstoken konnte nicht an den Sidecar übergeben werden");
 
             // Backend-Output in separatem Task loggen – so sehen wir Crashes und Fehler
             tauri::async_runtime::spawn(async move {
@@ -597,15 +655,16 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster])
+        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
             // Fallback: Falls CloseRequested nicht gefeuert hat (z.B. kein Hauptfenster)
             if let tauri::RunEvent::Exit = event {
                 let port = *app_handle.state::<BackendPort>().0.lock().unwrap();
+                let token = app_handle.state::<BackendToken>().0.clone();
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
-                    kill_backend_inner(child, port, false);  // non-blocking Fallback
+                    kill_backend_inner(child, port, token, false);  // non-blocking Fallback
                 }
             }
         });

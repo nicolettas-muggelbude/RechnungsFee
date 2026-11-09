@@ -14,10 +14,20 @@ F2 – Datei-Antworten: „X-Content-Type-Options: nosniff“ überall; Antworte
   ausführen. PDF bewusst ohne sandbox (blockiert in manchen Engines den PDF-Viewer),
   HTML setzt seine CSP selbst (Journal-Beleg) bzw. ist eigener Code (PDF-Ansichtshülle).
 
+F4 Teil 2, Schritt 1 – Sitzungstoken: jeder Request braucht „Authorization: Bearer <token>“
+  (pro App-Start von Tauri erzeugt, siehe utils/sitzungstoken.py), sonst 401. Ausnahmen:
+  CORS-Preflight (OPTIONS trägt keinen Header) und – als Übergang bis zu den signierten
+  Kurzzeit-Links (Schritt 2) – lesende Abrufe der Datei-Endpunkte, die das Frontend in einem
+  eigenen Fenster, iframe oder <img> öffnet (`_FENSTER_PFADE`). Dort kann kein Header gesetzt
+  werden. Alle JSON-Endpunkte und alle schreibenden Requests sind geschützt.
+
 Reine ASGI-Middleware (kein BaseHTTPMiddleware), damit Streaming-Antworten unverändert
 durchlaufen.
 """
+import re
 from urllib.parse import urlsplit
+
+from utils import sitzungstoken
 
 ERLAUBTE_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -34,6 +44,47 @@ _OHNE_SANDBOX = ("application/json", "text/html", "application/pdf")
 MAX_UPLOAD = 500 * 1024 ** 2                    # 500 MB
 MAX_UPLOAD_BACKUP = 10 * 1024 ** 3              # 10 GB – wie das Entpack-Limit beim Restore
 _BACKUP_PFADE = ("/api/backup/wiederherstellen",)
+
+
+# Übergang bis Schritt 2 (signierte Links): GET/HEAD-Pfade, die ohne eigenen Header geladen
+# werden (WebviewWindow per openUrl()/openInPdfWindow(), iframe in pdf-ansehen, <img> fürs Logo).
+# Neue Datei-Endpunkte, die im Fenster geöffnet werden, hier ergänzen – sonst 401 im Fenster.
+_FENSTER_PFADE = re.compile(r"""^/api/(?:
+      rechnungen/\d+/(?:pdf|pdf-ansehen|beleg|zugferd)
+    | rechnungen/temp/[0-9a-f\-]{36}
+    | rechnungen/export
+    | mahnwesen/\d+/pdf
+    | (?:kunden|lieferanten)/\d+/(?:kontokorrent/pdf|dsgvo-export|dsgvo-export-pdf)
+    | kunden/\d+/belege/\d+/download
+    | dokumentenpakete/\d+/(?:vorschau|dateien/\d+/download)
+    | journal/\d+/(?:beleg|anhang)
+    | journal/(?:export|kassenbuch-export)
+    | (?:inventurliste|kontenuebersicht)/export
+    | (?:kategorien|tagesabschluss)/export/pdf
+    | (?:anlage-g|anlage-s|anlageverzeichnis|euer|ustva|eks)/pdf
+    | ustva/jahreserklarung/pdf
+    | eks/halbjahr/pdf
+    | pdf-vorlagen/demo
+    | postfach/eingang/\d+/datei
+    | unternehmen/logo
+)$""", re.X)
+
+# Angehängter Dateiname (Issue #476, PdfDateinameMiddleware läuft erst danach).
+_DATEI_MARKER_RE = re.compile(r"^(.+)/_datei/[^/]+$")
+
+_OHNE_TOKEN = {"/health"}
+
+
+def ohne_token_erlaubt(methode: str, pfad: str) -> bool:
+    """True, wenn der Request (Übergangsregel) auch ohne Sitzungstoken durch darf."""
+    if methode == "OPTIONS":
+        return True
+    if methode not in ("GET", "HEAD"):
+        return False
+    m = _DATEI_MARKER_RE.match(pfad)
+    if m:
+        pfad = m.group(1)
+    return pfad in _OHNE_TOKEN or bool(_FENSTER_PFADE.match(pfad))
 
 
 def _hostname(host_header: str) -> str:
@@ -90,6 +141,14 @@ class SicherheitMiddleware:
         origin = headers.get("origin")
         if scope.get("method", "GET") not in _LESEND and origin is not None and not origin_erlaubt(origin):
             await _abweisen(send, 403, "Anfrage von fremder Herkunft abgelehnt.")
+            return
+
+        if (
+            sitzungstoken.pruefung_aktiv()
+            and not ohne_token_erlaubt(scope.get("method", "GET"), scope.get("path", ""))
+            and not sitzungstoken.authorization_gueltig(headers.get("authorization"))
+        ):
+            await _abweisen(send, 401, "Sitzungstoken fehlt oder ist ungültig.")
             return
 
         laenge = headers.get("content-length", "")

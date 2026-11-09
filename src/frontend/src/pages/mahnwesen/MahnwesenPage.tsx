@@ -8,6 +8,7 @@ import {
   getUnternehmen, getApiBase, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
   type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult,
+  apiFetch,
 } from '../../api/client'
 import { MahnungMailDialog } from '../../components/MahnungMailDialog'
 import { DateInput } from '../../components/DateInput'
@@ -58,7 +59,7 @@ function mahnungStatusLabel(status: string): string {
 
 async function mahnungDrucken(mahnungId: number, qc: ReturnType<typeof useQueryClient>) {
   const base = await getApiBase()
-  const resp = await fetch(`${base}/mahnwesen/${mahnungId}/pdf`)
+  const resp = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf`)
   const blob = await resp.blob()
   const blobUrl = URL.createObjectURL(blob)
   qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
