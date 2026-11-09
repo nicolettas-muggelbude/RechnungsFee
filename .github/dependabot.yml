@@ -18,6 +18,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      # Issue #493: PyMuPDF 2 lädt beim Import Modelldateien, die PyInstaller nicht mitpackt
+      # (Sidecar: „Paket ansehen“ und OCR scheitern) – requirements.txt pinnt bewusst <2
+      - dependency-name: "pymupdf"
+        update-types: ["version-update:semver-major"]
     groups:
       backend-production:
         dependency-type: "production"

@@ -9,7 +9,7 @@ resvg_py
 segno==1.6.6
 drafthorse
 factur-x
-lxml>=5
+lxml>=6.1.3
 pypdf
 pdfplumber
 # Issue #493: PyMuPDF 2.0 zieht pymupdf-layout (+ onnxruntime, numpy, networkx) mit und lädt beim
