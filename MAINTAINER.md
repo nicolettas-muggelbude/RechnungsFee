@@ -237,11 +237,7 @@ CSV-Details:
 - Dezimaltrennzeichen: <, oder .>
 - Spalten: <Anzahl>
 
-Closes #<Issue-Nummer>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Closes #<Issue-Nummer>"
 
 git push origin main
 ```
@@ -262,11 +258,7 @@ CSV-Details:
 - Dezimaltrennzeichen: Punkt (.)
 - Spalten: 8
 
-Closes #5
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Closes #5"
 ```
 
 ---

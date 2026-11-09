@@ -7,7 +7,7 @@ Open-Source-Buchhaltungssoftware für Freiberufler & Kleinunternehmer (§19 UStG
 ## Wichtige Konventionen
 - UI-Texte immer **Du-Ansprache** (nicht Sie)
 - Geldbeträge als `NUMERIC(12,2)` – keine floats
-- Commits auf Deutsch, Co-Authored-By: Claude Sonnet 4.6
+- Commits auf Deutsch, **ohne** `Co-Authored-By`-Zeile und ohne „Generated with Claude Code“ (seit 2026-11-09)
 - **Nie `git push`** ohne explizite Nachfrage
 - Skripte mit neuer Version: Änderungen nicht einzeln nachfragen
 
