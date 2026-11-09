@@ -277,6 +277,20 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     db.delete(kunde)
     db.commit()
 
+    # Seit #25 (Lieferadressen) stand dieser Block versehentlich in delete_lieferadresse() –
+    # die Anonymisierung lieferte null (keine Bestätigung, kein GoBD-Hinweis), das Löschen einer
+    # Lieferadresse brach nach dem Commit mit NameError (500) ab.
+    return {
+        "anonymisierte_buchungen": len(mutable),
+        "anonymisierte_rechnungen": len(rechnungen),
+        "unveraenderlich_verblieben": immutable_anzahl,
+        "hinweis": (
+            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
+            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
+            if immutable_anzahl else ""
+        ),
+    }
+
 
 @router.get("/{kunde_id}/mahnungen")
 def kunde_mahnungen(kunde_id: int, db: Session = Depends(get_db)):
@@ -383,19 +397,16 @@ def delete_lieferadresse(kunde_id: int, la_id: int, db: Session = Depends(get_db
     ).first()
     if not la:
         raise HTTPException(404, "Lieferadresse nicht gefunden.")
+    # Fremdschlüssel aus Dokumenten (Lieferort, Issue #495 auch Empfänger) – sonst IntegrityError (500)
+    from database.models import Rechnung
+    genutzt = db.query(Rechnung.rechnungsnummer).filter(
+        (Rechnung.lieferadresse_id == la_id) | (Rechnung.empfaenger_adresse_id == la_id)
+    ).limit(3).all()
+    if genutzt:
+        nummern = ", ".join(n for (n,) in genutzt if n) or "Entwürfe"
+        raise HTTPException(409, f"Die Adresse wird in Dokumenten verwendet ({nummern}) und kann nicht gelöscht werden.")
     db.delete(la)
     db.commit()
-
-    return {
-        "anonymisierte_buchungen": len(mutable),
-        "anonymisierte_rechnungen": len(rechnungen),
-        "unveraenderlich_verblieben": immutable_anzahl,
-        "hinweis": (
-            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
-            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
-            if immutable_anzahl else ""
-        ),
-    }
 
 
 # ---------------------------------------------------------------------------

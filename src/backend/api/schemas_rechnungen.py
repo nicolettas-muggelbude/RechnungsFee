@@ -122,6 +122,7 @@ class RechnungCreate(BaseModel):
     skonto_tage: Optional[int] = None
     dokument_typ: str = "Rechnung"
     lieferadresse_id: Optional[int] = None
+    empfaenger_adresse_id: Optional[int] = None  # Issue #495
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: bool = False
@@ -227,6 +228,7 @@ class RechnungUpdate(BaseModel):
     bemerkung_erechnung: Optional[str] = None
     # Issue #495: fehlte - eine beim Bearbeiten gewählte Lieferadresse wurde verworfen
     lieferadresse_id: Optional[int] = None
+    empfaenger_adresse_id: Optional[int] = None  # Issue #495: Standort im Adressfeld
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
@@ -410,6 +412,7 @@ class RechnungResponse(BaseModel):
     linked_lieferschein_nr: Optional[str] = None   # nur bei genau 1 Lieferschein
     lieferadresse_id: Optional[int] = None
     lieferadresse_text: Optional[str] = None  # wird in from_orm_extended befüllt
+    empfaenger_adresse_id: Optional[int] = None
     # Angebote
     angebot_status: Optional[str] = None
     gueltig_bis: Optional[date] = None

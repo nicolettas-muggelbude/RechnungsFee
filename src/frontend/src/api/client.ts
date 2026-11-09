@@ -1484,6 +1484,7 @@ export type Rechnung = {
   linked_lieferschein_nr: string | null
   lieferadresse_id: number | null
   lieferadresse_text: string | null
+  empfaenger_adresse_id: number | null  // Issue #495: Standort im Adressfeld
   angebot_status: string | null
   gueltig_bis: string | null
   dokumentenpaket_id: number | null
@@ -1560,6 +1561,7 @@ export type RechnungCreate = {
   gueltig_bis?: string
   dokumentenpaket_id?: number | null
   lieferadresse_id?: number | null
+  empfaenger_adresse_id?: number | null
   ist_reverse_charge?: boolean
   ist_eu_lieferung?: boolean
   ist_drittland_leistung?: boolean

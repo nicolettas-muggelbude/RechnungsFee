@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 182
+SCHEMA_VERSION = 183
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4202,6 +4202,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 182"))
             conn.commit()
             print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
+
+    if version < 183:
+        # Issue #495: Empfänger im Adressfeld von Angebot/Auftrag/Proforma/Lieferschein – eine
+        # Lieferadresse (Standort) des Kunden statt seiner Rechnungsanschrift. Getrennt von
+        # lieferadresse_id (Lieferort-Zeile), die Rechnung geht weiter an den Kunden selbst.
+        with engine.connect() as conn:
+            re183 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "empfaenger_adresse_id" not in re183:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN empfaenger_adresse_id INTEGER REFERENCES kunden_lieferadressen(id)"
+                ))
+            conn.execute(text("PRAGMA user_version = 183"))
+            conn.commit()
+            print("[Migration] Schema auf Version 183 (Issue #495: rechnungen.empfaenger_adresse_id)")
 
 
 def _migrate_kategorien() -> None:

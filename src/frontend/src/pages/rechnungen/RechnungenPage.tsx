@@ -36,6 +36,7 @@ import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHi
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
+import { EmpfaengerAuswahl } from '../../components/EmpfaengerAuswahl'
 import { DateInput } from '../../components/DateInput'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
@@ -2879,6 +2880,10 @@ function RechnungForm({
   const [lieferadresseId, setLieferadresseId] = useState<string>(
     initial?.lieferadresse_id ? String(initial.lieferadresse_id) : ''
   )
+  // Issue #495: Standort des Kunden im Adressfeld des Lieferscheins ('' = Kunde selbst)
+  const [empfaengerId, setEmpfaengerId] = useState<string>(
+    initial?.empfaenger_adresse_id ? String(initial.empfaenger_adresse_id) : ''
+  )
 const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const { data: lieferadressen = [] } = useQuery({
     queryKey: ['lieferadressen', kundeIdNum],
@@ -3469,6 +3474,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       // null statt undefined: „keine Lieferadresse“ muss beim Bearbeiten eines Entwurfs ankommen (Issue #495)
       lieferadresse_id: dokumentTyp === 'Lieferschein' ? (lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
+      empfaenger_adresse_id: dokumentTyp === 'Lieferschein' ? (kundeIdNum && empfaengerId ? parseInt(empfaengerId) : null) : undefined,
       dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
@@ -4041,6 +4047,18 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             </div>
           </div>
         </div>
+      )}
+
+      {dokumentTyp === 'Lieferschein' && (
+        <EmpfaengerAuswahl
+          kundeId={kundeIdNum}
+          value={empfaengerId}
+          onChange={(v) => {
+            setEmpfaengerId(v)
+            if (v) setLieferadresseId(v)  // Lieferung geht an denselben Standort
+          }}
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+        />
       )}
 
       {/* Lieferadresse – nur bei Lieferschein mit ausgewähltem Kunden */}

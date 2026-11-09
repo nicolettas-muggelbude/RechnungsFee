@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 182` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 183` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -327,6 +327,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 180 | Issue #470-Folgeprüfung, Ermessensfälle (abgestimmt): Software & Abonnements 4940/6820 (Fachliteratur) → 4964/6837 (Lizenzen), Zinsen & Darlehenskosten 2140/7330 (zinsähnliche Aufwendungen) → 2120/7320 (Zinsen langfristige Verbindlichkeiten), Wareneinkauf/7 %/EU ohne USt-IdNr/Drittland mit USt/§25a 3000/5000 (RHB) → 3200/5200 (Wareneingang, bewusst keine Automatikkonten); Büroausstattung bleibt 4985/6845; respektiert user_modified_skr03/04 |
 | 181 | Issue #480: „Sonstige Einnahmen“/„Mahngebühren“/„Verzugszinsen (Einnahme)“/„Zuwendungen von Dritten“ euer_zeile NULL → 16 (fielen komplett aus der EÜR, Guard IS NULL); Beschreibung „Zuwendungen von Dritten“ (Gründungszuschuss = Privateinlage) und „Betriebseinnahmen (0%)“ angepasst (nur wenn noch Standardtext). Ohne Migration (`_migrate_kategorien()`): „Betriebseinnahmen (0%)“ 12 → 16, neue Kategorie „Betriebseinnahmen (Kleinunternehmer)“ 8192/4184 Zeile 12 – `_erloes_kategorie()` nimmt sie bei Kleinunternehmern. EÜR (`euer.py::_ku_status_je_buchung()`): Status je Buchung über `steuerbefreiung_grund == "§19 UStG"` (Storno erbt vom Original über gruppe_id, Altbuchung ohne Grund und ohne USt → aktueller Stammdaten-Status); Kleinunternehmer: Zeilen 15/16 → 12, Regelbesteuerte: 12 → 16. Zeile 13 (Kz 119) als nachrichtliche Davon-Zeile (`ZEILEN_NACHRICHTLICH`, nicht in `EINNAHMEN_ZEILEN`, keiner Kategorie zuordenbar): Kleinunternehmer-Einnahmen auf Kategorien mit Basiszeile 16; steuerfreie § 4 Nr. 14-Umsätze (Heilberufe) brauchen noch ein Stammdatenfeld |
 | 182 | Issue #491/#492: unternehmen.taetigkeit_beginn DATE (Gründungsjahr → Kleinunternehmergrenze 25.000 € ohne Hochrechnung; aus eks_einstellungen.taetigkeitsbeginn übernommen, falls leer), umsatz_extern_jahr/_vorjahr/_startjahr (Umsatz vor RechnungsFee, nur für die Warnung, nicht für die EÜR), steuerbefreiung_4 VARCHAR(20) (NULL \| 4_nr_14 \| 4_nr_21, Schlüssel in `schemas.py::STEUERBEFREIUNGEN_4`); rechnungen.steuerfrei_4 BOOLEAN DEFAULT 0 (steuerfreie Leistung nach § 4 UStG je Rechnung) |
+| 183 | Issue #495: rechnungen.empfaenger_adresse_id FK → kunden_lieferadressen – Standort des Kunden als Empfänger im Adressfeld (Angebot/Auftrag/Proforma/Lieferschein, `EMPFAENGER_DOKUMENTE` in api/rechnungen.py; Rechnung bleibt beim Kunden); wandert bei allen Umwandlungen mit, Lieferschein aus Angebot/Auftrag bekommt ihn zugleich als lieferadresse_id; PDF über Relationship `Rechnung.empfaenger_adresse` (`pdf_rechnung_base.py::_standort_adresszeilen`). Nebenfund: `delete_lieferadresse` trug seit #25 den Return-Block von `anonymisiere_kunde` (NameError beim Löschen, Anonymisierung lieferte null); genutzte Adressen jetzt 409 statt IntegrityError |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

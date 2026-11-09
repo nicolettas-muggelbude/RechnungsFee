@@ -816,6 +816,8 @@ class Rechnung(Base):
     gutschrift_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferschein_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferadresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
+    # Issue #495: Empfänger im Adressfeld (Angebot/Auftrag/Proforma/Lieferschein) – Standort statt Kunde
+    empfaenger_adresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
     # Angebote
     angebot_status: Mapped[str | None] = mapped_column(String(20), default="offen")   # offen|akzeptiert|abgelehnt|abgelaufen
     gueltig_bis: Mapped[date | None] = mapped_column(Date)
@@ -853,6 +855,7 @@ class Rechnung(Base):
     lieferant: Mapped["Lieferant | None"] = relationship(back_populates="rechnungen")
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
+    empfaenger_adresse: Mapped["KundeLieferadresse | None"] = relationship(foreign_keys=[empfaenger_adresse_id])
     positionen: Mapped[list["Rechnungsposition"]] = relationship(
         back_populates="rechnung", cascade="all, delete-orphan",
         foreign_keys="Rechnungsposition.rechnung_id",
