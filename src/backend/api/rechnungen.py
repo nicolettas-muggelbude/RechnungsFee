@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from collections import defaultdict
 
 from database.connection import get_db, APP_DATA_DIR
+from database.enums import DokumentTyp, RechnungTyp
 from database.models import (
     Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
     Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch,
@@ -75,7 +76,7 @@ def _lager_buchen(rechnung: "Rechnung", db: Session, faktor: Decimal) -> None:
     Minusbestand-Prüfung nur beim Abgang (faktor=-1) und nur wenn nicht erlaubt.
     Eingangsrechnungen lösen keinen Lagerabgang aus.
     """
-    if rechnung.typ == "eingang":
+    if rechnung.typ == RechnungTyp.EINGANG:
         return
     for pos in rechnung.positionen:
         if not pos.artikel_id:
@@ -308,7 +309,7 @@ def _reverse_charge_positionen(db: Session, typ: str, positionen, rechnung_kateg
     Rechnung). Steht eine §13b-Position auf 0 % (so wie auf der Rechnung des Lieferanten), wird der
     Standardsatz der Kategorie übernommen - die Steuer entsteht trotzdem. Beim ig. Erwerb bleibt
     0 % erlaubt (eigene KZ 90). additiv ist None, wenn keine Position betroffen ist."""
-    if typ != "eingang" or not positionen:
+    if typ != RechnungTyp.EINGANG or not positionen:
         return positionen, None
     kategorien: dict[int, Kategorie | None] = {}
     neu, additiv = [], []
@@ -404,7 +405,7 @@ def _pruefe_und_erzeuge_vorsteuer_soll(rechnung: "Rechnung", db: Session) -> Non
     direkt als final angelegte oder aus dem Bearbeiten-Dialog finalisierte Eingangsrechnung
     bekam dadurch nie einen Vorsteuer-Anspruch, ohne dass irgendwo ein Fehler auftrat
     (Issue #343-Folgefund, von Peter1061 aufgedeckt)."""
-    if not (rechnung.typ == "eingang" and rechnung.datum >= CUTOVER_DATUM_VORSTEUER):
+    if not (rechnung.typ == RechnungTyp.EINGANG and rechnung.datum >= CUTOVER_DATUM_VORSTEUER):
         return
     if _vorsteuer_kategorie_fehlt(rechnung):
         raise HTTPException(
@@ -423,7 +424,7 @@ def _skonto_konto(rechnung_typ: str, ust_satz: Decimal) -> tuple[str | None, str
     # Konten gegengeprüft am DATEV-Kontenrahmen 2026 (Issue #470-Folgeprüfung) - vorher lagen
     # hier u. a. Erlöskonten (SKR04 4300/4310/4320) und Forderungsverluste (SKR03 2400/2401)
     satz = int(ust_satz)
-    if rechnung_typ == "ausgang":
+    if rechnung_typ == RechnungTyp.AUSGANG:
         # Gewährte Skonti
         skr03 = {19: "8736", 7: "8731", 0: "8734"}.get(satz)
         skr04 = {19: "4736", 7: "4731", 0: "4734"}.get(satz)
@@ -706,27 +707,27 @@ def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
             if _session:
                 _auftrag = _session.query(rechnung.__class__).filter(
                     rechnung.__class__.rechnung_zu_auftrag_id == rechnung.id,
-                    rechnung.__class__.dokument_typ == "Auftrag",
+                    rechnung.__class__.dokument_typ == DokumentTyp.AUFTRAG,
                 ).first()
                 if not _auftrag:
                     _proforma = _session.query(rechnung.__class__).filter(
                         rechnung.__class__.rechnung_zu_proforma_id == rechnung.id,
-                        rechnung.__class__.dokument_typ == "Proforma",
+                        rechnung.__class__.dokument_typ == DokumentTyp.PROFORMA,
                     ).first()
                     if _proforma:
                         _auftrag = _session.query(rechnung.__class__).filter(
                             rechnung.__class__.proforma_zu_auftrag_id == _proforma.id,
-                            rechnung.__class__.dokument_typ == "Auftrag",
+                            rechnung.__class__.dokument_typ == DokumentTyp.AUFTRAG,
                         ).first()
                 if not _auftrag:
                     _lieferschein = _session.query(rechnung.__class__).filter(
                         rechnung.__class__.lieferschein_zu_rechnung_id == rechnung.id,
-                        rechnung.__class__.dokument_typ == "Lieferschein",
+                        rechnung.__class__.dokument_typ == DokumentTyp.LIEFERSCHEIN,
                     ).first()
                     if _lieferschein:
                         _auftrag = _session.query(rechnung.__class__).filter(
                             rechnung.__class__.lieferschein_zu_auftrag_id == _lieferschein.id,
-                            rechnung.__class__.dokument_typ == "Auftrag",
+                            rechnung.__class__.dokument_typ == DokumentTyp.AUFTRAG,
                         ).first()
                 if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
                     _auftrag.auftrag_status = "abgeschlossen"
@@ -745,10 +746,10 @@ def _partner_name(rechnung: Rechnung) -> str:
     """Lesbare Bezeichnung des Rechnungspartners."""
     if rechnung.partner_freitext:
         return rechnung.partner_freitext
-    if rechnung.typ == "ausgang" and rechnung.kunde:
+    if rechnung.typ == RechnungTyp.AUSGANG and rechnung.kunde:
         parts = [rechnung.kunde.firmenname or "", rechnung.kunde.vorname or "", rechnung.kunde.nachname or ""]
         return " ".join(p for p in parts if p)
-    if rechnung.typ == "eingang" and rechnung.lieferant:
+    if rechnung.typ == RechnungTyp.EINGANG and rechnung.lieferant:
         parts = [rechnung.lieferant.firmenname or "", rechnung.lieferant.vorname or "", rechnung.lieferant.nachname or ""]
         return " ".join(p for p in parts if p)
     return "Unbekannt"
@@ -1000,8 +1001,8 @@ def get_ueberzahlungen(db: Session = Depends(get_db)):
     GutschriftAlias = _alias(Rechnung.__table__, "gs")
     rechnungen = (
         db.query(Rechnung)
-        .filter(Rechnung.typ == "ausgang")
-        .filter(Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]))
+        .filter(Rechnung.typ == RechnungTyp.AUSGANG)
+        .filter(Rechnung.dokument_typ.in_([DokumentTyp.RECHNUNG, DokumentTyp.ABSCHLAGSRECHNUNG]))
         .filter(Rechnung.storniert == False)
         .filter(Rechnung.ist_entwurf == False)
         # Issue #419 Phase 2b: brutto_gesamt > 0 verhindert einen Fehlalarm bei einer durch
@@ -1013,7 +1014,7 @@ def get_ueberzahlungen(db: Session = Depends(get_db)):
         .filter(
             ~_exists().where(
                 (GutschriftAlias.c.gutschrift_zu_rechnung_id == Rechnung.id) &
-                (GutschriftAlias.c.dokument_typ == "Gutschrift")
+                (GutschriftAlias.c.dokument_typ == DokumentTyp.GUTSCHRIFT)
             )
         )
         .order_by(Rechnung.datum.desc())
@@ -1066,13 +1067,13 @@ def _rechnungen_gefiltert(
         q = q.filter(Rechnung.dokument_typ == dokument_typ)
     else:
         # Lieferscheine, Angebote, Proformas und Aufträge nur auf explizite Anfrage
-        q = q.filter(Rechnung.dokument_typ != "Lieferschein")
-        q = q.filter(Rechnung.dokument_typ != "Angebot")
-        q = q.filter(Rechnung.dokument_typ != "Proforma")
-        q = q.filter(Rechnung.dokument_typ != "Auftrag")
-        q = q.filter(Rechnung.dokument_typ != "Abschlagsrechnung")
+        q = q.filter(Rechnung.dokument_typ != DokumentTyp.LIEFERSCHEIN)
+        q = q.filter(Rechnung.dokument_typ != DokumentTyp.ANGEBOT)
+        q = q.filter(Rechnung.dokument_typ != DokumentTyp.PROFORMA)
+        q = q.filter(Rechnung.dokument_typ != DokumentTyp.AUFTRAG)
+        q = q.filter(Rechnung.dokument_typ != DokumentTyp.ABSCHLAGSRECHNUNG)
     if typ:
-        if typ not in ("eingang", "ausgang"):
+        if typ not in (RechnungTyp.EINGANG, RechnungTyp.AUSGANG):
             raise HTTPException(status_code=422, detail="typ muss 'eingang' oder 'ausgang' sein")
         q = q.filter(Rechnung.typ == typ)
     if zahlungsstatus:
@@ -1215,7 +1216,7 @@ def rechnungen_export(
 
     filter_teile = []
     if typ:
-        filter_teile.append("Eingangsrechnungen" if typ == "eingang" else "Ausgangsrechnungen")
+        filter_teile.append("Eingangsrechnungen" if typ == RechnungTyp.EINGANG else "Ausgangsrechnungen")
     if zahlungsstatus:
         filter_teile.append(f"Status: {', '.join(s.capitalize() for s in zahlungsstatus)}")
     if kunde_id is not None:
@@ -1285,7 +1286,7 @@ def rechnungen_export(
 def liste_auftraege(db: Session = Depends(get_db)):
     """Alle Aufträge zurückgeben."""
     auftraege = db.query(Rechnung).filter(
-        Rechnung.dokument_typ == "Auftrag"
+        Rechnung.dokument_typ == DokumentTyp.AUFTRAG
     ).order_by(Rechnung.datum.desc(), Rechnung.id.desc()).all()
     return [RechnungResponse.from_orm_extended(a) for a in auftraege]
 
@@ -1294,12 +1295,12 @@ def liste_auftraege(db: Session = Depends(get_db)):
 def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
     """Erstellt einen neuen Auftrag ohne Angebot-Quelle."""
     from api.mahnwesen import pruefe_kundensperre
-    pruefe_kundensperre(db, data.kunde_id, "ausgang")
+    pruefe_kundensperre(db, data.kunde_id, RechnungTyp.AUSGANG)
 
     heute = date.today()
     auftragsnummer = _naechste_auftragsnummer(heute, db)
     auftrag = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=auftragsnummer,
         datum=data.datum or heute,
         leistung_von=data.leistung_von,
@@ -1320,7 +1321,7 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
         kunden_bestellnummer=data.kunden_bestellnummer,
         bemerkung_erechnung=(data.bemerkung_erechnung or "").strip() or None,
         ist_entwurf=data.ist_entwurf,
-        dokument_typ="Auftrag",
+        dokument_typ=DokumentTyp.AUFTRAG,
         auftrag_status="offen",
         netto_gesamt=Decimal("0.00"),
         ust_gesamt=Decimal("0.00"),
@@ -1402,7 +1403,7 @@ def offene_abschlaege(
     Abschläge aus einem völlig anderen Projekt zur Auswahl anbieten."""
     query = db.query(Rechnung).filter(
         Rechnung.kunde_id == kunde_id,
-        Rechnung.dokument_typ == "Abschlagsrechnung",
+        Rechnung.dokument_typ == DokumentTyp.ABSCHLAGSRECHNUNG,
         Rechnung.storniert == False,
         Rechnung.ist_entwurf == False,
         Rechnung.verrechnet_in_rechnung_id.is_(None),
@@ -1441,8 +1442,8 @@ def letzter_steuerfall(kunde_id: int = Query(...), db: Session = Depends(get_db)
         db.query(Rechnung)
         .filter(
             Rechnung.kunde_id == kunde_id,
-            Rechnung.typ == "ausgang",
-            Rechnung.dokument_typ.in_(["Rechnung", "Abschlagsrechnung"]),
+            Rechnung.typ == RechnungTyp.AUSGANG,
+            Rechnung.dokument_typ.in_([DokumentTyp.RECHNUNG, DokumentTyp.ABSCHLAGSRECHNUNG]),
             Rechnung.storniert == False,  # noqa: E712
         )
         .order_by(Rechnung.datum.desc(), Rechnung.id.desc())
@@ -1473,7 +1474,7 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
     rechnen, sondern muss dieselbe, einzige Berechnung wie beim Speichern abfragen)."""
     unternehmen = db.query(Unternehmen).first()
     # §19 UStG betrifft nur Ausgangsdokumente (Issue #397) - siehe create_rechnung()
-    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == "ausgang")
+    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == RechnungTyp.AUSGANG)
     ist_steuerfrei_ausland = (
         data.ist_reverse_charge or data.ist_eu_lieferung
         or data.ist_drittland_leistung or data.ist_ausfuhrlieferung
@@ -1501,7 +1502,7 @@ def rechnung_vorschau(data: RechnungVorschauRequest, db: Session = Depends(get_d
 @router.post("", response_model=RechnungResponse, status_code=201)
 def create_rechnung(data: RechnungCreate, db: Session = Depends(get_db)):
     if data.extern_erstellt:
-        if data.typ != "ausgang" or (data.dokument_typ or "Rechnung") != "Rechnung":
+        if data.typ != RechnungTyp.AUSGANG or (data.dokument_typ or DokumentTyp.RECHNUNG) != DokumentTyp.RECHNUNG:
             raise HTTPException(status_code=422, detail="Nur Ausgangsrechnungen können als extern erstellt erfasst werden.")
         unternehmen = db.query(Unternehmen).first()
         if not (unternehmen and unternehmen.datenmigration_aktiv):
@@ -1518,7 +1519,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     # Kundensperrung (Abschnitt E): deckt Rechnung/Angebot/Lieferschein/Proforma ab (alle
     # laufen über diesen Endpunkt, unterschieden per dokument_typ) - Gutschrift und Storno
     # bewusst ausgenommen, die mindern eine Forderung statt neue zu schaffen.
-    if data.dokument_typ not in ("Gutschrift",):
+    if data.dokument_typ not in (DokumentTyp.GUTSCHRIFT,):
         from api.mahnwesen import pruefe_kundensperre
         pruefe_kundensperre(db, data.kunde_id, data.typ)
 
@@ -1537,12 +1538,12 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     # §19 UStG betrifft nur die eigenen Ausgangsrechnungen (keine USt auf eigene Umsätze) -
     # bei Eingangsrechnungen ist der USt-Satz des Lieferanten real und wird nur nicht als
     # Vorsteuer abgezogen (Issue #397). ist_kleinunternehmer hier NUR fuer _berechne_rechnung().
-    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == "ausgang")
+    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == RechnungTyp.AUSGANG)
 
     # Rechnungsnummer: aus Nummernkreis wenn nicht angegeben
     rechnungsnummer = data.rechnungsnummer
     if not rechnungsnummer:
-        if data.dokument_typ == "Lieferschein":
+        if data.dokument_typ == DokumentTyp.LIEFERSCHEIN:
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
             if nk:
                 # Jahreswechsel-Reset nur vorwärts (Issue #426) - siehe ausführlicher
@@ -1555,9 +1556,9 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
                 nk.naechste_nr += 1
                 rechnungsnummer = _belegnr_aus_format(nk.format, data.datum, nr)
             else:
-                count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Lieferschein").count()
+                count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN).count()
                 rechnungsnummer = f"LS-{str(data.datum.year)[-2:]}{count + 1:04d}"
-        elif data.dokument_typ == "Angebot":
+        elif data.dokument_typ == DokumentTyp.ANGEBOT:
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "angebot").first()
             if nk:
                 if nk.reset_jaehrlich and nk.letztes_jahr and data.datum.year > nk.letztes_jahr:
@@ -1568,14 +1569,14 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
                 nk.naechste_nr += 1
                 rechnungsnummer = _belegnr_aus_format(nk.format, data.datum, nr)
             else:
-                count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Angebot").count()
+                count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.ANGEBOT).count()
                 rechnungsnummer = f"ANG-{str(data.datum.year)[-2:]}{count + 1:04d}"
-        elif data.dokument_typ == "Abschlagsrechnung":
+        elif data.dokument_typ == DokumentTyp.ABSCHLAGSRECHNUNG:
             rechnungsnummer = naechste_nummer("abschlagsrechnung", db, data.datum)
             if not rechnungsnummer:
-                count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Abschlagsrechnung").count()
+                count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.ABSCHLAGSRECHNUNG).count()
                 rechnungsnummer = f"AR-{str(data.datum.year)[-2:]}{count + 1:04d}"
-        elif data.dokument_typ == "Proforma":
+        elif data.dokument_typ == DokumentTyp.PROFORMA:
             if not data.ist_entwurf:
                 rechnungsnummer = _naechste_proformanummer(data.datum, db)
             # else: Entwurf-Proforma ohne Nummer (wie Angebot-Entwurf)
@@ -1584,7 +1585,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
             # Format bestimmt die Nummer vollständig (Issue #399, Wunsch 1). Bestandsinstallationen
             # werden per Migration von "YY####" auf "RE-YY####"/"ER-YY####" gehoben, damit sich
             # am sichtbaren Ergebnis nichts ändert, bis jemand das Format bewusst anpasst.
-            nk_typ = "rechnung_ausgang" if data.typ == "ausgang" else "rechnung_eingang"
+            nk_typ = "rechnung_ausgang" if data.typ == RechnungTyp.AUSGANG else "rechnung_eingang"
             rechnungsnummer = naechste_nummer(nk_typ, db, data.datum)
             if not rechnungsnummer:
                 count = db.query(Rechnung).filter(Rechnung.typ == data.typ).count()
@@ -1592,7 +1593,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
 
     # Proforma: faellig_am aus Unternehmens-Standard wenn nicht übergeben; kein Skonto
     proforma_faellig_am = data.faellig_am
-    if data.dokument_typ == "Proforma" and proforma_faellig_am is None:
+    if data.dokument_typ == DokumentTyp.PROFORMA and proforma_faellig_am is None:
         _unt = db.query(Unternehmen).first()
         if _unt:
             from datetime import timedelta as _td
@@ -1604,7 +1605,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         rechnungsnummer=rechnungsnummer,
         datum=data.datum,
         leistung_von=data.leistung_von, leistung_bis=data.leistung_bis,
-        faellig_am=proforma_faellig_am if data.dokument_typ == "Proforma" else data.faellig_am,
+        faellig_am=proforma_faellig_am if data.dokument_typ == DokumentTyp.PROFORMA else data.faellig_am,
         kunde_id=data.kunde_id,
         lieferant_id=data.lieferant_id,
         partner_freitext=data.partner_freitext,
@@ -1622,23 +1623,23 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         kunden_bestellnummer=data.kunden_bestellnummer,
         bemerkung_erechnung=(data.bemerkung_erechnung or "").strip() or None,
         ist_entwurf=data.ist_entwurf,
-        skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
-        skonto_tage=None if data.dokument_typ == "Proforma" else data.skonto_tage,
+        skonto_prozent=None if data.dokument_typ == DokumentTyp.PROFORMA else data.skonto_prozent,
+        skonto_tage=None if data.dokument_typ == DokumentTyp.PROFORMA else data.skonto_tage,
         dokument_typ=data.dokument_typ,
-        lieferadresse_id=data.lieferadresse_id if data.dokument_typ == "Lieferschein" else None,
-        gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
+        lieferadresse_id=data.lieferadresse_id if data.dokument_typ == DokumentTyp.LIEFERSCHEIN else None,
+        gueltig_bis=data.gueltig_bis if data.dokument_typ == DokumentTyp.ANGEBOT else None,
         # Issue #477: Pakete auch für Rechnungen und Proforma (Lieferschein/Gutschrift/Eingang nicht)
         dokumentenpaket_id=(
             data.dokumentenpaket_id
-            if data.typ == "ausgang" and data.dokument_typ in ("Angebot", "Rechnung", "Abschlagsrechnung", "Proforma")
+            if data.typ == RechnungTyp.AUSGANG and data.dokument_typ in (DokumentTyp.ANGEBOT, DokumentTyp.RECHNUNG, DokumentTyp.ABSCHLAGSRECHNUNG, DokumentTyp.PROFORMA)
             else None
         ),
-        angebot_status="offen" if data.dokument_typ == "Angebot" else None,
+        angebot_status="offen" if data.dokument_typ == DokumentTyp.ANGEBOT else None,
         ist_reverse_charge=data.ist_reverse_charge,
         ist_eu_lieferung=data.ist_eu_lieferung,
         ist_drittland_leistung=data.ist_drittland_leistung,
         ist_ausfuhrlieferung=data.ist_ausfuhrlieferung,
-        steuerfrei_4=bool(data.steuerfrei_4) and data.typ == "ausgang",
+        steuerfrei_4=bool(data.steuerfrei_4) and data.typ == RechnungTyp.AUSGANG,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -1749,14 +1750,14 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if not rechnung.ist_entwurf and rechnung.dokument_typ not in ("Angebot", "Auftrag", "Proforma"):
+    if not rechnung.ist_entwurf and rechnung.dokument_typ not in (DokumentTyp.ANGEBOT, DokumentTyp.AUFTRAG, DokumentTyp.PROFORMA):
         raise HTTPException(status_code=409, detail="Nur Entwürfe können bearbeitet werden.")
-    if rechnung.dokument_typ == "Auftrag" and rechnung.auftrag_status not in ("offen", None):
+    if rechnung.dokument_typ == DokumentTyp.AUFTRAG and rechnung.auftrag_status not in ("offen", None):
         raise HTTPException(status_code=409, detail="Nur offene Aufträge können bearbeitet werden.")
 
     unternehmen = db.query(Unternehmen).first()
     # §19 UStG betrifft nur Ausgangsrechnungen (Issue #397) - siehe create_rechnung()
-    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and rechnung.typ == "ausgang")
+    ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and rechnung.typ == RechnungTyp.AUSGANG)
 
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
@@ -1772,7 +1773,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     # Issue #495: Lieferadresse am Lieferschein-Entwurf ändern - fehlte bisher in der Feldliste
     # oben, eine im Formular gewählte Adresse ging beim Speichern verloren. Über model_fields_set,
     # damit „keine Lieferadresse“ (null) die Auswahl auch wieder entfernen kann.
-    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == "Lieferschein":
+    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN:
         if data.lieferadresse_id is not None:
             from database.models import KundeLieferadresse
             la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == data.lieferadresse_id).first()
@@ -1803,7 +1804,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     if "bemerkung_erechnung" in data.model_fields_set:
         rechnung.bemerkung_erechnung = (data.bemerkung_erechnung or "").strip() or None
     # Issue #477: Paket muss sich auch wieder abwählen lassen (Frontend schickt dann null)
-    if "dokumentenpaket_id" in data.model_fields_set and rechnung.typ == "ausgang":
+    if "dokumentenpaket_id" in data.model_fields_set and rechnung.typ == RechnungTyp.AUSGANG:
         rechnung.dokumentenpaket_id = data.dokumentenpaket_id
 
     if sum([
@@ -1870,7 +1871,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         _synchronisiere_abschlagsverrechnung(rechnung, alte_abschlag_ids, db)
 
         # Gutschrift: Betrag darf den noch verbleibenden Restbetrag nicht überschreiten
-        if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
+        if rechnung.dokument_typ == DokumentTyp.GUTSCHRIFT and rechnung.gutschrift_zu_rechnung_id:
             original = db.query(Rechnung).filter(Rechnung.id == rechnung.gutschrift_zu_rechnung_id).first()
             if original:
                 restbetrag = _gutschrift_restbetrag(original, db, ausgenommen_id=rechnung.id)
@@ -1925,7 +1926,7 @@ def _gutschrift_restbetrag(original: "Rechnung", db: Session, ausgenommen_id: in
         db.query(Rechnung)
         .filter(
             Rechnung.gutschrift_zu_rechnung_id == original.id,
-            Rechnung.dokument_typ == "Gutschrift",
+            Rechnung.dokument_typ == DokumentTyp.GUTSCHRIFT,
             Rechnung.storniert == False,        # noqa: E712
             Rechnung.ist_entwurf == False,      # noqa: E712
         )
@@ -1976,7 +1977,7 @@ def _synchronisiere_abschlagsverrechnung(
         abschlag = db.query(Rechnung).filter(Rechnung.id == abschlag_id).first()
         if not abschlag:
             raise HTTPException(status_code=404, detail=f"Abschlagsrechnung #{abschlag_id} nicht gefunden.")
-        if abschlag.dokument_typ != "Abschlagsrechnung":
+        if abschlag.dokument_typ != DokumentTyp.ABSCHLAGSRECHNUNG:
             raise HTTPException(status_code=409, detail=f"{abschlag.rechnungsnummer or abschlag_id} ist keine Abschlagsrechnung.")
         if abschlag.storniert:
             raise HTTPException(status_code=409, detail=f"Abschlagsrechnung {abschlag.rechnungsnummer} ist storniert und kann nicht verrechnet werden.")
@@ -2021,8 +2022,8 @@ def finalisiere_rechnung(
         raise HTTPException(status_code=409, detail="Rechnung ist bereits finalisiert.")
 
     heute = date.today()
-    if (datum_heute and rechnung.typ == "ausgang" and not rechnung.import_quelle
-            and rechnung.dokument_typ != "Lieferschein" and rechnung.datum < heute):
+    if (datum_heute and rechnung.typ == RechnungTyp.AUSGANG and not rechnung.import_quelle
+            and rechnung.dokument_typ != DokumentTyp.LIEFERSCHEIN and rechnung.datum < heute):
         verschiebung = heute - rechnung.datum
         rechnung.datum = heute
         if rechnung.faellig_am:
@@ -2040,7 +2041,7 @@ def finalisiere_rechnung(
         )
 
     # Gutschrift: Summen-Check – darf den Original-Bruttobetrag nicht überschreiten
-    if rechnung.dokument_typ == "Gutschrift" and rechnung.gutschrift_zu_rechnung_id:
+    if rechnung.dokument_typ == DokumentTyp.GUTSCHRIFT and rechnung.gutschrift_zu_rechnung_id:
         original = db.query(Rechnung).filter(Rechnung.id == rechnung.gutschrift_zu_rechnung_id).first()
         if original:
             restbetrag = _gutschrift_restbetrag(original, db, ausgenommen_id=rechnung.id)
@@ -2061,10 +2062,10 @@ def finalisiere_rechnung(
     rechnung.absender_snapshot = _absender_snapshot(db)
 
     # Auftrag-Status auf rechnung_gestellt setzen sobald Rechnung finalisiert
-    if rechnung.dokument_typ == "Rechnung":
+    if rechnung.dokument_typ == DokumentTyp.RECHNUNG:
         _auftrag = db.query(Rechnung).filter(
             Rechnung.rechnung_zu_auftrag_id == rechnung.id,
-            Rechnung.dokument_typ == "Auftrag",
+            Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
         ).first()
         if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
             _auftrag.auftrag_status = "rechnung_gestellt"
@@ -2073,7 +2074,7 @@ def finalisiere_rechnung(
     # Ausnahme Issue #495: Lieferscheine aus Angebot/Auftrag entstehen seitdem als Entwurf - vorher
     # wurden sie sofort final und ohne Lagerabgang angelegt, der Abgang läuft dort über die
     # Rechnung. Das bleibt so, sonst würde die spätere Rechnung den Bestand doppelt mindern.
-    if not (rechnung.dokument_typ == "Lieferschein" and _ist_umgewandelter_lieferschein(db, rechnung)):
+    if not (rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN and _ist_umgewandelter_lieferschein(db, rechnung)):
         _lager_buchen(rechnung, db, faktor=Decimal("-1"))
     _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
@@ -2113,7 +2114,7 @@ def setze_extern_erstellt(rechnung_id: int, data: ExternErstelltRequest, db: Ses
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.typ != "ausgang" or (rechnung.dokument_typ or "Rechnung") != "Rechnung":
+    if rechnung.typ != RechnungTyp.AUSGANG or (rechnung.dokument_typ or DokumentTyp.RECHNUNG) != DokumentTyp.RECHNUNG:
         raise HTTPException(status_code=422, detail="Nur Ausgangsrechnungen können als extern erstellt gekennzeichnet werden.")
     unternehmen = db.query(Unternehmen).first()
     if not (unternehmen and unternehmen.datenmigration_aktiv):
@@ -2217,22 +2218,22 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         rechnung._gutschrift_original_nr = original.rechnungsnummer if original else None
 
     # Bezugsdokumente für PDF-Titel ermitteln
-    _dok = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
-    if _dok in ("Rechnung", "Lieferschein", "Proforma"):
+    _dok = getattr(rechnung, "dokument_typ", DokumentTyp.RECHNUNG) or DokumentTyp.RECHNUNG
+    if _dok in (DokumentTyp.RECHNUNG, DokumentTyp.LIEFERSCHEIN, DokumentTyp.PROFORMA):
         # Quell-Angebot (direkt)
         _angebot_col = {
-            "Rechnung":     Rechnung.rechnung_zu_angebot_id,
-            "Lieferschein": Rechnung.lieferschein_zu_angebot_id,
-            "Proforma":     Rechnung.proforma_zu_angebot_id,
+            DokumentTyp.RECHNUNG:     Rechnung.rechnung_zu_angebot_id,
+            DokumentTyp.LIEFERSCHEIN: Rechnung.lieferschein_zu_angebot_id,
+            DokumentTyp.PROFORMA:     Rechnung.proforma_zu_angebot_id,
         }[_dok]
         _quell_angebot = db.query(Rechnung).filter(_angebot_col == rechnung_id).first()
         rechnung._quell_angebot_nr = _quell_angebot.rechnungsnummer if _quell_angebot else None
 
         # Quell-Auftrag (direkt)
         _auftrag_col = {
-            "Rechnung":     Rechnung.rechnung_zu_auftrag_id,
-            "Lieferschein": Rechnung.lieferschein_zu_auftrag_id,
-            "Proforma":     Rechnung.proforma_zu_auftrag_id,
+            DokumentTyp.RECHNUNG:     Rechnung.rechnung_zu_auftrag_id,
+            DokumentTyp.LIEFERSCHEIN: Rechnung.lieferschein_zu_auftrag_id,
+            DokumentTyp.PROFORMA:     Rechnung.proforma_zu_auftrag_id,
         }[_dok]
         _quell_auftrag = db.query(Rechnung).filter(_auftrag_col == rechnung_id).first()
         rechnung._quell_auftrag_nr = _quell_auftrag.rechnungsnummer if _quell_auftrag else None
@@ -2242,20 +2243,20 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         if _quell_auftrag and not rechnung._quell_angebot_nr:
             _angebot_via_auftrag = db.query(Rechnung).filter(
                 Rechnung.auftrag_zu_angebot_id == _quell_auftrag.id,
-                Rechnung.dokument_typ == "Angebot",
+                Rechnung.dokument_typ == DokumentTyp.ANGEBOT,
             ).first()
             rechnung._quell_angebot_nr = _angebot_via_auftrag.rechnungsnummer if _angebot_via_auftrag else None
 
         # Fallback für Rechnung aus Proforma: Auftrag/Angebot über Proforma-Kette
-        if _dok == "Rechnung" and not rechnung._quell_auftrag_nr:
+        if _dok == DokumentTyp.RECHNUNG and not rechnung._quell_auftrag_nr:
             _via_proforma = db.query(Rechnung).filter(
                 Rechnung.rechnung_zu_proforma_id == rechnung_id,
-                Rechnung.dokument_typ == "Proforma",
+                Rechnung.dokument_typ == DokumentTyp.PROFORMA,
             ).first()
             if _via_proforma:
                 _auftrag_via = db.query(Rechnung).filter(
                     Rechnung.proforma_zu_auftrag_id == _via_proforma.id,
-                    Rechnung.dokument_typ == "Auftrag",
+                    Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
                 ).first()
                 if _auftrag_via:
                     rechnung._quell_auftrag_nr = _auftrag_via.rechnungsnummer
@@ -2263,7 +2264,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                         # auftrag_zu_angebot_id steht auf dem Angebot (FK → Auftrag), nicht auf dem Auftrag selbst
                         _angebot_via = db.query(Rechnung).filter(
                             Rechnung.auftrag_zu_angebot_id == _auftrag_via.id,
-                            Rechnung.dokument_typ == "Angebot",
+                            Rechnung.dokument_typ == DokumentTyp.ANGEBOT,
                         ).first()
                         rechnung._quell_angebot_nr = _angebot_via.rechnungsnummer if _angebot_via else None
                 elif not rechnung._quell_angebot_nr and _via_proforma.proforma_zu_angebot_id:
@@ -2273,39 +2274,39 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                     rechnung._quell_angebot_nr = _angebot_via.rechnungsnummer if _angebot_via else None
 
         # Fallback für Rechnung aus Lieferschein: Auftrag/Angebot über Lieferschein-Kette
-        if _dok == "Rechnung" and not rechnung._quell_auftrag_nr:
+        if _dok == DokumentTyp.RECHNUNG and not rechnung._quell_auftrag_nr:
             _via_ls = db.query(Rechnung).filter(
                 Rechnung.lieferschein_zu_rechnung_id == rechnung_id,
-                Rechnung.dokument_typ == "Lieferschein",
+                Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN,
             ).first()
             if _via_ls:
                 _auftrag_via_ls = db.query(Rechnung).filter(
                     Rechnung.lieferschein_zu_auftrag_id == _via_ls.id,
-                    Rechnung.dokument_typ == "Auftrag",
+                    Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
                 ).first()
                 if _auftrag_via_ls:
                     rechnung._quell_auftrag_nr = _auftrag_via_ls.rechnungsnummer
                     if not rechnung._quell_angebot_nr:
                         _angebot_via = db.query(Rechnung).filter(
                             Rechnung.auftrag_zu_angebot_id == _auftrag_via_ls.id,
-                            Rechnung.dokument_typ == "Angebot",
+                            Rechnung.dokument_typ == DokumentTyp.ANGEBOT,
                         ).first()
                         rechnung._quell_angebot_nr = _angebot_via.rechnungsnummer if _angebot_via else None
                 elif not rechnung._quell_angebot_nr:
                     # Lieferschein direkt aus Angebot (kein Auftrag dazwischen)
                     _angebot_via = db.query(Rechnung).filter(
                         Rechnung.lieferschein_zu_angebot_id == _via_ls.id,
-                        Rechnung.dokument_typ == "Angebot",
+                        Rechnung.dokument_typ == DokumentTyp.ANGEBOT,
                     ).first()
                     rechnung._quell_angebot_nr = _angebot_via.rechnungsnummer if _angebot_via else None
 
 
     # Auftrag: Eltern-Angebot über Rückwärts-FK suchen
     # (auftrag_zu_angebot_id steht auf dem Angebot, nicht auf dem Auftrag)
-    if _dok == "Auftrag":
+    if _dok == DokumentTyp.AUFTRAG:
         _angebot_des_auftrags = db.query(Rechnung).filter(
             Rechnung.auftrag_zu_angebot_id == rechnung_id,
-            Rechnung.dokument_typ == "Angebot",
+            Rechnung.dokument_typ == DokumentTyp.ANGEBOT,
         ).first()
         rechnung._quell_angebot_nr = _angebot_des_auftrags.rechnungsnummer if _angebot_des_auftrags else None
 
@@ -2317,15 +2318,15 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         ).first()
 
     ist_entwurf = rechnung.ist_entwurf
-    _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
-    _ist_storno_pdf = getattr(rechnung, "storniert", False) and _dok_typ == "Rechnung"
+    _dok_typ = getattr(rechnung, "dokument_typ", DokumentTyp.RECHNUNG) or DokumentTyp.RECHNUNG
+    _ist_storno_pdf = getattr(rechnung, "storniert", False) and _dok_typ == DokumentTyp.RECHNUNG
 
     # Dokumente die kein Original-Archiv brauchen (beliebig oft druckbar, kein Kopie-Stempel)
     # Stornorechnung: immer frisch – das Original-PDF war die ursprüngliche Rechnung
-    _kein_archiv = _dok_typ in ("Auftrag", "Angebot", "Proforma") or _ist_storno_pdf
+    _kein_archiv = _dok_typ in (DokumentTyp.AUFTRAG, DokumentTyp.ANGEBOT, DokumentTyp.PROFORMA) or _ist_storno_pdf
 
     # Gutschrift: erst ausgeben wenn Rückerstattung gebucht
-    ist_gutschrift_pdf = _dok_typ == "Gutschrift"
+    ist_gutschrift_pdf = _dok_typ == DokumentTyp.GUTSCHRIFT
     gutschrift_erstattet = ist_gutschrift_pdf and str(getattr(rechnung, "zahlungsstatus", "offen")) == "bezahlt"
     darf_archiviert = (
         not ist_entwurf
@@ -2394,8 +2395,8 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         if kopie_bytes:
             _dt_datei = _dok_typ
             _prefix = {
-                "Gutschrift":   "Gutschrift",
-                "Lieferschein": "Lieferschein",
+                DokumentTyp.GUTSCHRIFT:   "Gutschrift",
+                DokumentTyp.LIEFERSCHEIN: "Lieferschein",
             }.get(_dt_datei, "Rechnung")
             dateiname = f"{_prefix}_{rechnung.rechnungsnummer or rechnung_id}_Kopie.pdf"
             disposition = "attachment" if download else "inline"
@@ -2415,13 +2416,13 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     # sein; sonst interpretiert das PDF den gespeicherten Einzelpreis falsch (z.B. wird ein
     # bereits brutto erfasster Preis nochmal mit dem USt-Satz hochgerechnet - Nutzer-Feedback
     # 2026-08-04: 3,50€ brutto erschien im PDF als 4,17€).
-    ist_netto = rechnung.typ == "ausgang" and rechnung.eingabemodus == "netto"
+    ist_netto = rechnung.typ == RechnungTyp.AUSGANG and rechnung.eingabemodus == "netto"
 
     # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen
     kunde_zugferd = (
         not ist_entwurf
         and ist_netto
-        and _dok_typ in ("Rechnung", "Abschlagsrechnung")
+        and _dok_typ in (DokumentTyp.RECHNUNG, DokumentTyp.ABSCHLAGSRECHNUNG)
         and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
     )
     if kunde_zugferd:
@@ -2447,7 +2448,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         rechnung.ausgegeben_am = datetime.now()
         db.commit()
 
-    _dt_datei = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
+    _dt_datei = getattr(rechnung, "dokument_typ", DokumentTyp.RECHNUNG) or DokumentTyp.RECHNUNG
     if kunde_zugferd:
         firma = (unt_dict.get("firmenname") or "").replace("/", "-")
         dateiname = f"{firma}_Invoice {rechnung.rechnungsnummer or rechnung_id}.pdf"
@@ -2456,11 +2457,11 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
             _prefix = "Stornorechnung"
         else:
             _prefix = {
-                "Gutschrift":   "Gutschrift",
-                "Lieferschein": "Lieferschein",
-                "Angebot":      "Angebot",
-                "Proforma":     "Proforma",
-                "Auftrag":      "Auftrag",
+                DokumentTyp.GUTSCHRIFT:   "Gutschrift",
+                DokumentTyp.LIEFERSCHEIN: "Lieferschein",
+                DokumentTyp.ANGEBOT:      "Angebot",
+                DokumentTyp.PROFORMA:     "Proforma",
+                DokumentTyp.AUFTRAG:      "Auftrag",
             }.get(_dt_datei, "Rechnung")
         dateiname = f"{_prefix}_{rechnung.rechnungsnummer or rechnung_id}.pdf"
     disposition = "attachment" if download else "inline"
@@ -2635,9 +2636,9 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if rechnung.import_quelle:
         raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung kann nicht als ZUGFeRD neu ausgegeben werden – maßgeblich ist das Original.")
-    if rechnung.typ != "ausgang":
+    if rechnung.typ != RechnungTyp.AUSGANG:
         raise HTTPException(status_code=400, detail="ZUGFeRD ist nur für Ausgangsrechnungen verfügbar.")
-    if getattr(rechnung, "dokument_typ", "Rechnung") != "Rechnung":
+    if getattr(rechnung, "dokument_typ", DokumentTyp.RECHNUNG) != DokumentTyp.RECHNUNG:
         raise HTTPException(status_code=400, detail="ZUGFeRD ist nur für Rechnungen verfügbar, nicht für Proforma, Angebote oder Lieferscheine.")
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=400, detail="Entwürfe können nicht als ZUGFeRD exportiert werden.")
@@ -2714,8 +2715,8 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    ist_proforma = rechnung.dokument_typ == "Proforma"
-    ist_angebot  = rechnung.dokument_typ == "Angebot"
+    ist_proforma = rechnung.dokument_typ == DokumentTyp.PROFORMA
+    ist_angebot  = rechnung.dokument_typ == DokumentTyp.ANGEBOT
 
     if not rechnung.ist_entwurf and not ist_proforma and not ist_angebot:
         raise HTTPException(status_code=409, detail="Nur Entwürfe können gelöscht werden.")
@@ -2730,7 +2731,7 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         or rechnung.auftrag_zu_angebot_id
     ):
         raise HTTPException(status_code=409, detail="Angebot kann nicht gelöscht werden, da bereits Dokumente daraus erstellt wurden.")
-    ist_auftrag = rechnung.dokument_typ == "Auftrag"
+    ist_auftrag = rechnung.dokument_typ == DokumentTyp.AUFTRAG
     if ist_auftrag and (
         rechnung.rechnung_zu_auftrag_id
         or rechnung.lieferschein_zu_auftrag_id
@@ -2754,12 +2755,12 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     )
     _auftrag_ls = db.query(Rechnung).filter(
         Rechnung.lieferschein_zu_auftrag_id == rechnung_id,
-        Rechnung.dokument_typ == "Auftrag",
+        Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
     ).first()
     # Auftrag-Rückverweis bereinigen und Status zurücksetzen wenn keine Dokumente mehr
     _auftrag_ref = db.query(Rechnung).filter(
         Rechnung.proforma_zu_auftrag_id == rechnung_id,
-        Rechnung.dokument_typ == "Auftrag",
+        Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
     ).first()
     def _hat_aktive_vorlage(auftrag_id: int) -> bool:
         from database.models import Rechnungsvorlage as _RV
@@ -2777,7 +2778,7 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
             _auftrag_ref.auftrag_status = "laufend" if _hat_aktive_vorlage(_auftrag_ref.id) else "offen"
     _auftrag_ref2 = db.query(Rechnung).filter(
         Rechnung.rechnung_zu_auftrag_id == rechnung_id,
-        Rechnung.dokument_typ == "Auftrag",
+        Rechnung.dokument_typ == DokumentTyp.AUFTRAG,
     ).first()
     if _auftrag_ref2:
         _auftrag_ref2.rechnung_zu_auftrag_id = None
@@ -2883,11 +2884,11 @@ def _erstelle_skonto_eintrag(
     anteilig je Satz erfolgen statt mit einem einzigen (dominanten) Satz (Issue #295).
     """
     from database.models import Kategorie as _Kategorie
-    skonto_art = "Ausgabe" if rechnung.typ == "ausgang" else "Einnahme"
-    kat_name = "Gewährte Skonti" if rechnung.typ == "ausgang" else "Erhaltene Skonti"
+    skonto_art = "Ausgabe" if rechnung.typ == RechnungTyp.AUSGANG else "Einnahme"
+    kat_name = "Gewährte Skonti" if rechnung.typ == RechnungTyp.AUSGANG else "Erhaltene Skonti"
     kat = db.query(_Kategorie).filter(_Kategorie.name == kat_name).first()
     # Ausgangsrechnung-Skonto mindert Umsatzsteuer (1776/3806), nicht Vorsteuer (1575/1406)
-    ust_art_konto = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    ust_art_konto = "Einnahme" if rechnung.typ == RechnungTyp.AUSGANG else "Ausgabe"
     for ust_satz, skonto_betrag, _g_ust03, _g_ust04 in skonto_gruppen:
         if skonto_betrag == 0:
             continue
@@ -2895,7 +2896,7 @@ def _erstelle_skonto_eintrag(
         sk_ust = (skonto_betrag - sk_netto).quantize(Decimal("0.01"), ROUND_HALF_UP) if ust_satz > 0 else Decimal("0.00")
         sk_konto_skr03, sk_konto_skr04 = _skonto_konto(rechnung.typ, ust_satz)
         sk_ust_skr03, sk_ust_skr04 = _ust_konto(ust_art_konto, ust_satz) if ust_satz > 0 else (None, None)
-        sk_vorsteuerabzug = (rechnung.typ == "eingang" and ust_satz > 0)
+        sk_vorsteuerabzug = (rechnung.typ == RechnungTyp.EINGANG and ust_satz > 0)
         sk = Journaleintrag(
             datum=datum,
             belegnr=_naechste_belegnr_journal(db, datum),
@@ -2975,7 +2976,7 @@ def _ausgangs_buchungsgruppen(
     # §19 UStG zwingt nur die eigenen Ausgangsrechnungen auf 0% (Issue #397); bei einer
     # Eingangsrechnung ist der reale Lieferanten-USt-Satz weiterhin relevant fuer die
     # Netto/USt-Aufteilung der Zahlungsbuchung (nur der Vorsteuerabzug bleibt gesperrt).
-    if (ist_kleinunternehmer and rechnung.typ == "ausgang") or not rechnung.positionen:
+    if (ist_kleinunternehmer and rechnung.typ == RechnungTyp.AUSGANG) or not rechnung.positionen:
         return satz_ratios, ust_satz, False, gruppen_keys, gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed
 
     hat_25a = any(pos.differenzbesteuerung for pos in rechnung.positionen)
@@ -3095,7 +3096,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             detail="Diese Abschlagsrechnung ist bereits in einer Schlussrechnung verrechnet - eine weitere Zahlung würde dort nicht mehr berücksichtigt. Bitte storniere/bearbeite stattdessen die Schlussrechnung.",
         )
 
-    ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
+    ist_gutschrift = getattr(rechnung, "dokument_typ", DokumentTyp.RECHNUNG) == DokumentTyp.GUTSCHRIFT
     # Issue #419 Phase 2b: eine Schlussrechnung kann durch Abschlags-Verrechnung einen
     # negativen Gesamtbetrag haben (Kunde hat de facto ein Guthaben) - fachlich dieselbe
     # Erstattungs-Situation wie eine Gutschrift (Geld fließt an den Kunden zurück statt
@@ -3111,7 +3112,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # ist ja bereits 0) - schließt die zuvor dokumentierte Lücke "Rechnung bezahlt, Gebühr nicht
     # separat nachbuchbar".
     offene_mg_bei_bezahlter_rechnung = Decimal("0")
-    if abs(restbetrag) <= Decimal("0.004") and not ist_erstattung and rechnung.typ == "ausgang":
+    if abs(restbetrag) <= Decimal("0.004") and not ist_erstattung and rechnung.typ == RechnungTyp.AUSGANG:
         offene_mg_bei_bezahlter_rechnung = offene_mahngebuehr_summe(db, rechnung_id)
     if abs(restbetrag) <= Decimal("0.004") and offene_mg_bei_bezahlter_rechnung <= Decimal("0.004"):
         raise HTTPException(status_code=409, detail="Rechnung ist bereits vollständig bezahlt/verbucht.")
@@ -3139,7 +3140,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # gutschrift (typ=="eingang", Issue #364) ist es umgekehrt - der Lieferant erstattet UNS
         # bar, das ERHÖHT den Kassenstand, keine Deckungsprüfung nötig (wie bei jeder normalen
         # Bar-Einnahme, die ebenfalls nicht gegen den Kassenstand geprüft wird).
-        if data.zahlungsart == "Bar" and rechnung.typ == "ausgang":
+        if data.zahlungsart == "Bar" and rechnung.typ == RechnungTyp.AUSGANG:
             ein_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
                 Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
             aus_bar = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
@@ -3158,7 +3159,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # bereits bestehenden Verhalten beim Bank-Import (_buche_pfad_a). Eingangsrechnungen
         # bleiben unverändert strikt auf den Restbetrag begrenzt (kein Mahnwesen für Lieferanten).
         if betrag > restbetrag:
-            if rechnung.typ != "ausgang":
+            if rechnung.typ != RechnungTyp.AUSGANG:
                 raise HTTPException(status_code=422,
                     detail=f"Betrag ({betrag}) übersteigt den Restbetrag ({restbetrag}).")
             gesamt_ueberschuss = betrag - restbetrag
@@ -3173,7 +3174,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
                     detail=f"Betrag + Skonto ({total}) übersteigt den Restbetrag ({restbetrag}).")
 
     # art: Gutschrift = "Einnahme" mit negativem Betrag (Erlösminderung in EÜR)
-    art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    art = "Einnahme" if rechnung.typ == RechnungTyp.AUSGANG else "Ausgabe"
 
     # Barkassen-Prüfung Normal-Pfad (Eingangsrechnung per Bar)
     if not ist_erstattung and art == "Ausgabe" and data.zahlungsart == "Bar":
@@ -3392,7 +3393,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         # "eingang", Issue #364) ergibt sie keinen Sinn; dort muss stattdessen jede Position
         # bereits eine eigene Aufwand-Kategorie haben (analog zur Kategorie-Pflicht bei
         # Eingangsrechnungen), sonst klarer Fehler statt stillschweigend falscher Kategorie.
-        fallback_kat_id = _erloes_kategorie(db, rechnung)[0] if rechnung.typ == "ausgang" else None
+        fallback_kat_id = _erloes_kategorie(db, rechnung)[0] if rechnung.typ == RechnungTyp.AUSGANG else None
 
         gruppen_liste = list(pos_gruppen.items())
         for i, ((kat_id, satz_int, g_ist_diff), g_brutto_pos) in enumerate(gruppen_liste):
@@ -3405,7 +3406,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             satz_d = Decimal(str(satz_int)) if not steuerbefreiung_grund else Decimal("0")
             g_ust03, g_ust04 = (_ust_konto(art, satz_d) if satz_int > 0 and not steuerbefreiung_grund else (None, None))
             eff_kat_id = kat_25a_id_gs if g_ist_diff else (kat_id or rechnung.kategorie_id or fallback_kat_id)
-            if eff_kat_id is None and rechnung.typ == "eingang":
+            if eff_kat_id is None and rechnung.typ == RechnungTyp.EINGANG:
                 raise HTTPException(status_code=422, detail=(
                     "Bitte eine Kategorie auswählen (je Position oder als Hauptkategorie) – "
                     "die Lieferantengutschrift kann sonst nicht korrekt verbucht werden."
@@ -3517,7 +3518,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         )
 
     # Einfache Zahlung (kein Split)
-    if rechnung.typ == "ausgang":
+    if rechnung.typ == RechnungTyp.AUSGANG:
         kategorie_id, kat_obj = _erloes_kategorie(db, rechnung)
     else:
         if data.kategorie_id is None and rechnung.kategorie_id is None:
@@ -3904,9 +3905,9 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
     original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if original.typ != "ausgang":
+    if original.typ != RechnungTyp.AUSGANG:
         raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für Ausgangsrechnungen möglich.")
-    if original.dokument_typ != "Rechnung":
+    if original.dokument_typ != DokumentTyp.RECHNUNG:
         raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für reguläre Rechnungen möglich.")
     if not original.storniert:
         raise HTTPException(status_code=409, detail="Nur stornierte Rechnungen können durch eine Ersatzrechnung ersetzt werden.")
@@ -3921,8 +3922,8 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
     faellig_am = heute + timedelta(days=int(zahlungsziel))
 
     ersatz = Rechnung(
-        typ="ausgang",
-        dokument_typ="Rechnung",
+        typ=RechnungTyp.AUSGANG,
+        dokument_typ=DokumentTyp.RECHNUNG,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
         faellig_am=faellig_am,
@@ -4001,7 +4002,7 @@ def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if rechnung.typ != "ausgang":
+    if rechnung.typ != RechnungTyp.AUSGANG:
         raise HTTPException(
             status_code=409,
             detail="Uneinbringlich gilt nur für Forderungen (Ausgangsrechnungen). "
@@ -4031,7 +4032,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
     original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    if original.dokument_typ == "Gutschrift":
+    if original.dokument_typ == DokumentTyp.GUTSCHRIFT:
         raise HTTPException(status_code=409, detail="Aus einer Gutschrift kann keine weitere Gutschrift erstellt werden.")
     if original.storniert:
         raise HTTPException(status_code=409, detail="Stornierte Rechnungen können nicht als Vorlage für eine Gutschrift dienen.")
@@ -4068,14 +4069,14 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         nk.naechste_nr += 1
         rechnungsnummer = _belegnr_aus_format(nk.format, heute, nr)
     else:
-        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Gutschrift").count()
+        count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.GUTSCHRIFT).count()
         rechnungsnummer = f"GS-{str(heute.year)[-2:]}{count + 1:04d}"
 
     orig_nr = original.rechnungsnummer or f"#{original.id}"
 
     gutschrift = Rechnung(
         typ=original.typ,
-        dokument_typ="Gutschrift",
+        dokument_typ=DokumentTyp.GUTSCHRIFT,
         gutschrift_zu_rechnung_id=original.id,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
@@ -4177,7 +4178,7 @@ def _dominante_gruppe(rechnung: "Rechnung", db: Session) -> tuple[Decimal, "int 
     kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k]) if kat_gruppen else None
     if kat_id is None:
         kat_id = rechnung.kategorie_id
-    if kat_id is None and rechnung.typ == "ausgang":
+    if kat_id is None and rechnung.typ == RechnungTyp.AUSGANG:
         # Ausgangsrechnungen/-gutschriften fuehren nie ein eigenes kategorie_id je Position
         # (keine UI dafuer, siehe zahlung_bar_erstellen) - ohne diesen Fallback wuerde die
         # Verrechnung ohne Kategorie/Erloeskonto gebucht (Issue #366, analog zum Fix in
@@ -4210,7 +4211,7 @@ def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest,
     gutschrift = db.query(Rechnung).filter(Rechnung.id == gutschrift_id).first()
     if not gutschrift:
         raise HTTPException(status_code=404, detail="Gutschrift nicht gefunden.")
-    if gutschrift.dokument_typ != "Gutschrift":
+    if gutschrift.dokument_typ != DokumentTyp.GUTSCHRIFT:
         raise HTTPException(status_code=400, detail="Nur Gutschriften können auf diesem Weg verrechnet werden.")
     if gutschrift.ist_entwurf:
         raise HTTPException(status_code=409, detail="Entwurf zuerst finalisieren.")
@@ -4222,7 +4223,7 @@ def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest,
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     if rechnung.id == gutschrift.id:
         raise HTTPException(status_code=400, detail="Gutschrift kann nicht mit sich selbst verrechnet werden.")
-    if rechnung.dokument_typ != "Rechnung":
+    if rechnung.dokument_typ != DokumentTyp.RECHNUNG:
         raise HTTPException(status_code=400, detail="Verrechnung ist nur gegen reguläre Rechnungen möglich.")
     if rechnung.ist_entwurf:
         raise HTTPException(status_code=409, detail="Zielrechnung ist noch Entwurf.")
@@ -4233,7 +4234,7 @@ def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest,
             status_code=400,
             detail="Gutschrift und Rechnung müssen dieselbe Richtung haben (Ausgang/Eingang).",
         )
-    if gutschrift.typ == "ausgang":
+    if gutschrift.typ == RechnungTyp.AUSGANG:
         if not gutschrift.kunde_id or rechnung.kunde_id != gutschrift.kunde_id:
             raise HTTPException(status_code=400, detail="Kunde von Gutschrift und Rechnung stimmt nicht überein.")
     else:
@@ -4254,18 +4255,18 @@ def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest,
 
     gs_satz, gs_kat_id, gs_kat = _dominante_gruppe(gutschrift, db)
     re_satz, re_kat_id, re_kat = _dominante_gruppe(rechnung, db)
-    if re_kat_id is None and rechnung.typ == "eingang":
+    if re_kat_id is None and rechnung.typ == RechnungTyp.EINGANG:
         raise HTTPException(
             status_code=422,
             detail="Bitte zuerst eine Kategorie für die Rechnung hinterlegen – die Verrechnung kann sonst nicht korrekt verbucht werden.",
         )
-    if gs_kat_id is None and gutschrift.typ == "eingang":
+    if gs_kat_id is None and gutschrift.typ == RechnungTyp.EINGANG:
         raise HTTPException(
             status_code=422,
             detail="Bitte zuerst eine Kategorie für die Gutschrift hinterlegen – die Verrechnung kann sonst nicht korrekt verbucht werden.",
         )
 
-    gs_art = "Einnahme" if gutschrift.typ == "ausgang" else "Ausgabe"
+    gs_art = "Einnahme" if gutschrift.typ == RechnungTyp.AUSGANG else "Ausgabe"
     gs_ust03, gs_ust04 = (_ust_konto(gs_art, gs_satz) if gs_satz > 0 else (None, None))
     if gs_satz > 0:
         gs_netto = (-betrag * 100 / (100 + gs_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -4289,7 +4290,7 @@ def gutschrift_verrechnen(gutschrift_id: int, data: GutschriftVerrechnenRequest,
     gs_eintrag.signatur = signatur_journaleintrag(gs_eintrag)
     db.add(gs_eintrag)
 
-    re_art = "Einnahme" if rechnung.typ == "ausgang" else "Ausgabe"
+    re_art = "Einnahme" if rechnung.typ == RechnungTyp.AUSGANG else "Ausgabe"
     re_ust03, re_ust04 = (_ust_konto(re_art, re_satz) if re_satz > 0 else (None, None))
     if re_satz > 0:
         re_netto = (betrag * 100 / (100 + re_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -4512,7 +4513,7 @@ def _lieferschein_zu_rechnung_konvertieren(
     merged_notizen = notizen or f"Lieferscheine: {ls_nummern}"
 
     rechnung = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=rechnungsnummer,
         datum=datum,
         leistung_von=leistung_von,
@@ -4528,7 +4529,7 @@ def _lieferschein_zu_rechnung_konvertieren(
         notizen=merged_notizen,
         kunden_bestellnummer=lieferscheine[0].kunden_bestellnummer,
         bemerkung_erechnung=lieferscheine[0].bemerkung_erechnung,
-        dokument_typ="Rechnung",
+        dokument_typ=DokumentTyp.RECHNUNG,
         ist_entwurf=True,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
@@ -4601,7 +4602,7 @@ def _naechste_proformanummer(datum: date, db: Session) -> str:
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
-    count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Proforma").count()
+    count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.PROFORMA).count()
     return f"PRF-{str(datum.year)[-2:]}{count + 1:04d}"
 
 
@@ -4615,7 +4616,7 @@ def _naechste_lieferscheinnummer(datum: date, db: Session) -> str:
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
-    count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Lieferschein").count()
+    count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN).count()
     return f"LS-{str(datum.year)[-2:]}{count + 1:04d}"
 
 
@@ -4626,14 +4627,14 @@ def _naechste_rechnungsnummer(datum: date, db: Session) -> str:
     rechnungsnummer = naechste_nummer("rechnung_ausgang", db, datum)
     if rechnungsnummer:
         return rechnungsnummer
-    count = db.query(Rechnung).filter(Rechnung.typ == "ausgang", Rechnung.dokument_typ == "Rechnung").count()
+    count = db.query(Rechnung).filter(Rechnung.typ == RechnungTyp.AUSGANG, Rechnung.dokument_typ == DokumentTyp.RECHNUNG).count()
     return f"{str(datum.year)[-2:]}{count + 1:04d}"
 
 
 @router.post("/{ls_id}/rechnung-erstellen", response_model=RechnungResponse, status_code=201)
 def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Rechnung aus einem einzelnen Lieferschein."""
-    ls = db.query(Rechnung).filter(Rechnung.id == ls_id, Rechnung.dokument_typ == "Lieferschein").first()
+    ls = db.query(Rechnung).filter(Rechnung.id == ls_id, Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN).first()
     if not ls:
         raise HTTPException(status_code=404, detail="Lieferschein nicht gefunden.")
     if ls.lieferschein_zu_rechnung_id:
@@ -4657,15 +4658,15 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     """Erstellt einen Lieferschein aus einer bestehenden Ausgangsrechnung (Vorkasse-Workflow)."""
     r = db.query(Rechnung).filter(
         Rechnung.id == rechnung_id,
-        Rechnung.typ == "ausgang",
-        Rechnung.dokument_typ == "Rechnung",
+        Rechnung.typ == RechnungTyp.AUSGANG,
+        Rechnung.dokument_typ == DokumentTyp.RECHNUNG,
         Rechnung.storniert == False,
     ).first()
     if not r:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
     bereits = db.query(Rechnung).filter(
         Rechnung.lieferschein_zu_rechnung_id == rechnung_id,
-        Rechnung.dokument_typ == "Lieferschein",
+        Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN,
         Rechnung.storniert == False,
     ).first()
     if bereits:
@@ -4673,7 +4674,7 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
 
     ls_nr = _naechste_lieferscheinnummer(date.today(), db)
     ls = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=ls_nr,
         datum=date.today(),
         kunde_id=r.kunde_id,
@@ -4686,7 +4687,7 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         notizen=f"Zu Rechnung {r.rechnungsnummer}" if r.rechnungsnummer else None,
         kunden_bestellnummer=r.kunden_bestellnummer,
         bemerkung_erechnung=r.bemerkung_erechnung,
-        dokument_typ="Lieferschein",
+        dokument_typ=DokumentTyp.LIEFERSCHEIN,
         lieferschein_zu_rechnung_id=rechnung_id,
         ist_entwurf=False,
         bezahlt=False,
@@ -4741,14 +4742,14 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     Issue #495: als Entwurf, damit vor dem Finalisieren noch die Lieferadresse (z. B. der
     Standort eines Filialkunden) gewählt werden kann."""
     angebot = db.query(Rechnung).filter(
-        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == DokumentTyp.ANGEBOT
     ).first()
     if not angebot:
         raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
 
     ls_nr = _naechste_lieferscheinnummer(date.today(), db)
     ls = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=ls_nr,
         datum=date.today(),
         kunde_id=angebot.kunde_id,
@@ -4761,7 +4762,7 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         notizen=f"Zu Angebot {angebot.rechnungsnummer}" if angebot.rechnungsnummer else None,
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
-        dokument_typ="Lieferschein",
+        dokument_typ=DokumentTyp.LIEFERSCHEIN,
         ist_entwurf=True,
         lieferadresse_id=_standard_lieferadresse_id(db, angebot.kunde_id),
         bezahlt=False,
@@ -4798,7 +4799,7 @@ class AngebotStatusUpdate(BaseModel):
 def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     """Konvertiert ein Angebot in eine Ausgangsrechnung (Positionen werden übernommen)."""
     angebot = db.query(Rechnung).filter(
-        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == DokumentTyp.ANGEBOT
     ).first()
     if not angebot:
         raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
@@ -4813,7 +4814,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     faellig_am = heute + timedelta(days=int(zahlungsziel))
 
     rechnung = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
         faellig_am=faellig_am,
@@ -4830,7 +4831,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         ist_entwurf=True,
-        dokument_typ="Rechnung",
+        dokument_typ=DokumentTyp.RECHNUNG,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4861,7 +4862,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
 def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Proforma-Rechnung aus einem Angebot (Positionen werden übernommen)."""
     angebot = db.query(Rechnung).filter(
-        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == DokumentTyp.ANGEBOT
     ).first()
     if not angebot:
         raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
@@ -4877,7 +4878,7 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     _faellig = heute + _td(days=_zt)
 
     proforma = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=proforma_nr,
         datum=heute,
         faellig_am=_faellig,
@@ -4894,7 +4895,7 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         ist_entwurf=False,
-        dokument_typ="Proforma",
+        dokument_typ=DokumentTyp.PROFORMA,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4929,7 +4930,7 @@ class ZahlungEingegangen(BaseModel):
 def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Session = Depends(get_db)):
     """Konvertiert eine Proforma-Rechnung in eine echte Ausgangsrechnung und bucht den Zahlungseingang."""
     proforma = db.query(Rechnung).filter(
-        Rechnung.id == proforma_id, Rechnung.dokument_typ == "Proforma"
+        Rechnung.id == proforma_id, Rechnung.dokument_typ == DokumentTyp.PROFORMA
     ).first()
     if not proforma:
         raise HTTPException(status_code=404, detail="Proforma-Rechnung nicht gefunden.")
@@ -4940,7 +4941,7 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
     rechnungsnummer = _naechste_rechnungsnummer(heute, db)
 
     rechnung = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
         faellig_am=zahlung.bezahlt_am,
@@ -4957,7 +4958,7 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
         kunden_bestellnummer=proforma.kunden_bestellnummer,
         bemerkung_erechnung=proforma.bemerkung_erechnung,
         ist_entwurf=True,
-        dokument_typ="Rechnung",
+        dokument_typ=DokumentTyp.RECHNUNG,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -5048,7 +5049,7 @@ def angebot_status_setzen(angebot_id: int, data: AngebotStatusUpdate, db: Sessio
     if data.status not in erlaubt:
         raise HTTPException(status_code=422, detail=f"Status muss einer von {erlaubt} sein.")
     angebot = db.query(Rechnung).filter(
-        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == DokumentTyp.ANGEBOT
     ).first()
     if not angebot:
         raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
@@ -5073,7 +5074,7 @@ def _naechste_auftragsnummer(datum: date, db: Session) -> str:
         nr = nk.naechste_nr
         nk.naechste_nr += 1
         return _belegnr_aus_format(nk.format, datum, nr)
-    count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Auftrag").count()
+    count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.AUFTRAG).count()
     return f"AU-{str(datum.year)[-2:]}{count + 1:04d}"
 
 
@@ -5098,7 +5099,7 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             ust_satz_25a=pos.ust_satz_25a,
         )
         db.add(neue_pos)
-    if ziel.typ == "ausgang" and ziel.dokument_typ in ("Rechnung", "Abschlagsrechnung", "Proforma"):
+    if ziel.typ == RechnungTyp.AUSGANG and ziel.dokument_typ in (DokumentTyp.RECHNUNG, DokumentTyp.ABSCHLAGSRECHNUNG, DokumentTyp.PROFORMA):
         ziel.steuerfrei_4 = steuerfrei_4_vorgabe(db, bool(getattr(quell, "steuerfrei_4", False)), quell.positionen)
 
 
@@ -5120,7 +5121,7 @@ def steuerfrei_4_vorgabe(db: Session, quelle_steuerfrei: bool, positionen) -> bo
 def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     """Erstellt einen Auftrag aus einem Angebot (Positionen werden übernommen)."""
     angebot = db.query(Rechnung).filter(
-        Rechnung.id == angebot_id, Rechnung.dokument_typ == "Angebot"
+        Rechnung.id == angebot_id, Rechnung.dokument_typ == DokumentTyp.ANGEBOT
     ).first()
     if not angebot:
         raise HTTPException(status_code=404, detail="Angebot nicht gefunden.")
@@ -5134,7 +5135,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     auftragsnummer = _naechste_auftragsnummer(heute, db)
 
     auftrag = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=auftragsnummer,
         datum=heute,
         leistung_von=angebot.leistung_von,
@@ -5150,7 +5151,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         ist_entwurf=False,
-        dokument_typ="Auftrag",
+        dokument_typ=DokumentTyp.AUFTRAG,
         auftrag_status="offen",
         eingabemodus=angebot.eingabemodus,
         rabatt_prozent=angebot.rabatt_prozent,
@@ -5176,7 +5177,7 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
 def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Ausgangsrechnung aus einem Auftrag."""
     auftrag = db.query(Rechnung).filter(
-        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == DokumentTyp.AUFTRAG
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
@@ -5193,7 +5194,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     faellig_am = heute + timedelta(days=int(zahlungsziel))
 
     rechnung = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=rechnungsnummer,
         datum=heute,
         faellig_am=faellig_am,
@@ -5210,7 +5211,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
-        dokument_typ="Rechnung",
+        dokument_typ=DokumentTyp.RECHNUNG,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -5240,7 +5241,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     """Erstellt einen Lieferschein aus einem Auftrag - als Entwurf, damit vor dem Finalisieren
     noch die Lieferadresse gewählt werden kann (Issue #495)."""
     auftrag = db.query(Rechnung).filter(
-        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == DokumentTyp.AUFTRAG
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
@@ -5261,11 +5262,11 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         nk.naechste_nr += 1
         ls_nr = _belegnr_aus_format(nk.format, heute, nr)
     else:
-        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Lieferschein").count()
+        count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN).count()
         ls_nr = f"LS-{str(heute.year)[-2:]}{count + 1:04d}"
 
     lieferschein = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=ls_nr,
         datum=heute,
         leistung_von=auftrag.leistung_von,
@@ -5282,7 +5283,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
         lieferadresse_id=_standard_lieferadresse_id(db, auftrag.kunde_id),
-        dokument_typ="Lieferschein",
+        dokument_typ=DokumentTyp.LIEFERSCHEIN,
         eingabemodus=auftrag.eingabemodus,
         rabatt_prozent=auftrag.rabatt_prozent,
         rabatt_betrag=auftrag.rabatt_betrag,
@@ -5305,7 +5306,7 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
 def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Proforma-Rechnung aus einem Auftrag."""
     auftrag = db.query(Rechnung).filter(
-        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == DokumentTyp.AUFTRAG
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
@@ -5326,11 +5327,11 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         nk.naechste_nr += 1
         prf_nr = _belegnr_aus_format(nk.format, heute, nr)
     else:
-        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Proforma").count()
+        count = db.query(Rechnung).filter(Rechnung.dokument_typ == DokumentTyp.PROFORMA).count()
         prf_nr = f"PRF-{str(heute.year)[-2:]}{count + 1:04d}"
 
     proforma = Rechnung(
-        typ="ausgang",
+        typ=RechnungTyp.AUSGANG,
         rechnungsnummer=prf_nr,
         datum=heute,
         leistung_von=auftrag.leistung_von,
@@ -5346,7 +5347,7 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=False,
-        dokument_typ="Proforma",
+        dokument_typ=DokumentTyp.PROFORMA,
         eingabemodus=auftrag.eingabemodus,
         rabatt_prozent=auftrag.rabatt_prozent,
         rabatt_betrag=auftrag.rabatt_betrag,
@@ -5376,7 +5377,7 @@ def auftrag_status_setzen(auftrag_id: int, data: AuftragStatusUpdate, db: Sessio
     if data.status not in erlaubt:
         raise HTTPException(status_code=422, detail=f"Status muss einer von {erlaubt} sein.")
     auftrag = db.query(Rechnung).filter(
-        Rechnung.id == auftrag_id, Rechnung.dokument_typ == "Auftrag"
+        Rechnung.id == auftrag_id, Rechnung.dokument_typ == DokumentTyp.AUFTRAG
     ).first()
     if not auftrag:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
@@ -5395,7 +5396,7 @@ def sammelrechnung_erstellen(data: SammelrechnungCreate, db: Session = Depends(g
         raise HTTPException(status_code=422, detail="Mindestens ein Lieferschein erforderlich.")
     lieferscheine = db.query(Rechnung).filter(
         Rechnung.id.in_(data.lieferschein_ids),
-        Rechnung.dokument_typ == "Lieferschein",
+        Rechnung.dokument_typ == DokumentTyp.LIEFERSCHEIN,
     ).all()
     if len(lieferscheine) != len(data.lieferschein_ids):
         raise HTTPException(status_code=404, detail="Mindestens ein Lieferschein nicht gefunden.")
