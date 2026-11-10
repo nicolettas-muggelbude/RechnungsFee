@@ -8,6 +8,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Optional
 from pydantic import BaseModel, field_validator, model_validator
 
+from database.enums import DokumentTyp, RechnungTyp
+
 
 # ---------------------------------------------------------------------------
 # Beleg
@@ -91,7 +93,7 @@ class RechnungspositionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class RechnungCreate(BaseModel):
-    typ: str  # eingang|ausgang
+    typ: RechnungTyp
     # Ausgangsrechnung wurde außerhalb von RechnungsFee erstellt (Datenübernahme) - gleiche Sperre
     # wie beim CSV-Import: kein neues PDF/ZUGFeRD, kein Versand, keine Mahnung (import_quelle='extern')
     extern_erstellt: bool = False
@@ -120,7 +122,7 @@ class RechnungCreate(BaseModel):
     rabatt_betrag: Optional[Decimal] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
-    dokument_typ: str = "Rechnung"
+    dokument_typ: DokumentTyp = DokumentTyp.RECHNUNG
     lieferadresse_id: Optional[int] = None
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
@@ -151,11 +153,14 @@ class RechnungCreate(BaseModel):
             )
         return self
 
-    @field_validator("dokument_typ")
+    # mode="before": eigene deutsche Fehlermeldung statt der englischen Enum-Meldung von Pydantic;
+    # die erlaubten Werte kommen aus dem Enum und werden nicht mehr doppelt gepflegt.
+    @field_validator("dokument_typ", mode="before")
     @classmethod
-    def check_dokument_typ(cls, v: str) -> str:
-        if v not in ("Rechnung", "Gutschrift", "Lieferschein", "Angebot", "Proforma", "Auftrag", "Abschlagsrechnung"):
-            raise ValueError("dokument_typ muss 'Rechnung', 'Gutschrift', 'Lieferschein', 'Angebot', 'Proforma', 'Auftrag' oder 'Abschlagsrechnung' sein")
+    def check_dokument_typ(cls, v):
+        if v not in list(DokumentTyp):
+            erlaubt = ", ".join(f"'{d}'" for d in DokumentTyp)
+            raise ValueError(f"dokument_typ muss einer dieser Werte sein: {erlaubt}")
         return v
 
     @model_validator(mode="after")
@@ -176,10 +181,10 @@ class RechnungCreate(BaseModel):
     ust_gesamt_override: Optional[Decimal] = None
     brutto_gesamt_override: Optional[Decimal] = None
 
-    @field_validator("typ")
+    @field_validator("typ", mode="before")
     @classmethod
-    def check_typ(cls, v: str) -> str:
-        if v not in ("eingang", "ausgang"):
+    def check_typ(cls, v):
+        if v not in list(RechnungTyp):
             raise ValueError("typ muss 'eingang' oder 'ausgang' sein")
         return v
 
@@ -192,9 +197,9 @@ class RechnungCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_partner(self) -> "RechnungCreate":
-        if self.typ == "ausgang" and not self.kunde_id and not self.partner_freitext:
+        if self.typ == RechnungTyp.AUSGANG and not self.kunde_id and not self.partner_freitext:
             raise ValueError("Ausgangsrechnung benötigt einen Kunden oder partner_freitext")
-        if self.typ == "eingang" and not self.lieferant_id and not self.partner_freitext:
+        if self.typ == RechnungTyp.EINGANG and not self.lieferant_id and not self.partner_freitext:
             raise ValueError("Eingangsrechnung benötigt einen Lieferanten oder partner_freitext")
         return self
 
@@ -260,7 +265,7 @@ class RechnungUpdate(BaseModel):
 class RechnungVorschauRequest(BaseModel):
     # Default "ausgang" (Issue #397): Angebot/Auftrag/Proforma sind immer Ausgangsdokumente
     # und schicken typ nicht mit - nur RechnungenPage.tsx setzt es explizit fuer Eingang/Ausgang.
-    typ: str = "ausgang"
+    typ: RechnungTyp = RechnungTyp.AUSGANG
     positionen: List[RechnungspositionCreate]
     # Issue #459: Kategorie der Rechnung (Fallback für Positionen ohne eigene) - erkennt
     # Reverse-Charge-Eingangsrechnungen, deren USt nicht zum Rechnungsbetrag zählt
