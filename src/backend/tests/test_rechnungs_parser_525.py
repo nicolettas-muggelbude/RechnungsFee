@@ -89,6 +89,15 @@ def test_summenzeile_unter_steuerkopf_ist_summe_keine_position():
     assert all(p.ust_satz == "19" for p in erg.positionen)
 
 
+def test_bezeichnung_aus_zeile_unter_codezeile():
+    """'10 60418b 1 PAK 1 V 11,10 11,10' - die Bezeichnung steht in der Folgezeile."""
+    erg = _parse(BUEROMARKT_SUMMENZEILE)
+    assert [(p.beschreibung, p.artikel_nr, p.einheit) for p in erg.positionen] == [
+        ("Packband braun", "60418b", "PAK"),
+        ("Versandkosten pro Auftrag", "t", "Stück"),
+    ]
+
+
 KASSENBON_OCR = """\
 MUSTER-MARKT GMBH
 Musterstraße 69

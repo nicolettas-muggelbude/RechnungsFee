@@ -422,11 +422,45 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
     prev_zeile = ""   # letzte Zeile ohne Preis → potenzieller Produktname (z.B. "Super 95")
     kontext_ust = ust_satz_default or "0"  # Abschnitts-USt: "19" oder "7" als eigene Zeile (PENNY)
 
+    wartet_auf_bezeichnung: Optional[AnalysePosition] = None  # Issue #525, Böttcher
+
     for z in alle_zeilen[start:end]:
         s = z.strip()
         if not s:
             prev_zeile = ""
             continue
+        # Bezeichnung in der Zeile unter der Positionszeile (Böttcher, Issue #525)
+        if wartet_auf_bezeichnung is not None:
+            pos_ohne_text, wartet_auf_bezeichnung = wartet_auf_bezeichnung, None
+            if (not re.search(r"\d+[,.]\d{2}", s) and not _SUMMENLABEL.match(s)
+                    and re.search(r"[A-Za-zÄÖÜäöüß]{3,}", s)):
+                pos_ohne_text.beschreibung = s
+                continue
+        # Positionszeile nur aus Codes: "10 60418b 1 PAK 1 V 11,10 11,10"
+        # (Pos Artikel-Nr. Menge ME PE Steuerkennz. Einzelpreis Gesamtpreis)
+        m_code = _POS_CODEZEILE_RE.match(s)
+        if m_code:
+            try:
+                menge_d = Decimal(m_code.group("m").replace(",", "."))
+                ep = Decimal(_betrag_de(m_code.group("ep")) or "x")
+                gp = Decimal(_betrag_de(m_code.group("gp")) or "x")
+                passt = menge_d > 0 and abs(ep * menge_d - gp) <= Decimal("0.02")
+            except InvalidOperation:
+                passt = False
+            if passt:
+                me = m_code.group("me")
+                pos_neu = AnalysePosition(
+                    beschreibung=f"Position {m_code.group('pos')}",
+                    menge=str(menge_d),
+                    einheit=_EINHEIT_MAP.get(me.lower(), me),
+                    netto=str(ep),
+                    ust_satz=kontext_ust,
+                    artikel_nr=m_code.group("art"),
+                )
+                positionen.append(pos_neu)
+                wartet_auf_bezeichnung = pos_neu
+                prev_zeile = ""
+                continue
         # USt-Abschnitts-Header: "19" oder "7" allein auf einer Zeile → Kontext-USt setzen
         # PENNY druckt die Rate als Gruppen-Header vor jedem Steuerblock
         m_ust_hdr = re.match(r"^(\d{1,2})\s*%?\s*$", s)
@@ -876,6 +910,14 @@ def _extrahiere_positionen_telecom(text: str) -> list["AnalysePosition"]:
         ))
     return positionen
 
+
+# Issue #525 (Böttcher): Positionszeile ohne Bezeichnung, die folgt in der nächsten Zeile
+# "10 60418b 1 PAK 1 V 11,10 11,10" = Pos ArtNr Menge ME [PE] [Steuerkennz.] Einzelpreis Gesamtpreis
+_POS_CODEZEILE_RE = re.compile(
+    r"^(?P<pos>\d{1,4})\s+(?P<art>\S+)\s+(?P<m>\d+(?:,\d+)?)\s+(?P<me>[A-Za-z]{1,5}\.?)\s+"
+    r"(?:\d+\s+)?(?:[A-Z]\s+)?"
+    r"(?P<ep>-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?P<gp>-?\d{1,3}(?:\.\d{3})*,\d{2})$"
+)
 
 # Issue #525 (Galaxus): "Bezeichnung [ArtNr] [Datum] Menge 19.00% Preis-exkl Preis-inkl Betrag-exkl Betrag-inkl"
 _BETRAG_SPALTE = r"\d{1,3}(?:[.,]\d{3})*[.,]\d{2}"
