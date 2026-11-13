@@ -10,7 +10,7 @@ Unterstützte Formate:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional
 import re
 
@@ -350,8 +350,11 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
         re.IGNORECASE,
     )
     _SUMMENLABEL = re.compile(
-        r"^(?:netto(?:betrag|summe|preis)?|brutto(?:betrag|summe)?|"
-        r"gesamt(?:betrag|summe|preis)?|zwischensumme|rechnungsbetrag|total|"
+        # Issue #525: "Netto-/Bruttorechnungsbetrag" (otelo), OCR-"Gesantbetrag" sowie
+        # Zahlungszeilen am Bon-Ende ("Geg. VISA EUR 2,99", "Rückgeld") sind keine Positionen
+        r"^(?:(?:netto|brutto)rechnungsbetrag|geg(?:eben)?\.?|r[üu]ckgeld|wechselgeld|"
+        r"netto(?:betrag|summe|preis)?|brutto(?:betrag|summe)?|"
+        r"gesa[mn]t(?:betrag|summe|preis|wert)?|zwischensumme|rechnungsbetrag|total|"
         r"zu\s+zahlen(?:\w+)?|summe(?:betrag)?(?:\s+netto)?|"
         r"(?:\w*preis)(?:\s+(?:netto|brutto|gesamt))?|"  # "Preis", "Gesamtpreis", "Preis Netto" …
         r"(?:ust|mwst|umsatzsteuer)\.?\s*(?:\d+[,.]?\d*)?\s*%?|"  # auch 19,0% / 7,0%
@@ -442,12 +445,20 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
         # Format: Zahl [optionale Einheit] × Einzelpreis → ist Preisdetail, keine eigene Position
         if re.match(r"^\d+[,.]?\d*\s+(?:\S+\s+)?[x×]\s+\d+[,.]\d+", s, re.IGNORECASE):
             continue
+        # Reine Betragszeile ohne Text ("14,09 2,68 EUR 16,77") = Summen-/Steuerzeile, keine
+        # Position - sonst übernahm sie die Beschreibung der Vorzeile (Issue #525, Böttcher)
+        if (re.match(r"^[\d\s.,\-€]*(?:EUR)?[\d\s.,\-€]*$", s, re.IGNORECASE)
+                and len(re.findall(r"\d+[,.]\d{2}", s)) >= 2):
+            prev_zeile = ""
+            continue
         m = _BETRAG_END.search(s)
         if not m:
             # Zeile ohne Preis merken (nur wenn sie wie ein Produktname aussieht)
             if (len(s) > 2
                     and not _SUMMENLABEL.match(s)
-                    and not re.match(r"^\d+[,.]\d+$", s)):
+                    and not re.match(r"^\d+[,.]\d+$", s)
+                    # Spaltenkopf-Rest "inkl. USt. inkl. USt." ist kein Produktname (Issue #525)
+                    and not re.fullmatch(r"(?:(?:inkl|exkl|zzgl)\.?\s*(?:USt|MwSt)\.?\s*)+", s, re.IGNORECASE)):
                 prev_zeile = s
             continue
         betrag = _betrag_de(m.group(1))
@@ -491,8 +502,10 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
                     ust_pos = m_ust2.group(1)
 
         # Zweiten Betrag (Einzelpreis) in vor abschneiden
+        einzelpreis: Optional[str] = None
         m2 = _BETRAG_END.search(vor)
         if m2:
+            einzelpreis = _betrag_de(m2.group(1))
             vor = vor[:m2.start()].strip()
 
         # Nackter USt-Satz (ohne %) am Zeilenende → aus Beschreibung entfernen
@@ -537,6 +550,7 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
 
         # Menge am Anfang: "2x", "4 Std", "1,5 kg" …
         menge, einheit = "1.000", "Stück"
+        vor_ohne_menge = vor  # für den Fall, dass die Zahl keine Menge war (siehe unten)
         # Format "[TypCode] [Qty] Beschreibung" (z.B. "A 1 TLD Domain"): einzelner Buchstabe + Zahl
         m_typ_q = re.match(r"^[A-Z]\s+(\d+(?:[,.]\d+)?)\s+(?=[A-Za-zÀ-ž])", vor, re.IGNORECASE)
         if m_typ_q:
@@ -605,7 +619,32 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
         )
         if prev_zeile and (len(vor) < 2 or re.match(r"^[\d×xXà@€/,.:\s]+$", vor) or _ist_reine_menge):
             vor = prev_zeile
+        elif re.match(r"^[\d€/,.:\s]+$", vor) and re.search(r"\d+[,.]\d{2}", vor):
+            # nur Beträge übrig ("6,19 €" bei OCR mit Spaltenlayout) - Beschreibung steht
+            # woanders, neutrale Bezeichnung statt eines Betrags als Text (Issue #525)
+            vor = f"Position {len(positionen) + 1}"
         prev_zeile = ""  # nach jeder gefundenen Position zurücksetzen
+
+        # Issue #525: Der Betrag am Zeilenende ist der Zeilenbetrag, das Formular rechnet aber
+        # Menge × Einzelpreis. Bei Menge ≠ 1 muss das wieder den Zeilenbetrag ergeben:
+        # - passender Einzelpreis in der Zeile → den übernehmen
+        # - Einzelpreis = Zeilenbetrag ("2 kg - Paket 6,19 € 6,19 €") → Zahl war keine Menge
+        # - kein Einzelpreis (Tankquittung "32,69 l … 57,48") → Einzelpreis = Betrag / Menge
+        try:
+            menge_d = Decimal(menge)
+            if menge_d not in (0, 1):
+                betrag_d = Decimal(betrag)
+                einzel_d = Decimal(einzelpreis) if einzelpreis else None
+                if einzel_d is not None and abs(einzel_d * menge_d - betrag_d) <= Decimal("0.02"):
+                    betrag = str(einzel_d)
+                elif einzel_d is not None and einzel_d == betrag_d:
+                    menge, einheit = "1.000", "Stück"
+                    if len(vor_ohne_menge) >= 2:
+                        vor = vor_ohne_menge
+                else:
+                    betrag = str((betrag_d / menge_d).quantize(Decimal("0.0001"), ROUND_HALF_UP))
+        except (InvalidOperation, ZeroDivisionError):
+            pass
 
         if len(vor) < 2 or re.match(r"^\d+$", vor):
             continue
@@ -944,6 +983,23 @@ def _ocr_pdf(pdf_bytes: bytes) -> "tuple[str, str]":
 # Text-Extraktion (Schritt 1–3, kein Parsing)
 # ---------------------------------------------------------------------------
 
+_CID_RE = re.compile(r"\(cid:\d+\)")
+
+
+def _ist_unlesbar(text: str) -> bool:
+    """Issue #525: Schriften ohne Unicode-Zuordnung liefern nur "(cid:20)(cid:24)…" - formal
+    Text, inhaltlich Zeichensalat. Dann wie ein Scan behandeln (OCR), statt nichts zu erkennen."""
+    if not text.strip():
+        return True
+    cid_anteil = sum(len(m) for m in _CID_RE.findall(text))
+    if cid_anteil > 0.3 * len(text):
+        return True
+    # pypdf liefert dieselben Glyphen als Steuerzeichen ("\x14\x18\x17…") statt "(cid:…)"
+    zeichen = [c for c in text if not c.isspace()]
+    steuer = sum(1 for c in zeichen if ord(c) < 32)
+    return bool(zeichen) and steuer > 0.2 * len(zeichen)
+
+
 def _extrahiere_text(pdf_bytes: bytes) -> "tuple[str, list[str]]":
     """Rohtext aus PDF extrahieren – pdfplumber → pypdf → OCR.
     Gibt (text, warnungen) zurück; text ist leer wenn alle Methoden scheitern.
@@ -959,15 +1015,16 @@ def _extrahiere_text(pdf_bytes: bytes) -> "tuple[str, list[str]]":
     except Exception:
         pass
 
-    if not text.strip():
+    if _ist_unlesbar(text):
         try:
             from pypdf import PdfReader
             reader = PdfReader(io.BytesIO(pdf_bytes))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception as exc:
-            return "", ["Kein eingebettetes XML – Textextraktion fehlgeschlagen.", str(exc)]
+            if not text.strip():
+                return "", ["Kein eingebettetes XML – Textextraktion fehlgeschlagen.", str(exc)]
 
-    if not text.strip():
+    if _ist_unlesbar(text):
         ocr_text, ocr_warnung = _ocr_pdf(pdf_bytes)
         if ocr_text.strip():
             text = ocr_text
@@ -1262,7 +1319,8 @@ class BelegParser:
             else:
                 # Vodafone-Format: "MwSt. 19% 9,20"  (Label, dann Satz%, dann Betrag)
                 m = re.search(
-                    r"^(?:MwSt\.?|USt\.?|Umsatzsteuer)(?:\s*/[^\n0-9]{0,20})?\s*(?:(\d{1,2})\s*%\s*)?:?\s*([\d.,]+)\s*(?:€|EUR)?",
+                    # Satz auch mit Nachkommastellen "MwSt. 19.00% 7.33" (Issue #525)
+                    r"^(?:MwSt\.?|USt\.?|Umsatzsteuer)(?:\s*/[^\n0-9]{0,20})?\s*(?:(\d{1,2})(?:[.,]\d+)?\s*%\s*)?:?\s*([\d.,]+)\s*(?:€|EUR)?",
                     text, re.IGNORECASE | re.MULTILINE,
                 )
                 if m:
@@ -1274,11 +1332,17 @@ class BelegParser:
 
         # Brutto-Gesamtbetrag
         # "Rechnungsbetrag in EUR 57,60" – Vodafone schreibt "in EUR" nach dem Label
+        # Issue #525: "Nettorechnungsbetrag" enthält "rechnungsbetrag" - per Lookbehind
+        # ausgeschlossen (otelo: 4,1933 netto landete als Brutto). Klammerzusatz "(brutto, inkl.
+        # MwSt)" erlaubt, "(netto, …)" bewusst nicht. Folgt dem Label ein zweiter, größerer
+        # Betrag ("Gesamtbetrag 38.57 45.90" = exkl./inkl.), ist der zweite das Brutto.
         m = re.search(
-            r"(?:Gesamtbetrag|Rechnungsbetrag|Zu\s+zahlen(?:der\s+Betrag)?|Brutto(?:summe|betrag)?)"
+            r"(?<!netto)(?:Gesamtbetrag|Rechnungsbetrag|Zu\s+zahlen(?:der\s+(?:Gesamt)?betrag)?|Brutto(?:summe|betrag)?)"
             r"(?:\s+in\s+(?:€|EUR|CHF))?"
             r"(?:\s+inkl\.?\s*(?:MwSt|USt|Umsatzsteuer)\.?)?"   # "Rechnungsbetrag in EUR inkl. MwSt. 19,99 €" (Issue #438)
-            r"(?:\s*/[^\n0-9]{0,25})?\s*[:\s]*(?:€|EUR|CHF)?\s*([\d.,]+)\s*(?:€|EUR|CHF)?",
+            r"(?:\s*\((?:brutto|inkl)[^)\n]{0,30}\))?"
+            r"(?:\s*/[^\n0-9]{0,25})?\s*[:\s]*(?:€|EUR|CHF)?\s*(\d[\d.,]*)(?:[ \t]*(?:€|EUR|CHF))?"
+            r"(?:[ \t]+(\d+[.,]\d{2})(?![\d.,]))?",
             text, re.IGNORECASE,
         )
         if not m:
@@ -1287,6 +1351,13 @@ class BelegParser:
             m = re.search(r"(?:Gesamt(?:summe)?|Summe)\s*[:\s]*(?:€|EUR|CHF)?\s*([\d.,]+)\s*(?:€|EUR|CHF)?", text, re.IGNORECASE)
         if m:
             v = _betrag_de(m.group(1))
+            if v and m.lastindex and m.lastindex >= 2 and m.group(2):
+                v2 = _betrag_de(m.group(2))
+                try:
+                    if v2 and Decimal(v2) > Decimal(v):
+                        v = v2
+                except InvalidOperation:
+                    pass
             if v:
                 felder["gesamt_brutto"] = v
 
@@ -1303,6 +1374,41 @@ class BelegParser:
             v = _betrag_de(m.group(1))
             if v:
                 felder["gesamt_netto"] = v
+
+        # Issue #525: Summenzeile "Netto USt Brutto" ohne eigenes Brutto-Label - entweder mit
+        # Summenlabel ("Gesantbetrag 2,51 0,48 2,99", OCR) oder unter einer Kopfzeile mit
+        # Netto + MwSt ("Netto MwSt 19% … Gesamtwert" / "14,09 2,68 EUR 16,77"). Nur wenn
+        # Netto + USt = Brutto aufgeht - sonst sind es beliebige drei Zahlen.
+        if not felder.get("gesamt_brutto"):
+            zeilen = text.split("\n")
+            for i, zeile in enumerate(zeilen):
+                betraege = re.findall(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[,.]\d{2})(?![\d.,%])", zeile)
+                if len(betraege) < 3:
+                    continue
+                vorher = zeilen[i - 1] if i else ""
+                if not (re.match(r"^\s*(?:gesa[mn]t\w*|summe\w*)\b", zeile, re.IGNORECASE)
+                        or (re.search(r"netto", vorher, re.IGNORECASE)
+                            and re.search(r"mwst|ust|steuer", vorher, re.IGNORECASE))):
+                    continue
+                try:
+                    n, u, b = (Decimal(_betrag_de(x) or "x") for x in betraege[-3:])
+                except InvalidOperation:
+                    continue
+                if b > 0 and abs(n + u - b) <= Decimal("0.01"):
+                    felder["gesamt_netto"], felder["gesamt_ust"], felder["gesamt_brutto"] = str(n), str(u), str(b)
+                    break
+
+        # Issue #525: Zahlungssatz als letzter Anhaltspunkt ("Der Betrag von 12,38 € wird …
+        # belastet", "Die Forderung von 16,77 EUR ziehen wir …") - bei OCR mit Spaltenlayout
+        # stehen Summenlabel und Beträge sonst auf getrennten Zeilen
+        if not felder.get("gesamt_brutto"):
+            m_zahl = re.search(
+                r"(?:Betrag|Forderung)\s+von\s+(\d[\d.,]*\d)\s*(?:€|EUR)", text, re.IGNORECASE,
+            )
+            if m_zahl:
+                v = _betrag_de(m_zahl.group(1))
+                if v:
+                    felder["gesamt_brutto"] = v
 
         # USt-ID
         # auch "Ust.Id.: DE191 352 769" (Schreibweise + Leerzeichen-Gruppen, Issue #438)
@@ -1369,6 +1475,14 @@ class BelegParser:
     def parse(self, text: str, warnungen: list) -> "AnalyseErgebnis":
         """Vollständiges Parsing: Felder → Konfidenz → Positionen → Modus → Ergebnis."""
         felder = {k: v for k, v in self._extrahiere_felder(text).items() if v is not None}
+        # Issue #525: Telekommunikationsrechnungen weisen Summen mit 4 Nachkommastellen aus
+        # ("Nettorechnungsbetrag 4,1933") - Belegfelder sind Cent-Beträge
+        for k in ("gesamt_netto", "gesamt_ust", "gesamt_brutto"):
+            if felder.get(k):
+                try:
+                    felder[k] = str(Decimal(felder[k]).quantize(Decimal("0.01"), ROUND_HALF_UP))
+                except InvalidOperation:
+                    felder.pop(k)
         _berechne_fehlende_summen(felder)
 
         warnungen.append(
