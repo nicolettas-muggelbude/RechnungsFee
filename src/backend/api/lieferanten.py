@@ -227,6 +227,24 @@ class KontokorrentBewegung(BaseModel):
     saldo: float
 
 
+def _storno_bewegung(r: Rechnung) -> dict | None:
+    """Gegenzeile für einen stornierten Eingangsbeleg (Issue #533) - analog zum Kunden-
+    Kontokorrent. Ohne sie blieb eine stornierte Eingangsrechnung dauerhaft als offene
+    Verbindlichkeit stehen. Eine bereits verbuchte Zahlung bleibt stehen (deren Storno-
+    Gegenbuchung ist art=Einnahme und zählt hier nicht) - Ergebnis ist ein sichtbares
+    Guthaben beim Lieferanten, wie beim Kunden. Gilt auch für stornierte Lieferanten-
+    gutschriften (negatives brutto_gesamt → positive Gegenzeile)."""
+    if not r.storniert:
+        return None
+    return {
+        "datum": str(r.storno_datum or r.datum),
+        "typ": "storno",
+        "belegnr": r.storno_rechnungsnummer or r.externe_belegnr or r.rechnungsnummer or str(r.id),
+        "beschreibung": f"Storno {r.externe_belegnr or r.rechnungsnummer or '—'}",
+        "betrag": -float(r.brutto_gesamt),
+    }
+
+
 @router.get("/{lieferant_id}/kontokorrent", response_model=list[KontokorrentBewegung])
 def kontokorrent_lieferant(lieferant_id: int, db: Session = Depends(get_db)):
     lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
@@ -255,6 +273,9 @@ def kontokorrent_lieferant(lieferant_id: int, db: Session = Depends(get_db)):
             "beschreibung": f"Eingangsrechnung {r.externe_belegnr or r.rechnungsnummer or '—'}",
             "betrag": float(r.brutto_gesamt),
         })
+        storno = _storno_bewegung(r)
+        if storno:
+            bewegungen.append(storno)
 
     # Zahlungsausgänge aus dem Journal
     zahlungen = (
@@ -311,14 +332,17 @@ def _kontokorrent_bewegungen_lieferant(
     raw: list[dict] = []
     for r in rechnungen:
         datum = r.datum
-        if not (von <= datum <= bis):
-            continue
-        raw.append({
-            "datum": str(datum), "typ": "rechnung",
-            "belegnr": r.externe_belegnr or r.rechnungsnummer or str(r.id),
-            "beschreibung": f"Eingangsrechnung {r.externe_belegnr or r.rechnungsnummer or '—'}",
-            "betrag": float(r.brutto_gesamt),
-        })
+        if von <= datum <= bis:
+            raw.append({
+                "datum": str(datum), "typ": "rechnung",
+                "belegnr": r.externe_belegnr or r.rechnungsnummer or str(r.id),
+                "beschreibung": f"Eingangsrechnung {r.externe_belegnr or r.rechnungsnummer or '—'}",
+                "betrag": float(r.brutto_gesamt),
+            })
+        # Storno mit eigenem Datum - unabhängig vom Zeitraum der Rechnung selbst geprüft
+        storno = _storno_bewegung(r)
+        if storno and von <= _date.fromisoformat(storno["datum"]) <= bis:
+            raw.append(storno)
 
     zahlungen = (
         db.query(Journaleintrag)
