@@ -1097,6 +1097,35 @@ def _extrahiere_lieferant_adresse(lines: list[str], name_zeile: int, name: str) 
 # Basisklasse + Spezialisierungen
 # ---------------------------------------------------------------------------
 
+def _warne_bei_summenabweichung(
+    felder: dict, positionen: "list[AnalysePosition]", modus: str, warnungen: list,
+) -> None:
+    """Issue #525: Das Formular rechnet die Summe aus den Positionen neu - weichen sie vom
+    erkannten Gesamtbetrag ab, wäre die Rechnung still falsch. Positionen werden bewusst NICHT
+    verworfen (Abbild der Rechnung, Issue #119: Verwerfen traf korrekte Rabatt-Positionen),
+    nur ein sichtbarer Hinweis."""
+    if not positionen or not felder.get("gesamt_brutto"):
+        return
+    try:
+        brutto_beleg = Decimal(felder["gesamt_brutto"])
+        summe = Decimal("0")
+        for p in positionen:
+            zeile = Decimal(p.menge) * Decimal(p.netto)
+            if modus != "brutto":
+                zeile *= 1 + Decimal(p.ust_satz or "0") / 100
+            summe += zeile
+        summe = summe.quantize(Decimal("0.01"), ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        return
+    if abs(summe - brutto_beleg) > Decimal("0.05"):
+        def eur(d: Decimal) -> str:
+            return f"{d:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        warnungen.append(
+            f"Die erkannten Positionen ergeben {eur(summe)} €, der Beleg weist {eur(brutto_beleg)} € aus "
+            "– bitte Positionen und Beträge prüfen."
+        )
+
+
 class BelegParser:
     """
     Basisparser – gemeinsame Feld- und Positions-Extraktion für alle Belegtypen.
@@ -1541,6 +1570,8 @@ class BelegParser:
                         break
             except (InvalidOperation, ZeroDivisionError):
                 pass
+
+        _warne_bei_summenabweichung(felder, positionen, positionen_modus, warnungen)
 
         return AnalyseErgebnis(
             format="pdf", felder=felder, positionen=positionen,

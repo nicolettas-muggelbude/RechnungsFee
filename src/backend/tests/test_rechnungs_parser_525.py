@@ -126,6 +126,23 @@ def test_menge_ohne_einzelpreis_ergibt_zeilenbetrag():
     assert (Decimal(pos[0].menge) * Decimal(pos[0].netto)).quantize(Decimal("0.01")) == Decimal("360.00")
 
 
+def _summenwarnung(erg) -> bool:
+    return any("Positionen ergeben" in w for w in erg.warnungen)
+
+
+def test_keine_summenwarnung_wenn_positionen_passen():
+    assert not _summenwarnung(_parse(BUEROMARKT_SUMMENZEILE))
+    assert not _summenwarnung(_parse(KASSENBON_OCR, KassenbonParser))
+
+
+def test_summenwarnung_wenn_positionen_nicht_passen():
+    """Positionen bleiben erhalten (Issue #119), aber die Abweichung wird angezeigt."""
+    text = BUEROMARKT_SUMMENZEILE.replace("20 t 1 STK 1 V 2,99 2,99", "20 t 1 STK 1 V 9,99 9,99")
+    erg = _parse(text)
+    assert len(erg.positionen) == 2
+    assert _summenwarnung(erg)
+
+
 def test_cid_text_gilt_als_unlesbar():
     assert _ist_unlesbar("(cid:20)(cid:24)(cid:23)(cid:26)\n(cid:23)(cid:48) (cid:62)")
     assert _ist_unlesbar("\x14\x18\x17\x1a\x1d\x1d\x19 \x14\x18\x17")
