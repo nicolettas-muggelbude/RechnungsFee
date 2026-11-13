@@ -1163,6 +1163,10 @@ async function _triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Öffentlicher Zugang zu _triggerBlobDownload für Seiten/Komponenten (Issue #532: Muster-CSV
+ *  lief über ein eigenes <a download>, das in der Desktop-App nichts herunterlud). */
+export const speichereBlob = (blob: Blob, filename: string) => _triggerBlobDownload(blob, filename)
+
 /** Lädt eine ELSTER-Exportdatei; die Backend-Meldung (z. B. 422) wird als Fehlertext durchgereicht. */
 async function _downloadElsterDatei(pfad: string, fallbackName: string): Promise<string> {
   const res = await fetch(`${await getBaseUrl()}${pfad}`)

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   getMusterCsv,
+  speichereBlob,
   getSpalten,
   getImportVorschau,
   importDurchfuehren,
@@ -164,10 +165,7 @@ export function ImportDialog({ typ, onClose }: ImportDialogProps) {
   }
 
   async function musterDownload() {
-    const blob = await getMusterCsv(typ)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = `muster_${typ}.csv`; a.click()
-    URL.revokeObjectURL(url)
+    await speichereBlob(await getMusterCsv(typ), `muster_${typ}.csv`)
   }
 
   const schrittLabels = ['Datei', 'Feldzuordnung', 'Vorschau', 'Ergebnis']
