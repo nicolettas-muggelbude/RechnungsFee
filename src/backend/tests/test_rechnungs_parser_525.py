@@ -143,6 +143,50 @@ def test_summenwarnung_wenn_positionen_nicht_passen():
     assert _summenwarnung(erg)
 
 
+TELKO_KOPF_OHNE_RECHTSFORM = """\
+Musterfunk Kundenservice
+Datum 17. März 2026
+Kundennummer
+Rechnungsnummer 1
+Seite 11 vvoonn 11
+Ihre Rechnung für März 2026
+Sie haben gekündigt oder etwas an Ihrem Vertrag geändert? Das ist systembedingt hier vielleicht noch nicht berücksichtigt.
+Rechnungsbetrag (netto, ohne 19% MwSt) 16,7984 €
+MwSt. (19% = 3,19 €) 3,1917 €
+Rechnungsbetrag (brutto, inkl. MwSt) 19,9901 €
+Zu zahlender Gesamtbetrag 19,99 €
+Der zu zahlende Gesamtbetrag von 19,99 € wird am 20.03.2026 per Lastschrift eingezogen.
+""" + "Hinweistext\n" * 25 + """\
+Musterfunk GmbH
+Hausanschrift Musterplatz 1 D-12345 Musterstadt
+Handelsregister Amtsgericht Musterstadt HRB 1 USt-IdNr. DE 123456789
+"""
+
+
+def test_telko_lieferant_aus_fusszeile_und_kein_fliesstext():
+    """'e.K.' traf jedes 'ek' ('gekündigt') - Fließtext wurde Lieferant."""
+    f = _parse(TELKO_KOPF_OHNE_RECHTSFORM).felder
+    assert f["lieferant_name"] == "Musterfunk GmbH"
+
+
+def test_telko_datum_belegnr_netto_ust():
+    f = _parse(TELKO_KOPF_OHNE_RECHTSFORM).felder
+    assert f["datum"] == "2026-03-17"
+    assert f["externe_belegnr"] == "1"
+    assert (f["gesamt_netto"], f["gesamt_ust"], f["gesamt_brutto"]) == ("16.80", "3.19", "19.99")
+    assert f["ust_satz"] == "19"
+
+
+def test_seite_und_absenderzeile_sind_keine_belegnr():
+    text = "Rechnung\n\nMuster Post AG - 12345 Musterstadt\nRechnungsnummer\nSeite 1 von 2\nSumme 5,00 €\n"
+    assert "externe_belegnr" not in _parse(text).felder
+
+
+def test_rechtsform_ek_ev_nur_als_kuerzel():
+    assert _parse("Blumen Muster e.K.\nMusterweg 1\n12345 Musterstadt\nSumme 5,00 €\n").felder[
+        "lieferant_name"] == "Blumen Muster e.K."
+
+
 def test_cid_text_gilt_als_unlesbar():
     assert _ist_unlesbar("(cid:20)(cid:24)(cid:23)(cid:26)\n(cid:23)(cid:48) (cid:62)")
     assert _ist_unlesbar("\x14\x18\x17\x1a\x1d\x1d\x19 \x14\x18\x17")

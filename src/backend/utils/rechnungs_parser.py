@@ -1060,6 +1060,18 @@ _STRASSE_RE = re.compile(
     r"|[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß .\-]{1,60}?\s*\d{1,4}\s*[a-zA-Z]?(?:\s*[-/]\s*\d{1,4}\s*[a-zA-Z]?)?)$"
 )
 _ADRESS_TRENNER_RE = re.compile(r"\s*[,·•|]\s*|\s+[-–]\s+")
+# Ausgeschriebene Monate ("17. März 2026") - lange Namen vor Abkürzungen (Regex-Alternation)
+_MONATE = {
+    "januar": 1, "februar": 2, "märz": 3, "maerz": 3, "april": 4, "mai": 5, "juni": 6,
+    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+    "jan": 1, "feb": 2, "mär": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8, "sept": 9,
+    "sep": 9, "okt": 10, "nov": 11, "dez": 12,
+}
+# Zeile, die nur aus Firmenname + Rechtsform besteht ("Vodafone GmbH", "Muster & Co. KG")
+_NUR_FIRMENNAME_RE = re.compile(
+    r"^[A-Za-zÄÖÜäöüß][\wÄÖÜäöüß&.'\- ]{0,50}?\s"
+    r"(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|UG(?:\s*\(haftungsbeschränkt\))?|KG|OHG|GbR|SE|e\.\s?K\.|e\.\s?V\.)$"
+)
 
 
 def _extrahiere_lieferant_adresse(lines: list[str], name_zeile: int, name: str) -> dict:
@@ -1216,6 +1228,21 @@ class BelegParser:
             if iso:
                 felder["datum"] = iso
         if not felder.get("datum"):
+            # Monat ausgeschrieben: "Datum 17. März 2026" (Vodafone, Issue #525) - sonst griff
+            # das erste beliebige Datum im Text (dort das Lastschriftdatum)
+            m_mon = re.search(
+                r"(?:Rechnungs(?:datum)?|Ausstellungsdatum|Ausgestellt(?:\s+am)?|Datum)\s*:?\s*"
+                r"(\d{1,2})\.?\s*(" + "|".join(_MONATE) + r")\.?\s+(\d{4})",
+                text, re.IGNORECASE,
+            )
+            if m_mon:
+                try:
+                    felder["datum"] = date(
+                        int(m_mon.group(3)), _MONATE[m_mon.group(2).lower()], int(m_mon.group(1)),
+                    ).isoformat()
+                except ValueError:
+                    pass
+        if not felder.get("datum"):
             m_iso = re.search(r"\b(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])", text)
             if m_iso:
                 try:
@@ -1241,10 +1268,18 @@ class BelegParser:
             r"|Invoice\s*(?:No\.?|Nr\.?|#))"
         )
         def _belegnr_filter(k: str) -> bool:
-            return bool(re.search(r"\d", k)) and not re.match(r"^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$", k)
+            # "Seite 1 von 1" (Vodafone, als "Seite 11 vvoonn 11" doppelt gedruckt) ist keine
+            # Belegnummer - stand in der Zeile unter "Rechnungsnummer" (Issue #525)
+            return (bool(re.search(r"\d", k)) and not re.match(r"^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$", k)
+                    and not re.match(r"^(?:Seite|Page|Blatt)\b", k, re.IGNORECASE)
+                    # Überschrift "Rechnung", darunter die Absenderzeile "Deutsche Post AG - 53250
+                    # Bonn" (DHL, Issue #525) - Rechtsform oder PLZ + Ort ist keine Belegnummer
+                    and not re.search(r"[a-zäöüß]\s+(?:GmbH|AG|KG|OHG|UG|SE)\b|\b\d{5}\s+[A-ZÄÖÜ][a-zäöüß]{2,}", k))
 
-        for m in re.finditer(_belegnr_label + r"[\s:]*([A-Z0-9][A-Z0-9/\-_. ]{1,39})", text, re.IGNORECASE):
-            val = re.sub(r"\s+", " ", m.group(1)).strip()
+        # Einstellige Nummer nur am Zeilenende ("Rechnungsnummer 1") - Issue #525
+        for m in re.finditer(_belegnr_label + r"(?:[\s:]*([A-Z0-9][A-Z0-9/\-_. ]{1,39})|[ \t:]*(\d)(?=[ \t]*$))",
+                             text, re.IGNORECASE | re.MULTILINE):
+            val = re.sub(r"\s+", " ", m.group(1) or m.group(2)).strip()
             if _belegnr_filter(val):
                 felder["externe_belegnr"] = val
                 break
@@ -1349,7 +1384,9 @@ class BelegParser:
                 # Vodafone-Format: "MwSt. 19% 9,20"  (Label, dann Satz%, dann Betrag)
                 m = re.search(
                     # Satz auch mit Nachkommastellen "MwSt. 19.00% 7.33" (Issue #525)
-                    r"^(?:MwSt\.?|USt\.?|Umsatzsteuer)(?:\s*/[^\n0-9]{0,20})?\s*(?:(\d{1,2})(?:[.,]\d+)?\s*%\s*)?:?\s*([\d.,]+)\s*(?:€|EUR)?",
+                    # Satz in Klammern "MwSt. (19% = 3,19 €) 3,1917 €" (Vodafone, Issue #525)
+                    r"^(?:MwSt\.?|USt\.?|Umsatzsteuer)(?:\s*/[^\n0-9]{0,20})?\s*"
+                    r"(?:\(?\s*(\d{1,2})(?:[.,]\d+)?\s*%(?:[^)\n]{0,20}\))?\s*)?:?\s*(\d[\d.,]*)\s*(?:€|EUR)?",
                     text, re.IGNORECASE | re.MULTILINE,
                 )
                 if m:
@@ -1392,11 +1429,13 @@ class BelegParser:
 
         # Netto-Betrag – optional: Steuer-Kürzel in Klammern "(19,0 %)" nach dem Label
         m = re.search(
-            r"(?:Netto(?:betrag|summe)?|Zwischensumme(?:\s+netto)?|"
+            # "Rechnungsbetrag (netto, ohne 19% MwSt) 16,7984 €" (Vodafone, Issue #525)
+            r"(?:Rechnungsbetrag\s*\(netto[^)\n]{0,30}\)|Netto(?:betrag|summe)?|Zwischensumme(?:\s+netto)?|"
             r"Gesamt\s+ohne\s+(?:MwSt\.?|USt\.?|Steuer|Umsatzsteuer)|net\s+amount)"
             r"(?:\s*/[^\n0-9]{0,25})?"
             r"(?:\s*\([^)]{1,20}\))?"   # opt. "(19,0 %)" o.ä. nach dem Label
-            r"\s*[:\s.·*\-]*(?:(?:€|EUR)\s*)?([\d.,]+)\s*(?:€|EUR)?",   # "Nettobetrag EUR 16,80 €" (Issue #438)
+            # Betrag muss mit einer Ziffer beginnen - sonst lieferte "(netto, ohne …" nur ","
+            r"\s*[:\s.·*\-]*(?:(?:€|EUR)\s*)?(\d[\d.,]*)\s*(?:€|EUR)?",   # "Nettobetrag EUR 16,80 €" (Issue #438)
             text, re.IGNORECASE,
         )
         if m:
@@ -1454,8 +1493,11 @@ class BelegParser:
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         _rechtsform_re = re.compile(
             # Wortgrenzen für kurze Kürzel (AG, KG etc.) – sonst Match in "Vertrag", "Betrag" usw.
-            r"GmbH(?:\s*&\s*Co)?|\bUG\b|\bAG\b|e\.?K\.?|\bKG\b|\bOHG\b|\bGbR\b"
-            r"|e\.?V\.?|\bSE\b|\bLtd\b|\bInc\b|Co\.",
+            # e.K./e.V. nur mit Punkt und als eigenes Wort - "e\.?K" traf jedes "ek"/"ev"
+            # ("gekündigt", "Revision") und machte beliebige Fließtextzeilen zum Lieferanten
+            # (Issue #525, Vodafone)
+            r"GmbH(?:\s*&\s*Co)?|\bUG\b|\bAG\b|(?<![^\W\d_])e\.\s?K\.?(?![^\W\d_])|\bKG\b|\bOHG\b|\bGbR\b"
+            r"|(?<![^\W\d_])e\.\s?V\.?(?![^\W\d_])|\bSE\b|\bLtd\b|\bInc\b|Co\.",
             re.IGNORECASE,
         )
         name_zeile: int | None = None  # Issue #438: Fundzeile für die Adresserkennung
@@ -1477,6 +1519,15 @@ class BelegParser:
                 felder["lieferant_name"] = name
                 name_zeile = i
                 break
+        # Issue #525: Kopf ohne Rechtsform (Vodafone: "Vodafone Kundenservice", darunter nur die
+        # Kundenanschrift) - der Firmenname steht dann allein in der Fußzeile ("Vodafone GmbH").
+        # Nur Zeilen, die ausschließlich aus Name + Rechtsform bestehen, sonst greifen Sätze.
+        if not felder.get("lieferant_name"):
+            for line in lines[25:]:
+                if (len(line) <= 60 and _NUR_FIRMENNAME_RE.match(line)
+                        and not re.search(r"Bankverbindung|IBAN|HRB|Sitz\s+der", line, re.IGNORECASE)):
+                    felder["lieferant_name"] = line
+                    break
         if not felder.get("lieferant_name") and lines:
             m_str = re.match(
                 r"^(.+?)\s+\S*(?:str\.|straße|gasse|weg|allee|platz|ring|damm)\s+\d+[a-zA-Z]?\s*$",
