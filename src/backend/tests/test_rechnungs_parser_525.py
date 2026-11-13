@@ -177,6 +177,12 @@ def test_telko_datum_belegnr_netto_ust():
     assert f["ust_satz"] == "19"
 
 
+def test_absenderzeile_mit_marke_co_und_spaltenrest():
+    f = _parse("Musterfon-Team | c/o Muster GmbH | 12345 Musterstadt Sie erreichen uns täglich\n"
+               "Rechnungsnummer R123\nSumme 5,00 €\n").felder
+    assert f["lieferant_name"] == "Muster GmbH"
+
+
 def test_seite_und_absenderzeile_sind_keine_belegnr():
     text = "Rechnung\n\nMuster Post AG - 12345 Musterstadt\nRechnungsnummer\nSeite 1 von 2\nSumme 5,00 €\n"
     assert "externe_belegnr" not in _parse(text).felder

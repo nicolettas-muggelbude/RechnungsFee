@@ -1514,8 +1514,16 @@ class BelegParser:
                 # - nur kürzen, wenn ein späteres Segment wirklich PLZ+Ort ist (sonst bleiben
                 # Namen wie "Müller - Schmidt GmbH" unangetastet)
                 segmente = [s.strip() for s in _ADRESS_TRENNER_RE.split(name) if s.strip()]
-                if len(segmente) > 1 and any(_PLZ_ORT_RE.match(s) for s in segmente[1:]):
-                    name = segmente[0]
+                # Issue #525 (otelo): PLZ-Segment kann Text der Nachbarspalte tragen
+                # ("40878 Ratingen Sie erreichen uns …") - Beginn mit PLZ + Ort genügt
+                if len(segmente) > 1 and any(
+                        _PLZ_ORT_RE.match(s) or re.match(r"^(?:D\s*-\s*)?\d{5}\s+[A-ZÄÖÜ]", s)
+                        for s in segmente[1:]):
+                    # "otelo-Team | c/o Vodafone GmbH | …": Rechnungsaussteller ist das
+                    # Segment mit der Rechtsform, nicht die Marke davor
+                    mit_rechtsform = [s for s in segmente if _rechtsform_re.search(s)]
+                    name = re.sub(r"^c/o\s+", "", mit_rechtsform[0] if mit_rechtsform else segmente[0],
+                                  flags=re.IGNORECASE)
                 felder["lieferant_name"] = name
                 name_zeile = i
                 break
