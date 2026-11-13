@@ -942,6 +942,39 @@ _FUEHRENDE_STRASSE_RE = re.compile(
 )
 
 
+_SPALTENKOPF_BEZEICHNUNG_RE = re.compile(
+    r"^(?:Artikel|Artikelbezeichnung|Bezeichnung|Beschreibung|Leistung|Leistungsbeschreibung|Produkt)$",
+    re.IGNORECASE,
+)
+_KEINE_BEZEICHNUNG_RE = re.compile(
+    r"rechnung|datum|nummer|menge|summe|seite|preis|betrag|steuer|ust|mwst|kunde|auftrag",
+    re.IGNORECASE,
+)
+
+
+def _bezeichnungen_aus_spalte(text: str, positionen: list["AnalysePosition"]) -> None:
+    """Issue #525 (DHL, OCR): Tabelle spaltenweise gelesen - unter dem allein stehenden
+    Spaltenkopf "Artikelbezeichnung" stehen alle Bezeichnungen, die Betragszeilen folgen
+    weiter unten ohne Text. Passt die Zahl der Textzeilen genau zur Zahl der Positionen
+    (und folgt danach ein Label statt weiterer Bezeichnungen), werden sie der Reihe nach
+    zugeordnet. Sonst bleibt alles unverändert."""
+    if not positionen:
+        return
+    zeilen = [z.strip() for z in text.split("\n") if z.strip()]
+    for i, z in enumerate(zeilen):
+        if not _SPALTENKOPF_BEZEICHNUNG_RE.match(z):
+            continue
+        kandidaten = zeilen[i + 1:i + 1 + len(positionen)]
+        danach = zeilen[i + 1 + len(positionen)] if i + 1 + len(positionen) < len(zeilen) else ""
+        if (len(kandidaten) == len(positionen)
+                and all(re.search(r"[A-Za-zÄÖÜäöüß]{3,}", k) and not re.search(r"\d+[,.]\d{2}", k)
+                        and not _KEINE_BEZEICHNUNG_RE.search(k) for k in kandidaten)
+                and (not danach or _KEINE_BEZEICHNUNG_RE.search(danach))):
+            for p, k in zip(positionen, kandidaten):
+                p.beschreibung = k
+        return
+
+
 def _extrahiere_positionen_telko_netto(text: str) -> list["AnalysePosition"]:
     """Positionen aus Telekommunikationsrechnungen mit 4-stelligen Netto-Beträgen.
     Nullpositionen (inklusive Optionen) entfallen; eine Zeile ohne Beschreibung, die eine
@@ -1355,6 +1388,7 @@ class BelegParser:
             pos5 = _extrahiere_positionen_telko_netto(text)
             if pos5:
                 positionen = pos5
+        _bezeichnungen_aus_spalte(text, positionen)
         return positionen
 
     def _extrahiere_felder(self, text: str) -> dict:

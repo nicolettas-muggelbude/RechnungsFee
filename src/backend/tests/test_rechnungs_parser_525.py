@@ -237,6 +237,39 @@ def test_artikelzeile_mit_exkl_inkl_spalten():
     assert erg.positionen_modus == "netto"
 
 
+OCR_SPALTENWEISE = """\
+Rechnung
+Muster Post AG - 12345 Musterstadt
+Artikelbezeichnung
+2 kg - Paket
+5 kg - Paket
+Rechnungsnummer
+Rechnungsdatum
+Menge
+Gesamtsumme Brutto
+24.02.2026
+lvonl
+Einzelpreis USt. Gesamtpreis
+inkl. USt. inkl. USt.
+6,19 € 0% 6,19 €
+8,49 € 0% 8,49 €
+14,68 €
+"""
+
+
+def test_bezeichnungen_aus_spaltenweise_gelesener_tabelle():
+    """OCR liest erst die Bezeichnungsspalte, dann die Betragszeilen ohne Text."""
+    erg = _parse(OCR_SPALTENWEISE)
+    assert [(p.beschreibung, Decimal(p.netto)) for p in erg.positionen] == [
+        ("2 kg - Paket", Decimal("6.19")), ("5 kg - Paket", Decimal("8.49")),
+    ]
+
+
+def test_spaltenzuordnung_nur_bei_passender_anzahl():
+    text = OCR_SPALTENWEISE.replace("5 kg - Paket\n", "5 kg - Paket\n10 kg - Paket\n")
+    assert "Paket" not in " ".join(p.beschreibung for p in _parse(text).positionen)
+
+
 def test_seite_und_absenderzeile_sind_keine_belegnr():
     text = "Rechnung\n\nMuster Post AG - 12345 Musterstadt\nRechnungsnummer\nSeite 1 von 2\nSumme 5,00 €\n"
     assert "externe_belegnr" not in _parse(text).felder
