@@ -38,6 +38,7 @@ import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
 import { LieferadresseAuswahl, RechnungsadresseAuswahl } from '../../components/EmpfaengerAuswahl'
 import { DateInput } from '../../components/DateInput'
+import { useRechnungsdatumFrage } from '../../hooks/useRechnungsdatumFrage'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
@@ -93,21 +94,8 @@ function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-// Issue #485: Beim Finalisieren eines älteren Entwurfs nachfragen, ob das Rechnungsdatum auf
-// heute gesetzt werden soll - nie stillschweigend, weil bewusst rückdatiert nacherfasst werden
-// kann. true = auf heute setzen. Datumsvergleich als ISO-String (yyyy-mm-dd).
-function frageRechnungsdatumAufHeute(datum: string, leistungBis?: string | null): boolean {
-  const heute = heuteIso()
-  if (!datum || datum >= heute) return false
-  const de = (iso: string) => iso.split('-').reverse().join('.')
-  let text = `Das Rechnungsdatum ist der ${de(datum)}. Soll es beim Finalisieren auf heute (${de(heute)}) gesetzt werden?`
-  if (leistungBis && leistungBis > datum) {
-    text += `\n\nAchtung: Der Leistungszeitraum endet erst am ${de(leistungBis)}, also nach dem bisherigen Rechnungsdatum.`
-  }
-  text += '\n\nDie Fälligkeit verschiebt sich um dieselbe Anzahl Tage.\n\nOK = auf heute setzen\nAbbrechen = Datum beibehalten'
-  return window.confirm(text)
-}
-
+// Issue #485/#531: Nachfrage „Rechnungsdatum auf heute?“ beim Finalisieren - siehe
+// hooks/useRechnungsdatumFrage.tsx (eigener Dialog statt window.confirm)
 function verschiebeIso(iso: string, vonIso: string, bisIso: string): string {
   const tage = (Date.parse(bisIso) - Date.parse(vonIso)) / 86_400_000
   const d = new Date(Date.parse(iso) + tage * 86_400_000)
@@ -1341,6 +1329,7 @@ function RechnungDetail({
     stornoMutation.mutate(grund)
   }
 
+  const [frageDatum, datumDialog] = useRechnungsdatumFrage()
   const finalisiereMutation = useMutation({
     mutationFn: (datumHeute: boolean) => finalisiereRechnung(rechnung.id, datumHeute),
     onSuccess: (updated) => {
@@ -1516,6 +1505,7 @@ function RechnungDetail({
 
   return (
     <div className="border-l border-slate-200 dark:border-slate-700 h-full overflow-auto flex flex-col">
+      {datumDialog}
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
@@ -1884,7 +1874,7 @@ function RechnungDetail({
               <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
             </span>
             <button
-              onClick={() => {
+              onClick={async () => {
                 const kategorieFehlt = rechnung.typ === 'eingang' && !rechnung.kategorie_id &&
                   !rechnung.positionen.every((p) => p.kategorie_id != null)
                 if (kategorieFehlt && !window.confirm(
@@ -1899,8 +1889,10 @@ function RechnungDetail({
                   'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
                 )) return
                 const datumHeute = rechnung.typ === 'ausgang' && !rechnung.import_quelle &&
-                  rechnung.dokument_typ !== 'Lieferschein' &&
-                  frageRechnungsdatumAufHeute(rechnung.datum, rechnung.leistung_bis)
+                  rechnung.dokument_typ !== 'Lieferschein'
+                  ? await frageDatum(rechnung.datum, rechnung.leistung_bis)
+                  : false
+                if (datumHeute === null) return
                 finalisiereMutation.mutate(datumHeute)
               }}
               disabled={finalisiereMutation.isPending}
@@ -3522,10 +3514,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     }
   }
 
+  const [frageDatum, datumDialog] = useRechnungsdatumFrage()
   const partnerFehlt = !partnerId && !partnerFreitext.trim()
   const positionenFehlen = positionen.every((p) => !p.beschreibung.trim())
 
-  function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
+  async function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
     e.preventDefault()
     if (partnerFehlt || positionenFehlen) {
       setZeigeValidierung(true)
@@ -3547,9 +3540,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     }
     const daten = buildData(istEntwurf)
     // Issue #485: älteres Rechnungsdatum beim Finalisieren auf heute setzen (nur auf Nachfrage)
-    if (!istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
-        dokumentTyp !== 'Lieferschein' &&
-        frageRechnungsdatumAufHeute(datum, leistungZeitraum ? leistungBis : null)) {
+    const datumHeute = !istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
+      dokumentTyp !== 'Lieferschein'
+      ? await frageDatum(datum, leistungZeitraum ? leistungBis : null)
+      : false
+    if (datumHeute === null) return
+    if (datumHeute) {
       const heute = heuteIso()
       if (daten.faellig_am) daten.faellig_am = verschiebeIso(daten.faellig_am, datum, heute)
       daten.datum = heute
@@ -3559,6 +3555,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   return (
     <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
+      {datumDialog}
       {/* Import-Warnungen */}
       {prefillFromAnalyse && prefillFromAnalyse.warnungen.some(w => w === 'TESSERACT_FEHLT') && (
         <OcrInstallHinweis />
