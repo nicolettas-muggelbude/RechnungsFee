@@ -183,6 +183,51 @@ def test_absenderzeile_mit_marke_co_und_spaltenrest():
     assert f["lieferant_name"] == "Muster GmbH"
 
 
+def test_lieferant_ohne_webadresse_und_ocr_reste():
+    assert _parse("Muster Versand GmbH www.muster.de\nMusterweg 1\n12345 Musterstadt\nSumme 5,00 €\n").felder[
+        "lieferant_name"] == "Muster Versand GmbH"
+    assert _parse("«K MUSTER-MARKT GMBH xx\nMusterweg 1\n12345 Musterstadt\nSumme 5,00 €\n").felder[
+        "lieferant_name"] == "MUSTER-MARKT GMBH"
+
+
+def _pos(erg):
+    return [(p.beschreibung, Decimal(p.menge), Decimal(p.netto), p.ust_satz) for p in erg.positionen]
+
+
+def test_telko_positionen_satz_vor_netto():
+    """otelo: '… 19% 16,7983' - 4 Nachkommastellen, Nullposition entfällt."""
+    text = TELEKOM_4_STELLEN.replace(
+        "Ihr Vorteil", "Nutzungskosten (s. Einzelverbindungsnachweis) 19% 0,0000\nIhr Vorteil")
+    erg = _parse(text)
+    assert _pos(erg) == [
+        ("Allnet-Flat 01.03.2026 - 31.03.2026", 1, Decimal("16.7983"), "19"),
+        ("Ihr Vorteil: Preisreduktion 01.03.2026 - 31.03.2026", 1, Decimal("-12.6050"), "19"),
+    ]
+    assert not _summenwarnung(erg)
+
+
+def test_telko_positionen_spalten_ohne_kundenanschrift_und_wiederholung():
+    """Vodafone: Zeitraum Menge Netto Satz Brutto; Anschrift rutscht vorn in die Zeile,
+    die Vertragsübersicht wiederholt die Position ohne Bezeichnung."""
+    text = TELKO_KOPF_OHNE_RECHTSFORM.replace("Hinweistext\n", (
+        "Produkt Zeitraum Menge Nettopreis (€) MwSt. Bruttopreis (€)\n"
+        "1 Paket Option 01.03.26-31.03.26 1 0,0000 19 % 0,00\n"
+        "Musterstr. 4 Kabel 50 01.03.26-31.03.26 1 16,7984 19 % 19,99\n"
+        "01.03.26-31.03.26 1 16,7984 19 % 19,99\n"
+        "Zwischensumme: 16,7984 19,99\n"), 1)
+    erg = _parse(text)
+    assert _pos(erg) == [("Kabel 50", 1, Decimal("16.7984"), "19")]
+    assert not _summenwarnung(erg)
+
+
+def test_artikelzeile_mit_exkl_inkl_spalten():
+    """Galaxus: Zeile mit Satz% und vier Beträgen ist keine USt-Aufschlüsselung."""
+    erg = _parse(SHOP_PUNKT_DEZIMAL)
+    assert _pos(erg) == [("Funkmaus schwarz", 1, Decimal("38.57"), "19")]
+    assert erg.positionen[0].artikel_nr == "46537128"
+    assert erg.positionen_modus == "netto"
+
+
 def test_seite_und_absenderzeile_sind_keine_belegnr():
     text = "Rechnung\n\nMuster Post AG - 12345 Musterstadt\nRechnungsnummer\nSeite 1 von 2\nSumme 5,00 €\n"
     assert "externe_belegnr" not in _parse(text).felder

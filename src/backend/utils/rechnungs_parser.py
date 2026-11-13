@@ -438,9 +438,42 @@ def _extrahiere_positionen(text: str, ust_satz_default: Optional[str]) -> list["
             continue
         # USt-Aufschlüsselungs-Tabellenzeile mit Dezimalrate: "fz 19,0% 4,12 6,78 4,90"
         # oder "B= 7,0% 24,25 1,70 25,95" – Code + %-Rate + 3 Beträge → kein Positionseintrag
-        if (re.search(r"\d+[,.]?\d*\s*%", s)
-                and len(re.findall(r"\d+[,.]\d{2}", s)) >= 3):
-            continue
+        # Issue #525 (Galaxus): Artikelzeile mit Satzspalte ("Funkmaus schwarz 46537128 1
+        # 19.00% 38.57 45.90 38.57 45.90") ist keine Aufschlüsselung - dort steht vor dem
+        # Satz nur ein Kürzel oder ein Steuerlabel
+        m_pct = re.search(r"\d+[,.]?\d*\s*%", s)
+        if m_pct and len(re.findall(r"\d+[,.]\d{2}", s)) >= 3:
+            vor_satz = s[:m_pct.start()]
+            if (not re.search(r"[A-Za-zÄÖÜäöüß]{3,}", vor_satz)
+                    or re.match(r"^\s*(?:mwst|ust|umsatzsteuer|steuer|vat|summe|gesamt|netto|brutto)",
+                                vor_satz, re.IGNORECASE)):
+                continue
+        # Spalten "Menge Satz% Preis exkl. Preis inkl. Betrag exkl. Betrag inkl." (Galaxus)
+        m_exin = _EXKL_INKL_ZEILE_RE.match(s)
+        if m_exin:
+            try:
+                menge_d = Decimal(m_exin.group("m").replace(",", "."))
+                satz_d = Decimal(m_exin.group("s"))
+                pe, pi, be = (Decimal(_betrag_de(m_exin.group(g)) or "x") for g in ("pe", "pi", "be"))
+                passt = (abs(pe * (1 + satz_d / 100) - pi) <= Decimal("0.02")
+                         and abs(pe * menge_d - be) <= Decimal("0.02"))
+            except InvalidOperation:
+                passt = False
+            if passt and int(satz_d) in _GUELTIGE_UST:
+                beschr = re.sub(r"\s+\d{1,2}\.\d{1,2}\.\d{2,4}$", "", m_exin.group("b").strip())
+                m_artnr = re.search(r"\s+(\d{5,})$", beschr)
+                if m_artnr:
+                    beschr = beschr[:m_artnr.start()].strip()
+                positionen.append(AnalysePosition(
+                    beschreibung=beschr,
+                    menge=str(menge_d),
+                    einheit="",
+                    netto=str(pe),
+                    ust_satz=str(int(satz_d)),
+                    artikel_nr=m_artnr.group(1) if m_artnr else None,
+                ))
+                prev_zeile = ""
+                continue
         # Mengen-Aufschlüsselung überspringen: "2 Stk x 2,45" / "1,5 l x 1,599" / "2 x 2,45"
         # Format: Zahl [optionale Einheit] × Einzelpreis → ist Preisdetail, keine eigene Position
         if re.match(r"^\d+[,.]?\d*\s+(?:\S+\s+)?[x×]\s+\d+[,.]\d+", s, re.IGNORECASE):
@@ -844,6 +877,71 @@ def _extrahiere_positionen_telecom(text: str) -> list["AnalysePosition"]:
     return positionen
 
 
+# Issue #525 (Galaxus): "Bezeichnung [ArtNr] [Datum] Menge 19.00% Preis-exkl Preis-inkl Betrag-exkl Betrag-inkl"
+_BETRAG_SPALTE = r"\d{1,3}(?:[.,]\d{3})*[.,]\d{2}"
+_EXKL_INKL_ZEILE_RE = re.compile(
+    rf"^(?P<b>.*[A-Za-zÄÖÜäöüß]{{3,}}.*?)\s+(?P<m>\d+(?:[,.]\d+)?)\s+(?P<s>\d{{1,2}})(?:[.,]\d+)?\s*%\s+"
+    rf"(?P<pe>{_BETRAG_SPALTE})\s+(?P<pi>{_BETRAG_SPALTE})\s+(?P<be>{_BETRAG_SPALTE})\s+{_BETRAG_SPALTE}$"
+)
+
+# Issue #525: Telekommunikationszeilen mit Netto auf 4 Nachkommastellen
+# otelo:    "Allnet-Flat 01.03.2026 - 31.03.2026 19% 16,7983"   (Satz vor dem Netto)
+# Vodafone: "GigaZuhause 01.03.26-31.03.26 1 16,7984 19 % 19,99" (Zeitraum Menge Netto Satz Brutto)
+_TELKO_SATZ_NETTO_RE = re.compile(
+    r"^(?P<b>.+?)\s+(?P<s>\d{1,2})\s*%\s+(?P<n>-?\d{1,3}(?:\.\d{3})*,\d{2,4})$"
+)
+_TELKO_SPALTEN_RE = re.compile(
+    r"^(?P<b>.*?)\s*(?P<z>\d{2}\.\d{2}\.\d{2,4}\s*-\s*\d{2}\.\d{2}\.\d{2,4})\s+(?P<m>\d+(?:,\d+)?)\s+"
+    r"(?P<n>-?\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(?P<s>\d{1,2})\s*%\s+-?\d{1,3}(?:\.\d{3})*,\d{2}$"
+)
+# Kundenanschrift, die bei Spaltenlayouts vorn in die Positionszeile rutscht ("Musterstr. 4 …")
+_FUEHRENDE_STRASSE_RE = re.compile(
+    r"^\S*(?:str\.|straße|strasse|weg|gasse|allee|platz|ring|damm)\s+\d+\s?[a-zA-Z]?\s+", re.IGNORECASE,
+)
+
+
+def _extrahiere_positionen_telko_netto(text: str) -> list["AnalysePosition"]:
+    """Positionen aus Telekommunikationsrechnungen mit 4-stelligen Netto-Beträgen.
+    Nullpositionen (inklusive Optionen) entfallen; eine Zeile ohne Beschreibung, die eine
+    bereits erfasste Position wiederholt (Vodafone-Vertragsübersicht), ebenfalls."""
+    positionen: list[AnalysePosition] = []
+    gesehen: set[tuple[str, str]] = set()
+    for line in text.splitlines():
+        s = line.strip()
+        m = _TELKO_SPALTEN_RE.match(s)
+        if m:
+            menge, zeitraum = m.group("m").replace(",", "."), m.group("z")
+        else:
+            m = _TELKO_SATZ_NETTO_RE.match(s)
+            if not m:
+                continue
+            menge, zeitraum = "1", ""
+        satz = m.group("s")
+        netto = _betrag_de(m.group("n"))
+        if not netto or int(satz) not in _GUELTIGE_UST:
+            continue
+        try:
+            if Decimal(netto) == 0:
+                continue
+        except InvalidOperation:
+            continue
+        beschr = _FUEHRENDE_STRASSE_RE.sub("", m.group("b").strip()).strip()
+        if re.match(r"^(?:umsatzsteuer|mwst|ust|netto|brutto|summe|zwischensumme|gesamt)",
+                    beschr, re.IGNORECASE):
+            continue
+        if (netto, zeitraum) in gesehen and not beschr:
+            continue
+        gesehen.add((netto, zeitraum))
+        positionen.append(AnalysePosition(
+            beschreibung=beschr or f"Leistung {zeitraum}".strip(),
+            menge=menge,
+            einheit="",
+            netto=netto,
+            ust_satz=satz,
+        ))
+    return positionen
+
+
 def _finde_tesseract_binary() -> str | None:
     """
     Gibt den Pfad zur tesseract-Binärdatei zurück oder None.
@@ -1211,6 +1309,10 @@ class BelegParser:
             pos4 = _extrahiere_positionen_telecom(text)
             if pos4:
                 positionen = pos4
+        if not positionen or all(_nur_betraege.match(p.beschreibung.strip()) for p in positionen):
+            pos5 = _extrahiere_positionen_telko_netto(text)
+            if pos5:
+                positionen = pos5
         return positionen
 
     def _extrahiere_felder(self, text: str) -> dict:
@@ -1524,6 +1626,12 @@ class BelegParser:
                     mit_rechtsform = [s for s in segmente if _rechtsform_re.search(s)]
                     name = re.sub(r"^c/o\s+", "", mit_rechtsform[0] if mit_rechtsform else segmente[0],
                                   flags=re.IGNORECASE)
+                # Issue #525: Rest hinter der Rechtsform abschneiden ("Galaxus Deutschland GmbH
+                # www.galaxus.de", OCR-"PENNY-MARKT GMBH xx") und Logo-Reste davor ("«K …")
+                treffer = list(_rechtsform_re.finditer(name))
+                if treffer:
+                    name = name[:treffer[-1].end()].strip()
+                name = re.sub(r"^(?:\S*[^\w\s&.,'’\-/()]\S*\s+)+", "", name).strip() or name
                 felder["lieferant_name"] = name
                 name_zeile = i
                 break
