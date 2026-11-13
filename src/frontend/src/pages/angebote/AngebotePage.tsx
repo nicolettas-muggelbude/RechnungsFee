@@ -417,7 +417,7 @@ function AngebotFormular({
         partner_plz: !partnerId && partnerPlz ? partnerPlz : undefined,
         partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
         partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
-        notizen: notizen || undefined,
+        notizen: notizen || null,  // Issue #522: null, damit eine entfernte Notiz beim Backend ankommt
         // Issue #368: null statt undefined - nur so kommt ein bewusst geleertes Feld beim
         // Bearbeiten als "explizit geleert" im Backend an (model_fields_set).
         einleitungstext: einleitungstext || null,

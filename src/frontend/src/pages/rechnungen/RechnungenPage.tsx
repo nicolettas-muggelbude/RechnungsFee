@@ -3459,7 +3459,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
       partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
-      notizen: notizen || undefined,
+      notizen: notizen || null,  // Issue #522: null, damit eine entfernte Notiz beim Backend ankommt
       // Issue #368: null statt undefined - nur so kann ein bewusst geleertes Feld beim
       // Bearbeiten eines Entwurfs tatsächlich als "explizit geleert" beim Backend ankommen
       // (model_fields_set), ein weggelassenes Feld (undefined) bleibt sonst unangetastet.

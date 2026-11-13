@@ -1550,7 +1550,7 @@ export type RechnungCreate = {
   partner_ort?: string
   partner_land?: string
   kategorie_id?: number
-  notizen?: string
+  notizen?: string | null
   einleitungstext?: string | null
   schlusstext?: string | null
   externe_belegnr?: string

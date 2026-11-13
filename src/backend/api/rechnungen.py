@@ -1771,7 +1771,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
-                  "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
+                  "kategorie_id", "externe_belegnr", "kunden_bestellnummer",
                   "skonto_prozent", "skonto_tage", "gueltig_bis",
                   "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "steuerfrei_4",
                   "eingabemodus"):
@@ -1823,6 +1823,10 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.einleitungstext = data.einleitungstext
     if "schlusstext" in data.model_fields_set:
         rechnung.schlusstext = data.schlusstext
+    # Issue #522: Notiz muss sich wieder entfernen lassen (Frontend schickt dann null) -
+    # im "val is not None"-Muster blieb die alte Notiz stehen
+    if "notizen" in data.model_fields_set:
+        rechnung.notizen = (data.notizen or "").strip() or None
     if "bemerkung_erechnung" in data.model_fields_set:
         rechnung.bemerkung_erechnung = (data.bemerkung_erechnung or "").strip() or None
     # Issue #477: Paket muss sich auch wieder abwählen lassen (Frontend schickt dann null)
