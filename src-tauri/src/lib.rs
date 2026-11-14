@@ -339,7 +339,7 @@ fn schreibe_temp_anhang(dateiname: String, data: Vec<u8>) -> Result<String, Stri
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_sicherheit {
     use super::{ist_web_oder_mail, temp_anhang_name};
 
     #[test]
@@ -831,7 +831,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster, lese_gedroppte_datei, speichern_unter, schreibe_temp_anhang])
+        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, oeffne_pdf_fenster, lese_gedroppte_datei, speichern_unter, schreibe_temp_anhang])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
