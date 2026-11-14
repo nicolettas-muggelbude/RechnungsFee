@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'in Arbeit',
     eintraege: [
       { typ: 'fix', text: 'Lagerführung: Angebote, Proforma- und Abschlagsrechnungen haben fälschlich Lagerbestand abgebucht, und bei Lieferschein + Rechnung ging die Ware doppelt vom Bestand ab. Jetzt gilt eine feste Regel: Angebot, Proforma, Auftrag und Abschlagsrechnung buchen nie ab, der Lieferschein beim Finalisieren, die Rechnung nur, was nicht schon über einen Lieferschein abgebucht ist (auch bei Vorkasse, wenn der Lieferschein erst nach der Rechnung entsteht). Ein Storno bucht genau das zurück, was das Dokument tatsächlich bewegt hat. Fehlbestände aus der Zeit davor korrigiert das nicht – bitte bei Bedarf den Bestand im Artikel per Inventur richtigstellen (Issue #505).' },
+      { typ: 'fix', text: 'Linux: Das PDF der Anlage G öffnete sich als leeres weißes Fenster. Es wird jetzt wie bei Anlage S und EÜR direkt geladen.' },
     ],
   },
   {

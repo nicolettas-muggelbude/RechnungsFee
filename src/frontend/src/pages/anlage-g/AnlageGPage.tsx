@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { berechneAnlageG, getAnlageGPdfUrl, getUnternehmen, isTauri, openInPdfWindow, openUrl, type AnlageGErgebnis } from '../../api/client'
+import { berechneAnlageG, getAnlageGPdfUrl, getUnternehmen, openUrl, type AnlageGErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
@@ -98,17 +98,9 @@ export function AnlageGPage() {
   async function handlePdf() {
     setPdfFehler(null)
     try {
-      const url = await getAnlageGPdfUrl(jahr, messbetrag, hebesatz)
-      if (isTauri()) {
-        const resp = await fetch(url)
-        if (!resp.ok) throw new Error(`PDF-Fehler: ${resp.status}`)
-        const blob = await resp.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        await openInPdfWindow(blobUrl, `Anlage G ${jahr}`)
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
-      } else {
-        await openUrl(url)
-      }
+      // Direkt über die URL wie Anlage S/EÜR – eine blob:-URL zeigt in einem eigenen
+      // Fenster unter Linux (WebKitGTK) nur eine weiße Seite (vgl. Issue #371).
+      await openUrl(await getAnlageGPdfUrl(jahr, messbetrag, hebesatz))
     }
     catch (e: any) { setPdfFehler(e?.message ?? 'PDF-Export fehlgeschlagen') }
   }
