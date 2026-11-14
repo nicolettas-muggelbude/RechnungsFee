@@ -1,6 +1,7 @@
 """
 Mail-Versand via SMTP – Rechnungen, Angebote, Proforma, Aufträge.
 """
+import base64
 import hashlib
 import socket
 import ssl
@@ -23,6 +24,7 @@ from database.models import Unternehmen, Rechnung, DokumentenPaket
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
+from utils.mailfelder import bereinige_mailfeld, ist_ascii
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
     MailTLSConfigurationError,
@@ -155,7 +157,16 @@ def _build_message(
     attachments: list[tuple[bytes, str]],
 ) -> MIMEMultipart:
     msg = MIMEMultipart("mixed")
-    von_adresse = u.smtp_von_adresse or u.smtp_user or ""
+    # Issue #537: unsichtbare Zeichen (auch in schon gespeicherten Altwerten) entfernen; echte
+    # Umlaute in der Adresse kann SMTP ohne SMTPUTF8 nicht übertragen → verständliche Meldung
+    von_adresse = bereinige_mailfeld(u.smtp_von_adresse or u.smtp_user or "")
+    if not ist_ascii(von_adresse):
+        raise HTTPException(
+            400,
+            f"Die Absenderadresse „{von_adresse}“ enthält Sonderzeichen (z. B. Umlaute), die der "
+            "SMTP-Versand nicht übertragen kann. Bitte unter Einstellungen → Unternehmen → E-Mail "
+            "die Absenderadresse prüfen und ggf. neu eintippen.",
+        )
     msg["From"] = formataddr((u.firmenname or "", von_adresse))
     msg["To"] = an
     if cc:
@@ -224,8 +235,35 @@ def _pruefe_gepinntes_zertifikat(u: Unternehmen, srv, db: Session) -> None:
         )
 
 
+def _smtp_login(srv: smtplib.SMTP, user: str, passwort: str) -> None:
+    """Anmeldung – smtplib überträgt Benutzer/Passwort nur als ASCII. Enthält das Passwort
+    Umlaute, €, § o. Ä., warf das einen UnicodeEncodeError (Issue #537: „Failed to fetch“).
+    Dann AUTH PLAIN mit UTF-8 wie Thunderbird (RFC 4616 sieht UTF-8 vor)."""
+    try:
+        srv.login(user, passwort)
+        return
+    except UnicodeEncodeError:
+        pass
+    srv.ehlo_or_helo_if_needed()
+    if not srv.has_extn("auth"):
+        raise smtplib.SMTPNotSupportedError("Der Server bietet keine Anmeldung (AUTH) an.")
+    token = base64.b64encode(f"\0{user}\0{passwort}".encode("utf-8")).decode("ascii")
+    code, antwort = srv.docmd("AUTH", "PLAIN " + token)
+    if code not in (235, 503):  # 503 = bereits angemeldet
+        raise smtplib.SMTPAuthenticationError(code, antwort)
+
+
 def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
     port = u.smtp_port or 587
+    host = bereinige_mailfeld(u.smtp_host) or ""
+    user = bereinige_mailfeld(u.smtp_user) or ""
+    for feld, wert in (("SMTP-Server", host), ("SMTP-Benutzer", user)):
+        if not ist_ascii(wert):
+            raise HTTPException(
+                400,
+                f"{feld} „{wert}“ enthält Sonderzeichen (z. B. Umlaute), die SMTP nicht übertragen "
+                "kann. Bitte unter Einstellungen → Unternehmen → E-Mail prüfen und ggf. neu eintippen.",
+            )
     try:
         ctx = create_mail_tls_context(public_cas=not u.smtp_zertifikat_ignorieren)
     except MailTLSConfigurationError as e:
@@ -238,20 +276,27 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
         ctx.verify_mode = ssl.CERT_NONE
     try:
         if u.smtp_ssl:
-            with smtplib.SMTP_SSL(u.smtp_host, port, context=ctx, timeout=15) as srv:
+            with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as srv:
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                srv.login(u.smtp_user, u.smtp_passwort)
+                _smtp_login(srv, user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
-            with smtplib.SMTP(u.smtp_host, port, timeout=15) as srv:
+            with smtplib.SMTP(host, port, timeout=15) as srv:
                 srv.ehlo()
                 srv.starttls(context=ctx)
                 srv.ehlo()
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                srv.login(u.smtp_user, u.smtp_passwort)
+                _smtp_login(srv, user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
+    except UnicodeEncodeError:
+        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen
+        raise HTTPException(
+            400,
+            "Die Mail enthält Zeichen, die der SMTP-Server nicht annimmt (z. B. einen Umlaut in der "
+            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen.",
+        )
     except smtplib.SMTPAuthenticationError:
         raise HTTPException(400, "SMTP-Authentifizierung fehlgeschlagen – Benutzer oder Passwort prüfen")
     except smtplib.SMTPConnectError:

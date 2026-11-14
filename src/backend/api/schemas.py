@@ -210,6 +210,13 @@ class UnternehmenBase(BaseModel):
             raise ValueError("Anzahl externer Backups muss zwischen 1 und 999 liegen")
         return v
 
+    @field_validator("smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user")
+    @classmethod
+    def bereinige_mailzugang(cls, v: Optional[str]) -> Optional[str]:
+        # Issue #537: unsichtbare Zeichen aus kopierten Zugangsdaten (sonst UnicodeEncodeError)
+        from utils.mailfelder import bereinige_mailfeld
+        return bereinige_mailfeld(v)
+
     @model_validator(mode="after")
     def erzwinge_kalenderjahr_wenn_inaktiv(self):
         # geschaeftsjahr_beginn ist die einzige Quelle der Wahrheit für die Zeitraumberechnung

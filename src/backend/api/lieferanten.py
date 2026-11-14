@@ -458,7 +458,7 @@ def kontokorrent_mail_lieferant(
         empfaenger.append(data.cc)
     msg = _build_message(unt, data.an, data.cc, data.betreff, data.text,
                          attachments=[(pdf_bytes, dateiname)])
-    _sende(unt, msg, empfaenger)
+    _sende(unt, msg, empfaenger, db)  # db fehlte seit #336 (TypeError → „Failed to fetch“, #537)
     return {"ok": True}
 
 

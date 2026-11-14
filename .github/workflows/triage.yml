@@ -45,13 +45,14 @@ jobs:
 
             1. **RechnungsFee-Version** (Einstellungen → Info) – bereits angegeben: super!
             2. **Betriebssystem** – bereits angegeben: super!
-            3. **Backend-Log**: Starte RechnungsFee über das Terminal und kopiere die Ausgabe ab dem Zeitpunkt des Fehlers:
-               - Windows: \`%AppData%\\Roaming\\RechnungsFee\\logs\\\` oder Konsole beim Start
-               - Linux: \`journalctl --user -u rechnungsfee -n 100\` oder Konsolenausgabe
+            3. **Backend-Log** \`backend.log\` – die letzten Zeilen ab dem Zeitpunkt des Fehlers (\`Standard\` ist der Profilname, bei eigenem Profil entsprechend anpassen):
+               - Windows: \`%APPDATA%\\RechnungsFee\\profile\\Standard\\logs\\backend.log\` (in die Adresszeile des Explorers einfügen)
+               - Linux: \`~/.local/share/RechnungsFee/profile/Standard/logs/backend.log\`
+               - macOS: \`~/Library/Application Support/RechnungsFee/profile/Standard/logs/backend.log\`
             4. **Lässt sich der Fehler immer reproduzieren?** Bei welchen genauen Eingaben?
 
             ---
-            *Wenn du keine Backend-Logs findest: Rechtsklick auf das App-Icon → "Als Administrator ausführen" (Windows) hilft manchmal, das Protokollfenster sichtbar zu machen.*`
+            *Ab v0.7.11 zeigt RechnungsFee bei unerwarteten Backend-Fehlern statt „Failed to fetch" die eigentliche Fehlermeldung an – bitte diese dann mit angeben.*`
             })
             await github.rest.issues.addLabels({
               issue_number: context.issue.number,

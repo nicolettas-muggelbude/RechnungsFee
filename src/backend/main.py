@@ -47,6 +47,11 @@ app = FastAPI(
     openapi_url=None if _IST_RELEASE else "/openapi.json",
 )
 
+# Issue #537: vor CORS registriert = innere Schicht → auch Fehlerantworten tragen CORS-Header,
+# Traceback landet in backend.log (statt „Failed to fetch“ ohne jede Spur)
+from utils.fehler_middleware import FehlerMiddleware  # noqa: E402
+app.add_middleware(FehlerMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "tauri://localhost", "http://tauri.localhost"],
