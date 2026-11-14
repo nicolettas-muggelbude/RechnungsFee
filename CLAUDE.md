@@ -82,7 +82,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 186` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 187` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -331,6 +331,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 184 | Issue #495: kunden_lieferadressen.email VARCHAR(200) – eigene Mailadresse je Adresse; `RechnungResponse.kunde_email` liefert die Adresse im Adressfeld (Filiale) vor der des Kunden, dadurch schlagen alle Versandwege (SMTP-Dialog, mailto, Thunderbird) sie ohne Frontend-Änderung vor |
 | 185 | Issue #495: kunden_lieferadressen.name VARCHAR(200) – optionaler eigener Name/Firma je Adresse; leer = Name/Firma aus den Kundenstammdaten (`dokument_adressen.py::name_fuer_adresse`); gilt für Adressfeld, Lieferzeile und ZUGFeRD (Käufername bei gewählter Rechnungsadresse, ShipTo-Name) |
 | 186 | Issue #534-Folgefund: Datenfix kunden.zugferd_aktiv = 1 wo Firmenname + USt-IdNr./Steuernummer vorhanden (CSV-Import setzte immer 0). Ohne Migration: ZUGFeRD-Automatik jetzt auch im Backend (`kunden.py::zugferd_automatisch()` in create/update_kunde und `datenmigration.py::_kunde_anlegen`, beim Überschreiben nur einschalten); ZUGFeRD-Auslöser in PDF/Mail ist `kunde.zugferd_aktiv` statt Netto-Modus (Regression aus #332), `generate_zugferd_pdf(ist_netto=…)` zeichnet Brutto-Rechnungen korrekt |
+| 187 | Issue #530: öffentliche Auftraggeber – unternehmen.oeffentliche_auftraggeber_aktiv (Opt-in, Einstellungen → Funktionen), kunden.oeffentlicher_auftraggeber + leitweg_id VARCHAR(50), rechnungen.original_xml_pfad. Leitweg-ID-Prüfung (Format + Mod 97-10) in `utils/leitweg_id.py` / `utils/leitwegId.ts`; mit Schalter Pflicht: Leitweg-ID + E-Mail beim Kunden (`kunden.py::pruefe_oeffentlicher_auftraggeber`, schaltet ZUGFeRD ein), beim Finalisieren Telefon/E-Mail/IBAN Verkäufer (`zugferd.py::xrechnung_pflicht_fehler`). XML: Leitweg-ID als BT-10 statt Kundennummer. Ausgabe getrennt: XRechnung-XML ist das Original (`GET /rechnungen/{id}/xrechnung`, beim ersten Abruf/Mailversand archiviert und danach unverändert, auch im GoBD-Export), PDF ohne eingebettete XML = Sichtkopie; Mail/Thunderbird/mailto hängen XML + PDF an. Normale ZUGFeRD-Kunden unverändert (eine Hybrid-PDF) |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

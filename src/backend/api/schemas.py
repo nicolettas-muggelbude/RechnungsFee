@@ -119,6 +119,7 @@ class UnternehmenBase(BaseModel):
     imap_zertifikat_ignorieren: bool = False
     imap_zertifikat_fingerprint: Optional[str] = None
     zugferd_anhaenge_aktiv: bool = False
+    oeffentliche_auftraggeber_aktiv: bool = False
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
     standard_zahlungsziel: int = 14
@@ -612,6 +613,8 @@ class KundeBase(BaseModel):
     z_hd: Optional[str] = None
     notizen: Optional[str] = None
     zugferd_aktiv: bool = False
+    oeffentlicher_auftraggeber: bool = False
+    leitweg_id: Optional[str] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
 

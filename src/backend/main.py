@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 186
+SCHEMA_VERSION = 187
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4254,6 +4254,26 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 186"))
             conn.commit()
             print(f"[Migration] Schema auf Version 186 (Issue #534: ZUGFeRD-Automatik für {n} Kunden nachgezogen)")
+
+    if version < 187:
+        # Issue #530: öffentliche Auftraggeber (XRechnung mit Leitweg-ID) – Opt-in-Funktion,
+        # Kunden-Schalter + Leitweg-ID, archivierte XRechnung-XML als Original (GoBD)
+        with engine.connect() as conn:
+            for tabelle, spalten in (
+                ("unternehmen", [("oeffentliche_auftraggeber_aktiv", "BOOLEAN NOT NULL DEFAULT 0")]),
+                ("kunden", [("oeffentlicher_auftraggeber", "BOOLEAN NOT NULL DEFAULT 0"),
+                            ("leitweg_id", "VARCHAR(50)")]),
+                ("rechnungen", [("original_xml_pfad", "VARCHAR(500)")]),
+            ):
+                cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info({tabelle})")).fetchall()}
+                if not cols:
+                    continue
+                for name, typ in spalten:
+                    if name not in cols:
+                        conn.execute(text(f"ALTER TABLE {tabelle} ADD COLUMN {name} {typ}"))
+            conn.execute(text("PRAGMA user_version = 187"))
+            conn.commit()
+            print("[Migration] Schema auf Version 187 (Issue #530: öffentliche Auftraggeber, Leitweg-ID, original_xml_pfad)")
 
 
 def _migrate_kategorien() -> None:

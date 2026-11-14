@@ -85,7 +85,35 @@ def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool, sonderfall=N
     return "E" if ist_kleinunternehmer else "Z"
 
 
-_RESERVIERTE_XML_NAMEN = {"xrechnung.xml", "factur-x.xml", "zugferd-invoice.xml", "order-x.xml"}
+def ist_oeffentlicher_auftraggeber(rechnung) -> bool:
+    """Issue #530: Rechnung an einen öffentlichen Auftraggeber – dann ist die XRechnung-XML das
+    Original und die PDF nur Sichtkopie."""
+    kunde = getattr(rechnung, "kunde", None)
+    return bool(kunde is not None and getattr(kunde, "oeffentlicher_auftraggeber", False))
+
+
+def xrechnung_pflicht_fehler(rechnung, unternehmen: dict) -> list[str]:
+    """Issue #530: Angaben, ohne die ein Rechnungsportal öffentlicher Auftraggeber die XRechnung
+    ablehnt (BR-DE-1 Zahlungsanweisung, BR-DE-6/7 Kontakt Verkäufer, BT-10 Leitweg-ID,
+    BT-49 elektronische Adresse des Käufers). Leer = alles da; nur für öffentliche Auftraggeber."""
+    if not ist_oeffentlicher_auftraggeber(rechnung):
+        return []
+    from utils.leitweg_id import leitweg_id_fehler
+    fehlend = []
+    if not (unternehmen.get("telefon") or "").strip():
+        fehlend.append("Telefon in den Unternehmensdaten")
+    if not (unternehmen.get("email") or "").strip():
+        fehlend.append("E-Mail in den Unternehmensdaten")
+    if not (unternehmen.get("iban") or "").strip():
+        fehlend.append("IBAN in den Unternehmensdaten")
+    if leitweg_id_fehler(rechnung.kunde.leitweg_id):
+        fehlend.append("gültige Leitweg-ID beim Kunden")
+    if not empfaenger_email(rechnung):
+        fehlend.append("E-Mail-Adresse beim Kunden")
+    return fehlend
+
+
+_RESERVIERTE_XML_NAMEN ={"xrechnung.xml", "factur-x.xml", "zugferd-invoice.xml", "order-x.xml"}
 
 
 def _zugferd_anhang_dateien(rechnung) -> list[tuple]:
@@ -254,8 +282,11 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
                 ship_to.address.city_name = rechnung.partner_ort
             ship_to.address.country_id = rechnung.partner_land
 
-    # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer)
-    if rechnung.kunde and rechnung.kunde.kundennummer:
+    # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer) – bei öffentlichen
+    # Auftraggebern die Leitweg-ID, über die das Rechnungsportal die Rechnung zustellt (Issue #530)
+    if ist_oeffentlicher_auftraggeber(rechnung) and rechnung.kunde.leitweg_id:
+        doc.trade.agreement.buyer_reference = rechnung.kunde.leitweg_id
+    elif rechnung.kunde and rechnung.kunde.kundennummer:
         doc.trade.agreement.buyer_reference = rechnung.kunde.kundennummer
     else:
         doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)

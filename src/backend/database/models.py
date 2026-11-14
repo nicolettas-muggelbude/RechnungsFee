@@ -178,6 +178,8 @@ class Unternehmen(Base):
     # interner Abrufstand {"ordner", "uidvalidity", "uid"} - nur Mails danach werden geprüft
     imap_abruf_stand: Mapped[str | None] = mapped_column(Text)
     zugferd_anhaenge_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #530: Opt-in – erst dann gibt es beim Kunden „Öffentlicher Auftraggeber“ + Leitweg-ID
+    oeffentliche_auftraggeber_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
     unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     standard_zahlungsziel: Mapped[int] = mapped_column(Integer, default=14, server_default="14")
@@ -483,6 +485,9 @@ class Kunde(Base):
     z_hd: Mapped[str | None] = mapped_column(String(200))
     notizen: Mapped[str | None] = mapped_column(Text)
     zugferd_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #530: öffentlicher Auftraggeber → Rechnung ist die XRechnung-XML (PDF nur Sichtkopie)
+    oeffentlicher_auftraggeber: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    leitweg_id: Mapped[str | None] = mapped_column(String(50))
     skonto_prozent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     skonto_tage: Mapped[int | None] = mapped_column(Integer)
     mahnung_gesperrt: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
@@ -815,6 +820,8 @@ class Rechnung(Base):
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ausgegeben_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_pdf_pfad: Mapped[str | None] = mapped_column(String(500))
+    # Issue #530: archivierte XRechnung-XML (Original bei öffentlichen Auftraggebern, GoBD)
+    original_xml_pfad: Mapped[str | None] = mapped_column(String(500))
     absender_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gutschrift / Lieferschein
     dokument_typ: Mapped[str] = mapped_column(String(20), default="Rechnung", nullable=False, server_default="Rechnung")

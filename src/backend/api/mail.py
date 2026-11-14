@@ -22,7 +22,7 @@ from database.connection import get_db, APP_DATA_DIR
 from database.models import Unternehmen, Rechnung, DokumentenPaket
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
-from utils.zugferd import generate_zugferd_pdf
+from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
     MailTLSConfigurationError,
@@ -100,6 +100,8 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
         not r.ist_entwurf and r.typ == "ausgang" and _dok in ("Rechnung", "Abschlagsrechnung")
         and r.kunde is not None and bool(r.kunde.zugferd_aktiv)
         and u and (u.steuernummer or u.ust_idnr)
+        # Issue #530: öffentlicher Auftraggeber – XML geht als eigene Datei mit, PDF = Sichtkopie
+        and not ist_oeffentlicher_auftraggeber(r)
     )
 
     _ist_storno_mail = getattr(r, "storniert", False) and _dok == "Rechnung"
@@ -298,8 +300,16 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
     attachments: list[tuple[bytes, str]] = []
     frisches_original: Optional[tuple[int, str]] = None
 
+    from api.rechnungen import XRECHNUNG_DOKUMENTTYPEN, vermerke_xrechnung_original, xrechnung_xml_fuer
+    frisches_xml: Optional[str] = None
     if req.rechnung_id:
         pdf_bytes, dateiname, frisches_original = _pdf_bytes_fuer(req.rechnung_id, db)
+        # Issue #530: an öffentliche Auftraggeber geht die XRechnung-XML (das Original) zuerst mit
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        if (r and ist_oeffentlicher_auftraggeber(r) and not r.ist_entwurf and r.typ == "ausgang"
+                and r.dokument_typ in XRECHNUNG_DOKUMENTTYPEN and not r.storniert):
+            xml_bytes, xml_name, frisches_xml = xrechnung_xml_fuer(r, db)
+            attachments.append((xml_bytes, xml_name))
         attachments.append((pdf_bytes, dateiname))
 
     if req.mahnung_id:
@@ -345,6 +355,10 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         r.original_pdf_pfad = rel_pfad
         r.ausgegeben = True
         r.ausgegeben_am = datetime.now()
+        db.commit()
+    if frisches_xml:
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        vermerke_xrechnung_original(r, frisches_xml)
         db.commit()
 
     return {"ok": True}

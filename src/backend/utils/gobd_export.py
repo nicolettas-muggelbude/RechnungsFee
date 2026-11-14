@@ -554,24 +554,31 @@ def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
             continue
 
         # Weg 3: Ausgangsrechnung – eigenes archiviertes Original-PDF, kein Beleg-Datensatz
-        if rechnung_obj and rechnung_obj.original_pdf_pfad and rechnung_obj.id not in seen_rechnungen:
-            seen_rechnungen.add(rechnung_obj.id)
-            rows.append([
-                "",
-                f"{rechnung_obj.id}.pdf",
-                "application/pdf",
-                "",
-                "",
-                e.belegnr,
-                str(rechnung_obj.id),
-                "",
-                _fmt_bool(False),
-            ])
-            beleg_infos.append({
-                "art": "ausgang",
-                "pfad": APP_DATA_DIR / rechnung_obj.original_pdf_pfad,
-                "zip_name": f"ausgangsrechnung_{rechnung_obj.id}.pdf",
-            })
+        # Issue #530: bei öffentlichen Auftraggebern zusätzlich die archivierte XRechnung-XML (Original)
+        if rechnung_obj and rechnung_obj.id not in seen_rechnungen:
+            originale = [(p, endung, mime) for p, endung, mime in (
+                (rechnung_obj.original_pdf_pfad, "pdf", "application/pdf"),
+                (getattr(rechnung_obj, "original_xml_pfad", None), "xml", "application/xml"),
+            ) if p]
+            if originale:
+                seen_rechnungen.add(rechnung_obj.id)
+            for pfad, endung, mime in originale:
+                rows.append([
+                    "",
+                    f"{rechnung_obj.id}.{endung}",
+                    mime,
+                    "",
+                    "",
+                    e.belegnr,
+                    str(rechnung_obj.id),
+                    "",
+                    _fmt_bool(False),
+                ])
+                beleg_infos.append({
+                    "art": "ausgang",
+                    "pfad": APP_DATA_DIR / pfad,
+                    "zip_name": f"ausgangsrechnung_{rechnung_obj.id}.{endung}",
+                })
 
     return _make_csv(header, rows), beleg_infos
 

@@ -23,6 +23,7 @@ from .schemas import KundeCreate, KundeUpdate, KundeResponse
 from .schemas_rechnungen import BelegResponse
 from utils.pdf_dsgvo import generate_dsgvo_pdf
 from utils.pdf_kontokorrent import erstelle_kontokorrent_pdf
+from utils.leitweg_id import leitweg_id_fehler, normalisiere_leitweg_id
 
 _BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 _ERLAUBTE_MIME = {"application/pdf", "image/jpeg", "image/png", "image/tiff", "image/webp",
@@ -48,11 +49,30 @@ def zugferd_automatisch(firmenname: str | None, ust_idnr: str | None) -> bool:
     return bool((firmenname or "").strip() and (ust_idnr or "").strip())
 
 
+def pruefe_oeffentlicher_auftraggeber(daten: dict) -> None:
+    """Issue #530: Pflichtangaben für öffentliche Auftraggeber (XRechnung) – Leitweg-ID gültig,
+    E-Mail vorhanden (BT-49 elektronische Adresse des Käufers). Normalisiert die Leitweg-ID und
+    schaltet ZUGFeRD/E-Rechnung ein. Ohne Schalter bleibt alles wie bisher."""
+    daten["leitweg_id"] = normalisiere_leitweg_id(daten.get("leitweg_id"))
+    if not daten.get("oeffentlicher_auftraggeber"):
+        return
+    fehler = []
+    lw = leitweg_id_fehler(daten.get("leitweg_id"))
+    if lw:
+        fehler.append(lw)
+    if not (daten.get("email") or "").strip():
+        fehler.append("Öffentliche Auftraggeber brauchen eine E-Mail-Adresse (Pflicht in der XRechnung).")
+    if fehler:
+        raise HTTPException(status_code=422, detail=" ".join(fehler))
+    daten["zugferd_aktiv"] = True
+
+
 @router.post("", response_model=KundeResponse, status_code=201)
 def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
     kunde_data = data.model_dump()
     if zugferd_automatisch(kunde_data.get("firmenname"), kunde_data.get("ust_idnr")):
         kunde_data["zugferd_aktiv"] = True
+    pruefe_oeffentlicher_auftraggeber(kunde_data)
     for key in ("anrede", "anrede_individuell"):
         kunde_data[key] = (kunde_data.get(key) or "").strip() or None
     if not kunde_data.get("kundennummer"):
@@ -945,6 +965,16 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
             value = (value or "").strip() or None
         setattr(kunde, key, value)
     if zugferd_automatisch(kunde.firmenname, kunde.ust_idnr):
+        kunde.zugferd_aktiv = True
+    pruef = {"oeffentlicher_auftraggeber": kunde.oeffentlicher_auftraggeber,
+             "leitweg_id": kunde.leitweg_id, "email": kunde.email}
+    try:
+        pruefe_oeffentlicher_auftraggeber(pruef)
+    except HTTPException:
+        db.rollback()
+        raise
+    kunde.leitweg_id = pruef["leitweg_id"]
+    if pruef.get("zugferd_aktiv"):
         kunde.zugferd_aktiv = True
     db.commit()
     db.refresh(kunde)

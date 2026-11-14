@@ -311,6 +311,7 @@ export type Unternehmen = {
   imap_zertifikat_ignorieren?: boolean
   imap_zertifikat_fingerprint?: string | null
   zugferd_anhaenge_aktiv?: boolean
+  oeffentliche_auftraggeber_aktiv?: boolean
   unterschrift_bild?: string | null
   unterschrift_auf_rechnung?: boolean
   standard_zahlungsziel?: number
@@ -760,6 +761,8 @@ export type Kunde = {
   z_hd?: string
   notizen?: string
   zugferd_aktiv?: boolean
+  oeffentlicher_auftraggeber?: boolean
+  leitweg_id?: string | null
   skonto_prozent?: number | null
   skonto_tage?: number | null
   ust_idnr_validiert?: boolean
@@ -1434,6 +1437,8 @@ export type Rechnung = {
   kunde_name: string | null
   kunde_email: string | null
   kunde_zugferd_aktiv: boolean
+  /** Issue #530: öffentlicher Auftraggeber – Original ist die XRechnung-XML */
+  kunde_oeffentlich?: boolean
   lieferant_id: number | null
   lieferant_name: string | null
   lieferant_email: string | null
@@ -1894,6 +1899,22 @@ export async function getRechnungZugferd(id: number): Promise<Blob> {
     throw new Error(err.detail ?? 'ZUGFeRD-Export fehlgeschlagen')
   }
   return res.blob()
+}
+
+/** Issue #530: URL der XRechnung-XML (öffentliche Auftraggeber) – auch für Thunderbird-Anhänge. */
+export async function getXRechnungUrl(id: number): Promise<string> {
+  return `${await getBaseUrl()}/rechnungen/${id}/xrechnung`
+}
+
+/** XRechnung-XML speichern (Speichern-Dialog); Backend-Meldung (z. B. fehlende Pflichtangabe) als Fehlertext. */
+export async function speichereXRechnung(id: number, rechnungsnummer: string | null): Promise<void> {
+  const res = await fetch(await getXRechnungUrl(id))
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'XRechnung konnte nicht erzeugt werden')
+  }
+  const nr = (rechnungsnummer ?? String(id)).replace(/[/ ]/g, '_')
+  await speichereBlob(await res.blob(), `XRechnung_${nr}.xml`)
 }
 
 // --- Artikelstamm ---

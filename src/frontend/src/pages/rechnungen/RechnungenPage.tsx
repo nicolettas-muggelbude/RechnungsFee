@@ -11,6 +11,7 @@ import {
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen, getOffeneAbschlaege, type OffenerAbschlag,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
+  getXRechnungUrl, speichereXRechnung,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
   uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad, dateiInSpeicher,
@@ -1440,6 +1441,8 @@ function RechnungDetail({
   }
 
   async function handleMail() {
+    const istXRechnung = rechnung.typ === 'ausgang' && !!rechnung.kunde_oeffentlich && !rechnung.ist_entwurf
+      && !rechnung.storniert && (rechnung.dokument_typ === 'Rechnung' || rechnung.dokument_typ === 'Abschlagsrechnung')
     if (unternehmen?.thunderbird_aktiv) {
       const email = partnerEmail || mailAdresse.trim()
       if (!email) { setZeigMailEingabe(true); return }
@@ -1449,11 +1452,15 @@ function RechnungDetail({
       try {
         const base = await getApiBase()
         const { subjectText, bodyText } = berechneBetreffUndText()
+        // Issue #530: an öffentliche Auftraggeber zuerst die XRechnung-XML (das Original)
+        const xmlAnhang = istXRechnung
+          ? [{ url: await getXRechnungUrl(rechnung.id), dateiname: `XRechnung_${(rechnung.rechnungsnummer ?? String(rechnung.id)).replace(/[/ ]/g, '_')}.xml` }]
+          : []
         await sendeUeberThunderbird({
           an: email,
           betreff: subjectText,
           text: bodyText,
-          anhaenge: [{
+          anhaenge: [...xmlAnhang, {
             url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
             dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
           }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
@@ -1481,9 +1488,13 @@ function RechnungDetail({
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
+      if (istXRechnung) await speichereXRechnung(rechnung.id, rechnung.rechnungsnummer)
       await downloadPdfForMail(rechnung.id)
       setPdfHinweis(true)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : 'Dateien konnten nicht erzeugt werden')
+      return
     } finally {
       setPdfLaeuft(false)
     }
@@ -1959,10 +1970,26 @@ function RechnungDetail({
               </span>
             </div>
           )}
-          {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && (
+          {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && !rechnung.kunde_oeffentlich && (
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
               <span className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">ZUGFeRD ✓</span>
+            </div>
+          )}
+          {/* Issue #530: öffentlicher Auftraggeber – Original ist die XRechnung-XML (Upload ins Portal) */}
+          {rechnung.typ === 'ausgang' && rechnung.kunde_oeffentlich && !rechnung.ist_entwurf
+            && (rechnung.dokument_typ === 'Rechnung' || rechnung.dokument_typ === 'Abschlagsrechnung') && (
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
+              <button type="button"
+                onClick={async () => {
+                  try { await speichereXRechnung(rechnung.id, rechnung.rechnungsnummer); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }
+                  catch (e) { setFehler(e instanceof Error ? e.message : 'XRechnung konnte nicht erzeugt werden') }
+                }}
+                title="XRechnung (XML) speichern – zum Hochladen ins Rechnungsportal des Auftraggebers. Die PDF ist nur eine Sichtkopie."
+                className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900">
+                ⬇ XRechnung (XML)
+              </button>
             </div>
           )}
           {rechnung.storniert && rechnung.storno_datum && (

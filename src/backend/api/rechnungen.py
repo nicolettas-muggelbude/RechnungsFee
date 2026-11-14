@@ -35,7 +35,7 @@ from utils.mahngebuehr_verrechnung import offene_mahngebuehr_summe, verrechne_ma
 from utils.dokument_adressen import EMPFAENGER_DOKUMENTE, LIEFERADRESSE_DOKUMENTE
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
-from utils.zugferd import generate_zugferd_pdf
+from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils.rechnungs_parser import analysiere_datei
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
@@ -49,6 +49,8 @@ from .nummernkreise import naechste_nummer
 BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 TEMP_DIR = APP_DATA_DIR / "uploads" / "tmp"
 ERLAUBTE_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/tiff"}
+# Dokumenttypen, die als E-Rechnung (ZUGFeRD/XRechnung) ausgegeben werden
+XRECHNUNG_DOKUMENTTYPEN = ("Rechnung", "Abschlagsrechnung")
 
 router = APIRouter(prefix="/api/rechnungen", tags=["Rechnungen"])
 
@@ -2084,6 +2086,20 @@ def finalisiere_rechnung(
                     ),
                 )
 
+    # Issue #530: Rechnung an öffentlichen Auftraggeber – ohne diese Angaben lehnt das Portal die
+    # XRechnung ab, also hier melden statt erst beim Empfänger
+    if rechnung.typ == "ausgang" and rechnung.dokument_typ in XRECHNUNG_DOKUMENTTYPEN:
+        from utils.zugferd import xrechnung_pflicht_fehler
+        _u = db.query(Unternehmen).first()
+        _u_dict = {c.name: getattr(_u, c.name) for c in _u.__table__.columns} if _u else {}
+        fehlend = xrechnung_pflicht_fehler(rechnung, _u_dict)
+        if fehlend:
+            raise HTTPException(
+                status_code=422,
+                detail="Für die XRechnung an einen öffentlichen Auftraggeber fehlt: "
+                       + ", ".join(fehlend) + ". Bitte ergänzen und dann finalisieren.",
+            )
+
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -2446,8 +2462,11 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         and rechnung.typ == "ausgang"
         and rechnung.kunde is not None
         and bool(rechnung.kunde.zugferd_aktiv)
-        and _dok_typ in ("Rechnung", "Abschlagsrechnung")
+        and _dok_typ in XRECHNUNG_DOKUMENTTYPEN
         and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
+        # Issue #530: öffentlicher Auftraggeber – Original ist die getrennte XRechnung-XML,
+        # die PDF bleibt reine Sichtkopie (sonst lägen zwei Originale vor)
+        and not ist_oeffentlicher_auftraggeber(rechnung)
     )
     if kunde_zugferd:
         try:
@@ -2731,6 +2750,79 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+    )
+
+
+def xrechnung_xml_fuer(rechnung: Rechnung, db: Session) -> tuple[bytes, str, Optional[str]]:
+    """Issue #530: XRechnung-XML einer finalisierten Rechnung als (xml_bytes, dateiname,
+    frischer_rel_pfad). Ist schon ein Original archiviert, kommt genau dieses zurück (GoBD:
+    unverändert). Sonst wird erzeugt und die Datei geschrieben – frischer_rel_pfad ist dann
+    gesetzt und wird vom Aufrufer erst nach erfolgreicher Ausgabe in der DB vermerkt (wie
+    beim Original-PDF, Issue #410)."""
+    if rechnung.import_quelle:
+        raise HTTPException(409, "Extern erstellte bzw. importierte Rechnung – maßgeblich ist das Original.")
+    if rechnung.typ != "ausgang" or rechnung.dokument_typ not in XRECHNUNG_DOKUMENTTYPEN:
+        raise HTTPException(400, "XRechnung gibt es nur für Ausgangs- und Abschlagsrechnungen.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(400, "Entwürfe können nicht als XRechnung ausgegeben werden – bitte erst finalisieren.")
+
+    nr = (rechnung.rechnungsnummer or str(rechnung.id)).replace("/", "-").replace(" ", "_")
+    dateiname = f"XRechnung_{nr}.xml"
+    if rechnung.original_xml_pfad:
+        original = APP_DATA_DIR / rechnung.original_xml_pfad
+        if original.is_file():
+            return original.read_bytes(), dateiname, None
+    if rechnung.storniert:
+        raise HTTPException(400, "Stornierte Rechnungen können nicht mehr als XRechnung ausgegeben werden.")
+
+    if rechnung.absender_snapshot:
+        try:
+            unt_dict = json.loads(rechnung.absender_snapshot)
+        except (json.JSONDecodeError, ValueError):
+            unt_dict = {}
+    else:
+        u = db.query(Unternehmen).first()
+        unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
+    from utils.zugferd import generate_zugferd_xml, xrechnung_pflicht_fehler
+    fehlend = xrechnung_pflicht_fehler(rechnung, unt_dict)
+    if fehlend:
+        raise HTTPException(422, "Für die XRechnung fehlt: " + ", ".join(fehlend) + ".")
+    try:
+        xml_bytes = generate_zugferd_xml(rechnung, unt_dict)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+    ziel_dir = APP_DATA_DIR / "uploads" / "rechnungen"
+    ziel_dir.mkdir(parents=True, exist_ok=True)
+    datei = f"{nr}_{rechnung.id}.xml"
+    (ziel_dir / datei).write_bytes(xml_bytes)
+    return xml_bytes, dateiname, f"uploads/rechnungen/{datei}"
+
+
+def vermerke_xrechnung_original(rechnung: Rechnung, rel_pfad: str) -> None:
+    """Archiviertes XML-Original eintragen; erste Ausgabe zählt als „ausgegeben“."""
+    rechnung.original_xml_pfad = rel_pfad
+    if not rechnung.ausgegeben:
+        rechnung.ausgegeben = True
+    if not rechnung.ausgegeben_am:
+        rechnung.ausgegeben_am = datetime.now()
+
+
+@router.get("/{rechnung_id}/xrechnung")
+def rechnung_als_xrechnung(rechnung_id: int, db: Session = Depends(get_db)):
+    """Issue #530: reine XRechnung-XML (CII) zum Hochladen ins Rechnungsportal öffentlicher
+    Auftraggeber. Download, keine Anzeige – daher attachment."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    xml_bytes, dateiname, frisch = xrechnung_xml_fuer(rechnung, db)
+    if frisch:
+        vermerke_xrechnung_original(rechnung, frisch)
+        db.commit()
+    return Response(
+        content=xml_bytes,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"', "Cache-Control": "no-store"},
     )
 
 

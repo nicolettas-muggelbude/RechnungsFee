@@ -340,6 +340,7 @@ class RechnungResponse(BaseModel):
     kunde_name: Optional[str] = None
     kunde_email: Optional[str] = None
     kunde_zugferd_aktiv: bool = False
+    kunde_oeffentlich: bool = False  # Issue #530: XRechnung-XML als eigene Datei
     lieferant_id: Optional[int]
     lieferant_name: Optional[str] = None
     lieferant_email: Optional[str] = None
@@ -467,6 +468,7 @@ class RechnungResponse(BaseModel):
             # Issue #495: Mailadresse der Filiale/des Standorts im Adressfeld, sonst die des Kunden
             data.kunde_email = empfaenger_email(obj)
             data.kunde_zugferd_aktiv = bool(getattr(obj.kunde, "zugferd_aktiv", False))
+            data.kunde_oeffentlich = bool(getattr(obj.kunde, "oeffentlicher_auftraggeber", False))
         if obj.lieferant:
             parts = [obj.lieferant.firmenname or "", obj.lieferant.vorname or "", obj.lieferant.nachname or ""]
             data.lieferant_name = " ".join(p for p in parts if p) or None
