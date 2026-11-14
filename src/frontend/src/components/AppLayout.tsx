@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getTagesabschlussFehltGestern, getUnternehmen, pruefZM, pruefKleinunternehmerUStVA, pruefenWiederkehrend, getFaelligeBuchungsvorlagen, getMahnwesenEinstellungen, getProfile, openUrl, isTauri, postfachAbrufen, type EntwurfErgebnis } from '../api/client'
@@ -201,6 +201,18 @@ const AKZENT_FARBEN = {
 export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const mainRef = useRef<HTMLElement>(null)
+  const inhaltRef = useRef<HTMLDivElement>(null)
+
+  // Issue #535: Beim Seitenwechsel beide Scroll-Container nach oben setzen. Sonst blieb die
+  // Scroll-Position der vorherigen Seite stehen; WebKitGTK unter X11 korrigiert sie nicht,
+  // wenn die neue Seite kürzer ist - der Kopfbereich war dann abgeschnitten, ohne dass
+  // eine Scrollleiste zum Zurückscrollen da war (Wayland nicht betroffen).
+  useEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0
+    if (inhaltRef.current) inhaltRef.current.scrollTop = 0
+  }, [location.pathname])
+
   const { einstellungen } = useAnsicht()
   const qc = useQueryClient()
   const [bannerDismissed, setBannerDismissed] = useState(false)
@@ -547,7 +559,7 @@ export function AppLayout() {
       </aside>
 
       {/* Hauptinhalt */}
-      <main className="flex-1 min-w-0 overflow-auto flex flex-col">
+      <main ref={mainRef} className="flex-1 min-w-0 overflow-auto flex flex-col">
         <div className="md:hidden flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
           <button type="button" aria-label="Navigation öffnen" aria-controls="app-navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} className="rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600">☰ Menü</button>
           <span className="text-sm font-semibold">RechnungsFee</span>
@@ -666,7 +678,7 @@ export function AppLayout() {
         )}
 
         <div className="flex-1 min-h-0 flex">
-          <div className="flex-1 overflow-y-auto h-full">
+          <div ref={inhaltRef} className="flex-1 overflow-y-auto h-full">
             <Outlet />
           </div>
         </div>
