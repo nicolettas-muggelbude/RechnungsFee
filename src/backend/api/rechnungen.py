@@ -27,7 +27,7 @@ from collections import defaultdict
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
     Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
-    Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch,
+    Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch, Lagerbewegung,
 )
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
@@ -99,6 +99,100 @@ def _lager_buchen(rechnung: "Rechnung", db: Session, faktor: Decimal) -> None:
                 ),
             )
         art.bestand_aktuell = neuer_bestand
+
+
+# ── Lagerregel je Dokumenttyp (Issue #505) ─────────────────────────────────────
+# Nur diese Dokumente bewegen Ware. Angebot, Proforma, Auftrag und Abschlagsrechnung (Anzahlung)
+# nie. Lieferschein und Rechnung bewegen zusammen genau einmal: jedes bucht nur die Menge, die das
+# verknüpfte Gegenstück (lieferschein_zu_rechnung_id) nicht schon abgebucht hat – in beiden
+# Reihenfolgen (Lieferschein → Rechnung wie Vorkasse Rechnung → Lieferschein).
+LAGER_DOKUMENTTYPEN = ("Rechnung", "Gutschrift", "Lieferschein")
+
+
+def _lager_mengen(rechnung: "Rechnung", db: Session) -> dict[int, Decimal]:
+    """Menge je lagergeführtem Artikel im Dokument (Gutschrift: negativ)."""
+    mengen: dict[int, Decimal] = {}
+    for pos in rechnung.positionen:
+        if not pos.artikel_id:
+            continue
+        art = db.query(Artikel).filter(Artikel.id == pos.artikel_id).first()
+        if art and art.lager_aktiv:
+            mengen[art.id] = mengen.get(art.id, Decimal("0")) + Decimal(pos.menge)
+    return mengen
+
+
+def _lager_gegenstuecke(rechnung: "Rechnung", db: Session) -> list["Rechnung"]:
+    """Finalisierte, nicht stornierte Gegenstücke: Lieferschein ↔ Rechnung."""
+    if rechnung.dokument_typ == "Lieferschein":
+        if not rechnung.lieferschein_zu_rechnung_id:
+            return []
+        q = db.query(Rechnung).filter(Rechnung.id == rechnung.lieferschein_zu_rechnung_id)
+    else:
+        q = db.query(Rechnung).filter(
+            Rechnung.lieferschein_zu_rechnung_id == rechnung.id,
+            Rechnung.dokument_typ == "Lieferschein",
+        )
+    return [d for d in q.all() if d.id != rechnung.id and not d.ist_entwurf and not d.storniert]
+
+
+def _abgegangen(dok: "Rechnung", db: Session) -> dict[int, Decimal]:
+    """Wie viel ein Dokument je Artikel bereits abgebucht hat (positiv = Abgang)."""
+    if dok.lager_erfasst:
+        summe: dict[int, Decimal] = {}
+        for b in db.query(Lagerbewegung).filter(Lagerbewegung.rechnung_id == dok.id).all():
+            summe[b.artikel_id] = summe.get(b.artikel_id, Decimal("0")) - Decimal(b.menge)
+        return summe
+    # Altdokument (vor dem Stichtag, Plan #505): Rechnungen haben nach der alten Regel abgebucht,
+    # Lieferscheine gelten als „nicht abgebucht“ – exakt rekonstruierbar ist das nicht
+    if dok.dokument_typ in ("Rechnung", "Gutschrift"):
+        return {a: m for a, m in _lager_mengen(dok, db).items() if m > 0}
+    return {}
+
+
+def _lager_bestand_aendern(art: "Artikel", abgang: Decimal, menge_text: Decimal) -> None:
+    neuer_bestand = art.bestand_aktuell - abgang
+    if abgang > 0 and not art.minusbestand_erlaubt and neuer_bestand < 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f'Artikel "{art.bezeichnung}" hat nicht genug Bestand '
+                f"(verfügbar: {_fmt_menge(art.bestand_aktuell)} {art.einheit}, "
+                f"benötigt: {_fmt_menge(menge_text)} {art.einheit}). "
+                f"Minusbestand ist für diesen Artikel nicht erlaubt."
+            ),
+        )
+    art.bestand_aktuell = neuer_bestand
+
+
+def _lager_finalisieren(rechnung: "Rechnung", db: Session) -> None:
+    """Lagerabgang beim Finalisieren nach der Regel oben; jede Bewegung wird protokolliert."""
+    if rechnung.typ == "ausgang" and rechnung.dokument_typ in LAGER_DOKUMENTTYPEN:
+        schon: dict[int, Decimal] = {}
+        for gs in _lager_gegenstuecke(rechnung, db):
+            for art_id, m in _abgegangen(gs, db).items():
+                schon[art_id] = schon.get(art_id, Decimal("0")) + m
+        for art_id, menge in _lager_mengen(rechnung, db).items():
+            abgang = max(menge - schon.get(art_id, Decimal("0")), Decimal("0")) if menge > 0 else menge
+            if abgang == 0:
+                continue
+            art = db.query(Artikel).filter(Artikel.id == art_id).first()
+            _lager_bestand_aendern(art, abgang, menge)
+            db.add(Lagerbewegung(artikel_id=art_id, rechnung_id=rechnung.id, menge=-abgang, art="abgang"))
+    rechnung.lager_erfasst = True
+
+
+def _lager_storno(rechnung: "Rechnung", db: Session) -> None:
+    """Storno bucht genau zurück, was dieses Dokument bewegt hat. Altdokumente wie bisher."""
+    if not rechnung.lager_erfasst:
+        _lager_buchen(rechnung, db, faktor=Decimal("1"))
+        return
+    for art_id, abgang in _abgegangen(rechnung, db).items():
+        if abgang == 0:
+            continue
+        art = db.query(Artikel).filter(Artikel.id == art_id).first()
+        if art:
+            art.bestand_aktuell = art.bestand_aktuell + abgang
+        db.add(Lagerbewegung(artikel_id=art_id, rechnung_id=rechnung.id, menge=abgang, art="storno"))
 
 
 def _naechste_belegnr_journal(db: Session, datum: date) -> str:
@@ -1744,10 +1838,10 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
     _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
 
-    # Lagerführung: direkt finalisierte Rechnungen (ist_entwurf=False) buchen den Bestand sofort ab.
+    # Lagerführung: direkt finalisierte Dokumente buchen sofort (Regel je Dokumenttyp, #505).
     # Entwürfe holen den Abgang über /finalisieren nach.
     if not data.ist_entwurf:
-        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+        _lager_finalisieren(rechnung, db)
         rechnung.absender_snapshot = _absender_snapshot(db)
         _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
@@ -1933,7 +2027,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         if war_entwurf and not data.ist_entwurf:
             db.flush()  # neue Positionen in DB schreiben bevor Relationship-Cache geleert wird
             db.expire(rechnung, ["positionen"])  # SQLAlchemy-Cache war [] nach delete+flush; fresh load erzwingen
-            _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+            _lager_finalisieren(rechnung, db)
             rechnung.absender_snapshot = _absender_snapshot(db)
             _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
@@ -2112,12 +2206,9 @@ def finalisiere_rechnung(
         if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
             _auftrag.auftrag_status = "rechnung_gestellt"
 
-    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung).
-    # Ausnahme Issue #495: Lieferscheine aus Angebot/Auftrag entstehen seitdem als Entwurf - vorher
-    # wurden sie sofort final und ohne Lagerabgang angelegt, der Abgang läuft dort über die
-    # Rechnung. Das bleibt so, sonst würde die spätere Rechnung den Bestand doppelt mindern.
-    if not (rechnung.dokument_typ == "Lieferschein" and _ist_umgewandelter_lieferschein(db, rechnung)):
-        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+    # Lagerführung: Regel je Dokumenttyp (Issue #505) – Lieferscheine aus Angebot/Auftrag buchen
+    # jetzt beim Finalisieren ab, die spätere Rechnung nur noch den Rest (vorher #495-Ausnahme)
+    _lager_finalisieren(rechnung, db)
     _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
@@ -3999,8 +4090,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     rechnung.storno_rechnungsnummer = storno_nr
     rechnung.immutable = True
 
-    # Lagerführung: Bestand zurückbuchen (Storno kehrt Finalisierungs-Buchung um)
-    _lager_buchen(rechnung, db, faktor=Decimal("1"))
+    # Lagerführung: genau die Bewegungen dieses Dokuments zurückbuchen (Issue #505)
+    _lager_storno(rechnung, db)
 
     # Verknüpfte Lieferscheine wieder auf "Nicht abgerechnet" setzen
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_rechnung_id == rechnung_id).update(
@@ -4831,6 +4922,10 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.add(ls)
     db.flush()
     _kopiere_positionen(r, ls, db)
+    db.flush()
+    db.expire(ls, ["positionen"])
+    # Issue #505: bucht nur, was die Rechnung (Vorkasse) nicht schon abgebucht hat – meist nichts
+    _lager_finalisieren(ls, db)
 
     ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -4873,14 +4968,6 @@ def _lieferadresse_nach_umwandlung(db: Session, quelle: Rechnung) -> Optional[in
     """Lieferadresse für einen aus Angebot/Auftrag erzeugten Lieferschein: der gewählte
     Empfänger-Standort (Issue #495 – Lieferung geht dorthin), sonst die Standard-Lieferadresse."""
     return quelle.empfaenger_adresse_id or _standard_lieferadresse_id(db, quelle.kunde_id)
-
-
-def _ist_umgewandelter_lieferschein(db: Session, rechnung: Rechnung) -> bool:
-    """Lieferschein, der aus einem Angebot oder Auftrag entstanden ist (Issue #495)."""
-    return db.query(Rechnung).filter(or_(
-        Rechnung.lieferschein_zu_angebot_id == rechnung.id,
-        Rechnung.lieferschein_zu_auftrag_id == rechnung.id,
-    )).first() is not None
 
 
 @router.post("/{angebot_id}/lieferschein-aus-angebot", response_model=RechnungResponse, status_code=201)

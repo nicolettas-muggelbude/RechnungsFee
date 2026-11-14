@@ -648,6 +648,19 @@ class Artikel(Base):
     positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="artikel")
 
 
+class Lagerbewegung(Base):
+    """Issue #505: jede durch ein Dokument ausgelöste Bestandsänderung – Storno bucht genau diese
+    Bewegungen zurück, und Lieferschein/Rechnung sehen, was das Gegenstück schon abgebucht hat."""
+    __tablename__ = "lagerbewegungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    artikel_id: Mapped[int] = mapped_column(ForeignKey("artikel.id", ondelete="CASCADE"), nullable=False)
+    rechnung_id: Mapped[int] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), nullable=False)
+    menge: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)  # < 0 = Abgang, > 0 = Zugang
+    art: Mapped[str] = mapped_column(String(20), nullable=False)            # abgang | storno
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 # ---------------------------------------------------------------------------
 # Belege (Dateianhänge an Rechnungen und Journaleinträge)
 # ---------------------------------------------------------------------------
@@ -822,6 +835,9 @@ class Rechnung(Base):
     original_pdf_pfad: Mapped[str | None] = mapped_column(String(500))
     # Issue #530: archivierte XRechnung-XML (Original bei öffentlichen Auftraggebern, GoBD)
     original_xml_pfad: Mapped[str | None] = mapped_column(String(500))
+    # Issue #505: beim Finalisieren nach der neuen Lagerregel gebucht (Bewegungen in lagerbewegungen,
+    # ggf. keine). False bei Altdokumenten – deren Abgang wird nach der alten Regel angenommen.
+    lager_erfasst: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     absender_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gutschrift / Lieferschein
     dokument_typ: Mapped[str] = mapped_column(String(20), default="Rechnung", nullable=False, server_default="Rechnung")

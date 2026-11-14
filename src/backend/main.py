@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 187
+SCHEMA_VERSION = 188
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4279,6 +4279,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 187"))
             conn.commit()
             print("[Migration] Schema auf Version 187 (Issue #530: öffentliche Auftraggeber, Leitweg-ID, original_xml_pfad)")
+
+    if version < 188:
+        # Issue #505: Lagerbewegungen je Dokument (Tabelle per create_all) + Kennzeichen, ob ein
+        # Dokument nach der neuen Regel gebucht wurde. Kein Backfill: Altdokumente lassen sich nicht
+        # exakt rekonstruieren (Stichtag), bestehende Fehlbestände korrigiert die Inventur.
+        with engine.connect() as conn:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if cols and "lager_erfasst" not in cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN lager_erfasst BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 188"))
+            conn.commit()
+            print("[Migration] Schema auf Version 188 (Issue #505: lagerbewegungen, rechnungen.lager_erfasst)")
 
 
 def _migrate_kategorien() -> None:
