@@ -94,7 +94,7 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
     ist_netto = r.typ == "ausgang" and r.eingabemodus == "netto"
     # ZUGFeRD per Kunden-Schalter, nicht per Netto-Modus (Issue #534, siehe rechnungen.py)
     kunde_zugferd = (
-        not r.ist_entwurf and r.typ == "ausgang" and _dok == "Rechnung"
+        not r.ist_entwurf and r.typ == "ausgang" and _dok in ("Rechnung", "Abschlagsrechnung")
         and r.kunde is not None and bool(r.kunde.zugferd_aktiv)
         and u and (u.steuernummer or u.ust_idnr)
     )

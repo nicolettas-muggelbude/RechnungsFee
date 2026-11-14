@@ -84,3 +84,14 @@ def test_netto_rechnung_an_zugferd_kunden_enthaelt_xml(db):
 def test_kunde_ohne_zugferd_bekommt_keine_xml(db):
     reader = _pdf(db, _rechnung(db, zugferd_kunde=False, eingabemodus="netto"))
     assert "xrechnung.xml" not in reader.attachments
+
+
+@pytest.mark.parametrize("dokument_typ", ["Rechnung", "Abschlagsrechnung"])
+def test_mailversand_haengt_xml_an(db, tmp_path, monkeypatch, dokument_typ):
+    import api.mail as mail_mod
+    monkeypatch.setattr(mail_mod, "APP_DATA_DIR", tmp_path)
+    r = _rechnung(db, zugferd_kunde=True, eingabemodus="brutto")
+    r.dokument_typ = dokument_typ
+    db.commit()
+    pdf_bytes, _, _ = mail_mod._pdf_bytes_fuer(r.id, db)
+    assert "xrechnung.xml" in PdfReader(BytesIO(pdf_bytes)).attachments
