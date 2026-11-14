@@ -92,8 +92,10 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
     # Netto- oder Bruttorechnung: entscheidet r.eingabemodus (Issue #332), nicht kunde.zugferd_aktiv
     # - sonst interpretiert das PDF den gespeicherten Einzelpreis falsch (siehe rechnungen.py).
     ist_netto = r.typ == "ausgang" and r.eingabemodus == "netto"
+    # ZUGFeRD per Kunden-Schalter, nicht per Netto-Modus (Issue #534, siehe rechnungen.py)
     kunde_zugferd = (
-        not r.ist_entwurf and ist_netto and _dok == "Rechnung"
+        not r.ist_entwurf and r.typ == "ausgang" and _dok == "Rechnung"
+        and r.kunde is not None and bool(r.kunde.zugferd_aktiv)
         and u and (u.steuernummer or u.ust_idnr)
     )
 
@@ -117,7 +119,7 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
 
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(r, unt_dict)
+            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)
         except Exception:
             pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
     elif u and u.pdf_vorlage == 1:

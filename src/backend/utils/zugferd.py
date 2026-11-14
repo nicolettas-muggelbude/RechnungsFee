@@ -415,8 +415,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     return xml
 
 
-def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
-    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML."""
+def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) -> bytes:
+    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML.
+
+    ist_netto: Erfassungsmodus der Rechnung (rechnung.eingabemodus, Issue #332) - bestimmt nur,
+    wie das sichtbare PDF den gespeicherten Einzelpreis liest. Bisher fest Netto, deshalb hing
+    die ZUGFeRD-Auslösung versehentlich am Netto-Modus (Issue #534). Die XML ist unabhängig
+    vom Modus (Positionssummen aus brutto - ust_betrag, Issue #389)."""
     # saxonche ist Top-Level-Import in facturx aber wird nur für XSD/Schematron-Validierung
     # gebraucht – wir nutzen check_xsd=False, check_schematron=False. Falls saxonche im
     # PyInstaller-Build nicht korrekt gebündelt ist, Stub eintragen damit der Import nicht fehlschlägt.
@@ -433,7 +438,7 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
 
     # sRGB-OutputIntent für PDF/A-3-Konformität
     pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
-                                      mit_output_intent=True)
+                                      mit_output_intent=True, ist_netto=ist_netto)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
     # XRechnung-Profil in facturx registrieren (einmalig; idempotent)

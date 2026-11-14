@@ -2437,16 +2437,21 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     # 2026-08-04: 3,50€ brutto erschien im PDF als 4,17€).
     ist_netto = rechnung.typ == "ausgang" and rechnung.eingabemodus == "netto"
 
-    # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen
+    # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen.
+    # Issue #534: Bis dahin stand hier statt des Kunden-Schalters "ist_netto" - vor #332 war
+    # das derselbe Wert, seitdem hing ZUGFeRD versehentlich am Erfassungsmodus (Brutto-
+    # Rechnung an ZUGFeRD-Kunden: Detailansicht "ZUGFeRD ✓", PDF ohne XML).
     kunde_zugferd = (
         not ist_entwurf
-        and ist_netto
+        and rechnung.typ == "ausgang"
+        and rechnung.kunde is not None
+        and bool(rechnung.kunde.zugferd_aktiv)
         and _dok_typ in ("Rechnung", "Abschlagsrechnung")
         and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
     )
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto)
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
@@ -2716,7 +2721,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
     }
 
     try:
-        pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+        pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=rechnung.eingabemodus == "netto")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZUGFeRD-Generierung fehlgeschlagen: {e}")
 
