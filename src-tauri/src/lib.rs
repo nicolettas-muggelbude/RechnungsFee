@@ -272,8 +272,21 @@ fn pdf_download(webview: tauri::Webview, event: tauri::webview::DownloadEvent<'_
             true
         }
         DownloadEvent::Finished { url, path, success } => {
+            // Der Betrachter speichert oft aus seinem Speicher (Adresse ohne …/_datei/<Name>) –
+            // dann trägt die Adresse des Fensters den Namen, über sie wurde das PDF geöffnet.
+            let fenster_url = webview.url().ok();
+            log::info!(
+                "PDF speichern: Download {url}, Fenster {}",
+                fenster_url.as_ref().map(|u| u.as_str()).unwrap_or("-")
+            );
+            let mut name = pdf_dateiname_aus_url(&url);
+            if name == "Dokument.pdf" {
+                if let Some(f) = &fenster_url {
+                    name = pdf_dateiname_aus_url(f);
+                }
+            }
             let endpfad = match (success, path) {
-                (true, Some(p)) => Some(verschiebe_download(&p, &ordner(), &pdf_dateiname_aus_url(&url))),
+                (true, Some(p)) => Some(verschiebe_download(&p, &ordner(), &name)),
                 _ => None,
             };
             let (text, art) = match (success, &endpfad) {
