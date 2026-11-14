@@ -1,4 +1,4 @@
-fastapi==0.162.0
+fastapi==0.162.4
 uvicorn==0.54.0
 sqlalchemy==2.1.8
 aiofiles==25.1.0
@@ -15,7 +15,7 @@ pdfplumber
 # Issue #493: PyMuPDF 2.0 zieht pymupdf-layout (+ onnxruntime, numpy, networkx) mit und lädt beim
 # Import Modelldateien, die PyInstaller nicht mitpackt - jeder "import fitz" scheiterte im Sidecar
 # ("Paket ansehen", OCR gescannter Belege). Wir brauchen nur Rendering/Zusammenfügen → bei 1.x bleiben.
-pymupdf<2
+pymupdf<3
 pytesseract
 ocrmypdf
 markdown
