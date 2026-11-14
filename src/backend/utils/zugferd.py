@@ -10,6 +10,7 @@ Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder storniert
 
 import base64
 from decimal import Decimal
+from pathlib import Path
 
 from database.connection import APP_DATA_DIR
 from utils.dokument_adressen import adressfeld_adresse, empfaenger_email, name_fuer_adresse
@@ -82,6 +83,31 @@ def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool, sonderfall=N
     if sonderfall:
         return sonderfall[0]
     return "E" if ist_kleinunternehmer else "Z"
+
+
+_RESERVIERTE_XML_NAMEN = {"xrechnung.xml", "factur-x.xml", "zugferd-invoice.xml", "order-x.xml"}
+
+
+def _zugferd_anhang_dateien(rechnung) -> list[tuple]:
+    """Vorhandene ZUGFeRD-Anhänge als (anhang, pfad, dateiname) – Dateinamen eindeutig, damit
+    XML-Verweis (#ef=) und eingebettete PDF-Datei zusammenpassen (Issue #527)."""
+    ergebnis = []
+    vergeben: set[str] = set()
+    for anhang in getattr(rechnung, "zugferd_anhaenge", []):
+        beleg = anhang.beleg
+        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+        if not pfad.exists():
+            continue
+        name = Path(beleg.original_name or beleg.dateiname).name or "anhang"
+        stamm, endung = Path(name).stem, Path(name).suffix
+        n = 1
+        # Namen der Rechnungs-XML selbst sind reserviert (facturx würde den Anhang sonst verwerfen)
+        while name.lower() in vergeben or name.lower() in _RESERVIERTE_XML_NAMEN:
+            n += 1
+            name = f"{stamm}-{n}{endung}"
+        vergeben.add(name.lower())
+        ergebnis.append((anhang, pfad, name))
+    return ergebnis
 
 
 def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
@@ -254,19 +280,20 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # Werden als AdditionalReferencedDocument mit eingebettetem Base64-Anhang in die
     # PDF/A-3 aufgenommen (Issue #383) - TypeCode 916 ("Referenced document") ist die in
     # ZUGFeRD/Factur-X übliche Kennung für generische Anhänge ohne eigenen Beleg-Typ.
-    for anhang in getattr(rechnung, "zugferd_anhaenge", []):
+    # Issue #527: zusätzlich als eigene Datei im PDF-Container (Büroklammer im PDF-Viewer) –
+    # URIID "#ef=<Dateiname>" verweist nach Factur-X-Konvention auf diese eingebettete Datei.
+    # Die Base64-Kopie bleibt, weil viele Empfänger (XRechnung/ERP) nur die XML auslesen.
+    for anhang, pfad, dateiname in _zugferd_anhang_dateien(rechnung):
         beleg = anhang.beleg
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if not pfad.exists():
-            continue
         ref_doc = AdditionalReferencedDocument()
         ref_doc.issuer_assigned_id = str(anhang.id)
+        ref_doc.uri_id = f"#ef={dateiname}"
         ref_doc.type_code._text = "916"
         ref_doc.name = anhang.bezeichnung or beleg.original_name
         inhalt_b64 = base64.b64encode(pfad.read_bytes()).decode("ascii")
         ref_doc.attached_object = (
             beleg.mime_type or "application/octet-stream",
-            beleg.original_name,
+            dateiname,
             inhalt_b64,
         )
         doc.trade.agreement.additional_references.add(ref_doc)
@@ -469,6 +496,15 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) ->
             check_schematron=False,
             xmp_compression=False,
             afrelationship="alternative",
+            # Issue #527: rechnungsbegleitende Dokumente auch als eigene Dateien im Container
+            attachments={
+                dateiname: {
+                    "filedata": pfad.read_bytes(),
+                    "description": anhang.bezeichnung or anhang.beleg.original_name or dateiname,
+                    "afrelationship": "supplement",
+                }
+                for anhang, pfad, dateiname in _zugferd_anhang_dateien(rechnung)
+            } or None,
         )
         with open(tmp.name, "rb") as f:
             result = f.read()

@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.11',
     datum: 'November 2026',
     eintraege: [
+      { typ: 'verbesserung', text: 'ZUGFeRD-Anhänge (Stundennachweis, Vertrag …) stecken jetzt zusätzlich als eigene Dateien in der PDF und lassen sich im PDF-Viewer über die Büroklammer öffnen. In der XML bleiben sie wie bisher enthalten und verweisen per „#ef=“ auf die eingebettete Datei. Danke an ask4it (Issue #527).' },
       { typ: 'neu', text: 'Datenauskunft per Mail: Bei Kunden und Lieferanten gibt es im Abschnitt „Datenschutz (DSGVO)“ jetzt „Auskunft per Mail“. Die Auskunft nach Art. 15 DSGVO geht als PDF-Anhang mit vorformuliertem Text raus – per SMTP-Dialog, Thunderbird oder dein Mailprogramm. Abgeschickt wird bewusst von Hand, damit du vorher prüfen kannst, ob die Anfrage wirklich von der Person stammt. Danke an gitmacer (Issue #526).' },
       { typ: 'verbesserung', text: 'Dokumentenpakete: Die Reihenfolge der Dokumente lässt sich jetzt mit Pfeilen nach oben und unten ändern. Sie gilt für Anhänge, „Paket ansehen“ und den Druck. Neu hinzugefügte Dokumente landen immer am Ende – bisher konnten sie nach dem Löschen eines Dokuments irgendwo im Stapel auftauchen. Danke an ludgerknorps (Issue #524).' },
       { typ: 'fix', text: 'Linux (X11): Wer in einer Seite nach unten gescrollt hatte und dann den Bereich wechselte, sah im neuen Bereich den Kopf nicht mehr und konnte nicht zurückscrollen. Jeder Bereich startet jetzt oben. Danke an Markus (Issue #535).' },
