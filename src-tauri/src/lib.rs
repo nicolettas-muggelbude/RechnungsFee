@@ -172,9 +172,66 @@ fn kill_backend_inner(child: CommandChild, port: u16, token: String, wait: bool)
     }
 }
 
-/// IPC-Command: URL mit System-Standard-App öffnen (z.B. mailto:, https:)
+/// Schemata, die ohne Nachfrage geöffnet werden (Browser bzw. Mailprogramm).
+fn ist_web_oder_mail(url: &str) -> bool {
+    let klein = url.trim_start().to_ascii_lowercase();
+    ["https://", "http://", "mailto:"].iter().any(|s| klein.starts_with(s))
+}
+
+/// Datei mit den bestätigten Schnellzugriff-Zielen. Liegt im Konfigurationsordner der App und
+/// wird nur hier in Rust geschrieben – das Frontend hat keinen Schreibzugriff darauf.
+fn freigaben_datei(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("freigegebene_ziele.json"))
+}
+
+fn lade_freigaben(app: &tauri::AppHandle) -> Vec<String> {
+    freigaben_datei(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn speichere_freigabe(app: &tauri::AppHandle, ziel: &str) {
+    let Some(pfad) = freigaben_datei(app) else { return };
+    let mut liste = lade_freigaben(app);
+    if !liste.iter().any(|z| z == ziel) {
+        liste.push(ziel.to_string());
+    }
+    if let Some(ordner) = pfad.parent() {
+        let _ = std::fs::create_dir_all(ordner);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&liste) {
+        let _ = std::fs::write(pfad, json);
+    }
+}
+
+/// IPC-Command: URL oder Pfad mit der Standard-App des Systems öffnen (Security-Audit F12).
+///
+/// https/http/mailto öffnen direkt. Alles andere – Programme, Ordner, Dateien, fremde
+/// Schemata, z. B. Schnellzugriff-Links im Dashboard – startet `open` ungeprüft (unter
+/// Windows liefe eine .exe direkt). Deshalb beim ersten Mal ein nativer Bestätigungsdialog,
+/// den ein eingeschleustes Skript nicht selbst bestätigen kann; die Freigabe merkt sich Rust.
+/// `async`, weil der blockierende Dialog nicht auf dem Hauptthread laufen darf.
 #[tauri::command]
-fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+    if !ist_web_oder_mail(&url) && !lade_freigaben(&app).iter().any(|z| z == &url) {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+        let bestaetigt = app
+            .dialog()
+            .message(format!(
+                "RechnungsFee soll Folgendes öffnen:\n\n{url}\n\n\
+                 Bestätige nur, wenn du diesen Link oder Pfad selbst eingetragen hast \
+                 (z. B. im Schnellzugriff auf dem Dashboard). Danach wird nicht mehr nachgefragt."
+            ))
+            .title("Programm oder Pfad öffnen?")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom("Öffnen".into(), "Abbrechen".into()))
+            .blocking_show();
+        if !bestaetigt {
+            return Err("Öffnen abgebrochen.".into());
+        }
+        speichere_freigabe(&app, &url);
+    }
     app.shell().open(&url, None).map_err(|e| e.to_string())
 }
 
@@ -283,7 +340,20 @@ fn schreibe_temp_anhang(dateiname: String, data: Vec<u8>) -> Result<String, Stri
 
 #[cfg(test)]
 mod tests {
-    use super::temp_anhang_name;
+    use super::{ist_web_oder_mail, temp_anhang_name};
+
+    #[test]
+    fn nur_web_und_mail_ohne_nachfrage() {
+        for url in ["https://www.elster.de", "HTTP://example.org", "mailto:a@example.org", " https://x"] {
+            assert!(ist_web_oder_mail(url), "{url}");
+        }
+        for url in [
+            r"C:\Programme\Banking\banking.exe", "/usr/bin/xterm", "file:///etc/passwd",
+            "smb://nas/freigabe", "javascript:alert(1)", "tel:+49123", "ms-settings:", "httpx://x",
+        ] {
+            assert!(!ist_web_oder_mail(url), "{url}");
+        }
+    }
 
     #[test]
     fn temp_anhang_bleibt_im_temp_ordner() {

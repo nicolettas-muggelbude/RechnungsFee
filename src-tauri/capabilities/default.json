@@ -20,7 +20,6 @@
         { "name": "thunderbird-win-appdata", "cmd": "$LOCALDATA/Mozilla Thunderbird/thunderbird.exe", "args": ["-compose", { "validator": "(?s)^to='(?:[^'\\\\,]|\\\\.)*'(?:,cc='(?:[^'\\\\,]|\\\\.)*')?,subject='(?:[^'\\\\,]|\\\\.)*',body='(?:[^'\\\\,]|\\\\.)*'(?:,attachment='file://(?:/tmp/|/var/folders/[^/'\\\\,]+/[^/'\\\\,]+/T/|[A-Za-z]:\\\\\\\\Users\\\\\\\\[^/'\\\\,]+\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\(?:[0-9]+\\\\\\\\)?)rechnungsfee_[^/'\\\\,]+(?:\\\\,file://(?:/tmp/|/var/folders/[^/'\\\\,]+/[^/'\\\\,]+/T/|[A-Za-z]:\\\\\\\\Users\\\\\\\\[^/'\\\\,]+\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\(?:[0-9]+\\\\\\\\)?)rechnungsfee_[^/'\\\\,]+)*')?$", "raw": true }] }
       ]
     },
-    "shell:allow-open",
     "updater:default",
     "process:allow-restart",
     "process:allow-exit",
