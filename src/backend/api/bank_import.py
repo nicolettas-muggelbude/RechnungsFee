@@ -805,7 +805,7 @@ def _vorschau_fuer_bytes(
     template_id: Optional[str],
     db: Session,
 ) -> "VorschauResponse":
-    """Gemeinsame Logik für /vorschau und /vorschau-pfad."""
+    """Vorschau-Logik für hochgeladene Bytes (Upload über /vorschau)."""
 
     # -----------------------------------------------------------------------
     # ZIP-Extraktion: CAMT-Export der Sparkasse kommt als ZIP mit mehreren XMLs
@@ -978,25 +978,6 @@ async def vorschau_import(
         raise HTTPException(status_code=404, detail="Konto nicht gefunden.")
     raw = await datei.read()
     return _vorschau_fuer_bytes(raw, konto_id, template_id, db)
-
-
-class VorschauPfadRequest(BaseModel):
-    pfad: str
-    konto_id: Optional[int] = None
-    template_id: Optional[str] = None
-
-
-@router.post("/vorschau-pfad", response_model=VorschauResponse)
-def vorschau_import_pfad(body: VorschauPfadRequest, db: Session = Depends(get_db)):
-    """Wie /vorschau, aber liest die Datei vom lokalen Pfad (Tauri Drag-&-Drop)."""
-    from pathlib import Path as _Path
-    pfad = _Path(body.pfad)
-    if not pfad.exists() or not pfad.is_file():
-        raise HTTPException(status_code=400, detail="Datei nicht gefunden")
-    if body.konto_id is not None and not db.query(Konto).filter(Konto.id == body.konto_id).first():
-        raise HTTPException(status_code=404, detail="Konto nicht gefunden.")
-    raw = pfad.read_bytes()
-    return _vorschau_fuer_bytes(raw, body.konto_id, body.template_id, db)
 
 
 @router.post("/importieren", response_model=ImportiereResponse, status_code=201)

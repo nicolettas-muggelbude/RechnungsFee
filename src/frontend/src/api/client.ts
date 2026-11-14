@@ -1362,7 +1362,6 @@ export type AnalyseErgebnis = {
   warnungen: string[]
   positionen_modus?: 'netto' | 'brutto'
   temp_url?: string
-  temp_path?: string
   lieferant_vorschlaege?: LieferantVorschlag[]
 }
 
@@ -1392,18 +1391,22 @@ export async function analysiereRechnung(datei: File): Promise<AnalyseErgebnis> 
   return res.json()
 }
 
-export async function analysiereRechnungPfad(pfad: string): Promise<AnalyseErgebnis> {
-  const base = await getBaseUrl()
-  const res = await apiFetch(`${base}/rechnungen/analysieren-pfad`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pfad }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Analyse fehlgeschlagen')
+const _DROP_MIME: Record<string, string> = {
+  pdf: 'application/pdf', xml: 'application/xml', csv: 'text/csv', txt: 'text/plain', zip: 'application/zip',
+}
+
+/** Security-Audit F5: Datei aus einem Drag & Drop in die Desktop-App (tauri://drag-drop liefert
+ *  nur Pfade). Tauri liest sie – nur Pfade aus dem letzten echten Drop –, danach geht sie wie eine
+ *  ausgewählte Datei per Upload ans Backend. Das Backend nimmt selbst keine Dateipfade an. */
+export async function leseGedroppteDatei(pfad: string): Promise<File> {
+  const name = pfad.replace(/\\/g, '/').split('/').pop() || 'datei'
+  const endung = name.split('.').pop()?.toLowerCase() ?? ''
+  try {
+    const daten = await invoke<ArrayBuffer>('lese_gedroppte_datei', { pfad })
+    return new File([daten], name, { type: _DROP_MIME[endung] ?? 'application/octet-stream' })
+  } catch (e) {
+    throw new Error(`„${name}“ konnte nicht gelesen werden: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
   }
-  return res.json()
 }
 
 // --- Rechnungen ---
@@ -3041,24 +3044,6 @@ export async function vorschauBankImport(
   if (kontoId != null) form.append('konto_id', String(kontoId))
   if (templateId) form.append('template_id', templateId)
   const res = await apiFetch(`${base}/bank-import/vorschau`, { method: 'POST', body: form })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail ?? `Fehler ${res.status}`)
-  }
-  return res.json()
-}
-
-export async function vorschauBankImportPfad(
-  pfad: string,
-  kontoId?: number,
-  templateId?: string,
-): Promise<BankVorschauResponse> {
-  const base = await getBaseUrl()
-  const res = await apiFetch(`${base}/bank-import/vorschau-pfad`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pfad, konto_id: kontoId ?? null, template_id: templateId ?? null }),
-  })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail ?? `Fehler ${res.status}`)

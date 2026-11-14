@@ -824,7 +824,6 @@ class AnalyseResponse(BaseModel):
     warnungen: List[str]
     positionen_modus: str = "netto"   # "netto" | "brutto"
     temp_url: Optional[str] = None
-    temp_path: Optional[str] = None
     lieferant_vorschlaege: List[LieferantVorschlag] = []
 
 

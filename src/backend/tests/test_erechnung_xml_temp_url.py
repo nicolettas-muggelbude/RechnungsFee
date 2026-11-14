@@ -4,19 +4,23 @@ XML-Datei (kein PDF) erzeugte nie eine temp_url - im Frontend blieb "datei" dadu
 dauerhaft null und der Button "Rechnung erstellen" tat wirkungslos nichts, ohne jede
 Fehlermeldung. Ursache: _temp_dateiendung() (vorher inline "if dateiname.endswith('.pdf')")
 kannte nur PDF.
+
+Seit Security-Audit F5 läuft auch ein Drop über den Upload-Endpunkt /analysieren (Tauri liest
+die Datei, das Backend nimmt keine Pfade mehr an) – daher hier über analysiere_rechnung.
 """
-from pathlib import Path
+import asyncio
+import io
 
 import pytest
+from starlette.datastructures import Headers, UploadFile
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import api.rechnungen as rechnungen_mod
 from api.rechnungen import (
-    AnalysierePfadRequest,
     _temp_dateiendung,
-    analysiere_rechnung_pfad,
+    analysiere_rechnung,
     get_temp_pdf,
 )
 from database.connection import Base
@@ -32,6 +36,12 @@ def db():
     session.close()
 
 
+def _analysiere(dateiname: str, inhalt: bytes, db):
+    datei = UploadFile(io.BytesIO(inhalt), filename=dateiname,
+                       headers=Headers({"content-type": "application/octet-stream"}))
+    return asyncio.run(analysiere_rechnung(datei, db))
+
+
 def test_temp_dateiendung_erkennt_pdf_und_xml():
     assert _temp_dateiendung("rechnung.pdf", None) == ".pdf"
     assert _temp_dateiendung("rechnung.PDF", None) == ".pdf"
@@ -40,16 +50,13 @@ def test_temp_dateiendung_erkennt_pdf_und_xml():
     assert _temp_dateiendung("rechnung.docx", None) is None
 
 
-def test_analysiere_pfad_xml_erzeugt_temp_url(tmp_path, monkeypatch, db):
+def test_analysiere_xml_erzeugt_temp_url(tmp_path, monkeypatch, db):
     monkeypatch.setattr(rechnungen_mod, "TEMP_DIR", tmp_path / "tmp-uploads")
 
     minimal_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100">
 </rsm:CrossIndustryInvoice>"""
-    xml_datei = tmp_path / "eingang.xml"
-    xml_datei.write_bytes(minimal_xml)
-
-    ergebnis = analysiere_rechnung_pfad(AnalysierePfadRequest(pfad=str(xml_datei)), db)
+    ergebnis = _analysiere("eingang.xml", minimal_xml, db)
 
     assert ergebnis.temp_url is not None
     assert ergebnis.temp_url.startswith("/rechnungen/temp/")
@@ -63,10 +70,7 @@ def test_analysiere_pfad_xml_erzeugt_temp_url(tmp_path, monkeypatch, db):
 def test_temp_datei_ohne_erkanntes_format_bleibt_ohne_url(tmp_path, monkeypatch, db):
     monkeypatch.setattr(rechnungen_mod, "TEMP_DIR", tmp_path / "tmp-uploads")
 
-    datei = tmp_path / "notiz.txt"
-    datei.write_bytes(b"kein Rechnungsformat")
-
-    ergebnis = analysiere_rechnung_pfad(AnalysierePfadRequest(pfad=str(datei)), db)
+    ergebnis = _analysiere("notiz.txt", b"kein Rechnungsformat", db)
 
     assert ergebnis.temp_url is None
 

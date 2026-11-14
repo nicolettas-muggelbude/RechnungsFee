@@ -14,7 +14,7 @@ import {
   getXRechnungUrl, speichereXRechnung,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
-  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad, dateiInSpeicher,
+  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, leseGedroppteDatei, dateiInSpeicher,
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
@@ -24,7 +24,6 @@ import {
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
   dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete,
-  apiFetch,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -5024,7 +5023,9 @@ function ImportDialog({
     if (f) handleDatei(f)
   }
 
-  // Tauri auf Windows: HTML5-Drop feuert nicht – stattdessen tauri://drag-drop hören
+  // Desktop-App: Tauri fängt Drops nativ ab (unter Windows kommt kein HTML5-Drop an) und liefert
+  // nur Pfade. Tauri liest die Datei, danach derselbe Weg wie bei einer ausgewählten Datei
+  // (Security-Audit F5: das Backend nimmt keine Pfade an).
   useEffect(() => {
     if (!isTauri() || schritt !== 'upload') return
     let unlisten: (() => void) | undefined
@@ -5033,27 +5034,11 @@ function ImportDialog({
       const paths = Array.isArray(payload) ? payload : (payload?.paths ?? [])
       const erlaubte = paths.filter((p: string) => /\.(pdf|xml)$/i.test(p))
       if (erlaubte.length === 0) return
-      const pfad = erlaubte[0]
-      const name = pfad.replace(/\\/g, '/').split('/').pop() ?? 'rechnung'
-      setLaedt(true)
       setLadeFehler(null)
       try {
-        const res = await analysiereRechnungPfad(pfad)
-        // Datei für Beleganhang: temp-Datei vom Backend holen - für PDF UND XML (Issue #384:
-        // reine XML-Rechnungen hatten hier bisher nie eine temp_url, "datei" blieb null und
-        // "Rechnung erstellen" tat wirkungslos nichts).
-        if (res.temp_url) {
-          const base = await getApiBase()
-          const blob = await apiFetch(`${base}${res.temp_url}`).then(r => r.blob())
-          const mime = pfad.toLowerCase().endsWith('.xml') ? 'application/xml' : 'application/pdf'
-          setDatei(new File([blob], name, { type: mime }))
-        }
-        setErgebnis(res)
-        setSchritt('ergebnis')
+        await handleDatei(await leseGedroppteDatei(erlaubte[0]))
       } catch (e: unknown) {
         setLadeFehler((e as Error).message)
-      } finally {
-        setLaedt(false)
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }

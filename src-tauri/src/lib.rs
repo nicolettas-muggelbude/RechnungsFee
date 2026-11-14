@@ -191,6 +191,48 @@ fn kill_backend(
     }
 }
 
+/// Globaler State: Pfade des letzten Drag & Drop ins Fenster (Security-Audit F5).
+///
+/// Das Backend nimmt keine Dateipfade mehr an. Gezogene Dateien liest Tauri selbst
+/// (`lese_gedroppte_datei`) und das Frontend lädt sie hoch wie eine ausgewählte Datei.
+/// Gelesen wird nur, was der Benutzer gerade wirklich ins Fenster gezogen hat – ein
+/// eingeschleustes Skript kann damit keine beliebigen Dateien von der Platte holen.
+struct GedropptePfade(Mutex<Vec<std::path::PathBuf>>);
+
+/// Dateiendungen, die ein Drop-Import verarbeitet (Rechnungsimport: pdf/xml, Bank-Import: csv/txt/xml/zip).
+const DROP_ENDUNGEN: [&str; 5] = ["pdf", "xml", "csv", "txt", "zip"];
+/// Wie MAX_UPLOAD im Backend (utils/sicherheit_middleware.py).
+const DROP_MAX_BYTES: u64 = 500 * 1024 * 1024;
+
+/// IPC-Command: Datei aus dem letzten Drag & Drop lesen (Inhalt als ArrayBuffer ans Frontend).
+#[tauri::command]
+fn lese_gedroppte_datei(
+    pfad: String,
+    state: tauri::State<GedropptePfade>,
+) -> Result<tauri::ipc::Response, String> {
+    let pfad = std::path::PathBuf::from(pfad);
+    if !state.0.lock().unwrap().iter().any(|p| p == &pfad) {
+        return Err("Diese Datei wurde nicht in die App gezogen.".into());
+    }
+    let endung = pfad
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !DROP_ENDUNGEN.contains(&endung.as_str()) {
+        return Err("Dieser Dateityp wird hier nicht unterstützt.".into());
+    }
+    let meta = std::fs::metadata(&pfad).map_err(|e| format!("Datei nicht gefunden: {e}"))?;
+    if !meta.is_file() {
+        return Err("Das ist keine Datei.".into());
+    }
+    if meta.len() > DROP_MAX_BYTES {
+        return Err("Die Datei ist zu groß.".into());
+    }
+    let daten = std::fs::read(&pfad).map_err(|e| format!("Datei konnte nicht gelesen werden: {e}"))?;
+    Ok(tauri::ipc::Response::new(daten))
+}
+
 /// IPC-Command: User hat Schließen bestätigt – Backend beenden und Fenster schließen
 #[tauri::command]
 fn write_bytes_to_path(path: String, data: Vec<u8>) -> Result<(), String> {
@@ -454,6 +496,13 @@ pub fn run() {
     let gtk_entfernt: Vec<String> = Vec::new();
 
     tauri::Builder::default()
+        .manage(GedropptePfade(Mutex::new(Vec::new())))
+        // F5: gezogene Pfade merken, bevor das Frontend sie per lese_gedroppte_datei anfragt
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                *window.state::<GedropptePfade>().0.lock().unwrap() = paths.clone();
+            }
+        })
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -655,7 +704,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster])
+        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster, lese_gedroppte_datei])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {

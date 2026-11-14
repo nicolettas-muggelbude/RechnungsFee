@@ -908,7 +908,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
     _entferne_eigene_adresse(ergebnis, db)
 
     temp_url = None
-    temp_path = None
     _temp_ext = _temp_dateiendung(datei.filename or "", datei.content_type)
     if _temp_ext:
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -917,7 +916,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
         temp_file = TEMP_DIR / f"{token}{_temp_ext}"
         temp_file.write_bytes(inhalt)
         temp_url = f"/rechnungen/temp/{token}"
-        temp_path = str(temp_file.absolute())
 
     # Lieferanten-Vorschläge per Fuzzy-Matching
     lieferant_vorschlaege: list[LieferantVorschlag] = []
@@ -965,81 +963,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
         positionen_modus=ergebnis.positionen_modus,
         warnungen=ergebnis.warnungen,
         temp_url=temp_url,
-        temp_path=temp_path,
-        lieferant_vorschlaege=lieferant_vorschlaege,
-    )
-
-
-class AnalysierePfadRequest(BaseModel):
-    pfad: str
-
-@router.post("/analysieren-pfad", response_model=AnalyseResponse)
-def analysiere_rechnung_pfad(body: AnalysierePfadRequest, db: Session = Depends(get_db)):
-    """Wie /analysieren, aber liest die Datei vom lokalen Pfad (Tauri Drag-&-Drop auf Windows)."""
-    from pathlib import Path as _Path
-    pfad = _Path(body.pfad)
-    if not pfad.exists() or not pfad.is_file():
-        raise HTTPException(status_code=400, detail="Datei nicht gefunden")
-    inhalt = pfad.read_bytes()
-    dateiname = pfad.name
-    ergebnis = analysiere_datei(dateiname, inhalt)
-    _entferne_eigene_adresse(ergebnis, db)
-
-    temp_url = None
-    temp_path = None
-    _temp_ext = _temp_dateiendung(dateiname, None)
-    if _temp_ext:
-        TEMP_DIR.mkdir(parents=True, exist_ok=True)
-        _bereinige_temp_dir()
-        token = str(uuid.uuid4())
-        temp_file = TEMP_DIR / f"{token}{_temp_ext}"
-        temp_file.write_bytes(inhalt)
-        temp_url = f"/rechnungen/temp/{token}"
-        temp_path = str(temp_file.absolute())
-
-    lieferant_vorschlaege: list[LieferantVorschlag] = []
-    erkannter_name = ergebnis.felder.get("lieferant_name", "")
-    erkannte_ust_id = ergebnis.felder.get("lieferant_ust_id", "")
-    if erkannter_name or erkannte_ust_id:
-        alle_lieferanten = db.query(Lieferant).filter(Lieferant.aktiv == True).all()
-        scored: list[tuple[float, Lieferant]] = []
-        _re_rechtsform2 = re.compile(
-            r"\b(?:GmbH|UG|AG|e\.?K\.?|KG|OHG|GbR|e\.?V\.?|Ltd|Inc|Co\.?|SE|GbR)\b",
-            re.IGNORECASE,
-        )
-        def _norm2(name: str) -> str:
-            n = _re_rechtsform2.sub("", name)
-            n = re.sub(r"[-_/\\|]", " ", n)
-            return re.sub(r"\s+", " ", n).strip().lower()
-
-        norm_erkannt2 = _norm2(erkannter_name)
-        for lief in alle_lieferanten:
-            score = 0.0
-            if erkannte_ust_id and lief.ust_idnr and erkannte_ust_id.replace(" ", "") == lief.ust_idnr.replace(" ", ""):
-                score = 1.0
-            elif erkannter_name and lief.firmenname:
-                norm_lief2 = _norm2(lief.firmenname)
-                if len(norm_erkannt2) >= 4 and (norm_erkannt2 in norm_lief2 or norm_lief2 in norm_erkannt2):
-                    score = 0.8
-                else:
-                    score = difflib.SequenceMatcher(None, norm_erkannt2, norm_lief2).ratio()
-            if score > 0.4:
-                scored.append((score, lief))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        lieferant_vorschlaege = [
-            LieferantVorschlag(id=lief.id, name=lief.firmenname, score=round(score, 2))
-            for score, lief in scored[:3]
-        ]
-
-    from .schemas_rechnungen import AnalyseFelder, AnalysePositionResponse
-    return AnalyseResponse(
-        format=ergebnis.format,
-        felder=AnalyseFelder(**ergebnis.felder, konfidenz=ergebnis.konfidenz),
-        positionen=[AnalysePositionResponse(**p.__dict__) for p in ergebnis.positionen],
-        positionen_modus=ergebnis.positionen_modus,
-        warnungen=ergebnis.warnungen,
-        temp_url=temp_url,
-        temp_path=temp_path,
         lieferant_vorschlaege=lieferant_vorschlaege,
     )
 

@@ -9,7 +9,7 @@ import {
   getBankTemplates,
   getBankTransaktionen,
   vorschauBankImport,
-  vorschauBankImportPfad,
+  leseGedroppteDatei,
   importiereBankTransaktionen,
   bucheTransaktion,
   verknuepfeBankTransaktionMitJournal,
@@ -83,7 +83,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const [vorschau, setVorschau] = useState<BankVorschauResponse | null>(null)
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set())
   const [fehler, setFehler] = useState<string | null>(null)
-  const [tauriPfad, setTauriPfad] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const geschaeftskonten = useMemo(() => konten.filter(k => k.kontotyp !== 'privat'), [konten])
@@ -123,7 +122,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     }
   }
 
-  // Tauri auf Windows: HTML5-Drop feuert nicht – stattdessen tauri://drag-drop hören
+  // Desktop-App: Tauri fängt Drops nativ ab (unter Windows kommt kein HTML5-Drop an) und liefert
+  // nur Pfade. Tauri liest die Datei, danach Upload wie bei einer ausgewählten Datei
+  // (Security-Audit F5: das Backend nimmt keine Pfade an).
   useEffect(() => {
     if (!isTauri() || schritt !== 1) return
     let unlisten: (() => void) | undefined
@@ -133,21 +134,19 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       const erlaubte = (Array.isArray(paths) ? paths : [])
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
-      const pfad = erlaubte[0]
-      const name = pfad.replace(/\\/g, '/').split('/').pop() ?? 'import.csv'
       setFehler(null)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
-      setTauriPfad(pfad)
       setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
       try {
+        const f = await leseGedroppteDatei(erlaubte[0])
+        setDatei(f)
         // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
         // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
-        const result = await vorschauBankImportPfad(pfad, undefined, undefined)
+        const result = await vorschauBankImport(f, undefined, undefined)
         if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
         setVorschau(result)
         setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-        setDatei(new File([new Blob()], name))
         if (result.konto_iban && result.erkanntes_konto_id) {
           const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
           setAnalyseStatus({
@@ -173,7 +172,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     const f = e.dataTransfer.files[0]
     if (f) {
       setDatei(f)
-      setTauriPfad(null)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setFehler(null)
@@ -183,12 +181,10 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
 
   // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
   async function ladeVorschauMitKonto(kontoId: number) {
-    if (!datei && !tauriPfad) return
+    if (!datei) return
     setFehler(null)
     try {
-      const result = tauriPfad
-        ? await vorschauBankImportPfad(tauriPfad, kontoId, templateId || undefined)
-        : await vorschauBankImport(datei!, kontoId, templateId || undefined)
+      const result = await vorschauBankImport(datei, kontoId, templateId || undefined)
       setVorschau(result)
       setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
     } catch (e: unknown) {
@@ -287,7 +283,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
-                    setTauriPfad(null)
                     setAnalyseStatus({ art: 'idle' })
                     setVorschau(null)
                     setFehler(null)
