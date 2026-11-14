@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { DsgvoMailButton } from '../../components/DsgvoMailButton'
 import { DateInput } from '../../components/DateInput'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { istEuLand } from '../../utils/laender'
@@ -1501,7 +1502,7 @@ export function KundenPage() {
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
                   <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => dsgvoExportKundePdf(editKunde.id!,
                         [editKunde.firmenname, editKunde.vorname, editKunde.nachname].filter(Boolean).join(' ') || undefined)}
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -1511,6 +1512,9 @@ export function KundenPage() {
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
                         📥 Datenauskunft (JSON)
                       </button>
+                      <DsgvoMailButton art="kunde" id={editKunde.id!}
+                        name={[editKunde.firmenname, editKunde.vorname, editKunde.nachname].filter(Boolean).join(' ')}
+                        email={editKunde.email} />
                       <button type="button" onClick={() => setShowDsgvoBestaetigung(true)}
                         className="flex-1 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-950">
                         🗑 Anonymisieren (Art. 17)

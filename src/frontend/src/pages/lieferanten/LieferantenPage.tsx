@@ -5,6 +5,7 @@ import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { LandCombobox } from '../../components/LandCombobox'
+import { DsgvoMailButton } from '../../components/DsgvoMailButton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -803,7 +804,7 @@ export function LieferantenPage() {
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
                   <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => dsgvoExportLieferantPdf(editLieferant.id!,
@@ -819,6 +820,9 @@ export function LieferantenPage() {
                       >
                         📥 Datenauskunft (JSON)
                       </button>
+                      <DsgvoMailButton art="lieferant" id={editLieferant.id!}
+                        name={editLieferant.firmenname || [editLieferant.vorname, editLieferant.nachname].filter(Boolean).join(' ')}
+                        email={editLieferant.email} />
                       <button
                         type="button"
                         onClick={() => setShowDsgvoBestaetigung(true)}

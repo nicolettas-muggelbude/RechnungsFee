@@ -141,6 +141,16 @@ def dsgvo_export(lieferant_id: int, db: Session = Depends(get_db)):
 @router.get("/{lieferant_id}/dsgvo-export-pdf")
 def dsgvo_export_pdf(lieferant_id: int, db: Session = Depends(get_db)):
     """DSGVO Art. 15: Datenauskunft als lesbare PDF-Datei."""
+    pdf_bytes, filename = dsgvo_pdf_lieferant(lieferant_id, db)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def dsgvo_pdf_lieferant(lieferant_id: int, db: Session) -> tuple[bytes, str]:
+    """Datenauskunft-PDF + Dateiname – gemeinsam für Ansicht und Mailversand (Issue #526)."""
     lieferant = db.query(Lieferant).filter(Lieferant.id == lieferant_id).first()
     if not lieferant:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden.")
@@ -182,12 +192,7 @@ def dsgvo_export_pdf(lieferant_id: int, db: Session = Depends(get_db)):
     ]
 
     pdf_bytes = generate_dsgvo_pdf(stammdaten, rechnungen_dicts, None, "Lieferant")
-    filename = f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
+    return pdf_bytes, f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
 
 
 @router.post("/{lieferant_id}/anonymisieren")

@@ -46,6 +46,9 @@ class MailSendenRequest(BaseModel):
     rechnung_id: Optional[int] = None
     dokumentenpaket_id: Optional[int] = None
     mahnung_id: Optional[int] = None
+    # Datenauskunft nach Art. 15 DSGVO als Anhang (Issue #526)
+    dsgvo_kunde_id: Optional[int] = None
+    dsgvo_lieferant_id: Optional[int] = None
 
 
 class TestMailRequest(BaseModel):
@@ -312,8 +315,15 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         # über diesen Endpunkt laufen.
         attachments.extend(sammle_mahnung_anhaenge(db, mahnung))
 
+    if req.dsgvo_kunde_id:
+        from api.kunden import dsgvo_pdf_kunde
+        attachments.append(dsgvo_pdf_kunde(req.dsgvo_kunde_id, db))
+    if req.dsgvo_lieferant_id:
+        from api.lieferanten import dsgvo_pdf_lieferant
+        attachments.append(dsgvo_pdf_lieferant(req.dsgvo_lieferant_id, db))
+
     if req.dokumentenpaket_id:
-        paket = db.query(DokumentenPaket).filter(DokumentenPaket.id == req.dokumentenpaket_id).first()
+        paket =db.query(DokumentenPaket).filter(DokumentenPaket.id == req.dokumentenpaket_id).first()
         if paket:
             for eintrag in sorted(paket.dateien, key=lambda e: e.sort_order):
                 pfad = APP_DATA_DIR / "uploads" / eintrag.beleg.dateiname

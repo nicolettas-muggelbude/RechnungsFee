@@ -2435,6 +2435,8 @@ export type MailSendenRequest = {
   rechnung_id?: number
   dokumentenpaket_id?: number
   mahnung_id?: number
+  dsgvo_kunde_id?: number
+  dsgvo_lieferant_id?: number
 }
 
 export const sendeMailMitAnhang = (data: MailSendenRequest) =>

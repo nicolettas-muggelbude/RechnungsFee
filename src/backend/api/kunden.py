@@ -185,6 +185,16 @@ def dsgvo_export(kunde_id: int, db: Session = Depends(get_db)):
 @router.get("/{kunde_id}/dsgvo-export-pdf")
 def dsgvo_export_pdf(kunde_id: int, db: Session = Depends(get_db)):
     """DSGVO Art. 15: Datenauskunft als lesbare PDF-Datei."""
+    pdf_bytes, filename = dsgvo_pdf_kunde(kunde_id, db)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def dsgvo_pdf_kunde(kunde_id: int, db: Session) -> tuple[bytes, str]:
+    """Datenauskunft-PDF + Dateiname – gemeinsam für Ansicht und Mailversand (Issue #526)."""
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
     if not kunde:
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
@@ -236,12 +246,7 @@ def dsgvo_export_pdf(kunde_id: int, db: Session = Depends(get_db)):
     ]
 
     pdf_bytes = generate_dsgvo_pdf(stammdaten, rechnungen_dicts, journal_dicts, "Kunde")
-    filename = f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
+    return pdf_bytes, f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
 
 
 @router.post("/{kunde_id}/anonymisieren")
