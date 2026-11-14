@@ -255,30 +255,53 @@ fn pdf_download(webview: tauri::Webview, event: tauri::webview::DownloadEvent<'_
     use tauri::webview::DownloadEvent;
     use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
     let app = webview.app_handle();
+    let ordner = || {
+        app.path()
+            .download_dir()
+            .ok()
+            .filter(|p| p.is_dir())
+            .or_else(|| app.path().home_dir().ok())
+            .unwrap_or_else(std::env::temp_dir)
+    };
     match event {
+        // Greift nicht immer: beim Speichern-Symbol des PDF-Betrachters legt WebKitGTK das Ziel
+        // selbst fest (Startordner, „document.pdf“) – dann korrigiert der Finished-Zweig.
         DownloadEvent::Requested { url, destination } => {
-            let ordner = app
-                .path()
-                .download_dir()
-                .ok()
-                .filter(|p| p.is_dir())
-                .or_else(|| app.path().home_dir().ok())
-                .unwrap_or_else(std::env::temp_dir);
-            *destination = freier_pfad(&ordner, &pdf_dateiname_aus_url(&url));
-            log::info!("PDF speichern: {}", destination.display());
+            *destination = freier_pfad(&ordner(), &pdf_dateiname_aus_url(&url));
+            log::info!("PDF speichern: Ziel {}", destination.display());
             true
         }
-        DownloadEvent::Finished { path, success, .. } => {
-            let (text, art) = match (success, path) {
+        DownloadEvent::Finished { url, path, success } => {
+            let endpfad = match (success, path) {
+                (true, Some(p)) => Some(verschiebe_download(&p, &ordner(), &pdf_dateiname_aus_url(&url))),
+                _ => None,
+            };
+            let (text, art) = match (success, &endpfad) {
                 (true, Some(p)) => (format!("Gespeichert unter:\n{}", p.display()), MessageDialogKind::Info),
                 (true, None) => ("Die Datei wurde gespeichert.".to_string(), MessageDialogKind::Info),
                 _ => ("Die Datei konnte nicht gespeichert werden.".to_string(), MessageDialogKind::Error),
             };
+            log::info!("PDF speichern: {text}");
             app.dialog().message(text).title("PDF speichern").kind(art).show(|_| {});
             true
         }
         _ => true,
     }
+}
+
+/// Fertigen Download in den Zielordner unter dem gewünschten Namen bringen, falls WebKitGTK ihn
+/// woanders bzw. als „document.pdf“ abgelegt hat. Liegt er schon richtig oder schlägt das
+/// Verschieben fehl, bleibt er, wo er ist (Rückgabe: tatsächlicher Ort).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn verschiebe_download(ist: &std::path::Path, ordner: &std::path::Path, dateiname: &str) -> std::path::PathBuf {
+    if ist.parent() == Some(ordner) && ist.file_name().and_then(|n| n.to_str()) == Some(dateiname) {
+        return ist.to_path_buf();
+    }
+    let ziel = freier_pfad(ordner, dateiname);
+    let ok = std::fs::rename(ist, &ziel).is_ok()
+        // anderes Dateisystem: kopieren und Original entfernen
+        || (std::fs::copy(ist, &ziel).is_ok() && std::fs::remove_file(ist).is_ok());
+    if ok { ziel } else { ist.to_path_buf() }
 }
 
 /// IPC-Command: PDF/Dokument des lokalen Backends in eigenem Fenster öffnen (Issue #544).
@@ -311,7 +334,27 @@ async fn oeffne_pdf_fenster(app: tauri::AppHandle, url: String, titel: String) -
 
 #[cfg(test)]
 mod tests {
-    use super::{freier_pfad, pdf_dateiname_aus_url};
+    use super::{freier_pfad, pdf_dateiname_aus_url, verschiebe_download};
+
+    #[test]
+    fn download_wird_umbenannt_und_verschoben() {
+        let basis = std::env::temp_dir().join(format!("rf-dl-{}", std::process::id()));
+        let start = basis.join("start");
+        let ziel = basis.join("ziel");
+        std::fs::create_dir_all(&start).unwrap();
+        std::fs::create_dir_all(&ziel).unwrap();
+        let doc = start.join("document.pdf");
+        std::fs::write(&doc, b"%PDF").unwrap();
+        let ende = verschiebe_download(&doc, &ziel, "Rechnung_RE-1.pdf");
+        assert_eq!(ende, ziel.join("Rechnung_RE-1.pdf"));
+        assert!(!doc.exists() && ende.exists());
+        // schon richtig: bleibt
+        assert_eq!(verschiebe_download(&ende, &ziel, "Rechnung_RE-1.pdf"), ende);
+        // zweite Datei gleichen Namens wird nummeriert
+        std::fs::write(&doc, b"%PDF").unwrap();
+        assert_eq!(verschiebe_download(&doc, &ziel, "Rechnung_RE-1.pdf"), ziel.join("Rechnung_RE-1 (2).pdf"));
+        std::fs::remove_dir_all(&basis).unwrap();
+    }
 
     fn name(url: &str) -> String {
         pdf_dateiname_aus_url(&url.parse().unwrap())
