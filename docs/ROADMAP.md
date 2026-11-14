@@ -210,6 +210,20 @@ offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
 - Eigenes Release, da Geldflüsse an vielen Stellen betroffen; Backend-lastig, daher nicht von der
   Oberflächen-Zurückstellung bis v0.8.0 erfasst
 
+### Umbuchung zwischen eigenen Konten (Geldtransit) – Community-Frage Pascal, 2026-11-14
+
+Heute: Umbuchungen (z. B. Geschäftskonto → Rücklagenkonto für die USt) werden im Bank-Import auf
+beiden Seiten „Ignoriert“ (#379) – erfolgsneutral, aber ohne Buchung. Folge im DATEV-Export: die
+Salden der beiden Bankkonten weichen von den Kontoauszügen ab. Gleiche Bauart wie das
+Verrechnungskonto oben, daher gemeinsam angehen.
+
+- [ ] Im Bank-Import „Umbuchung“ statt nur „Ignorieren“: erfolgsneutrale Buchung Bank → Geldtransit
+  (SKR03 1360 / SKR04 1460, am DATEV-Kontenrahmen 2026 prüfen) und Geldtransit → Zielkonto
+  (`konten.datev_kontonummer` je Konto, Migration 110)
+- [ ] Gegenstück auf dem anderen Konto vorschlagen (gleicher Betrag mit umgekehrtem Vorzeichen, Datum
+  ± wenige Tage), damit beide Seiten zusammen gebucht werden und der Transitsaldo 0 ergibt
+- [ ] EÜR/UStVA/Cockpit unberührt; bereits ignorierte Umbuchungen bleiben wie sie sind
+
 ## 📋 v0.7.8 – vorgemerkt
 
 - [x] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480,
