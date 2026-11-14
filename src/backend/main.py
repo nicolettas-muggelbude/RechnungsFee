@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 185
+SCHEMA_VERSION = 186
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4237,6 +4237,23 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 185"))
             conn.commit()
             print("[Migration] Schema auf Version 185 (Issue #495: kunden_lieferadressen.name)")
+
+    if version < 186:
+        # Issue #534-Folgefund: ZUGFeRD-Automatik (Firmenname + USt-IdNr./Steuernummer) lief nur
+        # im Kundenformular - per CSV-Datenübernahme angelegte Kunden hatten zugferd_aktiv=0,
+        # obwohl das Formular den Schalter bei denselben Daten fest einschaltet.
+        with engine.connect() as conn:
+            k186 = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            n = 0
+            if {"zugferd_aktiv", "firmenname", "ust_idnr"} <= k186:
+                n = conn.execute(text(
+                    "UPDATE kunden SET zugferd_aktiv = 1 "
+                    "WHERE COALESCE(zugferd_aktiv, 0) = 0 "
+                    "AND TRIM(COALESCE(firmenname, '')) <> '' AND TRIM(COALESCE(ust_idnr, '')) <> ''"
+                )).rowcount
+            conn.execute(text("PRAGMA user_version = 186"))
+            conn.commit()
+            print(f"[Migration] Schema auf Version 186 (Issue #534: ZUGFeRD-Automatik für {n} Kunden nachgezogen)")
 
 
 def _migrate_kategorien() -> None:

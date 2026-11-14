@@ -41,9 +41,18 @@ def list_kunden(nur_aktive: bool = True, db: Session = Depends(get_db)):
     return q.order_by(Kunde.firmenname, Kunde.nachname).all()
 
 
+def zugferd_automatisch(firmenname: str | None, ust_idnr: str | None) -> bool:
+    """ZUGFeRD-Automatik wie im Kundenformular (KundenPage.tsx zugferdAutoAktiv): Firmenname
+    und USt-IdNr./Steuernummer vorhanden → E-Rechnung immer an. Ohne beides bleibt der
+    Schalter frei wählbar (Issue #534: galt bisher nur im Frontend, nicht für CSV-Import)."""
+    return bool((firmenname or "").strip() and (ust_idnr or "").strip())
+
+
 @router.post("", response_model=KundeResponse, status_code=201)
 def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
     kunde_data = data.model_dump()
+    if zugferd_automatisch(kunde_data.get("firmenname"), kunde_data.get("ust_idnr")):
+        kunde_data["zugferd_aktiv"] = True
     for key in ("anrede", "anrede_individuell"):
         kunde_data[key] = (kunde_data.get(key) or "").strip() or None
     if not kunde_data.get("kundennummer"):
@@ -930,6 +939,8 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
         if key in ("anrede", "anrede_individuell"):
             value = (value or "").strip() or None
         setattr(kunde, key, value)
+    if zugferd_automatisch(kunde.firmenname, kunde.ust_idnr):
+        kunde.zugferd_aktiv = True
     db.commit()
     db.refresh(kunde)
     return kunde
