@@ -94,6 +94,9 @@ export async function openUrl(url: string) {
     return
   }
   if (isTauri()) {
+    // Dev-Modus: Basis ist relativ (/api über den Vite-Proxy) – sonst landete die Adresse bei
+    // open_url und scheiterte still (Berichts-PDFs öffneten unter tauri:dev gar nicht)
+    if (url.startsWith('/')) url = new URL(url, window.location.href).toString()
     const isLocal = url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')
       || url.startsWith('blob:')
     if (isLocal) {
