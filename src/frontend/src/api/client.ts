@@ -1131,15 +1131,8 @@ export async function downloadBackup(): Promise<string> {
   const filename = match?.[1] ?? 'rechnungsfee_backup.db'
 
   if (isTauri()) {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const { invoke } = await import('@tauri-apps/api/core')
-    const savePath = await save({
-      defaultPath: filename,
-      filters: [{ name: 'ZIP-Archiv', extensions: ['zip'] }],
-    })
+    const savePath = await _speichernUnter(blob, filename, 'ZIP-Archiv', ['zip'])
     if (!savePath) return '' // Abgebrochen
-    const data = Array.from(new Uint8Array(await blob.arrayBuffer()))
-    await invoke('write_bytes_to_path', { path: savePath, data })
     return savePath.split(/[\\/]/).pop() ?? filename
   }
 
@@ -1173,23 +1166,23 @@ export const wiederherstellenLokal = (dateiname: string) =>
     body: JSON.stringify({ dateiname }),
   })
 
+/** Tauri: nativer Speichern-Dialog und Schreiben in einem Schritt in Rust (speichern_unter,
+ *  Security-Audit F12) – das Frontend kann selbst keinen Zielpfad mehr vorgeben.
+ *  Rückgabe: gewählter Pfad, null = abgebrochen. */
+async function _speichernUnter(blob: Blob, dateiname: string, filterName: string | null, endungen: string[]): Promise<string | null> {
+  const data = Array.from(new Uint8Array(await blob.arrayBuffer()))
+  return invoke<string | null>('speichern_unter', { dateiname, filterName, endungen, data })
+}
+
 /** Speichert einen Blob als Datei - unter Tauri über den nativen Speichern-Dialog
- *  (@tauri-apps/plugin-dialog + write_bytes_to_path), sonst über <a download>.
+ *  (_speichernUnter), sonst über <a download>.
  *  Der <a download>-Weg ist unter Linux (WebKitGTK) nicht zuverlässig verdrahtet - der Klick
  *  löst dort keinen sichtbaren Download aus (unter Windows/WebView2 schon), deshalb der
  *  Tauri-Zweig für alle Plattformen einheitlich über den nativen Dialog. */
 async function _triggerBlobDownload(blob: Blob, filename: string) {
   if (isTauri()) {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const { invoke } = await import('@tauri-apps/api/core')
     const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : undefined
-    const savePath = await save({
-      defaultPath: filename,
-      filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined,
-    })
-    if (!savePath) return // Abgebrochen
-    const data = Array.from(new Uint8Array(await blob.arrayBuffer()))
-    await invoke('write_bytes_to_path', { path: savePath, data })
+    await _speichernUnter(blob, filename, ext ? ext.toUpperCase() : null, ext ? [ext] : [])
     return
   }
 

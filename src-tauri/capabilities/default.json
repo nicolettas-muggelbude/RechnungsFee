@@ -25,7 +25,6 @@
     "process:allow-restart",
     "process:allow-exit",
     "dialog:allow-open",
-    "dialog:allow-save",
     "window-state:default"
   ]
 }

@@ -233,10 +233,67 @@ fn lese_gedroppte_datei(
     Ok(tauri::ipc::Response::new(daten))
 }
 
-/// IPC-Command: User hat Schließen bestätigt – Backend beenden und Fenster schließen
+/// IPC-Command: Datei über den nativen Speichern-Dialog sichern (Security-Audit F12).
+///
+/// Ersetzt `write_bytes_to_path`, das an jeden beliebigen Pfad schreiben konnte. Den Pfad
+/// wählt jetzt ausschließlich der Benutzer im Dialog, den Rust selbst öffnet – das Frontend
+/// liefert nur Vorschlagsname, Filter und Inhalt. Rückgabe: gewählter Pfad, None = abgebrochen.
+/// `async`, weil der blockierende Dialog nicht auf dem Hauptthread laufen darf.
 #[tauri::command]
-fn write_bytes_to_path(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, &data).map_err(|e| e.to_string())
+async fn speichern_unter(
+    app: tauri::AppHandle,
+    dateiname: String,
+    filter_name: Option<String>,
+    endungen: Vec<String>,
+    data: Vec<u8>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut dialog = app.dialog().file().set_file_name(&dateiname);
+    if !endungen.is_empty() {
+        let endungen: Vec<&str> = endungen.iter().map(String::as_str).collect();
+        dialog = dialog.add_filter(filter_name.unwrap_or_default(), &endungen);
+    }
+    let Some(ziel) = dialog.blocking_save_file() else {
+        return Ok(None);
+    };
+    let pfad = ziel.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(&pfad, &data).map_err(|e| format!("Datei konnte nicht gespeichert werden: {e}"))?;
+    Ok(Some(pfad.to_string_lossy().into_owned()))
+}
+
+/// Dateiname für einen Temp-Anhang: nur der Name, ohne Pfadtrenner und ohne Zeichen, die im
+/// Thunderbird-`-compose`-Argument Feldgrenzen markieren (siehe Validator in capabilities).
+fn temp_anhang_name(dateiname: &str) -> String {
+    let name: String = dateiname
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | '\'' | ',' | ':') || c.is_control() { '_' } else { c })
+        .collect();
+    let name = name.trim().trim_start_matches('.');
+    format!("rechnungsfee_{}", if name.is_empty() { "anhang" } else { name })
+}
+
+/// IPC-Command: Mailanhang für Thunderbird ins Temp-Verzeichnis schreiben (Security-Audit F12).
+/// Schreibt nur `rechnungsfee_<name>` direkt in den Temp-Ordner, gibt den Pfad zurück.
+#[tauri::command]
+fn schreibe_temp_anhang(dateiname: String, data: Vec<u8>) -> Result<String, String> {
+    let pfad = std::env::temp_dir().join(temp_anhang_name(&dateiname));
+    std::fs::write(&pfad, &data).map_err(|e| format!("Anhang konnte nicht geschrieben werden: {e}"))?;
+    Ok(pfad.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::temp_anhang_name;
+
+    #[test]
+    fn temp_anhang_bleibt_im_temp_ordner() {
+        assert_eq!(temp_anhang_name("Rechnung_RE-26/001.pdf"), "rechnungsfee_Rechnung_RE-26_001.pdf");
+        assert_eq!(temp_anhang_name("../../.ssh/id_ed25519"), "rechnungsfee__.._.ssh_id_ed25519");
+        assert_eq!(temp_anhang_name(r"C:\Windows\x.dll"), "rechnungsfee_C__Windows_x.dll");
+        assert_eq!(temp_anhang_name("Müller, Anna's Auskunft.pdf"), "rechnungsfee_Müller_ Anna_s Auskunft.pdf");
+        assert_eq!(temp_anhang_name(""), "rechnungsfee_anhang");
+        assert_eq!(temp_anhang_name("..."), "rechnungsfee_anhang");
+    }
 }
 
 #[tauri::command]
@@ -704,7 +761,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster, lese_gedroppte_datei])
+        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster, lese_gedroppte_datei, speichern_unter, schreibe_temp_anhang])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
