@@ -64,13 +64,19 @@ function escapeThunderbirdFeld(wert: string): string {
  *  legt keine Ordner an, und tempDir() existiert auf allen drei Betriebssystemen bereits).
  *  Präfix "rechnungsfee_" macht die Datei im geteilten Temp-Verzeichnis erkennbar. Bewusst
  *  ohne Aufräum-Logik: derselbe Dateiname wird beim nächsten Versand desselben Dokuments
- *  einfach überschrieben, es sammelt sich also nichts nennenswert an. */
+ *  einfach überschrieben, es sammelt sich also nichts nennenswert an.
+ *
+ *  Security-Audit F12: Der -compose-Validator (capabilities/default.json) lässt als Anhang nur
+ *  `rechnungsfee_…` direkt im Temp-Ordner zu, ohne / \ ' , im Namen. Diese Zeichen werden hier
+ *  ersetzt – ein / in der Rechnungsnummer hätte sonst einen nicht existierenden Unterordner
+ *  ergeben. */
 async function schreibeTempDatei(url: string, dateiname: string): Promise<string> {
   const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Anhang konnte nicht geladen werden: ${res.status}`)
   const bytes = new Uint8Array(await res.arrayBuffer())
 
-  const pfad = await join(await tempDir(), `rechnungsfee_${dateiname}`)
+  const name = dateiname.replace(/[/\\',]/g, '_')
+  const pfad = await join(await tempDir(), `rechnungsfee_${name}`)
   await invoke('write_bytes_to_path', { path: pfad, data: Array.from(bytes) })
   return pfad
 }

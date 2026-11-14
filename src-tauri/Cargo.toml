@@ -31,5 +31,9 @@ tauri-plugin-window-state = "2"
 portpicker = "0.1"
 getrandom = "0.2"
 
+[dev-dependencies]
+# Test des Thunderbird--compose-Validators mit derselben Engine wie tauri-plugin-shell
+regex = "1"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2", features = ["v2_40"] }
