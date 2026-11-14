@@ -23,6 +23,7 @@ from .schemas import KundeCreate, KundeUpdate, KundeResponse
 from .schemas_rechnungen import BelegResponse
 from utils.pdf_dsgvo import generate_dsgvo_pdf
 from utils.pdf_kontokorrent import erstelle_kontokorrent_pdf
+from utils.leitweg_id import leitweg_id_fehler, normalisiere_leitweg_id
 
 _BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 _ERLAUBTE_MIME = {"application/pdf", "image/jpeg", "image/png", "image/tiff", "image/webp",
@@ -41,9 +42,37 @@ def list_kunden(nur_aktive: bool = True, db: Session = Depends(get_db)):
     return q.order_by(Kunde.firmenname, Kunde.nachname).all()
 
 
+def zugferd_automatisch(firmenname: str | None, ust_idnr: str | None) -> bool:
+    """ZUGFeRD-Automatik wie im Kundenformular (KundenPage.tsx zugferdAutoAktiv): Firmenname
+    und USt-IdNr./Steuernummer vorhanden → E-Rechnung immer an. Ohne beides bleibt der
+    Schalter frei wählbar (Issue #534: galt bisher nur im Frontend, nicht für CSV-Import)."""
+    return bool((firmenname or "").strip() and (ust_idnr or "").strip())
+
+
+def pruefe_oeffentlicher_auftraggeber(daten: dict) -> None:
+    """Issue #530: Pflichtangaben für öffentliche Auftraggeber (XRechnung) – Leitweg-ID gültig,
+    E-Mail vorhanden (BT-49 elektronische Adresse des Käufers). Normalisiert die Leitweg-ID und
+    schaltet ZUGFeRD/E-Rechnung ein. Ohne Schalter bleibt alles wie bisher."""
+    daten["leitweg_id"] = normalisiere_leitweg_id(daten.get("leitweg_id"))
+    if not daten.get("oeffentlicher_auftraggeber"):
+        return
+    fehler = []
+    lw = leitweg_id_fehler(daten.get("leitweg_id"))
+    if lw:
+        fehler.append(lw)
+    if not (daten.get("email") or "").strip():
+        fehler.append("Öffentliche Auftraggeber brauchen eine E-Mail-Adresse (Pflicht in der XRechnung).")
+    if fehler:
+        raise HTTPException(status_code=422, detail=" ".join(fehler))
+    daten["zugferd_aktiv"] = True
+
+
 @router.post("", response_model=KundeResponse, status_code=201)
 def create_kunde(data: KundeCreate, db: Session = Depends(get_db)):
     kunde_data = data.model_dump()
+    if zugferd_automatisch(kunde_data.get("firmenname"), kunde_data.get("ust_idnr")):
+        kunde_data["zugferd_aktiv"] = True
+    pruefe_oeffentlicher_auftraggeber(kunde_data)
     for key in ("anrede", "anrede_individuell"):
         kunde_data[key] = (kunde_data.get(key) or "").strip() or None
     if not kunde_data.get("kundennummer"):
@@ -176,6 +205,16 @@ def dsgvo_export(kunde_id: int, db: Session = Depends(get_db)):
 @router.get("/{kunde_id}/dsgvo-export-pdf")
 def dsgvo_export_pdf(kunde_id: int, db: Session = Depends(get_db)):
     """DSGVO Art. 15: Datenauskunft als lesbare PDF-Datei."""
+    pdf_bytes, filename = dsgvo_pdf_kunde(kunde_id, db)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def dsgvo_pdf_kunde(kunde_id: int, db: Session) -> tuple[bytes, str]:
+    """Datenauskunft-PDF + Dateiname – gemeinsam für Ansicht und Mailversand (Issue #526)."""
     kunde = db.query(Kunde).filter(Kunde.id == kunde_id).first()
     if not kunde:
         raise HTTPException(status_code=404, detail="Kunde nicht gefunden.")
@@ -227,12 +266,7 @@ def dsgvo_export_pdf(kunde_id: int, db: Session = Depends(get_db)):
     ]
 
     pdf_bytes = generate_dsgvo_pdf(stammdaten, rechnungen_dicts, journal_dicts, "Kunde")
-    filename = f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
+    return pdf_bytes, f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
 
 
 @router.post("/{kunde_id}/anonymisieren")
@@ -277,6 +311,20 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     db.delete(kunde)
     db.commit()
 
+    # Seit #25 (Lieferadressen) stand dieser Block versehentlich in delete_lieferadresse() –
+    # die Anonymisierung lieferte null (keine Bestätigung, kein GoBD-Hinweis), das Löschen einer
+    # Lieferadresse brach nach dem Commit mit NameError (500) ab.
+    return {
+        "anonymisierte_buchungen": len(mutable),
+        "anonymisierte_rechnungen": len(rechnungen),
+        "unveraenderlich_verblieben": immutable_anzahl,
+        "hinweis": (
+            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
+            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
+            if immutable_anzahl else ""
+        ),
+    }
+
 
 @router.get("/{kunde_id}/mahnungen")
 def kunde_mahnungen(kunde_id: int, db: Session = Depends(get_db)):
@@ -316,24 +364,28 @@ def kunde_mahnungen(kunde_id: int, db: Session = Depends(get_db)):
 
 class LieferadresseCreate(BaseModel):
     bezeichnung: Optional[str] = None
+    name: Optional[str] = None  # Issue #495: leer = Name/Firma aus den Stammdaten
     z_hd: Optional[str] = None
     strasse: Optional[str] = None
     hausnummer: Optional[str] = None
     plz: Optional[str] = None
     ort: Optional[str] = None
     land: str = "DE"
+    email: Optional[str] = None  # Issue #495
     ist_standard: bool = False
 
 class LieferadresseResponse(BaseModel):
     id: int
     kunde_id: int
     bezeichnung: Optional[str] = None
+    name: Optional[str] = None
     z_hd: Optional[str] = None
     strasse: Optional[str] = None
     hausnummer: Optional[str] = None
     plz: Optional[str] = None
     ort: Optional[str] = None
     land: str
+    email: Optional[str] = None
     ist_standard: bool
     model_config = {"from_attributes": True}
 
@@ -383,19 +435,16 @@ def delete_lieferadresse(kunde_id: int, la_id: int, db: Session = Depends(get_db
     ).first()
     if not la:
         raise HTTPException(404, "Lieferadresse nicht gefunden.")
+    # Fremdschlüssel aus Dokumenten (Lieferort, Issue #495 auch Empfänger) – sonst IntegrityError (500)
+    from database.models import Rechnung
+    genutzt = db.query(Rechnung.rechnungsnummer).filter(
+        (Rechnung.lieferadresse_id == la_id) | (Rechnung.empfaenger_adresse_id == la_id)
+    ).limit(3).all()
+    if genutzt:
+        nummern = ", ".join(n for (n,) in genutzt if n) or "Entwürfe"
+        raise HTTPException(409, f"Die Adresse wird in Dokumenten verwendet ({nummern}) und kann nicht gelöscht werden.")
     db.delete(la)
     db.commit()
-
-    return {
-        "anonymisierte_buchungen": len(mutable),
-        "anonymisierte_rechnungen": len(rechnungen),
-        "unveraenderlich_verblieben": immutable_anzahl,
-        "hinweis": (
-            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
-            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
-            if immutable_anzahl else ""
-        ),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -883,7 +932,7 @@ def kontokorrent_mail(
         empfaenger.append(data.cc)
     msg = _build_message(unt, data.an, data.cc, data.betreff, data.text,
                          attachments=[(pdf_bytes, dateiname)])
-    _sende(unt, msg, empfaenger)
+    _sende(unt, msg, empfaenger, db)  # db fehlte seit #336 (TypeError → „Failed to fetch“, #537)
     return {"ok": True}
 
 
@@ -915,6 +964,18 @@ def update_kunde(kunde_id: int, data: KundeUpdate, db: Session = Depends(get_db)
         if key in ("anrede", "anrede_individuell"):
             value = (value or "").strip() or None
         setattr(kunde, key, value)
+    if zugferd_automatisch(kunde.firmenname, kunde.ust_idnr):
+        kunde.zugferd_aktiv = True
+    pruef = {"oeffentlicher_auftraggeber": kunde.oeffentlicher_auftraggeber,
+             "leitweg_id": kunde.leitweg_id, "email": kunde.email}
+    try:
+        pruefe_oeffentlicher_auftraggeber(pruef)
+    except HTTPException:
+        db.rollback()
+        raise
+    kunde.leitweg_id = pruef["leitweg_id"]
+    if pruef.get("zugferd_aktiv"):
+        kunde.zugferd_aktiv = True
     db.commit()
     db.refresh(kunde)
     return kunde

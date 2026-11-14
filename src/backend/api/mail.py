@@ -1,6 +1,7 @@
 """
 Mail-Versand via SMTP – Rechnungen, Angebote, Proforma, Aufträge.
 """
+import base64
 import hashlib
 import socket
 import ssl
@@ -19,10 +20,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import Unternehmen, Rechnung, DokumentenPaket, KundeLieferadresse
+from database.models import Unternehmen, Rechnung, DokumentenPaket
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
-from utils.zugferd import generate_zugferd_pdf
+from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
+from utils.mailfelder import bereinige_mailfeld, ist_ascii
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
     MailTLSConfigurationError,
@@ -46,6 +48,9 @@ class MailSendenRequest(BaseModel):
     rechnung_id: Optional[int] = None
     dokumentenpaket_id: Optional[int] = None
     mahnung_id: Optional[int] = None
+    # Datenauskunft nach Art. 15 DSGVO als Anhang (Issue #526)
+    dsgvo_kunde_id: Optional[int] = None
+    dsgvo_lieferant_id: Optional[int] = None
 
 
 class TestMailRequest(BaseModel):
@@ -81,11 +86,6 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
     u = db.query(Unternehmen).first()
     unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
 
-    if r.lieferadresse_id:
-        r._lieferadresse = db.query(KundeLieferadresse).filter(
-            KundeLieferadresse.id == r.lieferadresse_id
-        ).first()
-
     _dok = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
     if _dok == "Auftrag":
         angebot = db.query(Rechnung).filter(
@@ -97,9 +97,13 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
     # Netto- oder Bruttorechnung: entscheidet r.eingabemodus (Issue #332), nicht kunde.zugferd_aktiv
     # - sonst interpretiert das PDF den gespeicherten Einzelpreis falsch (siehe rechnungen.py).
     ist_netto = r.typ == "ausgang" and r.eingabemodus == "netto"
+    # ZUGFeRD per Kunden-Schalter, nicht per Netto-Modus (Issue #534, siehe rechnungen.py)
     kunde_zugferd = (
-        not r.ist_entwurf and ist_netto and _dok == "Rechnung"
+        not r.ist_entwurf and r.typ == "ausgang" and _dok in ("Rechnung", "Abschlagsrechnung")
+        and r.kunde is not None and bool(r.kunde.zugferd_aktiv)
         and u and (u.steuernummer or u.ust_idnr)
+        # Issue #530: öffentlicher Auftraggeber – XML geht als eigene Datei mit, PDF = Sichtkopie
+        and not ist_oeffentlicher_auftraggeber(r)
     )
 
     _ist_storno_mail = getattr(r, "storniert", False) and _dok == "Rechnung"
@@ -122,7 +126,7 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
 
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(r, unt_dict)
+            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)
         except Exception:
             pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
     elif u and u.pdf_vorlage == 1:
@@ -153,7 +157,16 @@ def _build_message(
     attachments: list[tuple[bytes, str]],
 ) -> MIMEMultipart:
     msg = MIMEMultipart("mixed")
-    von_adresse = u.smtp_von_adresse or u.smtp_user or ""
+    # Issue #537: unsichtbare Zeichen (auch in schon gespeicherten Altwerten) entfernen; echte
+    # Umlaute in der Adresse kann SMTP ohne SMTPUTF8 nicht übertragen → verständliche Meldung
+    von_adresse = bereinige_mailfeld(u.smtp_von_adresse or u.smtp_user or "")
+    if not ist_ascii(von_adresse):
+        raise HTTPException(
+            400,
+            f"Die Absenderadresse „{von_adresse}“ enthält Sonderzeichen (z. B. Umlaute), die der "
+            "SMTP-Versand nicht übertragen kann. Bitte unter Einstellungen → Unternehmen → E-Mail "
+            "die Absenderadresse prüfen und ggf. neu eintippen.",
+        )
     msg["From"] = formataddr((u.firmenname or "", von_adresse))
     msg["To"] = an
     if cc:
@@ -222,8 +235,35 @@ def _pruefe_gepinntes_zertifikat(u: Unternehmen, srv, db: Session) -> None:
         )
 
 
+def _smtp_login(srv: smtplib.SMTP, user: str, passwort: str) -> None:
+    """Anmeldung – smtplib überträgt Benutzer/Passwort nur als ASCII. Enthält das Passwort
+    Umlaute, €, § o. Ä., warf das einen UnicodeEncodeError (Issue #537: „Failed to fetch“).
+    Dann AUTH PLAIN mit UTF-8 wie Thunderbird (RFC 4616 sieht UTF-8 vor)."""
+    try:
+        srv.login(user, passwort)
+        return
+    except UnicodeEncodeError:
+        pass
+    srv.ehlo_or_helo_if_needed()
+    if not srv.has_extn("auth"):
+        raise smtplib.SMTPNotSupportedError("Der Server bietet keine Anmeldung (AUTH) an.")
+    token = base64.b64encode(f"\0{user}\0{passwort}".encode("utf-8")).decode("ascii")
+    code, antwort = srv.docmd("AUTH", "PLAIN " + token)
+    if code not in (235, 503):  # 503 = bereits angemeldet
+        raise smtplib.SMTPAuthenticationError(code, antwort)
+
+
 def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
     port = u.smtp_port or 587
+    host = bereinige_mailfeld(u.smtp_host) or ""
+    user = bereinige_mailfeld(u.smtp_user) or ""
+    for feld, wert in (("SMTP-Server", host), ("SMTP-Benutzer", user)):
+        if not ist_ascii(wert):
+            raise HTTPException(
+                400,
+                f"{feld} „{wert}“ enthält Sonderzeichen (z. B. Umlaute), die SMTP nicht übertragen "
+                "kann. Bitte unter Einstellungen → Unternehmen → E-Mail prüfen und ggf. neu eintippen.",
+            )
     try:
         ctx = create_mail_tls_context(public_cas=not u.smtp_zertifikat_ignorieren)
     except MailTLSConfigurationError as e:
@@ -236,20 +276,27 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
         ctx.verify_mode = ssl.CERT_NONE
     try:
         if u.smtp_ssl:
-            with smtplib.SMTP_SSL(u.smtp_host, port, context=ctx, timeout=15) as srv:
+            with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as srv:
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                srv.login(u.smtp_user, u.smtp_passwort)
+                _smtp_login(srv, user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
-            with smtplib.SMTP(u.smtp_host, port, timeout=15) as srv:
+            with smtplib.SMTP(host, port, timeout=15) as srv:
                 srv.ehlo()
                 srv.starttls(context=ctx)
                 srv.ehlo()
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                srv.login(u.smtp_user, u.smtp_passwort)
+                _smtp_login(srv, user, u.smtp_passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
+    except UnicodeEncodeError:
+        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen
+        raise HTTPException(
+            400,
+            "Die Mail enthält Zeichen, die der SMTP-Server nicht annimmt (z. B. einen Umlaut in der "
+            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen.",
+        )
     except smtplib.SMTPAuthenticationError:
         raise HTTPException(400, "SMTP-Authentifizierung fehlgeschlagen – Benutzer oder Passwort prüfen")
     except smtplib.SMTPConnectError:
@@ -298,8 +345,16 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
     attachments: list[tuple[bytes, str]] = []
     frisches_original: Optional[tuple[int, str]] = None
 
+    from api.rechnungen import XRECHNUNG_DOKUMENTTYPEN, vermerke_xrechnung_original, xrechnung_xml_fuer
+    frisches_xml: Optional[str] = None
     if req.rechnung_id:
         pdf_bytes, dateiname, frisches_original = _pdf_bytes_fuer(req.rechnung_id, db)
+        # Issue #530: an öffentliche Auftraggeber geht die XRechnung-XML (das Original) zuerst mit
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        if (r and ist_oeffentlicher_auftraggeber(r) and not r.ist_entwurf and r.typ == "ausgang"
+                and r.dokument_typ in XRECHNUNG_DOKUMENTTYPEN and not r.storniert):
+            xml_bytes, xml_name, frisches_xml = xrechnung_xml_fuer(r, db)
+            attachments.append((xml_bytes, xml_name))
         attachments.append((pdf_bytes, dateiname))
 
     if req.mahnung_id:
@@ -315,8 +370,15 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         # über diesen Endpunkt laufen.
         attachments.extend(sammle_mahnung_anhaenge(db, mahnung))
 
+    if req.dsgvo_kunde_id:
+        from api.kunden import dsgvo_pdf_kunde
+        attachments.append(dsgvo_pdf_kunde(req.dsgvo_kunde_id, db))
+    if req.dsgvo_lieferant_id:
+        from api.lieferanten import dsgvo_pdf_lieferant
+        attachments.append(dsgvo_pdf_lieferant(req.dsgvo_lieferant_id, db))
+
     if req.dokumentenpaket_id:
-        paket = db.query(DokumentenPaket).filter(DokumentenPaket.id == req.dokumentenpaket_id).first()
+        paket =db.query(DokumentenPaket).filter(DokumentenPaket.id == req.dokumentenpaket_id).first()
         if paket:
             for eintrag in sorted(paket.dateien, key=lambda e: e.sort_order):
                 pfad = APP_DATA_DIR / "uploads" / eintrag.beleg.dateiname
@@ -338,6 +400,10 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         r.original_pdf_pfad = rel_pfad
         r.ausgegeben = True
         r.ausgegeben_am = datetime.now()
+        db.commit()
+    if frisches_xml:
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        vermerke_xrechnung_original(r, frisches_xml)
         db.commit()
 
     return {"ok": True}

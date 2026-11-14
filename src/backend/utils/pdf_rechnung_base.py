@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from utils.dokument_adressen import adressfeld_adresse, adresszeilen_weitere_adresse, lieferzeile_adresse
 from utils.logo import logo_datei
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
 
@@ -111,20 +112,30 @@ def anrede_zeile(r, unt: dict, nur_wenn_konfiguriert: bool = False) -> str:
         "{sehr_geehrte}": _ANREDE_SEHR_GEEHRTE.get(geschlecht) or f"Guten Tag {vorname}".strip(),
     }
 
-    benutzt = [p for p in werte if p in vorlage]
     hat_name = bool(vorname or nachname)
-    if (any(p in benutzt for p in ("{vorname}", "{nachname}", "{sehr_geehrte}")) and not hat_name) \
-            or ("{anrede}" in benutzt and not werte["{anrede}"]) \
-            or ("{firma}" in benutzt and not firma):
-        return fallback
 
-    text = vorlage
-    for p, w in werte.items():
-        text = text.replace(p, w)
-    # Leerer Vor- oder Nachname hinterlässt sonst doppelte Leerzeichen / " ,"
-    text = re.sub(r" {2,}", " ", text)
-    text = re.sub(r" +([,.!])", r"\1", text)
-    return text.strip()
+    def _unvollstaendig(text: str) -> bool:
+        benutzt = [p for p in werte if p in text]
+        return (any(p in benutzt for p in ("{vorname}", "{nachname}", "{sehr_geehrte}")) and not hat_name) \
+            or ("{anrede}" in benutzt and not werte["{anrede}"]) \
+            or ("{firma}" in benutzt and not firma)
+
+    def _ersetzen(text: str) -> str:
+        for p, w in werte.items():
+            text = text.replace(p, w)
+        # Leerer Vor- oder Nachname hinterlässt sonst doppelte Leerzeichen / " ,"
+        text = re.sub(r" {2,}", " ", text)
+        text = re.sub(r" +([,.!])", r"\1", text)
+        return text.strip()
+
+    if _unvollstaendig(vorlage):
+        # Die Ersatzanrede darf selbst Platzhalter tragen (z. B. „Moin {firma}“ für Firmenkunden
+        # ohne Ansprechpartner) – wurde bis v0.7.10 roh mit „{firma}“ gedruckt. Fehlt auch dafür
+        # ein Wert, bleibt nur der neutrale Standard.
+        if _unvollstaendig(fallback):
+            return ANREDE_FALLBACK_STANDARD
+        return _ersetzen(fallback)
+    return _ersetzen(vorlage)
 
 
 # ---------------------------------------------------------------------------
@@ -514,7 +525,10 @@ class RechnungPDFBase(FPDF):
 
         partner_obj = r.kunde if r.typ == "ausgang" else r.lieferant
         freitext    = r.partner_freitext
-        adresszeilen = _adresszeilen(partner_obj)
+        # Issue #495: Filiale/Standort im Adressfeld (Empfänger, Rechnungs- bzw. beim Lieferschein Lieferadresse)
+        feld_adresse = adressfeld_adresse(r)
+        adresszeilen = (adresszeilen_weitere_adresse(feld_adresse, partner_obj) if feld_adresse
+                        else _adresszeilen(partner_obj))
         if not adresszeilen and freitext:
             adresszeilen = [freitext]
             strasse = getattr(r, "partner_strasse", None) or ""
@@ -598,13 +612,19 @@ class RechnungPDFBase(FPDF):
                 _meta("Gültig bis", _iso_zu_de(str(gueltig_bis)))
         elif r.faellig_am:
             _meta(self._faellig_label, _iso_zu_de(str(r.faellig_am)))
-        la = getattr(r, "_lieferadresse", None)
+        # Issue #495: Lieferadresse bei Auftrag/Proforma/Rechnung – nicht, wenn sie schon im Adressfeld steht
+        la = lieferzeile_adresse(r)
         if la:
-            strasse_nr = " ".join(filter(None, [la.strasse, la.hausnummer]))
-            plz_ort = " ".join(filter(None, [la.plz, la.ort]))
-            la_label = la.bezeichnung or "Lieferadresse"
-            la_zeile = ", ".join(filter(None, [strasse_nr, plz_ort]))
-            _meta(la_label, la_zeile)
+            la_zeilen = [z for z in [
+                (getattr(la, "name", None) or "").strip(),
+                (la.bezeichnung or "").strip(),
+                f"z.Hd. {la.z_hd.strip()}" if (la.z_hd or "").strip() else "",
+                " ".join(filter(None, [la.strasse, la.hausnummer])),
+                " ".join(filter(None, [la.plz, la.ort])),
+                la.land.upper() if (la.land or "DE").upper() != "DE" else "",
+            ] if z]
+            for i, zeile in enumerate(la_zeilen):
+                _meta("Lieferadresse" if i == 0 else "", zeile)
         quell_angebot_nr = getattr(r, "_quell_angebot_nr", None)
         if quell_angebot_nr:
             _meta("Angebot", quell_angebot_nr, dim=True)

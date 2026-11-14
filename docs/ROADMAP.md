@@ -102,12 +102,12 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
   buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
   Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
-- [ ] **Empfänger und Standort je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten) –
-  Lieferadressen im Kundenstamm zu „weiteren Adressen / Standorten“ ausbauen; je Dokument
-  `empfaenger_adresse_id` (neu, Adressfeld bei Angebot/Auftrag/Proforma/Lieferschein) und
-  `lieferadresse_id` (eigene Zeile, auch auf der Rechnung); Rechnung immer an den Kunden (§ 14 UStG);
-  beide Felder wandern bei Umwandlungen mit. Erste Hilfe in v0.7.8: Lieferscheine aus Angebot/Auftrag
-  als Entwurf. Rückfragen an Gerti offen (Empfänger Lieferschein, feste oder wechselnde Empfänger)
+- [x] **Adressrollen je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten, v0.7.11) –
+  weitere Adressen des Kunden (Filialen/Standorte) als Empfänger (Angebot), Rechnungs- und
+  Lieferadresse (Auftrag/Proforma/Rechnung), Lieferadresse im Adressfeld (Lieferschein); eigene
+  Mailadresse je Adresse; Weitergabe bei allen Umwandlungen; E-Rechnung Käufer/ShipTo.
+- [ ] **Folge #495:** Suche statt Auswahlliste bei vielen Filialen; Filiale in Dokumentlisten
+  anzeigen/filtern; Anrede je Adresse (Ansprechpartner der Filiale) – erst bei Rückmeldung
 - [x] **E-Rechnung: richtige Steuerkategorie** (Issue #467, erledigt für v0.7.5) – 0-%-Positionen bekommen im ZUGFeRD-XML
   immer „Z“; richtig wären AE (Reverse Charge), K (ig. Lieferung), G (Ausfuhr), O (Drittland) mit
   Befreiungsgrund (BT-120/121).
@@ -115,9 +115,18 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Standard-Vorlage, Schalter unter Einstellungen → Rechnungsvorlagen.
 - [x] **Eigene Bemerkung für die E-Rechnung (BT-22)** (Issue #474, erledigt für v0.7.5) – Opt-in-Feld unter
   dem Einleitungstext, Vorrang vor den Notizen; BT-13/BT-22-Hinweise an den Formularfeldern.
-- [ ] **XRechnung für öffentliche Auftraggeber** (Anfrage Handwerksbetriebe) – Kundenfeld „Leitweg-ID“,
-  das statt der Kundennummer in BT-10 (BuyerReference) geschrieben wird; optional Download der reinen
-  XRechnung-XML (bisher nur hybrides ZUGFeRD-PDF), da manche Behördenportale nur XML annehmen.
+- [x] **XRechnung für öffentliche Auftraggeber** (Issue #530, v0.7.11) – Opt-in unter Funktionen,
+  Kunden-Schalter „Öffentlicher Auftraggeber“ mit Leitweg-ID (Prüfziffer) in BT-10; reine XRechnung-XML
+  als archiviertes Original, PDF als Sichtkopie; Pflichtangaben-Prüfung beim Finalisieren.
+- [ ] **Folge #530:** Versand über Peppol; Prüfung gegen den KoSIT-Validator in CI; Gutschrift (381)
+  an öffentliche Auftraggeber
+- [x] **ZUGFeRD-Anhänge auch im PDF-Container** (Issue #527, v0.7.11) – Büroklammer im PDF-Viewer,
+  `URIID #ef=` in der XML
+- [x] **Datenauskunft per Mail** (Issue #526, v0.7.11) – Art. 15 DSGVO bei Kunden/Lieferanten
+- [x] **Dokumentenpakete: Reihenfolge änderbar** (Issue #524, v0.7.11)
+- [x] **Lesbare Backend-Fehler statt „Failed to fetch“** (Issue #537, v0.7.11) – Fehler-Middleware
+  innerhalb von CORS, Traceback in backend.log
+- [ ] **StrEnums für Dokumenttyp/Rechnungstyp** (Issue #528) – nach 1.0 im Refactoring-Durchgang
 - [ ] **Reverse Charge für Bauleistungen im Inland** (§13b Abs. 2 Nr. 4 / Abs. 5 UStG, Anfrage
   Handwerksbetriebe) – Ausgangsrechnung eines Handwerkers an einen deutschen Bauunternehmer ohne USt mit
   Hinweis „Steuerschuldnerschaft des Leistungsempfängers“; bisher nur für EU-Kunden möglich
@@ -139,7 +148,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [x] Abhängigkeiten aktualisiert (Dependabot)
 - [ ] Folge-Release: weitere Härtung zwischen Oberfläche und Hintergrunddienst
 
-## 📋 v0.7.11 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## 📋 v0.7.12 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
@@ -154,9 +163,9 @@ nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen 
 - [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
 - [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
 
-## 📋 v0.7.11 – Reverse Charge mit privatem Anteil (Issue #503)
+## 📋 v0.7.12 – Reverse Charge mit privatem Anteil (Issue #503)
 
-Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.11 – beides Steuer-/Buchungslogik ohne
+Gemeinsam mit dem Verrechnungskonto (Abschnitt unten) in v0.7.12 – beides Steuer-/Buchungslogik ohne
 größere neue Oberfläche.
 
 Rechtslage: Bei § 13b wird die USt auch für den privaten Anteil voll geschuldet (§ 13b Abs. 5 UStG) →
@@ -177,7 +186,7 @@ nur an der Kategorie (`vorsteuer_prozent`) und wird bei Reverse Charge bewusst i
 - Bis dahin: Wertabgabe-Weg (voll abziehen, privaten Anteil als unentgeltliche Wertabgabe mit
   19 % versteuern) ergibt dieselbe Zahllast
 
-## 📋 v0.7.11 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
+## 📋 v0.7.12 – Guthaben über ein Verrechnungskonto (Nebenfund Issue #502)
 
 Guthaben aus Überzahlungen (Lieferanten-/Kundenguthaben, auch aus dem Mahnwesen) stehen nur als
 offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
@@ -398,7 +407,7 @@ das Konto, der DATEV-Export nutzt dann dessen Nummer als Gegenkonto.
 - [ ] Kassen als Konten (Kontoart `bar`), Mehrfach-Kasse inkl. Kassenbuch/Tagesabschluss je Kasse
 - [ ] weitere Zahlungsdienste (Klarna, Mollie, Stripe) ohne Code-Änderung als Konto anlegbar
 - [ ] DATEV-Gegenkonto immer aus dem Konto; globale `unternehmen.datev_konto_*` danach entfernen
-- [ ] „Privat bezahlt“ (v0.7.11) als Konto-Variante übernehmen
+- [ ] „Privat bezahlt“ (v0.7.12) als Konto-Variante übernehmen
 
 ---
 

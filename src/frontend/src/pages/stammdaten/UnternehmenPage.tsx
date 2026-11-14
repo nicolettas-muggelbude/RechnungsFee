@@ -1034,7 +1034,8 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <code>{'{anrede}'}</code> (Herr/Frau), <code>{'{sehr_geehrte}'}</code> („Sehr geehrte Frau" / „Sehr geehrter Herr",
               bei divers oder ohne Angabe „Guten Tag" + Vorname). Herr/Frau/divers stellst du beim Kunden ein.
               Beispiel: <code>{'{sehr_geehrte} {nachname},'}</code>.
-              Fehlt ein benötigter Wert (z. B. kein Name beim Kunden), wird die Ersatzanrede gedruckt.
+              Fehlt ein benötigter Wert (z. B. kein Name beim Kunden), wird die Ersatzanrede gedruckt –
+              sie darf ebenfalls Platzhalter enthalten, etwa <code>{'Moin {firma},'}</code> für Firmenkunden.
               Leer lassen für den Standard (grau im Feld). Die grüne Vorlage zeigt die Anrede immer, die
               Standardvorlage nur, wenn du hier einen Satz einträgst. Pro Kunde kannst du die Anrede in den
               Kundenstammdaten zusätzlich überschreiben.
@@ -1236,6 +1237,28 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Rechnungsbegleitende Dokumente (z. B. Stundennachweis, Vertrag) direkt in die ZUGFeRD-PDF/A-3 einbetten. Anhänge lassen sich nur bei Entwürfen hinzufügen – nach dem Finalisieren bleibt die Rechnung unverändert.
               </p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!form.oeffentliche_auftraggeber_aktiv}
+              onChange={ev => set('oeffentliche_auftraggeber_aktiv', ev.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Öffentliche Auftraggeber (XRechnung mit Leitweg-ID)
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Für Rechnungen an Behörden, Kommunen und andere öffentliche Stellen. Beim Kunden erscheint dann „Öffentlicher Auftraggeber“ mit Leitweg-ID. Rechnungen an diese Kunden gibt es als XRechnung-Datei (XML) zum Hochladen ins Rechnungsportal, die PDF dazu ist eine Sichtkopie. Pflicht in den Unternehmensdaten: Telefon, E-Mail und IBAN.
+              </p>
+              {form.oeffentliche_auftraggeber_aktiv && (!form.telefon || !form.email || !form.iban) && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Noch nicht ausgefüllt: {[!form.telefon && 'Telefon', !form.email && 'E-Mail', !form.iban && 'IBAN'].filter(Boolean).join(', ')} – ohne diese Angaben lässt sich keine XRechnung finalisieren.
+                </p>
+              )}
             </div>
           </label>
 

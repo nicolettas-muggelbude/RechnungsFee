@@ -134,7 +134,13 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
           </div>
 
           <div className="text-xs text-slate-400 dark:text-slate-500">
-            Anhänge: <span className="font-medium text-slate-600 dark:text-slate-300">{dokumentTyp}_{dokument.rechnungsnummer ?? dokument.id}.pdf</span>
+            Anhänge:{' '}
+            {/* Issue #530: öffentlicher Auftraggeber – Backend hängt die XRechnung-XML (Original) vorn an */}
+            {dokument.kunde_oeffentlich && !dokument.ist_entwurf && !dokument.storniert && (
+              <span className="font-medium text-slate-600 dark:text-slate-300">XRechnung_{dokument.rechnungsnummer ?? dokument.id}.xml + </span>
+            )}
+            <span className="font-medium text-slate-600 dark:text-slate-300">{dokumentTyp}_{dokument.rechnungsnummer ?? dokument.id}.pdf</span>
+            {dokument.kunde_oeffentlich && !dokument.ist_entwurf && <span className="ml-1">(Sichtkopie)</span>}
             {dokument.dokumentenpaket_id && <span className="ml-2">+ Dokumentenpaket</span>}
           </div>
 

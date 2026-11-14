@@ -200,7 +200,8 @@ async def upload_datei(
     db.add(beleg)
     db.flush()
 
-    sort_order = len(p.dateien)
+    # Issue #524: immer ans Ende – len() vergab nach einem Löschen eine schon belegte Position
+    sort_order = max((d.sort_order for d in p.dateien), default=-1) + 1
     eintrag = DokumentenPaketBeleg(
         paket_id=p.id,
         beleg_id=beleg.id,
@@ -232,6 +233,30 @@ def update_datei_eintrag(
         eintrag.sort_order = data.sort_order
     db.commit()
     p = db.query(DokumentenPaket).filter(DokumentenPaket.id == paket_id).first()
+    db.refresh(p)
+    return _paket_response(p)
+
+
+class ReihenfolgeUpdate(BaseModel):
+    eintrag_ids: list[int]
+
+
+@router.put("/{paket_id}/reihenfolge", response_model=PaketResponse)
+def update_reihenfolge(paket_id: int, data: ReihenfolgeUpdate, db: Session = Depends(get_db)):
+    """Reihenfolge der Dokumente festlegen (Issue #524) – vollständige Liste aller Eintrag-IDs."""
+    p = db.query(DokumentenPaket).filter(DokumentenPaket.id == paket_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Dokumentenpaket nicht gefunden.")
+    eintraege = {d.id: d for d in p.dateien}
+    if len(data.eintrag_ids) != len(eintraege) or set(data.eintrag_ids) != set(eintraege):
+        raise HTTPException(
+            status_code=422,
+            detail="Die Reihenfolge passt nicht zu den Dokumenten im Paket – bitte Seite neu laden.",
+        )
+    for pos, eintrag_id in enumerate(data.eintrag_ids):
+        eintraege[eintrag_id].sort_order = pos
+    db.commit()
+    db.expire(p, ["dateien"])
     db.refresh(p)
     return _paket_response(p)
 

@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Optional
 from pydantic import BaseModel, field_validator, model_validator
+from utils.dokument_adressen import empfaenger_email
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +123,7 @@ class RechnungCreate(BaseModel):
     skonto_tage: Optional[int] = None
     dokument_typ: str = "Rechnung"
     lieferadresse_id: Optional[int] = None
+    empfaenger_adresse_id: Optional[int] = None  # Issue #495
     gueltig_bis: Optional[date] = None
     dokumentenpaket_id: Optional[int] = None
     ist_reverse_charge: bool = False
@@ -227,6 +229,7 @@ class RechnungUpdate(BaseModel):
     bemerkung_erechnung: Optional[str] = None
     # Issue #495: fehlte - eine beim Bearbeiten gewählte Lieferadresse wurde verworfen
     lieferadresse_id: Optional[int] = None
+    empfaenger_adresse_id: Optional[int] = None  # Issue #495: Standort im Adressfeld
     ist_entwurf: Optional[bool] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
@@ -337,6 +340,7 @@ class RechnungResponse(BaseModel):
     kunde_name: Optional[str] = None
     kunde_email: Optional[str] = None
     kunde_zugferd_aktiv: bool = False
+    kunde_oeffentlich: bool = False  # Issue #530: XRechnung-XML als eigene Datei
     lieferant_id: Optional[int]
     lieferant_name: Optional[str] = None
     lieferant_email: Optional[str] = None
@@ -410,6 +414,7 @@ class RechnungResponse(BaseModel):
     linked_lieferschein_nr: Optional[str] = None   # nur bei genau 1 Lieferschein
     lieferadresse_id: Optional[int] = None
     lieferadresse_text: Optional[str] = None  # wird in from_orm_extended befüllt
+    empfaenger_adresse_id: Optional[int] = None
     # Angebote
     angebot_status: Optional[str] = None
     gueltig_bis: Optional[date] = None
@@ -460,8 +465,10 @@ class RechnungResponse(BaseModel):
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
-            data.kunde_email = obj.kunde.email
+            # Issue #495: Mailadresse der Filiale/des Standorts im Adressfeld, sonst die des Kunden
+            data.kunde_email = empfaenger_email(obj)
             data.kunde_zugferd_aktiv = bool(getattr(obj.kunde, "zugferd_aktiv", False))
+            data.kunde_oeffentlich = bool(getattr(obj.kunde, "oeffentlicher_auftraggeber", False))
         if obj.lieferant:
             parts = [obj.lieferant.firmenname or "", obj.lieferant.vorname or "", obj.lieferant.nachname or ""]
             data.lieferant_name = " ".join(p for p in parts if p) or None
@@ -571,8 +578,8 @@ class RechnungResponse(BaseModel):
                         data.gutschrift_zu_rechnung_nr = original.rechnungsnummer if original else None
                 except Exception:
                     pass
-        if obj.lieferadresse_id and hasattr(obj, "_lieferadresse"):
-            la = obj._lieferadresse
+        if obj.lieferadresse_id:
+            la = obj.lieferadresse
             if la:
                 teile = [la.bezeichnung, la.z_hd,
                          " ".join(filter(None, [la.strasse, la.hausnummer])),

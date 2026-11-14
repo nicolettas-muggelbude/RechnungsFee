@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { DsgvoMailButton } from '../../components/DsgvoMailButton'
+import { leitwegIdFehler } from '../../utils/leitwegId'
 import { DateInput } from '../../components/DateInput'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { istEuLand } from '../../utils/laender'
@@ -44,7 +46,7 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
   const qc = useQueryClient()
   const [editId, setEditId] = useState<number | 'neu' | null>(null)
   const [form, setForm] = useState<Omit<KundeLieferadresse, 'id' | 'kunde_id'>>({
-    bezeichnung: '', z_hd: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false,
+    bezeichnung: '', name: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false,
   })
 
   const { data: adressen = [] } = useQuery({
@@ -63,10 +65,11 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
     mutationFn: (id: number) => deleteLieferadresse(kundeId, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lieferadressen', kundeId] }),
   })
+  const loeschFehler = delMut.error instanceof Error ? delMut.error.message : null
 
   function startEdit(la: KundeLieferadresse) {
     setEditId(la.id!)
-    setForm({ bezeichnung: la.bezeichnung ?? '', z_hd: la.z_hd ?? '', strasse: la.strasse ?? '',
+    setForm({ bezeichnung: la.bezeichnung ?? '', name: la.name ?? '', z_hd: la.z_hd ?? '', email: la.email ?? '', strasse: la.strasse ?? '',
       hausnummer: la.hausnummer ?? '', plz: la.plz ?? '', ort: la.ort ?? '', land: la.land, ist_standard: la.ist_standard })
   }
 
@@ -75,17 +78,25 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Lieferadressen</span>
-        <button type="button" onClick={() => { setEditId('neu'); setForm({ bezeichnung: '', z_hd: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false }) }}
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Weitere Adressen (Filialen, Lieferadressen)</span>
+        <button type="button" onClick={() => { setEditId('neu'); setForm({ bezeichnung: '', name: '', z_hd: '', email: '', strasse: '', hausnummer: '', plz: '', ort: '', land: 'DE', ist_standard: false }) }}
           className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Hinzufügen</button>
       </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Nutzbar als Empfänger, Rechnungs- oder Lieferadresse in Angebot, Auftrag, Proforma, Lieferschein und Rechnung.
+      </p>
+      {loeschFehler && (
+        <p role="alert" className="text-xs text-red-600 dark:text-red-400">{loeschFehler}</p>
+      )}
 
       {adressen.map(la => (
         <div key={la.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm">
           {editId === la.id ? (
             <div className="space-y-2">
               <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+              <input placeholder="Firma / Name (leer = aus den Stammdaten)" value={form.name ?? ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={`${inp} w-full`} />
               <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
+              <input type="email" placeholder="E-Mail (wird beim Versand vorgeschlagen)" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={`${inp} w-full`} />
               <div className="grid grid-cols-3 gap-2">
                 <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} col-span-2`} />
                 <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={inp} />
@@ -107,9 +118,11 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
           ) : (
             <div className="flex items-start justify-between gap-2">
               <div>
-                {la.ist_standard && <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded px-1 mr-1">Standard</span>}
-                <span className="font-medium text-slate-800 dark:text-slate-100">{la.bezeichnung || 'Lieferadresse'}</span>
+                {la.ist_standard && <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded px-1 mr-1">Standard-Lieferadresse</span>}
+                <span className="font-medium text-slate-800 dark:text-slate-100">{la.bezeichnung || 'Adresse'}</span>
+                {la.name && <div className="text-slate-600 dark:text-slate-300 text-xs">{la.name}</div>}
                 {la.z_hd && <div className="text-slate-500 dark:text-slate-400 text-xs">z.Hd. {la.z_hd}</div>}
+                {la.email && <div className="text-slate-500 dark:text-slate-400 text-xs">{la.email}</div>}
                 <div className="text-slate-600 dark:text-slate-300 text-xs">{[la.strasse, la.hausnummer].filter(Boolean).join(' ')}</div>
                 <div className="text-slate-600 dark:text-slate-300 text-xs">{[la.plz, la.ort].filter(Boolean).join(' ')}</div>
               </div>
@@ -125,7 +138,9 @@ function KundeLieferadressen({ kundeId }: { kundeId: number }) {
       {editId === 'neu' && (
         <div className="border border-blue-300 dark:border-blue-700 rounded-lg p-3 space-y-2">
           <input placeholder="Bezeichnung (z.B. Lager Nord)" value={form.bezeichnung ?? ''} onChange={e => setForm(f => ({ ...f, bezeichnung: e.target.value }))} className={`${inp} w-full`} />
+          <input placeholder="Firma / Name (leer = aus den Stammdaten)" value={form.name ?? ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={`${inp} w-full`} />
           <input placeholder="z.Hd." value={form.z_hd ?? ''} onChange={e => setForm(f => ({ ...f, z_hd: e.target.value }))} className={`${inp} w-full`} />
+          <input type="email" placeholder="E-Mail (wird beim Versand vorgeschlagen)" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={`${inp} w-full`} />
           <div className="grid grid-cols-3 gap-2">
             <input placeholder="Straße" value={form.strasse ?? ''} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className={`${inp} col-span-2`} />
             <input placeholder="Nr." value={form.hausnummer ?? ''} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className={inp} />
@@ -845,10 +860,18 @@ const schema = z.object({
   ist_verein: z.boolean().optional(),
   ist_gemeinnuetzig: z.boolean().optional(),
   zugferd_aktiv: z.boolean().optional(),
+  oeffentlicher_auftraggeber: z.boolean().optional(),
+  leitweg_id: z.string().optional(),
   skonto_prozent: z.number().min(0).max(100).nullable().optional(),
   skonto_tage: z.number().int().min(1).max(365).nullable().optional(),
 }).superRefine((data, ctx) => {
-  if (!data.zugferd_aktiv) return
+  // Issue #530: Pflichtangaben für die XRechnung an öffentliche Auftraggeber
+  if (data.oeffentlicher_auftraggeber) {
+    const fehler = leitwegIdFehler(data.leitweg_id)
+    if (fehler) ctx.addIssue({ code: 'custom', path: ['leitweg_id'], message: fehler })
+    if (!data.email?.trim()) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Pflichtfeld für öffentliche Auftraggeber (XRechnung)' })
+  }
+  if (!data.zugferd_aktiv && !data.oeffentlicher_auftraggeber) return
   if (!data.firmenname?.trim()) ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.strasse?.trim()) ctx.addIssue({ code: 'custom', path: ['strasse'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.plz?.trim()) ctx.addIssue({ code: 'custom', path: ['plz'], message: 'Pflichtfeld für ZUGFeRD' })
@@ -862,6 +885,7 @@ const EMPTY: FormValues = {
   plz: '', ort: '', land: 'DE', ust_idnr: '', ust_idnr_validiert: false, ust_idnr_validierung_datum: null,
   steuernummer_ausland: '', email: '', telefon: '',
   kundennummer: '', z_hd: '', notizen: '', ist_verein: false, ist_gemeinnuetzig: false, zugferd_aktiv: false,
+  oeffentlicher_auftraggeber: false, leitweg_id: '',
   skonto_prozent: null, skonto_tage: null,
 }
 
@@ -955,8 +979,12 @@ export function KundenPage() {
   const watchLand = useWatch({ control, name: 'land' })
   const watchUstIdnrValidiert = useWatch({ control, name: 'ust_idnr_validiert' })
   const watchUstIdnrValidierungDatum = useWatch({ control, name: 'ust_idnr_validierung_datum' })
-  const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim())
-  const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim())
+  const watchOeffentlich = useWatch({ control, name: 'oeffentlicher_auftraggeber' })
+  const { data: unternehmenStamm } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
+  // Issue #530: Schalter nur sichtbar, wenn die Funktion an ist – oder der Kunde schon so markiert ist
+  const zeigOeffentlich = !!unternehmenStamm?.oeffentliche_auftraggeber_aktiv || !!editKunde?.oeffentlicher_auftraggeber
+  const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim()) || !!watchOeffentlich
+  const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim() && !watchOeffentlich)
   // Drittland: weder Deutschland noch EU-Mitglied (Issue #315) - dort gilt keine USt-IdNr.,
   // sondern je nach Land eine andere Steuer-/Unternehmens-ID
   const istDrittland = !!watchLand && watchLand !== 'DE' && !istEuLand(watchLand)
@@ -989,6 +1017,7 @@ export function KundenPage() {
       email: k.email ?? '', telefon: k.telefon ?? '', kundennummer: k.kundennummer ?? '',
       z_hd: k.z_hd ?? '', notizen: k.notizen ?? '', ist_verein: k.ist_verein, ist_gemeinnuetzig: k.ist_gemeinnuetzig,
       zugferd_aktiv: k.zugferd_aktiv ?? false,
+      oeffentlicher_auftraggeber: k.oeffentlicher_auftraggeber ?? false, leitweg_id: k.leitweg_id ?? '',
       skonto_prozent: (k as any).skonto_prozent ?? null,
       skonto_tage: (k as any).skonto_tage ?? null,
     })
@@ -1242,7 +1271,7 @@ export function KundenPage() {
                                   <div className="flex gap-1.5 flex-wrap">
                                     {k.ist_verein && <span className="px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">Verein</span>}
                                     {k.ist_gemeinnuetzig && <span className="px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">Gemeinnützig</span>}
-                                    {k.zugferd_aktiv && <span className="px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300">ZUGFeRD</span>}
+                                    {k.zugferd_aktiv && <span className="px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300">{k.oeffentlicher_auftraggeber ? 'XRechnung' : 'ZUGFeRD'}</span>}
                                   </div>
                                 </div>
                               )}
@@ -1454,7 +1483,7 @@ export function KundenPage() {
                     <span>
                       ZUGFeRD / E-Rechnung
                       {zugferdAutoAktiv
-                        ? <span className="ml-1 text-xs text-blue-500 dark:text-blue-400">(automatisch aktiv – Firma + USt-IdNr./Steuernummer vorhanden)</span>
+                        ? <span className="ml-1 text-xs text-blue-500 dark:text-blue-400">(automatisch aktiv – {watchOeffentlich ? 'öffentlicher Auftraggeber' : 'Firma + USt-IdNr./Steuernummer vorhanden'})</span>
                         : <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">PDF enthält maschinenlesbares XML für B2B-Empfänger</span>
                       }
                     </span>
@@ -1465,6 +1494,28 @@ export function KundenPage() {
                     </p>
                   )}
                 </div>
+                {zeigOeffentlich && (
+                  <div className="col-span-2 space-y-2">
+                    <label className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                      <input type="checkbox" {...register('oeffentlicher_auftraggeber')} className="rounded mt-0.5" />
+                      <span>
+                        Öffentlicher Auftraggeber
+                        <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">Behörde, Kommune o. Ä. – Rechnung als XRechnung (XML) mit Leitweg-ID</span>
+                      </span>
+                    </label>
+                    {watchOeffentlich && (
+                      <div className="ml-6">
+                        <label htmlFor="kunde-leitweg-id" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Leitweg-ID *</label>
+                        <input id="kunde-leitweg-id" {...register('leitweg_id')} placeholder="z. B. 991-33333TEST-33"
+                          aria-invalid={!!errors.leitweg_id}
+                          className="w-64 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100" />
+                        {errors.leitweg_id
+                          ? <p className="text-red-500 text-xs mt-1">{errors.leitweg_id.message}</p>
+                          : <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Teilt dir der Auftraggeber mit (meist in der Bestellung). E-Mail-Adresse ist ebenfalls Pflicht.</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {mutationError && <p className="text-red-600 text-sm">{(mutationError as Error).message}</p>}
@@ -1488,7 +1539,7 @@ export function KundenPage() {
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
                   <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datenschutz (DSGVO)</p>
                   {!showDsgvoBestaetigung ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => dsgvoExportKundePdf(editKunde.id!,
                         [editKunde.firmenname, editKunde.vorname, editKunde.nachname].filter(Boolean).join(' ') || undefined)}
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -1498,6 +1549,9 @@ export function KundenPage() {
                         className="flex-1 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700">
                         📥 Datenauskunft (JSON)
                       </button>
+                      <DsgvoMailButton art="kunde" id={editKunde.id!}
+                        name={[editKunde.firmenname, editKunde.vorname, editKunde.nachname].filter(Boolean).join(' ')}
+                        email={editKunde.email} />
                       <button type="button" onClick={() => setShowDsgvoBestaetigung(true)}
                         className="flex-1 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-950">
                         🗑 Anonymisieren (Art. 17)

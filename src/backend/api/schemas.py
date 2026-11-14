@@ -119,6 +119,7 @@ class UnternehmenBase(BaseModel):
     imap_zertifikat_ignorieren: bool = False
     imap_zertifikat_fingerprint: Optional[str] = None
     zugferd_anhaenge_aktiv: bool = False
+    oeffentliche_auftraggeber_aktiv: bool = False
     unterschrift_bild: Optional[str] = None
     unterschrift_auf_rechnung: bool = False
     standard_zahlungsziel: int = 14
@@ -208,6 +209,13 @@ class UnternehmenBase(BaseModel):
         if not 1 <= v <= 999:
             raise ValueError("Anzahl externer Backups muss zwischen 1 und 999 liegen")
         return v
+
+    @field_validator("smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user")
+    @classmethod
+    def bereinige_mailzugang(cls, v: Optional[str]) -> Optional[str]:
+        # Issue #537: unsichtbare Zeichen aus kopierten Zugangsdaten (sonst UnicodeEncodeError)
+        from utils.mailfelder import bereinige_mailfeld
+        return bereinige_mailfeld(v)
 
     @model_validator(mode="after")
     def erzwinge_kalenderjahr_wenn_inaktiv(self):
@@ -612,6 +620,8 @@ class KundeBase(BaseModel):
     z_hd: Optional[str] = None
     notizen: Optional[str] = None
     zugferd_aktiv: bool = False
+    oeffentlicher_auftraggeber: bool = False
+    leitweg_id: Optional[str] = None
     skonto_prozent: Optional[Decimal] = None
     skonto_tage: Optional[int] = None
 

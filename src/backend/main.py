@@ -35,7 +35,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 182
+SCHEMA_VERSION = 187
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -46,6 +46,11 @@ app = FastAPI(
     redoc_url=None if _IST_RELEASE else "/redoc",
     openapi_url=None if _IST_RELEASE else "/openapi.json",
 )
+
+# Issue #537: vor CORS registriert = innere Schicht → auch Fehlerantworten tragen CORS-Header,
+# Traceback landet in backend.log (statt „Failed to fetch“ ohne jede Spur)
+from utils.fehler_middleware import FehlerMiddleware  # noqa: E402
+app.add_middleware(FehlerMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -4202,6 +4207,78 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 182"))
             conn.commit()
             print("[Migration] Schema auf Version 182 (Issue #491/#492: Kleinunternehmergrenze, steuerfreie Umsätze § 4)")
+
+    if version < 183:
+        # Issue #495: Empfänger im Adressfeld von Angebot/Auftrag/Proforma/Lieferschein – eine
+        # Lieferadresse (Standort) des Kunden statt seiner Rechnungsanschrift. Getrennt von
+        # lieferadresse_id (Lieferort-Zeile), die Rechnung geht weiter an den Kunden selbst.
+        with engine.connect() as conn:
+            re183 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if "empfaenger_adresse_id" not in re183:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN empfaenger_adresse_id INTEGER REFERENCES kunden_lieferadressen(id)"
+                ))
+            conn.execute(text("PRAGMA user_version = 183"))
+            conn.commit()
+            print("[Migration] Schema auf Version 183 (Issue #495: rechnungen.empfaenger_adresse_id)")
+
+    if version < 184:
+        # Issue #495: eigene Mailadresse je Adresse (Filiale/Standort) – wird beim Versand
+        # vorgeschlagen, wenn die Adresse im Adressfeld des Dokuments steht.
+        with engine.connect() as conn:
+            la184 = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden_lieferadressen)")).fetchall()}
+            if la184 and "email" not in la184:
+                conn.execute(text("ALTER TABLE kunden_lieferadressen ADD COLUMN email VARCHAR(200)"))
+            conn.execute(text("PRAGMA user_version = 184"))
+            conn.commit()
+            print("[Migration] Schema auf Version 184 (Issue #495: kunden_lieferadressen.email)")
+
+    if version < 185:
+        # Issue #495: optionaler eigener Name/Firma je Adresse (leer = aus den Kundenstammdaten)
+        with engine.connect() as conn:
+            la185 = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden_lieferadressen)")).fetchall()}
+            if la185 and "name" not in la185:
+                conn.execute(text("ALTER TABLE kunden_lieferadressen ADD COLUMN name VARCHAR(200)"))
+            conn.execute(text("PRAGMA user_version = 185"))
+            conn.commit()
+            print("[Migration] Schema auf Version 185 (Issue #495: kunden_lieferadressen.name)")
+
+    if version < 186:
+        # Issue #534-Folgefund: ZUGFeRD-Automatik (Firmenname + USt-IdNr./Steuernummer) lief nur
+        # im Kundenformular - per CSV-Datenübernahme angelegte Kunden hatten zugferd_aktiv=0,
+        # obwohl das Formular den Schalter bei denselben Daten fest einschaltet.
+        with engine.connect() as conn:
+            k186 = {r[1] for r in conn.execute(text("PRAGMA table_info(kunden)")).fetchall()}
+            n = 0
+            if {"zugferd_aktiv", "firmenname", "ust_idnr"} <= k186:
+                n = conn.execute(text(
+                    "UPDATE kunden SET zugferd_aktiv = 1 "
+                    "WHERE COALESCE(zugferd_aktiv, 0) = 0 "
+                    "AND TRIM(COALESCE(firmenname, '')) <> '' AND TRIM(COALESCE(ust_idnr, '')) <> ''"
+                )).rowcount
+            conn.execute(text("PRAGMA user_version = 186"))
+            conn.commit()
+            print(f"[Migration] Schema auf Version 186 (Issue #534: ZUGFeRD-Automatik für {n} Kunden nachgezogen)")
+
+    if version < 187:
+        # Issue #530: öffentliche Auftraggeber (XRechnung mit Leitweg-ID) – Opt-in-Funktion,
+        # Kunden-Schalter + Leitweg-ID, archivierte XRechnung-XML als Original (GoBD)
+        with engine.connect() as conn:
+            for tabelle, spalten in (
+                ("unternehmen", [("oeffentliche_auftraggeber_aktiv", "BOOLEAN NOT NULL DEFAULT 0")]),
+                ("kunden", [("oeffentlicher_auftraggeber", "BOOLEAN NOT NULL DEFAULT 0"),
+                            ("leitweg_id", "VARCHAR(50)")]),
+                ("rechnungen", [("original_xml_pfad", "VARCHAR(500)")]),
+            ):
+                cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info({tabelle})")).fetchall()}
+                if not cols:
+                    continue
+                for name, typ in spalten:
+                    if name not in cols:
+                        conn.execute(text(f"ALTER TABLE {tabelle} ADD COLUMN {name} {typ}"))
+            conn.execute(text("PRAGMA user_version = 187"))
+            conn.commit()
+            print("[Migration] Schema auf Version 187 (Issue #530: öffentliche Auftraggeber, Leitweg-ID, original_xml_pfad)")
 
 
 def _migrate_kategorien() -> None:

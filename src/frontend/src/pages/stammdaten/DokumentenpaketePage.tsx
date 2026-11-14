@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDokumentenPakete, createDokumentenPaket, updateDokumentenPaket, deleteDokumentenPaket,
   uploadPaketDatei, updatePaketDatei, deletePaketDatei, getPaketDateiUrl, getPaketVorschauUrl,
+  updatePaketReihenfolge,
   type DokumentenPaket, type PaketDatei,
 } from '../../api/client'
 import { openUrl } from '../../api/client'
@@ -14,10 +15,24 @@ const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm fo
 // Datei-Zeile innerhalb einer Gruppe
 // ---------------------------------------------------------------------------
 
-function DateiZeile({ paket, datei }: { paket: DokumentenPaket; datei: PaketDatei }) {
+function DateiZeile({ paket, datei, index }: { paket: DokumentenPaket; datei: PaketDatei; index: number }) {
   const qc = useQueryClient()
   const [editBez, setEditBez] = useState(false)
   const [bez, setBez] = useState(datei.bezeichnung ?? '')
+
+  // Issue #524: Reihenfolge per Pfeil ändern – bestimmt Anhänge, Paket-PDF und Druck
+  const verschiebeMut = useMutation({
+    mutationFn: (richtung: -1 | 1) => {
+      const ids = paket.dateien.map(d => d.id)
+      const ziel = index + richtung
+      ;[ids[index], ids[ziel]] = [ids[ziel], ids[index]]
+      return updatePaketReihenfolge(paket.id, ids)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['dokumentenpakete'] }),
+  })
+  const istErstes = index === 0
+  const istLetztes = index === paket.dateien.length - 1
+  const pfeilCls = "p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default"
 
   const updateMut = useMutation({
     mutationFn: () => updatePaketDatei(paket.id, datei.id, { bezeichnung: bez.trim() || undefined }),
@@ -76,6 +91,20 @@ function DateiZeile({ paket, datei }: { paket: DokumentenPaket; datei: PaketDate
       </div>
 
       <div className="flex gap-1 flex-shrink-0">
+        <button onClick={() => verschiebeMut.mutate(-1)}
+          disabled={istErstes || verschiebeMut.isPending}
+          title="Nach oben"
+          aria-label={`„${datei.bezeichnung || datei.original_name}" nach oben verschieben`}
+          className={pfeilCls}>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+        </button>
+        <button onClick={() => verschiebeMut.mutate(1)}
+          disabled={istLetztes || verschiebeMut.isPending}
+          title="Nach unten"
+          aria-label={`„${datei.bezeichnung || datei.original_name}" nach unten verschieben`}
+          className={pfeilCls}>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </button>
         <button onClick={handleOpen}
           title="Öffnen"
           className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
@@ -284,7 +313,7 @@ function GruppenKarte({ paket }: { paket: DokumentenPaket }) {
           <p className="text-sm text-slate-400 dark:text-slate-500 italic py-1">Noch keine Dokumente in dieser Gruppe.</p>
         ) : (
           <div>
-            {paket.dateien.map(d => <DateiZeile key={d.id} paket={paket} datei={d} />)}
+            {paket.dateien.map((d, i) => <DateiZeile key={d.id} paket={paket} datei={d} index={i} />)}
           </div>
         )}
         <DokumentHinzufuegen paket={paket} />

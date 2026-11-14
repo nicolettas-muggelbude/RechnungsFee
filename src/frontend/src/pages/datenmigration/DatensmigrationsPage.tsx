@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   getMusterCsv,
+  speichereBlob,
   getSpalten,
   getImportVorschau,
   importDurchfuehren,
@@ -207,13 +208,8 @@ function ImportFlow({ typ }: { typ: ImportTyp }) {
   }
 
   async function musterDownload() {
-    const blob = await getMusterCsv(typ === 'gemischt' ? 'kunden' : typ)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `muster_${typ === 'gemischt' ? 'kunden' : typ}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const t = typ === 'gemischt' ? 'kunden' : typ
+    await speichereBlob(await getMusterCsv(t), `muster_${t}.csv`)
   }
 
   function neuStarten() {
@@ -517,13 +513,7 @@ function RechnungenBelegeImportFlow() {
   const mappingUnveraendert = mappingStand === JSON.stringify(mapping)
 
   async function musterLaden() {
-    const blob = await getRechnungenImportMuster(typ)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `muster_${typ}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    await speichereBlob(await getRechnungenImportMuster(typ), `muster_${typ}.csv`)
   }
 
   async function vorschauLaden() {

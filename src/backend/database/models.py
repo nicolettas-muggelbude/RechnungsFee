@@ -178,6 +178,8 @@ class Unternehmen(Base):
     # interner Abrufstand {"ordner", "uidvalidity", "uid"} - nur Mails danach werden geprüft
     imap_abruf_stand: Mapped[str | None] = mapped_column(Text)
     zugferd_anhaenge_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #530: Opt-in – erst dann gibt es beim Kunden „Öffentlicher Auftraggeber“ + Leitweg-ID
+    oeffentliche_auftraggeber_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     unterschrift_bild: Mapped[str | None] = mapped_column(Text)           # base64-PNG
     unterschrift_auf_rechnung: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     standard_zahlungsziel: Mapped[int] = mapped_column(Integer, default=14, server_default="14")
@@ -483,6 +485,9 @@ class Kunde(Base):
     z_hd: Mapped[str | None] = mapped_column(String(200))
     notizen: Mapped[str | None] = mapped_column(Text)
     zugferd_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #530: öffentlicher Auftraggeber → Rechnung ist die XRechnung-XML (PDF nur Sichtkopie)
+    oeffentlicher_auftraggeber: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    leitweg_id: Mapped[str | None] = mapped_column(String(50))
     skonto_prozent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     skonto_tage: Mapped[int | None] = mapped_column(Integer)
     mahnung_gesperrt: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
@@ -541,12 +546,15 @@ class KundeLieferadresse(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kunde_id: Mapped[int] = mapped_column(ForeignKey("kunden.id"), nullable=False)
     bezeichnung: Mapped[str | None] = mapped_column(String(100))   # z.B. „Lager Nord", „Filiale Berlin"
+    # Issue #495: abweichender Name/Firma im Adressfeld – leer = Name/Firma aus den Kundenstammdaten
+    name: Mapped[str | None] = mapped_column(String(200))
     z_hd: Mapped[str | None] = mapped_column(String(200))
     strasse: Mapped[str | None] = mapped_column(String(200))
     hausnummer: Mapped[str | None] = mapped_column(String(20))
     plz: Mapped[str | None] = mapped_column(String(10))
     ort: Mapped[str | None] = mapped_column(String(100))
     land: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
+    email: Mapped[str | None] = mapped_column(String(200))  # Issue #495: eigene Mailadresse je Adresse
     ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -700,7 +708,9 @@ class DokumentenPaket(Base):
 
     dateien: Mapped[list["DokumentenPaketBeleg"]] = relationship(
         "DokumentenPaketBeleg", back_populates="paket",
-        cascade="all, delete-orphan", order_by="DokumentenPaketBeleg.sort_order"
+        cascade="all, delete-orphan",
+        # id als Zweitschlüssel: Altbestände können doppelte sort_order haben (Issue #524)
+        order_by="[DokumentenPaketBeleg.sort_order, DokumentenPaketBeleg.id]"
     )
 
 
@@ -810,12 +820,17 @@ class Rechnung(Base):
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ausgegeben_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_pdf_pfad: Mapped[str | None] = mapped_column(String(500))
+    # Issue #530: archivierte XRechnung-XML (Original bei öffentlichen Auftraggebern, GoBD)
+    original_xml_pfad: Mapped[str | None] = mapped_column(String(500))
     absender_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gutschrift / Lieferschein
     dokument_typ: Mapped[str] = mapped_column(String(20), default="Rechnung", nullable=False, server_default="Rechnung")
     gutschrift_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferschein_zu_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
     lieferadresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
+    # Issue #495: Adresse im Adressfeld (Empfänger bzw. Rechnungsadresse) – Filiale/Standort statt Kunde,
+    # siehe utils/dokument_adressen.py (beim Lieferschein steht stattdessen die Lieferadresse im Adressfeld)
+    empfaenger_adresse_id: Mapped[int | None] = mapped_column(ForeignKey("kunden_lieferadressen.id"), nullable=True)
     # Angebote
     angebot_status: Mapped[str | None] = mapped_column(String(20), default="offen")   # offen|akzeptiert|abgelehnt|abgelaufen
     gueltig_bis: Mapped[date | None] = mapped_column(Date)
@@ -853,6 +868,8 @@ class Rechnung(Base):
     lieferant: Mapped["Lieferant | None"] = relationship(back_populates="rechnungen")
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="rechnungen")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
+    empfaenger_adresse: Mapped["KundeLieferadresse | None"] = relationship(foreign_keys=[empfaenger_adresse_id])
+    lieferadresse: Mapped["KundeLieferadresse | None"] = relationship(foreign_keys=[lieferadresse_id])
     positionen: Mapped[list["Rechnungsposition"]] = relationship(
         back_populates="rechnung", cascade="all, delete-orphan",
         foreign_keys="Rechnungsposition.rechnung_id",

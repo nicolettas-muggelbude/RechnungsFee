@@ -203,12 +203,18 @@ def _kunde_anlegen(db: Session, daten: dict, ueberschreiben_id: Optional[int] = 
         felder["skonto_prozent"] = None
         felder["skonto_tage"] = None
 
+    # Issue #534: ZUGFeRD-Automatik wie im Kundenformular; beim Überschreiben nur einschalten,
+    # nie einen bestehenden (manuell gesetzten) Schalter abschalten
+    from .kunden import zugferd_automatisch
+    felder["zugferd_auto"] = 1 if zugferd_automatisch(felder["firmenname"], felder["ust_idnr"]) else 0
+
     if ueberschreiben_id:
         db.execute(
             text("""UPDATE kunden SET firmenname=:firmenname, vorname=:vorname, nachname=:nachname,
                     strasse=:strasse, hausnummer=:hausnummer, plz=:plz, ort=:ort, land=:land,
                     email=:email, telefon=:telefon, ust_idnr=:ust_idnr, z_hd=:z_hd,
                     notizen=:notizen, skonto_prozent=:skonto_prozent, skonto_tage=:skonto_tage,
+                    zugferd_aktiv=MAX(COALESCE(zugferd_aktiv, 0), :zugferd_auto),
                     aktualisiert_am=CURRENT_TIMESTAMP WHERE id=:id"""),
             {**felder, "id": ueberschreiben_id},
         )
@@ -223,7 +229,7 @@ def _kunde_anlegen(db: Session, daten: dict, ueberschreiben_id: Optional[int] = 
                 erstellt_am, aktualisiert_am)
                 VALUES (:firmenname, :vorname, :nachname, :strasse, :hausnummer, :plz, :ort, :land,
                 :email, :telefon, :ust_idnr, :kundennummer, :z_hd, :notizen, :skonto_prozent, :skonto_tage,
-                1, 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""),
+                1, 0, 0, 0, :zugferd_auto, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""),
         {**felder, "kundennummer": kundennummer},
     )
     return "importiert"

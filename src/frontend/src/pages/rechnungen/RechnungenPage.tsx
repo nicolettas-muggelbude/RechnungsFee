@@ -11,6 +11,7 @@ import {
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen, getOffeneAbschlaege, type OffenerAbschlag,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
+  getXRechnungUrl, speichereXRechnung,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
   uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad, dateiInSpeicher,
@@ -36,7 +37,9 @@ import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHi
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
+import { LieferadresseAuswahl, RechnungsadresseAuswahl } from '../../components/EmpfaengerAuswahl'
 import { DateInput } from '../../components/DateInput'
+import { useRechnungsdatumFrage } from '../../hooks/useRechnungsdatumFrage'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
@@ -92,21 +95,8 @@ function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-// Issue #485: Beim Finalisieren eines älteren Entwurfs nachfragen, ob das Rechnungsdatum auf
-// heute gesetzt werden soll - nie stillschweigend, weil bewusst rückdatiert nacherfasst werden
-// kann. true = auf heute setzen. Datumsvergleich als ISO-String (yyyy-mm-dd).
-function frageRechnungsdatumAufHeute(datum: string, leistungBis?: string | null): boolean {
-  const heute = heuteIso()
-  if (!datum || datum >= heute) return false
-  const de = (iso: string) => iso.split('-').reverse().join('.')
-  let text = `Das Rechnungsdatum ist der ${de(datum)}. Soll es beim Finalisieren auf heute (${de(heute)}) gesetzt werden?`
-  if (leistungBis && leistungBis > datum) {
-    text += `\n\nAchtung: Der Leistungszeitraum endet erst am ${de(leistungBis)}, also nach dem bisherigen Rechnungsdatum.`
-  }
-  text += '\n\nDie Fälligkeit verschiebt sich um dieselbe Anzahl Tage.\n\nOK = auf heute setzen\nAbbrechen = Datum beibehalten'
-  return window.confirm(text)
-}
-
+// Issue #485/#531: Nachfrage „Rechnungsdatum auf heute?“ beim Finalisieren - siehe
+// hooks/useRechnungsdatumFrage.tsx (eigener Dialog statt window.confirm)
 function verschiebeIso(iso: string, vonIso: string, bisIso: string): string {
   const tage = (Date.parse(bisIso) - Date.parse(vonIso)) / 86_400_000
   const d = new Date(Date.parse(iso) + tage * 86_400_000)
@@ -1340,6 +1330,7 @@ function RechnungDetail({
     stornoMutation.mutate(grund)
   }
 
+  const [frageDatum, datumDialog] = useRechnungsdatumFrage()
   const finalisiereMutation = useMutation({
     mutationFn: (datumHeute: boolean) => finalisiereRechnung(rechnung.id, datumHeute),
     onSuccess: (updated) => {
@@ -1450,6 +1441,8 @@ function RechnungDetail({
   }
 
   async function handleMail() {
+    const istXRechnung = rechnung.typ === 'ausgang' && !!rechnung.kunde_oeffentlich && !rechnung.ist_entwurf
+      && !rechnung.storniert && (rechnung.dokument_typ === 'Rechnung' || rechnung.dokument_typ === 'Abschlagsrechnung')
     if (unternehmen?.thunderbird_aktiv) {
       const email = partnerEmail || mailAdresse.trim()
       if (!email) { setZeigMailEingabe(true); return }
@@ -1459,11 +1452,15 @@ function RechnungDetail({
       try {
         const base = await getApiBase()
         const { subjectText, bodyText } = berechneBetreffUndText()
+        // Issue #530: an öffentliche Auftraggeber zuerst die XRechnung-XML (das Original)
+        const xmlAnhang = istXRechnung
+          ? [{ url: await getXRechnungUrl(rechnung.id), dateiname: `XRechnung_${(rechnung.rechnungsnummer ?? String(rechnung.id)).replace(/[/ ]/g, '_')}.xml` }]
+          : []
         await sendeUeberThunderbird({
           an: email,
           betreff: subjectText,
           text: bodyText,
-          anhaenge: [{
+          anhaenge: [...xmlAnhang, {
             url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
             dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
           }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
@@ -1491,9 +1488,13 @@ function RechnungDetail({
     setPdfLaeuft(true)
     setPdfHinweis(false)
     try {
+      if (istXRechnung) await speichereXRechnung(rechnung.id, rechnung.rechnungsnummer)
       await downloadPdfForMail(rechnung.id)
       setPdfHinweis(true)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : 'Dateien konnten nicht erzeugt werden')
+      return
     } finally {
       setPdfLaeuft(false)
     }
@@ -1515,6 +1516,7 @@ function RechnungDetail({
 
   return (
     <div className="border-l border-slate-200 dark:border-slate-700 h-full overflow-auto flex flex-col">
+      {datumDialog}
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
@@ -1883,7 +1885,7 @@ function RechnungDetail({
               <InfoTooltip text="Entwürfe sind noch nicht rechtsverbindlich und können bearbeitet oder gelöscht werden. Erst nach dem Finalisieren erhält die Rechnung ihre offizielle Nummer – danach ist keine Bearbeitung mehr möglich. Entwürfe können nicht kassiert werden." />
             </span>
             <button
-              onClick={() => {
+              onClick={async () => {
                 const kategorieFehlt = rechnung.typ === 'eingang' && !rechnung.kategorie_id &&
                   !rechnung.positionen.every((p) => p.kategorie_id != null)
                 if (kategorieFehlt && !window.confirm(
@@ -1898,8 +1900,10 @@ function RechnungDetail({
                   'Weder Steuernummer noch USt-IdNr. sind in den Unternehmensdaten hinterlegt. Beides zusammen ist eine Pflichtangabe auf Rechnungen (§14 Abs. 4 UStG) – ohne sie ist die Rechnung formal unvollständig und dem Kunden droht im Zweifel der Vorsteuerabzug verwehrt zu werden, bis eine berichtigte Fassung vorliegt.\n\nTrotzdem jetzt finalisieren?'
                 )) return
                 const datumHeute = rechnung.typ === 'ausgang' && !rechnung.import_quelle &&
-                  rechnung.dokument_typ !== 'Lieferschein' &&
-                  frageRechnungsdatumAufHeute(rechnung.datum, rechnung.leistung_bis)
+                  rechnung.dokument_typ !== 'Lieferschein'
+                  ? await frageDatum(rechnung.datum, rechnung.leistung_bis)
+                  : false
+                if (datumHeute === null) return
                 finalisiereMutation.mutate(datumHeute)
               }}
               disabled={finalisiereMutation.isPending}
@@ -1966,10 +1970,26 @@ function RechnungDetail({
               </span>
             </div>
           )}
-          {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && (
+          {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && !rechnung.kunde_oeffentlich && (
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
               <span className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">ZUGFeRD ✓</span>
+            </div>
+          )}
+          {/* Issue #530: öffentlicher Auftraggeber – Original ist die XRechnung-XML (Upload ins Portal) */}
+          {rechnung.typ === 'ausgang' && rechnung.kunde_oeffentlich && !rechnung.ist_entwurf
+            && (rechnung.dokument_typ === 'Rechnung' || rechnung.dokument_typ === 'Abschlagsrechnung') && (
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
+              <button type="button"
+                onClick={async () => {
+                  try { await speichereXRechnung(rechnung.id, rechnung.rechnungsnummer); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }
+                  catch (e) { setFehler(e instanceof Error ? e.message : 'XRechnung konnte nicht erzeugt werden') }
+                }}
+                title="XRechnung (XML) speichern – zum Hochladen ins Rechnungsportal des Auftraggebers. Die PDF ist nur eine Sichtkopie."
+                className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900">
+                ⬇ XRechnung (XML)
+              </button>
             </div>
           )}
           {rechnung.storniert && rechnung.storno_datum && (
@@ -2879,6 +2899,11 @@ function RechnungForm({
   const [lieferadresseId, setLieferadresseId] = useState<string>(
     initial?.lieferadresse_id ? String(initial.lieferadresse_id) : ''
   )
+  // Issue #495: Rechnungsadresse (Filiale statt Stammanschrift) bei Rechnung/Abschlag – der
+  // Lieferschein trägt den Wert aus Angebot/Auftrag nur zur Rechnung weiter
+  const [empfaengerId, setEmpfaengerId] = useState<string>(
+    initial?.empfaenger_adresse_id ? String(initial.empfaenger_adresse_id) : ''
+  )
 const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const { data: lieferadressen = [] } = useQuery({
     queryKey: ['lieferadressen', kundeIdNum],
@@ -3453,7 +3478,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
       partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
       kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
-      notizen: notizen || undefined,
+      notizen: notizen || null,  // Issue #522: null, damit eine entfernte Notiz beim Backend ankommt
       // Issue #368: null statt undefined - nur so kann ein bewusst geleertes Feld beim
       // Bearbeiten eines Entwurfs tatsächlich als "explizit geleert" beim Backend ankommen
       // (model_fields_set), ein weggelassenes Feld (undefined) bleibt sonst unangetastet.
@@ -3468,7 +3493,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       skonto_tage: dokumentTyp === 'Lieferschein' ? undefined : (skontoTage ? parseInt(skontoTage) : undefined),
       dokument_typ: dokumentTyp !== 'Rechnung' ? dokumentTyp : undefined,
       // null statt undefined: „keine Lieferadresse“ muss beim Bearbeiten eines Entwurfs ankommen (Issue #495)
-      lieferadresse_id: dokumentTyp === 'Lieferschein' ? (lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
+      lieferadresse_id: typ === 'ausgang' ? (kundeIdNum && lieferadresseId ? parseInt(lieferadresseId) : null) : undefined,
+      empfaenger_adresse_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein'
+        ? (kundeIdNum && empfaengerId ? parseInt(empfaengerId) : null)
+        : undefined,
       dokumentenpaket_id: typ === 'ausgang' && dokumentTyp !== 'Lieferschein' ? (paketId ? parseInt(paketId) : null) : undefined,
       ist_reverse_charge: typ === 'ausgang' ? istReverseCharge : undefined,
       ist_eu_lieferung: typ === 'ausgang' ? istEuLieferung : undefined,
@@ -3513,10 +3541,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     }
   }
 
+  const [frageDatum, datumDialog] = useRechnungsdatumFrage()
   const partnerFehlt = !partnerId && !partnerFreitext.trim()
   const positionenFehlen = positionen.every((p) => !p.beschreibung.trim())
 
-  function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
+  async function handleSubmit(e: React.FormEvent, istEntwurf: boolean) {
     e.preventDefault()
     if (partnerFehlt || positionenFehlen) {
       setZeigeValidierung(true)
@@ -3538,9 +3567,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     }
     const daten = buildData(istEntwurf)
     // Issue #485: älteres Rechnungsdatum beim Finalisieren auf heute setzen (nur auf Nachfrage)
-    if (!istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
-        dokumentTyp !== 'Lieferschein' &&
-        frageRechnungsdatumAufHeute(datum, leistungZeitraum ? leistungBis : null)) {
+    const datumHeute = !istEntwurf && typ === 'ausgang' && !externErstellt && !initial?.import_quelle &&
+      dokumentTyp !== 'Lieferschein'
+      ? await frageDatum(datum, leistungZeitraum ? leistungBis : null)
+      : false
+    if (datumHeute === null) return
+    if (datumHeute) {
       const heute = heuteIso()
       if (daten.faellig_am) daten.faellig_am = verschiebeIso(daten.faellig_am, datum, heute)
       daten.datum = heute
@@ -3550,6 +3582,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   return (
     <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
+      {datumDialog}
       {/* Import-Warnungen */}
       {prefillFromAnalyse && prefillFromAnalyse.warnungen.some(w => w === 'TESSERACT_FEHLT') && (
         <OcrInstallHinweis />
@@ -4043,22 +4076,31 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
         </div>
       )}
 
-      {/* Lieferadresse – nur bei Lieferschein mit ausgewähltem Kunden */}
-      {dokumentTyp === 'Lieferschein' && kundeIdNum && lieferadressen.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Lieferadresse</label>
-          <select
-            value={lieferadresseId}
-            onChange={e => setLieferadresseId(e.target.value)}
+      {/* Issue #495: Adressrollen – Lieferschein: Lieferadresse im Adressfeld;
+          Rechnung/Abschlag: Rechnungsadresse im Adressfeld + Lieferadresse als eigene Zeile */}
+      {typ === 'ausgang' && dokumentTyp === 'Lieferschein' && (
+        <LieferadresseAuswahl
+          kundeId={kundeIdNum}
+          value={lieferadresseId}
+          onChange={setLieferadresseId}
+          leerText="Kunde (Stammanschrift)"
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+        />
+      )}
+      {typ === 'ausgang' && dokumentTyp !== 'Lieferschein' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <RechnungsadresseAuswahl
+            kundeId={kundeIdNum}
+            value={empfaengerId}
+            onChange={setEmpfaengerId}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-          >
-            <option value="">Rechnungsadresse (Standard)</option>
-            {lieferadressen.map(la => (
-              <option key={la.id} value={String(la.id)}>
-                {la.bezeichnung || 'Lieferadresse'}{la.ist_standard ? ' ★' : ''} – {[la.strasse, la.hausnummer, la.plz, la.ort].filter(Boolean).join(' ')}
-              </option>
-            ))}
-          </select>
+          />
+          <LieferadresseAuswahl
+            kundeId={kundeIdNum}
+            value={lieferadresseId}
+            onChange={setLieferadresseId}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+          />
         </div>
       )}
 

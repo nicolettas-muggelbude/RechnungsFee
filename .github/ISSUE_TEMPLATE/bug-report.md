@@ -44,9 +44,10 @@ Falls eine Fehlermeldung erscheint, hier einfügen:
 [Fehlermeldung hier einfügen]
 ```
 
-**Log-Datei (falls vorhanden):**
-- Windows: `%LOCALAPPDATA%\de.rechnungsfee.app\logs\rechnungsfee.log`
-- Linux: `~/.local/share/de.rechnungsfee.app/logs/rechnungsfee.log`
+**Log-Datei `backend.log` (falls vorhanden; `Standard` = Profilname):**
+- Windows: `%APPDATA%\RechnungsFee\profile\Standard\logs\backend.log`
+- Linux: `~/.local/share/RechnungsFee/profile/Standard/logs/backend.log`
+- macOS: `~/Library/Application Support/RechnungsFee/profile/Standard/logs/backend.log`
 
 ```
 [Log-Inhalt hier einfügen]

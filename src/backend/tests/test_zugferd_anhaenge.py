@@ -141,6 +141,54 @@ def test_zugferd_xml_enthaelt_anhang_als_additional_referenced_document(db):
     assert base64.b64encode(inhalt).decode("ascii") in xml
 
 
+def _rechnung_mit_anhaengen(db, *namen):
+    """Finalisierte Rechnung mit je einem Anhang pro Originalnamen (gleiche Namen erlaubt)."""
+    rechnung = _rechnung(db, ist_entwurf=False)
+    db.add(Rechnungsposition(
+        rechnung_id=rechnung.id, position_nr=1, beschreibung="Beratung",
+        menge=Decimal("1"), netto=Decimal("100.00"), ust_satz=Decimal("19"), brutto=Decimal("119.00"),
+    ))
+    for i, name in enumerate(namen):
+        ziel = zugferd_mod.APP_DATA_DIR / "uploads" / "belege" / f"datei{i}.pdf"
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_bytes(f"%PDF-1.4 Inhalt {i}".encode())
+        beleg = Beleg(dateiname=f"belege/datei{i}.pdf", original_name=name, mime_type="application/pdf", dateigroesse=10)
+        db.add(beleg)
+        db.flush()
+        db.add(RechnungZugferdAnhang(rechnung_id=rechnung.id, beleg_id=beleg.id, bezeichnung=f"Nachweis {i}"))
+    db.commit()
+    db.refresh(rechnung)
+    return rechnung
+
+
+def test_xml_verweist_per_uriid_auf_eingebettete_datei(db):
+    """Issue #527: URIID #ef=<Dateiname>, doppelte Namen eindeutig gemacht."""
+    rechnung = _rechnung_mit_anhaengen(db, "nachweis.pdf", "nachweis.pdf")
+    xml = generate_zugferd_xml(rechnung, UNTERNEHMEN_DICT).decode("utf-8")
+    assert "<ram:URIID>#ef=nachweis.pdf</ram:URIID>" in xml
+    assert "<ram:URIID>#ef=nachweis-2.pdf</ram:URIID>" in xml
+    # Base64-Kopie bleibt für Empfänger, die nur die XML lesen
+    assert base64.b64encode(b"%PDF-1.4 Inhalt 0").decode("ascii") in xml
+
+
+def test_pdf_container_enthaelt_anhaenge_als_dateien(db):
+    """Issue #527: Anhänge zusätzlich als eigene Dateien im PDF/A-3 (Büroklammer im Viewer)."""
+    from pypdf import PdfReader
+    rechnung = _rechnung_mit_anhaengen(db, "nachweis.pdf", "nachweis.pdf", "xrechnung.xml")
+    pdf = PdfReader(BytesIO(zugferd_mod.generate_zugferd_pdf(rechnung, UNTERNEHMEN_DICT)))
+    anhaenge = pdf.attachments
+    assert set(anhaenge) == {"xrechnung.xml", "nachweis.pdf", "nachweis-2.pdf", "xrechnung-2.xml"}
+    assert anhaenge["nachweis-2.pdf"][0] == b"%PDF-1.4 Inhalt 1"
+    assert b"Inhalt 2" not in anhaenge["xrechnung.xml"][0]
+
+
+def test_pdf_ohne_anhaenge_nur_xml(db):
+    from pypdf import PdfReader
+    rechnung = _rechnung_mit_anhaengen(db)
+    pdf = PdfReader(BytesIO(zugferd_mod.generate_zugferd_pdf(rechnung, UNTERNEHMEN_DICT)))
+    assert set(pdf.attachments) == {"xrechnung.xml"}
+
+
 def test_zugferd_xml_ohne_anhang_bleibt_unveraendert(db):
     rechnung = _rechnung(db, ist_entwurf=False)
     db.add(Rechnungsposition(

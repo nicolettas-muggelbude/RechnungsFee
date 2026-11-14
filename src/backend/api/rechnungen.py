@@ -32,9 +32,10 @@ from database.models import (
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
 from utils.mahngebuehr_verrechnung import offene_mahngebuehr_summe, verrechne_mahngebuehren
+from utils.dokument_adressen import EMPFAENGER_DOKUMENTE, LIEFERADRESSE_DOKUMENTE
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
-from utils.zugferd import generate_zugferd_pdf
+from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils.rechnungs_parser import analysiere_datei
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
@@ -48,6 +49,8 @@ from .nummernkreise import naechste_nummer
 BELEG_DIR = APP_DATA_DIR / "uploads" / "belege"
 TEMP_DIR = APP_DATA_DIR / "uploads" / "tmp"
 ERLAUBTE_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/tiff"}
+# Dokumenttypen, die als E-Rechnung (ZUGFeRD/XRechnung) ausgegeben werden
+XRECHNUNG_DOKUMENTTYPEN = ("Rechnung", "Abschlagsrechnung")
 
 router = APIRouter(prefix="/api/rechnungen", tags=["Rechnungen"])
 
@@ -1319,6 +1322,8 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
         schlusstext=data.schlusstext,
         kunden_bestellnummer=data.kunden_bestellnummer,
         bemerkung_erechnung=(data.bemerkung_erechnung or "").strip() or None,
+        empfaenger_adresse_id=_pruefe_empfaenger_adresse(db, data.empfaenger_adresse_id, data.kunde_id),  # Issue #495
+        lieferadresse_id=_pruefe_kundenadresse(db, data.lieferadresse_id, data.kunde_id, "Die Lieferadresse"),
         ist_entwurf=data.ist_entwurf,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -1625,7 +1630,14 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
         skonto_prozent=None if data.dokument_typ == "Proforma" else data.skonto_prozent,
         skonto_tage=None if data.dokument_typ == "Proforma" else data.skonto_tage,
         dokument_typ=data.dokument_typ,
-        lieferadresse_id=data.lieferadresse_id if data.dokument_typ == "Lieferschein" else None,
+        lieferadresse_id=(
+            _pruefe_kundenadresse(db, data.lieferadresse_id, data.kunde_id, "Die Lieferadresse")
+            if data.typ == "ausgang" and data.dokument_typ in LIEFERADRESSE_DOKUMENTE else None
+        ),
+        empfaenger_adresse_id=(
+            _pruefe_empfaenger_adresse(db, data.empfaenger_adresse_id, data.kunde_id)
+            if data.typ == "ausgang" and data.dokument_typ in EMPFAENGER_DOKUMENTE else None
+        ),
         gueltig_bis=data.gueltig_bis if data.dokument_typ == "Angebot" else None,
         # Issue #477: Pakete auch für Rechnungen und Proforma (Lieferschein/Gutschrift/Eingang nicht)
         dokumentenpaket_id=(
@@ -1761,7 +1773,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
                   "partner_plz", "partner_ort", "partner_land",
-                  "kategorie_id", "notizen", "externe_belegnr", "kunden_bestellnummer",
+                  "kategorie_id", "externe_belegnr", "kunden_bestellnummer",
                   "skonto_prozent", "skonto_tage", "gueltig_bis",
                   "ist_reverse_charge", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "steuerfrei_4",
                   "eingabemodus"):
@@ -1772,13 +1784,10 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     # Issue #495: Lieferadresse am Lieferschein-Entwurf ändern - fehlte bisher in der Feldliste
     # oben, eine im Formular gewählte Adresse ging beim Speichern verloren. Über model_fields_set,
     # damit „keine Lieferadresse“ (null) die Auswahl auch wieder entfernen kann.
-    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ == "Lieferschein":
-        if data.lieferadresse_id is not None:
-            from database.models import KundeLieferadresse
-            la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == data.lieferadresse_id).first()
-            if not la or la.kunde_id != (data.kunde_id or rechnung.kunde_id):
-                raise HTTPException(status_code=422, detail="Die Lieferadresse gehört nicht zu diesem Kunden.")
-        rechnung.lieferadresse_id = data.lieferadresse_id
+    if "lieferadresse_id" in data.model_fields_set and rechnung.dokument_typ in LIEFERADRESSE_DOKUMENTE:
+        rechnung.lieferadresse_id = _pruefe_kundenadresse(
+            db, data.lieferadresse_id, data.kunde_id or rechnung.kunde_id, "Die Lieferadresse",
+        )
 
     # Issue #478: Wechsel von einem Kunden/Lieferanten aus den Stammdaten auf einen frei
     # eingetippten Empfänger - das Formular schickt dann keine kunde_id/lieferant_id mehr mit,
@@ -1790,6 +1799,22 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.lieferant_id = None
         rechnung.lieferadresse_id = None  # gehörte zum bisherigen Kunden
 
+    # Issue #495: Empfänger-Standort setzen/entfernen (null = wieder an den Kunden selbst)
+    if "empfaenger_adresse_id" in data.model_fields_set and rechnung.dokument_typ in EMPFAENGER_DOKUMENTE:
+        rechnung.empfaenger_adresse_id = _pruefe_empfaenger_adresse(
+            db, data.empfaenger_adresse_id, rechnung.kunde_id,
+        )
+    elif rechnung.empfaenger_adresse_id:
+        try:
+            _pruefe_empfaenger_adresse(db, rechnung.empfaenger_adresse_id, rechnung.kunde_id)
+        except HTTPException:
+            rechnung.empfaenger_adresse_id = None  # Kunde gewechselt – Standort gehörte zum bisherigen
+    if rechnung.lieferadresse_id and "lieferadresse_id" not in data.model_fields_set:
+        try:
+            _pruefe_kundenadresse(db, rechnung.lieferadresse_id, rechnung.kunde_id)
+        except HTTPException:
+            rechnung.lieferadresse_id = None  # dito
+
     # Issue #368: einleitungstext/schlusstext bewusst NICHT im obigen "val is not None"-
     # Muster - das würde ein absichtliches Leeren (Frontend schickt explizit null) nicht von
     # "gar nicht mitgeschickt" unterscheiden können. Über model_fields_set wird nur dann
@@ -1800,6 +1825,10 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         rechnung.einleitungstext = data.einleitungstext
     if "schlusstext" in data.model_fields_set:
         rechnung.schlusstext = data.schlusstext
+    # Issue #522: Notiz muss sich wieder entfernen lassen (Frontend schickt dann null) -
+    # im "val is not None"-Muster blieb die alte Notiz stehen
+    if "notizen" in data.model_fields_set:
+        rechnung.notizen = (data.notizen or "").strip() or None
     if "bemerkung_erechnung" in data.model_fields_set:
         rechnung.bemerkung_erechnung = (data.bemerkung_erechnung or "").strip() or None
     # Issue #477: Paket muss sich auch wieder abwählen lassen (Frontend schickt dann null)
@@ -2057,6 +2086,20 @@ def finalisiere_rechnung(
                     ),
                 )
 
+    # Issue #530: Rechnung an öffentlichen Auftraggeber – ohne diese Angaben lehnt das Portal die
+    # XRechnung ab, also hier melden statt erst beim Empfänger
+    if rechnung.typ == "ausgang" and rechnung.dokument_typ in XRECHNUNG_DOKUMENTTYPEN:
+        from utils.zugferd import xrechnung_pflicht_fehler
+        _u = db.query(Unternehmen).first()
+        _u_dict = {c.name: getattr(_u, c.name) for c in _u.__table__.columns} if _u else {}
+        fehlend = xrechnung_pflicht_fehler(rechnung, _u_dict)
+        if fehlend:
+            raise HTTPException(
+                status_code=422,
+                detail="Für die XRechnung an einen öffentlichen Auftraggeber fehlt: "
+                       + ", ".join(fehlend) + ". Bitte ergänzen und dann finalisieren.",
+            )
+
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -2309,13 +2352,6 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         ).first()
         rechnung._quell_angebot_nr = _angebot_des_auftrags.rechnungsnummer if _angebot_des_auftrags else None
 
-    # Lieferschein: Lieferadresse am Objekt hinterlegen (für PDF + Response)
-    if rechnung.lieferadresse_id:
-        from database.models import KundeLieferadresse
-        rechnung._lieferadresse = db.query(KundeLieferadresse).filter(
-            KundeLieferadresse.id == rechnung.lieferadresse_id
-        ).first()
-
     ist_entwurf = rechnung.ist_entwurf
     _dok_typ = getattr(rechnung, "dokument_typ", "Rechnung") or "Rechnung"
     _ist_storno_pdf = getattr(rechnung, "storniert", False) and _dok_typ == "Rechnung"
@@ -2417,16 +2453,24 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     # 2026-08-04: 3,50€ brutto erschien im PDF als 4,17€).
     ist_netto = rechnung.typ == "ausgang" and rechnung.eingabemodus == "netto"
 
-    # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen
+    # ZUGFeRD: automatisch wenn Kunde zugferd_aktiv – nur für echte Ausgangsrechnungen.
+    # Issue #534: Bis dahin stand hier statt des Kunden-Schalters "ist_netto" - vor #332 war
+    # das derselbe Wert, seitdem hing ZUGFeRD versehentlich am Erfassungsmodus (Brutto-
+    # Rechnung an ZUGFeRD-Kunden: Detailansicht "ZUGFeRD ✓", PDF ohne XML).
     kunde_zugferd = (
         not ist_entwurf
-        and ist_netto
-        and _dok_typ in ("Rechnung", "Abschlagsrechnung")
+        and rechnung.typ == "ausgang"
+        and rechnung.kunde is not None
+        and bool(rechnung.kunde.zugferd_aktiv)
+        and _dok_typ in XRECHNUNG_DOKUMENTTYPEN
         and (unt_dict.get("steuernummer") or unt_dict.get("ust_idnr"))
+        # Issue #530: öffentlicher Auftraggeber – Original ist die getrennte XRechnung-XML,
+        # die PDF bleibt reine Sichtkopie (sonst lägen zwei Originale vor)
+        and not ist_oeffentlicher_auftraggeber(rechnung)
     )
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto)
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
@@ -2696,7 +2740,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
     }
 
     try:
-        pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict)
+        pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=rechnung.eingabemodus == "netto")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZUGFeRD-Generierung fehlgeschlagen: {e}")
 
@@ -2706,6 +2750,79 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+    )
+
+
+def xrechnung_xml_fuer(rechnung: Rechnung, db: Session) -> tuple[bytes, str, Optional[str]]:
+    """Issue #530: XRechnung-XML einer finalisierten Rechnung als (xml_bytes, dateiname,
+    frischer_rel_pfad). Ist schon ein Original archiviert, kommt genau dieses zurück (GoBD:
+    unverändert). Sonst wird erzeugt und die Datei geschrieben – frischer_rel_pfad ist dann
+    gesetzt und wird vom Aufrufer erst nach erfolgreicher Ausgabe in der DB vermerkt (wie
+    beim Original-PDF, Issue #410)."""
+    if rechnung.import_quelle:
+        raise HTTPException(409, "Extern erstellte bzw. importierte Rechnung – maßgeblich ist das Original.")
+    if rechnung.typ != "ausgang" or rechnung.dokument_typ not in XRECHNUNG_DOKUMENTTYPEN:
+        raise HTTPException(400, "XRechnung gibt es nur für Ausgangs- und Abschlagsrechnungen.")
+    if rechnung.ist_entwurf:
+        raise HTTPException(400, "Entwürfe können nicht als XRechnung ausgegeben werden – bitte erst finalisieren.")
+
+    nr = (rechnung.rechnungsnummer or str(rechnung.id)).replace("/", "-").replace(" ", "_")
+    dateiname = f"XRechnung_{nr}.xml"
+    if rechnung.original_xml_pfad:
+        original = APP_DATA_DIR / rechnung.original_xml_pfad
+        if original.is_file():
+            return original.read_bytes(), dateiname, None
+    if rechnung.storniert:
+        raise HTTPException(400, "Stornierte Rechnungen können nicht mehr als XRechnung ausgegeben werden.")
+
+    if rechnung.absender_snapshot:
+        try:
+            unt_dict = json.loads(rechnung.absender_snapshot)
+        except (json.JSONDecodeError, ValueError):
+            unt_dict = {}
+    else:
+        u = db.query(Unternehmen).first()
+        unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
+    from utils.zugferd import generate_zugferd_xml, xrechnung_pflicht_fehler
+    fehlend = xrechnung_pflicht_fehler(rechnung, unt_dict)
+    if fehlend:
+        raise HTTPException(422, "Für die XRechnung fehlt: " + ", ".join(fehlend) + ".")
+    try:
+        xml_bytes = generate_zugferd_xml(rechnung, unt_dict)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+    ziel_dir = APP_DATA_DIR / "uploads" / "rechnungen"
+    ziel_dir.mkdir(parents=True, exist_ok=True)
+    datei = f"{nr}_{rechnung.id}.xml"
+    (ziel_dir / datei).write_bytes(xml_bytes)
+    return xml_bytes, dateiname, f"uploads/rechnungen/{datei}"
+
+
+def vermerke_xrechnung_original(rechnung: Rechnung, rel_pfad: str) -> None:
+    """Archiviertes XML-Original eintragen; erste Ausgabe zählt als „ausgegeben“."""
+    rechnung.original_xml_pfad = rel_pfad
+    if not rechnung.ausgegeben:
+        rechnung.ausgegeben = True
+    if not rechnung.ausgegeben_am:
+        rechnung.ausgegeben_am = datetime.now()
+
+
+@router.get("/{rechnung_id}/xrechnung")
+def rechnung_als_xrechnung(rechnung_id: int, db: Session = Depends(get_db)):
+    """Issue #530: reine XRechnung-XML (CII) zum Hochladen ins Rechnungsportal öffentlicher
+    Auftraggeber. Download, keine Anzeige – daher attachment."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    xml_bytes, dateiname, frisch = xrechnung_xml_fuer(rechnung, db)
+    if frisch:
+        vermerke_xrechnung_original(rechnung, frisch)
+        db.commit()
+    return Response(
+        content=xml_bytes,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"', "Cache-Control": "no-store"},
     )
 
 
@@ -3941,6 +4058,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         einleitungstext=original.einleitungstext,
         schlusstext=original.schlusstext,
         kunden_bestellnummer=original.kunden_bestellnummer,
+        empfaenger_adresse_id=original.empfaenger_adresse_id,  # Issue #495
         bemerkung_erechnung=original.bemerkung_erechnung,
         rabatt_prozent=original.rabatt_prozent,
         rabatt_betrag=original.rabatt_betrag,
@@ -4091,6 +4209,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
         kategorie_id=original.kategorie_id,
         notizen=None,
         kunden_bestellnummer=original.kunden_bestellnummer,
+        empfaenger_adresse_id=original.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=original.lieferadresse_id,
         bemerkung_erechnung=original.bemerkung_erechnung,
         skonto_prozent=None,
         skonto_tage=None,
@@ -4527,6 +4647,11 @@ def _lieferschein_zu_rechnung_konvertieren(
         partner_land=lieferscheine[0].partner_land,
         notizen=merged_notizen,
         kunden_bestellnummer=lieferscheine[0].kunden_bestellnummer,
+        # Issue #495: Rechnungsadresse aus Auftrag/Angebot (über den Lieferschein weitergereicht),
+        # Lieferadresse nur, wenn alle Lieferscheine dieselbe haben
+        empfaenger_adresse_id=lieferscheine[0].empfaenger_adresse_id,
+        lieferadresse_id=(lieferscheine[0].lieferadresse_id
+                          if len({ls.lieferadresse_id for ls in lieferscheine}) == 1 else None),
         bemerkung_erechnung=lieferscheine[0].bemerkung_erechnung,
         dokument_typ="Rechnung",
         ist_entwurf=True,
@@ -4685,6 +4810,8 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         partner_land=r.partner_land,
         notizen=f"Zu Rechnung {r.rechnungsnummer}" if r.rechnungsnummer else None,
         kunden_bestellnummer=r.kunden_bestellnummer,
+        empfaenger_adresse_id=r.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=r.lieferadresse_id,
         bemerkung_erechnung=r.bemerkung_erechnung,
         dokument_typ="Lieferschein",
         lieferschein_zu_rechnung_id=rechnung_id,
@@ -4726,6 +4853,28 @@ def _standard_lieferadresse_id(db: Session, kunde_id: Optional[int]) -> Optional
     return la.id if la else None
 
 
+def _pruefe_kundenadresse(db: Session, adresse_id: Optional[int], kunde_id: Optional[int],
+                          rolle: str = "Die Adresse") -> Optional[int]:
+    """Issue #495: Eine gewählte weitere Adresse (Filiale/Standort) muss genau zu diesem Kunden gehören."""
+    if adresse_id is None:
+        return None
+    from database.models import KundeLieferadresse
+    la = db.query(KundeLieferadresse).filter(KundeLieferadresse.id == adresse_id).first()
+    if not la or not kunde_id or la.kunde_id != kunde_id:
+        raise HTTPException(status_code=422, detail=f"{rolle} gehört nicht zu diesem Kunden.")
+    return adresse_id
+
+
+def _pruefe_empfaenger_adresse(db: Session, adresse_id: Optional[int], kunde_id: Optional[int]) -> Optional[int]:
+    return _pruefe_kundenadresse(db, adresse_id, kunde_id, "Die Rechnungs- bzw. Empfängeradresse")
+
+
+def _lieferadresse_nach_umwandlung(db: Session, quelle: Rechnung) -> Optional[int]:
+    """Lieferadresse für einen aus Angebot/Auftrag erzeugten Lieferschein: der gewählte
+    Empfänger-Standort (Issue #495 – Lieferung geht dorthin), sonst die Standard-Lieferadresse."""
+    return quelle.empfaenger_adresse_id or _standard_lieferadresse_id(db, quelle.kunde_id)
+
+
 def _ist_umgewandelter_lieferschein(db: Session, rechnung: Rechnung) -> bool:
     """Lieferschein, der aus einem Angebot oder Auftrag entstanden ist (Issue #495)."""
     return db.query(Rechnung).filter(or_(
@@ -4763,7 +4912,8 @@ def lieferschein_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         dokument_typ="Lieferschein",
         ist_entwurf=True,
-        lieferadresse_id=_standard_lieferadresse_id(db, angebot.kunde_id),
+        lieferadresse_id=_lieferadresse_nach_umwandlung(db, angebot),
+        empfaenger_adresse_id=angebot.empfaenger_adresse_id,
         bezahlt=False,
         bezahlt_betrag=Decimal("0.00"),
         zahlungsstatus="offen",
@@ -4828,6 +4978,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         partner_land=angebot.partner_land,
         notizen=angebot.notizen,
         kunden_bestellnummer=angebot.kunden_bestellnummer,
+        empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495: Leistungsempfänger aus dem Angebot
         bemerkung_erechnung=angebot.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -4893,6 +5044,8 @@ def proforma_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         notizen=angebot.notizen,
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
+        empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=_lieferadresse_nach_umwandlung(db, angebot),
         ist_entwurf=False,
         dokument_typ="Proforma",
         bezahlt=False,
@@ -4955,6 +5108,8 @@ def rechnung_aus_proforma(proforma_id: int, zahlung: ZahlungEingegangen, db: Ses
         partner_land=proforma.partner_land,
         notizen=proforma.notizen,
         kunden_bestellnummer=proforma.kunden_bestellnummer,
+        empfaenger_adresse_id=proforma.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=proforma.lieferadresse_id,
         bemerkung_erechnung=proforma.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -5149,6 +5304,8 @@ def auftrag_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         notizen=angebot.notizen,
         kunden_bestellnummer=angebot.kunden_bestellnummer,
         bemerkung_erechnung=angebot.bemerkung_erechnung,
+        empfaenger_adresse_id=angebot.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=_lieferadresse_nach_umwandlung(db, angebot),
         ist_entwurf=False,
         dokument_typ="Auftrag",
         auftrag_status="offen",
@@ -5208,6 +5365,8 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         partner_land=auftrag.partner_land,
         notizen=auftrag.notizen,
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
+        empfaenger_adresse_id=auftrag.empfaenger_adresse_id,  # Issue #495: Auftraggeber
+        lieferadresse_id=auftrag.lieferadresse_id,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
         dokument_typ="Rechnung",
@@ -5281,7 +5440,8 @@ def lieferschein_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
         ist_entwurf=True,
-        lieferadresse_id=_standard_lieferadresse_id(db, auftrag.kunde_id),
+        lieferadresse_id=auftrag.lieferadresse_id or _lieferadresse_nach_umwandlung(db, auftrag),
+        empfaenger_adresse_id=auftrag.empfaenger_adresse_id,
         dokument_typ="Lieferschein",
         eingabemodus=auftrag.eingabemodus,
         rabatt_prozent=auftrag.rabatt_prozent,
@@ -5345,6 +5505,8 @@ def proforma_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         notizen=auftrag.notizen,
         kunden_bestellnummer=auftrag.kunden_bestellnummer,
         bemerkung_erechnung=auftrag.bemerkung_erechnung,
+        empfaenger_adresse_id=auftrag.empfaenger_adresse_id,  # Issue #495
+        lieferadresse_id=auftrag.lieferadresse_id,
         ist_entwurf=False,
         dokument_typ="Proforma",
         eingabemodus=auftrag.eingabemodus,

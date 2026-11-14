@@ -10,8 +10,10 @@ Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder storniert
 
 import base64
 from decimal import Decimal
+from pathlib import Path
 
 from database.connection import APP_DATA_DIR
+from utils.dokument_adressen import adressfeld_adresse, empfaenger_email, name_fuer_adresse
 
 # UN/ECE Rec 20 Einheitencodes
 _EINHEIT_CODE: dict[str, str] = {
@@ -81,6 +83,59 @@ def _steuerkategorie(ust_satz: Decimal, ist_kleinunternehmer: bool, sonderfall=N
     if sonderfall:
         return sonderfall[0]
     return "E" if ist_kleinunternehmer else "Z"
+
+
+def ist_oeffentlicher_auftraggeber(rechnung) -> bool:
+    """Issue #530: Rechnung an einen öffentlichen Auftraggeber – dann ist die XRechnung-XML das
+    Original und die PDF nur Sichtkopie."""
+    kunde = getattr(rechnung, "kunde", None)
+    return bool(kunde is not None and getattr(kunde, "oeffentlicher_auftraggeber", False))
+
+
+def xrechnung_pflicht_fehler(rechnung, unternehmen: dict) -> list[str]:
+    """Issue #530: Angaben, ohne die ein Rechnungsportal öffentlicher Auftraggeber die XRechnung
+    ablehnt (BR-DE-1 Zahlungsanweisung, BR-DE-6/7 Kontakt Verkäufer, BT-10 Leitweg-ID,
+    BT-49 elektronische Adresse des Käufers). Leer = alles da; nur für öffentliche Auftraggeber."""
+    if not ist_oeffentlicher_auftraggeber(rechnung):
+        return []
+    from utils.leitweg_id import leitweg_id_fehler
+    fehlend = []
+    if not (unternehmen.get("telefon") or "").strip():
+        fehlend.append("Telefon in den Unternehmensdaten")
+    if not (unternehmen.get("email") or "").strip():
+        fehlend.append("E-Mail in den Unternehmensdaten")
+    if not (unternehmen.get("iban") or "").strip():
+        fehlend.append("IBAN in den Unternehmensdaten")
+    if leitweg_id_fehler(rechnung.kunde.leitweg_id):
+        fehlend.append("gültige Leitweg-ID beim Kunden")
+    if not empfaenger_email(rechnung):
+        fehlend.append("E-Mail-Adresse beim Kunden")
+    return fehlend
+
+
+_RESERVIERTE_XML_NAMEN ={"xrechnung.xml", "factur-x.xml", "zugferd-invoice.xml", "order-x.xml"}
+
+
+def _zugferd_anhang_dateien(rechnung) -> list[tuple]:
+    """Vorhandene ZUGFeRD-Anhänge als (anhang, pfad, dateiname) – Dateinamen eindeutig, damit
+    XML-Verweis (#ef=) und eingebettete PDF-Datei zusammenpassen (Issue #527)."""
+    ergebnis = []
+    vergeben: set[str] = set()
+    for anhang in getattr(rechnung, "zugferd_anhaenge", []):
+        beleg = anhang.beleg
+        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+        if not pfad.exists():
+            continue
+        name = Path(beleg.original_name or beleg.dateiname).name or "anhang"
+        stamm, endung = Path(name).stem, Path(name).suffix
+        n = 1
+        # Namen der Rechnungs-XML selbst sind reserviert (facturx würde den Anhang sonst verwerfen)
+        while name.lower() in vergeben or name.lower() in _RESERVIERTE_XML_NAMEN:
+            n += 1
+            name = f"{stamm}-{n}{endung}"
+        vergeben.add(name.lower())
+        ergebnis.append((anhang, pfad, name))
+    return ergebnis
 
 
 def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
@@ -173,17 +228,24 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     buyer = doc.trade.agreement.buyer
     if rechnung.kunde:
         k = rechnung.kunde
-        buyer.name = _kunde_name(k)
-        if k.strasse:
-            buyer.address.line_one = f"{k.strasse} {k.hausnummer or ''}".strip()
-        if k.plz:
-            buyer.address.postcode = k.plz
-        if k.ort:
-            buyer.address.city_name = k.ort
-        buyer.address.country_id = k.land or "DE"
+        # Issue #495: gewählte Rechnungsadresse (Filiale) statt Stammanschrift; Name wie im PDF –
+        # eigener Name/Firma der Adresse, sonst der Kunde
+        anschrift = adressfeld_adresse(rechnung) or k
+        kaeufer_name = name_fuer_adresse(anschrift, k) if anschrift is not k else _kunde_name(k)
+        buyer.name = kaeufer_name
+        if anschrift.strasse:
+            buyer.address.line_one = f"{anschrift.strasse} {anschrift.hausnummer or ''}".strip()
+        if anschrift is not k and (anschrift.bezeichnung or "").strip():
+            buyer.address.line_two = anschrift.bezeichnung.strip()
+        if anschrift.plz:
+            buyer.address.postcode = anschrift.plz
+        if anschrift.ort:
+            buyer.address.city_name = anschrift.ort
+        buyer.address.country_id = anschrift.land or "DE"
         # BT-49: Elektronische Adresse des Käufers (empfohlen)
-        if hasattr(k, "email") and k.email:
-            buyer.electronic_address.uri_ID = ("EM", k.email)
+        mail = empfaenger_email(rechnung)
+        if mail:
+            buyer.electronic_address.uri_ID = ("EM", mail)
         # BT-48: USt-IdNr. des Käufers - Pflicht bei Reverse Charge und ig. Lieferung (BR-AE-02,
         # BR-IC-02), bei Kategorie O dagegen verboten (BR-O-02) (Issue #467)
         if getattr(k, "ust_idnr", None) and k.ust_idnr.strip() and not ist_nicht_steuerbar:
@@ -191,20 +253,20 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
             reg.id = ("VA", k.ust_idnr.strip().replace(" ", ""))
             buyer.tax_registrations.add(reg)
     else:
-        buyer.name = rechnung.partner_freitext or "Kunde"
+        kaeufer_name = rechnung.partner_freitext or "Kunde"
+        buyer.name = kaeufer_name
 
     # BT-80: Lieferland - Pflicht bei ig. Lieferung (BR-IC-12); XRechnung verlangt dann die
     # vollständige Lieferanschrift (BR-DE-10/11: Ort, PLZ). Lieferadresse vor Kundenadresse.
-    if sonderfall and sonderfall[0] == "K":
-        lieferadresse = next(
-            (la for la in (rechnung.kunde.lieferadressen if rechnung.kunde else [])
-             if la.id == getattr(rechnung, "lieferadresse_id", None)),
-            None,
-        )
+    # Issue #495: abweichende Lieferadresse auch ohne ig. Lieferung als Lieferanschrift (BG-15)
+    lieferadresse = getattr(rechnung, "lieferadresse", None) if rechnung.kunde else None
+    if (sonderfall and sonderfall[0] == "K") or lieferadresse is not None:
         quelle = lieferadresse or rechnung.kunde
         ship_to = doc.trade.delivery.ship_to
         if quelle is not None:
-            ship_to.name = getattr(quelle, "firmenname", None) or buyer.name
+            # Als Text – buyer.name liefert ein drafthorse-Element, das sich nicht erneut zuweisen lässt
+            ship_to.name = (getattr(quelle, "firmenname", None) or (getattr(quelle, "name", None) or "").strip()
+                            or kaeufer_name)
             if quelle.strasse:
                 ship_to.address.line_one = f"{quelle.strasse} {quelle.hausnummer or ''}".strip()
             if quelle.plz:
@@ -213,15 +275,18 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
                 ship_to.address.city_name = quelle.ort
             ship_to.address.country_id = quelle.land or "DE"
         elif rechnung.partner_land:
-            ship_to.name = buyer.name
+            ship_to.name = kaeufer_name
             if rechnung.partner_plz:
                 ship_to.address.postcode = rechnung.partner_plz
             if rechnung.partner_ort:
                 ship_to.address.city_name = rechnung.partner_ort
             ship_to.address.country_id = rechnung.partner_land
 
-    # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer)
-    if rechnung.kunde and rechnung.kunde.kundennummer:
+    # BuyerReference (XRechnung-Pflichtfeld: Kundennummer oder Rechnungsnummer) – bei öffentlichen
+    # Auftraggebern die Leitweg-ID, über die das Rechnungsportal die Rechnung zustellt (Issue #530)
+    if ist_oeffentlicher_auftraggeber(rechnung) and rechnung.kunde.leitweg_id:
+        doc.trade.agreement.buyer_reference = rechnung.kunde.leitweg_id
+    elif rechnung.kunde and rechnung.kunde.kundennummer:
         doc.trade.agreement.buyer_reference = rechnung.kunde.kundennummer
     else:
         doc.trade.agreement.buyer_reference = rechnung.rechnungsnummer or str(rechnung.id)
@@ -246,19 +311,20 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # Werden als AdditionalReferencedDocument mit eingebettetem Base64-Anhang in die
     # PDF/A-3 aufgenommen (Issue #383) - TypeCode 916 ("Referenced document") ist die in
     # ZUGFeRD/Factur-X übliche Kennung für generische Anhänge ohne eigenen Beleg-Typ.
-    for anhang in getattr(rechnung, "zugferd_anhaenge", []):
+    # Issue #527: zusätzlich als eigene Datei im PDF-Container (Büroklammer im PDF-Viewer) –
+    # URIID "#ef=<Dateiname>" verweist nach Factur-X-Konvention auf diese eingebettete Datei.
+    # Die Base64-Kopie bleibt, weil viele Empfänger (XRechnung/ERP) nur die XML auslesen.
+    for anhang, pfad, dateiname in _zugferd_anhang_dateien(rechnung):
         beleg = anhang.beleg
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if not pfad.exists():
-            continue
         ref_doc = AdditionalReferencedDocument()
         ref_doc.issuer_assigned_id = str(anhang.id)
+        ref_doc.uri_id = f"#ef={dateiname}"
         ref_doc.type_code._text = "916"
         ref_doc.name = anhang.bezeichnung or beleg.original_name
         inhalt_b64 = base64.b64encode(pfad.read_bytes()).decode("ascii")
         ref_doc.attached_object = (
             beleg.mime_type or "application/octet-stream",
-            beleg.original_name,
+            dateiname,
             inhalt_b64,
         )
         doc.trade.agreement.additional_references.add(ref_doc)
@@ -407,8 +473,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     return xml
 
 
-def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
-    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML."""
+def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) -> bytes:
+    """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML.
+
+    ist_netto: Erfassungsmodus der Rechnung (rechnung.eingabemodus, Issue #332) - bestimmt nur,
+    wie das sichtbare PDF den gespeicherten Einzelpreis liest. Bisher fest Netto, deshalb hing
+    die ZUGFeRD-Auslösung versehentlich am Netto-Modus (Issue #534). Die XML ist unabhängig
+    vom Modus (Positionssummen aus brutto - ust_betrag, Issue #389)."""
     # saxonche ist Top-Level-Import in facturx aber wird nur für XSD/Schematron-Validierung
     # gebraucht – wir nutzen check_xsd=False, check_schematron=False. Falls saxonche im
     # PyInstaller-Build nicht korrekt gebündelt ist, Stub eintragen damit der Import nicht fehlschlägt.
@@ -425,7 +496,7 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
 
     # sRGB-OutputIntent für PDF/A-3-Konformität
     pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
-                                      mit_output_intent=True)
+                                      mit_output_intent=True, ist_netto=ist_netto)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
     # XRechnung-Profil in facturx registrieren (einmalig; idempotent)
@@ -456,6 +527,15 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict) -> bytes:
             check_schematron=False,
             xmp_compression=False,
             afrelationship="alternative",
+            # Issue #527: rechnungsbegleitende Dokumente auch als eigene Dateien im Container
+            attachments={
+                dateiname: {
+                    "filedata": pfad.read_bytes(),
+                    "description": anhang.bezeichnung or anhang.beleg.original_name or dateiname,
+                    "afrelationship": "supplement",
+                }
+                for anhang, pfad, dateiname in _zugferd_anhang_dateien(rechnung)
+            } or None,
         )
         with open(tmp.name, "rb") as f:
             result = f.read()

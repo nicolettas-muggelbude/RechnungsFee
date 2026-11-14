@@ -20,6 +20,7 @@ import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } f
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
 import { StammdatenCombobox } from '../../components/StammdatenCombobox'
+import { LieferadresseAuswahl, RechnungsadresseAuswahl } from '../../components/EmpfaengerAuswahl'
 import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import type { RechnungVorschauRequest } from '../../api/client'
@@ -245,6 +246,9 @@ function ProformaFormular({
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 5 })
 
   const [partnerId, setPartnerId] = useState(initial?.kunde_id?.toString() ?? vorKundeId ?? '')
+  // Issue #495: Rechnungsadresse (Filiale statt Stammanschrift) und Lieferadresse ('' = keine)
+  const [empfaengerId, setEmpfaengerId] = useState(initial?.empfaenger_adresse_id?.toString() ?? '')
+  const [lieferadresseId, setLieferadresseId] = useState(initial?.lieferadresse_id?.toString() ?? '')
   const [partnerFreitext, setPartnerFreitext] = useState(initial?.partner_freitext ?? '')
   const [partnerStrasse, setPartnerStrasse] = useState(initial?.partner_strasse ?? '')
   const [partnerHausnummer, setPartnerHausnummer] = useState(initial?.partner_hausnummer ?? '')
@@ -393,12 +397,15 @@ function ProformaFormular({
         faellig_am: faelligAm || undefined,
         kunde_id: partnerId ? parseInt(partnerId) : undefined,
         partner_freitext: partnerFreitext || undefined,
+        // null statt undefined: „wieder an den Kunden“ muss beim Bearbeiten ankommen
+        empfaenger_adresse_id: partnerId && empfaengerId ? parseInt(empfaengerId) : null,
+        lieferadresse_id: partnerId && lieferadresseId ? parseInt(lieferadresseId) : null,
         partner_strasse: !partnerId && partnerStrasse ? partnerStrasse : undefined,
         partner_hausnummer: !partnerId && partnerHausnummer ? partnerHausnummer : undefined,
         partner_plz: !partnerId && partnerPlz ? partnerPlz : undefined,
         partner_ort: !partnerId && partnerOrt ? partnerOrt : undefined,
         partner_land: !partnerId && partnerLand && partnerLand !== 'DE' ? partnerLand : undefined,
-        notizen: notizen || undefined,
+        notizen: notizen || null,  // Issue #522: null, damit eine entfernte Notiz beim Backend ankommt
         dokumentenpaket_id: paketId ? parseInt(paketId) : null,
         // Issue #368: null statt undefined - nur so kommt ein bewusst geleertes Feld beim
         // Bearbeiten als "explizit geleert" im Backend an (model_fields_set).
@@ -495,6 +502,21 @@ function ProformaFormular({
             </span>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <RechnungsadresseAuswahl
+          kundeId={partnerId ? parseInt(partnerId) : null}
+          value={empfaengerId}
+          onChange={setEmpfaengerId}
+          className={inputCls}
+        />
+        <LieferadresseAuswahl
+          kundeId={partnerId ? parseInt(partnerId) : null}
+          value={lieferadresseId}
+          onChange={setLieferadresseId}
+          className={inputCls}
+        />
       </div>
 
       {/* Einmalkunde-Adresse */}
