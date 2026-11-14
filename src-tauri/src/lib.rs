@@ -160,8 +160,193 @@ fn confirm_close(
     // Fenster wird von JS nach diesem Return geschlossen
 }
 
+/// Issue #543: Das AppImage bringt kein eigenes GTK mit (GTK, GIO, gdk-pixbuf kommen vom
+/// System), der AppRun-Hook von linuxdeploy-plugin-gtk lenkt die Modulpfade aber trotzdem in
+/// nicht vorhandene Ordner im AppImage um. Folge u. a.: GTK findet die Druckmodule
+/// (printbackends) nicht, der Druckdialog zeigt keine Drucker. Entfernt werden nur Variablen,
+/// deren Ziel fehlt – liefert ein späterer Build GTK doch mit, bleibt alles unverändert.
+/// Muss vor dem Start von GTK laufen. Rückgabe: entfernte Variablen (fürs Protokoll).
+#[cfg(target_os = "linux")]
+fn bereinige_appimage_gtk_umgebung() -> Vec<String> {
+    let mut entfernt = Vec::new();
+    if std::env::var_os("APPIMAGE").is_none() {
+        return entfernt;
+    }
+    // (Variable, Unterpfad, der vorhanden sein muss)
+    let pruefungen = [
+        ("GTK_PATH", ""),
+        ("GTK_EXE_PREFIX", "lib/gtk-3.0"),
+        ("GTK_IM_MODULE_FILE", ""),
+        ("GDK_PIXBUF_MODULE_FILE", ""),
+        ("GIO_MODULE_DIR", ""),
+        ("GI_TYPELIB_PATH", ""),
+    ];
+    for (var, unterpfad) in pruefungen {
+        let Some(wert) = std::env::var_os(var) else { continue };
+        let vorhanden = std::env::split_paths(&wert)
+            .any(|p| !p.as_os_str().is_empty() && p.join(unterpfad).exists());
+        if !vorhanden {
+            std::env::remove_var(var);
+            entfernt.push(format!("{var}={}", wert.to_string_lossy()));
+        }
+    }
+    entfernt
+}
+
+/// Issue #544: Dateiname für „Speichern“ im PDF-Fenster. Die URL trägt ihn seit #476 als
+/// `…/_datei/<Name>`; WebKitGTK schlägt trotzdem „document.pdf“ vor.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn pdf_dateiname_aus_url(url: &tauri::Url) -> String {
+    let segmente: Vec<&str> = url.path_segments().map(|s| s.collect()).unwrap_or_default();
+    let roh = segmente
+        .iter()
+        .position(|s| *s == "_datei")
+        .and_then(|i| segmente.get(i + 1))
+        .copied()
+        .unwrap_or("");
+    // Prozent-Kodierung auflösen (Umlaute, Leerzeichen)
+    let bytes = roh.as_bytes();
+    let mut dekodiert = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16) {
+                dekodiert.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        dekodiert.push(bytes[i]);
+        i += 1;
+    }
+    let name: String = String::from_utf8_lossy(&dekodiert)
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\') || c.is_control() { '_' } else { c })
+        .collect();
+    let name = name.trim().trim_start_matches('.').to_string();
+    if name.is_empty() {
+        return "Dokument.pdf".into();
+    }
+    if name.to_ascii_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") }
+}
+
+/// Freier Dateipfad im Ordner: „Name.pdf“, sonst „Name (2).pdf“, „Name (3).pdf“ …
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn freier_pfad(ordner: &std::path::Path, dateiname: &str) -> std::path::PathBuf {
+    let kandidat = ordner.join(dateiname);
+    if !kandidat.exists() {
+        return kandidat;
+    }
+    let pfad = std::path::Path::new(dateiname);
+    let stamm = pfad.file_stem().and_then(|s| s.to_str()).unwrap_or("Dokument");
+    let endung = pfad.extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (2..)
+        .map(|n| ordner.join(format!("{stamm} ({n}){endung}")))
+        .find(|p| !p.exists())
+        .unwrap()
+}
+
+/// Issue #544: Download aus dem PDF-Fenster (Speichern-Symbol des Betrachters) unter Linux.
+/// Ohne Handler speicherte WebKitGTK still als „document.pdf“ in den Download- oder sogar den
+/// Startordner, ohne jede Rückmeldung. Jetzt: Download-Ordner, sprechender Name, Hinweis.
+/// (Windows/WebView2 zeigt einen eigenen Speichern-Dialog – dort kein Handler.)
+#[cfg(target_os = "linux")]
+fn pdf_download(webview: tauri::Webview, event: tauri::webview::DownloadEvent<'_>) -> bool {
+    use tauri::webview::DownloadEvent;
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    let app = webview.app_handle();
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            let ordner = app
+                .path()
+                .download_dir()
+                .ok()
+                .filter(|p| p.is_dir())
+                .or_else(|| app.path().home_dir().ok())
+                .unwrap_or_else(std::env::temp_dir);
+            *destination = freier_pfad(&ordner, &pdf_dateiname_aus_url(&url));
+            log::info!("PDF speichern: {}", destination.display());
+            true
+        }
+        DownloadEvent::Finished { path, success, .. } => {
+            let (text, art) = match (success, path) {
+                (true, Some(p)) => (format!("Gespeichert unter:\n{}", p.display()), MessageDialogKind::Info),
+                (true, None) => ("Die Datei wurde gespeichert.".to_string(), MessageDialogKind::Info),
+                _ => ("Die Datei konnte nicht gespeichert werden.".to_string(), MessageDialogKind::Error),
+            };
+            app.dialog().message(text).title("PDF speichern").kind(art).show(|_| {});
+            true
+        }
+        _ => true,
+    }
+}
+
+/// IPC-Command: PDF/Dokument des lokalen Backends in eigenem Fenster öffnen (Issue #544).
+/// Bisher per `new WebviewWindow()` im Frontend – dort lässt sich kein Download-Handler setzen.
+/// Nur Adressen des eigenen Backends (127.0.0.1/localhost). `async`: Fenster aus einem
+/// synchronen Command zu erzeugen, kann unter Windows hängen bleiben.
+#[tauri::command]
+async fn oeffne_pdf_fenster(app: tauri::AppHandle, url: String, titel: String) -> Result<(), String> {
+    let ziel: tauri::Url = url.parse().map_err(|_| format!("Ungültige Adresse: {url}"))?;
+    if ziel.scheme() != "http" || !matches!(ziel.host_str(), Some("127.0.0.1") | Some("localhost")) {
+        return Err("Nur Dokumente des lokalen Backends können so geöffnet werden.".into());
+    }
+    let label = format!(
+        "pdf-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    );
+    let fenster = tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(ziel))
+        .title(titel)
+        .inner_size(960.0, 800.0)
+        .center()
+        .resizable(true);
+    #[cfg(target_os = "linux")]
+    let fenster = fenster.on_download(pdf_download);
+    fenster.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{freier_pfad, pdf_dateiname_aus_url};
+
+    fn name(url: &str) -> String {
+        pdf_dateiname_aus_url(&url.parse().unwrap())
+    }
+
+    #[test]
+    fn dateiname_aus_der_adresse() {
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf/_datei/Rechnung_RE-260139.pdf"), "Rechnung_RE-260139.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/mahnwesen/6/pdf/_datei/MHN-260038.pdf?nur_ansehen=true"), "MHN-260038.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/euer/pdf/_datei/E%C3%9CR_2026?jahr=2026"), "EÜR_2026.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/x/_datei/..%2F..%2Fgeheim.pdf"), "_.._geheim.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf"), "Dokument.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf/_datei/"), "Dokument.pdf");
+    }
+
+    #[test]
+    fn freier_pfad_nummeriert() {
+        let ordner = std::env::temp_dir().join(format!("rf-test-{}", std::process::id()));
+        std::fs::create_dir_all(&ordner).unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A.pdf"));
+        std::fs::write(ordner.join("A.pdf"), b"x").unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A (2).pdf"));
+        std::fs::write(ordner.join("A (2).pdf"), b"x").unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A (3).pdf"));
+        std::fs::remove_dir_all(&ordner).unwrap();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    let gtk_entfernt = bereinige_appimage_gtk_umgebung();
+    #[cfg(not(target_os = "linux"))]
+    let gtk_entfernt: Vec<String> = Vec::new();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -179,7 +364,11 @@ pub fn run() {
                 ))
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
+            for eintrag in &gtk_entfernt {
+                log::info!("AppImage: GTK-Umgebungsvariable ohne Ziel entfernt (Issue #543): {eintrag}");
+            }
+
             // Zombie-Backend vom letzten Absturz ODER von einem Update-Relaunch-Race
             // killen, bevor ein neues gestartet wird. Schützt vor DB-Schreibsperren
             // (Issue #268: manchmal läuft nach Update+Neustart noch ein altes Backend,
@@ -352,7 +541,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url, confirm_close, write_bytes_to_path])
+        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url, confirm_close, write_bytes_to_path, oeffne_pdf_fenster])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {

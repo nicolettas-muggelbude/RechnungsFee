@@ -145,8 +145,16 @@ export function dokumentPdfUrl(
 }
 
 /** Öffnet ein Dokument in einem neuen Tauri-WebView-Fenster (eigenes OS-Fenster).
- *  Funktioniert für HTTP-URLs und blob:-URLs gleichermaßen. */
+ *  Adressen des Backends öffnet Rust (oeffne_pdf_fenster), damit unter Linux das
+ *  Speichern-Symbol des PDF-Betrachters mit Download-Ordner, sprechendem Namen und Hinweis
+ *  speichert (Issue #544). blob:-URLs kann nur das Frontend selbst öffnen. */
 export async function openInPdfWindow(url: string, title = 'Dokument') {
+  if (!url.startsWith('blob:')) {
+    // Dev-Modus: relative /api-Adresse (Vite-Proxy) – das neue Fenster braucht eine absolute
+    const absolut = new URL(url, window.location.href).toString()
+    await invoke('oeffne_pdf_fenster', { url: absolut, titel: title })
+    return
+  }
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
   const label = `pdf-${Date.now()}`
   new WebviewWindow(label, {
