@@ -703,7 +703,9 @@ class DokumentenPaket(Base):
 
     dateien: Mapped[list["DokumentenPaketBeleg"]] = relationship(
         "DokumentenPaketBeleg", back_populates="paket",
-        cascade="all, delete-orphan", order_by="DokumentenPaketBeleg.sort_order"
+        cascade="all, delete-orphan",
+        # id als Zweitschlüssel: Altbestände können doppelte sort_order haben (Issue #524)
+        order_by="[DokumentenPaketBeleg.sort_order, DokumentenPaketBeleg.id]"
     )
 
 

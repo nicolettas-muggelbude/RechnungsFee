@@ -1757,6 +1757,10 @@ export const uploadPaketDatei = (paketId: number, datei: File, bezeichnung?: str
 export const updatePaketDatei = (paketId: number, eintragId: number, data: { bezeichnung?: string; sort_order?: number }) =>
   request<DokumentenPaket>(`/dokumentenpakete/${paketId}/dateien/${eintragId}`, { method: 'PUT', body: JSON.stringify(data) })
 
+/** Reihenfolge der Dokumente im Paket speichern (vollständige ID-Liste, Issue #524). */
+export const updatePaketReihenfolge = (paketId: number, eintragIds: number[]) =>
+  request<DokumentenPaket>(`/dokumentenpakete/${paketId}/reihenfolge`, { method: 'PUT', body: JSON.stringify({ eintrag_ids: eintragIds }) })
+
 export const deletePaketDatei = (paketId: number, eintragId: number) =>
   request<DokumentenPaket>(`/dokumentenpakete/${paketId}/dateien/${eintragId}`, { method: 'DELETE' })
 
