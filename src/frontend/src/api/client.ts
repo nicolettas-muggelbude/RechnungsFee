@@ -1946,7 +1946,7 @@ export async function getXRechnungUrl(id: number): Promise<string> {
 
 /** XRechnung-XML speichern (Speichern-Dialog); Backend-Meldung (z. B. fehlende Pflichtangabe) als Fehlertext. */
 export async function speichereXRechnung(id: number, rechnungsnummer: string | null): Promise<void> {
-  const res = await fetch(await getXRechnungUrl(id))
+  const res = await apiFetch(await getXRechnungUrl(id))
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'XRechnung konnte nicht erzeugt werden')

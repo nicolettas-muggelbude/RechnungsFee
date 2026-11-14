@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  getApiBase, getUnternehmen, isTauri, openUrl, sendeMailMitAnhang, speichereBlob,
+  apiFetch, getApiBase, getUnternehmen, isTauri, openUrl, sendeMailMitAnhang, speichereBlob,
   type MailSendenRequest, type Unternehmen,
 } from '../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../utils/thunderbirdVersand'
@@ -73,7 +73,7 @@ export function DsgvoMailButton({ art, id, name, email }: Props) {
         return
       }
       // Kein SMTP/Thunderbird: PDF speichern, Mailprogramm öffnen – Anhang von Hand einfügen
-      const res = await fetch(await pdfUrl(art, id))
+      const res = await apiFetch(await pdfUrl(art, id))
       if (!res.ok) throw new Error(`PDF konnte nicht erzeugt werden (${res.status})`)
       await speichereBlob(await res.blob(), dateiname(name))
       const mailto = `mailto:${email ?? ''}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`
