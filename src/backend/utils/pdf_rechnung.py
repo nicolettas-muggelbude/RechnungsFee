@@ -11,7 +11,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _fmt_ust_satz, _iso_zu_de, _ust_aufschluesselung,
+    _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _ust_aufschluesselung,
     GRAU_HELL, GRAU_RAND, TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W,
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
@@ -123,8 +123,7 @@ class RechnungPDF(RechnungPDFBase):
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H):
                 _tabellenkopf()
-            menge     = float(str(pos.menge))
-            menge_str = str(int(menge)) if menge == int(menge) else f"{menge:.3f}".rstrip("0")
+            menge_str = _fmt_zahl(pos.menge)
             if ist_storno:
                 menge_str = f"-{menge_str}"
             ist_diff  = getattr(pos, "differenzbesteuerung", False)
@@ -180,7 +179,7 @@ class RechnungPDF(RechnungPDFBase):
                 else:
                     rabatt_abs = brutto_ges_vor - brutto_ges_eff
                 self.set_x(L_MARGIN)
-                self.cell(pre_total_w, 5, f"  {pos_rabatt:.4g} % Rabatt", align="L")
+                self.cell(pre_total_w, 5, f"  {_fmt_zahl(pos_rabatt)} % Rabatt", align="L")
                 self.cell(col_w[-1], 5, f"− {_fmt_euro(rabatt_abs)}", align="R",
                           new_x="LMARGIN", new_y="NEXT")
                 self.set_font("DejaVu", "", 8.5)
@@ -262,7 +261,7 @@ class RechnungPDF(RechnungPDFBase):
                 skonto_frist = r.datum + timedelta(days=int(r.skonto_tage))
                 skonto_betrag = (r.brutto_gesamt * Decimal(str(r.skonto_prozent)) / 100).quantize(Decimal("0.01"))
                 skonto_text = (
-                    f"{r.skonto_prozent:.0f}% Skonto bei Zahlung bis {_iso_zu_de(str(skonto_frist))}: "
+                    f"{_fmt_zahl(r.skonto_prozent)}% Skonto bei Zahlung bis {_iso_zu_de(str(skonto_frist))}: "
                     f"{_fmt_euro(r.brutto_gesamt - skonto_betrag)}"
                 )
                 self.set_font("DejaVu", "", 8)

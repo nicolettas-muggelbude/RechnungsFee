@@ -208,13 +208,20 @@ def _fmt_euro(val: Any) -> str:
     return f"{sign}{formatted} €"
 
 
+def _fmt_zahl(val: Any) -> str:
+    """Menge oder Prozentwert im deutschen Format ohne überflüssige Nachkommastellen:
+    1.5 → "1,5", 10.00 → "10", 1250 → "1.250", -1.5 → "-1,5".
+    Format "f" statt str(), weil normalize() glatte Zehner als Exponent liefert (10 → "1E+1")."""
+    normalisiert = Decimal(str(val)).normalize()
+    return f"{normalisiert:,f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _fmt_ust_satz(satz: Any) -> str:
-    """19.00 → "19", 7.00 → "7", 7.80 → "7,8" – analog zu zugferd.py::_ust_satz(), aber mit
-    deutschem Komma für die PDF-Anzeige. Issue #406: int(pos.ust_satz) kappte bei eigenen
+    """19.00 → "19", 7.00 → "7", 7.80 → "7,8", 10.00 → "10" – analog zu zugferd.py::_ust_satz(),
+    aber mit deutschem Komma für die PDF-Anzeige. Issue #406: int(pos.ust_satz) kappte bei eigenen
     Steuersätzen mit Nachkommastelle (z.B. 7,8 % Pauschalierung §24 UStG) die Dezimalstelle,
     obwohl Berechnung/Speicherung korrekt waren - reiner Anzeigefehler in der PDF-Positionszeile."""
-    normalisiert = Decimal(str(satz)).quantize(Decimal("0.01")).normalize()
-    return str(normalisiert).replace(".", ",")
+    return _fmt_zahl(Decimal(str(satz)).quantize(Decimal("0.01")))
 
 
 def _iso_zu_de(iso: str) -> str:
@@ -793,7 +800,7 @@ class RechnungPDFBase(FPDF):
             else:
                 rabatt_netto  = (pos_netto_sum  * re_rabatt_proz / 100).quantize(_Q2)
                 rabatt_brutto = (pos_brutto_sum * re_rabatt_proz / 100).quantize(_Q2)
-                rabatt_lbl = f"Rabatt {re_rabatt_proz:.4g} %"
+                rabatt_lbl = f"Rabatt {_fmt_zahl(re_rabatt_proz)} %"
 
         if self._ist_netto:
             if hat_rabatt:

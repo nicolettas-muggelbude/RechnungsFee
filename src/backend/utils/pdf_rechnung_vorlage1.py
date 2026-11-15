@@ -13,7 +13,7 @@ from io import BytesIO
 
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
-    _fmt_euro, _fmt_ust_satz, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
+    _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -164,7 +164,6 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             if self._umbruch_vor_position(_hoehe, KOPF_H, vor_umbruch=lambda: _rahmen(tbl_top, self.get_y())):
                 tbl_top = self.get_y()
                 _tabellenkopf()
-            menge = float(str(pos.menge))
             ist_diff = getattr(pos, "differenzbesteuerung", False)
             ust_label = "§25a" if ist_diff else f"{_fmt_ust_satz(pos.ust_satz)} %"
             pos_rabatt = getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")
@@ -177,7 +176,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.set_x(other_x)
             if ist_lieferschein:
                 einheit = (pos.einheit or "").strip()
-                self.cell(col_w[desc_col + 1], ROW_H, f"{menge:g}", align="R")
+                self.cell(col_w[desc_col + 1], ROW_H, _fmt_zahl(pos.menge), align="R")
                 self.cell(col_w[desc_col + 2], ROW_H, einheit)
             elif self._ist_netto:
                 # Anzeige-Werte für den "vor Rabatt"-Referenzpreis und die Rabatt-Unterzeile - rein
@@ -186,7 +185,6 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 # Issue #332). Mit Decimal statt float für exakte Centbeträge.
                 netto_ges_vor = pos.netto * pos.menge * _sign
                 netto_ges_eff = (pos.brutto - pos.ust_betrag) * _sign
-                menge_disp = f"-{menge:g}" if ist_storno else f"{menge:g}"
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(pos.netto), align="R")
                 self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
                 self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(netto_ges_vor), align="R")
@@ -196,7 +194,6 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 ep_brutto = pos.netto
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
-                menge_disp = f"-{menge:g}" if ist_storno else f"{menge:g}"
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(ep_brutto), align="R")
                 self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
                 self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
@@ -222,7 +219,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 else:
                     rabatt_abs = brutto_ges_vor - brutto_ges_eff
                 self.set_x(L_MARGIN)
-                self.cell(pre_total_w, 5, f"  {pos_rabatt:.4g} % Rabatt", align="L")
+                self.cell(pre_total_w, 5, f"  {_fmt_zahl(pos_rabatt)} % Rabatt", align="L")
                 self.cell(col_w[-1], 5, f"− {_fmt_euro(rabatt_abs)}", align="R",
                           new_x="LMARGIN", new_y="NEXT")
                 self.set_font("DejaVu", "", 8.5)
@@ -373,7 +370,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             _row("Rechnungsbetrag", _fmt_euro(r.brutto_gesamt), bold_val=True)
             _row("Zahlungsziel", faellig)
             if sk_betrag is not None:
-                _row("Skonto", f"{_sk_proz:.0f}% bis {_iso_zu_de(str(sk_frist))}: {_fmt_euro(sk_netto)}")
+                _row("Skonto", f"{_fmt_zahl(_sk_proz)}% bis {_iso_zu_de(str(sk_frist))}: {_fmt_euro(sk_netto)}")
             if r.rechnungsnummer:
                 _row("Verwendungszweck", r.rechnungsnummer or "")
             if bank:
