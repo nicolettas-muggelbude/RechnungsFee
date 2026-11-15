@@ -3103,10 +3103,14 @@ export const bucheTransaktion = (
   rechnungId: number | null = null,
   betragZuBuchen?: number,
   restPrivat = false,
+  kategorieId?: number,
 ) =>
   request<BankTransaktion>(`/bank-import/transaktion/${txId}/buchen`, {
     method: 'POST',
-    body: JSON.stringify({ rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null, rest_privat: restPrivat }),
+    body: JSON.stringify({
+      rechnung_id: rechnungId, betrag_zu_buchen: betragZuBuchen ?? null, rest_privat: restPrivat,
+      kategorie_id: kategorieId ?? null,
+    }),
   })
 
 export const verknuepfeBankTransaktionMitJournal = (txId: number, journalId: number) =>
