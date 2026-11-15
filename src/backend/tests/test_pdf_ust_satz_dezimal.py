@@ -23,7 +23,7 @@ from database.connection import Base
 from database.models import Kunde, Rechnung, Rechnungsposition
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
-from utils.pdf_rechnung_base import _ust_aufschluesselung
+from utils.pdf_rechnung_base import _fmt_ust_satz, _fmt_zahl, _ust_aufschluesselung
 
 
 @pytest.fixture
@@ -106,3 +106,109 @@ def test_ust_aufschluesselung_gruppiert_7_8_prozent_getrennt_von_7_prozent():
     ust_by_satz = {s: ust for s, _, ust in ergebnis}
     assert ust_by_satz[Decimal("7.8")] == Decimal("7.80")
     assert ust_by_satz[Decimal("7")] == Decimal("7.00")
+
+
+# --- Menge, Rabatt und Skonto im deutschen Zahlenformat -------------------------------------
+# In Angeboten erschien die Menge als "1.5"/"2.5" und der Rechnungsrabatt als "Rabatt 10.00 %",
+# während Geldbeträge bereits korrekt deutsch formatiert waren ("1.966,50 €"). Skonto wurde
+# über :.0f auf eine ganze Zahl gerundet (1,5 % → "2%"), und _fmt_ust_satz() lieferte für
+# glatte Zehner über Decimal.normalize() Exponentenschreibweise (10 % → "1E+1 %").
+
+def _rechnung_mit_mengen(db, mengen, pos_rabatt="0", **rechnung_felder) -> Rechnung:
+    kunde = Kunde(firmenname="Webkunde", strasse="Hofweg", hausnummer="1", plz="12345", ort="Testort", land="DE")
+    db.add(kunde)
+    db.flush()
+    einzelpreis = Decimal("80.00")
+    zeilen = [(Decimal(m), (einzelpreis * Decimal(m)).quantize(Decimal("0.01"))) for m in mengen]
+    netto = sum(n for _, n in zeilen)
+    ust = (netto * Decimal("0.19")).quantize(Decimal("0.01"))
+    felder = dict(
+        typ="ausgang", rechnungsnummer="ANG-260001", datum=date(2026, 9, 24),
+        kunde_id=kunde.id, netto_gesamt=netto, ust_gesamt=ust,
+        brutto_gesamt=netto + ust, ist_entwurf=False, dokument_typ="Angebot",
+    )
+    felder.update(rechnung_felder)
+    rechnung = Rechnung(**felder)
+    db.add(rechnung)
+    db.flush()
+    for nr, (menge, zeile_netto) in enumerate(zeilen, start=1):
+        zeile_ust = (zeile_netto * Decimal("0.19")).quantize(Decimal("0.01"))
+        db.add(Rechnungsposition(
+            rechnung_id=rechnung.id, position_nr=nr, beschreibung=f"Leistung {nr}", menge=menge,
+            einheit="Std.", netto=einzelpreis, ust_satz=Decimal("19"), ust_betrag=zeile_ust,
+            brutto=zeile_netto + zeile_ust, rabatt_prozent=Decimal(pos_rabatt),
+        ))
+    db.commit()
+    db.refresh(rechnung)
+    return rechnung
+
+
+GENERATOREN = [generate_rechnung_pdf, generate_rechnung_pdf_vorlage1]
+
+
+def test_vorlage0_menge_mit_komma(db):
+    rechnung = _rechnung_mit_mengen(db, ["1.5", "2.5"])
+    text = _pdf_text(generate_rechnung_pdf(rechnung, UNT_DICT))
+    assert "1,5" in text and "2,5" in text
+    assert "1.5" not in text and "2.5" not in text
+
+
+def test_vorlage0_storno_menge_mit_komma_und_vorzeichen(db):
+    rechnung = _rechnung_mit_mengen(db, ["1.5"], dokument_typ="Rechnung", storniert=True,
+                                    storno_datum=date(2026, 9, 25))
+    text = _pdf_text(generate_rechnung_pdf(rechnung, UNT_DICT))
+    assert "-1,5" in text
+    assert "1.5" not in text
+
+
+def test_vorlage1_lieferschein_menge_mit_komma(db):
+    rechnung = _rechnung_mit_mengen(db, ["1.5"], dokument_typ="Lieferschein")
+    text = _pdf_text(generate_rechnung_pdf_vorlage1(rechnung, UNT_DICT))
+    assert "1,5" in text
+    assert "1.5" not in text
+
+
+@pytest.mark.parametrize("generator", GENERATOREN)
+def test_rechnungsrabatt_ohne_ueberfluessige_nullen(db, generator):
+    rechnung = _rechnung_mit_mengen(db, ["1.5", "2.5"], rabatt_prozent=Decimal("10.00"))
+    text = _pdf_text(generator(rechnung, UNT_DICT))
+    assert "Rabatt 10 %" in text
+    assert "10.00" not in text
+
+
+@pytest.mark.parametrize("generator", GENERATOREN)
+def test_rechnungsrabatt_mit_nachkommastelle(db, generator):
+    rechnung = _rechnung_mit_mengen(db, ["1"], rabatt_prozent=Decimal("12.50"))
+    text = _pdf_text(generator(rechnung, UNT_DICT))
+    assert "Rabatt 12,5 %" in text
+
+
+@pytest.mark.parametrize("generator", GENERATOREN)
+def test_positionsrabatt_mit_komma(db, generator):
+    rechnung = _rechnung_mit_mengen(db, ["1"], pos_rabatt="7.50")
+    text = _pdf_text(generator(rechnung, UNT_DICT))
+    assert "7,5 % Rabatt" in text
+    assert "7.50" not in text
+
+
+@pytest.mark.parametrize("generator", GENERATOREN)
+def test_skonto_mit_nachkommastelle(db, generator):
+    unt = {**UNT_DICT, "iban": "DE89370400440532013000", "bic": "COBADEFFXXX"}
+    rechnung = _rechnung_mit_mengen(db, ["1"], dokument_typ="Rechnung",
+                                    skonto_prozent=Decimal("1.50"), skonto_tage=10)
+    text = _pdf_text(generator(rechnung, unt))
+    assert "1,5%" in text
+    assert "2%" not in text
+
+
+@pytest.mark.parametrize("satz,erwartet", [("10", "10"), ("20.00", "20"), ("19", "19"), ("7.8", "7,8")])
+def test_fmt_ust_satz_ohne_exponentenschreibweise(satz, erwartet):
+    assert _fmt_ust_satz(Decimal(satz)) == erwartet
+
+
+@pytest.mark.parametrize("wert,erwartet", [
+    ("1", "1"), ("12.000", "12"), ("1.5", "1,5"), ("0.25", "0,25"), ("2.125", "2,125"),
+    ("10.00", "10"), ("1250", "1.250"), ("1250.5", "1.250,5"), ("-1.5", "-1,5"), ("0", "0"),
+])
+def test_fmt_zahl(wert, erwartet):
+    assert _fmt_zahl(Decimal(wert)) == erwartet
