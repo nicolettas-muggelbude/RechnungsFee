@@ -5,18 +5,18 @@ Prüfung in utils/sicherheit_middleware.py).
 Vorher: Jeder lokale Prozess und jeder andere Benutzer des Rechners konnte mit einem simplen
 `curl http://127.0.0.1:<port>/api/unternehmen` alle Daten samt Zugangsdaten lesen, Buchungen
 anlegen oder ein Backup einspielen. Jetzt: ohne gültiges `Authorization: Bearer <token>` 401 –
-außer CORS-Preflight und (Übergang bis Schritt 2) lesenden Abrufen der Datei-Endpunkte, die im
-eigenen Fenster geöffnet werden.
+außer CORS-Preflight und lesenden Abrufen mit gültigem signiertem Kurzzeit-Link (Schritt 2, für
+Fenster/iframe/<img>, die keinen Header senden können).
 """
 import asyncio
 import io
-import re
+import time
 
 import pytest
 
 import main
 from utils import sitzungstoken
-from utils.sicherheit_middleware import SicherheitMiddleware, _FENSTER_PFADE, ohne_token_erlaubt
+from utils.sicherheit_middleware import SicherheitMiddleware
 
 TOKEN = "a" * 32 + "0123456789abcdef0123456789abcdef"
 
@@ -29,7 +29,7 @@ def mit_token():
     sitzungstoken.setze_token(vorher)
 
 
-def _rufe(method="GET", path="/api/unternehmen", authorization=None):
+def _rufe(method="GET", path="/api/unternehmen", authorization=None, query=""):
     aufgerufen = []
 
     async def app(scope, receive, send):
@@ -41,7 +41,8 @@ def _rufe(method="GET", path="/api/unternehmen", authorization=None):
     headers = [(b"host", b"127.0.0.1:18765")]
     if authorization is not None:
         headers.append((b"authorization", authorization.encode()))
-    scope = {"type": "http", "method": method, "path": path, "headers": headers}
+    scope = {"type": "http", "method": method, "path": path, "headers": headers,
+             "query_string": query.encode()}
     nachrichten = []
 
     async def receive():
@@ -95,61 +96,112 @@ def test_preflight_ohne_token(mit_token):
     assert status == 200 and aufgerufen
 
 
-@pytest.mark.parametrize("path", [
-    "/api/rechnungen/12/pdf",
-    "/api/rechnungen/12/pdf/_datei/Rechnung_RE-260035.pdf",   # Issue #476
-    "/api/rechnungen/12/pdf-ansehen",
-    "/api/rechnungen/temp/0b6e3c3a-2c55-4c43-9a0f-7d1c1b9a7f10",
-    "/api/journal/5/beleg",
-    "/api/unternehmen/logo",
-    "/api/euer/pdf",
-    "/health",
+def test_health_braucht_token(mit_token):
+    status, aufgerufen = _rufe("GET", "/health")
+    assert status == 401 and not aufgerufen
+
+
+# ── Signierte Kurzzeit-Links (Schritt 2) ───────────────────────────────────────
+
+def _link(pfad, query="", **kw):
+    """(Pfad, Query) eines signierten Links, wie ihn der Browser an die Middleware schickt."""
+    voll = sitzungstoken.signiere(pfad, query, **kw)
+    p, _, q = voll.partition("?")
+    return p, q
+
+
+@pytest.mark.parametrize("pfad,query", [
+    ("/api/rechnungen/12/pdf", ""),
+    ("/api/rechnungen/12/pdf", "nur_ansehen=true"),
+    ("/api/unternehmen/logo", "v=1700000000"),
 ])
-def test_fensterpfade_lesend_ohne_token(mit_token, path):
+def test_signierter_link_ohne_token(mit_token, pfad, query):
+    p, q = _link(pfad, query)
     for method in ("GET", "HEAD"):
-        status, aufgerufen = _rufe(method, path)
-        assert status == 200 and aufgerufen, (method, path)
+        status, aufgerufen = _rufe(method, p, query=q)
+        assert status == 200 and aufgerufen
 
 
-@pytest.mark.parametrize("path", [
-    "/api/rechnungen/12",
-    "/api/rechnungen/12/pdfx",
-    "/api/rechnungen/abc/pdf",
-    "/api/rechnungen/temp/../../unternehmen",
-    "/api/unternehmen/logo/../",
-    "/api/kunden",
-    "/api/backup/download",
-    "/api/export/gobd",
-    "/api/euer/pdf/extra",
-])
-def test_kein_fensterpfad(path):
-    assert not ohne_token_erlaubt("GET", path)
+def test_signierter_link_mit_dateiname_segment(mit_token):
+    p, q = _link("/api/rechnungen/12/pdf", "nur_ansehen=true")
+    status, _ = _rufe("GET", p + "/_datei/Rechnung_RE-1.pdf", query=q)
+    assert status == 200
 
 
-def test_ohne_token_im_dev_modus_offen():
+def test_link_abgelaufen(mit_token):
+    p, q = _link("/api/rechnungen/12/pdf", gueltig=-1)
+    assert _rufe("GET", p, query=q)[0] == 401
+
+
+def test_link_nicht_uebertragbar(mit_token):
+    p, q = _link("/api/rechnungen/12/pdf", "nur_ansehen=true")
+    assert _rufe("GET", "/api/rechnungen/13/pdf", query=q)[0] == 401      # anderer Pfad
+    assert _rufe("GET", p, query=q.replace("nur_ansehen=true&", ""))[0] == 401  # Query entfernt
+    assert _rufe("GET", p, query="nur_ansehen=false&" + q.split("&", 1)[1])[0] == 401
+    assert _rufe("POST", p, query=q)[0] == 401                            # nur lesend
+
+
+def test_link_manipuliert(mit_token):
+    p, q = _link("/api/rechnungen/12/pdf")
+    exp = int(q.split("&")[0].split("=")[1])
+    assert _rufe("GET", p, query=q.replace("exp=%d" % exp, "exp=%d" % (exp + 999)))[0] == 401
+    assert _rufe("GET", p, query=q[:-1] + ("0" if q[-1] != "0" else "1"))[0] == 401
+    assert _rufe("GET", p, query="exp=%d" % exp)[0] == 401
+    assert _rufe("GET", p, query="exp=abc&sig=x")[0] == 401
+
+
+def test_link_mit_anderem_token_ungueltig(mit_token):
+    p, q = _link("/api/rechnungen/12/pdf")
+    sitzungstoken.setze_token("b" * 40)
+    assert _rufe("GET", p, query=q)[0] == 401
+
+
+def test_signiere_ohne_token_unveraendert():
     vorher = sitzungstoken.aktuelles_token()
     sitzungstoken.setze_token(None)
     try:
-        status, aufgerufen = _rufe("GET", "/api/unternehmen")
-        assert status == 200 and aufgerufen
+        assert sitzungstoken.signiere("/api/x", "a=1") == "/api/x?a=1"
     finally:
         sitzungstoken.setze_token(vorher)
 
 
-# ── Fenster-Pfade passen zu echten Routen ──────────────────────────────────────
+# ── Endpunkt POST /api/signierte-url ───────────────────────────────────────────
 
-def test_fensterpfade_existieren_als_get_routen():
-    """Jede Alternative in _FENSTER_PFADE muss mindestens eine echte GET-Route treffen –
-    schützt vor Tippfehlern, durch die ein PDF-Fenster plötzlich 401 zeigt."""
-    get_pfade = [p for p, m in main.app.openapi()["paths"].items() if "get" in m]
-    beispiele = [re.sub(r"\{token\}", "0b6e3c3a-2c55-4c43-9a0f-7d1c1b9a7f10",
-                        re.sub(r"\{[a-z_]*id\}", "1", p)) for p in get_pfade]
-    # Jede Zeile des Musters ist eine Alternative und muss mindestens eine Route treffen
-    zeilen = [z.strip().lstrip("|").strip() for z in _FENSTER_PFADE.pattern.splitlines()[1:-1]]
-    assert len(zeilen) > 10
-    for zeile in zeilen:
-        teil = re.compile(rf"^/api/(?:{zeile})$")
-        assert any(teil.match(b) for b in beispiele), f"keine Route für {zeile!r}"
+def test_endpunkt_signiert_und_link_funktioniert(mit_token):
+    from fastapi.testclient import TestClient
+    c = TestClient(main.app, base_url="http://127.0.0.1:18765")
+    kopf = {"Authorization": f"Bearer {TOKEN}"}
+    url = "http://127.0.0.1:18765/api/rechnungen/12/pdf/_datei/Rechnung%20%C3%9C.pdf?nur_ansehen=true#x"
+    assert c.post("/api/signierte-url", json={"url": url}).status_code == 401
+    r = c.post("/api/signierte-url", json={"url": url}, headers=kopf)
+    assert r.status_code == 200
+    signiert = r.json()["url"]
+    assert signiert.startswith("http://127.0.0.1:18765/api/rechnungen/12/pdf/_datei/Rechnung%20%C3%9C.pdf?nur_ansehen=true&exp=")
+    # Der signierte Link besteht die Prüfung ohne Header (Route selbst darf 404 liefern – kein 401)
+    assert c.get(signiert.replace("http://127.0.0.1:18765", "")).status_code != 401
+    assert c.get(signiert.replace("/12/", "/13/").replace("http://127.0.0.1:18765", "")).status_code == 401
+
+
+@pytest.mark.parametrize("url", [
+    "http://attacker.example/api/rechnungen/1/pdf",
+    "/api/../etc/passwd",
+    "/api/signierte-url",
+    "/nicht-api/x",
+])
+def test_endpunkt_lehnt_ab(mit_token, url):
+    from fastapi.testclient import TestClient
+    c = TestClient(main.app, base_url="http://127.0.0.1:18765")
+    r = c.post("/api/signierte-url", json={"url": url}, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 422
+
+
+def test_pdf_ansehen_huelle_signiert_iframe(mit_token):
+    from api.rechnungen import rechnung_pdf_ansehen_wrapper
+    from types import SimpleNamespace
+    r = SimpleNamespace(rechnungsnummer="RE-1")
+    db = SimpleNamespace(query=lambda *_: SimpleNamespace(filter=lambda *_: SimpleNamespace(first=lambda: r)))
+    html = rechnung_pdf_ansehen_wrapper(12, db).body.decode()
+    assert "nur_ansehen=true&amp;exp=" in html and "&amp;sig=" in html
 
 
 # ── Token-Übergabe ────────────────────────────────────────────────────────────

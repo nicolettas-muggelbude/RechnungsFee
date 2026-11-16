@@ -37,6 +37,7 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils.rechnungs_parser import analysiere_datei
+from utils import sitzungstoken
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
@@ -2588,7 +2589,7 @@ iframe {{
 </head>
 <body>
 <div class="titelleiste">{titel} – nur zur Ansicht</div>
-<div class="viewer"><iframe src="/api/rechnungen/{rechnung_id}/pdf?nur_ansehen=true"></iframe></div>
+<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', 'nur_ansehen=true'))}"></iframe></div>
 <script>
 document.addEventListener('keydown', function(e) {{
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's')) {{

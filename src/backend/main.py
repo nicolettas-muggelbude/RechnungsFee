@@ -8,6 +8,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from pydantic import BaseModel
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -143,6 +144,31 @@ def shutdown():
         os._exit(0)
     threading.Thread(target=_exit, daemon=True).start()
     return {"ok": True}
+
+
+class SignierteUrlRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/signierte-url")
+def signierte_url(data: SignierteUrlRequest):
+    """Security-Audit F4 Teil 2: Kurzzeit-Link für Fenster/iframe/<img>, die keinen
+    Authorization-Header senden können (siehe utils/sitzungstoken.py). Der Aufruf selbst
+    braucht das Sitzungstoken."""
+    from urllib.parse import urlsplit, unquote
+    try:
+        teile = urlsplit(data.url)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ungültige Adresse.")
+    pfad = unquote(teile.path)
+    if teile.netloc and teile.hostname not in ("127.0.0.1", "localhost"):
+        raise HTTPException(status_code=422, detail="Nur Adressen des lokalen Backends.")
+    if not pfad.startswith("/api/") or ".." in pfad.split("/") or pfad == "/api/signierte-url":
+        raise HTTPException(status_code=422, detail="Nur API-Adressen können signiert werden.")
+    signiert = sitzungstoken.signiere(pfad, teile.query)
+    # Schema/Host/Port und den kodierten Pfad der Eingabe beibehalten, nur die Query ersetzen
+    basis = data.url.split("?", 1)[0].split("#", 1)[0]
+    return {"url": basis + signiert[len(pfad):]}
 
 
 def _decrypt_bytes(data: bytes, passwort: str) -> bytes:

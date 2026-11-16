@@ -555,7 +555,7 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
 
   async function handleOpen(kb: KundeBeleg) {
     const url = await getKundeBelegDownloadUrl(kundeId, kb.id)
-    window.open(url, '_blank')
+    await openUrl(url)
   }
 
   function fileIcon(mime?: string) {

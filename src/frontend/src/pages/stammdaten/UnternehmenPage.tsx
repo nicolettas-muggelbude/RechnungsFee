@@ -93,7 +93,7 @@ function LogoSektion({
   const [ladeVersuch, setLadeVersuch] = useState(0)
   const logoFehlt = logoVorhanden && ladeVersuch >= 2
   useEffect(() => {
-    getLogoUrl().then((url) => setLogoSrc(`${url}?v=${cacheBust}`))
+    getLogoUrl(cacheBust).then(setLogoSrc)
   }, [cacheBust])
 
   const uploadMut = useMutation({

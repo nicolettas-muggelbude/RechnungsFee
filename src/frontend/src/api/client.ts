@@ -50,6 +50,21 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   return fetch(url, { ...init, headers })
 }
 
+/** Security-Audit F4 Teil 2: Datei-URLs für Fenster, iframe und <img> können keinen
+ *  Authorization-Header senden. Das Backend stellt dafür einen Kurzzeit-Link (exp/sig) aus,
+ *  gebunden an Pfad + Query – deshalb als LETZTER Schritt, nachdem die URL fertig ist.
+ *  Ohne Sitzungstoken (Vite-Dev-Modus, der Proxy hängt den Header an) bleibt die URL unverändert. */
+export async function signiereUrl(url: string): Promise<string> {
+  if (url.startsWith('blob:') || /[?&]sig=/.test(url) || !(await getBackendToken())) return url
+  const res = await apiFetch(`${await getBaseUrl()}/signierte-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) throw new Error(`Link konnte nicht erstellt werden: ${res.status}`)
+  return (await res.json()).url
+}
+
 /** Wartet bis das Backend antwortet (max. 300 × 200 ms = 60 s).
  *  Nach einem Update scannt Windows Defender die neue backend.exe und PyInstaller
  *  extrahiert sich neu – das dauert typisch 20–60 s. */
@@ -179,7 +194,7 @@ export function dokumentPdfUrl(
 export async function openInPdfWindow(url: string, title = 'Dokument') {
   if (!url.startsWith('blob:')) {
     // Dev-Modus: relative /api-Adresse (Vite-Proxy) – das neue Fenster braucht eine absolute
-    const absolut = new URL(url, window.location.href).toString()
+    const absolut = await signiereUrl(new URL(url, window.location.href).toString())
     await invoke('oeffne_pdf_fenster', { url: absolut, titel: title })
     return
   }
@@ -422,9 +437,9 @@ export async function deleteLogo(): Promise<void> {
   }
 }
 
-export async function getLogoUrl(): Promise<string> {
+export async function getLogoUrl(version?: number): Promise<string> {
   const base = await getBaseUrl()
-  return `${base}/unternehmen/logo`
+  return signiereUrl(`${base}/unternehmen/logo${version ? `?v=${version}` : ''}`)
 }
 
 // --- Konten ---

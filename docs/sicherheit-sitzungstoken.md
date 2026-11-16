@@ -1,8 +1,8 @@
 # Sitzungstoken zwischen Tauri, Frontend und Backend
 
 **Stand:** 2026-11-09
-**Status:** Schritt 1 umgesetzt (Branch `feature/f4-sitzungstoken`), Security-Audit F4 Teil 2.
-Schritt 2 (signierte Kurzzeit-Links für Datei-URLs) folgt.
+**Status:** Schritt 1 und 2 umgesetzt (Branch `feature/f4-sitzungstoken`), Security-Audit F4 Teil 2.
+Schritt 2 (signierte Kurzzeit-Links für Datei-URLs) ist umgesetzt.
 
 ## Problem
 
@@ -54,16 +54,24 @@ Verkehr verlässt den Rechner nicht, und wer Loopback mitlesen kann, kann auch d
 | Was | Warum |
 |-----|-------|
 | `OPTIONS` | CORS-Preflight trägt keinen `Authorization`-Header |
-| `GET /health` | reine Erreichbarkeitsprüfung, keine Daten |
-| GET/HEAD auf Datei-Endpunkte (`_FENSTER_PFADE`) | **Übergang bis Schritt 2:** PDFs, Belege, Logo usw. werden in einem eigenen `WebviewWindow`, `<iframe>` oder `<img>` geladen, und dort lässt sich kein Header setzen |
+| GET/HEAD mit gültigem signiertem Link (`?exp=…&sig=…`) | PDFs, Belege, Logo usw. werden in einem eigenen `WebviewWindow`, `<iframe>` oder `<img>` geladen, wo sich kein Header setzen lässt |
 
-**Wichtig für neue Datei-Endpunkte:** Wird ein neuer GET-Endpunkt im eigenen Fenster geöffnet
-(`openUrl()`, `openInPdfWindow()`, `<img src>`), muss sein Pfad in `_FENSTER_PFADE` ergänzt
-werden, sonst zeigt das Fenster „Sitzungstoken fehlt oder ist ungültig.“. Der Test
-`test_fensterpfade_existieren_als_get_routen` prüft, dass jeder Eintrag zu einer echten Route
-passt.
+`GET /health` braucht seit Schritt 2 ebenfalls das Token (ein 401 zeigt nur, dass etwas läuft).
 
-Alle JSON-Endpunkte und alle schreibenden Requests brauchen das Token.
+## Signierte Kurzzeit-Links (Schritt 2)
+
+- `POST /api/signierte-url` (mit Token) nimmt `{url}` und liefert dieselbe Adresse mit `exp` und
+  `sig`. Nur `/api/`-Pfade auf `127.0.0.1`/`localhost`.
+- `sig = HMAC-SHA256(HMAC(token, "rechnungsfee-link-v1"), "GET\n<pfad>\n<query ohne exp/sig>\n<exp>")`.
+  Pfad **und** Query sind gebunden – ein Link gilt für genau ein Dokument; ein angehängtes
+  `/_datei/<name>` (Issue #476) bleibt außen vor. Gültig 1 h (`LINK_GUELTIG_SEKUNDEN` in
+  `utils/sitzungstoken.py`; unter Linux lädt „Speichern“ im PDF-Fenster die URL neu).
+- Frontend: `signiereUrl()` (`api/client.ts`) läuft in `openInPdfWindow()` (und damit in
+  `openUrl()`) sowie in `getLogoUrl()`. Als **letzter** Schritt aufrufen – wer danach noch
+  Query-Parameter anhängt, macht die Signatur ungültig.
+- `pdf-ansehen` signiert die Adresse seines `<iframe>` selbst (`sitzungstoken.signiere()`).
+- Es gibt keine Pfad-Allowlist mehr: neue Datei-Endpunkte funktionieren ohne Eintrag, solange
+  das Frontend sie über `openUrl()`/`openInPdfWindow()`/`getLogoUrl()`-Muster öffnet.
 
 ## Entwicklungsmodus
 
@@ -84,13 +92,12 @@ Loopback haben.
 ## Tests
 
 `src/backend/tests/test_security_sitzungstoken.py`: ohne, mit falschem und mit richtigem Token,
-Preflight, Fensterpfade inkl. `/_datei/`-Segment (Issue #476), Abgleich der Fensterpfade mit den
-echten Routen, Übergabe über stdin und Umgebungsvariable, ungültige Token-Formate.
+Preflight, signierte Links (gültig, abgelaufen, anderer Pfad/Query, manipuliert, anderes Token,
+`/_datei/`-Segment, Endpunkt, `pdf-ansehen`), `/health` mit Token, Übergabe über stdin und Umgebungsvariable, ungültige Token-Formate.
 
 ## Nächste Schritte
 
-1. **Signierte Kurzzeit-Links** für alle Datei-URLs (`?exp=…&sig=HMAC-SHA256(…)`, Schlüssel vom
-   Token abgeleitet, 10–15 Minuten gültig), dann `_FENSTER_PFADE` entfernen.
+1. ~~Signierte Kurzzeit-Links~~ – umgesetzt (siehe oben).
 2. Passwörter write-only (`GET /api/unternehmen` liefert nur „gesetzt ja/nein“).
 3. Im Release `http://localhost:5173` aus CORS entfernen; die Origin-Ausnahme für beliebige
    localhost-Ports streichen.
