@@ -345,7 +345,7 @@ export type Unternehmen = {
   smtp_port?: number
   smtp_ssl?: boolean
   smtp_user?: string | null
-  smtp_passwort?: string | null
+  smtp_passwort_gesetzt?: boolean   // Security-Audit F6: Passwort selbst kommt nie zurück
   smtp_von_adresse?: string | null
   smtp_zertifikat_ignorieren?: boolean
   smtp_zertifikat_fingerprint?: string | null
@@ -356,7 +356,7 @@ export type Unternehmen = {
   imap_port?: number
   imap_ssl?: boolean
   imap_user?: string | null
-  imap_passwort?: string | null
+  imap_passwort_gesetzt?: boolean
   imap_ordner?: string
   imap_beim_start?: boolean
   imap_zertifikat_ignorieren?: boolean
@@ -381,10 +381,10 @@ export type Unternehmen = {
   profilmanager_aktiv?: boolean
   backup_extern_pfad_1?: string | null
   backup_extern_pfad_2?: string | null
-  backup_extern_passwort?: string | null
+  backup_extern_passwort_gesetzt?: boolean
   backup_extern_anzahl?: number
   backup_smb_benutzer?: string | null
-  backup_smb_passwort?: string | null
+  backup_smb_passwort_gesetzt?: boolean
   backup_extern_pfad_1_lokal_ok?: boolean
   backup_extern_pfad_2_lokal_ok?: boolean
   datev_beraternummer?: string | null
@@ -413,7 +413,21 @@ export type Unternehmen = {
 export const getUnternehmen = () => request<Unternehmen | null>('/unternehmen')
 export const createUnternehmen = (data: Unternehmen) =>
   request<Unternehmen>('/unternehmen', { method: 'POST', body: JSON.stringify(data) })
-export const updateUnternehmen = (data: Partial<Unternehmen>) =>
+/** Security-Audit F6: Passwörter werden nur geschrieben. Leer/nicht gesendet = unverändert,
+ *  `<feld>_entfernen: true` löscht das hinterlegte Passwort. */
+export interface UnternehmenGeheimnisEingabe {
+  smtp_passwort?: string | null
+  imap_passwort?: string | null
+  backup_extern_passwort?: string | null
+  backup_smb_passwort?: string | null
+  smtp_passwort_entfernen?: boolean
+  imap_passwort_entfernen?: boolean
+  backup_extern_passwort_entfernen?: boolean
+  backup_smb_passwort_entfernen?: boolean
+}
+export type UnternehmenEingabe = Partial<Unternehmen> & UnternehmenGeheimnisEingabe
+
+export const updateUnternehmen = (data: UnternehmenEingabe) =>
   request<Unternehmen>('/unternehmen', { method: 'PUT', body: JSON.stringify(data) })
 
 export async function uploadLogo(file: File): Promise<Unternehmen> {

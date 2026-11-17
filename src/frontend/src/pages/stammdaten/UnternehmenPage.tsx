@@ -6,6 +6,8 @@ import {
   STEUERBEFREIUNGEN_4, type Unternehmen,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { GespeichertesPasswort } from '../../components/GespeichertesPasswort'
+import { passwortPlatzhalter } from '../../utils/passwortPlatzhalter'
 import { DateInput } from '../../components/DateInput'
 import { KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { LandCombobox } from '../../components/LandCombobox'
@@ -1513,7 +1515,8 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
   const [port, setPort] = useState(String(data.smtp_port ?? 587))
   const [ssl, setSsl] = useState(data.smtp_ssl ?? false)
   const [user, setUser] = useState(data.smtp_user ?? '')
-  const [passwort, setPasswort] = useState(data.smtp_passwort ?? '')
+  const [passwort, setPasswort] = useState('')   // Security-Audit F6: nie vorbefüllt
+  const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [von, setVon] = useState(data.smtp_von_adresse ?? '')
   const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.smtp_zertifikat_ignorieren ?? false)
   const fingerprint = data.smtp_zertifikat_fingerprint
@@ -1535,11 +1538,14 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
       smtp_ssl: ssl,
       smtp_user: user || null,
       smtp_passwort: passwort || null,
+      smtp_passwort_entfernen: passwortEntfernen && !passwort,
       smtp_von_adresse: von || null,
       smtp_zertifikat_ignorieren: zertifikatIgnorieren,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unternehmen'] })
+      setPasswort('')
+      setPasswortEntfernen(false)
       setGespeichert(true)
       setFehler(null)
       setTimeout(() => setGespeichert(false), 2500)
@@ -1594,7 +1600,11 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
               <input type="email" value={user} onChange={e => setUser(e.target.value)} placeholder="deine@email.de" className={inputCls} />
             </Field>
             <Field label="Passwort / App-Passwort">
-              <input type="password" value={passwort} onChange={e => setPasswort(e.target.value)} placeholder="••••••••" className={inputCls} />
+              <input type="password" autoComplete="new-password" value={passwort}
+                onChange={e => { setPasswort(e.target.value); setPasswortEntfernen(false) }}
+                placeholder={passwortPlatzhalter(data.smtp_passwort_gesetzt, passwortEntfernen, '••••••••')} className={inputCls} />
+              <GespeichertesPasswort gesetzt={data.smtp_passwort_gesetzt} neuEingegeben={!!passwort}
+                entfernen={passwortEntfernen} onEntfernenChange={setPasswortEntfernen} />
             </Field>
           </div>
 
@@ -1682,7 +1692,8 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
   const [port, setPort] = useState(String(data.imap_port ?? 993))
   const [ssl, setSsl] = useState(data.imap_ssl ?? true)
   const [user, setUser] = useState(data.imap_user ?? '')
-  const [passwort, setPasswort] = useState(data.imap_passwort ?? '')
+  const [passwort, setPasswort] = useState('')   // Security-Audit F6: nie vorbefüllt
+  const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [ordner, setOrdner] = useState(data.imap_ordner ?? 'INBOX')
   const [beimStart, setBeimStart] = useState(data.imap_beim_start ?? false)
   const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.imap_zertifikat_ignorieren ?? false)
@@ -1705,12 +1716,15 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
       imap_ssl: ssl,
       imap_user: user.trim() || null,
       imap_passwort: passwort || null,
+      imap_passwort_entfernen: passwortEntfernen && !passwort,
       imap_ordner: ordner.trim() || 'INBOX',
       imap_beim_start: beimStart,
       imap_zertifikat_ignorieren: zertifikatIgnorieren,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unternehmen'] })
+      setPasswort('')
+      setPasswortEntfernen(false)
       setGespeichert(true)
       setFehler(null)
       setTimeout(() => setGespeichert(false), 2500)
@@ -1774,7 +1788,11 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
               <input type="text" value={user} onChange={e => setUser(e.target.value)} placeholder="rechnungen@firma.de" className={inputCls} />
             </Field>
             <Field label="Passwort / App-Passwort">
-              <input type="password" value={passwort} onChange={e => setPasswort(e.target.value)} placeholder="••••••••" className={inputCls} />
+              <input type="password" autoComplete="new-password" value={passwort}
+                onChange={e => { setPasswort(e.target.value); setPasswortEntfernen(false) }}
+                placeholder={passwortPlatzhalter(data.imap_passwort_gesetzt, passwortEntfernen, '••••••••')} className={inputCls} />
+              <GespeichertesPasswort gesetzt={data.imap_passwort_gesetzt} neuEingegeben={!!passwort}
+                entfernen={passwortEntfernen} onEntfernenChange={setPasswortEntfernen} />
             </Field>
           </div>
 

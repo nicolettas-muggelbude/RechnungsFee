@@ -83,6 +83,8 @@ pyinstaller \
     --collect-all pdfplumber \
     --collect-all fitz \
     --collect-all resvg_py \
+    --collect-submodules keyring \
+    --copy-metadata keyring \
     --hidden-import pytesseract \
     --hidden-import utils.rechnungs_parser \
     --hidden-import utils.pdfa_konverter \

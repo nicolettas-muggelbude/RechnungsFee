@@ -191,6 +191,26 @@ class Unternehmen(Base):
     backup_extern_passwort: Mapped[str | None] = mapped_column(Text)
     backup_smb_benutzer:   Mapped[str | None] = mapped_column(Text)
     backup_smb_passwort:   Mapped[str | None] = mapped_column(Text)
+    # Security-Audit F6: smtp_passwort, imap_passwort, backup_extern_passwort und
+    # backup_smb_passwort enthalten nur noch einen Marker (Schlüsselbund bzw. verschlüsselt),
+    # nie den Klartext – lesen/schreiben ausschließlich über utils/geheimnisse.py.
+
+    @property
+    def smtp_passwort_gesetzt(self) -> bool:
+        return bool(self.smtp_passwort)
+
+    @property
+    def imap_passwort_gesetzt(self) -> bool:
+        return bool(self.imap_passwort)
+
+    @property
+    def backup_extern_passwort_gesetzt(self) -> bool:
+        return bool(self.backup_extern_passwort)
+
+    @property
+    def backup_smb_passwort_gesetzt(self) -> bool:
+        return bool(self.backup_smb_passwort)
+
     # Nutzer bestätigt bewusst, dass Pfad 1/2 auf dem Systemlaufwerk liegt (z.B. ein per
     # Sync-Client wie Dropbox/Proton Drive extern gesicherter lokaler Ordner) - ohne diese
     # Bestätigung blockt _ist_systemlaufwerk() den Pfad beim Backup weiterhin (Issue #348).

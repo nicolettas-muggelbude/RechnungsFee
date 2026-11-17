@@ -20,6 +20,9 @@ pytesseract
 ocrmypdf
 markdown
 cryptography
+# Security-Audit F6: Zugangsdaten im Schlüsselbund des Betriebssystems (Windows Credential Manager,
+# macOS Keychain, Secret Service/KWallet) statt im Klartext in der Datenbank
+keyring
 certifi
 smbprotocol
 # --no-binary erzwingt die reine Python-Variante: das vorkompilierte mypyc-Wheel bringt ein

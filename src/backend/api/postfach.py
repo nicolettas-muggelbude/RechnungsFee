@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import APP_DATA_DIR, get_db
 from database.models import Beleg, PostfachEingang, Rechnung, Unternehmen
+from utils import geheimnisse
 from utils.mail_tls import (
     MailTLSConfigurationError,
     certificate_verification_detail,
@@ -109,6 +110,21 @@ def _einstellungen(db: Session) -> Unternehmen:
     return u
 
 
+def _imap_passwort(u: Unternehmen) -> str:
+    """IMAP-Passwort aus Schlüsselbund bzw. verschlüsselter Ablage (Security-Audit F6)."""
+    try:
+        passwort = geheimnisse.passwort(u, "imap_passwort")
+    except geheimnisse.GeheimnisFehlt:
+        passwort = None
+    if not passwort:
+        raise HTTPException(
+            400,
+            "IMAP-Passwort nicht gefunden (z. B. nach Wiederherstellung auf einem anderen Rechner). "
+            "Bitte in den Postfach-Einstellungen neu eingeben.",
+        )
+    return passwort
+
+
 def _pruefe_gepinntes_zertifikat(u: Unternehmen, sock, db: Session) -> None:
     """Trust on First Use wie beim SMTP-Versand (api/mail.py, Issue #336)."""
     fp = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
@@ -126,6 +142,7 @@ def _pruefe_gepinntes_zertifikat(u: Unternehmen, sock, db: Session) -> None:
 
 
 def _verbinde(u: Unternehmen, db: Session) -> imaplib.IMAP4:
+    passwort = _imap_passwort(u)
     try:
         ctx = create_mail_tls_context(public_cas=not u.imap_zertifikat_ignorieren)
     except MailTLSConfigurationError as e:
@@ -142,7 +159,7 @@ def _verbinde(u: Unternehmen, db: Session) -> imaplib.IMAP4:
             m.starttls(ssl_context=ctx)
         if u.imap_zertifikat_ignorieren:
             _pruefe_gepinntes_zertifikat(u, m.sock, db)
-        m.login(u.imap_user, u.imap_passwort)
+        m.login(u.imap_user, passwort)
         # imaplib merkt sich die CAPABILITY-Antwort VOR der Anmeldung - viele Server (z. B. Dovecot)
         # melden MOVE/NAMESPACE/UIDPLUS erst danach. Ohne Neuabfrage würde der Zielordner im
         # falschen Namensraum angelegt ("Mailbox name should probably be prefixed with: INBOX.").

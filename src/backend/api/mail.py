@@ -24,6 +24,7 @@ from database.models import Unternehmen, Rechnung, DokumentenPaket
 from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
+from utils import geheimnisse
 from utils.mailfelder import bereinige_mailfeld, ist_ascii
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
@@ -253,6 +254,21 @@ def _smtp_login(srv: smtplib.SMTP, user: str, passwort: str) -> None:
         raise smtplib.SMTPAuthenticationError(code, antwort)
 
 
+def _smtp_passwort(u: Unternehmen) -> str:
+    """SMTP-Passwort aus Schlüsselbund bzw. verschlüsselter Ablage (Security-Audit F6)."""
+    try:
+        passwort = geheimnisse.passwort(u, "smtp_passwort")
+    except geheimnisse.GeheimnisFehlt:
+        passwort = None
+    if not passwort:
+        raise HTTPException(
+            400,
+            "SMTP-Passwort nicht gefunden (z. B. nach Wiederherstellung auf einem anderen Rechner). "
+            "Bitte unter Einstellungen → Unternehmen → E-Mail neu eingeben.",
+        )
+    return passwort
+
+
 def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
     port = u.smtp_port or 587
     host = bereinige_mailfeld(u.smtp_host) or ""
@@ -264,6 +280,7 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
                 f"{feld} „{wert}“ enthält Sonderzeichen (z. B. Umlaute), die SMTP nicht übertragen "
                 "kann. Bitte unter Einstellungen → Unternehmen → E-Mail prüfen und ggf. neu eintippen.",
             )
+    passwort = _smtp_passwort(u)
     try:
         ctx = create_mail_tls_context(public_cas=not u.smtp_zertifikat_ignorieren)
     except MailTLSConfigurationError as e:
@@ -279,7 +296,7 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
             with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as srv:
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                _smtp_login(srv, user, u.smtp_passwort)
+                _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
             with smtplib.SMTP(host, port, timeout=15) as srv:
@@ -288,7 +305,7 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
                 srv.ehlo()
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
-                _smtp_login(srv, user, u.smtp_passwort)
+                _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
     except UnicodeEncodeError:
         # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen
