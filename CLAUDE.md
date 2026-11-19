@@ -127,6 +127,8 @@ Jedes neue Feld in `unternehmen` muss an **5 Stellen** gleichzeitig ergänzt wer
 | TypeScript-Typ | `src/frontend/src/api/client.ts` → `Unternehmen`-Interface |
 | Formular | `src/frontend/src/pages/stammdaten/UnternehmenPage.tsx` |
 
+**Passwörter/Geheimnisse sind die Ausnahme (seit v0.7.12, Audit F6):** nie als normales Feld in `UnternehmenBase`/`client.ts`. Sie liegen im OS-Schlüsselbund (`utils/geheimnisse.py`, Spalte nur Marker `keyring:v1`), werden über `GeheimnisEingabe` nur geschrieben und als `<feld>_gesetzt` gemeldet; Lesen nur serverseitig direkt vor der Verwendung. Details: `docs/sicherheit-passwoerter.md`.
+
 **Fehlt `schemas.py`:** Feld wird vom API-Endpoint ignoriert (silent discard) → kann nicht gespeichert werden.  
 **Fehlt `client.ts`:** TypeScript-Fehler oder Feld unsichtbar im Frontend-State.
 

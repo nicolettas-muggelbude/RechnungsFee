@@ -98,8 +98,8 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), Forderungsausfall im Folge-PR; siehe Abschnitt ELSTER-Export unten.
-- [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
+- [x] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), Forderungsausfall in v0.7.12 (PR #521); siehe Abschnitt ELSTER-Export unten.
+- [x] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505, v0.7.12) – Angebot und Proforma
   buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
   Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
 - [x] **Adressrollen je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten, v0.7.11) –
@@ -146,9 +146,10 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Inhalte, Herkunftsprüfung, XML-Parser, Dateirechte); Details im Sicherheitshinweis nach dem Release
 - [x] `SECURITY.md`: vertrauliche Meldung über GitHub
 - [x] Abhängigkeiten aktualisiert (Dependabot)
-- [ ] Folge-Release: weitere Härtung zwischen Oberfläche und Hintergrunddienst
+- [x] Folge-Release v0.7.12: weitere Härtung zwischen Oberfläche und Hintergrunddienst (Sitzungsschlüssel,
+  signierte Links, keine Dateipfade über die Schnittstelle, CSP, Passwörter im Schlüsselbund)
 
-## 📋 v0.7.12 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
