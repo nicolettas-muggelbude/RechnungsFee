@@ -3293,6 +3293,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const alle = kategorien ?? []
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
+  // Issue #567: Ausgangsrechnungen bekommen eine Erlös-Kategorie je Position (leer = automatisch).
+  // Bei Sonderfällen legt das Backend die Kategorie fest (ausgangs_positionskategorie_gesperrt) -
+  // dann keine Auswahl anzeigen und keine Kategorie mitschicken.
+  const erloesKat = alle.filter((k) => k.kontenart === 'Erlös')
+  const ausgangKatGesperrt = typ === 'ausgang' && (
+    istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4
+    || positionen.some((p) => p.differenzbesteuerung || p.abschlag_rechnung_id)
+  )
+  const zeigeKatSpalte = typ === 'eingang' || !ausgangKatGesperrt
 
   // Summenberechnung (Issue #332): das Formular rechnet nicht mehr selbst, sondern fragt beim
   // Backend dieselbe Berechnung ab die auch beim Speichern läuft (debounced) - siehe
@@ -3401,7 +3410,9 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       // Kategoriewechsel schlägt den hinterlegten USt-Satz der Kategorie vor (z. B. 0 % bei
       // "Wareneinkauf Drittland (ohne USt)") - sonst bleibt der zuvor gewählte Satz stehen,
       // auch wenn er zur neuen Kategorie nicht mehr passt.
-      if (field === 'kategorie_id' && !sperreUstAufNull) {
+      // Nur Eingang: bei Ausgangsrechnungen bestimmt die Leistung den Satz, nicht die
+      // Erlös-Kategorie (Issue #567).
+      if (field === 'kategorie_id' && typ === 'eingang' && !sperreUstAufNull) {
         const kat = (kategorien ?? []).find((k) => String(k.id) === value)
         if (kat) next.ust_satz = String(kat.ust_satz_standard)
       }
@@ -3435,7 +3446,9 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     const defaultUst = typ === 'ausgang'
       ? defaultUstGlobal
       : String((kategorien ?? []).find((k) => String(k.id) === (letztePos?.kategorie_id ?? ''))?.ust_satz_standard ?? defaultUstGlobal)
-    setPositionen((prev) => [...prev, { ...leerPosition(defaultUst), kategorie_id: letztePos?.kategorie_id }])
+    // Ausgang (Issue #567): neue Zeile startet mit „automatisch“ statt die Kategorie der
+    // Vorzeile still zu übernehmen.
+    setPositionen((prev) => [...prev, { ...leerPosition(defaultUst), kategorie_id: typ === 'ausgang' ? undefined : letztePos?.kategorie_id }])
   }
 
   function removePosition(i: number) {
@@ -3536,7 +3549,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
           ust_satz,
           artikel_id: p.artikel_id,
-          kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
+          kategorie_id: p.kategorie_id && !ausgangKatGesperrt ? parseInt(p.kategorie_id) : undefined,
           differenzbesteuerung: istDiff,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
           abschlag_rechnung_id: p.abschlag_rechnung_id,
@@ -4350,8 +4363,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   </th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Rabatt %</th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
-                  {typ === 'eingang' && (
-                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">Konto</th>
+                  {zeigeKatSpalte && (
+                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">
+                      {typ === 'eingang' ? 'Konto' : 'Kategorie'}
+                    </th>
                   )}
                 </>}
                 <th className="px-3 py-2 w-8"></th>
@@ -4375,7 +4390,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                       </td>
                       <td className="px-3 py-1.5"></td>
                       <td className="px-3 py-1.5 text-right">{pos.ust_satz} %</td>
-                      {typ === 'eingang' && <td className="px-3 py-1.5"></td>}
+                      {zeigeKatSpalte && <td className="px-3 py-1.5"></td>}
                     </>}
                     <td className="px-2 py-1.5 text-center">
                       <button
@@ -4477,6 +4492,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                         </select>
                       </td>
                     )}
+                    {typ === 'ausgang' && zeigeKatSpalte && (
+                      <td className="px-2 py-1.5">
+                        <select
+                          value={pos.kategorie_id ?? ''}
+                          onChange={(e) => updatePosition(i, 'kategorie_id', e.target.value)}
+                          aria-label={`Kategorie Position ${i + 1}`}
+                          title="Erlös-Kategorie für die Buchung der Zahlung – leer = automatisch (Betriebseinnahmen)"
+                          className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
+                        >
+                          <option value="">— automatisch —</option>
+                          {erloesKat.map((k) => (
+                            <option key={k.id} value={String(k.id)}>{katLabel(k, katModus)}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                   </>}
                   <td className="px-2 py-1.5 text-center">
                     {positionen.length > 1 && (
@@ -4498,20 +4529,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               {!sperreUstAufNull && (
                 <>
                   <tr>
-                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
+                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
                       Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                     </td>
                     <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
                   </tr>
                   <tr>
-                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                     <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
                   </tr>
                 </>
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
                     Zwischensumme Brutto
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.brutto)}</td>
@@ -4519,7 +4550,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
                     {rechnungRabattModus === 'betrag' ? 'Abzug' : `Rabatt ${rechnungRabattNum} %`}
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
@@ -4530,7 +4561,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 </tr>
               )}
               <tr>
-                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
+                <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(anzeigeSummen.brutto)}</td>
@@ -4539,6 +4570,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             )}
           </table>
         </div>
+        )}
+        {ausgangKatGesperrt && dokumentTyp !== 'Lieferschein' && (
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Die Erlös-Kategorie legt RechnungsFee bei diesem Steuerfall automatisch fest.
+          </p>
         )}
         {zeigeValidierung && positionenFehlen && (
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">

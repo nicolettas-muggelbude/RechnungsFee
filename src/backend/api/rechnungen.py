@@ -1472,6 +1472,9 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
             kategorie_id=pos_data.kategorie_id,
         )
         db.add(pos)
+    db.flush()
+    db.expire(auftrag, ["positionen"])
+    _pruefe_ausgangs_positionskategorien(auftrag, db)  # Issue #567
     if not data.ist_entwurf:
         auftrag.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -1843,6 +1846,7 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
     db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
     _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
+    _pruefe_ausgangs_positionskategorien(rechnung, db)  # Issue #567
 
     # Lagerführung: direkt finalisierte Dokumente buchen sofort (Regel je Dokumenttyp, #505).
     # Entwürfe holen den Abgang über /finalisieren nach.
@@ -2015,6 +2019,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                             f"diese Gutschrift: {_euro(diese_gs)}."
                         ),
                     )
+
+    # Issue #567: auch ohne neue Positionen (z. B. nur ig.-Lieferung-Kennzeichen umgeschaltet)
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    _pruefe_ausgangs_positionskategorien(rechnung, db)
 
     if data.ist_entwurf is not None:
         war_entwurf = rechnung.ist_entwurf
@@ -3157,6 +3166,104 @@ def _kette_gruppe_id(rechnung: "Rechnung", db: Session) -> int | None:
     return letzter.gruppe_id or letzter.id
 
 
+AUSGANG_FESTE_KATEGORIE_FLAGS = (
+    "steuerfrei_4", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "ist_reverse_charge",
+)
+
+
+def ausgangs_positionskategorie_gesperrt(rechnung: "Rechnung") -> bool:
+    """Issue #567: Ausgangsrechnungen, deren Erlös-Kategorie fachlich festgelegt ist (§ 4 UStG,
+    ig. Lieferung, Drittland, Ausfuhr, § 3a-Leistung, § 25a, verrechnete Abschläge), nehmen
+    keine selbst gewählte Positionskategorie an - dort entscheidet weiter _erloes_kategorie()
+    bzw. die §25a-Gruppierung, sonst landeten diese Umsätze in falschen UStVA-/EÜR-Zeilen."""
+    if any(getattr(rechnung, f, False) for f in AUSGANG_FESTE_KATEGORIE_FLAGS):
+        return True
+    return any(p.differenzbesteuerung or p.abschlag_rechnung_id for p in rechnung.positionen)
+
+
+def ausgangs_positionskategorien_aktiv(rechnung: "Rechnung") -> bool:
+    """True, wenn eine Ausgangsrechnung mindestens eine Position mit selbst gewählter
+    Erlös-Kategorie hat und kein Sonderfall die Kategorie festlegt (Issue #567)."""
+    if rechnung.typ != "ausgang" or not rechnung.positionen:
+        return False
+    if ausgangs_positionskategorie_gesperrt(rechnung):
+        return False
+    return any(p.kategorie_id for p in rechnung.positionen)
+
+
+def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> None:
+    """Issue #567: Positionskategorien einer Ausgangsrechnung nach dem Speichern prüfen.
+    Nur Erlös-Kategorien (ohne USt-Sonderfall) sind zulässig; bei einem Sonderfall
+    (ausgangs_positionskategorie_gesperrt) werden gesetzte Kategorien entfernt, damit
+    Gutschrift, Storno und Forderungsausfall nicht mit einer veralteten Auswahl rechnen."""
+    if rechnung.typ != "ausgang":
+        return
+    positionen = [p for p in rechnung.positionen if p.kategorie_id]
+    if not positionen:
+        return
+    if ausgangs_positionskategorie_gesperrt(rechnung):
+        for p in positionen:
+            p.kategorie_id = None
+        db.flush()
+        return
+    ids = {p.kategorie_id for p in positionen}
+    kats = {k.id: k for k in db.query(Kategorie).filter(Kategorie.id.in_(ids)).all()}
+    for kid in ids:
+        k = kats.get(kid)
+        if k is None:
+            raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+        if k.kontenart != "Erlös" or k.ust_sonderfall:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Kategorie „{k.name}“ passt nicht zu einer Ausgangsrechnung – bitte eine Erlös-Kategorie wählen.",
+            )
+
+
+def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool):
+    """Issue #567: Buchungsgruppen je (USt-Satz, Kategorie) für Ausgangsrechnungen mit eigenen
+    Positionskategorien. Positionen ohne Kategorie bekommen die automatische Erlös-Kategorie
+    (_erloes_kategorie(), bei Kleinunternehmern „Betriebseinnahmen (Kleinunternehmer)“).
+    Kleinunternehmer buchen wie bisher immer mit 0 % (§ 19 UStG, Issue #397).
+
+    Rückgabe im Format von _ausgangs_buchungsgruppen() mit ist_gemischt=True, damit beide
+    Buchungswege (Zahlung erfassen, Bank-Import) jede Gruppe mit ihrer Kategorie buchen.
+    Schlüssel: (satz, False, kategorie_id)."""
+    std_id, std_kat = _erloes_kategorie(db, rechnung)
+    gruppen_kategorie: dict[tuple, tuple[int | None, "Kategorie | None"]] = {}
+    gruppen_brutto: dict[tuple, Decimal] = {}
+    for pos in rechnung.positionen:
+        s = 0 if ist_kleinunternehmer else int(pos.ust_satz)
+        kat_id = pos.kategorie_id or std_id
+        key = (s, False, kat_id)
+        if key not in gruppen_kategorie:
+            if kat_id == std_id:
+                gruppen_kategorie[key] = (std_id, std_kat)
+            else:
+                k = db.query(Kategorie).filter(Kategorie.id == kat_id).first()
+                gruppen_kategorie[key] = (kat_id, k)
+        gruppen_brutto[key] = gruppen_brutto.get(key, Decimal("0")) + (pos.brutto or Decimal("0"))
+
+    # Gruppen ohne Betrag (z. B. Position + gleich hohe Minusposition) erzeugen keine 0-€-Buchung
+    gruppen_brutto = {k: v for k, v in gruppen_brutto.items() if v != 0} or gruppen_brutto
+    gesamt = sum(gruppen_brutto.values()) or Decimal("1")
+    gruppen_keys = sorted(gruppen_brutto, key=lambda k: (k[0], k[2] or 0))
+    satz_summen: dict[int, Decimal] = {}
+    for k, v in gruppen_brutto.items():
+        satz_summen[k[0]] = satz_summen.get(k[0], Decimal("0")) + v
+    ust_satz = Decimal(str(max(satz_summen, key=lambda s: satz_summen[s])))
+    satz_ratios = [(k[0], gruppen_brutto[k] / gesamt) for k in gruppen_keys]
+    return satz_ratios, ust_satz, True, gruppen_keys, gruppen_kategorie, {}, gruppen_brutto
+
+
+def _satz_ratios_je_satz(satz_ratios: list[tuple[int, Decimal]]) -> list[tuple[int, Decimal]]:
+    """Fasst Anteile mit gleichem USt-Satz zusammen (Issue #567: mehrere Kategorie-Gruppen
+    mit demselben Satz) - für Skonto und Abschlagsabzug, die nur je Satz gebucht werden."""
+    je_satz: dict[int, Decimal] = {}
+    for s, r in satz_ratios:
+        je_satz[s] = je_satz.get(s, Decimal("0")) + r
+    return sorted(je_satz.items())
+
+
 def _ausgangs_buchungsgruppen(
     db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
 ) -> tuple[
@@ -3178,6 +3285,12 @@ def _ausgangs_buchungsgruppen(
     ist_gemischt=False leer; der Aufrufer ermittelt dann die (einzige) Kategorie selbst
     (z.B. ueber _erloes_kategorie()), wie vor Einfuehrung dieser Funktion.
     """
+    # Issue #567: eigene Erlös-Kategorie je Position (z. B. Übungsleiter-Einnahmen neben
+    # normalen Leistungen) - eigener Gruppierungsweg, alle anderen Rechnungen laufen
+    # unverändert durch den Code darunter.
+    if ausgangs_positionskategorien_aktiv(rechnung):
+        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer)
+
     satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]
     gruppen_keys: list[tuple[int, bool]] = []
     gruppen_kategorie: dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]] = {}
@@ -3288,6 +3401,8 @@ def _bezahlte_betraege_je_satz(db: Session, abschlag: "Rechnung") -> list[tuple[
     ).scalar() or Decimal("0")
     gesamt_gezahlt = (abschlag.bezahlt_betrag or Decimal("0")) + offenes_guthaben
     satz_ratios, _, _, _, _, _, _ = _ausgangs_buchungsgruppen(db, abschlag, ist_ku)
+    if ausgangs_positionskategorien_aktiv(abschlag):
+        satz_ratios = _satz_ratios_je_satz(satz_ratios)
     verteilung = _verteile_nach_satz(gesamt_gezahlt, satz_ratios, "Einnahme")
     return [(satz, betrag) for satz, betrag, _ust03, _ust04 in verteilung if betrag != 0]
 
@@ -3426,7 +3541,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
         ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
         if data.skonto_betrag and data.skonto_betrag > 0:
-            skonto_gruppen = _verteile_nach_satz(data.skonto_betrag, satz_ratios, art)
+            skonto_ratios = (
+                _satz_ratios_je_satz(satz_ratios) if ausgangs_positionskategorien_aktiv(rechnung) else satz_ratios
+            )
+            skonto_gruppen = _verteile_nach_satz(data.skonto_betrag, skonto_ratios, art)
         konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
     # §25a Marge vorberechnen (Brutto-Marge = VK_brutto − EK_netto_gesamt für §25a-Positionen)

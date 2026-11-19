@@ -42,7 +42,7 @@ from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
     _erstelle_skonto_eintrag, _kette_gruppe_id, _klassifiziere_sonderfall, _partner_name, _ust_konto,
-    _verteile_nach_satz,
+    _satz_ratios_je_satz, _verteile_nach_satz, ausgangs_positionskategorien_aktiv,
 )
 from .schemas import JournalEintragCreate
 
@@ -660,7 +660,10 @@ def _buche_pfad_a(
         skonto_ziel = _skonto_zielbetrag(rechnung, tx.datum)
         if skonto_ziel is not None and abs(skonto_ziel - betrag_zu_buchen) <= Decimal("0.02"):
             skonto_betrag = differenz.quantize(Decimal("0.01"), ROUND_HALF_UP)
-            skonto_gruppen = _verteile_nach_satz(skonto_betrag, satz_ratios, art)
+            skonto_ratios = (  # Issue #567: Kategorie-Gruppen gleichen Satzes zusammenfassen
+                _satz_ratios_je_satz(satz_ratios) if ausgangs_positionskategorien_aktiv(rechnung) else satz_ratios
+            )
+            skonto_gruppen = _verteile_nach_satz(skonto_betrag, skonto_ratios, art)
             _erstelle_skonto_eintrag(db, rechnung, rechnung.id, tx.datum, skonto_gruppen,
                                      steuerbefreiung_grund, art)
             db.flush()
