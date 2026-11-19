@@ -1,8 +1,8 @@
-fastapi==0.162.4
+fastapi==0.163.1
 uvicorn==0.54.0
-sqlalchemy==2.1.8
+sqlalchemy==2.1.9
 aiofiles==25.1.0
-python-multipart==0.0.33
+python-multipart==0.0.34
 fpdf2
 Pillow==13.0.0
 resvg_py
