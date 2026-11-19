@@ -172,6 +172,12 @@ def _zeile_13_beitrag(e: Journaleintrag, ku: Optional[bool], haupt_zeile: Option
     Rechnungen mit dem Kennzeichen steuerfrei_4 auf „Betriebseinnahmen (0%)“ und damit ebenfalls hier."""
     kat = e.kategorie
     if ku is True and haupt_zeile == _ZEILE_KLEINUNTERNEHMER and kat and kat.euer_zeile == _ZEILE_STEUERFREI:
+        # Issue #549: Vor v0.7.6 (#480) buchten Zahlungen auf Kleinunternehmer-Rechnungen
+        # automatisch auf „Betriebseinnahmen (0%)“ - das sind normale Kleinunternehmer-Umsätze,
+        # keine nicht steuerbaren. Bei Rechnungszahlungen entscheidet deshalb das § 4-Kennzeichen
+        # der Rechnung; Buchungen ohne Rechnung bleiben bei der Kategorie-Regel.
+        if kat.name == "Betriebseinnahmen (0%)" and e.rechnung is not None and not e.rechnung.steuerfrei_4:
+            return ZERO
         return haupt_beitrag
     return ZERO
 
