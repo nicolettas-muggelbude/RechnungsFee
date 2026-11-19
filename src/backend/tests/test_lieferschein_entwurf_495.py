@@ -130,12 +130,13 @@ def test_kein_doppelter_lagerabgang(db, quelle):
     assert _artikel(db).bestand_aktuell == basis
 
     finalisiere_rechnung(ls.id, db)
-    assert _artikel(db).bestand_aktuell == basis  # wie bisher: kein Abgang am Lieferschein
+    # Issue #505: Abgang jetzt beim Lieferschein (die Ware verlässt mit der Lieferung das Lager)
+    assert _artikel(db).bestand_aktuell == basis - 2
     assert db.query(Rechnung).filter(Rechnung.id == ls.id).one().absender_snapshot
 
     r = rechnung_aus_lieferschein(ls.id, db)
     finalisiere_rechnung(r.id, db)
-    assert _artikel(db).bestand_aktuell == basis - 2  # genau einmal, über die Rechnung
+    assert _artikel(db).bestand_aktuell == basis - 2  # genau einmal insgesamt
 
 
 def test_direkter_lieferschein_entwurf_bucht_wie_bisher(db):

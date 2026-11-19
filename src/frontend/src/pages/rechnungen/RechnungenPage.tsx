@@ -14,7 +14,7 @@ import {
   getXRechnungUrl, speichereXRechnung,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
-  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, analysiereRechnungPfad, dateiInSpeicher,
+  uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, leseGedroppteDatei, dateiInSpeicher,
   getBuchungsvorlage, erledigtVorlage,
   getMahnwesenEinstellungen, getRechnungMahnungen,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
@@ -49,6 +49,17 @@ import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../stor
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
 // ---------------------------------------------------------------------------
+
+// Issue #567: Erlös-Kategorien, die RechnungsFee selbst wählt (Steuersatz/Steuerfall-Haken) oder
+// die nicht aus einer Rechnung entstehen - nicht als Positionskategorie anbieten.
+// Gegenstück im Backend: api/rechnungen.py AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.
+const AUSGANG_KATEGORIEN_NICHT_WAEHLBAR = new Set([
+  'Betriebseinnahmen', 'Betriebseinnahmen (7%)', 'Betriebseinnahmen (0%)',
+  'Betriebseinnahmen (Kleinunternehmer)', 'Differenzbesteuerung (§25a)',
+  'Innergemeinschaftliche Lieferungen', 'Nicht steuerbare Auslandsumsätze (Drittland)',
+  'Steuerfreie Ausfuhrlieferungen (Drittland)',
+  'Gewährte Skonti', 'Umsatzsteuer-Erstattung FA', 'Vorsteuererstattung FA',
+])
 
 function formatMenge(v: string | number): string {
   const n = parseFloat(String(v).replace(',', '.'))
@@ -1856,6 +1867,12 @@ function RechnungDetail({
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Restbetrag: <strong>{formatEuro(Math.abs(parseFloat(rechnung.brutto_gesamt) - parseFloat(rechnung.bezahlt_betrag)))}</strong> – wird ohne Buchung als uneinbringlich markiert (Ist-Versteuerung: nie gezahltes Geld wurde nie versteuert)
             </p>
+            {/* Stichtag = CUTOVER_DATUM in utils/zm_meldezeitraum.py (Issue #497) */}
+            {(rechnung.ist_eu_lieferung || rechnung.ist_reverse_charge) && rechnung.dokument_typ !== 'Abschlagsrechnung' && rechnung.datum >= '2027-01-01' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Zusammenfassende Meldung und UStVA (Kennzahl 41/21) werden im Monat des Ausfalls um den offenen Betrag berichtigt (§17 Abs. 2 Nr. 1 UStG); eine spätere Zahlung meldet wieder in ihrem Monat.
+              </p>
+            )}
             <div className="flex gap-2 pt-0.5">
               <button
                 onClick={() => forderungsausfallMutation.mutate()}
@@ -3287,6 +3304,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   const alle = kategorien ?? []
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat  = alle.filter((k) => k.kontenart === 'Anlage')
+  // Issue #567: Ausgangsrechnungen bekommen eine Erlös-Kategorie je Position (leer = automatisch).
+  // Bei Sonderfällen legt das Backend die Kategorie fest (ausgangs_positionskategorie_gesperrt) -
+  // dann keine Auswahl anzeigen und keine Kategorie mitschicken.
+  const erloesKat = alle.filter((k) => k.kontenart === 'Erlös' && !AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.has(k.name))
+  const ausgangKatGesperrt = typ === 'ausgang' && (
+    istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4
+    || positionen.some((p) => p.differenzbesteuerung || p.abschlag_rechnung_id)
+  )
+  const zeigeKatSpalte = typ === 'eingang' || !ausgangKatGesperrt
 
   // Summenberechnung (Issue #332): das Formular rechnet nicht mehr selbst, sondern fragt beim
   // Backend dieselbe Berechnung ab die auch beim Speichern läuft (debounced) - siehe
@@ -3395,7 +3421,9 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       // Kategoriewechsel schlägt den hinterlegten USt-Satz der Kategorie vor (z. B. 0 % bei
       // "Wareneinkauf Drittland (ohne USt)") - sonst bleibt der zuvor gewählte Satz stehen,
       // auch wenn er zur neuen Kategorie nicht mehr passt.
-      if (field === 'kategorie_id' && !sperreUstAufNull) {
+      // Nur Eingang: bei Ausgangsrechnungen bestimmt die Leistung den Satz, nicht die
+      // Erlös-Kategorie (Issue #567).
+      if (field === 'kategorie_id' && typ === 'eingang' && !sperreUstAufNull) {
         const kat = (kategorien ?? []).find((k) => String(k.id) === value)
         if (kat) next.ust_satz = String(kat.ust_satz_standard)
       }
@@ -3426,10 +3454,17 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   function addPosition() {
     const letztePos = positionen[positionen.length - 1]
-    const defaultUst = typ === 'ausgang'
+    // Steuerfälle ohne USt-Ausweis: neue Zeile gleich mit 0 % anzeigen – gespeichert wurde
+    // ohnehin 0 % (Payload), nur das Formular zeigte bisher den Standardsatz.
+    const steuerfallOhneUst = istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4
+    const defaultUst = steuerfallOhneUst
+      ? '0'
+      : typ === 'ausgang'
       ? defaultUstGlobal
       : String((kategorien ?? []).find((k) => String(k.id) === (letztePos?.kategorie_id ?? ''))?.ust_satz_standard ?? defaultUstGlobal)
-    setPositionen((prev) => [...prev, { ...leerPosition(defaultUst), kategorie_id: letztePos?.kategorie_id }])
+    // Ausgang (Issue #567): neue Zeile startet mit „automatisch“ statt die Kategorie der
+    // Vorzeile still zu übernehmen.
+    setPositionen((prev) => [...prev, { ...leerPosition(defaultUst), kategorie_id: typ === 'ausgang' ? undefined : letztePos?.kategorie_id }])
   }
 
   function removePosition(i: number) {
@@ -3530,7 +3565,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           netto: (parseFloat(p.netto.replace(',', '.')) || 0).toFixed(4),
           ust_satz,
           artikel_id: p.artikel_id,
-          kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
+          kategorie_id: p.kategorie_id && !ausgangKatGesperrt ? parseInt(p.kategorie_id) : undefined,
           differenzbesteuerung: istDiff,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
           abschlag_rechnung_id: p.abschlag_rechnung_id,
@@ -4344,8 +4379,10 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   </th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Rabatt %</th>
                   <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">USt %</th>
-                  {typ === 'eingang' && (
-                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">Konto</th>
+                  {zeigeKatSpalte && (
+                    <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-28">
+                      {typ === 'eingang' ? 'Konto' : 'Kategorie'}
+                    </th>
                   )}
                 </>}
                 <th className="px-3 py-2 w-8"></th>
@@ -4369,7 +4406,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                       </td>
                       <td className="px-3 py-1.5"></td>
                       <td className="px-3 py-1.5 text-right">{pos.ust_satz} %</td>
-                      {typ === 'eingang' && <td className="px-3 py-1.5"></td>}
+                      {zeigeKatSpalte && <td className="px-3 py-1.5"></td>}
                     </>}
                     <td className="px-2 py-1.5 text-center">
                       <button
@@ -4471,6 +4508,22 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                         </select>
                       </td>
                     )}
+                    {typ === 'ausgang' && zeigeKatSpalte && (
+                      <td className="px-2 py-1.5">
+                        <select
+                          value={pos.kategorie_id ?? ''}
+                          onChange={(e) => updatePosition(i, 'kategorie_id', e.target.value)}
+                          aria-label={`Kategorie Position ${i + 1}`}
+                          title="Erlös-Kategorie für die Buchung der Zahlung – leer = automatisch (Betriebseinnahmen)"
+                          className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs"
+                        >
+                          <option value="">— automatisch —</option>
+                          {erloesKat.map((k) => (
+                            <option key={k.id} value={String(k.id)}>{katLabel(k, katModus)}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                   </>}
                   <td className="px-2 py-1.5 text-center">
                     {positionen.length > 1 && (
@@ -4492,20 +4545,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               {!sperreUstAufNull && (
                 <>
                   <tr>
-                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
+                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
                       Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                     </td>
                     <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
                   </tr>
                   <tr>
-                    <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                     <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
                   </tr>
                 </>
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
                     Zwischensumme Brutto
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.brutto)}</td>
@@ -4513,7 +4566,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
                     {rechnungRabattModus === 'betrag' ? 'Abzug' : `Rabatt ${rechnungRabattNum} %`}
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
@@ -4524,7 +4577,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 </tr>
               )}
               <tr>
-                <td colSpan={typ === 'eingang' ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
+                <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(anzeigeSummen.brutto)}</td>
@@ -4533,6 +4586,11 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             )}
           </table>
         </div>
+        )}
+        {ausgangKatGesperrt && dokumentTyp !== 'Lieferschein' && (
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Die Erlös-Kategorie legt RechnungsFee bei diesem Steuerfall automatisch fest.
+          </p>
         )}
         {zeigeValidierung && positionenFehlen && (
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
@@ -4965,7 +5023,9 @@ function ImportDialog({
     if (f) handleDatei(f)
   }
 
-  // Tauri auf Windows: HTML5-Drop feuert nicht – stattdessen tauri://drag-drop hören
+  // Desktop-App: Tauri fängt Drops nativ ab (unter Windows kommt kein HTML5-Drop an) und liefert
+  // nur Pfade. Tauri liest die Datei, danach derselbe Weg wie bei einer ausgewählten Datei
+  // (Security-Audit F5: das Backend nimmt keine Pfade an).
   useEffect(() => {
     if (!isTauri() || schritt !== 'upload') return
     let unlisten: (() => void) | undefined
@@ -4974,27 +5034,11 @@ function ImportDialog({
       const paths = Array.isArray(payload) ? payload : (payload?.paths ?? [])
       const erlaubte = paths.filter((p: string) => /\.(pdf|xml)$/i.test(p))
       if (erlaubte.length === 0) return
-      const pfad = erlaubte[0]
-      const name = pfad.replace(/\\/g, '/').split('/').pop() ?? 'rechnung'
-      setLaedt(true)
       setLadeFehler(null)
       try {
-        const res = await analysiereRechnungPfad(pfad)
-        // Datei für Beleganhang: temp-Datei vom Backend holen - für PDF UND XML (Issue #384:
-        // reine XML-Rechnungen hatten hier bisher nie eine temp_url, "datei" blieb null und
-        // "Rechnung erstellen" tat wirkungslos nichts).
-        if (res.temp_url) {
-          const base = await getApiBase()
-          const blob = await fetch(`${base}${res.temp_url}`).then(r => r.blob())
-          const mime = pfad.toLowerCase().endsWith('.xml') ? 'application/xml' : 'application/pdf'
-          setDatei(new File([blob], name, { type: mime }))
-        }
-        setErgebnis(res)
-        setSchritt('ergebnis')
+        await handleDatei(await leseGedroppteDatei(erlaubte[0]))
       } catch (e: unknown) {
         setLadeFehler((e as Error).message)
-      } finally {
-        setLaedt(false)
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }

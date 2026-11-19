@@ -842,14 +842,13 @@ function parseConfig(raw: string | null | undefined): DashboardConfig {
 
 async function openExternUrl(url: string) {
   if (!url) return
-  try {
-    const { isTauri } = await import('@tauri-apps/api/core')
-    if (isTauri()) {
-      const { invoke } = await import('@tauri-apps/api/core')
-      await (invoke as (cmd: string, args?: Record<string, unknown>) => Promise<void>)('open_url', { url })
-      return
-    }
-  } catch { /* ignorieren */ }
+  const { isTauri, invoke } = await import('@tauri-apps/api/core')
+  if (isTauri()) {
+    // Programme/Pfade fragt Rust beim ersten Mal per Dialog nach (Security-Audit F12) –
+    // bei „Abbrechen“ kommt ein Fehler zurück, dann bewusst nichts weiter öffnen.
+    try { await invoke('open_url', { url }) } catch { /* abgebrochen oder nicht öffnbar */ }
+    return
+  }
   window.open(url, '_blank', 'noopener')
 }
 

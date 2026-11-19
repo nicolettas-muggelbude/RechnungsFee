@@ -156,6 +156,22 @@ def test_kleinunternehmer_zeile_12_und_13_nicht_im_gesamtumsatz(db):
     assert kz.get("kz_48", Decimal("0")) == Decimal("0")
 
 
+def test_kleinunternehmer_altbuchung_auf_null_prozent_nicht_in_zeile_13(db):
+    """Issue #549: Vor v0.7.6 buchten Zahlungen auf normale Kleinunternehmer-Rechnungen auf
+    „Betriebseinnahmen (0%)“ - das sind keine nicht steuerbaren Umsätze (Zeile 13)."""
+    unt = db.query(Unternehmen).one()
+    unt.ist_kleinunternehmer = True
+    db.commit()
+    r = _bezahlt(db, _rechnung(db, satz="0", steuerfrei=False))
+    e = db.query(Journaleintrag).filter(Journaleintrag.rechnung_id == r.id).one()
+    e.kategorie_id = db.query(Kategorie).filter(Kategorie.name == "Betriebseinnahmen (0%)").one().id
+    db.commit()
+
+    euer = _berechne_euer(2026, db)
+    assert euer["zeilen"].get(12) == Decimal("100.00")
+    assert euer["zeilen"].get(13, Decimal("0")) == Decimal("0")
+
+
 # --- PDF und E-Rechnung ---------------------------------------------------------------------------
 
 def _unt_dict(db) -> dict:

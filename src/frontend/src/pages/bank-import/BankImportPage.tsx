@@ -9,7 +9,7 @@ import {
   getBankTemplates,
   getBankTransaktionen,
   vorschauBankImport,
-  vorschauBankImportPfad,
+  leseGedroppteDatei,
   importiereBankTransaktionen,
   bucheTransaktion,
   verknuepfeBankTransaktionMitJournal,
@@ -19,6 +19,7 @@ import {
   loescheTransaktion,
   loescheUngebuchte,
   klassifiziereBankTransaktion,
+  getKategorien,
   isTauri,
   type Konto,
   type BankTemplate,
@@ -82,7 +83,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const [vorschau, setVorschau] = useState<BankVorschauResponse | null>(null)
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set())
   const [fehler, setFehler] = useState<string | null>(null)
-  const [tauriPfad, setTauriPfad] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const geschaeftskonten = useMemo(() => konten.filter(k => k.kontotyp !== 'privat'), [konten])
@@ -122,7 +122,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     }
   }
 
-  // Tauri auf Windows: HTML5-Drop feuert nicht – stattdessen tauri://drag-drop hören
+  // Desktop-App: Tauri fängt Drops nativ ab (unter Windows kommt kein HTML5-Drop an) und liefert
+  // nur Pfade. Tauri liest die Datei, danach Upload wie bei einer ausgewählten Datei
+  // (Security-Audit F5: das Backend nimmt keine Pfade an).
   useEffect(() => {
     if (!isTauri() || schritt !== 1) return
     let unlisten: (() => void) | undefined
@@ -132,21 +134,19 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       const erlaubte = (Array.isArray(paths) ? paths : [])
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
-      const pfad = erlaubte[0]
-      const name = pfad.replace(/\\/g, '/').split('/').pop() ?? 'import.csv'
       setFehler(null)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
-      setTauriPfad(pfad)
       setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
       try {
+        const f = await leseGedroppteDatei(erlaubte[0])
+        setDatei(f)
         // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
         // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
-        const result = await vorschauBankImportPfad(pfad, undefined, undefined)
+        const result = await vorschauBankImport(f, undefined, undefined)
         if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
         setVorschau(result)
         setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-        setDatei(new File([new Blob()], name))
         if (result.konto_iban && result.erkanntes_konto_id) {
           const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
           setAnalyseStatus({
@@ -172,7 +172,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     const f = e.dataTransfer.files[0]
     if (f) {
       setDatei(f)
-      setTauriPfad(null)
       setAnalyseStatus({ art: 'idle' })
       setVorschau(null)
       setFehler(null)
@@ -182,12 +181,10 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
 
   // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
   async function ladeVorschauMitKonto(kontoId: number) {
-    if (!datei && !tauriPfad) return
+    if (!datei) return
     setFehler(null)
     try {
-      const result = tauriPfad
-        ? await vorschauBankImportPfad(tauriPfad, kontoId, templateId || undefined)
-        : await vorschauBankImport(datei!, kontoId, templateId || undefined)
+      const result = await vorschauBankImport(datei, kontoId, templateId || undefined)
       setVorschau(result)
       setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
     } catch (e: unknown) {
@@ -286,7 +283,6 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
-                    setTauriPfad(null)
                     setAnalyseStatus({ art: 'idle' })
                     setVorschau(null)
                     setFehler(null)
@@ -766,6 +762,62 @@ function AbgleichDialog({ tx, vorschlaege, onZuordnen, onOhneRechnung, onClose, 
 }
 
 // ---------------------------------------------------------------------------
+// Kategorie-Dialog (Issue #546): Eingangsrechnung ohne Kategorie – vor dem Kategorie-Stichtag
+// finalisiert, die Kategorie wird wie im Dialog „Zahlung buchen“ erst beim Bezahlen gewählt
+// ---------------------------------------------------------------------------
+
+function KategorieWahlDialog({ onBuchen, onClose, pending }: {
+  onBuchen: (kategorieId: number) => void
+  onClose: () => void
+  pending: boolean
+}) {
+  const [kategorieId, setKategorieId] = useState('')
+  const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
+  const aufwandKat = (kategorien ?? []).filter(k => k.kontenart === 'Aufwand')
+  const anlageKat = (kategorien ?? []).filter(k => k.kontenart === 'Anlage')
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="kat-wahl-titel"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md px-6 py-5 space-y-4">
+        <div>
+          <h2 id="kat-wahl-titel" className="text-base font-semibold text-slate-800 dark:text-slate-100">Kategorie wählen</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+            Die Rechnung hat noch keine Kategorie. Wähle aus, worauf die Zahlung gebucht wird –
+            die Kategorie wird auch an der Rechnung gespeichert.
+          </p>
+        </div>
+        <select
+          value={kategorieId}
+          onChange={e => setKategorieId(e.target.value)}
+          aria-label="Kategorie"
+          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+        >
+          <option value="">— Kategorie wählen —</option>
+          <optgroup label="Betriebsausgaben">
+            {aufwandKat.map(k => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+          </optgroup>
+          {anlageKat.length > 0 && (
+            <optgroup label="Investitionen">
+              {anlageKat.map(k => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+            </optgroup>
+          )}
+        </select>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+            Abbrechen
+          </button>
+          <button onClick={() => onBuchen(Number(kategorieId))} disabled={!kategorieId || pending}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium">
+            {pending ? 'Buche…' : 'Buchen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Überzahlungs-Dialog (Ausgangsrechnung)
 // ---------------------------------------------------------------------------
 
@@ -908,6 +960,8 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   } | null>(null)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
   const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
+  // Issue #546: Eingangsrechnung ohne Kategorie – Buchung mit gewählter Kategorie wiederholen
+  const [kategorieWahl, setKategorieWahl] = useState<{ txId: number; rechnungId: number; restPrivat: boolean } | null>(null)
   const [suche, setSuche] = useState('')
   const [statusFilter, setStatusFilter] = useState<'alle' | 'offen' | 'gebucht' | 'privat' | 'ignoriert'>('alle')
 
@@ -963,14 +1017,18 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   })
 
   const bucheMut = useMutation({
-    mutationFn: ({ txId, rechnungId, restPrivat = false }: { txId: number; rechnungId: number | null; restPrivat?: boolean }) =>
-      bucheTransaktion(txId, rechnungId, undefined, restPrivat),
+    mutationFn: ({ txId, rechnungId, restPrivat = false, kategorieId }: {
+      txId: number; rechnungId: number | null; restPrivat?: boolean; kategorieId?: number
+    }) =>
+      bucheTransaktion(txId, rechnungId, undefined, restPrivat, kategorieId),
     onSuccess: (tx, { rechnungId, restPrivat }) => {
       qc.invalidateQueries({ queryKey: ['bank-transaktionen', konto.id] })
       qc.invalidateQueries({ queryKey: ['ueberzahlungen'] })
       qc.invalidateQueries({ queryKey: ['zm-pruefen'] })
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
       setAbgleichDialog(null)
       setBuchungTx(null)
+      setKategorieWahl(null)
       if (tx.hinweis) setBuchungsHinweis(tx.hinweis)  // Issue #497: freie ig. Lieferung ab Stichtag
 
       if (tx.forderung_id) {
@@ -995,7 +1053,13 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
       }
       zeigToast(rechnungId ? 'Rechnung als bezahlt markiert' : 'Buchung erstellt', true)
     },
-    onError: (e: Error) => zeigToast(e.message || 'Fehler beim Buchen.', false),
+    onError: (e: Error, { txId, rechnungId, restPrivat = false }) => {
+      if (e.message === 'keine_kategorie' && rechnungId) {
+        setKategorieWahl({ txId, rechnungId, restPrivat })
+        return
+      }
+      zeigToast(e.message === 'keine_kategorie' ? 'Bitte eine Kategorie für die Buchung wählen.' : (e.message || 'Fehler beim Buchen.'), false)
+    },
   })
 
   const bereinigeMut = useMutation({
@@ -1310,6 +1374,14 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
           onZuordnen={(rechnungId, restPrivat) => bucheMut.mutate({ txId: abgleichDialog.tx.id, rechnungId, restPrivat })}
           onOhneRechnung={() => { setAbgleichDialog(null); proceedOhneAbgleich(abgleichDialog.tx) }}
           onClose={() => setAbgleichDialog(null)}
+        />
+      )}
+
+      {kategorieWahl && (
+        <KategorieWahlDialog
+          pending={bucheMut.isPending}
+          onBuchen={kategorieId => bucheMut.mutate({ ...kategorieWahl, kategorieId })}
+          onClose={() => setKategorieWahl(null)}
         />
       )}
 

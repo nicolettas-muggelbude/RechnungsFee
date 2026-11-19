@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { downloadBackup, getUnternehmen, updateUnternehmen, getBackupListe, wiederherstellenLokal, isTauri, getProfile } from '../../api/client'
-import type { BackupEintrag } from '../../api/client'
+import type { BackupEintrag, UnternehmenEingabe } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { BackupZipWiederherstellen } from '../../components/BackupZipWiederherstellen'
+import { GespeichertesPasswort } from '../../components/GespeichertesPasswort'
+import { passwortPlatzhalter } from '../../utils/passwortPlatzhalter'
 
 type TabId = 'backup' | 'wiederherstellung'
 
@@ -68,9 +70,11 @@ function ExterneBackupEinstellungen() {
   const [pfad2LokalOk, setPfad2LokalOk] = useState(false)
   const [passwort, setPasswort] = useState<string>('')
   const [zeigPasswort, setZeigPasswort] = useState(false)
+  const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [smbBenutzer, setSmbBenutzer] = useState<string>('')
   const [smbPasswort, setSmbPasswort] = useState<string>('')
   const [zeigSmbPasswort, setZeigSmbPasswort] = useState(false)
+  const [smbPasswortEntfernen, setSmbPasswortEntfernen] = useState(false)
   const [anzahl, setAnzahl] = useState<string>('5')
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'err'>('idle')
 
@@ -80,14 +84,17 @@ function ExterneBackupEinstellungen() {
     setPfad2(data.backup_extern_pfad_2 ?? '')
     setPfad1LokalOk(data.backup_extern_pfad_1_lokal_ok ?? false)
     setPfad2LokalOk(data.backup_extern_pfad_2_lokal_ok ?? false)
-    setPasswort(data.backup_extern_passwort ?? '')
+    // Security-Audit F6: Passwörter kommen nie zurück – Felder leer = unverändert
+    setPasswort('')
+    setPasswortEntfernen(false)
     setSmbBenutzer(data.backup_smb_benutzer ?? '')
-    setSmbPasswort(data.backup_smb_passwort ?? '')
+    setSmbPasswort('')
+    setSmbPasswortEntfernen(false)
     setAnzahl(String(data.backup_extern_anzahl ?? 5))
   }, [data])
 
   const mutation = useMutation({
-    mutationFn: (payload: typeof data) => updateUnternehmen(payload!),
+    mutationFn: (payload: UnternehmenEingabe) => updateUnternehmen(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['unternehmen'] })
       setStatus('ok')
@@ -106,7 +113,8 @@ function ExterneBackupEinstellungen() {
   }
 
   const hatZiel = !!(pfad1 || pfad2)
-  const passwortFehlt = hatZiel && !passwort
+  const passwortHinterlegt = !!data?.backup_extern_passwort_gesetzt && !passwortEntfernen
+  const passwortFehlt = hatZiel && !passwort && !passwortHinterlegt
   const anzahlZahl = Number(anzahl)
   const anzahlUngueltig = !Number.isInteger(anzahlZahl) || anzahlZahl < 1 || anzahlZahl > 999
   const kannSpeichern = !passwortFehlt && !anzahlUngueltig && !!data && status !== 'saving'
@@ -114,11 +122,15 @@ function ExterneBackupEinstellungen() {
   function speichern() {
     if (!kannSpeichern) return
     setStatus('saving')
+    // Nur die Backup-Felder senden (früher ...data – das schickte die ganze GET-Antwort zurück)
     mutation.mutate({
-      ...data!,
       backup_extern_pfad_1: pfad1 || null, backup_extern_pfad_2: pfad2 || null,
       backup_extern_pfad_1_lokal_ok: pfad1LokalOk, backup_extern_pfad_2_lokal_ok: pfad2LokalOk,
-      backup_extern_passwort: passwort || null, backup_smb_benutzer: smbBenutzer || null, backup_smb_passwort: smbPasswort || null,
+      backup_extern_passwort: passwort || null,
+      backup_extern_passwort_entfernen: passwortEntfernen && !passwort,
+      backup_smb_benutzer: smbBenutzer || null,
+      backup_smb_passwort: smbPasswort || null,
+      backup_smb_passwort_entfernen: smbPasswortEntfernen && !smbPasswort,
       backup_extern_anzahl: anzahlZahl,
     })
   }
@@ -228,14 +240,17 @@ function ExterneBackupEinstellungen() {
                 <div className="space-y-1">
                   <label className="block text-xs text-slate-500 dark:text-slate-400">Passwort</label>
                   <div className="relative">
-                    <input type={zeigSmbPasswort ? 'text' : 'password'} value={smbPasswort} onChange={e => setSmbPasswort(e.target.value)}
-                      placeholder="SMB-Passwort"
+                    <input type={zeigSmbPasswort ? 'text' : 'password'} autoComplete="new-password" value={smbPasswort}
+                      onChange={e => { setSmbPasswort(e.target.value); setSmbPasswortEntfernen(false) }}
+                      placeholder={passwortPlatzhalter(data?.backup_smb_passwort_gesetzt, smbPasswortEntfernen, 'SMB-Passwort')}
                       className={`${inputCls} pr-20`} />
                     <button type="button" onClick={() => setZeigSmbPasswort(z => !z)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2 py-1">
                       {zeigSmbPasswort ? 'Verbergen' : 'Anzeigen'}
                     </button>
                   </div>
+                  <GespeichertesPasswort gesetzt={data?.backup_smb_passwort_gesetzt} neuEingegeben={!!smbPasswort}
+                    entfernen={smbPasswortEntfernen} onEntfernenChange={setSmbPasswortEntfernen} />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500">
@@ -252,14 +267,18 @@ function ExterneBackupEinstellungen() {
             Verschlüsselungs-Passwort{hatZiel && <span className="ml-1 text-red-500">*</span>}
           </label>
           <div className="relative">
-            <input type={zeigPasswort ? 'text' : 'password'} value={passwort} onChange={e => setPasswort(e.target.value)}
-              placeholder={hatZiel ? 'Pflichtfeld – externes Backup ist immer verschlüsselt' : 'Wird benötigt sobald ein Ziel konfiguriert ist'}
+            <input type={zeigPasswort ? 'text' : 'password'} autoComplete="new-password" value={passwort}
+              onChange={e => { setPasswort(e.target.value); setPasswortEntfernen(false) }}
+              placeholder={passwortPlatzhalter(data?.backup_extern_passwort_gesetzt, passwortEntfernen,
+                hatZiel ? 'Pflichtfeld – externes Backup ist immer verschlüsselt' : 'Wird benötigt sobald ein Ziel konfiguriert ist')}
               className={`${inputCls} pr-24 ${passwortFehlt ? 'border-red-400 focus:ring-red-400' : ''}`} />
             <button type="button" onClick={() => setZeigPasswort(z => !z)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2 py-1">
               {zeigPasswort ? 'Verbergen' : 'Anzeigen'}
             </button>
           </div>
+          <GespeichertesPasswort gesetzt={data?.backup_extern_passwort_gesetzt} neuEingegeben={!!passwort}
+            entfernen={passwortEntfernen} onEntfernenChange={setPasswortEntfernen} />
           {passwortFehlt && (
             <p className="text-xs text-red-600 dark:text-red-400">
               Externes Backup erfordert ein Passwort – Kundendaten müssen gemäß DSGVO Art. 32 verschlüsselt gespeichert werden.

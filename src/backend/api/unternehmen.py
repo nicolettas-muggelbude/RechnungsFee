@@ -12,8 +12,12 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
 from database.models import Unternehmen
+from utils import geheimnisse
 from utils.logo import logo_datei, logo_relativ
-from .schemas import UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse
+from .schemas import (
+    GEHEIMNIS_EINGABE_FELDER, GeheimnisEingabe,
+    UnternehmenCreate, UnternehmenUpdate, UnternehmenResponse,
+)
 
 router = APIRouter(prefix="/api/unternehmen", tags=["Stammdaten"])
 
@@ -31,6 +35,18 @@ def _upload_dir() -> Path:
     return UPLOAD_DIR
 
 
+def _geheimnisse_uebernehmen(unternehmen: Unternehmen, data: GeheimnisEingabe) -> None:
+    """Security-Audit F6: Passwörter nur über utils/geheimnisse.py ablegen.
+
+    Leer/nicht gesendet = unverändert (die Oberfläche bekommt den Wert nie zurück und kann ihn
+    daher auch nicht mitschicken), `<feld>_entfernen` löscht."""
+    for feld in geheimnisse.FELDER:
+        if getattr(data, f"{feld}_entfernen"):
+            geheimnisse.passwort_setzen(unternehmen, feld, None)
+        elif wert := getattr(data, feld):
+            geheimnisse.passwort_setzen(unternehmen, feld, wert)
+
+
 @router.get("", response_model=UnternehmenResponse | None)
 def get_unternehmen(db: Session = Depends(get_db)):
     """Gibt die Unternehmensdaten zurück, oder null wenn noch nicht eingerichtet."""
@@ -45,7 +61,8 @@ def create_unternehmen(data: UnternehmenCreate, db: Session = Depends(get_db)):
             status_code=409,
             detail="Unternehmensdaten bereits vorhanden. Bitte PUT verwenden.",
         )
-    unternehmen = Unternehmen(**data.model_dump())
+    unternehmen = Unternehmen(**data.model_dump(exclude=GEHEIMNIS_EINGABE_FELDER))
+    _geheimnisse_uebernehmen(unternehmen, data)
     db.add(unternehmen)
     db.commit()
     db.refresh(unternehmen)
@@ -59,8 +76,11 @@ def update_unternehmen(data: UnternehmenUpdate, db: Session = Depends(get_db)):
     if not unternehmen:
         raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
     # logo_pfad wird ausschließlich über POST/DELETE /logo verwaltet – nie überschreiben
-    for key, value in data.model_dump(exclude_unset=True, exclude={"logo_pfad"}).items():
+    for key, value in data.model_dump(
+        exclude_unset=True, exclude={"logo_pfad"} | GEHEIMNIS_EINGABE_FELDER,
+    ).items():
         setattr(unternehmen, key, value)
+    _geheimnisse_uebernehmen(unternehmen, data)
     db.commit()
     db.refresh(unternehmen)
     return unternehmen

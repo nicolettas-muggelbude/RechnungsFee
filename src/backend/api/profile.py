@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from database.connection import BASE_DIR, ist_gueltiger_profilname
+from utils import geheimnisse
 
 router = APIRouter(prefix="/api/profile", tags=["Profilmanager"])
 
@@ -200,6 +201,8 @@ def _loesche_profilordner(ordner, name: str, data: ProfilLoeschenRequest) -> Non
         raise HTTPException(status_code=404, detail=f"Profil '{name}' nicht gefunden.")
     if data.bestaetigung != name:
         raise HTTPException(status_code=422, detail="Bestätigung stimmt nicht mit dem Profilnamen überein.")
+    # Security-Audit F6: Passwörter dieses Profils liegen im Schlüsselbund, nicht im Ordner
+    geheimnisse.profil_entfernen(ordner)
     shutil.rmtree(ordner)
 
 

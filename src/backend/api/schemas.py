@@ -103,7 +103,6 @@ class UnternehmenBase(BaseModel):
     smtp_port: int = 587
     smtp_ssl: bool = False
     smtp_user: Optional[str] = None
-    smtp_passwort: Optional[str] = None
     smtp_von_adresse: Optional[str] = None
     smtp_zertifikat_ignorieren: bool = False
     smtp_zertifikat_fingerprint: Optional[str] = None
@@ -113,7 +112,6 @@ class UnternehmenBase(BaseModel):
     imap_port: int = 993
     imap_ssl: bool = True
     imap_user: Optional[str] = None
-    imap_passwort: Optional[str] = None
     imap_ordner: str = "INBOX"
     imap_beim_start: bool = False
     imap_zertifikat_ignorieren: bool = False
@@ -138,9 +136,7 @@ class UnternehmenBase(BaseModel):
     bt22_bemerkung_aktiv: bool = False
     backup_extern_pfad_1:   Optional[str] = None
     backup_extern_pfad_2:   Optional[str] = None
-    backup_extern_passwort: Optional[str] = None
     backup_smb_benutzer:    Optional[str] = None
-    backup_smb_passwort:    Optional[str] = None
     backup_extern_pfad_1_lokal_ok: bool = False
     backup_extern_pfad_2_lokal_ok: bool = False
     backup_extern_anzahl:   int = 5
@@ -230,11 +226,30 @@ class UnternehmenBase(BaseModel):
         return self
 
 
-class UnternehmenCreate(UnternehmenBase):
+class GeheimnisEingabe(BaseModel):
+    """Security-Audit F6: Passwörter werden nur geschrieben, nie zurückgegeben.
+
+    Leer oder nicht gesendet = unverändert; `<feld>_entfernen=true` löscht das Passwort.
+    Abgelegt werden sie über utils/geheimnisse.py (Schlüsselbund bzw. verschlüsselte Datei)."""
+    smtp_passwort: Optional[str] = None
+    imap_passwort: Optional[str] = None
+    backup_extern_passwort: Optional[str] = None
+    backup_smb_passwort: Optional[str] = None
+    smtp_passwort_entfernen: bool = False
+    imap_passwort_entfernen: bool = False
+    backup_extern_passwort_entfernen: bool = False
+    backup_smb_passwort_entfernen: bool = False
+
+
+# Felder aus GeheimnisEingabe – laufen nie durch die setattr-Schleife der Stammdaten-Endpunkte
+GEHEIMNIS_EINGABE_FELDER: set[str] = set(GeheimnisEingabe.model_fields)
+
+
+class UnternehmenCreate(GeheimnisEingabe, UnternehmenBase):
     pass
 
 
-class UnternehmenUpdate(UnternehmenBase):
+class UnternehmenUpdate(GeheimnisEingabe, UnternehmenBase):
     # Alle Felder optional beim Update
     firmenname: Optional[str] = None
     strasse: Optional[str] = None
@@ -247,6 +262,11 @@ class UnternehmenResponse(UnternehmenBase):
     id: int
     erstellt_am: datetime
     aktualisiert_am: datetime
+    # Security-Audit F6: nur ob ein Passwort hinterlegt ist, nie der Wert selbst
+    smtp_passwort_gesetzt: bool = False
+    imap_passwort_gesetzt: bool = False
+    backup_extern_passwort_gesetzt: bool = False
+    backup_smb_passwort_gesetzt: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -430,6 +450,7 @@ class JournalEintragResponse(BaseModel):
     beschreibung: str
     kategorie_id: Optional[int]
     kategorie_kontenart: Optional[str] = None  # Erlös|Aufwand|Privat|Anlage
+    kategorie_name: Optional[str] = None       # Anzeige im Journal (Issue #567)
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None   # aus Relationship befüllt
     kunde_email: Optional[str] = None
@@ -480,6 +501,7 @@ class JournalEintragResponse(BaseModel):
             data.kunde_email = obj.kunde.email
         if obj.kategorie:
             data.kategorie_kontenart = obj.kategorie.kontenart
+            data.kategorie_name = obj.kategorie.name
         if obj.rechnung:
             data.rechnung_nr = obj.rechnung.rechnungsnummer
             data.rechnung_datum = obj.rechnung.datum

@@ -88,7 +88,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ## 📋 Nach v0.7.4 – vorgemerkt
 
-- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn) – bisher ziehen Entwürfe von
+- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.13) – bisher ziehen Entwürfe von
   Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
   (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
   Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen
@@ -98,8 +98,8 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   angelegte Rechnungen sofort; Frontend mit fehlender Nummer (Liste, Vorschau-PDF „Entwurf“,
   Mail-Platzhalter, Dateinamen); bestehende Entwürfe behalten ihre Nummer (kein Doppel-Vergeben);
   Angebot/Auftrag/Lieferschein unverändert (Proforma-Entwürfe sind bereits ohne Nummer).
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), offen nur der Forderungsausfall; siehe Abschnitt ELSTER-Export unten.
-- [ ] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505) – Angebot und Proforma
+- [x] **Meldezeitraum ZM / KZ 21 / KZ 41** (Issue #497) – in v0.7.8 umgesetzt (PR #498), Forderungsausfall in v0.7.12 (PR #521); siehe Abschnitt ELSTER-Export unten.
+- [x] **Lagerführung: einheitliche Regel für den Lagerabgang** (Issue #505, v0.7.12) – Angebot und Proforma
   buchen fälschlich ab, Lieferschein + Rechnung doppelt. Regel: Angebot/Proforma/Auftrag nie,
   Lieferschein beim Finalisieren, Rechnung nur ohne Lieferschein; Bestandsdaten unterscheiden.
 - [x] **Adressrollen je Dokument** (Issue #495, Gerti: Betreiber mit ~100 Standorten, v0.7.11) –
@@ -146,9 +146,10 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
   Inhalte, Herkunftsprüfung, XML-Parser, Dateirechte); Details im Sicherheitshinweis nach dem Release
 - [x] `SECURITY.md`: vertrauliche Meldung über GitHub
 - [x] Abhängigkeiten aktualisiert (Dependabot)
-- [ ] Folge-Release: weitere Härtung zwischen Oberfläche und Hintergrunddienst
+- [x] Folge-Release v0.7.12: weitere Härtung zwischen Oberfläche und Hintergrunddienst (Sitzungsschlüssel,
+  signierte Links, keine Dateipfade über die Schnittstelle, CSP, Passwörter im Schlüsselbund)
 
-## 📋 v0.7.12 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
@@ -210,6 +211,20 @@ offener Posten in `forderungen`, nicht im Journal. Folgen im DATEV-Export:
 - Eigenes Release, da Geldflüsse an vielen Stellen betroffen; Backend-lastig, daher nicht von der
   Oberflächen-Zurückstellung bis v0.8.0 erfasst
 
+### Umbuchung zwischen eigenen Konten (Geldtransit) – Community-Frage Pascal, 2026-11-14
+
+Heute: Umbuchungen (z. B. Geschäftskonto → Rücklagenkonto für die USt) werden im Bank-Import auf
+beiden Seiten „Ignoriert“ (#379) – erfolgsneutral, aber ohne Buchung. Folge im DATEV-Export: die
+Salden der beiden Bankkonten weichen von den Kontoauszügen ab. Gleiche Bauart wie das
+Verrechnungskonto oben, daher gemeinsam angehen.
+
+- [ ] Im Bank-Import „Umbuchung“ statt nur „Ignorieren“: erfolgsneutrale Buchung Bank → Geldtransit
+  (SKR03 1360 / SKR04 1460, am DATEV-Kontenrahmen 2026 prüfen) und Geldtransit → Zielkonto
+  (`konten.datev_kontonummer` je Konto, Migration 110)
+- [ ] Gegenstück auf dem anderen Konto vorschlagen (gleicher Betrag mit umgekehrtem Vorzeichen, Datum
+  ± wenige Tage), damit beide Seiten zusammen gebucht werden und der Transitsaldo 0 ergibt
+- [ ] EÜR/UStVA/Cockpit unberührt; bereits ignorierte Umbuchungen bleiben wie sie sind
+
 ## 📋 v0.7.8 – vorgemerkt
 
 - [x] **Steuerfreie Umsätze nach § 4 UStG in den Unternehmensdaten** (Issue #492, Folge aus #480,
@@ -268,11 +283,11 @@ Privatentnahme/-einlage laufen nur über Kategorien ohne Personenbezug.
 Wunsch von Peter1061, Recherche von herrschmidt (Issue #360): Kennzahlen nicht mehr in ELSTER abtippen.
 
 - [x] **Stufe 1 – Datei für den Upload in Mein ELSTER** (keine Registrierung, kein Zertifikat) – umgesetzt von herrschmidt (PR #460), Kennzahlen-Fehler davor behoben (#456 ZM, #457 KZ 43/87, #458 KZ 41, #459 §13b/Kleinunternehmer):
-- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, v0.7.8 mit PR #498 von 5eBeKs bis auf den Forderungsausfall, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
+- [ ] **Meldezeitraum ZM / KZ 21 / KZ 41 gesetzeskonform** (Issue #497, v0.7.8 mit PR #498 von 5eBeKs, Forderungsausfall im Folge-PR, Recherche herrschmidt in PR #460, am Gesetzestext geprüft): bisher nach Zahlungsdatum – unbezahlte EU-Lieferungen fehlen ganz. Laut §18a Abs. 8 und §18b UStG gilt, unabhängig von Ist-Versteuerung:
   - **L / KZ 41** (ig. Lieferung): Monat der Rechnungsausstellung, spätestens Monat nach der Lieferung – umgesetzt
   - **S / KZ 21** (sonstige Leistung §3a Abs. 2): Monat der Ausführung (`leistung_bis` → `leistung_von` → Rechnungsdatum) – umgesetzt
   - Quelle wird die Rechnung (Netto), nicht die Zahlung; ZM und UStVA weiter aus derselben Quelle (`utils/zm_meldezeitraum.py`); Abschlagsrechnungen melden 0, die Schlussrechnung die volle Leistung (#419) – umgesetzt
-  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr) – Storno, Gutschrift und Skonto umgesetzt; Forderungsausfall offen (braucht ein Ausfalldatum)
+  - Korrekturen nach §17 (§18a Abs. 7, §18b Satz 4) als eigene Minusbeträge im Monat des Ereignisses: Storno, Gutschrift, Skonto, Forderungsausfall (`forderungsausfall_buchen`, #252 – dortige Begründung „nichts zu korrigieren“ gilt dann nicht mehr) – umgesetzt; Forderungsausfall mit `ausfall_datum` (Migration 189, PR #521): minus im Ausfallmonat, spätere Zahlung plus in ihrem Monat (§17 Abs. 2 Nr. 1 Satz 2)
   - Übergang per Stichtag wie beim Vorsteuer-Cutover (#338): Rechnungen ab Stichtag nach neuer Regel, ältere bleiben beim Zahlungsdatum – sonst Doppel- bzw. Fehlmeldungen. Stichtag 01.01.2027 (`CUTOVER_DATUM`); Leistungen vor dem Stichtag mit Rechnung danach melden im ersten Monat ab Stichtag, nicht rückwirkend – umgesetzt
   - Abgestimmt in #497: Forderungsausfall (`ausfall_datum` + Migration, Minus im Ausfallmonat, Plus bei späterer Zahlung nach § 17 Abs. 2 Nr. 1 Satz 2) als eigener PR danach; freie Journal-/Bank-Buchungen auf ig. Lieferung/EU-Dienstleistung ohne Rechnungsbezug zählen weiter nach Buchungsdatum, ab Stichtag nur Hinweis beim Buchen (keine Sperre, keine Zuordnung)
   - nicht betroffen: KZ 43 (Ausfuhr) und KZ 45 (Drittland) – nicht in §18b

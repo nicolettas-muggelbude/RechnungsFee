@@ -13,10 +13,61 @@ struct BackendPort(Mutex<u16>);
 /// Globaler State: Handle des laufenden Sidecar-Prozesses
 struct BackendChild(Mutex<Option<CommandChild>>);
 
+/// Globaler State: Sitzungstoken für die lokale API (Security-Audit F4 Teil 2).
+///
+/// Pro App-Start 32 Zufallsbytes aus dem Zufallsgenerator des Betriebssystems, hex-kodiert.
+/// Der Sidecar bekommt es über stdin (nicht über argv – die Kommandozeile ist per `ps` für
+/// alle Benutzer sichtbar), das Hauptfenster per IPC (`get_backend_token`). Jeder API-Request
+/// schickt es als `Authorization: Bearer <token>` mit. Bewusst kein JWT: ein Aussteller,
+/// ein Prüfer, keine Claims – ein Zufallstoken ist einfacher und hat weniger Fallstricke.
+struct BackendToken(String);
+
+fn neues_sitzungstoken() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).expect("Zufallsgenerator des Betriebssystems nicht verfügbar");
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// POST /api/shutdown mit Sitzungstoken – direkt über TCP statt per curl, damit das Token
+/// nicht in der Kommandozeile eines Hilfsprozesses auftaucht (dort für alle Benutzer sichtbar).
+/// Liefert true bei HTTP 200.
+fn sende_shutdown(port: u16, token: &str, timeout: std::time::Duration) -> bool {
+    use std::io::{Read, Write};
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let mut stream = match std::net::TcpStream::connect_timeout(&addr, timeout) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+    let anfrage = format!(
+        "POST /api/shutdown HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        port, token
+    );
+    if stream.write_all(anfrage.as_bytes()).is_err() {
+        return false;
+    }
+    let mut puffer = [0u8; 32];
+    match stream.read(&mut puffer) {
+        Ok(n) if n > 0 => {
+            let antwort = String::from_utf8_lossy(&puffer[..n]);
+            antwort.starts_with("HTTP/1.1 200") || antwort.starts_with("HTTP/1.0 200")
+        }
+        _ => false,
+    }
+}
+
 /// IPC-Command: Frontend fragt den Backend-Port ab
 #[tauri::command]
 fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
     *state.0.lock().unwrap()
+}
+
+/// IPC-Command: Frontend holt das Sitzungstoken (nur Fenster „main“ hat IPC-Rechte,
+/// siehe capabilities/default.json – PDF-Fenster bekommen es nicht).
+#[tauri::command]
+fn get_backend_token(state: tauri::State<BackendToken>) -> String {
+    state.0.clone()
 }
 
 /// Backend-Prozessbaum beenden.
@@ -38,7 +89,7 @@ fn get_backend_port(state: tauri::State<BackendPort>) -> u16 {
 ///
 /// wait=true  → blockiert komplett (IPC vor exit(0), NSIS wartet)
 /// wait=false → non-blocking (CloseRequested / RunEvent::Exit)
-fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
+fn kill_backend_inner(child: CommandChild, port: u16, token: String, wait: bool) {
     #[cfg(target_os = "windows")]
     {
         let pid = child.pid();
@@ -48,14 +99,11 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
         log::info!("Sende Shutdown-Request an {} (PID {})", shutdown_url, pid);
 
         if wait {
-            // 1. Graceful: HTTP POST an /api/shutdown – curl.exe blockiert bis Antwort
-            let status = std::process::Command::new("curl.exe")
-                .args(["-s", "-m", "3", "-X", "POST", &shutdown_url])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
-            match &status {
-                Ok(o) if o.status.success() => log::info!("Graceful shutdown OK"),
-                _ => log::warn!("Graceful shutdown fehlgeschlagen – fahre mit taskkill fort"),
+            // 1. Graceful: HTTP POST an /api/shutdown – blockiert bis Antwort (max. 3 s)
+            if sende_shutdown(port, &token, std::time::Duration::from_secs(3)) {
+                log::info!("Graceful shutdown OK");
+            } else {
+                log::warn!("Graceful shutdown fehlgeschlagen – fahre mit taskkill fort");
             }
 
             // 2. Kurz warten: Prozess beendet sich nach /shutdown selbst
@@ -70,10 +118,9 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
             log::info!("Backend (PID {}) beendet (wait=true)", pid);
         } else {
             // Non-blocking: Shutdown-Request feuern und nicht warten
-            let _ = std::process::Command::new("curl.exe")
-                .args(["-s", "-m", "2", "-X", "POST", &shutdown_url])
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn();
+            std::thread::spawn(move || {
+                sende_shutdown(port, &token, std::time::Duration::from_secs(2));
+            });
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .creation_flags(CREATE_NO_WINDOW)
@@ -90,13 +137,11 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
         log::info!("Sende Shutdown-Request an {} (PID {})", shutdown_url, pid);
 
         if wait {
-            // 1. Graceful: HTTP POST an /api/shutdown
-            let status = std::process::Command::new("curl")
-                .args(["-s", "-m", "3", "-X", "POST", &shutdown_url])
-                .output();
-            match &status {
-                Ok(o) if o.status.success() => log::info!("Graceful shutdown OK"),
-                _ => log::warn!("Graceful shutdown fehlgeschlagen – fahre mit Kill fort"),
+            // 1. Graceful: HTTP POST an /api/shutdown (max. 3 s)
+            if sende_shutdown(port, &token, std::time::Duration::from_secs(3)) {
+                log::info!("Graceful shutdown OK");
+            } else {
+                log::warn!("Graceful shutdown fehlgeschlagen – fahre mit Kill fort");
             }
 
             // 2. Kurz warten: Bootloader beendet sich nach /shutdown selbst (wartet auf sein Kind)
@@ -113,9 +158,9 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
             log::info!("Backend (PID {}) beendet (wait=true)", pid);
         } else {
             // Non-blocking: Shutdown-Request feuern und nicht warten
-            let _ = std::process::Command::new("curl")
-                .args(["-s", "-m", "2", "-X", "POST", &shutdown_url])
-                .spawn();
+            std::thread::spawn(move || {
+                sende_shutdown(port, &token, std::time::Duration::from_secs(2));
+            });
             let _ = std::process::Command::new("pkill")
                 .args(["-9", "-P", &pid.to_string()])
                 .spawn();
@@ -127,42 +172,464 @@ fn kill_backend_inner(child: CommandChild, port: u16, wait: bool) {
     }
 }
 
-/// IPC-Command: URL mit System-Standard-App öffnen (z.B. mailto:, https:)
+/// Schemata, die ohne Nachfrage geöffnet werden (Browser bzw. Mailprogramm).
+fn ist_web_oder_mail(url: &str) -> bool {
+    let klein = url.trim_start().to_ascii_lowercase();
+    ["https://", "http://", "mailto:"].iter().any(|s| klein.starts_with(s))
+}
+
+/// Datei mit den bestätigten Schnellzugriff-Zielen. Liegt im Konfigurationsordner der App und
+/// wird nur hier in Rust geschrieben – das Frontend hat keinen Schreibzugriff darauf.
+fn freigaben_datei(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("freigegebene_ziele.json"))
+}
+
+fn lade_freigaben(app: &tauri::AppHandle) -> Vec<String> {
+    freigaben_datei(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn speichere_freigabe(app: &tauri::AppHandle, ziel: &str) {
+    let Some(pfad) = freigaben_datei(app) else { return };
+    let mut liste = lade_freigaben(app);
+    if !liste.iter().any(|z| z == ziel) {
+        liste.push(ziel.to_string());
+    }
+    if let Some(ordner) = pfad.parent() {
+        let _ = std::fs::create_dir_all(ordner);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&liste) {
+        let _ = std::fs::write(pfad, json);
+    }
+}
+
+/// IPC-Command: URL oder Pfad mit der Standard-App des Systems öffnen (Security-Audit F12).
+///
+/// https/http/mailto öffnen direkt. Alles andere – Programme, Ordner, Dateien, fremde
+/// Schemata, z. B. Schnellzugriff-Links im Dashboard – startet `open` ungeprüft (unter
+/// Windows liefe eine .exe direkt). Deshalb beim ersten Mal ein nativer Bestätigungsdialog,
+/// den ein eingeschleustes Skript nicht selbst bestätigen kann; die Freigabe merkt sich Rust.
+/// `async`, weil der blockierende Dialog nicht auf dem Hauptthread laufen darf.
 #[tauri::command]
-fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+    if !ist_web_oder_mail(&url) && !lade_freigaben(&app).iter().any(|z| z == &url) {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+        let bestaetigt = app
+            .dialog()
+            .message(format!(
+                "RechnungsFee soll Folgendes öffnen:\n\n{url}\n\n\
+                 Bestätige nur, wenn du diesen Link oder Pfad selbst eingetragen hast \
+                 (z. B. im Schnellzugriff auf dem Dashboard). Danach wird nicht mehr nachgefragt."
+            ))
+            .title("Programm oder Pfad öffnen?")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom("Öffnen".into(), "Abbrechen".into()))
+            .blocking_show();
+        if !bestaetigt {
+            return Err("Öffnen abgebrochen.".into());
+        }
+        speichere_freigabe(&app, &url);
+    }
     app.shell().open(&url, None).map_err(|e| e.to_string())
 }
 
 /// IPC-Command: vom Frontend vor exit(0) aufgerufen – wartet bis Backend wirklich beendet ist
 #[tauri::command]
-fn kill_backend(child_state: tauri::State<BackendChild>, port_state: tauri::State<BackendPort>) {
+fn kill_backend(
+    child_state: tauri::State<BackendChild>,
+    port_state: tauri::State<BackendPort>,
+    token_state: tauri::State<BackendToken>,
+) {
     let port = *port_state.0.lock().unwrap();
     if let Some(child) = child_state.0.lock().unwrap().take() {
-        kill_backend_inner(child, port, true);  // wait=true: blockiert bis Backend weg ist
+        kill_backend_inner(child, port, token_state.0.clone(), true);  // wait=true: blockiert bis Backend weg ist
     }
 }
 
-/// IPC-Command: User hat Schließen bestätigt – Backend beenden und Fenster schließen
+/// Globaler State: Pfade des letzten Drag & Drop ins Fenster (Security-Audit F5).
+///
+/// Das Backend nimmt keine Dateipfade mehr an. Gezogene Dateien liest Tauri selbst
+/// (`lese_gedroppte_datei`) und das Frontend lädt sie hoch wie eine ausgewählte Datei.
+/// Gelesen wird nur, was der Benutzer gerade wirklich ins Fenster gezogen hat – ein
+/// eingeschleustes Skript kann damit keine beliebigen Dateien von der Platte holen.
+struct GedropptePfade(Mutex<Vec<std::path::PathBuf>>);
+
+/// Dateiendungen, die ein Drop-Import verarbeitet (Rechnungsimport: pdf/xml, Bank-Import: csv/txt/xml/zip).
+const DROP_ENDUNGEN: [&str; 5] = ["pdf", "xml", "csv", "txt", "zip"];
+/// Wie MAX_UPLOAD im Backend (utils/sicherheit_middleware.py).
+const DROP_MAX_BYTES: u64 = 500 * 1024 * 1024;
+
+/// IPC-Command: Datei aus dem letzten Drag & Drop lesen (Inhalt als ArrayBuffer ans Frontend).
 #[tauri::command]
-fn write_bytes_to_path(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, &data).map_err(|e| e.to_string())
+fn lese_gedroppte_datei(
+    pfad: String,
+    state: tauri::State<GedropptePfade>,
+) -> Result<tauri::ipc::Response, String> {
+    let pfad = std::path::PathBuf::from(pfad);
+    if !state.0.lock().unwrap().iter().any(|p| p == &pfad) {
+        return Err("Diese Datei wurde nicht in die App gezogen.".into());
+    }
+    let endung = pfad
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !DROP_ENDUNGEN.contains(&endung.as_str()) {
+        return Err("Dieser Dateityp wird hier nicht unterstützt.".into());
+    }
+    let meta = std::fs::metadata(&pfad).map_err(|e| format!("Datei nicht gefunden: {e}"))?;
+    if !meta.is_file() {
+        return Err("Das ist keine Datei.".into());
+    }
+    if meta.len() > DROP_MAX_BYTES {
+        return Err("Die Datei ist zu groß.".into());
+    }
+    let daten = std::fs::read(&pfad).map_err(|e| format!("Datei konnte nicht gelesen werden: {e}"))?;
+    Ok(tauri::ipc::Response::new(daten))
+}
+
+/// IPC-Command: Datei über den nativen Speichern-Dialog sichern (Security-Audit F12).
+///
+/// Ersetzt `write_bytes_to_path`, das an jeden beliebigen Pfad schreiben konnte. Den Pfad
+/// wählt jetzt ausschließlich der Benutzer im Dialog, den Rust selbst öffnet – das Frontend
+/// liefert nur Vorschlagsname, Filter und Inhalt. Rückgabe: gewählter Pfad, None = abgebrochen.
+/// `async`, weil der blockierende Dialog nicht auf dem Hauptthread laufen darf.
+#[tauri::command]
+async fn speichern_unter(
+    app: tauri::AppHandle,
+    dateiname: String,
+    filter_name: Option<String>,
+    endungen: Vec<String>,
+    data: Vec<u8>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut dialog = app.dialog().file().set_file_name(&dateiname);
+    if !endungen.is_empty() {
+        let endungen: Vec<&str> = endungen.iter().map(String::as_str).collect();
+        dialog = dialog.add_filter(filter_name.unwrap_or_default(), &endungen);
+    }
+    let Some(ziel) = dialog.blocking_save_file() else {
+        return Ok(None);
+    };
+    let pfad = ziel.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(&pfad, &data).map_err(|e| format!("Datei konnte nicht gespeichert werden: {e}"))?;
+    Ok(Some(pfad.to_string_lossy().into_owned()))
+}
+
+/// Dateiname für einen Temp-Anhang: nur der Name, ohne Pfadtrenner und ohne Zeichen, die im
+/// Thunderbird-`-compose`-Argument Feldgrenzen markieren (siehe Validator in capabilities).
+fn temp_anhang_name(dateiname: &str) -> String {
+    let name: String = dateiname
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | '\'' | ',' | ':') || c.is_control() { '_' } else { c })
+        .collect();
+    let name = name.trim().trim_start_matches('.');
+    format!("rechnungsfee_{}", if name.is_empty() { "anhang" } else { name })
+}
+
+/// IPC-Command: Mailanhang für Thunderbird ins Temp-Verzeichnis schreiben (Security-Audit F12).
+/// Schreibt nur `rechnungsfee_<name>` direkt in den Temp-Ordner, gibt den Pfad zurück.
+#[tauri::command]
+fn schreibe_temp_anhang(dateiname: String, data: Vec<u8>) -> Result<String, String> {
+    let pfad = std::env::temp_dir().join(temp_anhang_name(&dateiname));
+    std::fs::write(&pfad, &data).map_err(|e| format!("Anhang konnte nicht geschrieben werden: {e}"))?;
+    Ok(pfad.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests_sicherheit {
+    use super::{ist_web_oder_mail, temp_anhang_name};
+
+    #[test]
+    fn nur_web_und_mail_ohne_nachfrage() {
+        for url in ["https://www.elster.de", "HTTP://example.org", "mailto:a@example.org", " https://x"] {
+            assert!(ist_web_oder_mail(url), "{url}");
+        }
+        for url in [
+            r"C:\Programme\Banking\banking.exe", "/usr/bin/xterm", "file:///etc/passwd",
+            "smb://nas/freigabe", "javascript:alert(1)", "tel:+49123", "ms-settings:", "httpx://x",
+        ] {
+            assert!(!ist_web_oder_mail(url), "{url}");
+        }
+    }
+
+    #[test]
+    fn temp_anhang_bleibt_im_temp_ordner() {
+        assert_eq!(temp_anhang_name("Rechnung_RE-26/001.pdf"), "rechnungsfee_Rechnung_RE-26_001.pdf");
+        assert_eq!(temp_anhang_name("../../.ssh/id_ed25519"), "rechnungsfee__.._.ssh_id_ed25519");
+        assert_eq!(temp_anhang_name(r"C:\Windows\x.dll"), "rechnungsfee_C__Windows_x.dll");
+        assert_eq!(temp_anhang_name("Müller, Anna's Auskunft.pdf"), "rechnungsfee_Müller_ Anna_s Auskunft.pdf");
+        assert_eq!(temp_anhang_name(""), "rechnungsfee_anhang");
+        assert_eq!(temp_anhang_name("..."), "rechnungsfee_anhang");
+    }
 }
 
 #[tauri::command]
 fn confirm_close(
     child_state: tauri::State<BackendChild>,
     port_state: tauri::State<BackendPort>,
+    token_state: tauri::State<BackendToken>,
 ) {
     let port = *port_state.0.lock().unwrap();
     if let Some(child) = child_state.0.lock().unwrap().take() {
-        kill_backend_inner(child, port, false);
+        kill_backend_inner(child, port, token_state.0.clone(), false);
     }
     // Fenster wird von JS nach diesem Return geschlossen
 }
 
+/// Issue #543: Das AppImage bringt kein eigenes GTK mit (GTK, GIO, gdk-pixbuf kommen vom
+/// System), der AppRun-Hook von linuxdeploy-plugin-gtk lenkt die Modulpfade aber trotzdem in
+/// nicht vorhandene Ordner im AppImage um. Folge u. a.: GTK findet die Druckmodule
+/// (printbackends) nicht, der Druckdialog zeigt keine Drucker. Entfernt werden nur Variablen,
+/// deren Ziel fehlt – liefert ein späterer Build GTK doch mit, bleibt alles unverändert.
+/// Muss vor dem Start von GTK laufen. Rückgabe: entfernte Variablen (fürs Protokoll).
+#[cfg(target_os = "linux")]
+fn bereinige_appimage_gtk_umgebung() -> Vec<String> {
+    let mut entfernt = Vec::new();
+    if std::env::var_os("APPIMAGE").is_none() {
+        return entfernt;
+    }
+    // (Variable, Unterpfad, der vorhanden sein muss)
+    let pruefungen = [
+        ("GTK_PATH", ""),
+        ("GTK_EXE_PREFIX", "lib/gtk-3.0"),
+        ("GTK_IM_MODULE_FILE", ""),
+        ("GDK_PIXBUF_MODULE_FILE", ""),
+        ("GIO_MODULE_DIR", ""),
+        ("GI_TYPELIB_PATH", ""),
+    ];
+    for (var, unterpfad) in pruefungen {
+        let Some(wert) = std::env::var_os(var) else { continue };
+        let vorhanden = std::env::split_paths(&wert)
+            .any(|p| !p.as_os_str().is_empty() && p.join(unterpfad).exists());
+        if !vorhanden {
+            std::env::remove_var(var);
+            entfernt.push(format!("{var}={}", wert.to_string_lossy()));
+        }
+    }
+    entfernt
+}
+
+/// Issue #544: Dateiname für „Speichern“ im PDF-Fenster. Die URL trägt ihn seit #476 als
+/// `…/_datei/<Name>`; WebKitGTK schlägt trotzdem „document.pdf“ vor.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn pdf_dateiname_aus_url(url: &tauri::Url) -> String {
+    let segmente: Vec<&str> = url.path_segments().map(|s| s.collect()).unwrap_or_default();
+    let roh = segmente
+        .iter()
+        .position(|s| *s == "_datei")
+        .and_then(|i| segmente.get(i + 1))
+        .copied()
+        .unwrap_or("");
+    // Prozent-Kodierung auflösen (Umlaute, Leerzeichen)
+    let bytes = roh.as_bytes();
+    let mut dekodiert = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16) {
+                dekodiert.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        dekodiert.push(bytes[i]);
+        i += 1;
+    }
+    let name: String = String::from_utf8_lossy(&dekodiert)
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\') || c.is_control() { '_' } else { c })
+        .collect();
+    let name = name.trim().trim_start_matches('.').to_string();
+    if name.is_empty() {
+        return "Dokument.pdf".into();
+    }
+    if name.to_ascii_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") }
+}
+
+/// Freier Dateipfad im Ordner: „Name.pdf“, sonst „Name (2).pdf“, „Name (3).pdf“ …
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn freier_pfad(ordner: &std::path::Path, dateiname: &str) -> std::path::PathBuf {
+    let kandidat = ordner.join(dateiname);
+    if !kandidat.exists() {
+        return kandidat;
+    }
+    let pfad = std::path::Path::new(dateiname);
+    let stamm = pfad.file_stem().and_then(|s| s.to_str()).unwrap_or("Dokument");
+    let endung = pfad.extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (2..)
+        .map(|n| ordner.join(format!("{stamm} ({n}){endung}")))
+        .find(|p| !p.exists())
+        .unwrap()
+}
+
+/// Issue #544: Download aus dem PDF-Fenster (Speichern-Symbol des Betrachters) unter Linux.
+/// Ohne Handler speicherte WebKitGTK still als „document.pdf“ in den Download- oder sogar den
+/// Startordner, ohne jede Rückmeldung. Jetzt: Download-Ordner, sprechender Name, Hinweis.
+/// (Windows/WebView2 zeigt einen eigenen Speichern-Dialog – dort kein Handler.)
+#[cfg(target_os = "linux")]
+fn pdf_download(webview: tauri::Webview, event: tauri::webview::DownloadEvent<'_>) -> bool {
+    use tauri::webview::DownloadEvent;
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    let app = webview.app_handle();
+    let ordner = || {
+        app.path()
+            .download_dir()
+            .ok()
+            .filter(|p| p.is_dir())
+            .or_else(|| app.path().home_dir().ok())
+            .unwrap_or_else(std::env::temp_dir)
+    };
+    match event {
+        // Greift nicht immer: beim Speichern-Symbol des PDF-Betrachters legt WebKitGTK das Ziel
+        // selbst fest (Startordner, „document.pdf“) – dann korrigiert der Finished-Zweig.
+        DownloadEvent::Requested { url, destination } => {
+            *destination = freier_pfad(&ordner(), &pdf_dateiname_aus_url(&url));
+            log::info!("PDF speichern: Ziel {}", destination.display());
+            true
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            // Der Betrachter speichert oft aus seinem Speicher (Adresse ohne …/_datei/<Name>) –
+            // dann trägt die Adresse des Fensters den Namen, über sie wurde das PDF geöffnet.
+            let fenster_url = webview.url().ok();
+            log::info!(
+                "PDF speichern: Download {url}, Fenster {}",
+                fenster_url.as_ref().map(|u| u.as_str()).unwrap_or("-")
+            );
+            let mut name = pdf_dateiname_aus_url(&url);
+            if name == "Dokument.pdf" {
+                if let Some(f) = &fenster_url {
+                    name = pdf_dateiname_aus_url(f);
+                }
+            }
+            let endpfad = match (success, path) {
+                (true, Some(p)) => Some(verschiebe_download(&p, &ordner(), &name)),
+                _ => None,
+            };
+            let (text, art) = match (success, &endpfad) {
+                (true, Some(p)) => (format!("Gespeichert unter:\n{}", p.display()), MessageDialogKind::Info),
+                (true, None) => ("Die Datei wurde gespeichert.".to_string(), MessageDialogKind::Info),
+                _ => ("Die Datei konnte nicht gespeichert werden.".to_string(), MessageDialogKind::Error),
+            };
+            log::info!("PDF speichern: {text}");
+            app.dialog().message(text).title("PDF speichern").kind(art).show(|_| {});
+            true
+        }
+        _ => true,
+    }
+}
+
+/// Fertigen Download in den Zielordner unter dem gewünschten Namen bringen, falls WebKitGTK ihn
+/// woanders bzw. als „document.pdf“ abgelegt hat. Liegt er schon richtig oder schlägt das
+/// Verschieben fehl, bleibt er, wo er ist (Rückgabe: tatsächlicher Ort).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn verschiebe_download(ist: &std::path::Path, ordner: &std::path::Path, dateiname: &str) -> std::path::PathBuf {
+    if ist.parent() == Some(ordner) && ist.file_name().and_then(|n| n.to_str()) == Some(dateiname) {
+        return ist.to_path_buf();
+    }
+    let ziel = freier_pfad(ordner, dateiname);
+    let ok = std::fs::rename(ist, &ziel).is_ok()
+        // anderes Dateisystem: kopieren und Original entfernen
+        || (std::fs::copy(ist, &ziel).is_ok() && std::fs::remove_file(ist).is_ok());
+    if ok { ziel } else { ist.to_path_buf() }
+}
+
+/// IPC-Command: PDF/Dokument des lokalen Backends in eigenem Fenster öffnen (Issue #544).
+/// Bisher per `new WebviewWindow()` im Frontend – dort lässt sich kein Download-Handler setzen.
+/// Nur Adressen des eigenen Backends (127.0.0.1/localhost). `async`: Fenster aus einem
+/// synchronen Command zu erzeugen, kann unter Windows hängen bleiben.
+#[tauri::command]
+async fn oeffne_pdf_fenster(app: tauri::AppHandle, url: String, titel: String) -> Result<(), String> {
+    let ziel: tauri::Url = url.parse().map_err(|_| format!("Ungültige Adresse: {url}"))?;
+    if ziel.scheme() != "http" || !matches!(ziel.host_str(), Some("127.0.0.1") | Some("localhost")) {
+        return Err("Nur Dokumente des lokalen Backends können so geöffnet werden.".into());
+    }
+    let label = format!(
+        "pdf-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    );
+    let fenster = tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(ziel))
+        .title(titel)
+        .inner_size(960.0, 800.0)
+        .center()
+        .resizable(true);
+    #[cfg(target_os = "linux")]
+    let fenster = fenster.on_download(pdf_download);
+    fenster.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{freier_pfad, pdf_dateiname_aus_url, verschiebe_download};
+
+    #[test]
+    fn download_wird_umbenannt_und_verschoben() {
+        let basis = std::env::temp_dir().join(format!("rf-dl-{}", std::process::id()));
+        let start = basis.join("start");
+        let ziel = basis.join("ziel");
+        std::fs::create_dir_all(&start).unwrap();
+        std::fs::create_dir_all(&ziel).unwrap();
+        let doc = start.join("document.pdf");
+        std::fs::write(&doc, b"%PDF").unwrap();
+        let ende = verschiebe_download(&doc, &ziel, "Rechnung_RE-1.pdf");
+        assert_eq!(ende, ziel.join("Rechnung_RE-1.pdf"));
+        assert!(!doc.exists() && ende.exists());
+        // schon richtig: bleibt
+        assert_eq!(verschiebe_download(&ende, &ziel, "Rechnung_RE-1.pdf"), ende);
+        // zweite Datei gleichen Namens wird nummeriert
+        std::fs::write(&doc, b"%PDF").unwrap();
+        assert_eq!(verschiebe_download(&doc, &ziel, "Rechnung_RE-1.pdf"), ziel.join("Rechnung_RE-1 (2).pdf"));
+        std::fs::remove_dir_all(&basis).unwrap();
+    }
+
+    fn name(url: &str) -> String {
+        pdf_dateiname_aus_url(&url.parse().unwrap())
+    }
+
+    #[test]
+    fn dateiname_aus_der_adresse() {
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf/_datei/Rechnung_RE-260139.pdf"), "Rechnung_RE-260139.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/mahnwesen/6/pdf/_datei/MHN-260038.pdf?nur_ansehen=true"), "MHN-260038.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/euer/pdf/_datei/E%C3%9CR_2026?jahr=2026"), "EÜR_2026.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/x/_datei/..%2F..%2Fgeheim.pdf"), "_.._geheim.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf"), "Dokument.pdf");
+        assert_eq!(name("http://127.0.0.1:8002/api/rechnungen/201/pdf/_datei/"), "Dokument.pdf");
+    }
+
+    #[test]
+    fn freier_pfad_nummeriert() {
+        let ordner = std::env::temp_dir().join(format!("rf-test-{}", std::process::id()));
+        std::fs::create_dir_all(&ordner).unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A.pdf"));
+        std::fs::write(ordner.join("A.pdf"), b"x").unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A (2).pdf"));
+        std::fs::write(ordner.join("A (2).pdf"), b"x").unwrap();
+        assert_eq!(freier_pfad(&ordner, "A.pdf"), ordner.join("A (3).pdf"));
+        std::fs::remove_dir_all(&ordner).unwrap();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    let gtk_entfernt = bereinige_appimage_gtk_umgebung();
+    #[cfg(not(target_os = "linux"))]
+    let gtk_entfernt: Vec<String> = Vec::new();
+
     tauri::Builder::default()
+        .manage(GedropptePfade(Mutex::new(Vec::new())))
+        // F5: gezogene Pfade merken, bevor das Frontend sie per lese_gedroppte_datei anfragt
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                *window.state::<GedropptePfade>().0.lock().unwrap() = paths.clone();
+            }
+        })
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -179,7 +646,11 @@ pub fn run() {
                 ))
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
+            for eintrag in &gtk_entfernt {
+                log::info!("AppImage: GTK-Umgebungsvariable ohne Ziel entfernt (Issue #543): {eintrag}");
+            }
+
             // Zombie-Backend vom letzten Absturz ODER von einem Update-Relaunch-Race
             // killen, bevor ein neues gestartet wird. Schützt vor DB-Schreibsperren
             // (Issue #268: manchmal läuft nach Update+Neustart noch ein altes Backend,
@@ -239,15 +710,23 @@ pub fn run() {
             log::info!("Backend-Port: {}", port);
             app.manage(BackendPort(Mutex::new(port)));
 
+            let token = neues_sitzungstoken();
+            app.manage(BackendToken(token.clone()));
+
             let sidecar_cmd = app
                 .shell()
                 .sidecar("backend")
                 .expect("Backend-Sidecar nicht gefunden")
-                .args(["--port", &port.to_string()]);
+                .args(["--port", &port.to_string(), "--token-stdin"]);
 
-            let (rx, child) = sidecar_cmd
+            let (rx, mut child) = sidecar_cmd
                 .spawn()
                 .expect("Backend-Sidecar konnte nicht gestartet werden");
+
+            // Token als erste Zeile über stdin – der Sidecar liest es vor dem Start von uvicorn.
+            child
+                .write(format!("{}\n", token).as_bytes())
+                .expect("Sitzungstoken konnte nicht an den Sidecar übergeben werden");
 
             // Backend-Output in separatem Task loggen – so sehen wir Crashes und Fehler
             tauri::async_runtime::spawn(async move {
@@ -352,15 +831,16 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_backend_port, kill_backend, open_url, confirm_close, write_bytes_to_path])
+        .invoke_handler(tauri::generate_handler![get_backend_port, get_backend_token, kill_backend, open_url, confirm_close, oeffne_pdf_fenster, lese_gedroppte_datei, speichern_unter, schreibe_temp_anhang])
         .build(tauri::generate_context!())
         .expect("Fehler beim Erstellen der Tauri-Anwendung")
         .run(|app_handle, event| {
             // Fallback: Falls CloseRequested nicht gefeuert hat (z.B. kein Hauptfenster)
             if let tauri::RunEvent::Exit = event {
                 let port = *app_handle.state::<BackendPort>().0.lock().unwrap();
+                let token = app_handle.state::<BackendToken>().0.clone();
                 if let Some(child) = app_handle.state::<BackendChild>().0.lock().unwrap().take() {
-                    kill_backend_inner(child, port, false);  // non-blocking Fallback
+                    kill_backend_inner(child, port, token, false);  // non-blocking Fallback
                 }
             }
         });

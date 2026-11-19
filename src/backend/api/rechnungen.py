@@ -27,7 +27,7 @@ from collections import defaultdict
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
     Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
-    Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch,
+    Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch, Lagerbewegung,
 )
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
 from utils.vorsteuer_soll import CUTOVER_DATUM as CUTOVER_DATUM_VORSTEUER
@@ -37,6 +37,7 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils.rechnungs_parser import analysiere_datei
+from utils import sitzungstoken
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
@@ -99,6 +100,100 @@ def _lager_buchen(rechnung: "Rechnung", db: Session, faktor: Decimal) -> None:
                 ),
             )
         art.bestand_aktuell = neuer_bestand
+
+
+# ── Lagerregel je Dokumenttyp (Issue #505) ─────────────────────────────────────
+# Nur diese Dokumente bewegen Ware. Angebot, Proforma, Auftrag und Abschlagsrechnung (Anzahlung)
+# nie. Lieferschein und Rechnung bewegen zusammen genau einmal: jedes bucht nur die Menge, die das
+# verknüpfte Gegenstück (lieferschein_zu_rechnung_id) nicht schon abgebucht hat – in beiden
+# Reihenfolgen (Lieferschein → Rechnung wie Vorkasse Rechnung → Lieferschein).
+LAGER_DOKUMENTTYPEN = ("Rechnung", "Gutschrift", "Lieferschein")
+
+
+def _lager_mengen(rechnung: "Rechnung", db: Session) -> dict[int, Decimal]:
+    """Menge je lagergeführtem Artikel im Dokument (Gutschrift: negativ)."""
+    mengen: dict[int, Decimal] = {}
+    for pos in rechnung.positionen:
+        if not pos.artikel_id:
+            continue
+        art = db.query(Artikel).filter(Artikel.id == pos.artikel_id).first()
+        if art and art.lager_aktiv:
+            mengen[art.id] = mengen.get(art.id, Decimal("0")) + Decimal(pos.menge)
+    return mengen
+
+
+def _lager_gegenstuecke(rechnung: "Rechnung", db: Session) -> list["Rechnung"]:
+    """Finalisierte, nicht stornierte Gegenstücke: Lieferschein ↔ Rechnung."""
+    if rechnung.dokument_typ == "Lieferschein":
+        if not rechnung.lieferschein_zu_rechnung_id:
+            return []
+        q = db.query(Rechnung).filter(Rechnung.id == rechnung.lieferschein_zu_rechnung_id)
+    else:
+        q = db.query(Rechnung).filter(
+            Rechnung.lieferschein_zu_rechnung_id == rechnung.id,
+            Rechnung.dokument_typ == "Lieferschein",
+        )
+    return [d for d in q.all() if d.id != rechnung.id and not d.ist_entwurf and not d.storniert]
+
+
+def _abgegangen(dok: "Rechnung", db: Session) -> dict[int, Decimal]:
+    """Wie viel ein Dokument je Artikel bereits abgebucht hat (positiv = Abgang)."""
+    if dok.lager_erfasst:
+        summe: dict[int, Decimal] = {}
+        for b in db.query(Lagerbewegung).filter(Lagerbewegung.rechnung_id == dok.id).all():
+            summe[b.artikel_id] = summe.get(b.artikel_id, Decimal("0")) - Decimal(b.menge)
+        return summe
+    # Altdokument (vor dem Stichtag, Plan #505): Rechnungen haben nach der alten Regel abgebucht,
+    # Lieferscheine gelten als „nicht abgebucht“ – exakt rekonstruierbar ist das nicht
+    if dok.dokument_typ in ("Rechnung", "Gutschrift"):
+        return {a: m for a, m in _lager_mengen(dok, db).items() if m > 0}
+    return {}
+
+
+def _lager_bestand_aendern(art: "Artikel", abgang: Decimal, menge_text: Decimal) -> None:
+    neuer_bestand = art.bestand_aktuell - abgang
+    if abgang > 0 and not art.minusbestand_erlaubt and neuer_bestand < 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f'Artikel "{art.bezeichnung}" hat nicht genug Bestand '
+                f"(verfügbar: {_fmt_menge(art.bestand_aktuell)} {art.einheit}, "
+                f"benötigt: {_fmt_menge(menge_text)} {art.einheit}). "
+                f"Minusbestand ist für diesen Artikel nicht erlaubt."
+            ),
+        )
+    art.bestand_aktuell = neuer_bestand
+
+
+def _lager_finalisieren(rechnung: "Rechnung", db: Session) -> None:
+    """Lagerabgang beim Finalisieren nach der Regel oben; jede Bewegung wird protokolliert."""
+    if rechnung.typ == "ausgang" and rechnung.dokument_typ in LAGER_DOKUMENTTYPEN:
+        schon: dict[int, Decimal] = {}
+        for gs in _lager_gegenstuecke(rechnung, db):
+            for art_id, m in _abgegangen(gs, db).items():
+                schon[art_id] = schon.get(art_id, Decimal("0")) + m
+        for art_id, menge in _lager_mengen(rechnung, db).items():
+            abgang = max(menge - schon.get(art_id, Decimal("0")), Decimal("0")) if menge > 0 else menge
+            if abgang == 0:
+                continue
+            art = db.query(Artikel).filter(Artikel.id == art_id).first()
+            _lager_bestand_aendern(art, abgang, menge)
+            db.add(Lagerbewegung(artikel_id=art_id, rechnung_id=rechnung.id, menge=-abgang, art="abgang"))
+    rechnung.lager_erfasst = True
+
+
+def _lager_storno(rechnung: "Rechnung", db: Session) -> None:
+    """Storno bucht genau zurück, was dieses Dokument bewegt hat. Altdokumente wie bisher."""
+    if not rechnung.lager_erfasst:
+        _lager_buchen(rechnung, db, faktor=Decimal("1"))
+        return
+    for art_id, abgang in _abgegangen(rechnung, db).items():
+        if abgang == 0:
+            continue
+        art = db.query(Artikel).filter(Artikel.id == art_id).first()
+        if art:
+            art.bestand_aktuell = art.bestand_aktuell + abgang
+        db.add(Lagerbewegung(artikel_id=art_id, rechnung_id=rechnung.id, menge=abgang, art="storno"))
 
 
 def _naechste_belegnr_journal(db: Session, datum: date) -> str:
@@ -735,6 +830,12 @@ def _aktualisiere_zahlungsstatus(rechnung: Rechnung) -> None:
                     _auftrag.auftrag_status = "abgeschlossen"
         except Exception:
             pass
+    elif rechnung.ausfall_datum is not None:
+        # Zahlung nach Forderungsausfall (§17 Abs. 2 Nr. 1 Satz 2 UStG): bleibt ausgebucht, bis
+        # vollständig bezahlt - sonst ließe sich die Forderung ein zweites Mal ausbuchen und der
+        # Ausfall stünde doppelt in ZM und KZ 41/21 (Issue #497)
+        rechnung.zahlungsstatus = "uneinbringlich"
+        rechnung.bezahlt = False
     elif abs_bezahlt > Decimal("0.004"):
         rechnung.zahlungsstatus = "teilweise"
         rechnung.bezahlt = False
@@ -808,7 +909,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
     _entferne_eigene_adresse(ergebnis, db)
 
     temp_url = None
-    temp_path = None
     _temp_ext = _temp_dateiendung(datei.filename or "", datei.content_type)
     if _temp_ext:
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -817,7 +917,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
         temp_file = TEMP_DIR / f"{token}{_temp_ext}"
         temp_file.write_bytes(inhalt)
         temp_url = f"/rechnungen/temp/{token}"
-        temp_path = str(temp_file.absolute())
 
     # Lieferanten-Vorschläge per Fuzzy-Matching
     lieferant_vorschlaege: list[LieferantVorschlag] = []
@@ -865,81 +964,6 @@ async def analysiere_rechnung(datei: UploadFile = File(...), db: Session = Depen
         positionen_modus=ergebnis.positionen_modus,
         warnungen=ergebnis.warnungen,
         temp_url=temp_url,
-        temp_path=temp_path,
-        lieferant_vorschlaege=lieferant_vorschlaege,
-    )
-
-
-class AnalysierePfadRequest(BaseModel):
-    pfad: str
-
-@router.post("/analysieren-pfad", response_model=AnalyseResponse)
-def analysiere_rechnung_pfad(body: AnalysierePfadRequest, db: Session = Depends(get_db)):
-    """Wie /analysieren, aber liest die Datei vom lokalen Pfad (Tauri Drag-&-Drop auf Windows)."""
-    from pathlib import Path as _Path
-    pfad = _Path(body.pfad)
-    if not pfad.exists() or not pfad.is_file():
-        raise HTTPException(status_code=400, detail="Datei nicht gefunden")
-    inhalt = pfad.read_bytes()
-    dateiname = pfad.name
-    ergebnis = analysiere_datei(dateiname, inhalt)
-    _entferne_eigene_adresse(ergebnis, db)
-
-    temp_url = None
-    temp_path = None
-    _temp_ext = _temp_dateiendung(dateiname, None)
-    if _temp_ext:
-        TEMP_DIR.mkdir(parents=True, exist_ok=True)
-        _bereinige_temp_dir()
-        token = str(uuid.uuid4())
-        temp_file = TEMP_DIR / f"{token}{_temp_ext}"
-        temp_file.write_bytes(inhalt)
-        temp_url = f"/rechnungen/temp/{token}"
-        temp_path = str(temp_file.absolute())
-
-    lieferant_vorschlaege: list[LieferantVorschlag] = []
-    erkannter_name = ergebnis.felder.get("lieferant_name", "")
-    erkannte_ust_id = ergebnis.felder.get("lieferant_ust_id", "")
-    if erkannter_name or erkannte_ust_id:
-        alle_lieferanten = db.query(Lieferant).filter(Lieferant.aktiv == True).all()
-        scored: list[tuple[float, Lieferant]] = []
-        _re_rechtsform2 = re.compile(
-            r"\b(?:GmbH|UG|AG|e\.?K\.?|KG|OHG|GbR|e\.?V\.?|Ltd|Inc|Co\.?|SE|GbR)\b",
-            re.IGNORECASE,
-        )
-        def _norm2(name: str) -> str:
-            n = _re_rechtsform2.sub("", name)
-            n = re.sub(r"[-_/\\|]", " ", n)
-            return re.sub(r"\s+", " ", n).strip().lower()
-
-        norm_erkannt2 = _norm2(erkannter_name)
-        for lief in alle_lieferanten:
-            score = 0.0
-            if erkannte_ust_id and lief.ust_idnr and erkannte_ust_id.replace(" ", "") == lief.ust_idnr.replace(" ", ""):
-                score = 1.0
-            elif erkannter_name and lief.firmenname:
-                norm_lief2 = _norm2(lief.firmenname)
-                if len(norm_erkannt2) >= 4 and (norm_erkannt2 in norm_lief2 or norm_lief2 in norm_erkannt2):
-                    score = 0.8
-                else:
-                    score = difflib.SequenceMatcher(None, norm_erkannt2, norm_lief2).ratio()
-            if score > 0.4:
-                scored.append((score, lief))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        lieferant_vorschlaege = [
-            LieferantVorschlag(id=lief.id, name=lief.firmenname, score=round(score, 2))
-            for score, lief in scored[:3]
-        ]
-
-    from .schemas_rechnungen import AnalyseFelder, AnalysePositionResponse
-    return AnalyseResponse(
-        format=ergebnis.format,
-        felder=AnalyseFelder(**ergebnis.felder, konfidenz=ergebnis.konfidenz),
-        positionen=[AnalysePositionResponse(**p.__dict__) for p in ergebnis.positionen],
-        positionen_modus=ergebnis.positionen_modus,
-        warnungen=ergebnis.warnungen,
-        temp_url=temp_url,
-        temp_path=temp_path,
         lieferant_vorschlaege=lieferant_vorschlaege,
     )
 
@@ -1372,6 +1396,9 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
             kategorie_id=pos_data.kategorie_id,
         )
         db.add(pos)
+    db.flush()
+    db.expire(auftrag, ["positionen"])
+    _pruefe_ausgangs_positionskategorien(auftrag, db)  # Issue #567
     if not data.ist_entwurf:
         auftrag.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -1743,11 +1770,12 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
     db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
     _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
+    _pruefe_ausgangs_positionskategorien(rechnung, db)  # Issue #567
 
-    # Lagerführung: direkt finalisierte Rechnungen (ist_entwurf=False) buchen den Bestand sofort ab.
+    # Lagerführung: direkt finalisierte Dokumente buchen sofort (Regel je Dokumenttyp, #505).
     # Entwürfe holen den Abgang über /finalisieren nach.
     if not data.ist_entwurf:
-        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+        _lager_finalisieren(rechnung, db)
         rechnung.absender_snapshot = _absender_snapshot(db)
         _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
@@ -1916,6 +1944,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                         ),
                     )
 
+    # Issue #567: auch ohne neue Positionen (z. B. nur ig.-Lieferung-Kennzeichen umgeschaltet)
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    _pruefe_ausgangs_positionskategorien(rechnung, db)
+
     if data.ist_entwurf is not None:
         war_entwurf = rechnung.ist_entwurf
         if war_entwurf and not data.ist_entwurf and rechnung.datum > date.today():
@@ -1933,7 +1966,7 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
         if war_entwurf and not data.ist_entwurf:
             db.flush()  # neue Positionen in DB schreiben bevor Relationship-Cache geleert wird
             db.expire(rechnung, ["positionen"])  # SQLAlchemy-Cache war [] nach delete+flush; fresh load erzwingen
-            _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+            _lager_finalisieren(rechnung, db)
             rechnung.absender_snapshot = _absender_snapshot(db)
             _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
@@ -2112,12 +2145,9 @@ def finalisiere_rechnung(
         if _auftrag and _auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
             _auftrag.auftrag_status = "rechnung_gestellt"
 
-    # Lagerführung: Bestand pro Position anpassen (pos.menge < 0 bei Gutschriften → Rückbuchung).
-    # Ausnahme Issue #495: Lieferscheine aus Angebot/Auftrag entstehen seitdem als Entwurf - vorher
-    # wurden sie sofort final und ohne Lagerabgang angelegt, der Abgang läuft dort über die
-    # Rechnung. Das bleibt so, sonst würde die spätere Rechnung den Bestand doppelt mindern.
-    if not (rechnung.dokument_typ == "Lieferschein" and _ist_umgewandelter_lieferschein(db, rechnung)):
-        _lager_buchen(rechnung, db, faktor=Decimal("-1"))
+    # Lagerführung: Regel je Dokumenttyp (Issue #505) – Lieferscheine aus Angebot/Auftrag buchen
+    # jetzt beim Finalisieren ab, die spätere Rechnung nur noch den Rest (vorher #495-Ausnahme)
+    _lager_finalisieren(rechnung, db)
     _pruefe_und_erzeuge_vorsteuer_soll(rechnung, db)
 
     db.commit()
@@ -2559,7 +2589,7 @@ iframe {{
 </head>
 <body>
 <div class="titelleiste">{titel} – nur zur Ansicht</div>
-<div class="viewer"><iframe src="/api/rechnungen/{rechnung_id}/pdf?nur_ansehen=true"></iframe></div>
+<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', 'nur_ansehen=true'))}"></iframe></div>
 <script>
 document.addEventListener('keydown', function(e) {{
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's')) {{
@@ -2864,6 +2894,15 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
         {"auftrag_zu_angebot_id": None}
     )
+    # Issue #548: Ersatzrechnung (Entwurf) und Rechnung aus Angebot (Entwurf) - der Rückverweis
+    # am Original/Angebot blockierte das Löschen (FOREIGN KEY constraint failed); danach ist
+    # das Original wieder frei für eine neue Ersatzrechnung bzw. das Angebot für eine Rechnung
+    db.query(Rechnung).filter(Rechnung.ersatzrechnung_id == rechnung_id).update(
+        {"ersatzrechnung_id": None}
+    )
+    db.query(Rechnung).filter(Rechnung.rechnung_zu_angebot_id == rechnung_id).update(
+        {"rechnung_zu_angebot_id": None}
+    )
     # Issue #495: Lieferscheine aus Angebot/Auftrag sind jetzt Entwürfe und damit löschbar -
     # der Rückverweis am Angebot muss weg, sonst blockiert er das Angebot dauerhaft
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_angebot_id == rechnung_id).update(
@@ -3060,6 +3099,122 @@ def _kette_gruppe_id(rechnung: "Rechnung", db: Session) -> int | None:
     return letzter.gruppe_id or letzter.id
 
 
+AUSGANG_FESTE_KATEGORIE_FLAGS = (
+    "steuerfrei_4", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "ist_reverse_charge",
+)
+
+# Issue #567: Erlös-Kategorien, die RechnungsFee selbst wählt (Steuersatz bzw. Steuerfall-Haken)
+# oder die nicht aus einer Rechnung entstehen - als Positionskategorie würden sie mit dem
+# falschen USt-Satz/Konto gebucht (z. B. „Innergemeinschaftliche Lieferungen“ mit 19 %).
+# Gegenstück im Frontend: RechnungenPage.tsx AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.
+AUSGANG_KATEGORIEN_NICHT_WAEHLBAR = frozenset({
+    "Betriebseinnahmen", "Betriebseinnahmen (7%)", "Betriebseinnahmen (0%)",
+    "Betriebseinnahmen (Kleinunternehmer)", "Differenzbesteuerung (§25a)",
+    "Innergemeinschaftliche Lieferungen", "Nicht steuerbare Auslandsumsätze (Drittland)",
+    "Steuerfreie Ausfuhrlieferungen (Drittland)",
+    "Gewährte Skonti", "Umsatzsteuer-Erstattung FA", "Vorsteuererstattung FA",
+})
+
+
+def ausgangs_positionskategorie_gesperrt(rechnung: "Rechnung") -> bool:
+    """Issue #567: Ausgangsrechnungen, deren Erlös-Kategorie fachlich festgelegt ist (§ 4 UStG,
+    ig. Lieferung, Drittland, Ausfuhr, § 3a-Leistung, § 25a, verrechnete Abschläge), nehmen
+    keine selbst gewählte Positionskategorie an - dort entscheidet weiter _erloes_kategorie()
+    bzw. die §25a-Gruppierung, sonst landeten diese Umsätze in falschen UStVA-/EÜR-Zeilen."""
+    if any(getattr(rechnung, f, False) for f in AUSGANG_FESTE_KATEGORIE_FLAGS):
+        return True
+    return any(p.differenzbesteuerung or p.abschlag_rechnung_id for p in rechnung.positionen)
+
+
+def ausgangs_positionskategorien_aktiv(rechnung: "Rechnung") -> bool:
+    """True, wenn eine Ausgangsrechnung mindestens eine Position mit selbst gewählter
+    Erlös-Kategorie hat und kein Sonderfall die Kategorie festlegt (Issue #567)."""
+    if rechnung.typ != "ausgang" or not rechnung.positionen:
+        return False
+    if ausgangs_positionskategorie_gesperrt(rechnung):
+        return False
+    return any(p.kategorie_id for p in rechnung.positionen)
+
+
+def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> None:
+    """Issue #567: Positionskategorien einer Ausgangsrechnung nach dem Speichern prüfen.
+    Nur Erlös-Kategorien (ohne USt-Sonderfall) sind zulässig; bei einem Sonderfall
+    (ausgangs_positionskategorie_gesperrt) werden gesetzte Kategorien entfernt, damit
+    Gutschrift, Storno und Forderungsausfall nicht mit einer veralteten Auswahl rechnen."""
+    if rechnung.typ != "ausgang":
+        return
+    positionen = [p for p in rechnung.positionen if p.kategorie_id]
+    if not positionen:
+        return
+    if ausgangs_positionskategorie_gesperrt(rechnung):
+        for p in positionen:
+            p.kategorie_id = None
+        db.flush()
+        return
+    ids = {p.kategorie_id for p in positionen}
+    kats = {k.id: k for k in db.query(Kategorie).filter(Kategorie.id.in_(ids)).all()}
+    for kid in ids:
+        k = kats.get(kid)
+        if k is None:
+            raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+        if k.kontenart != "Erlös" or k.ust_sonderfall:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Kategorie „{k.name}“ passt nicht zu einer Ausgangsrechnung – bitte eine Erlös-Kategorie wählen.",
+            )
+        if k.name in AUSGANG_KATEGORIEN_NICHT_WAEHLBAR:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Die Kategorie „{k.name}“ legt RechnungsFee selbst fest – bitte „automatisch“ lassen "
+                       "(bei ig. Lieferung, Drittland oder Ausfuhr den Haken an der Rechnung setzen).",
+            )
+
+
+def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool):
+    """Issue #567: Buchungsgruppen je (USt-Satz, Kategorie) für Ausgangsrechnungen mit eigenen
+    Positionskategorien. Positionen ohne Kategorie bekommen die automatische Erlös-Kategorie
+    (_erloes_kategorie(), bei Kleinunternehmern „Betriebseinnahmen (Kleinunternehmer)“).
+    Kleinunternehmer buchen wie bisher immer mit 0 % (§ 19 UStG, Issue #397).
+
+    Rückgabe im Format von _ausgangs_buchungsgruppen() mit ist_gemischt=True, damit beide
+    Buchungswege (Zahlung erfassen, Bank-Import) jede Gruppe mit ihrer Kategorie buchen.
+    Schlüssel: (satz, False, kategorie_id)."""
+    std_id, std_kat = _erloes_kategorie(db, rechnung)
+    gruppen_kategorie: dict[tuple, tuple[int | None, "Kategorie | None"]] = {}
+    gruppen_brutto: dict[tuple, Decimal] = {}
+    for pos in rechnung.positionen:
+        s = 0 if ist_kleinunternehmer else int(pos.ust_satz)
+        kat_id = pos.kategorie_id or std_id
+        key = (s, False, kat_id)
+        if key not in gruppen_kategorie:
+            if kat_id == std_id:
+                gruppen_kategorie[key] = (std_id, std_kat)
+            else:
+                k = db.query(Kategorie).filter(Kategorie.id == kat_id).first()
+                gruppen_kategorie[key] = (kat_id, k)
+        gruppen_brutto[key] = gruppen_brutto.get(key, Decimal("0")) + (pos.brutto or Decimal("0"))
+
+    # Gruppen ohne Betrag (z. B. Position + gleich hohe Minusposition) erzeugen keine 0-€-Buchung
+    gruppen_brutto = {k: v for k, v in gruppen_brutto.items() if v != 0} or gruppen_brutto
+    gesamt = sum(gruppen_brutto.values()) or Decimal("1")
+    gruppen_keys = sorted(gruppen_brutto, key=lambda k: (k[0], k[2] or 0))
+    satz_summen: dict[int, Decimal] = {}
+    for k, v in gruppen_brutto.items():
+        satz_summen[k[0]] = satz_summen.get(k[0], Decimal("0")) + v
+    ust_satz = Decimal(str(max(satz_summen, key=lambda s: satz_summen[s])))
+    satz_ratios = [(k[0], gruppen_brutto[k] / gesamt) for k in gruppen_keys]
+    return satz_ratios, ust_satz, True, gruppen_keys, gruppen_kategorie, {}, gruppen_brutto
+
+
+def _satz_ratios_je_satz(satz_ratios: list[tuple[int, Decimal]]) -> list[tuple[int, Decimal]]:
+    """Fasst Anteile mit gleichem USt-Satz zusammen (Issue #567: mehrere Kategorie-Gruppen
+    mit demselben Satz) - für Skonto und Abschlagsabzug, die nur je Satz gebucht werden."""
+    je_satz: dict[int, Decimal] = {}
+    for s, r in satz_ratios:
+        je_satz[s] = je_satz.get(s, Decimal("0")) + r
+    return sorted(je_satz.items())
+
+
 def _ausgangs_buchungsgruppen(
     db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
 ) -> tuple[
@@ -3081,6 +3236,12 @@ def _ausgangs_buchungsgruppen(
     ist_gemischt=False leer; der Aufrufer ermittelt dann die (einzige) Kategorie selbst
     (z.B. ueber _erloes_kategorie()), wie vor Einfuehrung dieser Funktion.
     """
+    # Issue #567: eigene Erlös-Kategorie je Position (z. B. Übungsleiter-Einnahmen neben
+    # normalen Leistungen) - eigener Gruppierungsweg, alle anderen Rechnungen laufen
+    # unverändert durch den Code darunter.
+    if ausgangs_positionskategorien_aktiv(rechnung):
+        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer)
+
     satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]
     gruppen_keys: list[tuple[int, bool]] = []
     gruppen_kategorie: dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]] = {}
@@ -3191,6 +3352,8 @@ def _bezahlte_betraege_je_satz(db: Session, abschlag: "Rechnung") -> list[tuple[
     ).scalar() or Decimal("0")
     gesamt_gezahlt = (abschlag.bezahlt_betrag or Decimal("0")) + offenes_guthaben
     satz_ratios, _, _, _, _, _, _ = _ausgangs_buchungsgruppen(db, abschlag, ist_ku)
+    if ausgangs_positionskategorien_aktiv(abschlag):
+        satz_ratios = _satz_ratios_je_satz(satz_ratios)
     verteilung = _verteile_nach_satz(gesamt_gezahlt, satz_ratios, "Einnahme")
     return [(satz, betrag) for satz, betrag, _ust03, _ust04 in verteilung if betrag != 0]
 
@@ -3329,7 +3492,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 
         ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
         if data.skonto_betrag and data.skonto_betrag > 0:
-            skonto_gruppen = _verteile_nach_satz(data.skonto_betrag, satz_ratios, art)
+            skonto_ratios = (
+                _satz_ratios_je_satz(satz_ratios) if ausgangs_positionskategorien_aktiv(rechnung) else satz_ratios
+            )
+            skonto_gruppen = _verteile_nach_satz(data.skonto_betrag, skonto_ratios, art)
         konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz) if ust_satz > 0 else (None, None)
 
     # §25a Marge vorberechnen (Brutto-Marge = VK_brutto − EK_netto_gesamt für §25a-Positionen)
@@ -3999,8 +4165,8 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     rechnung.storno_rechnungsnummer = storno_nr
     rechnung.immutable = True
 
-    # Lagerführung: Bestand zurückbuchen (Storno kehrt Finalisierungs-Buchung um)
-    _lager_buchen(rechnung, db, faktor=Decimal("1"))
+    # Lagerführung: genau die Bewegungen dieses Dokuments zurückbuchen (Issue #505)
+    _lager_storno(rechnung, db)
 
     # Verknüpfte Lieferscheine wieder auf "Nicht abgerechnet" setzen
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_rechnung_id == rechnung_id).update(
@@ -4111,11 +4277,13 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{rechnung_id}/forderungsausfall", response_model=RechnungResponse)
 def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
-    """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich.
-    Reine Status-Änderung, keine Journalbuchung: Unter Ist-Versteuerung (§20 UStG, die
-    einzige von RechnungsFee unterstützte Versteuerungsart) entsteht USt erst bei
-    tatsächlichem Zahlungseingang – für den nie gezahlten Restbetrag wurde nie USt fällig,
-    es gibt also nichts zu korrigieren (Issue #252)."""
+    """Markiert eine offene/teilweise bezahlte Rechnung als uneinbringlich (ausfall_datum = heute).
+    Keine Journalbuchung: Unter Ist-Versteuerung (§20 UStG, die einzige von RechnungsFee
+    unterstützte Versteuerungsart) entsteht USt erst bei tatsächlichem Zahlungseingang – für den
+    nie gezahlten Restbetrag wurde nie USt fällig, KZ 81/86 sind nicht zu korrigieren (Issue #252).
+    Anders bei ig. Lieferungen und EU-Dienstleistungen ab dem Stichtag: sie melden in ZM und
+    KZ 41/21 nach der Rechnung (Issue #497), der Ausfall mindert die Meldung im Ausfallmonat
+    (§17 Abs. 2 Nr. 1 UStG, utils/zm_meldezeitraum.py)."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
@@ -4135,6 +4303,7 @@ def forderungsausfall_buchen(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Forderung ist bereits ausgebucht.")
 
     rechnung.zahlungsstatus = "uneinbringlich"
+    rechnung.ausfall_datum = date.today()
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
@@ -4831,6 +5000,10 @@ def lieferschein_aus_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.add(ls)
     db.flush()
     _kopiere_positionen(r, ls, db)
+    db.flush()
+    db.expire(ls, ["positionen"])
+    # Issue #505: bucht nur, was die Rechnung (Vorkasse) nicht schon abgebucht hat – meist nichts
+    _lager_finalisieren(ls, db)
 
     ls.absender_snapshot = _absender_snapshot(db)
     db.commit()
@@ -4873,14 +5046,6 @@ def _lieferadresse_nach_umwandlung(db: Session, quelle: Rechnung) -> Optional[in
     """Lieferadresse für einen aus Angebot/Auftrag erzeugten Lieferschein: der gewählte
     Empfänger-Standort (Issue #495 – Lieferung geht dorthin), sonst die Standard-Lieferadresse."""
     return quelle.empfaenger_adresse_id or _standard_lieferadresse_id(db, quelle.kunde_id)
-
-
-def _ist_umgewandelter_lieferschein(db: Session, rechnung: Rechnung) -> bool:
-    """Lieferschein, der aus einem Angebot oder Auftrag entstanden ist (Issue #495)."""
-    return db.query(Rechnung).filter(or_(
-        Rechnung.lieferschein_zu_angebot_id == rechnung.id,
-        Rechnung.lieferschein_zu_auftrag_id == rechnung.id,
-    )).first() is not None
 
 
 @router.post("/{angebot_id}/lieferschein-aus-angebot", response_model=RechnungResponse, status_code=201)

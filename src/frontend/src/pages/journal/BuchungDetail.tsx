@@ -237,6 +237,12 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
         {/* Betragsdetails + Kundendaten */}
         <div className="flex gap-6">
           <div className="flex-1 text-sm space-y-1">
+            {e.kategorie_name && (
+              <div className="flex justify-between text-slate-500 dark:text-slate-400">
+                <span>Kategorie</span>
+                <span className="text-slate-700 dark:text-slate-200">{e.kategorie_name}</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span title="ohne MwSt">Netto</span>
               <span>{formatEuro(e.netto_betrag)}</span>

@@ -618,20 +618,18 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               ))}
             </div>
 
-            {/* Split-Option für Ausgaben */}
-            {art === 'Ausgabe' && (
-              <button
-                type="button"
-                onClick={() => toggleSplit(true)}
-                className="w-full flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
-              >
-                <span>Mehrere Positionen auf unterschiedliche Kategorien?</span>
-                <span className="flex items-center gap-1 font-medium">
-                  Split-Buchung →
-                  <InfoTooltip text="Eine Split-Buchung verteilt einen Gesamtbetrag auf mehrere Kategorien. Beispiel: Restaurantrechnung 80 € aufteilen in 60 € Bewirtungskosten + 20 € Reisekosten. Alle Positionen werden als eine atomare Buchung gespeichert." side="bottom" />
-                </span>
-              </button>
-            )}
+            {/* Split-Option (Einnahmen und Ausgaben, Issue #567) */}
+            <button
+              type="button"
+              onClick={() => toggleSplit(true)}
+              className="w-full flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+            >
+              <span>Mehrere Positionen auf unterschiedliche Kategorien?</span>
+              <span className="flex items-center gap-1 font-medium">
+                Split-Buchung →
+                <InfoTooltip text="Eine Split-Buchung verteilt einen Gesamtbetrag auf mehrere Kategorien. Beispiel: Restaurantrechnung 80 € aufteilen in 60 € Bewirtungskosten + 20 € Reisekosten, oder eine Überweisung auf zwei Einnahme-Kategorien. Alle Positionen werden als eine atomare Buchung gespeichert." side="bottom" />
+              </span>
+            </button>
 
             {/* Datum + Zahlungsart */}
             <div className="grid grid-cols-2 gap-3">

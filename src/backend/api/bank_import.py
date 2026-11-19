@@ -42,7 +42,7 @@ from .journal import _felder_aus_data, _naechste_belegnr
 from .rechnungen import (
     _aktualisiere_zahlungsstatus, _ausgangs_buchungsgruppen, _berechne_vorsteuer, _erloes_kategorie,
     _erstelle_skonto_eintrag, _kette_gruppe_id, _klassifiziere_sonderfall, _partner_name, _ust_konto,
-    _verteile_nach_satz,
+    _satz_ratios_je_satz, _verteile_nach_satz, ausgangs_positionskategorien_aktiv,
 )
 from .schemas import JournalEintragCreate
 
@@ -154,6 +154,10 @@ class BuchungsRequest(BaseModel):
     # Issue #502: Rest einer Abbuchung über den offenen Rechnungsbetrag hinaus ist privater
     # Anteil (Mischkonto-Beleg, private Artikel auf dem Bon) statt Lieferantenguthaben
     rest_privat: bool = False
+    # Issue #546: Kategorie für Eingangsrechnungen ohne Positions-/Hauptkategorie (vor dem
+    # Kategorie-Stichtag finalisiert) - wie im Dialog „Zahlung buchen“, wird als Hauptkategorie
+    # an die Rechnung zurückgeschrieben
+    kategorie_id: Optional[int] = None
 
 
 class AbgleichVorschlag(BaseModel):
@@ -438,6 +442,20 @@ def _match_lieferantenguthaben(
     return None
 
 
+def _eingangs_kategorie_id(rechnung: Rechnung) -> Optional[int]:
+    """Kategorie für die Zahlung einer Eingangsrechnung: die Kategorie mit dem größten
+    Bruttoanteil der Positionen, Positionen ohne eigene Kategorie zählen mit der Hauptkategorie
+    der Rechnung (Issue #546 - bisher wurde rechnung.kategorie_id hier gar nicht beachtet)."""
+    kat_gruppen: dict[int, Decimal] = {}
+    for pos in rechnung.positionen:
+        k = pos.kategorie_id or rechnung.kategorie_id
+        if k is not None:
+            kat_gruppen[k] = kat_gruppen.get(k, Decimal("0")) + abs(pos.brutto)
+    if kat_gruppen:
+        return max(kat_gruppen, key=lambda k: kat_gruppen[k])
+    return rechnung.kategorie_id
+
+
 def _buche_pfad_a(
     db: Session,
     tx: BankTransaktion,
@@ -445,6 +463,7 @@ def _buche_pfad_a(
     betrag_zu_buchen: Optional[Decimal] = None,
     unternehmen: Optional[Unternehmen] = None,
     rest_privat: bool = False,
+    kategorie_id: Optional[int] = None,
 ) -> tuple[Journaleintrag, Optional[Forderung]]:
     """Bucht Transaktion gegen Rechnung. Bei Überzahlung: Split + Forderung (Lieferanten-/Kundenguthaben),
     bei rest_privat (nur Eingangsrechnung) statt des Lieferantenguthabens eine Privatentnahme."""
@@ -494,14 +513,21 @@ def _buche_pfad_a(
         # in einen einzigen 0%-Topf ohne Kategorie fallen statt die echten Rechnungspositionen
         # zu spiegeln.
         gruppen_brutto: dict[int, Decimal] = {}
-        kat_gruppen: dict[int | None, Decimal] = {}
         for pos in rechnung.positionen:
             s = int(pos.ust_satz_25a if pos.differenzbesteuerung and pos.ust_satz_25a else pos.ust_satz)
             gruppen_brutto[s] = gruppen_brutto.get(s, Decimal("0")) + pos.brutto
-            kat_gruppen[pos.kategorie_id] = kat_gruppen.get(pos.kategorie_id, Decimal("0")) + pos.brutto
-        kat_id = max(kat_gruppen, key=lambda k: kat_gruppen[k] if k is not None else Decimal("0"))
         gesamt_pos_brutto = sum(gruppen_brutto.values())
         satz_ratios = [(s, gruppen_brutto[s] / gesamt_pos_brutto) for s in sorted(gruppen_brutto)]
+
+    if art == "Ausgabe":
+        kat_id = _eingangs_kategorie_id(rechnung)
+        if kat_id is None and kategorie_id is not None:
+            # Issue #546: vom Nutzer im Abgleich gewählt - wie zahlung_bar_erstellen() als
+            # Hauptkategorie an die Rechnung zurückschreiben (Folgezahlungen finden sie dann)
+            if not db.query(Kategorie).filter(Kategorie.id == kategorie_id).first():
+                raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+            kat_id = kategorie_id
+            rechnung.kategorie_id = kat_id
         kat = db.query(Kategorie).filter(Kategorie.id == kat_id).first() if kat_id else None
 
     # Kategorie ist bei Eingangsrechnungen Pflicht - sonst bucht der Bank-Import klaglos
@@ -634,7 +660,10 @@ def _buche_pfad_a(
         skonto_ziel = _skonto_zielbetrag(rechnung, tx.datum)
         if skonto_ziel is not None and abs(skonto_ziel - betrag_zu_buchen) <= Decimal("0.02"):
             skonto_betrag = differenz.quantize(Decimal("0.01"), ROUND_HALF_UP)
-            skonto_gruppen = _verteile_nach_satz(skonto_betrag, satz_ratios, art)
+            skonto_ratios = (  # Issue #567: Kategorie-Gruppen gleichen Satzes zusammenfassen
+                _satz_ratios_je_satz(satz_ratios) if ausgangs_positionskategorien_aktiv(rechnung) else satz_ratios
+            )
+            skonto_gruppen = _verteile_nach_satz(skonto_betrag, skonto_ratios, art)
             _erstelle_skonto_eintrag(db, rechnung, rechnung.id, tx.datum, skonto_gruppen,
                                      steuerbefreiung_grund, art)
             db.flush()
@@ -776,7 +805,7 @@ def _vorschau_fuer_bytes(
     template_id: Optional[str],
     db: Session,
 ) -> "VorschauResponse":
-    """Gemeinsame Logik für /vorschau und /vorschau-pfad."""
+    """Vorschau-Logik für hochgeladene Bytes (Upload über /vorschau)."""
 
     # -----------------------------------------------------------------------
     # ZIP-Extraktion: CAMT-Export der Sparkasse kommt als ZIP mit mehreren XMLs
@@ -951,25 +980,6 @@ async def vorschau_import(
     return _vorschau_fuer_bytes(raw, konto_id, template_id, db)
 
 
-class VorschauPfadRequest(BaseModel):
-    pfad: str
-    konto_id: Optional[int] = None
-    template_id: Optional[str] = None
-
-
-@router.post("/vorschau-pfad", response_model=VorschauResponse)
-def vorschau_import_pfad(body: VorschauPfadRequest, db: Session = Depends(get_db)):
-    """Wie /vorschau, aber liest die Datei vom lokalen Pfad (Tauri Drag-&-Drop)."""
-    from pathlib import Path as _Path
-    pfad = _Path(body.pfad)
-    if not pfad.exists() or not pfad.is_file():
-        raise HTTPException(status_code=400, detail="Datei nicht gefunden")
-    if body.konto_id is not None and not db.query(Konto).filter(Konto.id == body.konto_id).first():
-        raise HTTPException(status_code=404, detail="Konto nicht gefunden.")
-    raw = pfad.read_bytes()
-    return _vorschau_fuer_bytes(raw, body.konto_id, body.template_id, db)
-
-
 @router.post("/importieren", response_model=ImportiereResponse, status_code=201)
 def importieren(data: ImportiereRequest, db: Session = Depends(get_db)):
     if not db.query(Konto).filter(Konto.id == data.konto_id).first():
@@ -1102,7 +1112,18 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
                 tx.id, tx.betrag, len(score3_treffer),
             )
 
-            if len(score3_treffer) == 1:
+            # Issue #546: Eingangsrechnung ohne jede Kategorie nicht automatisch buchen -
+            # _buche_pfad_a() bräche ab und der Rollback verwürfe alle bisherigen Buchungen
+            # dieses Laufs; die Transaktion bleibt offen, beim manuellen Abgleich wird die
+            # Kategorie abgefragt
+            if (
+                len(score3_treffer) == 1
+                and score3_treffer[0].typ == "eingang"
+                and not (unternehmen and unternehmen.ist_kleinunternehmer)
+                and _eingangs_kategorie_id(score3_treffer[0]) is None
+            ):
+                offen += 1
+            elif len(score3_treffer) == 1:
                 _, forderung = _buche_pfad_a(db, tx, score3_treffer[0], unternehmen=unternehmen)
                 gebucht += 1
                 if forderung:
@@ -1262,7 +1283,10 @@ def buche_transaktion(
             if not _privatentnahme_kategorie(db):
                 raise HTTPException(status_code=422, detail="Kategorie „Privatentnahme“ nicht gefunden.")
 
-        _, forderung = _buche_pfad_a(db, tx, rechnung, data.betrag_zu_buchen, rest_privat=data.rest_privat)
+        _, forderung = _buche_pfad_a(
+            db, tx, rechnung, data.betrag_zu_buchen, rest_privat=data.rest_privat,
+            kategorie_id=data.kategorie_id,
+        )
     else:
         if not tx.kategorie_id:
             raise HTTPException(status_code=422, detail="keine_kategorie")

@@ -540,6 +540,9 @@ export function JournalPage() {
                             🧾 {e.rechnung_nr} ↗
                           </button>
                         )}
+                        {e.kategorie_name && (
+                          <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">· {e.kategorie_name}</span>
+                        )}
                         {e.steuerbefreiung_grund && (
                           <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({e.steuerbefreiung_grund})</span>
                         )}

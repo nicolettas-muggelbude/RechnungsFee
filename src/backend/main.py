@@ -8,11 +8,13 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from pydantic import BaseModel
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from database.connection import Base, engine, SessionLocal, DB_PATH, APP_DATA_DIR
+from utils import geheimnisse
 
 # ── Backend-Datei-Logging ─────────────────────────────────────────────────────
 # Logs landen neben der DB unter APP_DATA_DIR/logs/backend.log (max. 5 MB × 3)
@@ -35,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 187
+SCHEMA_VERSION = 189
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -81,6 +83,11 @@ app.add_middleware(PdfDateinameMiddleware)
 # Zuletzt hinzugefügt = äußerste Schicht → fremde Requests werden vor allem anderen abgewiesen.
 from utils.sicherheit_middleware import SicherheitMiddleware  # noqa: E402
 app.add_middleware(SicherheitMiddleware)
+
+# Security-Audit F4 Teil 2: Sitzungstoken. Dev-Modus (uvicorn main:app) liest es optional aus
+# RECHNUNGSFEE_TOKEN; der Sidecar bekommt es von Tauri über stdin (siehe __main__ unten).
+from utils import sitzungstoken  # noqa: E402
+sitzungstoken.aus_umgebung()
 
 app.include_router(setup.router)
 app.include_router(unternehmen.router)
@@ -138,6 +145,31 @@ def shutdown():
         os._exit(0)
     threading.Thread(target=_exit, daemon=True).start()
     return {"ok": True}
+
+
+class SignierteUrlRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/signierte-url")
+def signierte_url(data: SignierteUrlRequest):
+    """Security-Audit F4 Teil 2: Kurzzeit-Link für Fenster/iframe/<img>, die keinen
+    Authorization-Header senden können (siehe utils/sitzungstoken.py). Der Aufruf selbst
+    braucht das Sitzungstoken."""
+    from urllib.parse import urlsplit, unquote
+    try:
+        teile = urlsplit(data.url)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ungültige Adresse.")
+    pfad = unquote(teile.path)
+    if teile.netloc and teile.hostname not in ("127.0.0.1", "localhost"):
+        raise HTTPException(status_code=422, detail="Nur Adressen des lokalen Backends.")
+    if not pfad.startswith("/api/") or ".." in pfad.split("/") or pfad == "/api/signierte-url":
+        raise HTTPException(status_code=422, detail="Nur API-Adressen können signiert werden.")
+    signiert = sitzungstoken.signiere(pfad, teile.query)
+    # Schema/Host/Port und den kodierten Pfad der Eingabe beibehalten, nur die Query ersetzen
+    basis = data.url.split("?", 1)[0].split("#", 1)[0]
+    return {"url": basis + signiert[len(pfad):]}
 
 
 def _decrypt_bytes(data: bytes, passwort: str) -> bytes:
@@ -297,12 +329,27 @@ def backup_erstellen():
     if not row:
         return {"ok": True}
 
-    pfad1, pfad2, passwort, smb_benutzer, smb_passwort, pfad1_lokal_ok, pfad2_lokal_ok, behalten = row
+    pfad1, pfad2, passwort_marker, smb_benutzer, smb_marker, pfad1_lokal_ok, pfad2_lokal_ok, behalten = row
     behalten = int(behalten or 5)
-    extern_konfiguriert = bool(passwort and (pfad1 or pfad2))
+    extern_konfiguriert = bool(passwort_marker and (pfad1 or pfad2))
     if not extern_konfiguriert:
         print("[Backup] Externe Ziele übersprungen: kein Verschlüsselungs-Passwort gesetzt")
         return {"ok": True, "extern_konfiguriert": False}
+
+    # Security-Audit F6: Spalten enthalten nur Marker, Passwörter kommen aus dem Schlüsselbund
+    try:
+        passwort = geheimnisse.lesen("backup_extern_passwort", passwort_marker)
+    except geheimnisse.GeheimnisFehlt:
+        print("[Backup] Verschlüsselungs-Passwort nicht lesbar – externe Ziele übersprungen")
+        return {"ok": True, "extern_konfiguriert": True, "fehler": [
+            "Backup-Passwort nicht gefunden (z. B. nach Wiederherstellung auf einem anderen Rechner). "
+            "Bitte unter Backup neu eingeben."
+        ]}
+    try:
+        smb_passwort = geheimnisse.lesen("backup_smb_passwort", smb_marker)
+        smb_passwort_fehlt = False
+    except geheimnisse.GeheimnisFehlt:
+        smb_passwort, smb_passwort_fehlt = None, True
 
     # Vollbackup (DB + Uploads) als ZIP erstellen und verschlüsseln
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -323,6 +370,9 @@ def backup_erstellen():
         if not lokal_ok and _ist_systemlaufwerk(pfad):
             uebersprungen.append(pfad)
             print(f"[Backup] Systemlaufwerk übersprungen: {pfad}")
+            continue
+        if pfad.startswith("smb://") and smb_passwort_fehlt:
+            fehler.append(f"{pfad}: SMB-Passwort nicht gefunden – bitte unter Backup neu eingeben")
             continue
         try:
             if pfad.startswith("smb://"):
@@ -469,6 +519,113 @@ def _backup_datenbank() -> None:
     for old in backups[:-5]:
         old.unlink()
         print(f"[Migration] Altes Backup gelöscht: {old.name}")
+
+
+def _geheimnis_spalten(con: sqlite3.Connection) -> list[str]:
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(unternehmen)").fetchall()}
+    except sqlite3.DatabaseError:
+        return []
+    return [f for f in geheimnisse.FELDER if f in cols]
+
+
+def _geheimnis_zeile(con: sqlite3.Connection, felder: list[str]) -> tuple | None:
+    return con.execute(
+        f"SELECT id, {', '.join(felder)} FROM unternehmen ORDER BY id LIMIT 1"
+    ).fetchone()
+
+
+def _geheimnisse_ueberschreiben(con: sqlite3.Connection, zeilen_id: int, werte: dict) -> None:
+    """Setzt die Spalten und sorgt dafür, dass der alte Klartext nicht in freien Seiten oder
+    in der WAL-Datei liegen bleibt (secure_delete + VACUUM + Checkpoint)."""
+    con.execute("PRAGMA secure_delete = ON")
+    con.execute(
+        f"UPDATE unternehmen SET {', '.join(f'{f} = ?' for f in werte)} WHERE id = ?",
+        [*werte.values(), zeilen_id],
+    )
+    con.commit()
+    try:
+        con.execute("VACUUM")
+    except sqlite3.OperationalError as e:
+        print(f"[Geheimnisse] VACUUM nicht möglich: {e}")
+    try:
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migrate_geheimnisse() -> None:
+    """Security-Audit F6: Klartext-Passwörter aus der Datenbank in den Schlüsselbund umziehen.
+
+    Läuft bei JEDEM Start (idempotent, wie _migrate_kategorien) statt als versionierte Migration:
+    so werden auch Klartexte aus später wiederhergestellten Alt-Backups sofort umgezogen. Ohne
+    Klartext in der DB kostet der Lauf nur ein SELECT.
+
+    Danach werden die lokalen Snapshots unter backups/ bereinigt: derselbe Klartext wie im
+    Schlüsselbund → derselbe Marker (Wiederherstellen funktioniert auf diesem Rechner weiter),
+    ein abweichender älterer Klartext → NULL (müsste nach dem Wiederherstellen neu eingegeben
+    werden). Bereits heruntergeladene ZIPs und externe .zip.enc lassen sich nicht bereinigen.
+    """
+    try:
+        con = sqlite3.connect(str(DB_PATH))
+    except sqlite3.Error:
+        return
+    try:
+        felder = _geheimnis_spalten(con)
+        if not felder:
+            return
+        zeile = _geheimnis_zeile(con, felder)
+        if zeile:
+            zeilen_id, *werte = zeile
+            neu = {
+                feld: geheimnisse.speichern(feld, wert)
+                for feld, wert in zip(felder, werte)
+                if not geheimnisse.ist_marker(wert)
+            }
+            if neu:
+                _geheimnisse_ueberschreiben(con, zeilen_id, neu)
+                print(f"[Geheimnisse] {len(neu)} Passwort/Passwörter aus der Datenbank umgezogen "
+                      f"(Ablage: {geheimnisse.speicherort()})")
+        zeile = _geheimnis_zeile(con, felder)
+        aktuell = dict(zip(felder, zeile[1:])) if zeile else {}
+    finally:
+        con.close()
+
+    backup_dir = DB_PATH.parent / "backups"
+    if not backup_dir.is_dir():
+        return
+    klartext_cache: dict[str, str | None] = {}
+
+    def _aktueller_klartext(feld: str) -> str | None:
+        if feld not in klartext_cache:
+            try:
+                klartext_cache[feld] = geheimnisse.lesen(feld, aktuell.get(feld))
+            except geheimnisse.GeheimnisFehlt:
+                klartext_cache[feld] = None
+        return klartext_cache[feld]
+
+    for snapshot in sorted(backup_dir.glob("rechnungsfee_*.db")):
+        try:
+            sc = sqlite3.connect(str(snapshot))
+            try:
+                s_felder = _geheimnis_spalten(sc)
+                s_zeile = _geheimnis_zeile(sc, s_felder) if s_felder else None
+                if not s_zeile:
+                    continue
+                s_id, *s_werte = s_zeile
+                ersatz = {}
+                for feld, wert in zip(s_felder, s_werte):
+                    if geheimnisse.ist_marker(wert):
+                        continue
+                    gleich = _aktueller_klartext(feld) == wert
+                    ersatz[feld] = aktuell.get(feld) if gleich else None
+                if ersatz:
+                    _geheimnisse_ueberschreiben(sc, s_id, ersatz)
+                    print(f"[Geheimnisse] Snapshot bereinigt: {snapshot.name}")
+            finally:
+                sc.close()
+        except sqlite3.Error as e:
+            print(f"[Geheimnisse] Snapshot {snapshot.name} nicht bereinigt: {e}")
 
 
 RESTORE_MARKER_ZIP = APP_DATA_DIR / "restore_pending.zip"
@@ -4280,6 +4437,30 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 187 (Issue #530: öffentliche Auftraggeber, Leitweg-ID, original_xml_pfad)")
 
+    if version < 188:
+        # Issue #505: Lagerbewegungen je Dokument (Tabelle per create_all) + Kennzeichen, ob ein
+        # Dokument nach der neuen Regel gebucht wurde. Kein Backfill: Altdokumente lassen sich nicht
+        # exakt rekonstruieren (Stichtag), bestehende Fehlbestände korrigiert die Inventur.
+        with engine.connect() as conn:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if cols and "lager_erfasst" not in cols:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN lager_erfasst BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 188"))
+            conn.commit()
+            print("[Migration] Schema auf Version 188 (Issue #505: lagerbewegungen, rechnungen.lager_erfasst)")
+
+    if version < 189:
+        with engine.connect() as conn:
+            # Issue #497: Datum des Forderungsausfalls - Korrektur nach §17 Abs. 2 Nr. 1 UStG in
+            # ZM und UStVA KZ 41/21. Bereits ausgebuchte Rechnungen bleiben ohne Datum (NULL).
+            # (Im PR #521 als 183 nummeriert, beim Merge auf 189 verschoben)
+            _r189 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r189 and "ausfall_datum" not in _r189:
+                conn.execute(text("ALTER TABLE rechnungen ADD COLUMN ausfall_datum DATE"))
+            conn.execute(text("PRAGMA user_version = 189"))
+            conn.commit()
+            print("[Migration] Schema auf Version 189 (Issue #497: rechnungen.ausfall_datum)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -4783,6 +4964,10 @@ def startup():
     _prüfe_wiederherstellung()   # Vor create_all – DB muss ggf. erst ersetzt werden
     Base.metadata.create_all(bind=engine)
     _run_migrations()
+    try:
+        _migrate_geheimnisse()   # Security-Audit F6: Klartext-Passwörter → Schlüsselbund
+    except Exception as _e:
+        logging.getLogger(__name__).warning("Passwörter nicht umgezogen: %s", _e)
     _migrate_kategorien()   # Fehlende Kategorien nachträglich eintragen
     _migrate_signaturen_sicher()   # Signaturen nachholen, Trigger IMMER anschliessend neu setzen
     db = SessionLocal()
@@ -4817,6 +5002,8 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8002)
     parser.add_argument("--selbsttest", action="store_true",
                         help="Bibliotheken im gebündelten Sidecar laden und beenden (Build-Prüfung)")
+    parser.add_argument("--token-stdin", action="store_true",
+                        help="Sitzungstoken als erste Zeile von stdin lesen (so startet Tauri den Sidecar)")
     args = parser.parse_args()
     if args.selbsttest:
         # Issue #493: PyInstaller packt Datendateien nur auf Anweisung mit - ein Import kann im
@@ -4838,4 +5025,20 @@ if __name__ == "__main__":
             traceback.print_exc()
             print("[Selbsttest] FEHLER")
             sys.exit(1)
+    if args.token_stdin:
+        try:
+            sitzungstoken.aus_stdin()
+        except ValueError as e:
+            print(f"[Start] {e}", file=sys.stderr)
+            sys.exit(2)
+    if sitzungstoken.ist_gebuendelt() and not sitzungstoken.pruefung_aktiv():
+        # Ohne Token wäre die API für jeden lokalen Prozess offen – lieber gar nicht starten.
+        print("[Start] Kein Sitzungstoken erhalten – Backend wird nur von RechnungsFee gestartet.",
+              file=sys.stderr)
+        sys.exit(2)
+    if not sitzungstoken.pruefung_aktiv():
+        logging.getLogger(__name__).warning(
+            "Entwicklungsmodus ohne Sitzungstoken: API ohne Authentifizierung erreichbar "
+            "(RECHNUNGSFEE_TOKEN setzen, um die Prüfung zu testen)."
+        )
     uvicorn.run(app, host="127.0.0.1", port=args.port)

@@ -393,6 +393,7 @@ class RechnungResponse(BaseModel):
     storniert: bool
     storno_grund: Optional[str] = None
     storno_datum: Optional[date] = None
+    ausfall_datum: Optional[date] = None         # Forderungsausfall (uneinbringlich), Issue #497
     storno_rechnungsnummer: Optional[str] = None
     ersatzrechnung_id: Optional[int] = None         # auf stornierter Rechnung: welche Ersatzrechnung entstand
     ersatzrechnung_nr: Optional[str] = None         # wird in from_orm_extended befüllt
@@ -823,7 +824,6 @@ class AnalyseResponse(BaseModel):
     warnungen: List[str]
     positionen_modus: str = "netto"   # "netto" | "brutto"
     temp_url: Optional[str] = None
-    temp_path: Optional[str] = None
     lieferant_vorschlaege: List[LieferantVorschlag] = []
 
 

@@ -191,6 +191,26 @@ class Unternehmen(Base):
     backup_extern_passwort: Mapped[str | None] = mapped_column(Text)
     backup_smb_benutzer:   Mapped[str | None] = mapped_column(Text)
     backup_smb_passwort:   Mapped[str | None] = mapped_column(Text)
+    # Security-Audit F6: smtp_passwort, imap_passwort, backup_extern_passwort und
+    # backup_smb_passwort enthalten nur noch einen Marker (Schlüsselbund bzw. verschlüsselt),
+    # nie den Klartext – lesen/schreiben ausschließlich über utils/geheimnisse.py.
+
+    @property
+    def smtp_passwort_gesetzt(self) -> bool:
+        return bool(self.smtp_passwort)
+
+    @property
+    def imap_passwort_gesetzt(self) -> bool:
+        return bool(self.imap_passwort)
+
+    @property
+    def backup_extern_passwort_gesetzt(self) -> bool:
+        return bool(self.backup_extern_passwort)
+
+    @property
+    def backup_smb_passwort_gesetzt(self) -> bool:
+        return bool(self.backup_smb_passwort)
+
     # Nutzer bestätigt bewusst, dass Pfad 1/2 auf dem Systemlaufwerk liegt (z.B. ein per
     # Sync-Client wie Dropbox/Proton Drive extern gesicherter lokaler Ordner) - ohne diese
     # Bestätigung blockt _ist_systemlaufwerk() den Pfad beim Backup weiterhin (Issue #348).
@@ -648,6 +668,19 @@ class Artikel(Base):
     positionen: Mapped[list["Rechnungsposition"]] = relationship(back_populates="artikel")
 
 
+class Lagerbewegung(Base):
+    """Issue #505: jede durch ein Dokument ausgelöste Bestandsänderung – Storno bucht genau diese
+    Bewegungen zurück, und Lieferschein/Rechnung sehen, was das Gegenstück schon abgebucht hat."""
+    __tablename__ = "lagerbewegungen"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    artikel_id: Mapped[int] = mapped_column(ForeignKey("artikel.id", ondelete="CASCADE"), nullable=False)
+    rechnung_id: Mapped[int] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), nullable=False)
+    menge: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)  # < 0 = Abgang, > 0 = Zugang
+    art: Mapped[str] = mapped_column(String(20), nullable=False)            # abgang | storno
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 # ---------------------------------------------------------------------------
 # Belege (Dateianhänge an Rechnungen und Journaleinträge)
 # ---------------------------------------------------------------------------
@@ -816,12 +849,18 @@ class Rechnung(Base):
     mahnstufe_aktuell: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     storno_grund: Mapped[str | None] = mapped_column(String(500))
     storno_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Tag des Forderungsausfalls (zahlungsstatus "uneinbringlich", §17 Abs. 2 Nr. 1 UStG) - Monat
+    # der Korrektur in ZM und UStVA KZ 41/21 (Issue #497, utils/zm_meldezeitraum.py)
+    ausfall_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     storno_rechnungsnummer: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ausgegeben: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ausgegeben_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_pdf_pfad: Mapped[str | None] = mapped_column(String(500))
     # Issue #530: archivierte XRechnung-XML (Original bei öffentlichen Auftraggebern, GoBD)
     original_xml_pfad: Mapped[str | None] = mapped_column(String(500))
+    # Issue #505: beim Finalisieren nach der neuen Lagerregel gebucht (Bewegungen in lagerbewegungen,
+    # ggf. keine). False bei Altdokumenten – deren Abgang wird nach der alten Regel angenommen.
+    lager_erfasst: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     absender_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gutschrift / Lieferschein
     dokument_typ: Mapped[str] = mapped_column(String(20), default="Rechnung", nullable=False, server_default="Rechnung")

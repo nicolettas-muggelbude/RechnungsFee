@@ -25,7 +25,7 @@ importiert, verhindert Zirkelimporte).
 """
 
 import calendar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 
@@ -54,7 +54,8 @@ class IgUmsatz:
     kennzeichen: str    # "L" (KZ 41) oder "S" (KZ 21)
     betrag: Decimal     # vorzeichenbehaftet (Korrekturen nach §17 negativ)
     datum: date         # Meldedatum - bestimmt den Monat der UStVA bzw. ZM
-    art: str            # "rechnung" | "storno" | "gutschrift" | "gutschrift_storno" | "skonto"
+    art: str            # "rechnung" | "storno" | "gutschrift" | "gutschrift_storno" | "skonto" |
+                        # "forderungsausfall" | "ausfall_zahlung"
     rechnungsdatum: date | None = None  # nur bei art="rechnung": Datum der Rechnung (Posten-Text)
     nach_storno_original: bool = False  # nur bei art="rechnung": Ersatzrechnung, die erst im
                                         # Monat des Stornos ihres Originals meldet (meldedatum())
@@ -211,6 +212,72 @@ def _ist_storno_gegenbuchung(e: Journaleintrag, rechnung: Rechnung) -> bool:
                 and e.beschreibung.startswith("STORNO ") and f": {re_nr} – " in e.beschreibung)
 
 
+def _verrechnungstexte(rechnung: Rechnung, gutschriften: list[Rechnung]) -> set[str]:
+    """Texte der Buchungen aus gutschrift_verrechnen() an der Rechnung mit einer ihrer eigenen
+    Gutschriften ("Verrechnung Rechnung <Re-Nr> mit Gutschrift <Gs-Nr>")."""
+    re_nr = rechnung.rechnungsnummer or f"#{rechnung.id}"
+    return {f"Verrechnung Rechnung {re_nr} mit Gutschrift {g.rechnungsnummer or f'#{g.id}'}"
+            for g in gutschriften}
+
+
+def _ist_gutschrift_verrechnung(e: Journaleintrag, texte: set[str]) -> bool:
+    """Verrechnung mit einer eigenen Gutschrift der Rechnung (texte: _verrechnungstexte()). Kein
+    Zahlungseingang: diese Gutschrift meldet schon selbst als Korrektur. Die Verrechnung mit der
+    Gutschrift einer anderen Rechnung desselben Kunden ist dagegen eine Zahlung (Aufrechnung)."""
+    return e.zahlungsart == "Verrechnung" and e.beschreibung in texte
+
+
+def _zahlungen(eintraege: list[Journaleintrag], rechnung: Rechnung,
+               gutschriften: list[Rechnung]) -> list[Journaleintrag]:
+    """Zahlungsbuchungen der Rechnung für den Forderungsausfall: ohne Skonto, ohne Storno-
+    Gegenbuchungen der Rechnung und ohne Verrechnung mit einer eigenen Gutschrift (samt deren
+    Korrekturen). Die Storno-Buchung einer Zahlungskorrektur zählt mit (negativ)."""
+    texte = _verrechnungstexte(rechnung, gutschriften)
+    ohne = {e.id for e in eintraege if _ist_gutschrift_verrechnung(e, texte)}
+    return [
+        e for e in eintraege
+        if e.zahlungsart != "Skonto" and not _ist_storno_gegenbuchung(e, rechnung)
+        and e.id not in ohne and e.gruppe_id not in ohne
+    ]
+
+
+def _forderungsausfall(r: Rechnung, kz: str, ab: date, gemeldet: Decimal,
+                       eintraege: list[Journaleintrag], gutschriften: list[Rechnung],
+                       spaeter: list[IgUmsatz]) -> list[IgUmsatz]:
+    """Forderungsausfall nach §17 Abs. 2 Nr. 1 UStG: im Monat des Ausfalls minus, was von der
+    Rechnung bis dahin offen war (gemeldet = Netto der Rechnung, bei einer Schlussrechnung nach
+    Abzug der Abschläge, abzüglich Skonti und Gutschriften bis zum Ausfall, minus Zahlungen bis
+    zum Ausfalltag).
+
+    Danach meldet die Rechnung, was gezahlt ist, höchstens die Forderung: jede spätere Zahlung
+    plus in ihrem Monat (Satz 2), die Korrektur einer solchen Zahlung entsprechend. Skonto,
+    Gutschrift und Storno einer Gutschrift mit späterem Datum (spaeter) ändern die Forderung und
+    melden nur, soweit sie die Meldung unter das Gezahlte senken bzw. wieder bis dahin heben -
+    in der Reihenfolge der Daten."""
+    ausfall_am = max(r.ausfall_datum, ab)
+    gezahlt, nachher = ZERO, []
+    for e in _zahlungen(eintraege, r, gutschriften):
+        netto = e.netto_betrag or ZERO
+        netto = -netto if e.art == "Ausgabe" else netto
+        if e.datum <= r.ausfall_datum:
+            gezahlt += netto
+        else:
+            nachher.append(IgUmsatz(r.id, r.rechnungsnummer, kz, netto, max(e.datum, ab), "ausfall_zahlung"))
+    offen = max(gemeldet - gezahlt, ZERO)
+    ergebnis = [IgUmsatz(r.id, r.rechnungsnummer, kz, -offen, ausfall_am, "forderungsausfall")]
+    forderung, stand = gemeldet, gemeldet - offen
+    for b in sorted(nachher + spaeter, key=lambda b: b.datum):
+        if b.art == "ausfall_zahlung":
+            gezahlt += b.betrag
+        else:
+            forderung += b.betrag
+        neu = min(gezahlt, forderung)
+        if neu != stand:
+            ergebnis.append(replace(b, betrag=neu - stand))
+            stand = neu
+    return ergebnis
+
+
 def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], meldedaten: dict[int, date],
                  db: Session) -> list[IgUmsatz]:
     """Korrekturen nach §17 UStG (§18a Abs. 7, §18b Satz 4) für Rechnungen des neuen
@@ -226,9 +293,12 @@ def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], meldedaten: dic
       Storno finalisierte Gutschrift oder das Storno einer Gutschrift) entfallen: zu einer
       stornierten Rechnung gibt es nichts mehr zu berichtigen.
 
+    - Forderungsausfall (ausfall_datum): siehe _forderungsausfall(); zählt beim Storno mit.
+      Danach meldet die Rechnung nur, was gezahlt ist (Satz 2): Skonto, Gutschrift und Storno
+      einer Gutschrift mit späterem Datum zählen nur gegen das schon Gezahlte.
+
     Abschlagsrechnungen melden 0 (Issue #419) und damit auch keine Korrekturen; gemeldet und
-    korrigiert wird die Schlussrechnung. Forderungsausfall (§17 Abs. 2 Nr. 1) ist hier noch
-    nicht enthalten."""
+    korrigiert wird die Schlussrechnung."""
     ids = [r.id for r in rechnungen if r.dokument_typ != "Abschlagsrechnung"]
     if not ids:
         return []
@@ -237,8 +307,14 @@ def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], meldedaten: dic
         Journaleintrag.rechnung_id.in_(ids), Journaleintrag.zahlungsart == "Skonto",
     ).all():
         skonti.setdefault(e.rechnung_id, []).append(e)
+    ids_set = set(ids)
+    ausfall_ids = [r.id for r in rechnungen if r.id in ids_set and r.ausfall_datum]
+    buchungen: dict[int, list[Journaleintrag]] = {}
+    if ausfall_ids:
+        for e in db.query(Journaleintrag).filter(Journaleintrag.rechnung_id.in_(ausfall_ids)).all():
+            buchungen.setdefault(e.rechnung_id, []).append(e)
     gutschriften: dict[int, list[Rechnung]] = {}
-    for g in _gutschriften(db, set(ids)):
+    for g in _gutschriften(db, ids_set):
         if not g.ist_entwurf:
             gutschriften.setdefault(g.gutschrift_zu_rechnung_id, []).append(g)
 
@@ -260,6 +336,17 @@ def _korrekturen(rechnungen: list[Rechnung], neue_ids: set[int], meldedaten: dic
             if g.storniert and g.storno_datum:
                 beitraege.append(IgUmsatz(g.id, g.rechnungsnummer, kz, -netto,
                                           max(g.storno_datum, ab), "gutschrift_storno"))
+        if r.ausfall_datum:
+            ausfall_am = max(r.ausfall_datum, ab)
+            # nach dem Ausfall meldet die Rechnung nur noch Gezahltes - spätere Minderungen
+            # rechnet _forderungsausfall() gegen die Zahlungen
+            spaeter = [b for b in beitraege if b.datum > ausfall_am]
+            beitraege = [b for b in beitraege if b.datum <= ausfall_am]
+            # offen ist das Netto der Rechnung selbst - bei einer Schlussrechnung nach Abzug der
+            # Abschläge, die _betrag() für die Meldung wieder hinzurechnet
+            gemeldet = (r.netto_gesamt or ZERO) + sum((b.betrag for b in beitraege), ZERO)
+            beitraege += _forderungsausfall(r, kz, ab, gemeldet, buchungen.get(r.id, []),
+                                            gutschriften.get(r.id, []), spaeter)
         if r.storniert and r.storno_datum:
             storno_am = max(r.storno_datum, ab)
             # nach dem Storno steht die Rechnung auf 0 - spätere Beiträge melden nichts mehr

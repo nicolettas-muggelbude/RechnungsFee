@@ -14,10 +14,18 @@ F2 – Datei-Antworten: „X-Content-Type-Options: nosniff“ überall; Antworte
   ausführen. PDF bewusst ohne sandbox (blockiert in manchen Engines den PDF-Viewer),
   HTML setzt seine CSP selbst (Journal-Beleg) bzw. ist eigener Code (PDF-Ansichtshülle).
 
+F4 Teil 2 – Sitzungstoken: jeder Request braucht „Authorization: Bearer <token>“
+  (pro App-Start von Tauri erzeugt, siehe utils/sitzungstoken.py), sonst 401. Ausnahmen:
+  CORS-Preflight (OPTIONS trägt keinen Header) und lesende Abrufe (GET/HEAD) mit gültigem
+  signiertem Kurzzeit-Link (`?exp=…&sig=…`, ausgestellt von POST /api/signierte-url) – für
+  Fenster, iframe und <img>, die keinen Header setzen können. Der Link bindet Pfad + Query.
+
 Reine ASGI-Middleware (kein BaseHTTPMiddleware), damit Streaming-Antworten unverändert
 durchlaufen.
 """
 from urllib.parse import urlsplit
+
+from utils import sitzungstoken
 
 ERLAUBTE_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -34,6 +42,11 @@ _OHNE_SANDBOX = ("application/json", "text/html", "application/pdf")
 MAX_UPLOAD = 500 * 1024 ** 2                    # 500 MB
 MAX_UPLOAD_BACKUP = 10 * 1024 ** 3              # 10 GB – wie das Entpack-Limit beim Restore
 _BACKUP_PFADE = ("/api/backup/wiederherstellen",)
+
+
+def ohne_token_erlaubt(methode: str) -> bool:
+    """CORS-Preflight trägt keinen Authorization-Header."""
+    return methode == "OPTIONS"
 
 
 def _hostname(host_header: str) -> str:
@@ -90,6 +103,18 @@ class SicherheitMiddleware:
         origin = headers.get("origin")
         if scope.get("method", "GET") not in _LESEND and origin is not None and not origin_erlaubt(origin):
             await _abweisen(send, 403, "Anfrage von fremder Herkunft abgelehnt.")
+            return
+
+        if (
+            sitzungstoken.pruefung_aktiv()
+            and not ohne_token_erlaubt(scope.get("method", "GET"))
+            and not sitzungstoken.authorization_gueltig(headers.get("authorization"))
+            and not (
+                scope.get("method", "GET") in ("GET", "HEAD")
+                and sitzungstoken.link_gueltig(scope.get("path", ""), scope.get("query_string", b"").decode("latin-1"))
+            )
+        ):
+            await _abweisen(send, 401, "Sitzungstoken fehlt oder ist ungültig.")
             return
 
         laenge = headers.get("content-length", "")

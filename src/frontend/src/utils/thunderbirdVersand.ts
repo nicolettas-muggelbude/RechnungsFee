@@ -5,10 +5,9 @@
  * bei jeder anderen Mail. Für Rechnungen, Angebote und Aufträge (Issue #477: dort samt
  * Dokumentenpaket).
  */
-import { tempDir, join } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { Command } from '@tauri-apps/plugin-shell'
-import { getDokumentenPaket, getPaketDateiUrl } from '../api/client'
+import { apiFetch, getDokumentenPaket, getPaketDateiUrl } from '../api/client'
 
 export class ThunderbirdNichtGefundenError extends Error {
   /** Fehlermeldung je versuchtem Kandidaten, in derselben Reihenfolge wie kandidaten() - zur
@@ -60,19 +59,17 @@ function escapeThunderbirdFeld(wert: string): string {
     .replace(/'/g, "\\'")
 }
 
-/** Schreibt den Anhang direkt in tempDir() (kein Unterordner - write_bytes_to_path (Rust)
- *  legt keine Ordner an, und tempDir() existiert auf allen drei Betriebssystemen bereits).
- *  Präfix "rechnungsfee_" macht die Datei im geteilten Temp-Verzeichnis erkennbar. Bewusst
- *  ohne Aufräum-Logik: derselbe Dateiname wird beim nächsten Versand desselben Dokuments
- *  einfach überschrieben, es sammelt sich also nichts nennenswert an. */
+/** Schreibt den Anhang direkt in den Temp-Ordner als `rechnungsfee_<name>` (Rust:
+ *  schreibe_temp_anhang, Security-Audit F12 – das Frontend kann keinen Zielpfad vorgeben).
+ *  Rust ersetzt / \ ' , : im Namen: der -compose-Validator (capabilities/default.json) lässt
+ *  als Anhang nur solche Dateien zu, und ein / in der Rechnungsnummer hätte sonst einen nicht
+ *  existierenden Unterordner ergeben. Bewusst ohne Aufräum-Logik: derselbe Dateiname wird beim
+ *  nächsten Versand desselben Dokuments einfach überschrieben. Rückgabe: tatsächlicher Pfad. */
 async function schreibeTempDatei(url: string, dateiname: string): Promise<string> {
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Anhang konnte nicht geladen werden: ${res.status}`)
   const bytes = new Uint8Array(await res.arrayBuffer())
-
-  const pfad = await join(await tempDir(), `rechnungsfee_${dateiname}`)
-  await invoke('write_bytes_to_path', { path: pfad, data: Array.from(bytes) })
-  return pfad
+  return invoke<string>('schreibe_temp_anhang', { dateiname, data: Array.from(bytes) })
 }
 
 function baueComposeString(params: ThunderbirdMailParams, anhangPfade: string[]): string {

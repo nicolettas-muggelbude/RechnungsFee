@@ -221,9 +221,9 @@ export default function App() {
 
   async function führeBackupUndSchliesseDurch() {
     try {
-      const { getApiBase } = await import('./api/client')
+      const { getApiBase, apiFetch } = await import('./api/client')
       const base = await getApiBase()
-      const res = await fetch(`${base}/backup/erstellen`, { method: 'POST' })
+      const res = await apiFetch(`${base}/backup/erstellen`, { method: 'POST' })
       if (res.ok) {
         const json = await res.json().catch(() => ({}))
         setExternKonfiguriert(json.extern_konfiguriert ?? false)
