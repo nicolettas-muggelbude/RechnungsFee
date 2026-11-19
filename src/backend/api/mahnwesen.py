@@ -819,7 +819,12 @@ def _berechne_mahnung(
     # werden automatisch ALLE offenen Rechnungen des Kunden einbezogen - unabhängig davon,
     # welche/wie viele rechnung_ids ursprünglich übergeben wurden. Stufe 1 bleibt bewusst
     # immer 1:1 zur einzelnen Rechnung (Plan-Vorgabe).
+    # Issue #550: nur bereits ÜBERFÄLLIGE Rechnungen - eine offene Rechnung, deren Zahlungsziel
+    # noch in der Zukunft liegt, darf nicht mitgemahnt werden; importierte Rechnungen ebenfalls
+    # nicht (wie die Prüfung oben für die übergebenen rechnung_ids). Übergebene Rechnungen
+    # bleiben in jedem Fall enthalten.
     if stufe.stufe >= einstellungen.konsolidiert_ab_stufe:
+        heute = date.today()
         alle_offenen = (
             db.query(Rechnung)
             .filter(
@@ -829,12 +834,15 @@ def _berechne_mahnung(
                 Rechnung.verrechnet_in_rechnung_id.is_(None),
                 Rechnung.ist_entwurf == False,  # noqa: E712
                 Rechnung.storniert == False,  # noqa: E712
+                Rechnung.import_quelle.is_(None),
                 Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
+                Rechnung.faellig_am.isnot(None),
+                Rechnung.faellig_am < heute,
             )
             .all()
         )
-        if alle_offenen:
-            rechnungen = alle_offenen
+        uebergeben = {r.id for r in rechnungen}
+        rechnungen = rechnungen + [r for r in alle_offenen if r.id not in uebergeben]
 
     gewerblich = _kunde_ist_gewerblich(kunde)
     offener_betrag_gesamt = sum(
