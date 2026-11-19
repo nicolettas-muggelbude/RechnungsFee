@@ -3443,7 +3443,12 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
 
   function addPosition() {
     const letztePos = positionen[positionen.length - 1]
-    const defaultUst = typ === 'ausgang'
+    // Steuerfälle ohne USt-Ausweis: neue Zeile gleich mit 0 % anzeigen – gespeichert wurde
+    // ohnehin 0 % (Payload), nur das Formular zeigte bisher den Standardsatz.
+    const steuerfallOhneUst = istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4
+    const defaultUst = steuerfallOhneUst
+      ? '0'
+      : typ === 'ausgang'
       ? defaultUstGlobal
       : String((kategorien ?? []).find((k) => String(k.id) === (letztePos?.kategorie_id ?? ''))?.ust_satz_standard ?? defaultUstGlobal)
     // Ausgang (Issue #567): neue Zeile startet mit „automatisch“ statt die Kategorie der
