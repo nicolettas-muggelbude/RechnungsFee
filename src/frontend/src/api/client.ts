@@ -1102,7 +1102,11 @@ export async function eksHalbjahresPdf(start: string, art: string, zeitraum?: { 
 export async function downloadGobdExport(jahr: number): Promise<string> {
   const base = await getBaseUrl()
   const res = await apiFetch(`${base}/export/gobd?jahr=${jahr}`)
-  if (!res.ok) throw new Error('Export fehlgeschlagen')
+  if (!res.ok) {
+    // Begründung des Backends anzeigen (z. B. 404 „Keine Daten für das Jahr …“, 401 Sitzungstoken)
+    const detail = await res.json().then(j => j.detail).catch(() => null)
+    throw new Error(typeof detail === 'string' ? detail : `Export fehlgeschlagen (${res.status})`)
+  }
   const blob = await res.blob()
   const filename = `gobd_export_${jahr}.zip`
   await _triggerBlobDownload(blob, filename)
