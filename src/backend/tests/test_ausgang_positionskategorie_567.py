@@ -203,6 +203,16 @@ def test_kennzeichen_nachtraeglich_entfernt_kategorie(db):
     assert all(p.kategorie_id is None for p in r.positionen)
 
 
+def test_automatik_kategorie_abgelehnt(db):
+    """ig. Lieferung als Positionskategorie ohne Haken würde mit 19 % USt auf 8125 buchen."""
+    with pytest.raises(HTTPException) as exc:
+        create_rechnung(RechnungCreate(
+            typ="ausgang", datum=date(2026, 3, 10), kunde_id=db.query(Kunde).one().id,
+            positionen=[_pos("Ware", "100", "19", _kat(db, "Innergemeinschaftliche Lieferungen"))],
+        ), db)
+    assert exc.value.status_code == 422
+
+
 def test_aufwandskategorie_abgelehnt(db):
     with pytest.raises(HTTPException) as exc:
         create_rechnung(RechnungCreate(

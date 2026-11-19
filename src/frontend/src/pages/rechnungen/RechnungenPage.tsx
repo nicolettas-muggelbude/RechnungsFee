@@ -50,6 +50,17 @@ import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../stor
 // Hilfsfunktionen
 // ---------------------------------------------------------------------------
 
+// Issue #567: Erlös-Kategorien, die RechnungsFee selbst wählt (Steuersatz/Steuerfall-Haken) oder
+// die nicht aus einer Rechnung entstehen - nicht als Positionskategorie anbieten.
+// Gegenstück im Backend: api/rechnungen.py AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.
+const AUSGANG_KATEGORIEN_NICHT_WAEHLBAR = new Set([
+  'Betriebseinnahmen', 'Betriebseinnahmen (7%)', 'Betriebseinnahmen (0%)',
+  'Betriebseinnahmen (Kleinunternehmer)', 'Differenzbesteuerung (§25a)',
+  'Innergemeinschaftliche Lieferungen', 'Nicht steuerbare Auslandsumsätze (Drittland)',
+  'Steuerfreie Ausfuhrlieferungen (Drittland)',
+  'Gewährte Skonti', 'Umsatzsteuer-Erstattung FA', 'Vorsteuererstattung FA',
+])
+
 function formatMenge(v: string | number): string {
   const n = parseFloat(String(v).replace(',', '.'))
   if (isNaN(n)) return String(v)
@@ -3296,7 +3307,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
   // Issue #567: Ausgangsrechnungen bekommen eine Erlös-Kategorie je Position (leer = automatisch).
   // Bei Sonderfällen legt das Backend die Kategorie fest (ausgangs_positionskategorie_gesperrt) -
   // dann keine Auswahl anzeigen und keine Kategorie mitschicken.
-  const erloesKat = alle.filter((k) => k.kontenart === 'Erlös')
+  const erloesKat = alle.filter((k) => k.kontenart === 'Erlös' && !AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.has(k.name))
   const ausgangKatGesperrt = typ === 'ausgang' && (
     istReverseCharge || istEuLieferung || istDrittlandLeistung || istAusfuhrlieferung || steuerfrei4
     || positionen.some((p) => p.differenzbesteuerung || p.abschlag_rechnung_id)

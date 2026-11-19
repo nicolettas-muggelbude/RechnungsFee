@@ -3170,6 +3170,18 @@ AUSGANG_FESTE_KATEGORIE_FLAGS = (
     "steuerfrei_4", "ist_eu_lieferung", "ist_drittland_leistung", "ist_ausfuhrlieferung", "ist_reverse_charge",
 )
 
+# Issue #567: Erlös-Kategorien, die RechnungsFee selbst wählt (Steuersatz bzw. Steuerfall-Haken)
+# oder die nicht aus einer Rechnung entstehen - als Positionskategorie würden sie mit dem
+# falschen USt-Satz/Konto gebucht (z. B. „Innergemeinschaftliche Lieferungen“ mit 19 %).
+# Gegenstück im Frontend: RechnungenPage.tsx AUSGANG_KATEGORIEN_NICHT_WAEHLBAR.
+AUSGANG_KATEGORIEN_NICHT_WAEHLBAR = frozenset({
+    "Betriebseinnahmen", "Betriebseinnahmen (7%)", "Betriebseinnahmen (0%)",
+    "Betriebseinnahmen (Kleinunternehmer)", "Differenzbesteuerung (§25a)",
+    "Innergemeinschaftliche Lieferungen", "Nicht steuerbare Auslandsumsätze (Drittland)",
+    "Steuerfreie Ausfuhrlieferungen (Drittland)",
+    "Gewährte Skonti", "Umsatzsteuer-Erstattung FA", "Vorsteuererstattung FA",
+})
+
 
 def ausgangs_positionskategorie_gesperrt(rechnung: "Rechnung") -> bool:
     """Issue #567: Ausgangsrechnungen, deren Erlös-Kategorie fachlich festgelegt ist (§ 4 UStG,
@@ -3216,6 +3228,12 @@ def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> N
             raise HTTPException(
                 status_code=422,
                 detail=f"Kategorie „{k.name}“ passt nicht zu einer Ausgangsrechnung – bitte eine Erlös-Kategorie wählen.",
+            )
+        if k.name in AUSGANG_KATEGORIEN_NICHT_WAEHLBAR:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Die Kategorie „{k.name}“ legt RechnungsFee selbst fest – bitte „automatisch“ lassen "
+                       "(bei ig. Lieferung, Drittland oder Ausfuhr den Haken an der Rechnung setzen).",
             )
 
 
