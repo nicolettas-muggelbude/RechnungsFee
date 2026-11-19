@@ -2970,6 +2970,15 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     db.query(Rechnung).filter(Rechnung.auftrag_zu_angebot_id == rechnung_id).update(
         {"auftrag_zu_angebot_id": None}
     )
+    # Issue #548: Ersatzrechnung (Entwurf) und Rechnung aus Angebot (Entwurf) - der Rückverweis
+    # am Original/Angebot blockierte das Löschen (FOREIGN KEY constraint failed); danach ist
+    # das Original wieder frei für eine neue Ersatzrechnung bzw. das Angebot für eine Rechnung
+    db.query(Rechnung).filter(Rechnung.ersatzrechnung_id == rechnung_id).update(
+        {"ersatzrechnung_id": None}
+    )
+    db.query(Rechnung).filter(Rechnung.rechnung_zu_angebot_id == rechnung_id).update(
+        {"rechnung_zu_angebot_id": None}
+    )
     # Issue #495: Lieferscheine aus Angebot/Auftrag sind jetzt Entwürfe und damit löschbar -
     # der Rückverweis am Angebot muss weg, sonst blockiert er das Angebot dauerhaft
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_angebot_id == rechnung_id).update(
