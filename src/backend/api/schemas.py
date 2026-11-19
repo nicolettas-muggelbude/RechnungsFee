@@ -430,6 +430,7 @@ class JournalEintragResponse(BaseModel):
     beschreibung: str
     kategorie_id: Optional[int]
     kategorie_kontenart: Optional[str] = None  # Erlös|Aufwand|Privat|Anlage
+    kategorie_name: Optional[str] = None       # Anzeige im Journal (Issue #567)
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None   # aus Relationship befüllt
     kunde_email: Optional[str] = None
@@ -480,6 +481,7 @@ class JournalEintragResponse(BaseModel):
             data.kunde_email = obj.kunde.email
         if obj.kategorie:
             data.kategorie_kontenart = obj.kategorie.kontenart
+            data.kategorie_name = obj.kategorie.name
         if obj.rechnung:
             data.rechnung_nr = obj.rechnung.rechnungsnummer
             data.rechnung_datum = obj.rechnung.datum
