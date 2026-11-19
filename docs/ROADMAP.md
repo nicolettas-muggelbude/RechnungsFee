@@ -88,7 +88,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ## 📋 Nach v0.7.4 – vorgemerkt
 
-- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn) – bisher ziehen Entwürfe von
+- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.13) – bisher ziehen Entwürfe von
   Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
   (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
   Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen
