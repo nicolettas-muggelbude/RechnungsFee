@@ -503,7 +503,7 @@ def _buche_pfad_a(
         (
             satz_ratios, ust_satz_dom, hat_gemischte_25a, gruppen_keys,
             gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
-        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku, nach_offenem=True)
         if not hat_gemischte_25a:
             kat_id, kat = _erloes_kategorie(db, rechnung)
     elif rechnung.positionen:

@@ -220,3 +220,56 @@ def test_aufwandskategorie_abgelehnt(db):
             positionen=[_pos("Führung", "100", "19", _kat(db, "Büromaterial"))],
         ), db)
     assert exc.value.status_code == 422
+
+
+# --- Folgemeldung Markus: weitere Teilzahlung nach offenem Betrag, Korrektur je Kategorie --------
+
+def _eintrag(db, r, kat_name) -> Journaleintrag:
+    return db.query(Journaleintrag).filter(
+        Journaleintrag.rechnung_id == r.id, Journaleintrag.kategorie_id == _kat(db, kat_name).id,
+    ).one()
+
+
+def test_zweite_teilzahlung_nach_offenem_betrag(db):
+    from api.rechnungen import ZahlungKorrigieren, zahlung_korrigieren
+    _ku(db)
+    ul = _kat(db, "Übungsleiter § 3 Nr. 26")
+    r = _rechnung(db, [_pos("Führung", "300", "0", ul), _pos("Fotos", "100", "0")])
+    _zahlen(db, r, betrag=Decimal("200"))  # 150 / 50
+    # Übungsleiter-Anteil per Korrektur voll bezahlt
+    zahlung_korrigieren(r.id, _eintrag(db, r, "Übungsleiter § 3 Nr. 26").id,
+                        ZahlungKorrigieren(neues_datum=date(2026, 3, 20), neuer_betrag=Decimal("300")), db)
+    db.expire_all()
+    _zahlen(db, r)  # Rest 50 € → komplett auf die noch offene Kategorie
+    assert _buchungen(db, r) == {
+        "Übungsleiter § 3 Nr. 26": Decimal("300.00"),
+        "Betriebseinnahmen (Kleinunternehmer)": Decimal("100.00"),
+    }
+
+
+def test_teilzahlungen_ohne_korrektur_ergeben_positionssummen(db):
+    _ku(db)
+    ul = _kat(db, "Übungsleiter § 3 Nr. 26")
+    r = _rechnung(db, [_pos("Führung", "300", "0", ul), _pos("Fotos", "100", "0")])
+    _zahlen(db, r, betrag=Decimal("123.45"))
+    db.expire_all()  # in der App eigene Anfrage je Zahlung
+    _zahlen(db, r, betrag=Decimal("76.55"))
+    db.expire_all()
+    _zahlen(db, r)
+    assert _buchungen(db, r) == {
+        "Übungsleiter § 3 Nr. 26": Decimal("300.00"),
+        "Betriebseinnahmen (Kleinunternehmer)": Decimal("100.00"),
+    }
+
+
+def test_korrektur_ueber_kategorie_anteil_abgelehnt(db):
+    from api.rechnungen import ZahlungKorrigieren, zahlung_korrigieren
+    _ku(db)
+    ul = _kat(db, "Übungsleiter § 3 Nr. 26")
+    r = _rechnung(db, [_pos("Führung", "300", "0", ul), _pos("Fotos", "100", "0")])
+    _zahlen(db, r, betrag=Decimal("200"))  # 150 / 50
+    with pytest.raises(HTTPException) as exc:
+        zahlung_korrigieren(r.id, _eintrag(db, r, "Übungsleiter § 3 Nr. 26").id,
+                            ZahlungKorrigieren(neues_datum=date(2026, 3, 20), neuer_betrag=Decimal("300.01")), db)
+    assert exc.value.status_code == 422
+    assert "300.00" in exc.value.detail

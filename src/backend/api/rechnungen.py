@@ -3194,7 +3194,25 @@ def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> N
             )
 
 
-def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool):
+def _gebucht_je_kategorie_gruppe(
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
+) -> dict[tuple, Decimal]:
+    """Issue #567-Folgefund: bereits gebuchte Zahlungen je Gruppe (satz, False, kategorie_id) –
+    Storno-Gegenbuchungen tragen dieselbe rechnung_id und heben sich dadurch auf. Skonto- und
+    Mahngebühr-Buchungen laufen auf eigenen Kategorien und zählen hier nicht mit."""
+    gebucht: dict[tuple, Decimal] = {}
+    for e in db.query(Journaleintrag).filter(
+        Journaleintrag.rechnung_id == rechnung.id, Journaleintrag.art == "Einnahme",
+    ):
+        s = 0 if ist_kleinunternehmer else int(e.ust_satz or 0)
+        key = (s, False, e.kategorie_id)
+        gebucht[key] = gebucht.get(key, Decimal("0")) + (e.brutto_betrag or Decimal("0"))
+    return gebucht
+
+
+def _kategorie_buchungsgruppen(
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool, nach_offenem: bool = False,
+):
     """Issue #567: Buchungsgruppen je (USt-Satz, Kategorie) für Ausgangsrechnungen mit eigenen
     Positionskategorien. Positionen ohne Kategorie bekommen die automatische Erlös-Kategorie
     (_erloes_kategorie(), bei Kleinunternehmern „Betriebseinnahmen (Kleinunternehmer)“).
@@ -3220,13 +3238,25 @@ def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunter
 
     # Gruppen ohne Betrag (z. B. Position + gleich hohe Minusposition) erzeugen keine 0-€-Buchung
     gruppen_brutto = {k: v for k, v in gruppen_brutto.items() if v != 0} or gruppen_brutto
-    gesamt = sum(gruppen_brutto.values()) or Decimal("1")
     gruppen_keys = sorted(gruppen_brutto, key=lambda k: (k[0], k[2] or 0))
     satz_summen: dict[int, Decimal] = {}
     for k, v in gruppen_brutto.items():
         satz_summen[k[0]] = satz_summen.get(k[0], Decimal("0")) + v
     ust_satz = Decimal(str(max(satz_summen, key=lambda s: satz_summen[s])))
-    satz_ratios = [(k[0], gruppen_brutto[k] / gesamt) for k in gruppen_keys]
+
+    # Issue #567-Folgefund (Markus): eine weitere Teilzahlung wird nach dem noch OFFENEN Betrag
+    # je Kategorie verteilt, nicht erneut nach dem Rechnungsanteil - sonst bekommt eine bereits
+    # voll bezahlte Kategorie wieder einen Anteil und der anderen fehlt er. Nur bei rein
+    # positiven Gruppen (Gruppen mit Minusbetrag, z. B. verrechnete Abschläge, behalten die
+    # bisherige Verteilung).
+    anteile = gruppen_brutto
+    if nach_offenem and all(v > 0 for v in gruppen_brutto.values()):
+        gebucht = _gebucht_je_kategorie_gruppe(db, rechnung, ist_kleinunternehmer)
+        offen = {k: max(v - gebucht.get(k, Decimal("0")), Decimal("0")) for k, v in gruppen_brutto.items()}
+        if sum(offen.values()) > 0:
+            anteile = offen
+    gesamt = sum(anteile.values()) or Decimal("1")
+    satz_ratios = [(k[0], anteile[k] / gesamt) for k in gruppen_keys]
     return satz_ratios, ust_satz, True, gruppen_keys, gruppen_kategorie, {}, gruppen_brutto
 
 
@@ -3240,7 +3270,7 @@ def _satz_ratios_je_satz(satz_ratios: list[tuple[int, Decimal]]) -> list[tuple[i
 
 
 def _ausgangs_buchungsgruppen(
-    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool, nach_offenem: bool = False,
 ) -> tuple[
     list[tuple[int, Decimal]], Decimal, bool, list[tuple[int, bool]],
     dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]],
@@ -3264,7 +3294,7 @@ def _ausgangs_buchungsgruppen(
     # normalen Leistungen) - eigener Gruppierungsweg, alle anderen Rechnungen laufen
     # unverändert durch den Code darunter.
     if ausgangs_positionskategorien_aktiv(rechnung):
-        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer)
+        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer, nach_offenem)
 
     satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]
     gruppen_keys: list[tuple[int, bool]] = []
@@ -3512,7 +3542,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         (
             satz_ratios, ust_satz, hat_gemischte_25a, gruppen_keys,
             gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
-        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku, nach_offenem=True)
 
         ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
         if data.skonto_betrag and data.skonto_betrag > 0:
@@ -3961,6 +3991,30 @@ def zahlung_korrigieren(
                 status_code=422,
                 detail=f"Betrag ({neuer_brutto_abs} €) übersteigt den verfügbaren Restbetrag ({restbetrag_ohne_diese:.2f} €).",
             )
+        # Issue #567-Folgefund (Markus): bei Kategorie je Position darf eine Kategorie nicht
+        # mehr bekommen als ihre Positionen ausmachen (bisher nur Prüfung der Rechnungssumme).
+        if (
+            rechnung.typ == "ausgang" and e.art == "Einnahme" and e.brutto_betrag > 0
+            and neuer_brutto_abs > e.brutto_betrag
+            and ausgangs_positionskategorien_aktiv(rechnung)
+        ):
+            _unt = db.query(Unternehmen).first()
+            _ku = bool(_unt and _unt.ist_kleinunternehmer)
+            _, _, _, _, _gk, _, _gb = _kategorie_buchungsgruppen(db, rechnung, _ku)
+            _key = (0 if _ku else int(e.ust_satz or 0), False, e.kategorie_id)
+            if _key in _gb:
+                _gebucht = _gebucht_je_kategorie_gruppe(db, rechnung, _ku).get(_key, Decimal("0"))
+                _frei = _gb[_key] - (_gebucht - e.brutto_betrag)
+                if neuer_brutto_abs > _frei:
+                    _kat = _gk[_key][1]
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Betrag ({neuer_brutto_abs} €) übersteigt den Anteil der Kategorie "
+                            f"„{_kat.name if _kat else 'automatisch'}“ auf dieser Rechnung "
+                            f"(noch {max(_frei, Decimal('0')):.2f} € möglich)."
+                        ),
+                    )
         if e.zahlungsart == "Bar" and e.art == "Ausgabe" and neuer_brutto_abs > abs(e.brutto_betrag):
             einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
                 Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
