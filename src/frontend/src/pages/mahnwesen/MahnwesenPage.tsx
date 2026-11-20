@@ -5,10 +5,9 @@ import {
   getMahnwesenKundenUebersicht, getMahnwesenEinstellungen, mahnungVorschau, mahnungErstellen,
   mahnungVorschauGebuehr, mahnungErstellenGebuehr, bezahleMahngebuehrKunde, mahnungZahlungErfassen,
   getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, openUrl,
-  getUnternehmen, getApiBase, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
+  getUnternehmen, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
   type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult,
-  apiFetch,
 } from '../../api/client'
 import { MahnungMailDialog } from '../../components/MahnungMailDialog'
 import { DateInput } from '../../components/DateInput'
@@ -57,21 +56,22 @@ function mahnungStatusLabel(status: string): string {
   return status === 'entwurf' ? 'Entwurf' : status === 'versendet' ? 'Versendet' : status === 'storniert' ? 'Storniert' : status
 }
 
-async function mahnungDrucken(mahnungId: number, qc: ReturnType<typeof useQueryClient>) {
-  const base = await getApiBase()
-  const resp = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf`)
-  const blob = await resp.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
-  qc.invalidateQueries({ queryKey: ['kunde-mahnungen'] })
-  qc.invalidateQueries({ queryKey: ['rechnungen'] })
+/** Issue #559: direkte Backend-Adresse statt blob:-URL - ein eigenes Tauri-Fenster kann eine im
+ *  Hauptfenster erzeugte blob:-URL nicht auflösen und blieb weiß (wie Rechnungen, Issue #371).
+ *  Der Status „versendet“ wird serverseitig beim Laden der Adresse gesetzt. */
+async function mahnungDrucken(m: { id: number; mahnnummer?: string | null }, qc: ReturnType<typeof useQueryClient>) {
+  const url = await getMahnungPdfUrl(m.id, false, m.mahnnummer)
+  setTimeout(() => {
+    qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+    qc.invalidateQueries({ queryKey: ['kunde-mahnungen'] })
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+  }, 1500)
   if (isTauri()) {
-    openInPdfWindow(blobUrl, 'Mahnung drucken')
+    await openInPdfWindow(url, 'Mahnung drucken')
   } else {
-    const win = window.open(blobUrl, '_blank')
+    const win = window.open(url, '_blank')
     if (win) win.addEventListener('load', () => win.print())
   }
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
 }
 
 /** Mail-Fallback ohne SMTP: PDF herunterladen (zählt als versendet) + Standard-Mailprogramm mit
@@ -518,7 +518,7 @@ function KundeDetail({
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
                       👁 Ansehen
                     </button>
-                    <button type="button" onClick={() => mahnungDrucken(m.id, qc)}
+                    <button type="button" onClick={() => mahnungDrucken(m, qc)}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
                       🖨️ Drucken
                     </button>
