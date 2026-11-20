@@ -4864,6 +4864,34 @@ class SammelrechnungCreate(BaseModel):
     notizen: Optional[str] = None
 
 
+def _skonto_vorgabe(db: Session, kunde_id: Optional[int]) -> tuple[Optional[Decimal], Optional[int]]:
+    """Issue #563: Skonto wie im Rechnungsformular - Kunde vor Unternehmens-Standard."""
+    if kunde_id:
+        k = db.query(Kunde).filter(Kunde.id == kunde_id).first()
+        if k and k.skonto_prozent is not None:
+            return k.skonto_prozent, k.skonto_tage
+    unt = db.query(Unternehmen).first()
+    if unt and unt.standard_skonto_prozent is not None:
+        return unt.standard_skonto_prozent, unt.standard_skonto_tage
+    return None, None
+
+
+def _faelligkeit_vorgabe(db: Session, datum: date) -> Optional[date]:
+    """Issue #563: Fälligkeit aus dem Standard-Zahlungsziel (0 = keine Vorgabe, wie Issue #411)."""
+    unt = db.query(Unternehmen).first()
+    tage = 14 if unt is None or unt.standard_zahlungsziel is None else int(unt.standard_zahlungsziel)
+    if tage == 0:
+        return None
+    from datetime import timedelta
+    return datum + timedelta(days=tage)
+
+
+def _setze_skonto_vorgabe(rechnung: "Rechnung", db: Session) -> None:
+    """Issue #563: bei Umwandlungen zur Rechnung Skonto vorbelegen, wenn die Quelle keins hat."""
+    if rechnung.skonto_prozent is None:
+        rechnung.skonto_prozent, rechnung.skonto_tage = _skonto_vorgabe(db, rechnung.kunde_id)
+
+
 def _lieferschein_zu_rechnung_konvertieren(
     lieferscheine: list,
     datum: date,
@@ -4910,6 +4938,10 @@ def _lieferschein_zu_rechnung_konvertieren(
         ust_gesamt=Decimal("0.00"),
         brutto_gesamt=Decimal("0.00"),
     )
+    # Issue #563: Lieferscheine kennen weder Fälligkeit noch Skonto - Vorgaben wie im Formular
+    if rechnung.faellig_am is None:
+        rechnung.faellig_am = _faelligkeit_vorgabe(db, datum)
+    _setze_skonto_vorgabe(rechnung, db)
     db.add(rechnung)
     db.flush()
 
@@ -5235,6 +5267,9 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         ust_gesamt=angebot.ust_gesamt,
         brutto_gesamt=angebot.brutto_gesamt,
     )
+    # Issue #563: Skonto aus dem Angebot, sonst Vorgabe (Kunde, dann Einstellungen)
+    rechnung.skonto_prozent, rechnung.skonto_tage = angebot.skonto_prozent, angebot.skonto_tage
+    _setze_skonto_vorgabe(rechnung, db)
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(angebot, rechnung, db)
@@ -5625,6 +5660,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         skonto_prozent=auftrag.skonto_prozent,
         skonto_tage=auftrag.skonto_tage,
     )
+    _setze_skonto_vorgabe(rechnung, db)  # Issue #563: Auftrag ohne Skonto → Vorgabe
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(auftrag, rechnung, db)
