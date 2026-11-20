@@ -159,6 +159,9 @@ Debitor des Kunden als Personenkonto.
   Migration 115) als Personenkonto, analog zum Debitor bei Einnahmen (`datev.py`, `debitor_map`)
 - [ ] Prüfen: Wechselwirkung mit Zahlungen auf Eingangsrechnungen (dort Kreditor über die Rechnung)
   und mit Buchungen ohne Lieferant (unverändert)
+- [ ] Debitor bei Zahlungen auf Ausgangsrechnungen: Spalte 48 nutzt nur `journal.kunde_id`, das bei
+  Rechnungszahlungen leer ist (Issue #577 löste nur die Anzeige) – analog zum Kreditor über
+  `rechnung.kunde_id` ermitteln
 - [ ] Lieferanten-Historie/Kontokorrent: direkte Ausgaben zeigen oder bewusst weglassen (keine
   Verbindlichkeit) – entscheiden
 

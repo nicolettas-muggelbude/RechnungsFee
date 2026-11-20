@@ -513,6 +513,22 @@ class JournalEintragResponse(BaseModel):
         if obj.rechnung:
             data.rechnung_nr = obj.rechnung.rechnungsnummer
             data.rechnung_datum = obj.rechnung.datum
+            # Issue #577: Zahlungen zu Rechnungen tragen keinen eigenen Kunden/Lieferanten -
+            # für die Anzeige den Partner der Rechnung nehmen (wirkt auch für Altbuchungen,
+            # ohne versiegelte Zeilen zu ändern; DATEV bleibt unberührt)
+            r = obj.rechnung
+            if not data.kunde_name and r.kunde is not None:
+                k = r.kunde
+                data.kunde_name = " ".join(p for p in [k.firmenname, k.vorname, k.nachname] if p) or None
+                data.kunde_email = k.email
+            if not data.lieferant_name and getattr(r, "lieferant", None) is not None:
+                l = r.lieferant
+                data.lieferant_name = l.firmenname or " ".join(p for p in [l.vorname, l.nachname] if p) or None
+            if not data.kunde_name and not data.lieferant_name and r.partner_freitext:
+                if r.typ == "eingang":
+                    data.lieferant_name = r.partner_freitext
+                else:
+                    data.kunde_name = r.partner_freitext
         return data
 
 
