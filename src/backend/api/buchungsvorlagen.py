@@ -351,6 +351,7 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
         zahlungsart=zahlungsart,
         konto_id=v.konto_id if zahlungsart != "Bar" else None,
         kunde_id=v.kunde_id if art == "Einnahme" else None,
+        lieferant_id=v.lieferant_id if art == "Ausgabe" else None,  # Issue #566
         art=art,
         brutto_betrag=brutto,
         netto_betrag=netto,

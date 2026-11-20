@@ -13,6 +13,7 @@ import {
   createSplitBuchung,
   getKategorien,
   getKunden,
+  getLieferanten,
   getUnternehmen,
   getKassenstand,
   getUstSaetze,
@@ -39,6 +40,7 @@ const singleSchema = z.object({
   zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
   kategorie_id: z.string().optional(),
   kunde_id: z.string().optional(),
+  lieferant_id: z.string().optional(),
   vorsteuerabzug: z.boolean().optional(),
   ust_sonderfall: z.string().optional(),
   externe_belegnr: z.string().optional(),
@@ -60,6 +62,7 @@ const splitSchema = z.object({
   zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
   externe_belegnr: z.string().optional(),
   kunde_id: z.string().optional(),
+  lieferant_id: z.string().optional(),
   positionen: z.array(positionSchema).min(2, 'Mindestens 2 Positionen erforderlich'),
 })
 
@@ -135,6 +138,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+  // Issue #566: Lieferant bei Ausgaben
+  const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
+  const lieferantenOptionen = (lieferanten ?? [])
+    .filter((l) => l.aktiv !== false)
+    .map((l) => (
+      <option key={l.id} value={l.id}>
+        {l.firmenname || [l.vorname, l.nachname].filter(Boolean).join(' ')}
+        {l.lieferantennummer ? ` (${l.lieferantennummer})` : ''}
+      </option>
+    ))
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
   const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
@@ -162,6 +175,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       zahlungsart: bearbeiten.zahlungsart,
       kategorie_id: bearbeiten.kategorie_id ? String(bearbeiten.kategorie_id) : '',
       kunde_id: bearbeiten.kunde_id ? String(bearbeiten.kunde_id) : '',
+      lieferant_id: bearbeiten.lieferant_id ? String(bearbeiten.lieferant_id) : '',
       vorsteuerabzug: bearbeiten.vorsteuerabzug,
       ust_sonderfall: bearbeiten.ust_sonderfall ?? '',
       externe_belegnr: bearbeiten.externe_belegnr ?? '',
@@ -499,6 +513,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       zahlungsart: values.zahlungsart,
       kategorie_id: values.kategorie_id ? Number(values.kategorie_id) : undefined,
       kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
+      lieferant_id: values.art === 'Ausgabe' && values.lieferant_id ? Number(values.lieferant_id) : undefined,
       vorsteuerabzug: values.vorsteuerabzug,
       ust_sonderfall: values.ust_sonderfall || null,
       externe_belegnr: values.externe_belegnr || undefined,
@@ -524,6 +539,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       zahlungsart: values.zahlungsart,
       externe_belegnr: values.externe_belegnr || undefined,
       kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
+      lieferant_id: values.art === 'Ausgabe' && values.lieferant_id ? Number(values.lieferant_id) : undefined,
       positionen: values.positionen.map((p) => {
         const ustFinal = (istKleinunternehmer && values.art === 'Einnahme') ? '0' : p.ust_satz
         const bruttoFinal =
@@ -836,6 +852,23 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                         </option>
                       )
                     })}
+                </select>
+              </div>
+            )}
+
+            {/* Lieferant (nur Ausgaben, Issue #566) */}
+            {art === 'Ausgabe' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1" htmlFor="buchung-lieferant">
+                  Lieferant <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <select
+                  id="buchung-lieferant"
+                  {...register('lieferant_id')}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="">— kein Lieferant —</option>
+                  {lieferantenOptionen}
                 </select>
               </div>
             )}
@@ -1174,6 +1207,23 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                         </option>
                       )
                     })}
+                </select>
+              </div>
+            )}
+
+            {/* Lieferant (nur Ausgaben, Issue #566) */}
+            {artSplit === 'Ausgabe' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1" htmlFor="split-lieferant">
+                  Lieferant <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <select
+                  id="split-lieferant"
+                  {...registerS('lieferant_id')}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="">— kein Lieferant —</option>
+                  {lieferantenOptionen}
                 </select>
               </div>
             )}

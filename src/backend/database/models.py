@@ -378,6 +378,10 @@ class Journaleintrag(Base):
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
     kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id"))
+    # Issue #566: Lieferant bei direkt gebuchten Ausgaben. Bewusst OHNE Datenbank-Fremdschlüssel:
+    # versiegelte Zeilen sind unveränderlich, ein FK würde das Anonymisieren (Löschen) eines
+    # Lieferanten blockieren bzw. ein ON DELETE SET NULL am GoBD-Trigger scheitern lassen.
+    lieferant_id: Mapped[int | None] = mapped_column(Integer)
     zahlungsart: Mapped[str] = mapped_column(String(20), nullable=False)  # Bar|Karte|Bank|PayPal
     art: Mapped[str] = mapped_column(String(10), nullable=False)  # Einnahme|Ausgabe
     netto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -417,6 +421,10 @@ class Journaleintrag(Base):
 
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="journaleintraege")
     kunde: Mapped["Kunde | None"] = relationship()
+    # Issue #566: nur lesend, ohne DB-Fremdschlüssel (siehe lieferant_id)
+    lieferant: Mapped["Lieferant | None"] = relationship(
+        primaryjoin="foreign(Journaleintrag.lieferant_id) == Lieferant.id", viewonly=True,
+    )
     rechnung: Mapped["Rechnung | None"] = relationship(back_populates="journaleintraege")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
 

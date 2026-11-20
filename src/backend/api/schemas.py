@@ -413,6 +413,7 @@ class JournalEintragCreate(BaseModel):
     beschreibung: str
     kategorie_id: Optional[int] = None
     kunde_id: Optional[int] = None
+    lieferant_id: Optional[int] = None  # Issue #566: nur bei Ausgaben
     zahlungsart: str = "Bar"  # Bar|Karte|Bank|PayPal
     art: str  # Einnahme|Ausgabe
     brutto_betrag: Decimal
@@ -456,6 +457,8 @@ class JournalEintragResponse(BaseModel):
     kunde_id: Optional[int]
     kunde_name: Optional[str] = None   # aus Relationship befüllt
     kunde_email: Optional[str] = None
+    lieferant_id: Optional[int] = None    # Issue #566
+    lieferant_name: Optional[str] = None
     zahlungsart: str
     art: str
     netto_betrag: Decimal
@@ -501,6 +504,9 @@ class JournalEintragResponse(BaseModel):
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
             data.kunde_email = obj.kunde.email
+        if getattr(obj, "lieferant", None):
+            l = obj.lieferant
+            data.lieferant_name = l.firmenname or " ".join(p for p in [l.vorname, l.nachname] if p) or None
         if obj.kategorie:
             data.kategorie_kontenart = obj.kategorie.kontenart
             data.kategorie_name = obj.kategorie.name
@@ -538,6 +544,7 @@ class SplitBuchungCreate(BaseModel):
     zahlungsart: str = "Bar"
     externe_belegnr: Optional[str] = None
     kunde_id: Optional[int] = None
+    lieferant_id: Optional[int] = None  # Issue #566: nur bei Ausgaben
     positionen: List[SplitPosition]
     beleg_id: Optional[int] = None  # vorab hochgeladener Beleg (Issue #310) - Split-Buchungen
     # sind ab Erstellung immutable, ein Beleg kann daher nicht wie bei Einzelbuchungen per

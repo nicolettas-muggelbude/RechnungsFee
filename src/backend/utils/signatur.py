@@ -38,7 +38,7 @@ def _dec(wert: Optional[Decimal], skala: str) -> str:
 
 def signatur_journaleintrag(e: "Journaleintrag") -> str:
     """Signatur über alle buchungsrelevanten Felder eines Journaleintrags."""
-    return berechne_signatur({
+    felder = {
         "art": str(e.art),
         "belegnr": str(e.belegnr),
         "beschreibung": str(e.beschreibung),
@@ -54,7 +54,12 @@ def signatur_journaleintrag(e: "Journaleintrag") -> str:
         "vorsteuerabzug": bool(e.vorsteuerabzug),
         "zahlungsart": str(e.zahlungsart),
         "km_anzahl": _dec(e.km_anzahl, "0.1"),
-    })
+    }
+    # Issue #566: Lieferant nur, wenn gesetzt - so bleiben die Signaturen aller Buchungen
+    # ohne Lieferant (auch sämtlicher Altbestand) unverändert gültig.
+    if getattr(e, "lieferant_id", None) is not None:
+        felder["lieferant_id"] = str(e.lieferant_id)
+    return berechne_signatur(felder)
 
 
 def signatur_vorsteueranspruch(v: "VorsteuerAnspruch") -> str:

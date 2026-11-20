@@ -149,6 +149,19 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [x] Folge-Release v0.7.12: weitere Härtung zwischen Oberfläche und Hintergrunddienst (Sitzungsschlüssel,
   signierte Links, keine Dateipfade über die Schnittstelle, CSP, Passwörter im Schlüsselbund)
 
+## 📋 v0.7.14 – DATEV: Kreditor als Personenkonto bei direkten Ausgaben (Issue #566)
+
+Seit v0.7.13 können direkt gebuchte Ausgaben (Journal, Split, Buchungsvorlage) einen Lieferanten
+tragen (`journal.lieferant_id`, Migration 192). Der DATEV-Export nutzt bisher nur bei Einnahmen den
+Debitor des Kunden als Personenkonto.
+
+- [ ] DATEV-Export: bei Ausgaben mit `lieferant_id` die Kreditornummer (`lieferanten.kreditor_nr`,
+  Migration 115) als Personenkonto, analog zum Debitor bei Einnahmen (`datev.py`, `debitor_map`)
+- [ ] Prüfen: Wechselwirkung mit Zahlungen auf Eingangsrechnungen (dort Kreditor über die Rechnung)
+  und mit Buchungen ohne Lieferant (unverändert)
+- [ ] Lieferanten-Historie/Kontokorrent: direkte Ausgaben zeigen oder bewusst weglassen (keine
+  Verbindlichkeit) – entscheiden
+
 ## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen

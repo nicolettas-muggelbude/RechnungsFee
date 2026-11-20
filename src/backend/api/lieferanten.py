@@ -80,6 +80,7 @@ def dsgvo_export(lieferant_id: int, db: Session = Depends(get_db)):
         .order_by(Rechnung.datum)
         .all()
     )
+    eintraege = _journal_des_lieferanten(lieferant_id, db)
 
     name = lieferant.firmenname or " ".join(
         t for t in [lieferant.vorname, lieferant.nachname] if t
@@ -104,6 +105,15 @@ def dsgvo_export(lieferant_id: int, db: Session = Depends(get_db)):
             "ust_idnr": lieferant.ust_idnr,
             "notizen": lieferant.notizen,
         },
+        # Issue #566: direkt gebuchte Ausgaben mit diesem Lieferanten
+        "journal": [
+            {
+                "id": e.id, "datum": str(e.datum), "belegnr": e.belegnr, "beschreibung": e.beschreibung,
+                "art": e.art, "brutto_betrag": str(e.brutto_betrag), "zahlungsart": e.zahlungsart,
+                "immutable": e.immutable,
+            }
+            for e in eintraege
+        ],
         "rechnungen": [
             {
                 "id": r.id,
@@ -191,7 +201,12 @@ def dsgvo_pdf_lieferant(lieferant_id: int, db: Session) -> tuple[bytes, str]:
         for r in rechnungen
     ]
 
-    pdf_bytes = generate_dsgvo_pdf(stammdaten, rechnungen_dicts, None, "Lieferant")
+    journal_dicts = [
+        {"datum": str(e.datum), "belegnr": e.belegnr, "beschreibung": e.beschreibung,
+         "art": e.art, "brutto_betrag": str(e.brutto_betrag), "zahlungsart": e.zahlungsart}
+        for e in _journal_des_lieferanten(lieferant_id, db)
+    ]
+    pdf_bytes = generate_dsgvo_pdf(stammdaten, rechnungen_dicts, journal_dicts or None, "Lieferant")
     return pdf_bytes, f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
 
 
@@ -213,14 +228,40 @@ def anonymisiere_lieferant(lieferant_id: int, db: Session = Depends(get_db)):
             r.partner_freitext = name
         r.lieferant_id = None
 
+    # Issue #566: Journalbuchungen mit diesem Lieferanten - nur noch nicht versiegelte lösen,
+    # versiegelte behalten die Nummer (ohne Stammdaten dahinter, GoBD-Schutz wie beim Kunden)
+    mutable = db.query(Journaleintrag).filter(
+        Journaleintrag.lieferant_id == lieferant_id, Journaleintrag.immutable == False,  # noqa: E712
+    ).all()
+    for e in mutable:
+        e.lieferant_id = None
+    immutable_anzahl = db.query(Journaleintrag).filter(
+        Journaleintrag.lieferant_id == lieferant_id, Journaleintrag.immutable == True,  # noqa: E712
+    ).count()
+
     db.delete(lieferant)
     db.commit()
 
     return {
         "anonymisierte_rechnungen": len(rechnungen),
-        "unveraenderlich_verblieben": 0,
-        "hinweis": "",
+        "anonymisierte_buchungen": len(mutable),
+        "unveraenderlich_verblieben": immutable_anzahl,
+        "hinweis": (
+            f"{immutable_anzahl} unveränderliche Journalbuchungen verweisen weiter auf die interne "
+            f"Lieferantennummer, die Stammdaten sind gelöscht (GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
+            if immutable_anzahl else ""
+        ),
     }
+
+
+def _journal_des_lieferanten(lieferant_id: int, db: Session) -> list[Journaleintrag]:
+    """Issue #566: Journalbuchungen, an denen der Lieferant direkt hängt."""
+    return (
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.lieferant_id == lieferant_id)
+        .order_by(Journaleintrag.datum)
+        .all()
+    )
 
 
 class KontokorrentBewegung(BaseModel):

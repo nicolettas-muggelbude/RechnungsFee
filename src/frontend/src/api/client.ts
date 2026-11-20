@@ -554,6 +554,8 @@ export type JournalEintrag = {
   kunde_name: string | null
   kunde_email: string | null
   kunde_zugferd_aktiv: boolean
+  lieferant_id?: number | null    // Issue #566
+  lieferant_name?: string | null
   zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
   art: 'Einnahme' | 'Ausgabe'
   netto_betrag: string
@@ -591,6 +593,7 @@ export type JournalEintragCreate = {
   beschreibung: string
   kategorie_id?: number
   kunde_id?: number
+  lieferant_id?: number  // Issue #566: nur bei Ausgaben
   zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
   art: 'Einnahme' | 'Ausgabe'
   brutto_betrag: string
@@ -658,6 +661,7 @@ export type SplitBuchungCreate = {
   zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
   externe_belegnr?: string
   kunde_id?: number
+  lieferant_id?: number  // Issue #566: nur bei Ausgaben
   positionen: SplitPosition[]
   beleg_id?: number
 }

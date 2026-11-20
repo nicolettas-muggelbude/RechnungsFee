@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 191
+SCHEMA_VERSION = 192
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4486,6 +4486,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 191"))
             conn.commit()
             print("[Migration] Schema auf Version 191 (Issue #566: buchungsvorlagen.zahlungsart, kunde_id)")
+
+    if version < 192:
+        with engine.connect() as conn:
+            # Issue #566: Lieferant bei direkt gebuchten Ausgaben - bewusst ohne REFERENCES
+            # (versiegelte Zeilen, Anonymisieren des Lieferanten muss möglich bleiben).
+            # Kein Backfill: bestehende Buchungen sind GoBD-versiegelt.
+            _j192 = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
+            if _j192 and "lieferant_id" not in _j192:
+                conn.execute(text("ALTER TABLE journal ADD COLUMN lieferant_id INTEGER"))
+            conn.execute(text("PRAGMA user_version = 192"))
+            conn.commit()
+            print("[Migration] Schema auf Version 192 (Issue #566: journal.lieferant_id)")
 
 
 def _migrate_kategorien() -> None:

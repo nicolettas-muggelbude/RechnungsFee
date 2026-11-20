@@ -395,6 +395,7 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
         konto_ust_skr03=konto_ust_skr03,
         konto_ust_skr04=konto_ust_skr04,
         kunde_id=data.kunde_id,
+        lieferant_id=data.lieferant_id if data.art == "Ausgabe" else None,  # Issue #566
         zahlungsart=data.zahlungsart,
         art=data.art,
         netto_betrag=netto,
@@ -797,6 +798,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             konto_ust_skr03=konto_ust_skr03,
             konto_ust_skr04=konto_ust_skr04,
             kunde_id=data.kunde_id,
+            lieferant_id=data.lieferant_id if data.art == "Ausgabe" else None,  # Issue #566
             zahlungsart=data.zahlungsart,
             art=data.art,
             netto_betrag=netto,

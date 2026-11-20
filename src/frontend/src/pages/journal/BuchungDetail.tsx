@@ -283,8 +283,16 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">Keine E-Mail hinterlegt</p>
                 )}
               </div>
+            ) : e.lieferant_name ? (
+              /* Issue #566: Lieferant bei direkt gebuchten Ausgaben */
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Lieferant</p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{e.lieferant_name}</p>
+              </div>
             ) : (
-              <p className="text-slate-300 dark:text-slate-600 text-xs italic">Kein Kunde verknüpft</p>
+              <p className="text-slate-300 dark:text-slate-600 text-xs italic">
+                {e.art === 'Ausgabe' ? 'Kein Lieferant verknüpft' : 'Kein Kunde verknüpft'}
+              </p>
             )}
           </div>
         </div>
