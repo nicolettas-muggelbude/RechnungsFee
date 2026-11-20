@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.13',
+    datum: 'in Arbeit',
+    eintraege: [
+      { typ: 'fix', text: 'Rechnungen: Eine von Hand eingegebene Rechnungsnummer, die schon vergeben ist, wird jetzt mit einem Hinweis abgelehnt – beim Anlegen und beim Ändern eines Entwurfs. Bisher wurde sie ohne Widerspruch übernommen. Danke an Markus (Issue #554).' },
+    ],
+  },
+  {
     version: 'v0.7.12',
     datum: 'November 2026',
     eintraege: [
