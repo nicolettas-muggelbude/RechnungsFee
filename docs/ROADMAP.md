@@ -356,6 +356,9 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] Pflichtfelder mit `aria-required`, Fehlermeldungen per `aria-describedby` am Feld
 - [ ] Comboboxen (Land, Stammdaten, Artikel, Kategorie) mit `role="combobox"`, `aria-expanded`,
   `aria-activedescendant`; Pfeiltasten + Enter, kein Mausklick nötig
+  - [ ] Pfeil-Knopf bzw. Alt+↓ öffnet die vollständige Liste, auch bei leerem Feld (Kunden,
+    Lieferanten, Artikel – bisher erst ab 1 bzw. 2 Buchstaben); bei vielen Artikeln nach
+    Artikelgruppe gegliedert, mit Suche in der offenen Liste (Issue #557, Markus)
 - [ ] Datumsfelder per Tastatur bedienbar
 - [ ] Tabellen mit `<thead>`/`<tbody>`/`scope`
 
@@ -370,6 +373,7 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] Positionen verschieben (Issue #504, thomaskron): ↑/↓-Knöpfe je Zeile + Alt+↑/↓, Positionsnummern
   folgen automatisch; alle Positionstabellen (Rechnung, Angebot, Auftrag, Proforma, Lieferschein,
   Wiederkehrend). Kein Drag-and-drop ohne Tastaturalternative
+- [ ] Positionstabellen: Beschreibung breiter bzw. mehrzeilig, mehr Platz für die Eingabe (Issue #557)
 - [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
 - [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
 
