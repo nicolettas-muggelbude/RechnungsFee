@@ -162,6 +162,18 @@ Debitor des Kunden als Personenkonto.
 - [ ] Lieferanten-Historie/Kontokorrent: direkte Ausgaben zeigen oder bewusst weglassen (keine
   Verbindlichkeit) – entscheiden
 
+## 📋 v0.7.14 – Mehrere Belege je Buchung (Issue #568, Stufe 2)
+
+Seit v0.7.13 hängt das Buchen aus einer Vorlage den Vertrag als eigene Kopie an (Stufe 1). Eine
+Journalbuchung trägt aber weiterhin nur einen Beleg (`journal.beleg_id`) – lädt man beim Buchen eine
+Monatsabrechnung hoch, ersetzt sie den Vertrag.
+
+- [ ] Neue Tabelle für Journal-Anhänge (Junction wie `rechnung_zugferd_anhaenge`), `journal.beleg_id`
+  als ersten Anhang übernehmen (Datenmigration ohne Änderung der versiegelten Zeile)
+- [ ] Buchungsformular, Split, Buchungsvorlage: mehrere Belege; Vorlage hängt Vertrag **und** eigenen Beleg an
+- [ ] Buchungsdetail, Beleg-Ansicht, GoBD-Export, DATEV-Belegexport auf mehrere Anhänge umstellen
+- [ ] Anhängen nach dem Festschreiben bleibt gesperrt (GoBD)
+
 ## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen

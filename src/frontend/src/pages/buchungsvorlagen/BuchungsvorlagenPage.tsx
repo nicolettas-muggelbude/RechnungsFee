@@ -477,9 +477,19 @@ function VorlageKarte({ vorlage, onBuchen, onEingangsrechnung }: {
 /** Beleg-Auswahl für den Buchen-Bestätigungsdialog (Issue #355) - gleiches Aussehen wie der
  * Beleg-Anhang bei Eingangsrechnungen. Die Datei wird erst beim Bestätigen hochgeladen
  * (siehe handleBuchenBestaetigen), da der Journal-Eintrag noch nicht existiert. */
-function BelegDropzone({ datei, onChange }: { datei: File | null; onChange: (f: File | null) => void }) {
+function BelegDropzone({ datei, onChange, vertrag }: {
+  datei: File | null; onChange: (f: File | null) => void; vertrag?: string | null
+}) {
   return (
     <div className="mt-3">
+      {/* Issue #568: Vertrag der Vorlage wird ohne eigenen Beleg automatisch angehängt */}
+      {vertrag && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+          {datei
+            ? <>Dein Beleg ersetzt für diese Buchung den Vertrag „{vertrag}“.</>
+            : <>📎 Der Vertrag „{vertrag}“ wird an die Buchung angehängt.</>}
+        </p>
+      )}
       {datei ? (
         <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-slate-700">
           <span className="text-sm text-slate-600 dark:text-slate-300 truncate">📎 {datei.name}</span>
@@ -687,7 +697,7 @@ export default function BuchungsvorlagenPage() {
   const [suche, setSuche] = useState('')
   const [aktivFilter, setAktivFilter] = useState<'alle' | 'aktiv' | 'inaktiv'>('aktiv')
   const [modusFilter, setModusFilter] = useState<'' | 'direkt' | 'beleg'>('')
-  const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string } | null>(null)
+  const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string; vertrag: string | null } | null>(null)
   const [buchenBelegDatei, setBuchenBelegDatei] = useState<File | null>(null)
   const [buchenBelegHochladen, setBuchenBelegHochladen] = useState(false)
   const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
@@ -775,7 +785,10 @@ export default function BuchungsvorlagenPage() {
     const v = vorlagen.find(v => v.id === id)
     if (!v) return
     setBuchenBelegDatei(null)
-    setBuchungsBestaetigung({ id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung })
+    setBuchungsBestaetigung({
+      id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung,
+      vertrag: v.beleg_name,
+    })
   }
 
   return (
@@ -919,7 +932,7 @@ export default function BuchungsvorlagenPage() {
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Trotzdem jetzt buchen?</p>
                   </div>
                 </div>
-                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} vertrag={buchungsBestaetigung.vertrag} />
                 <div className="flex gap-3 justify-end mt-4">
                   <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -937,7 +950,7 @@ export default function BuchungsvorlagenPage() {
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
                   Erstellt einen Journal-Eintrag für <span className="font-medium">„{buchungsBestaetigung.bezeichnung}"</span> und rückt das Datum um ein Intervall vor.
                 </p>
-                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} vertrag={buchungsBestaetigung.vertrag} />
                 <div className="flex gap-3 justify-end mt-4">
                   <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">

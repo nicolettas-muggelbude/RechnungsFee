@@ -544,15 +544,20 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
     mime = datei.content_type or ""
     if mime not in ERLAUBTE_MIME_TYPES:
         raise HTTPException(status_code=422, detail=f"Dateityp '{mime}' nicht erlaubt. Erlaubt: PDF, JPEG, PNG, TIFF.")
-
     inhalt = await datei.read()
+    return beleg_aus_bytes_speichern(inhalt, datei.filename or "beleg", mime, db)
+
+
+def beleg_aus_bytes_speichern(inhalt: bytes, dateiname: str, mime: str, db: Session) -> Beleg:
+    """Legt einen Journal-Beleg (eigene Datei unter uploads/belege/JJJJ/MM/) aus Bytes an -
+    für Uploads und für die Kopie des Vertrags einer Buchungsvorlage (Issue #568)."""
     sha256 = hashlib.sha256(inhalt).hexdigest()
 
     jetzt = datetime.now()
     ziel_dir = BELEG_DIR / str(jetzt.year) / jetzt.strftime("%m")
     ziel_dir.mkdir(parents=True, exist_ok=True)
 
-    original_name = Path(datei.filename or "beleg")
+    original_name = Path(dateiname or "beleg")
     stem = original_name.stem[:50]
     suffix = original_name.suffix.lower() or ".bin"
     dateiname_lokal = f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
@@ -563,7 +568,7 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
     pdfa_pfad_rel: str | None = None
     if mime == "application/pdf":
         try:
-            ergebnis = analysiere_datei(datei.filename or "", inhalt)
+            ergebnis = analysiere_datei(dateiname or "", inhalt)
             if ergebnis.format in ("zugferd", "xrechnung"):
                 pdfa_pfad_rel = rel_pfad
         except Exception:
@@ -571,7 +576,7 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
 
     beleg = Beleg(
         dateiname=rel_pfad,
-        original_name=datei.filename or "beleg",
+        original_name=dateiname or "beleg",
         mime_type=mime,
         dateigroesse=len(inhalt),
         sha256=sha256,
@@ -623,19 +628,22 @@ async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Sess
             detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
         )
 
-    # Alten Beleg ersetzen wenn vorhanden
+    # Alten Beleg ersetzen wenn vorhanden - Datei nur löschen, wenn ihn nichts anderes mehr
+    # verwendet (Issue #568-Nebenfund)
+    alte_dateien: list[Path] = []
     if eintrag.beleg_id:
-        alter_beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
-        if alter_beleg:
-            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
-            if alter_pfad.exists():
-                alter_pfad.unlink()
-            db.delete(alter_beleg)
-            db.flush()
+        from api.rechnungen import _beleg_loeschen_wenn_unbenutzt
+        alte_id = eintrag.beleg_id
+        eintrag.beleg_id = None
+        db.flush()
+        alte_dateien = _beleg_loeschen_wenn_unbenutzt(alte_id, db)
+        db.flush()
 
     beleg = await _beleg_datei_speichern(datei, db)
     eintrag.beleg_id = beleg.id
     db.commit()
+    from api.rechnungen import _dateien_entfernen
+    _dateien_entfernen(alte_dateien)
     return BelegResponse.from_beleg(beleg)
 
 
@@ -700,14 +708,15 @@ def delete_anhang(eintrag_id: int, db: Session = Depends(get_db)):
             status_code=409,
             detail="Diese Buchung ist bereits festgeschrieben (GoBD) – der Beleg kann nicht mehr entfernt werden.",
         )
-    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+    # Datei nur löschen, wenn den Beleg nichts anderes mehr verwendet (Issue #568-Nebenfund:
+    # bisher wurde sie ungeprüft gelöscht - ein geteilter Beleg ging dabei verloren)
+    from api.rechnungen import _beleg_loeschen_wenn_unbenutzt, _dateien_entfernen
+    beleg_id = eintrag.beleg_id
     eintrag.beleg_id = None
-    if beleg:
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if pfad.exists():
-            pfad.unlink()
-        db.delete(beleg)
+    db.flush()
+    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 @router.post("/split", response_model=list[JournalEintragResponse], status_code=201)

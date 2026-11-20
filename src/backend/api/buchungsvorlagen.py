@@ -342,6 +342,19 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
                 f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {brutto:.2f} €.",
             )
 
+    # Issue #568: ohne eigenen Beleg beim Buchen den Vertrag der Vorlage als eigene Kopie
+    # anhängen - eigene Datei im Journal-Ordner (Vorlagen speichern relativ zu uploads/belege/,
+    # das Journal relativ zu uploads/), hält den Stand zum Buchungszeitpunkt fest (GoBD).
+    beleg_id = data.beleg_id
+    if beleg_id is None and v.beleg_id and v.beleg is not None:
+        quelle = BELEG_DIR / v.beleg.dateiname
+        if quelle.exists():
+            from api.journal import beleg_aus_bytes_speichern
+            kopie = beleg_aus_bytes_speichern(
+                quelle.read_bytes(), v.beleg.original_name or quelle.name, v.beleg.mime_type or "", db,
+            )
+            beleg_id = kopie.id
+
     belegnr = _naechste_belegnr(db, faellig_am)
     eintrag = Journaleintrag(
         datum=faellig_am,
@@ -365,7 +378,7 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
         konto_ust_skr04=konto_ust_skr04 if ust_satz_effektiv > 0 else None,
         steuerbefreiung_grund="§19 UStG" if ist_kleinunternehmer else None,
         buchungsvorlage_id=v.id,
-        beleg_id=data.beleg_id,
+        beleg_id=beleg_id,
         immutable=True,
     )
     eintrag.signatur = signatur_journaleintrag(eintrag)
