@@ -362,6 +362,10 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 ### 3. Kernabläufe komplett per Tastatur
 - [ ] Navigation: Seitenleiste per Tab, aktiver Punkt per Enter
 - [ ] Listen (Rechnungen, Kunden …) per Pfeiltasten, Enter öffnet das Detail-Panel
+- [ ] Sortierbare Spaltenköpfe (Issue #555, Markus): gemeinsame Komponente mit `aria-sort`, per
+  Tastatur bedienbar, Sortierung je Liste gemerkt; Stammdaten (Kunden, Lieferanten, Artikel) und
+  Fakturierungs-Übersichten (Rechnungen, Angebote, Aufträge, Proforma, Lieferscheine, Gutschriften);
+  Journal (bisher Einzellösung für Datum/Belegdatum) auf dieselbe Komponente umstellen
 - [ ] Rechnung schreiben und finalisieren (inkl. Positionszeilen: Tab durch alle Spalten)
 - [ ] Positionen verschieben (Issue #504, thomaskron): ↑/↓-Knöpfe je Zeile + Alt+↑/↓, Positionsnummern
   folgen automatisch; alle Positionstabellen (Rechnung, Angebot, Auftrag, Proforma, Lieferschein,
