@@ -89,7 +89,8 @@ class KontokorrentPDF(FPDF):
 
     def header(self):
         self.set_font("DejaVu", "B", 11)
-        self.cell(0, 7, self.unt.get("firmenname", ""), ln=True)
+        from utils.pdf_rechnung_base import absender_name
+        self.cell(0, 7, absender_name(self.unt), ln=True)  # Issue #558
         self.set_font("DejaVu", "B", 9)
         self.cell(0, 5, f"Kontokorrent-Auszug: {self.partner_name}", ln=True)
         self.set_font("DejaVu", "", 8)

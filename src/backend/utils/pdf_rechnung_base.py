@@ -62,6 +62,14 @@ def dokument_text(r, unt: dict, feld: str) -> str:
     return _standardtext(unt, feld, dokument_typ)
 
 
+def absender_name(unt: dict) -> str:
+    """Issue #558: Name des Ausstellers - Firmenname, sonst Vor- und Nachname (Freiberufler
+    ohne Firmenbezeichnung). Bisher nahm die Absenderzeile nur den Firmennamen."""
+    return (unt.get("firmenname") or "").strip() or " ".join(
+        filter(None, [(unt.get("vorname") or "").strip(), (unt.get("nachname") or "").strip()])
+    )
+
+
 ANREDE_STANDARD = "Hallo {vorname} {nachname},"
 ANREDE_FALLBACK_STANDARD = "Hallo,"
 # Finalisierte Dokumente mit einem Snapshot von vor Issue #440 kennen den Schlüssel
@@ -519,7 +527,7 @@ class RechnungPDFBase(FPDF):
         unt = self._unt
 
         absender_kurz = "  ·  ".join(filter(None, [
-            unt.get("firmenname"),
+            absender_name(unt),  # Issue #558
             f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip(),
             f"{unt.get('plz', '')} {unt.get('ort', '')}".strip(),
         ]))

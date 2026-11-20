@@ -69,7 +69,8 @@ class InkassoDeckblattPDF(FPDF):
         self.cell(0, 8, "Inkasso-Unterlagen", ln=True)
         self.set_font("DejaVu", "", 9)
         self.set_text_color(80, 80, 80)
-        self.cell(0, 5, self.unt.get("firmenname", ""), ln=True)
+        from utils.pdf_rechnung_base import absender_name
+        self.cell(0, 5, absender_name(self.unt), ln=True)  # Issue #558
         self.cell(0, 5, f"Schuldner: {self.kunde_name}", ln=True)
         self.cell(0, 5, f"Erstellt am: {self.erstellt_am}", ln=True)
         self.set_text_color(0, 0, 0)

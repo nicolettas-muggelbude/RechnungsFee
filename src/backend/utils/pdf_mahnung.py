@@ -209,8 +209,9 @@ class MahnungPDF(FPDF):
         self, empfaenger_zeilen: list[str], mahnnummer: str, datum_str: str, rechnungsnummern: str,
     ) -> float:
         unt = self.unt
+        from utils.pdf_rechnung_base import absender_name
         absender_kurz = "  ·  ".join(filter(None, [
-            unt.get("firmenname"),
+            absender_name(unt),  # Issue #558
             f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip(),
             f"{unt.get('plz', '')} {unt.get('ort', '')}".strip(),
         ]))
