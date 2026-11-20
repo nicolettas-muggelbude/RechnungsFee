@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 192
+SCHEMA_VERSION = 193
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4498,6 +4498,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 192"))
             conn.commit()
             print("[Migration] Schema auf Version 192 (Issue #566: journal.lieferant_id)")
+
+    if version < 193:
+        with engine.connect() as conn:
+            # Issue #578: voller Abzug im Anschaffungsjahr für EDV mit Nutzungsdauer 1 Jahr
+            # (BMF-Schreiben Computerhardware/Software). Opt-in - bestehende Anlagegüter behalten
+            # die monatsgenaue Verteilung, damit bereits abgegebene EÜR-Jahre unverändert bleiben.
+            _a193 = {r[1] for r in conn.execute(text("PRAGMA table_info(anlageverzeichnis)")).fetchall()}
+            if _a193 and "afa_sofort" not in _a193:
+                conn.execute(text("ALTER TABLE anlageverzeichnis ADD COLUMN afa_sofort BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 193"))
+            conn.commit()
+            print("[Migration] Schema auf Version 193 (Issue #578: anlageverzeichnis.afa_sofort)")
 
 
 def _migrate_kategorien() -> None:

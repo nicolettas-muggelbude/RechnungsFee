@@ -1053,6 +1053,9 @@ class Anlagegut(Base):
     kaufpreis_netto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     nutzungsdauer_jahre: Mapped[int] = mapped_column(Integer, nullable=False)
     afa_methode: Mapped[str] = mapped_column(String(20), default="linear", nullable=False)
+    # Issue #578: voller Abzug im Anschaffungsjahr (BMF-Schreiben Computerhardware/Software,
+    # Nutzungsdauer 1 Jahr) statt monatsgenauer Verteilung - nur EDV mit ND 1, bewusst Opt-in
+    afa_sofort: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     kennzeichen: Mapped[str | None] = mapped_column(String(20))          # KFZ
     privat_anteil_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     verkauft_am: Mapped[date | None] = mapped_column(Date)

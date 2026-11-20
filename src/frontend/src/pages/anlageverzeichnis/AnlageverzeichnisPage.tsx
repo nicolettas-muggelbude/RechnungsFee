@@ -67,6 +67,7 @@ function AnlagegutFormular({
           kaufpreis_netto: initial.kaufpreis_netto,
           nutzungsdauer_jahre: initial.nutzungsdauer_jahre,
           afa_methode: initial.afa_methode,
+          afa_sofort: initial.afa_sofort ?? false,
           kennzeichen: initial.kennzeichen,
           privat_anteil_prozent: initial.privat_anteil_prozent,
           verkauft_am: initial.verkauft_am,
@@ -86,6 +87,11 @@ function AnlagegutFormular({
       if (key === 'kaufdatum' && next.afa_methode === 'degressiv' && !istDegressivMoeglich(val as string)) {
         next.afa_methode = 'linear'
       }
+      // Issue #578: voller Abzug im Anschaffungsjahr nur für EDV mit ND 1 (linear). Bei neuen
+      // Einträgen vorausgewählt, sobald die Bedingung erfüllt ist; bestehende bleiben, wie sie sind.
+      const sofortMoeglich = next.typ === 'edv' && next.nutzungsdauer_jahre === 1 && next.afa_methode === 'linear'
+      if (!sofortMoeglich) next.afa_sofort = false
+      else if (!initial && (key === 'typ' || key === 'nutzungsdauer_jahre' || key === 'afa_methode')) next.afa_sofort = true
       return next
     })
   }
@@ -126,9 +132,25 @@ function AnlagegutFormular({
             const n = parseInt(e.target.value)
             set('nutzungsdauer_jahre', Number.isNaN(n) ? '' : n)
           }} />
-          <p className="text-xs text-slate-400 mt-1">AfA-Tabelle BMF: KFZ=6, PC/Laptop=3, Büromöbel=13</p>
+          <p className="text-xs text-slate-400 mt-1">AfA-Tabelle BMF: KFZ=6, Büromöbel=13. Computerhardware und Software: 1 Jahr zulässig (BMF-Schreiben).</p>
         </div>
       </div>
+
+      {/* Issue #578: Sofortabzug für Computerhardware/Software mit Nutzungsdauer 1 Jahr */}
+      {form.typ === 'edv' && form.nutzungsdauer_jahre === 1 && form.afa_methode === 'linear' && (
+        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 rounded border-slate-300 text-blue-600"
+            checked={!!form.afa_sofort} onChange={e => set('afa_sofort', e.target.checked)} />
+          <span>
+            Voller Abzug im Anschaffungsjahr
+            <span className="block text-xs text-slate-400 dark:text-slate-500">
+              Nach dem BMF-Schreiben zu Computerhardware und Software wird der gesamte Betrag im Jahr der
+              Anschaffung abgeschrieben, ohne Verteilung nach Monaten. Ohne Häkchen wird ab dem Kaufmonat
+              anteilig auf zwölf Monate verteilt.
+            </span>
+          </span>
+        </label>
+      )}
 
       <div>
         <label className={labelCls}>AfA-Methode</label>

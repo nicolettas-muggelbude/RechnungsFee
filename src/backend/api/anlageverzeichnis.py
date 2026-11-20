@@ -40,6 +40,7 @@ class AnlagegutBase(BaseModel):
     kaufpreis_netto: Decimal
     nutzungsdauer_jahre: int
     afa_methode: str = "linear"
+    afa_sofort: bool = False        # Issue #578: voller Abzug im Anschaffungsjahr (EDV, ND 1)
     kennzeichen: Optional[str] = None
     privat_anteil_prozent: Decimal = ZERO
     verkauft_am: Optional[date] = None
@@ -50,6 +51,12 @@ class AnlagegutBase(BaseModel):
     def check_afa_methode(self) -> "AnlagegutBase":
         if self.afa_methode not in ("linear", "degressiv"):
             raise ValueError("afa_methode muss 'linear' oder 'degressiv' sein")
+        if self.afa_sofort and not (self.typ == "edv" and self.nutzungsdauer_jahre == 1
+                                    and self.afa_methode == "linear"):
+            raise ValueError(
+                "Der volle Abzug im Anschaffungsjahr gilt nur für EDV/Software mit einer Nutzungsdauer "
+                "von 1 Jahr (BMF-Schreiben zu Computerhardware und Software)."
+            )
         if self.afa_methode == "degressiv" and not degressiv_moeglich(self.kaufdatum):
             raise ValueError(
                 "Degressive AfA gilt nur für Anschaffungen zwischen 01.07.2025 und 31.12.2027 (§7 Abs. 2 EStG)."
@@ -100,6 +107,17 @@ def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict
     privat = Decimal(str(gut.privat_anteil_prozent)) / 100
     betrieb = Decimal("1") - privat
     ist_degressiv = gut.afa_methode == "degressiv"
+
+    # Issue #578: Computerhardware/Software mit ND 1 Jahr - voller Abzug im Anschaffungsjahr
+    # (BMF-Schreiben, „wird nicht beanstandet“), keine Verteilung nach Monaten
+    if getattr(gut, "afa_sofort", False) and gut.typ == "edv" and nd == 1 and not ist_degressiv:
+        return [{
+            "jahr": kauf.year,
+            "afa_brutto": float(preis),
+            "afa_abziehbar": float((preis * betrieb).quantize(ONE_CENT, ROUND_HALF_UP)),
+            "restbuchwert_ende": 0.0,
+            "wechsel_zu_linear": False,
+        }]
 
     afa_voll_linear = (preis / nd).quantize(ONE_CENT, ROUND_HALF_UP)
     degressiv_satz = min(Decimal("3") / nd, Decimal("0.30")) if ist_degressiv else None
@@ -441,7 +459,8 @@ def pdf_export(jahr: int = Query(...), db: Session = Depends(get_db)):
         "Hinweis: Anzeigehilfe auf Basis des Anlagenverzeichnisses. Bitte Werte in ELSTER (Anlage AVEÜR) oder mit dem "
         "Steuerberater übertragen. Nutzungsdauer nach AfA-Tabellen des BMF. Lineare oder degressive AfA "
         "(§7 Abs. 2 EStG, Investitionsbooster, nur für Anschaffungen 01.07.2025-31.12.2027; automatischer "
-        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat).", fill=True, align="L")
+        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat), außer bei EDV/Software "
+        "mit Nutzungsdauer 1 Jahr und gewähltem vollem Abzug im Anschaffungsjahr (BMF-Schreiben).", fill=True, align="L")
 
     # Footer
     pdf.set_y(-15)

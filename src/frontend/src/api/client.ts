@@ -2777,6 +2777,7 @@ export type Anlagegut = {
   kaufpreis_netto: string
   nutzungsdauer_jahre: number
   afa_methode: string
+  afa_sofort?: boolean  // Issue #578: voller Abzug im Anschaffungsjahr (EDV, ND 1)
   kennzeichen: string | null
   privat_anteil_prozent: string
   verkauft_am: string | null
