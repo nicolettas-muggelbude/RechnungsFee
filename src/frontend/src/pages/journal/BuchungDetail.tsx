@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { stornoJournaleintrag, getUnternehmen, getJournalBelegUrl, openUrl, isTauri, type JournalEintrag } from '../../api/client'
+import {
+  stornoJournaleintrag, getUnternehmen, getJournalBelegUrl, getJournalAnhangUrl, openUrl, isTauri, type JournalEintrag,
+} from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
 function BelegnrKopieren({ belegnr }: { belegnr: string }) {
@@ -166,6 +168,22 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
             {bereitsStorniert && (
               <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Bereits storniert</span>
             )}
+          </div>
+        )}
+
+        {/* Issue #569: angehängten Beleg (Quittung, Vertrag …) ansehen - „PDF öffnen“ zeigt nur
+            den von RechnungsFee erzeugten Buchungsbeleg */}
+        {e.beleg_id && (
+          <div className="mb-3 flex items-center gap-2 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">📎 Angehängter Beleg:</span>
+            <button
+              type="button"
+              onClick={async () => openUrl(await getJournalAnhangUrl(e.id))}
+              className="text-blue-600 dark:text-blue-400 hover:underline truncate text-left"
+              title="Angehängten Beleg ansehen"
+            >
+              {e.beleg?.original_name ?? 'ansehen'}
+            </button>
           </div>
         )}
 
