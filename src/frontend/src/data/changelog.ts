@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     datum: 'in Arbeit',
     eintraege: [
       { typ: 'fix', text: 'Rechnungen: Eine von Hand eingegebene Rechnungsnummer, die schon vergeben ist, wird jetzt mit einem Hinweis abgelehnt – beim Anlegen und beim Ändern eines Entwurfs. Bisher wurde sie ohne Widerspruch übernommen. Danke an Markus (Issue #554).' },
+      { typ: 'fix', text: 'Rechnungsvorlage „Sandra grün – Nur für Kleinunternehmer“: Rechnungen an Kunden mit ZUGFeRD wechselten beim Finalisieren ins Standardlayout. Jetzt bleibt die gewählte Vorlage erhalten, die E-Rechnung (XML) ist weiterhin eingebettet. Bereits ausgegebene Rechnungen bleiben unverändert (GoBD). Danke an Markus (Issue #556).' },
     ],
   },
   {

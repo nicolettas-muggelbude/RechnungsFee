@@ -125,11 +125,14 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
             nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
             return kopie_bytes, f"{_dok}_{nr}_Kopie.pdf", None
 
+    pdf_bytes = None
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)
+            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)  # Vorlage aus unt_dict (#556)
         except Exception:
-            pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
+            pdf_bytes = None
+    if pdf_bytes is not None:
+        pass
     elif u and u.pdf_vorlage == 1:
         pdf_bytes = generate_rechnung_pdf_vorlage1(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
     else:

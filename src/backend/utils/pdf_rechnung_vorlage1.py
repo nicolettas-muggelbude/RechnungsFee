@@ -469,7 +469,11 @@ def generate_rechnung_pdf_vorlage1(
     ist_kopie: bool = False,
     ist_entwurf: bool = False,
     ist_netto: bool = False,
+    mit_output_intent: bool = False,
 ) -> bytes:
     pdf = RechnungPDFVorlage1(unternehmen, rechnung,
                                ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
+    if mit_output_intent:  # Issue #556: ZUGFeRD auch mit dieser Vorlage
+        from utils.pdf_rechnung import setze_srgb_output_intent
+        setze_srgb_output_intent(pdf)
     return pdf.render()

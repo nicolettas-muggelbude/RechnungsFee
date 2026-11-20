@@ -11,6 +11,7 @@ Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder storniert
 import base64
 from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 from database.connection import APP_DATA_DIR
 from utils.dokument_adressen import adressfeld_adresse, empfaenger_email, name_fuer_adresse
@@ -473,8 +474,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     return xml
 
 
-def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) -> bytes:
+def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True,
+                         vorlage: Optional[int] = None) -> bytes:
     """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML.
+
+    vorlage: PDF-Vorlage für das sichtbare PDF; None = unternehmen["pdf_vorlage"]. Bis
+    Issue #556 war hier fest die Standard-Vorlage verdrahtet – mit ZUGFeRD wechselte eine
+    Rechnung in der Vorlage „Sandra grün“ beim Finalisieren ins Standardlayout.
 
     ist_netto: Erfassungsmodus der Rechnung (rechnung.eingabemodus, Issue #332) - bestimmt nur,
     wie das sichtbare PDF den gespeicherten Einzelpreis liest. Bisher fest Netto, deshalb hing
@@ -493,10 +499,14 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) ->
     import facturx
     import facturx.facturx as _fx
     from utils.pdf_rechnung import generate_rechnung_pdf
+    from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 
+    if vorlage is None:
+        vorlage = int(unternehmen.get("pdf_vorlage") or 0)
     # sRGB-OutputIntent für PDF/A-3-Konformität
-    pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
-                                      mit_output_intent=True, ist_netto=ist_netto)
+    erzeuge = generate_rechnung_pdf_vorlage1 if vorlage == 1 else generate_rechnung_pdf
+    pdf_bytes = erzeuge(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
+                        mit_output_intent=True, ist_netto=ist_netto)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
     # XRechnung-Profil in facturx registrieren (einmalig; idempotent)

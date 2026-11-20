@@ -2506,16 +2506,15 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         # die PDF bleibt reine Sichtkopie (sonst lägen zwei Originale vor)
         and not ist_oeffentlicher_auftraggeber(rechnung)
     )
+    vorlage_nr = vorlage if vorlage >= 0 else int(unt_dict.get("pdf_vorlage") or 0)
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto)
+            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto, vorlage=vorlage_nr)
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
             kunde_zugferd = False
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
-    else:
-        vorlage_nr = vorlage if vorlage >= 0 else int(unt_dict.get("pdf_vorlage") or 0)
+    if not kunde_zugferd:
         if vorlage_nr == 1:
             pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
         else:
