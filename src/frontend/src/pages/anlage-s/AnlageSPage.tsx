@@ -158,6 +158,24 @@ export function AnlageSPage() {
             </div>
           </Abschnitt>
 
+          {/* Issue #567: Einnahmen aus nebenberuflicher Tätigkeit (§ 3 Nr. 26/26a EStG) */}
+          {data.nebentaetigkeiten.length > 0 && (
+            <Abschnitt titel="Einnahmen aus nebenberuflicher Tätigkeit">
+              {data.nebentaetigkeiten.map(n => (
+                <div key={n.zeile}>
+                  <ZeileNr zeile={String(n.zeile)}
+                    label={n.zeile === 57 ? 'aus der Tätigkeit als' : 'aus allen weiteren Tätigkeiten'}
+                    wert={n.taetigkeit} />
+                  <ZeileText label={`Gesamtbetrag (KZ ${n.zeile === 57 ? 191 : 193})`} wert={euroFmt(n.einnahmen)} />
+                  <ZeileText label={`davon als steuerfrei behandelt (KZ ${n.zeile === 57 ? 192 : 194})`} wert={euroFmt(n.steuerfrei)} />
+                </div>
+              ))}
+              <p className="text-xs text-slate-400 dark:text-slate-500 py-2">
+                Zeilen nach Vordruck 2025. Der Gewinn oben ist bereits um den steuerfreien Teil gemindert. In ELSTER zusätzlich angeben, in welcher Zeile der steuerpflichtige Rest enthalten ist.
+              </p>
+            </Abschnitt>
+          )}
+
           {/* KFZ */}
           {data.kfz_hinweise.length > 0 && (
             <Abschnitt titel="KFZ – Privatnutzung">

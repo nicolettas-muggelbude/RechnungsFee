@@ -494,12 +494,15 @@ export type Kategorie = {
   user_modified_skr04: boolean
   eks_kategorie?: string
   euer_zeile?: number
+  steuerfrei_paragraf?: SteuerfreiParagraf | null  // Issue #567
   vorsteuer_prozent: string
   ust_satz_standard: number
   ist_system: boolean
   aktiv: boolean
   beschreibung: string | null
 }
+// Issue #567: steuerfreie Einnahmen nach § 3 EStG (Übungsleiter / Ehrenamt)
+export type SteuerfreiParagraf = '3_26' | '3_26a'
 export type KategorieCreate = {
   name: string
   kontenart: string
@@ -510,6 +513,7 @@ export type KategorieCreate = {
   vorsteuer_prozent?: number
   ust_satz_standard?: number
   beschreibung?: string | null
+  steuerfrei_paragraf?: SteuerfreiParagraf | null
 }
 export const getKategorien = (nurAktive = false, nurBebuchte = false) => {
   const params = new URLSearchParams()
@@ -2389,6 +2393,14 @@ export type EUERZeileAuswahl = {
 // Issue #470: gültige EÜR-Zeilen (Basis Vordruck 2025) für die Kategorie-Auswahl
 export const getEUERZeilen = () => request<EUERZeileAuswahl[]>('/euer/zeilen')
 
+export type SteuerfreieTaetigkeit = {
+  paragraf: SteuerfreiParagraf
+  taetigkeit: string
+  einnahmen: string
+  steuerfrei: string
+  freibetrag: string
+}
+
 export type EUERErgebnis = {
   jahr: number
   zeilen: EUERZeile[]
@@ -2397,6 +2409,11 @@ export type EUERErgebnis = {
   summe_einnahmen: string
   summe_ausgaben: string
   gewinn_verlust: string
+  // Issue #567: Überschuss vor dem Abzug steuerfreier Einnahmen § 3 Nr. 26/26a (Zeile 78, 2026: 79)
+  ueberschuss: string
+  abzug_steuerfrei: string
+  zeile_steuerfrei: number
+  steuerfrei_taetigkeiten: SteuerfreieTaetigkeit[]
   anlage_zugaenge: string
   aveur_afa: string
   ist_kleinunternehmer: boolean
@@ -2471,6 +2488,15 @@ export type AnlageSErgebnis = {
   gewinn_verlust: string
   kfz_hinweise: AnlageSKfzHinweis[]
   taetigkeitsart: string
+  // Issue #567: Zeile 57/58 – Einnahmen aus nebenberuflicher Tätigkeit
+  nebentaetigkeiten: AnlageSNebentaetigkeit[]
+}
+
+export type AnlageSNebentaetigkeit = {
+  zeile: number
+  taetigkeit: string
+  einnahmen: string
+  steuerfrei: string
 }
 
 export const berechneAnlageS = (jahr: number) =>

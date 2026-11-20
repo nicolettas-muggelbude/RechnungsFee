@@ -92,13 +92,33 @@ EUR_ZEILEN_META: dict[int, tuple[str, str]] = {
 # (12–23) bleiben gleich. Ein künftiger Vordruck braucht hier nur eine weitere Stufe - die
 # Kategorien selbst behalten ihre Basisnummer (keine Datenmigration je Formularjahr).
 def formular_zeile(basis: int, jahr: int) -> int:
-    """Basis-Zeile (Vordruck 2025) → Zeilennummer im Vordruck des Wirtschaftsjahres."""
+    """Basis-Zeile (Vordruck 2025) → Zeilennummer im Vordruck des Wirtschaftsjahres.
+    Issue #567: auch die Gewinnermittlung rückt 2026 um eins (Zeilen 76–97 → 77–98, z. B.
+    steuerfreie Einnahmen § 3 Nr. 26: 78 → 79, Vordruck BMF vom 01.09.2026)."""
     if jahr >= 2026:
         if basis == 27:
             return 29
-        if 29 <= basis <= 75 or basis >= 100:
+        if basis >= 29:
             return basis + 1
     return basis
+
+
+# Issue #567: steuerfreie Einnahmen nach § 3 Nr. 26/26a EStG, die in den Betriebseinnahmen
+# enthalten sind - Abzug in der Gewinnermittlung (Basis-Zeile 78, Vordruck 2025).
+ZEILE_STEUERFREI_3_26 = 78
+STEUERFREI_BEZEICHNUNG = {
+    "3_26": "Übungsleiterfreibetrag (§ 3 Nr. 26 EStG)",
+    "3_26a": "Ehrenamtspauschale (§ 3 Nr. 26a EStG)",
+}
+
+
+def freibetrag_3(paragraf: str, jahr: int) -> Decimal:
+    """Höchstbetrag je Person und Kalenderjahr (ab 2026 angehoben, Steueränderungsgesetz 2025)."""
+    if paragraf == "3_26":
+        return Decimal("3300") if jahr >= 2026 else Decimal("3000")
+    if paragraf == "3_26a":
+        return Decimal("960") if jahr >= 2026 else Decimal("840")
+    return Decimal("0")
 
 
 ZEILE_SUMME_EINNAHMEN = 23   # Basis
@@ -354,6 +374,8 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
     # Issue #470: Kategorien mit einer Zeile, die RechnungsFee nicht kennt - ihr Betrag fließt in
     # keine Summe ein und muss in der Auswertung deutlich gemeldet werden
     unbekannte_zeilen: dict[int, set[str]] = {}
+    # Issue #567: Einnahmen auf Kategorien mit Steuerbefreiung nach § 3 Nr. 26/26a EStG
+    steuerfrei_einnahmen: dict[tuple[str, str], Decimal] = {}
     ku_status = _ku_status_je_buchung(eintraege, db, unt)
 
     for e in eintraege:
@@ -374,6 +396,9 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
         if haupt_zeile is not None:
             zeilen[haupt_zeile] = zeilen.get(haupt_zeile, ZERO) + haupt_beitrag
+            if kat and kat.steuerfrei_paragraf and haupt_zeile in EINNAHMEN_ZEILEN:
+                schluessel = (kat.steuerfrei_paragraf, kat.name)
+                steuerfrei_einnahmen[schluessel] = steuerfrei_einnahmen.get(schluessel, ZERO) + haupt_beitrag
         davon_13 = _zeile_13_beitrag(e, ku_status[e.id], haupt_zeile, haupt_beitrag)
         if davon_13:
             zeilen[13] = zeilen.get(13, ZERO) + davon_13
@@ -401,13 +426,37 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
     summe_einnahmen = sum(zeilen.get(z, ZERO) for z in EINNAHMEN_ZEILEN)
     summe_ausgaben  = sum(zeilen.get(z, ZERO) for z in AUSGABEN_ZEILEN)
-    gewinn_verlust  = (summe_einnahmen - summe_ausgaben).quantize(q, ROUND_HALF_UP)
+    ueberschuss     = (summe_einnahmen - summe_ausgaben).quantize(q, ROUND_HALF_UP)
+
+    # Issue #567: steuerfreier Teil je Befreiung bis zum Freibetrag (je Person und Jahr), auf
+    # die Kategorien (= Tätigkeiten) in absteigender Höhe verteilt. Der Abzug in Zeile 78
+    # mindert den steuerlichen Gewinn; die Einnahmen bleiben in den Betriebseinnahmen.
+    steuerfrei_taetigkeiten: list[dict] = []
+    for paragraf in STEUERFREI_BEZEICHNUNG:
+        rest = freibetrag_3(paragraf, jahr)
+        posten = sorted(
+            ((name, betrag) for (p, name), betrag in steuerfrei_einnahmen.items() if p == paragraf),
+            key=lambda x: -x[1],
+        )
+        for name, einnahmen in posten:
+            einnahmen = einnahmen.quantize(q, ROUND_HALF_UP)
+            steuerfrei = max(min(einnahmen, rest), ZERO)
+            rest -= steuerfrei
+            steuerfrei_taetigkeiten.append({
+                "paragraf": paragraf, "taetigkeit": name, "einnahmen": einnahmen,
+                "steuerfrei": steuerfrei, "freibetrag": freibetrag_3(paragraf, jahr),
+            })
+    abzug_steuerfrei = sum((t["steuerfrei"] for t in steuerfrei_taetigkeiten), ZERO)
+    gewinn_verlust = (ueberschuss - abzug_steuerfrei).quantize(q, ROUND_HALF_UP)
 
     return {
         "jahr": jahr,
         "zeilen": zeilen,
         "summe_einnahmen": summe_einnahmen.quantize(q, ROUND_HALF_UP),
         "summe_ausgaben":  summe_ausgaben.quantize(q, ROUND_HALF_UP),
+        "ueberschuss":     ueberschuss,
+        "abzug_steuerfrei": abzug_steuerfrei,
+        "steuerfrei_taetigkeiten": steuerfrei_taetigkeiten,
         "gewinn_verlust":  gewinn_verlust,
         "anlage_zugaenge": anlage_summe.quantize(q, ROUND_HALF_UP),
         "aveur_afa":       aveur_afa.quantize(q, ROUND_HALF_UP),
@@ -547,6 +596,14 @@ def _generate_pdf(daten: dict, unt: Unternehmen) -> bytes:
             f"(Kategorie {', '.join(nz['kategorien'])}) sind in keiner Summe enthalten. "
             "Bitte der Kategorie eine gültige EÜR-Zeile zuordnen.", fill=True, align="L")
 
+    # Issue #567: Gewinnermittlung - Abzug steuerfreier Einnahmen nach § 3 Nr. 26/26a EStG
+    if daten.get("abzug_steuerfrei"):
+        pdf.ln(2)
+        section_header("Ermittlung des Gewinns")
+        summen_row("Überschuss (Betriebseinnahmen − Betriebsausgaben)", daten["ueberschuss"])
+        zeile_row(formular_zeile(ZEILE_STEUERFREI_3_26, daten["jahr"]),
+                  "abzüglich steuerfreier Einnahmen nach § 3 Nr. 26, 26a, 26b EStG", -daten["abzug_steuerfrei"])
+
     pdf.ln(3)
     pdf.set_fill_color(30, 41, 59)
     pdf.set_text_color(255, 255, 255)
@@ -671,6 +728,15 @@ class EUERZeileAuswahl(BaseModel):
     bezeichnung: str
     abschnitt: str
 
+class SteuerfreieTaetigkeit(BaseModel):
+    """Issue #567: Einnahmen einer Kategorie mit Steuerbefreiung nach § 3 Nr. 26/26a EStG."""
+    paragraf: str           # 3_26 | 3_26a
+    taetigkeit: str         # Kategoriename
+    einnahmen: Decimal      # Gesamtbetrag (Anlage S Kz 191/193)
+    steuerfrei: Decimal     # davon steuerfrei (Anlage S Kz 192/194, EÜR Zeile 78)
+    freibetrag: Decimal
+
+
 class EUERErgebnis(BaseModel):
     jahr: int
     zeilen: list[EUERZeile]
@@ -679,6 +745,11 @@ class EUERErgebnis(BaseModel):
     summe_einnahmen: Decimal
     summe_ausgaben: Decimal
     gewinn_verlust: Decimal
+    # Issue #567: Überschuss vor dem Abzug steuerfreier Einnahmen § 3 Nr. 26/26a (Zeile 78/79)
+    ueberschuss: Decimal = Decimal("0")
+    abzug_steuerfrei: Decimal = Decimal("0")
+    zeile_steuerfrei: int = 78
+    steuerfrei_taetigkeiten: list[SteuerfreieTaetigkeit] = []
     anlage_zugaenge: Decimal
     aveur_afa: Decimal
     ist_kleinunternehmer: bool
@@ -758,6 +829,10 @@ def euer_berechnen(
         summe_einnahmen=daten["summe_einnahmen"],
         summe_ausgaben=daten["summe_ausgaben"],
         gewinn_verlust=daten["gewinn_verlust"],
+        ueberschuss=daten["ueberschuss"],
+        abzug_steuerfrei=daten["abzug_steuerfrei"],
+        zeile_steuerfrei=formular_zeile(ZEILE_STEUERFREI_3_26, daten["jahr"]),
+        steuerfrei_taetigkeiten=daten["steuerfrei_taetigkeiten"],
         anlage_zugaenge=daten["anlage_zugaenge"],
         aveur_afa=daten["aveur_afa"],
         ist_kleinunternehmer=bool(unt.ist_kleinunternehmer),

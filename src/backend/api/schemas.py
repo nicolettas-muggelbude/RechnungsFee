@@ -357,6 +357,7 @@ class KategorieResponse(BaseModel):
     user_modified_skr04: bool
     eks_kategorie: Optional[str]
     euer_zeile: Optional[int]
+    steuerfrei_paragraf: Optional[str] = None  # Issue #567: 3_26 | 3_26a | None
     vorsteuer_prozent: Decimal
     ust_satz_standard: int
     ist_system: bool
@@ -387,6 +388,7 @@ class KategorieCreate(BaseModel):
     vorsteuer_prozent: Decimal = Decimal("100")
     ust_satz_standard: int = 0
     beschreibung: Optional[str] = None
+    steuerfrei_paragraf: Optional[str] = None  # Issue #567: 3_26 | 3_26a | None (nur Erlös)
 
 KategorieUpdate = KategorieCreate
 

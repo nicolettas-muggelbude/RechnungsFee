@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 189
+SCHEMA_VERSION = 190
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4460,6 +4460,17 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 189"))
             conn.commit()
             print("[Migration] Schema auf Version 189 (Issue #497: rechnungen.ausfall_datum)")
+
+    if version < 190:
+        with engine.connect() as conn:
+            # Issue #567: steuerfreie Einnahmen nach § 3 Nr. 26/26a EStG je Erlös-Kategorie
+            # (Übungsleiter-/Ehrenamtspauschale) - EÜR Zeile 78 und Anlage S Zeile 57.
+            _k190 = {r[1] for r in conn.execute(text("PRAGMA table_info(kategorien)")).fetchall()}
+            if _k190 and "steuerfrei_paragraf" not in _k190:
+                conn.execute(text("ALTER TABLE kategorien ADD COLUMN steuerfrei_paragraf VARCHAR(10)"))
+            conn.execute(text("PRAGMA user_version = 190"))
+            conn.commit()
+            print("[Migration] Schema auf Version 190 (Issue #567: kategorien.steuerfrei_paragraf)")
 
 
 def _migrate_kategorien() -> None:

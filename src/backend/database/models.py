@@ -286,6 +286,10 @@ class Kategorie(Base):
     ust_sonderfall: Mapped[str | None] = mapped_column(String(20))
     eks_kategorie: Mapped[str | None] = mapped_column(String(10))  # B9, A1 etc.
     euer_zeile: Mapped[int | None] = mapped_column(Integer)
+    # Issue #567: Einnahmen dieser Erlös-Kategorie sind (bis zum Freibetrag) steuerfrei -
+    # "3_26" Übungsleiter (§ 3 Nr. 26 EStG), "3_26a" Ehrenamtspauschale (§ 3 Nr. 26a EStG), NULL = nein.
+    # Wirkt auf EÜR Zeile 78 (Abzug vom Gewinn) und Anlage S Zeile 57.
+    steuerfrei_paragraf: Mapped[str | None] = mapped_column(String(10))
     vorsteuer_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100, nullable=False)
     ust_satz_standard: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0|7|19
     ist_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
