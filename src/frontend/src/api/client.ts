@@ -2714,6 +2714,10 @@ export type Buchungsvorlage = {
   kategorie_name: string | null
   konto_id: number | null
   konto_name: string | null
+  // Issue #566: Zahlungsart der Buchung und Kunde bei Einnahme-Vorlagen
+  zahlungsart: 'Bank' | 'Bar' | 'Karte' | 'PayPal'
+  kunde_id: number | null
+  kunde_name: string | null
   betrag: string
   ist_brutto: boolean
   ust_satz: string
@@ -2731,7 +2735,7 @@ export type Buchungsvorlage = {
 }
 
 export type BuchungsvorlageCreate = Omit<Buchungsvorlage,
-  'id' | 'lieferant_name' | 'kategorie_name' | 'konto_name' |
+  'id' | 'lieferant_name' | 'kategorie_name' | 'konto_name' | 'kunde_name' |
   'beleg_id' | 'beleg_name' | 'letzte_buchung' | 'erstellte_buchungen' | 'erstellt_am'>
 
 export const getBuchungsvorlagen = () =>

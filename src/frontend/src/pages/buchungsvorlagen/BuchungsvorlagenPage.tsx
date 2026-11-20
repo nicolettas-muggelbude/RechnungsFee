@@ -11,7 +11,7 @@ import {
   uploadJournalAnhangVorab,
   analysiereRechnung,
   dateiInSpeicher,
-  getKategorien, getLieferanten, getKonten, getUnternehmen,
+  getKategorien, getLieferanten, getKonten, getUnternehmen, getKunden,
   type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
 } from '../../api/client'
 import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
@@ -55,6 +55,8 @@ type FormData = {
   lieferant_id: number | null
   kategorie_id: number | null
   konto_id: number | null
+  zahlungsart: 'Bank' | 'Bar' | 'Karte' | 'PayPal'
+  kunde_id: number | null
   betrag: string
   ist_brutto: boolean
   ust_satz: string
@@ -72,6 +74,8 @@ function leereForm(): FormData {
     lieferant_id: null,
     kategorie_id: null,
     konto_id: null,
+    zahlungsart: 'Bank',
+    kunde_id: null,
     betrag: '',
     ist_brutto: true,
     ust_satz: '0',
@@ -90,6 +94,8 @@ function fromVorlage(v: Buchungsvorlage): FormData {
     lieferant_id: v.lieferant_id,
     kategorie_id: v.kategorie_id,
     konto_id: v.konto_id,
+    zahlungsart: v.zahlungsart ?? 'Bank',
+    kunde_id: v.kunde_id ?? null,
     betrag: v.betrag,
     ist_brutto: v.ist_brutto,
     ust_satz: v.ust_satz,
@@ -112,6 +118,7 @@ function VorlageFormular({
   kategorien,
   lieferanten,
   konten,
+  kunden,
 }: {
   initial?: Buchungsvorlage
   onSave: (d: BuchungsvorlageCreate) => void
@@ -119,6 +126,7 @@ function VorlageFormular({
   kategorien: { id: number; name: string; kontenart: string }[]
   lieferanten: { id: number; name: string }[]
   konten: { id: number; bezeichnung: string; kontoart: string }[]
+  kunden: { id: number; name: string }[]
 }) {
   const qc = useQueryClient()
   const [form, setForm] = useState<FormData>(initial ? fromVorlage(initial) : leereForm())
@@ -135,6 +143,11 @@ function VorlageFormular({
   const relevanteKategorien = form.art === 'Einnahme'
     ? kategorien.filter(k => k.kontenart === 'Erlös')
     : kategorien.filter(k => k.kontenart === 'Aufwand')
+  // Issue #566: Konto passend zur Zahlungsart (PayPal = Zahlungsdienstleister, bar = keins)
+  const passendeKonten = konten.filter(k =>
+    form.zahlungsart === 'PayPal' ? k.kontoart === 'zahlungsdienstleister' : k.kontoart === 'bank')
+  const kontoWaehlbar = form.zahlungsart !== 'Bar'
+  const direkt = form.modus === 'direkt'
 
   function setArt(neu: 'Einnahme' | 'Ausgabe') {
     setForm(f => ({
@@ -153,7 +166,9 @@ function VorlageFormular({
       bezeichnung: form.bezeichnung.trim(),
       lieferant_id: form.art === 'Einnahme' ? null : form.lieferant_id,
       kategorie_id: form.kategorie_id,
-      konto_id: form.konto_id,
+      konto_id: kontoWaehlbar && passendeKonten.some(k => k.id === form.konto_id) ? form.konto_id : null,
+      zahlungsart: form.zahlungsart,
+      kunde_id: form.art === 'Einnahme' ? form.kunde_id : null,
       betrag: form.betrag,
       ist_brutto: form.ist_brutto,
       ust_satz: sperreUstAufNull ? '0' : form.ust_satz,
@@ -215,11 +230,22 @@ function VorlageFormular({
         </div>
       </div>
 
-      <div className={form.art === 'Ausgabe' ? 'grid grid-cols-2 gap-4' : ''}>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Nächste Fälligkeit *</label>
           <DateInput value={form.naechstes_datum} onChange={(v) => set('naechstes_datum', v)} required className={inputCls} />
         </div>
+        {/* Issue #566: Kunde bei Einnahme-Vorlagen (z. B. Honorar aus Honorarvertrag) */}
+        {form.art === 'Einnahme' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-kunde">Kunde</label>
+            <select id="bv-kunde" value={form.kunde_id ?? ''}
+              onChange={e => set('kunde_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
+              <option value="">– kein Kunde –</option>
+              {kunden.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </div>
+        )}
         {form.art === 'Ausgabe' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Lieferant</label>
@@ -291,14 +317,34 @@ function VorlageFormular({
             {relevanteKategorien.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Konto</label>
-          <select value={form.konto_id ?? ''} onChange={e => set('konto_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
-            <option value="">– kein Konto –</option>
-            {konten.map(k => <option key={k.id} value={k.id}>{k.bezeichnung ?? ''}</option>)}
-          </select>
-        </div>
+        {direkt && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-zahlungsart">Zahlungsart</label>
+            <select id="bv-zahlungsart" value={form.zahlungsart}
+              onChange={e => set('zahlungsart', e.target.value as FormData['zahlungsart'])} className={selectCls}>
+              <option value="Bank">Bank</option>
+              <option value="Bar">Bar</option>
+              <option value="Karte">Karte</option>
+              <option value="PayPal">PayPal</option>
+            </select>
+          </div>
+        )}
+        {(!direkt || kontoWaehlbar) && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-konto">Konto</label>
+            <select id="bv-konto" value={form.konto_id ?? ''} onChange={e => set('konto_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
+              <option value="">– kein Konto –</option>
+              {(direkt ? passendeKonten : konten.filter(k => k.kontoart === 'bank')).map(k =>
+                <option key={k.id} value={k.id}>{k.bezeichnung ?? ''}</option>)}
+            </select>
+          </div>
+        )}
       </div>
+      {direkt && form.zahlungsart === 'Bar' && form.art === 'Ausgabe' && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">
+          Bar-Ausgaben werden aus der Kasse gebucht. Reicht der Kassenbestand nicht, wird die Buchung abgelehnt.
+        </p>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Notizen</label>
@@ -535,7 +581,9 @@ function VorlageDetail({
           ['Buchungen erstellt', `${vorlage.erstellte_buchungen}×`],
           ...(vorlage.letzte_buchung ? [['Letzte Buchung', fmt(vorlage.letzte_buchung)]] : []),
           ...(vorlage.lieferant_name ? [['Lieferant', vorlage.lieferant_name]] : []),
+          ...(vorlage.kunde_name ? [['Kunde', vorlage.kunde_name]] : []),
           ...(vorlage.kategorie_name ? [['Kategorie', vorlage.kategorie_name]] : []),
+          ...(vorlage.modus === 'direkt' ? [['Zahlungsart', vorlage.zahlungsart ?? 'Bank']] : []),
           ...(vorlage.konto_name ? [['Konto', vorlage.konto_name]] : []),
         ].map(([label, value]) => (
           <div key={label}>
@@ -648,7 +696,11 @@ export default function BuchungsvorlagenPage() {
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
   const { data: lieferanten = [] } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
   const { data: konten = [] } = useQuery({ queryKey: ['konten'], queryFn: getKonten })
-  const bankKonten = konten.filter(k => k.kontoart === 'bank')
+  const { data: kundenListe = [] } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+  const kontenAuswahl = konten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))
+  const kundenAuswahl = kundenListe.map(k => ({
+    id: k.id!, name: k.firmenname || [k.vorname, k.nachname].filter(Boolean).join(' ') || `Kunde ${k.id}`,
+  }))
 
   const selVorlage = vorlagen.find(v => v.id === selId)
 
@@ -808,7 +860,8 @@ export default function BuchungsvorlagenPage() {
               <VorlageFormular
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
+                konten={kontenAuswahl}
+                kunden={kundenAuswahl}
                 onSave={d => createMut.mutate(d)}
                 onAbbrechen={() => setFormModus(null)}
               />
@@ -821,7 +874,8 @@ export default function BuchungsvorlagenPage() {
                 initial={selVorlage}
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
+                konten={kontenAuswahl}
+                kunden={kundenAuswahl}
                 onSave={d => updateMut.mutate({ id: selVorlage.id, data: d })}
                 onAbbrechen={() => setFormModus(null)}
               />

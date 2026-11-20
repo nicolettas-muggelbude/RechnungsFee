@@ -45,6 +45,7 @@ MODI = {"direkt", "beleg"}
 # ---------------------------------------------------------------------------
 
 ARTS = {"Einnahme", "Ausgabe"}
+ZAHLUNGSARTEN = {"Bank", "Bar", "Karte", "PayPal"}  # Issue #566
 
 
 class BuchungsvorlageCreate(BaseModel):
@@ -52,6 +53,8 @@ class BuchungsvorlageCreate(BaseModel):
     lieferant_id: Optional[int] = None
     kategorie_id: Optional[int] = None
     konto_id: Optional[int] = None
+    zahlungsart: str = "Bank"
+    kunde_id: Optional[int] = None
     betrag: Decimal
     ist_brutto: bool = True
     ust_satz: Decimal = Decimal("0")
@@ -72,6 +75,8 @@ class BuchungsvorlageUpdate(BaseModel):
     lieferant_id: Optional[int] = None
     kategorie_id: Optional[int] = None
     konto_id: Optional[int] = None
+    zahlungsart: Optional[str] = None
+    kunde_id: Optional[int] = None
     betrag: Optional[Decimal] = None
     ist_brutto: Optional[bool] = None
     ust_satz: Optional[Decimal] = None
@@ -94,6 +99,9 @@ class BuchungsvorlageResponse(BaseModel):
     kategorie_name: Optional[str] = None
     konto_id: Optional[int]
     konto_name: Optional[str] = None
+    zahlungsart: str = "Bank"
+    kunde_id: Optional[int] = None
+    kunde_name: Optional[str] = None
     betrag: Decimal
     ist_brutto: bool
     ust_satz: Decimal
@@ -135,6 +143,20 @@ def _vorruecken(d: date, intervall: str) -> date:
         return date(d.year + 1, d.month, 28)
 
 
+def _kunde_name(k) -> Optional[str]:
+    if not k:
+        return None
+    return k.firmenname or " ".join(filter(None, [k.vorname, k.nachname])) or None
+
+
+def _pruefe_vorlage(art: str, zahlungsart: str, kunde_id: Optional[int]) -> None:
+    """Issue #566: gültige Zahlungsart; Kunde nur bei Einnahme-Vorlagen."""
+    if zahlungsart not in ZAHLUNGSARTEN:
+        raise HTTPException(422, "zahlungsart muss Bank, Bar, Karte oder PayPal sein")
+    if kunde_id and art != "Einnahme":
+        raise HTTPException(422, "Ein Kunde kann nur bei Einnahme-Vorlagen hinterlegt werden")
+
+
 def _to_response(v: Buchungsvorlage) -> BuchungsvorlageResponse:
     return BuchungsvorlageResponse(
         id=v.id,
@@ -145,6 +167,9 @@ def _to_response(v: Buchungsvorlage) -> BuchungsvorlageResponse:
         kategorie_name=v.kategorie.name if v.kategorie else None,
         konto_id=v.konto_id,
         konto_name=v.konto.name if v.konto else None,
+        zahlungsart=v.zahlungsart or "Bank",
+        kunde_id=v.kunde_id,
+        kunde_name=_kunde_name(v.kunde),
         betrag=v.betrag,
         ist_brutto=bool(v.ist_brutto),
         ust_satz=v.ust_satz,
@@ -182,6 +207,7 @@ def erstelle_vorlage(data: BuchungsvorlageCreate, db: Session = Depends(get_db))
         raise HTTPException(422, "art muss 'Einnahme' oder 'Ausgabe' sein")
     if data.art == "Einnahme" and data.modus == "beleg":
         raise HTTPException(422, "Einnahme-Vorlagen können nicht im Beleg-Modus betrieben werden")
+    _pruefe_vorlage(data.art, data.zahlungsart, data.kunde_id)
     v = Buchungsvorlage(**data.model_dump())
     db.add(v)
     db.commit()
@@ -227,6 +253,9 @@ def aktualisiere_vorlage(vorlage_id: int, data: BuchungsvorlageUpdate, db: Sessi
     neuer_modus = data.modus if data.modus else v.modus
     if neue_art == "Einnahme" and neuer_modus == "beleg":
         raise HTTPException(422, "Einnahme-Vorlagen können nicht im Beleg-Modus betrieben werden")
+    if neue_art != "Einnahme":
+        v.kunde_id = None  # Kunde gehört nur zu Einnahme-Vorlagen (Issue #566)
+    _pruefe_vorlage(neue_art, v.zahlungsart or "Bank", v.kunde_id)
     db.commit()
     db.refresh(v)
     return _to_response(v)
@@ -301,13 +330,27 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
     konto_skr04 = kat.konto_skr04 if kat else None
     konto_ust_skr03, konto_ust_skr04 = _ust_konto(art, ust_satz_effektiv)
 
+    # Issue #566: Zahlungsart aus der Vorlage (bisher fest „Bank“). Das Konto (DATEV-Gegenkonto,
+    # Issue #110) wird jetzt mitgegeben - nur bei unbarer Zahlung, bar läuft über die Kasse.
+    zahlungsart = v.zahlungsart or "Bank"
+    if art == "Ausgabe" and zahlungsart == "Bar":
+        from api.journal import _get_bar_kassenstand
+        kassenstand = _get_bar_kassenstand(db)
+        if brutto > kassenstand:
+            raise HTTPException(
+                409,
+                f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, Ausgabe: {brutto:.2f} €.",
+            )
+
     belegnr = _naechste_belegnr(db, faellig_am)
     eintrag = Journaleintrag(
         datum=faellig_am,
         belegnr=belegnr,
         beschreibung=v.bezeichnung + (f" ({v.notizen})" if v.notizen else ""),
         kategorie_id=v.kategorie_id,
-        zahlungsart="Bank",
+        zahlungsart=zahlungsart,
+        konto_id=v.konto_id if zahlungsart != "Bar" else None,
+        kunde_id=v.kunde_id if art == "Einnahme" else None,
         art=art,
         brutto_betrag=brutto,
         netto_betrag=netto,

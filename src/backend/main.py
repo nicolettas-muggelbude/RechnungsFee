@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 190
+SCHEMA_VERSION = 191
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4471,6 +4471,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 190"))
             conn.commit()
             print("[Migration] Schema auf Version 190 (Issue #567: kategorien.steuerfrei_paragraf)")
+
+    if version < 191:
+        with engine.connect() as conn:
+            # Issue #566: Buchungsvorlagen mit Zahlungsart (bisher fest „Bank“ beim Buchen) und
+            # Kunde bei Einnahme-Vorlagen. Bestehende Vorlagen behalten „Bank“.
+            _b191 = {r[1] for r in conn.execute(text("PRAGMA table_info(buchungsvorlagen)")).fetchall()}
+            for name, typ in [
+                ("zahlungsart", "VARCHAR(20) NOT NULL DEFAULT 'Bank'"),
+                ("kunde_id", "INTEGER REFERENCES kunden(id) ON DELETE SET NULL"),
+            ]:
+                if _b191 and name not in _b191:
+                    conn.execute(text(f"ALTER TABLE buchungsvorlagen ADD COLUMN {name} {typ}"))
+            conn.execute(text("PRAGMA user_version = 191"))
+            conn.commit()
+            print("[Migration] Schema auf Version 191 (Issue #566: buchungsvorlagen.zahlungsart, kunde_id)")
 
 
 def _migrate_kategorien() -> None:

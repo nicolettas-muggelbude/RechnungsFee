@@ -1063,6 +1063,9 @@ class Buchungsvorlage(Base):
     lieferant_id: Mapped[int | None] = mapped_column(ForeignKey("lieferanten.id", ondelete="SET NULL"))
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id", ondelete="SET NULL"))
     konto_id: Mapped[int | None] = mapped_column(ForeignKey("konten.id", ondelete="SET NULL"))
+    # Issue #566: Zahlungsart der Buchung (bisher fest Bank) und Kunde bei Einnahme-Vorlagen
+    zahlungsart: Mapped[str] = mapped_column(String(20), default="Bank", server_default="Bank", nullable=False)
+    kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id", ondelete="SET NULL"))
     betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     ist_brutto: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
@@ -1080,6 +1083,7 @@ class Buchungsvorlage(Base):
     lieferant: Mapped["Lieferant | None"] = relationship(foreign_keys=[lieferant_id])
     kategorie: Mapped["Kategorie | None"] = relationship(foreign_keys=[kategorie_id])
     konto: Mapped["Konto | None"] = relationship(foreign_keys=[konto_id])
+    kunde: Mapped["Kunde | None"] = relationship(foreign_keys=[kunde_id])
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
 
 
