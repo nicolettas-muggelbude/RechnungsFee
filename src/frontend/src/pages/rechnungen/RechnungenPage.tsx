@@ -6,7 +6,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getRechnungen, getRechnung, createRechnung, updateRechnung, deleteRechnung, barZahlungErstellen,
-  stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, forderungsausbuchenRechnung,
+  stornoRechnung, finalisiereRechnung, createGutschrift, ersatzrechnungErstellen, rechnungDuplizieren, forderungsausbuchenRechnung,
   getKundenguthaben, getLieferantenguthaben, forderungVerrechnen, gutschriftVerrechnen, type Forderung,
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen, getOffeneAbschlaege, type OffenerAbschlag,
@@ -1371,6 +1371,18 @@ function RechnungDetail({
     onError: (e: Error) => setFehler(e.message),
   })
 
+  // Issue #560: neue Rechnung nach dem Muster dieser – öffnet den Entwurf direkt zum Bearbeiten
+  const [zeigDuplizieren, setZeigDuplizieren] = useState(false)
+  const duplizierenMutation = useMutation({
+    mutationFn: (mitPositionen: boolean) => rechnungDuplizieren(rechnung.id, mitPositionen),
+    onSuccess: (neu) => {
+      setZeigDuplizieren(false)
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      onErsatzrechnungCreated?.(neu)
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+
   const forderungsausfallMutation = useMutation({
     mutationFn: () => forderungsausbuchenRechnung(rechnung.id),
     onSuccess: () => {
@@ -1691,6 +1703,42 @@ function RechnungDetail({
             >
               {ersatzrechnungMutation.isPending ? '…' : '→ Ersatzrechnung erstellen'}
             </button>
+          )}
+          {rechnung.typ === 'ausgang' && rechnung.dokument_typ === 'Rechnung' && !zeigStornoEingabe && !zeigForderungsausfall && (
+            zeigDuplizieren ? (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Positionen übernehmen?</span>
+                <button
+                  onClick={() => duplizierenMutation.mutate(true)}
+                  disabled={duplizierenMutation.isPending}
+                  className="px-2.5 py-1 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                >
+                  Ja
+                </button>
+                <button
+                  onClick={() => duplizierenMutation.mutate(false)}
+                  disabled={duplizierenMutation.isPending}
+                  className="px-2.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50"
+                >
+                  Nein
+                </button>
+                <button
+                  onClick={() => setZeigDuplizieren(false)}
+                  className="px-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Abbrechen" aria-label="Duplizieren abbrechen"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setZeigDuplizieren(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+                title="Neue Rechnung nach dem Muster dieser anlegen (Datum heute)"
+              >
+                ⧉ Duplizieren
+              </button>
+            )
           )}
           {rechnung.ersatzrechnung_id && (
             <button

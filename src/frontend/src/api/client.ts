@@ -1945,6 +1945,9 @@ export const gutschriftVerrechnen = (gutschriftId: number, rechnungId: number) =
 
 export const ersatzrechnungErstellen = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ersatzrechnung`, { method: 'POST' })
+// Issue #560: neue Rechnung (Entwurf) nach dem Muster einer bestehenden
+export const rechnungDuplizieren = (id: number, mitPositionen: boolean) =>
+  request<Rechnung>(`/rechnungen/${id}/duplizieren?mit_positionen=${mitPositionen}`, { method: 'POST' })
 
 export const finalisiereRechnung = (id: number, datumHeute = false) =>
   request<Rechnung>(`/rechnungen/${id}/finalisieren${datumHeute ? '?datum_heute=true' : ''}`, { method: 'POST' })

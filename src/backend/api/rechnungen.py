@@ -42,7 +42,7 @@ from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stem
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
-    RechnungVorschauRequest, RechnungVorschauResponse, RechnungVorschauPosition,
+    RechnungVorschauRequest, RechnungVorschauResponse, RechnungVorschauPosition, RechnungspositionCreate,
 )
 from .schemas import StornoRequest
 from .nummernkreise import naechste_nummer
@@ -4253,6 +4253,63 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     db.commit()
     db.refresh(rechnung)
     return RechnungResponse.from_orm_extended(rechnung)
+
+
+@router.post("/{rechnung_id}/duplizieren", response_model=RechnungResponse, status_code=201)
+def rechnung_duplizieren(rechnung_id: int, mit_positionen: bool = True, db: Session = Depends(get_db)):
+    """Issue #560: neue Rechnung (Entwurf) nach dem Muster einer bestehenden - für Kunden mit
+    unregelmäßig wiederkehrenden Leistungen. Datum/Leistungsdatum heute, Nummer und Fälligkeit
+    wie bei einer neuen Rechnung; Kunde, Adressen, Texte, Steuerfall, Skonto, Rabatt und
+    Erfassungsmodus übernommen, Positionen auf Wunsch. Nicht übernommen: Bestellnummer,
+    E-Rechnungs-Bemerkung, Notizen, Zahlungen, Anhänge (gehören zur alten Rechnung).
+    Läuft über create_rechnung() - Berechnung, Kategorieprüfung und Nummernkreis unverändert."""
+    quelle = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not quelle:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if quelle.typ != "ausgang" or (quelle.dokument_typ or "Rechnung") != "Rechnung":
+        raise HTTPException(status_code=422, detail="Duplizieren ist nur für Ausgangsrechnungen möglich.")
+
+    positionen = []
+    if mit_positionen:
+        for p in sorted(quelle.positionen, key=lambda p: p.position_nr or 0):
+            if p.abschlag_rechnung_id:
+                continue  # verrechnete Abschläge gehören zur alten Schlussrechnung
+            positionen.append(RechnungspositionCreate(
+                beschreibung=p.beschreibung, menge=p.menge, einheit=p.einheit or "Stück",
+                netto=p.netto, rabatt_prozent=p.rabatt_prozent or Decimal("0"),
+                # §25a speichert in ust_satz 0, der echte Satz steht in ust_satz_25a
+                ust_satz=(p.ust_satz_25a if p.differenzbesteuerung and p.ust_satz_25a is not None else p.ust_satz),
+                artikel_id=p.artikel_id, kategorie_id=p.kategorie_id,
+                differenzbesteuerung=bool(p.differenzbesteuerung),
+            ))
+    if not positionen:
+        # Eine Rechnung braucht mindestens eine Position - leere Zeile zum Ausfüllen, Steuersatz
+        # wie die erste Position der Vorlage
+        erste = next((p for p in quelle.positionen if not p.abschlag_rechnung_id), None)
+        positionen = [RechnungspositionCreate(
+            beschreibung="", menge=Decimal("1"), netto=Decimal("0"),
+            ust_satz=erste.ust_satz if erste is not None else Decimal("19"),
+        )]
+
+    heute = date.today()
+    return create_rechnung(RechnungCreate(
+        typ="ausgang", dokument_typ="Rechnung", ist_entwurf=True,
+        datum=heute, leistung_von=heute,
+        faellig_am=_faelligkeit_vorgabe(db, heute),
+        kunde_id=quelle.kunde_id,
+        partner_freitext=quelle.partner_freitext, partner_strasse=quelle.partner_strasse,
+        partner_hausnummer=quelle.partner_hausnummer, partner_plz=quelle.partner_plz,
+        partner_ort=quelle.partner_ort, partner_land=quelle.partner_land,
+        empfaenger_adresse_id=quelle.empfaenger_adresse_id, lieferadresse_id=quelle.lieferadresse_id,
+        einleitungstext=quelle.einleitungstext, schlusstext=quelle.schlusstext,
+        eingabemodus=quelle.eingabemodus or "netto",
+        ist_reverse_charge=bool(quelle.ist_reverse_charge), ist_eu_lieferung=bool(quelle.ist_eu_lieferung),
+        ist_drittland_leistung=bool(quelle.ist_drittland_leistung),
+        ist_ausfuhrlieferung=bool(quelle.ist_ausfuhrlieferung), steuerfrei_4=bool(quelle.steuerfrei_4),
+        skonto_prozent=quelle.skonto_prozent, skonto_tage=quelle.skonto_tage,
+        rabatt_prozent=quelle.rabatt_prozent or Decimal("0"), rabatt_betrag=quelle.rabatt_betrag,
+        positionen=positionen,
+    ), db)
 
 
 @router.post("/{rechnung_id}/ersatzrechnung", response_model=RechnungResponse, status_code=201)
