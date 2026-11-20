@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment, type ComponentProps } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -1439,11 +1439,18 @@ function RechnungDetail({
         .replace(/\{firmenname\}/g, firmenname)
     }
 
-    const betreffVorlage = unternehmen?.mail_betreff_vorlage ?? 'Rechnung {rechnungsnummer}'
+    // Issue #570: Lieferschein hat keinen Betrag und keine eigenen Mailvorlagen - nicht die
+    // Rechnungsvorlage verwenden
+    const istLieferschein = rechnung.dokument_typ === 'Lieferschein'
+    const betreffVorlage = istLieferschein
+      ? 'Lieferschein {rechnungsnummer}'
+      : unternehmen?.mail_betreff_vorlage ?? 'Rechnung {rechnungsnummer}'
     const subjectText = ersetze(betreffVorlage)
 
-    const standardText = `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
-    const textVorlage = unternehmen?.mail_text_vorlage ?? standardText
+    const standardText = istLieferschein
+      ? `Anbei der Lieferschein vom ${datumDe}.\n\nLieferschein-Nr.: ${rechnung.rechnungsnummer ?? '—'}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
+      : `Anbei die Rechnung vom ${datumDe}.\n\nRechnungsnr.: ${rechnung.rechnungsnummer ?? '—'}\nBetrag: ${formatEuro(rechnung.brutto_gesamt)}\n\nBitte die beigefügte PDF-Datei als Anhang einfügen.`
+    const textVorlage = istLieferschein ? standardText : unternehmen?.mail_text_vorlage ?? standardText
     let bodyText = ersetze(textVorlage)
     if (unternehmen?.mail_signatur) {
       bodyText += `\n\n${unternehmen.mail_signatur}`
@@ -1473,7 +1480,7 @@ function RechnungDetail({
           text: bodyText,
           anhaenge: [...xmlAnhang, {
             url: `${base}/rechnungen/${rechnung.id}/pdf?download=1`,
-            dateiname: `Rechnung_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
+            dateiname: `${rechnung.dokument_typ === 'Lieferschein' ? 'Lieferschein' : 'Rechnung'}_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
           }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
         })
         qc.invalidateQueries({ queryKey: ['rechnungen'] })
@@ -1755,7 +1762,7 @@ function RechnungDetail({
         {zeigMailDialog && (
           <MailDialog
             dokument={rechnung}
-            dokumentTyp={rechnung.dokument_typ === 'Gutschrift' ? 'Rechnung' : (rechnung.dokument_typ as ComponentProps<typeof MailDialog>['dokumentTyp']) ?? 'Rechnung'}
+            dokumentTyp={rechnung.dokument_typ === 'Lieferschein' ? 'Lieferschein' : 'Rechnung'}
             unternehmen={unternehmen}
             onClose={() => { setZeigMailDialog(false); qc.invalidateQueries({ queryKey: ['rechnungen'] }) }}
           />

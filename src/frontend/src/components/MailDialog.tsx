@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { sendeMailMitAnhang, type Rechnung, type Unternehmen, type MailSendenRequest } from '../api/client'
 
-type DokumentTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag'
+type DokumentTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Lieferschein'
 
 interface Props {
   dokument: Rechnung
@@ -33,6 +33,7 @@ const DEFAULT_BETREFF: Record<DokumentTyp, string> = {
   Angebot:  'Angebot {rechnungsnummer} – {firmenname}',
   Proforma: 'Proforma-Rechnung {rechnungsnummer} – {firmenname}',
   Auftrag:  'Auftragsbestätigung {rechnungsnummer} – {firmenname}',
+  Lieferschein: 'Lieferschein {rechnungsnummer} – {firmenname}',
 }
 
 const DEFAULT_TEXT: Record<DokumentTyp, string> = {
@@ -40,10 +41,14 @@ const DEFAULT_TEXT: Record<DokumentTyp, string> = {
   Angebot:  'Guten Tag {kunde},\n\nanbei finden Sie unser Angebot {rechnungsnummer} vom {datum} über {betrag} €.\n\nGültig bis: {gueltig_bis}\n\nMit freundlichen Grüßen\n{firmenname}',
   Proforma: 'Guten Tag {kunde},\n\nanbei erhalten Sie unsere Proforma-Rechnung {rechnungsnummer} vom {datum} über {betrag} €.\n\nBitte begleichen Sie den Betrag bis zum {faellig_am}.\n\nMit freundlichen Grüßen\n{firmenname}',
   Auftrag:  'Guten Tag {kunde},\n\nvielen Dank für Ihren Auftrag. Anbei finden Sie Ihre Auftragsbestätigung {rechnungsnummer} vom {datum} über {betrag} €.\n\nMit freundlichen Grüßen\n{firmenname}',
+  Lieferschein: 'Guten Tag {kunde},\n\nanbei erhalten Sie den Lieferschein {rechnungsnummer} vom {datum}.\n\nMit freundlichen Grüßen\n{firmenname}',
 }
 
 function getVorlage(typ: DokumentTyp, u: Unternehmen | null | undefined): { betreff: string; text: string } {
-  if (!u) return { betreff: DEFAULT_BETREFF[typ], text: DEFAULT_TEXT[typ] }
+  // Issue #570: unbekannter Typ → Rechnungs-Vorgabe statt undefined (sonst Absturz in .replace())
+  if (!(typ in DEFAULT_BETREFF)) typ = 'Rechnung'
+  // Lieferschein hat (noch) keine eigenen Mailvorlagen in den Einstellungen
+  if (!u || typ === 'Lieferschein') return { betreff: DEFAULT_BETREFF[typ], text: DEFAULT_TEXT[typ] }
   const betreff = (
     typ === 'Rechnung'  ? u.mail_betreff_vorlage :
     typ === 'Angebot'   ? u.mail_betreff_angebot :
