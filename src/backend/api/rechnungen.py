@@ -1572,7 +1572,9 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == "ausgang")
 
     # Rechnungsnummer: aus Nummernkreis wenn nicht angegeben
-    rechnungsnummer = data.rechnungsnummer
+    rechnungsnummer = (data.rechnungsnummer or "").strip() or None
+    if rechnungsnummer:
+        _pruefe_rechnungsnummer_frei(data.typ, rechnungsnummer, db)  # Issue #554
     if not rechnungsnummer:
         if data.dokument_typ == "Lieferschein":
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
@@ -1797,6 +1799,12 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     unternehmen = db.query(Unternehmen).first()
     # §19 UStG betrifft nur Ausgangsrechnungen (Issue #397) - siehe create_rechnung()
     ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and rechnung.typ == "ausgang")
+
+    # Issue #554: geänderte Nummer darf nicht schon vergeben sein
+    if data.rechnungsnummer is not None:
+        data.rechnungsnummer = data.rechnungsnummer.strip() or None
+        if data.rechnungsnummer and data.rechnungsnummer != rechnung.rechnungsnummer:
+            _pruefe_rechnungsnummer_frei(rechnung.typ, data.rechnungsnummer, db, ausser_id=rechnung.id)
 
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
@@ -3134,6 +3142,23 @@ def ausgangs_positionskategorien_aktiv(rechnung: "Rechnung") -> bool:
     if ausgangs_positionskategorie_gesperrt(rechnung):
         return False
     return any(p.kategorie_id for p in rechnung.positionen)
+
+
+def _pruefe_rechnungsnummer_frei(
+    typ: str, rechnungsnummer: str, db: Session, ausser_id: Optional[int] = None,
+) -> None:
+    """Issue #554: Eine von Hand eingegebene Nummer darf nicht schon vergeben sein
+    (je Richtung ausgang/eingang, wie bei der Dubletten-Bereinigung in Migration 166)."""
+    q = db.query(Rechnung.id).filter(
+        Rechnung.typ == typ, Rechnung.rechnungsnummer == rechnungsnummer,
+    )
+    if ausser_id is not None:
+        q = q.filter(Rechnung.id != ausser_id)
+    if q.first():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Die Nummer {rechnungsnummer} ist bereits vergeben. Bitte wähle eine andere Nummer.",
+        )
 
 
 def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> None:
