@@ -371,6 +371,15 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ### 4. Prüfwerkzeuge & Abnahme
 - [ ] `eslint-plugin-jsx-a11y` im Lint
+- [ ] ESLint aufräumen (Stand main 2026-11-20: 135 Fehler, keine echten Programmfehler; Großteil aus
+  den neuen React-Compiler-Regeln von `eslint-plugin-react-hooks` 7):
+  - [ ] Kosmetik ohne Verhaltensänderung: `no-useless-escape` (changelog.ts), `no-unused-vars`,
+    Kommentare in leeren `catch`-Blöcken, `no-useless-assignment` (RechnungenPage)
+  - [ ] `react-hooks/immutability` beim gewollten Filterspeicher (Journal, Bank-Import …) bewusst
+    freigeben wie beim Dashboard
+  - [ ] `set-state-in-effect` / `refs` / `purity` vorerst als Warnung, beim Umbau der jeweiligen Seite mitnehmen
+  - [ ] `no-explicit-any` (64) schrittweise, spätestens beim Refactoring nach 1.0
+  - [ ] Danach ESLint in die CI (`ci.yml`), damit keine neuen Fehler dazukommen
 - [ ] axe-Prüfung in den Vitest-Tests der umgestellten Komponenten
 - [ ] Kontrast-Check für Hell- und Dunkelmodus
 - [ ] Manueller Durchlauf der Kernabläufe mit NVDA (Windows) und Orca (Linux), VoiceOver (macOS)
