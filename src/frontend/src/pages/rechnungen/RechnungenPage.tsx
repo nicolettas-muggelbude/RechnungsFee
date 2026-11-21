@@ -1166,6 +1166,7 @@ function RechnungDetail({
   const [korrigiereZahlungId, setKorrigiereZahlungId] = useState<number | null>(null)
   const [korrigiereDatum, setKorrigiereDatum] = useState('')
   const [korrigiereBetrag, setKorrigiereBetrag] = useState('')
+  const [korrigiereZahlungsart, setKorrigiereZahlungsart] = useState('')  // Issue #576
   const [aufgeklappteGruppen, setAufgeklappteGruppen] = useState<Set<number>>(new Set())
   const qc = useQueryClient()
 
@@ -1191,7 +1192,10 @@ function RechnungDetail({
   const [zugferdAnhangFehler, setZugferdAnhangFehler] = useState<string | null>(null)
 
   const korrigiereZahlungMutation = useMutation({
-    mutationFn: () => korrigiereZahlung(rechnung.id, korrigiereZahlungId!, korrigiereDatum, korrigiereBetrag || undefined),
+    mutationFn: () => korrigiereZahlung(
+      rechnung.id, korrigiereZahlungId!, korrigiereDatum, korrigiereBetrag || undefined,
+      (korrigiereZahlungsart || undefined) as 'Bar' | 'Karte' | 'Bank' | 'PayPal' | undefined,
+    ),
     onSuccess: (r) => {
       setKorrigiereZahlungId(null)
       qc.invalidateQueries({ queryKey: ['rechnungen'] })
@@ -2420,8 +2424,8 @@ function RechnungDetail({
                           </span>
                           {istKorrigierbar(z) && (
                             <button
-                              onClick={() => { setKorrigiereZahlungId(z.id); setKorrigiereDatum(z.datum); setKorrigiereBetrag(String(Math.abs(parseFloat(z.brutto_betrag)))) }}
-                              title="Zahlung korrigieren (Datum/Betrag)"
+                              onClick={() => { setKorrigiereZahlungId(z.id); setKorrigiereDatum(z.datum); setKorrigiereBetrag(String(Math.abs(parseFloat(z.brutto_betrag)))); setKorrigiereZahlungsart(z.zahlungsart) }}
+                              title="Zahlung korrigieren (Datum/Betrag/Zahlungsart)"
                               className="text-slate-400 hover:text-blue-600"
                             >
                               <span className="material-symbols-outlined text-base">edit</span>
@@ -2444,6 +2448,20 @@ function RechnungDetail({
                             onChange={(e) => setKorrigiereBetrag(e.target.value)}
                             className="w-24 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                           />
+                          {['Bar', 'Karte', 'Bank', 'PayPal'].includes(z.zahlungsart) && (
+                            <select
+                              value={korrigiereZahlungsart}
+                              onChange={(e) => setKorrigiereZahlungsart(e.target.value)}
+                              aria-label="Zahlungsart"
+                              title="Das Storno läuft mit der alten Zahlungsart, die Neubuchung mit der neuen – die Kasse wird dabei automatisch berichtigt."
+                              className="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            >
+                              <option value="Bar">Bar</option>
+                              <option value="Karte">Karte</option>
+                              <option value="Bank">Bank</option>
+                              <option value="PayPal">PayPal</option>
+                            </select>
+                          )}
                           <button
                             onClick={() => korrigiereZahlungMutation.mutate()}
                             disabled={korrigiereZahlungMutation.isPending}

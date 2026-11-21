@@ -727,10 +727,12 @@ export const getJournalExportUrl = async (
 }
 
 export const korrigiereZahlung = (
-  rechnungId: number, journalId: number, neuesDatum: string, neuerBetrag?: string
+  rechnungId: number, journalId: number, neuesDatum: string, neuerBetrag?: string,
+  neueZahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal',  // Issue #576
 ) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/zahlung/${journalId}/korrigieren`, {
-    method: 'PUT', body: JSON.stringify({ neues_datum: neuesDatum, neuer_betrag: neuerBetrag || undefined }),
+    method: 'PUT',
+    body: JSON.stringify({ neues_datum: neuesDatum, neuer_betrag: neuerBetrag || undefined, neue_zahlungsart: neueZahlungsart }),
   })
 
 export const getRechnungenExportUrl = async (

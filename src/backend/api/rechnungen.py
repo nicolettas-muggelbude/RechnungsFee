@@ -13,7 +13,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
@@ -26,7 +26,7 @@ from collections import defaultdict
 
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
-    Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
+    BankTransaktion, Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
     Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch, Lagerbewegung,
 )
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
@@ -3942,13 +3942,20 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 class ZahlungKorrigieren(BaseModel):
     neues_datum: date
     neuer_betrag: Decimal | None = None  # None = Betrag unverändert
+    # Issue #576: None = Zahlungsart unverändert
+    neue_zahlungsart: Literal["Bar", "Karte", "Bank", "PayPal"] | None = None
 
 
 @router.put("/{rechnung_id}/zahlung/{journal_id}/korrigieren", response_model=RechnungResponse)
 def zahlung_korrigieren(
     rechnung_id: int, journal_id: int, data: ZahlungKorrigieren, db: Session = Depends(get_db),
 ):
-    """Korrigiert Datum und/oder Betrag einer einzelnen Zahlungsbuchung (Issue #261).
+    """Korrigiert Datum, Betrag und/oder Zahlungsart einer einzelnen Zahlungsbuchung
+    (Issue #261, Zahlungsart Issue #576).
+
+    Zahlungsart: das Storno läuft immer mit der ALTEN Zahlungsart, die Neubuchung mit der
+    neuen - eine versehentlich als Bar gebuchte Kartenzahlung nimmt den Betrag dadurch wieder
+    aus der Kasse (Ausgabe: gibt ihn zurück), die Neubuchung berührt die Kasse nicht.
 
     Rechnungsbuchungen sind immer immutable=True (kein Korrekturfenster wie im Journal
     möglich, s. journal.py update_eintrag) – jede Korrektur läuft daher über Storno +
@@ -4018,17 +4025,6 @@ def zahlung_korrigieren(
                             f"(noch {max(_frei, Decimal('0')):.2f} € möglich)."
                         ),
                     )
-        if e.zahlungsart == "Bar" and e.art == "Ausgabe" and neuer_brutto_abs > abs(e.brutto_betrag):
-            einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-                Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
-            ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-                Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
-            kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
-            mehrbetrag = neuer_brutto_abs - abs(e.brutto_betrag)
-            if mehrbetrag > kassenstand:
-                raise HTTPException(status_code=409,
-                    detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, zusätzlich benötigt: {mehrbetrag:.2f} €.")
-
         neuer_brutto = neuer_brutto_abs if e.brutto_betrag >= 0 else -neuer_brutto_abs
         if e.ust_satz > 0:
             neuer_netto = (neuer_brutto_abs * 100 / (100 + e.ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -4040,6 +4036,32 @@ def zahlung_korrigieren(
         neue_vorsteuer = _berechne_vorsteuer(neuer_ust, e.vorsteuerabzug, e.kategorie, bool(e.ust_sonderfall))
     else:
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
+
+    # Issue #576: Zahlungsart wechseln
+    neue_zahlungsart = data.neue_zahlungsart or e.zahlungsart
+    if neue_zahlungsart != e.zahlungsart:
+        if e.zahlungsart not in ("Bar", "Karte", "Bank", "PayPal"):
+            raise HTTPException(status_code=409, detail=f"Bei einer Buchung mit Zahlungsart „{e.zahlungsart}“ lässt sich die Zahlungsart nicht ändern.")
+        if db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).first():
+            raise HTTPException(
+                status_code=409,
+                detail="Diese Zahlung stammt aus dem Bank-Import – die Zahlungsart lässt sich hier nicht ändern. "
+                       "Hebe die Verknüpfung im Bank-Import auf, wenn die Zuordnung falsch war.",
+            )
+
+    # Bar-Ausgabe: Kasse muss den Betrag hergeben - beim Wechsel auf Bar der volle Betrag,
+    # sonst nur ein Mehrbetrag. Das Storno der alten Bar-Buchung gibt ihren Betrag zurück.
+    if neue_zahlungsart == "Bar" and e.art == "Ausgabe":
+        benoetigt = abs(neuer_brutto) - (abs(e.brutto_betrag) if e.zahlungsart == "Bar" else Decimal("0"))
+        if benoetigt > 0:
+            einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
+            if benoetigt > kassenstand:
+                raise HTTPException(status_code=409,
+                    detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, zusätzlich benötigt: {benoetigt:.2f} €.")
 
     # Storno-Datum = Datum der Originalbuchung, nicht heute (wie journal.py, Issue #320):
     # korrigiert wird eine fehlerhafte Erfassung, kein Geldfluss von heute - sonst bliebe der
@@ -4073,18 +4095,24 @@ def zahlung_korrigieren(
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
         konto_ust_skr03=e.konto_ust_skr03, konto_ust_skr04=e.konto_ust_skr04,
-        zahlungsart=e.zahlungsart, art=e.art,
+        zahlungsart=neue_zahlungsart, art=e.art,
         netto_betrag=neuer_netto, ust_satz=e.ust_satz, ust_betrag=neuer_ust,
         vorsteuer_betrag=neue_vorsteuer, brutto_betrag=neuer_brutto,
         vorsteuerabzug=e.vorsteuerabzug,
         steuerbefreiung_grund=e.steuerbefreiung_grund,
         ist_ig_erwerb=e.ist_ig_erwerb, ust_sonderfall=e.ust_sonderfall,
         rechnung_id=rechnung_id, gruppe_id=e.gruppe_id or e.id, immutable=True,
+        # Issue #576-Nebenfund: Kunde/Lieferant/Bankkonto gingen bei der Korrektur verloren
+        # (DATEV-Gegenkonto bei Zahlungen aus dem Bank-Import); Konto nur bei gleicher Zahlungsart
+        kunde_id=e.kunde_id, lieferant_id=e.lieferant_id,
+        konto_id=e.konto_id if neue_zahlungsart == e.zahlungsart else None,
     )
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
 
     db.flush()
+    # Bank-Verknüpfung wandert mit auf die Neubuchung (wie journal.py, Issue #322)
+    db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).update({"journal_id": neu.id})
     db.expire(rechnung, ["journaleintraege"])
     _aktualisiere_zahlungsstatus(rechnung)
     db.commit()
