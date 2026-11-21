@@ -141,6 +141,9 @@ class Unternehmen(Base):
     mail_text_proforma: Mapped[str | None] = mapped_column(Text)
     mail_betreff_auftrag: Mapped[str | None] = mapped_column(String(500))
     mail_text_auftrag: Mapped[str | None] = mapped_column(Text)
+    # Issue #561: eigene Mailvorlage für Mahnungen (bisher fest eingebauter Text)
+    mail_betreff_mahnung: Mapped[str | None] = mapped_column(String(500))
+    mail_text_mahnung: Mapped[str | None] = mapped_column(Text)
     mail_signatur: Mapped[str | None] = mapped_column(Text)
     # SMTP
     smtp_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)

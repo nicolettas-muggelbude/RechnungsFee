@@ -339,6 +339,8 @@ export type Unternehmen = {
   mail_text_proforma?: string | null
   mail_betreff_auftrag?: string | null
   mail_text_auftrag?: string | null
+  mail_betreff_mahnung?: string | null  // Issue #561
+  mail_text_mahnung?: string | null
   mail_signatur?: string | null
   smtp_aktiv?: boolean
   smtp_host?: string | null

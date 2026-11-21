@@ -97,6 +97,8 @@ class UnternehmenBase(BaseModel):
     mail_text_proforma: Optional[str] = None
     mail_betreff_auftrag: Optional[str] = None
     mail_text_auftrag: Optional[str] = None
+    mail_betreff_mahnung: Optional[str] = None  # Issue #561
+    mail_text_mahnung: Optional[str] = None
     mail_signatur: Optional[str] = None
     smtp_aktiv: bool = False
     smtp_host: Optional[str] = None

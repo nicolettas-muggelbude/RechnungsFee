@@ -84,7 +84,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 193` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 194` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -342,6 +342,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 191 | Issue #566: buchungsvorlagen.zahlungsart VARCHAR(20) NOT NULL DEFAULT 'Bank' (Bank\|Bar\|Karte\|PayPal, bisher beim Buchen fest „Bank“) + buchungsvorlagen.kunde_id FK → kunden (ON DELETE SET NULL, nur Einnahme-Vorlagen). `buche_vorlage()` übernimmt jetzt Zahlungsart, `konto_id` (fehlte bisher – DATEV-Gegenkonto `konto.datev_kontonummer` griff nie) nur bei unbarer Zahlung und bei Einnahmen den Kunden; Bar-Ausgabe prüft den Kassenbestand wie das Journal (409). Formular: Konto passend zur Zahlungsart (PayPal = Zahlungsdienstleister). Offen: Lieferant bei direkten Ausgaben (Journal hat kein lieferant_id) |
 | 192 | Issue #566: journal.lieferant_id INTEGER – Lieferant bei direkt gebuchten Ausgaben (Journal, Split, Buchungsvorlage), nur bei art=Ausgabe gesetzt. **Bewusst ohne REFERENCES/ForeignKey**: versiegelte Zeilen sind unveränderlich, ein FK hätte das Anonymisieren (Löschen) des Lieferanten bei versiegelten Buchungen blockiert bzw. ein ON DELETE SET NULL am GoBD-Trigger scheitern lassen; Relationship `Journaleintrag.lieferant` nur lesend (`foreign()`, viewonly). Signatur (`utils/signatur.py`): `lieferant_id` nur im Hash, wenn gesetzt – Altbestand ohne Lieferant behält exakt seine Signatur. Storno übernimmt den Lieferanten nicht (wie beim Kunden). DSGVO beim Lieferanten: Auskunft listet die Buchungen, Anonymisieren löst nur unversiegelte, versiegelte behalten die Nummer ohne Stammdaten. DATEV-Kreditor als Personenkonto folgt in v0.7.14 (ROADMAP) |
 | 193 | Issue #578: anlageverzeichnis.afa_sofort BOOLEAN NOT NULL DEFAULT 0 – voller Abzug im Anschaffungsjahr für EDV/Software mit Nutzungsdauer 1 Jahr (BMF-Schreiben Computerhardware/Software, „wird nicht beanstandet“) statt Monatsprinzip (bisher z. B. Kauf im Mai: 8/12 im Kaufjahr, 4/12 im Folgejahr). Bewusst Opt-in je Anlagegut: bestehende Einträge rechnen unverändert, damit bereits abgegebene EÜR-Jahre stimmen; im Formular bei neuen EDV-Gütern mit ND 1 (linear) vorausgewählt. Validierung (`AnlagegutBase.check_afa_methode`): nur typ=edv, ND 1, linear. `_afa_jahresplan()` liefert dann eine einzige Zeile im Kaufjahr |
+| 194 | Issue #561: unternehmen.mail_betreff_mahnung VARCHAR(500) + mail_text_mahnung TEXT – eigene Mailvorlage für Mahnungen (Reiter „Mahnung“ unter Mailvorlagen, eigene Platzhalter {bezeichnung} {stufe} {mahnnummer} {rechnungsnummer} {kunde} {firmenname}); bisher fest eingebauter Text. `MahnungMailDialog.tsx::mahnungMailVorlage()` für SMTP-Dialog und Mailprogramm-Weg: Betreff = `mahnstufen.betreff_vorlage` (Nebenfund: wurde gespeichert, aber nie verwendet) → Mailvorlage → Standard; Text = Mailvorlage → Standard (Standard = bisheriger Text). `mahnstufen.text_vorlage` bleibt der Brieftext im Mahnungs-PDF |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

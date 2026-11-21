@@ -7,9 +7,9 @@ import {
   getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, openUrl,
   getUnternehmen, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
-  type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult,
+  type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult, type Mahnstufe,
 } from '../../api/client'
-import { MahnungMailDialog } from '../../components/MahnungMailDialog'
+import { MahnungMailDialog, mahnungMailVorlage } from '../../components/MahnungMailDialog'
 import { DateInput } from '../../components/DateInput'
 
 function formatEuro(v: string | number): string {
@@ -76,7 +76,10 @@ async function mahnungDrucken(m: { id: number; mahnnummer?: string | null }, qc:
 
 /** Mail-Fallback ohne SMTP: PDF herunterladen (zählt als versendet) + Standard-Mailprogramm mit
  *  vorausgefüllter Adresse/Betreff öffnen, analog handleMail() in RechnungenPage.tsx. */
-async function mahnungMailFallback(m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number) {
+async function mahnungMailFallback(
+  m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number,
+  unternehmen: Unternehmen | null | undefined, mahnstufen?: Mahnstufe[],
+) {
   if (!m.kunde_email) {
     window.alert('Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.')
     return
@@ -85,11 +88,10 @@ async function mahnungMailFallback(m: MahnungHistorieItem, qc: ReturnType<typeof
   qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
   qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
   qc.invalidateQueries({ queryKey: ['rechnungen'] })
-  const subject = encodeURIComponent(`${m.bezeichnung ?? 'Mahnung'} – Rechnung ${m.rechnungsnummern}`)
-  const body = encodeURIComponent(
-    `Guten Tag,\n\nanbei erhalten Sie unser Schreiben „${m.bezeichnung ?? 'Mahnung'}" zu Rechnung ${m.rechnungsnummern}.\n\n` +
-    `Bitte die heruntergeladene PDF-Datei als Anhang einfügen.\n\nMit freundlichen Grüßen`
-  )
+  // Issue #561: dieselbe Vorlage wie im SMTP-Dialog (Stufe → Mailvorlage „Mahnung“ → Standard)
+  const vorlage = mahnungMailVorlage(m, unternehmen, mahnstufen)
+  const subject = encodeURIComponent(vorlage.betreff)
+  const body = encodeURIComponent(vorlage.text)
   const mailtoUrl = `mailto:${m.kunde_email}?subject=${subject}&body=${body}`
   if (isTauri()) {
     await openUrl(mailtoUrl)
@@ -524,7 +526,7 @@ function KundeDetail({
                     </button>
                     <button
                       type="button"
-                      onClick={() => unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id)}
+                      onClick={() => unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)}
                       title={unternehmen?.smtp_aktiv ? undefined : 'Kein SMTP eingerichtet – öffnet dein E-Mail-Programm, PDF wird heruntergeladen'}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                     >
@@ -630,6 +632,7 @@ function KundeDetail({
         <MahnungMailDialog
           mahnung={mailFuer}
           unternehmen={unternehmen}
+          mahnstufen={einst?.mahnstufen}
           onClose={() => setMailFuer(null)}
           onGesendet={() => {
             qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kunde.kunde_id] })

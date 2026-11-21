@@ -1399,9 +1399,23 @@ const PLATZHALTER = [
   { key: '{firmenname}',      desc: 'Dein Firmenname' },
 ]
 
-type VorlagenTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag'
+type VorlagenTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Mahnung'
+
+// Issue #561: Platzhalter der Mahnungs-Mail (eigene Liste - kein Betrag/Datum der Rechnung)
+const PLATZHALTER_MAHNUNG = [
+  { key: '{bezeichnung}', desc: 'Mahnstufe (z. B. Zahlungserinnerung)' },
+  { key: '{mahnnummer}', desc: 'Nummer der Mahnung' },
+  { key: '{rechnungsnummer}', desc: 'Gemahnte Rechnung(en)' },
+  { key: '{kunde}', desc: 'Kundenname' },
+  { key: '{firmenname}', desc: 'Dein Firmenname' },
+]
 
 const VORLAGEN_DEFAULT: Record<VorlagenTyp, { betreff: string; text: string }> = {
+  // Issue #561: Vorgabe = bisher fest eingebauter Text im Mahnungs-Mailversand
+  Mahnung: {
+    betreff: '{bezeichnung} – Rechnung {rechnungsnummer}',
+    text: 'Guten Tag {kunde},\n\nanbei erhalten Sie unser Schreiben „{bezeichnung}" zu Rechnung {rechnungsnummer}.\n\nBitte entnehmen Sie die Details dem beigefügten PDF.\n\nMit freundlichen Grüßen\n{firmenname}',
+  },
   Rechnung: {
     betreff: 'Rechnung {rechnungsnummer}',
     text: 'Hallo {kunde},\n\nanbei findest du die Rechnung {rechnungsnummer} vom {datum}.\n\nBetrag: {betrag}\nFällig bis: {faellig_am}\n\nBitte überweise den Betrag auf das angegebene Konto.\n\nViele Grüße\n{firmenname}',
@@ -1421,10 +1435,10 @@ const VORLAGEN_DEFAULT: Record<VorlagenTyp, { betreff: string; text: string }> =
 }
 
 function betreffFeld(typ: VorlagenTyp): keyof Unternehmen {
-  return typ === 'Rechnung' ? 'mail_betreff_vorlage' : typ === 'Angebot' ? 'mail_betreff_angebot' : typ === 'Proforma' ? 'mail_betreff_proforma' : 'mail_betreff_auftrag'
+  return typ === 'Rechnung' ? 'mail_betreff_vorlage' : typ === 'Angebot' ? 'mail_betreff_angebot' : typ === 'Proforma' ? 'mail_betreff_proforma' : typ === 'Mahnung' ? 'mail_betreff_mahnung' : 'mail_betreff_auftrag'
 }
 function textFeld(typ: VorlagenTyp): keyof Unternehmen {
-  return typ === 'Rechnung' ? 'mail_text_vorlage' : typ === 'Angebot' ? 'mail_text_angebot' : typ === 'Proforma' ? 'mail_text_proforma' : 'mail_text_auftrag'
+  return typ === 'Rechnung' ? 'mail_text_vorlage' : typ === 'Angebot' ? 'mail_text_angebot' : typ === 'Proforma' ? 'mail_text_proforma' : typ === 'Mahnung' ? 'mail_text_mahnung' : 'mail_text_auftrag'
 }
 
 function MailVorlageSektion({ data }: { data: Unternehmen }) {
@@ -1454,7 +1468,8 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
     onError: (e: Error) => setFehler(e.message),
   })
 
-  const typen: VorlagenTyp[] = ['Rechnung', 'Angebot', 'Proforma', 'Auftrag']
+  const typen: VorlagenTyp[] = ['Rechnung', 'Angebot', 'Proforma', 'Auftrag', 'Mahnung']
+  const platzhalter = aktTyp === 'Mahnung' ? PLATZHALTER_MAHNUNG : PLATZHALTER
 
   return (
     <div className="space-y-5">
@@ -1470,7 +1485,7 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
       <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
         <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Verfügbare Platzhalter</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-          {PLATZHALTER.map(p => (
+          {platzhalter.map(p => (
             <div key={p.key} className="flex gap-2 text-xs">
               <code className="text-blue-700 dark:text-blue-300 font-mono whitespace-nowrap">{p.key}</code>
               <span className="text-blue-600 dark:text-blue-400">{p.desc}</span>
@@ -1478,6 +1493,13 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
           ))}
         </div>
       </div>
+
+      {aktTyp === 'Mahnung' && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Gilt für den Mailversand aller Mahnstufen. Hat eine Mahnstufe unter Einstellungen → Mahnwesen eine
+          eigene Betreff-Vorlage, wird diese verwendet. Der Text im Mahnungs-PDF wird dort je Stufe festgelegt.
+        </p>
+      )}
 
       <Field label="Betreff">
         <input type="text" value={betreff} onChange={ev => setBetreff(ev.target.value)} className={inputCls} />
