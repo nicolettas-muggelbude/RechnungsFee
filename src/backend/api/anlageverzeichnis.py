@@ -93,8 +93,43 @@ def degressiv_moeglich(kaufdatum: date) -> bool:
 
 
 def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict]:
+    """Abschreibungsplan inkl. Verkauf: Nebenfund zu Issue #578 - „Verkauft am“ wurde bisher nur
+    gespeichert, die AfA lief nach dem Verkauf unverändert weiter. Jetzt im Veräußerungsjahr
+    zeitanteilig bis einschließlich Verkaufsmonat (R 7.4 Abs. 8 EStR), danach keine AfA mehr.
+    Beim vollen Abzug im Anschaffungsjahr (EDV, ND 1) bleibt es beim vollen Betrag."""
+    plan = _afa_jahresplan_ohne_verkauf(gut, bis_jahr)
+    verkauf = getattr(gut, "verkauft_am", None)
+    if not verkauf or verkauf < gut.kaufdatum or getattr(gut, "afa_sofort", False):
+        return plan
+    kauf = gut.kaufdatum
+    nd = gut.nutzungsdauer_jahre
+    ergebnis: list[dict] = []
+    for zeile in plan:
+        jahr = zeile["jahr"]
+        if jahr > verkauf.year:
+            break
+        if jahr == verkauf.year:
+            # Monate, für die diese Planzeile normalerweise gilt
+            if jahr == kauf.year:
+                monate_normal = 12 - kauf.month + 1
+            elif jahr == kauf.year + nd and kauf.month > 1:
+                monate_normal = kauf.month - 1          # Restjahr
+            else:
+                monate_normal = 12
+            monate_bis_verkauf = verkauf.month - (kauf.month - 1 if jahr == kauf.year else 0)
+            anteil = Decimal(min(monate_bis_verkauf, monate_normal)) / Decimal(monate_normal)
+            afa = (Decimal(str(zeile["afa_brutto"])) * anteil).quantize(ONE_CENT, ROUND_HALF_UP)
+            abziehbar = (Decimal(str(zeile["afa_abziehbar"])) * anteil).quantize(ONE_CENT, ROUND_HALF_UP)
+            rest_vorher = Decimal(str(zeile["restbuchwert_ende"])) + Decimal(str(zeile["afa_brutto"]))
+            zeile = {**zeile, "afa_brutto": float(afa), "afa_abziehbar": float(abziehbar),
+                     "restbuchwert_ende": float((rest_vorher - afa).quantize(ONE_CENT, ROUND_HALF_UP))}
+        ergebnis.append(zeile)
+    return ergebnis
+
+
+def _afa_jahresplan_ohne_verkauf(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict]:
     """
-    Gibt den vollständigen Abschreibungsplan zurück.
+    Gibt den vollständigen Abschreibungsplan zurück (ohne Berücksichtigung eines Verkaufs).
     Jedes Dict: { jahr, afa_brutto, afa_abziehbar, restbuchwert_ende }
 
     Monatsprinzip im Kaufjahr: AfA nur für die Monate ab Kaufmonat (inkl.).
