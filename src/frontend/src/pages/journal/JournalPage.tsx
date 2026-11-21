@@ -9,6 +9,7 @@ import { BuchungDetail } from './BuchungDetail'
 import { SchnellbuchungenLeiste } from './SchnellbuchungenLeiste'
 import { DateInput } from '../../components/DateInput'
 import { journalFilter } from '../../store/filterStore'
+import { betragPasst, jahresAuswahl } from '../../utils/betragssuche'
 
 function formatEuro(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val
@@ -61,6 +62,11 @@ export function JournalPage() {
 
   const [nurBebuchte, _setNurBebuchte] = useState<boolean>(() => journalFilter.nurBebuchte)
   const setNurBebuchte = (v: boolean) => { journalFilter.nurBebuchte = v; _setNurBebuchte(v) }
+  // Issue #565: Jahr wählbar statt fest das aktuelle Jahr, dazu Text-/Betragssuche
+  const [jahr, _setJahr] = useState<number>(() => journalFilter.jahr)
+  const setJahr = (j: number) => { journalFilter.jahr = j; _setJahr(j) }
+  const [suche, _setSuche] = useState<string>(() => journalFilter.suche)
+  const setSuche = (s: string) => { journalFilter.suche = s; _setSuche(s) }
   const [gruppeIdFilter, setGruppeIdFilter] = useState<number | null>(null)
   const [showBuchung, setShowBuchung] = useState(false)
   const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
@@ -72,7 +78,7 @@ export function JournalPage() {
   const [exportLaedt, setExportLaedt] = useState(false)
   const [csvErfolg, setCsvErfolg] = useState<string | null>(null)
 
-  const aktivesJahr = new Date().getFullYear()
+  const aktivesJahr = jahr
 
   // "+" öffnet "Neue Buchung" ohne Maus (Issue #356) - nur wenn kein Eingabefeld fokussiert
   // ist (sonst würde z.B. eine "+" im Notizfeld ungewollt den Dialog öffnen) und kein anderer
@@ -103,7 +109,7 @@ export function JournalPage() {
     if (filterModus === 'monat') return t.startsWith(monat) ? t : ''
     if (filterModus === 'datum') return datum === t ? t : ''
     if (filterModus === 'zeitraum') return datumVon <= t && t <= datumBis ? t : ''
-    return t // 'jahr' / 'alle' → immer aktuelles Jahr
+    return t.startsWith(String(jahr)) ? t : '' // 'jahr' / 'alle' → gewähltes Jahr
   }
 
   const filterParams = filterModus === 'monat'
@@ -205,6 +211,16 @@ export function JournalPage() {
       })
     : eintraege
 
+  // Issue #565: Suche in Beschreibung, Belegnummern, Rechnung, Kunde/Lieferant, Kategorie und Betrag
+  const sucheText = suche.trim().toLowerCase()
+  const eintraegeGefiltert = sucheText && eintraegeSortiert
+    ? eintraegeSortiert.filter((e) =>
+        [e.beschreibung, e.belegnr, e.externe_belegnr, e.rechnung_nr, e.kunde_name, e.lieferant_name,
+         e.kategorie_name, e.storno_belegnr, e.storno_von_belegnr]
+          .some((f) => (f ?? '').toLowerCase().includes(sucheText))
+        || betragPasst(sucheText, e.brutto_betrag) || betragPasst(sucheText, e.netto_betrag))
+    : eintraegeSortiert
+
   const gruppenWurzeln = new Set(
     (eintraege ?? []).map(e => e.gruppe_id).filter((g): g is number => g != null)
   )
@@ -214,13 +230,15 @@ export function JournalPage() {
     queryFn: () => getKategorien(false, nurBebuchte),
   })
 
-  const hatAktiveFilter = art !== '' || kategorieId !== '' || zahlungsartTyp !== '' || filterModus !== 'monat' || nurBebuchte
+  const hatAktiveFilter = art !== '' || kategorieId !== '' || zahlungsartTyp !== '' || filterModus !== 'monat' || nurBebuchte || suche !== ''
 
   function resetFilter() {
     setArt('')
     setKategorieId('')
     setZahlungsartTyp('')
     setNurBebuchte(false)
+    setSuche('')
+    setJahr(new Date().getFullYear())
     setFilterModus('monat')
     setMonat(aktuellerMonat())
     setDatum(heuteIso())
@@ -232,9 +250,9 @@ export function JournalPage() {
     setAktiverEintragId((prev) => (prev === id ? null : id))
   }
 
-  const sumEinnahmen = (eintraege ?? []).reduce(
+  const sumEinnahmen = (eintraegeGefiltert ?? []).reduce(
     (s, e) => e.art === 'Einnahme' ? s + parseFloat(e.brutto_betrag) : s, 0)
-  const sumAusgaben = (eintraege ?? []).reduce(
+  const sumAusgaben = (eintraegeGefiltert ?? []).reduce(
     (s, e) => e.art === 'Ausgabe' ? s + parseFloat(e.brutto_betrag) : s, 0)
   const saldo = sumEinnahmen - sumAusgaben
 
@@ -304,6 +322,18 @@ export function JournalPage() {
 
       {/* Filter */}
       <div className="flex flex-wrap gap-3 mb-4 items-center">
+        {/* Suche (Issue #565) – Strg+F fokussiert sie */}
+        <input
+          type="search"
+          data-search-input
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+          placeholder="Suchen: Text, Belegnr., Betrag…"
+          aria-label="Journal durchsuchen"
+          className={`min-w-[200px] rounded-lg px-3 py-1.5 text-sm focus:outline-none border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 placeholder:text-slate-400 ${
+            suche ? 'ring-2 ring-blue-500' : 'focus:ring-2 focus:ring-blue-500'
+          }`}
+        />
         {/* Modus-Umschalter */}
         <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
           {(['monat', 'datum', 'zeitraum', 'alle'] as FilterModus[]).map((m) => (
@@ -329,6 +359,16 @@ export function JournalPage() {
             onChange={(e) => setMonat(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
           />
+        )}
+        {filterModus === 'alle' && (
+          <select
+            value={jahr}
+            onChange={(e) => setJahr(Number(e.target.value))}
+            aria-label="Jahr"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+          >
+            {jahresAuswahl().map((j) => <option key={j} value={j}>{j}</option>)}
+          </select>
         )}
         {filterModus === 'datum' && (
           <DateInput
@@ -427,7 +467,7 @@ export function JournalPage() {
         )}
 
         {/* Summen: Saldo links, dann Zugänge/Abgänge über den jeweiligen Spalten */}
-        {!!eintraege?.length && (
+        {!!eintraegeGefiltert?.length && (
           <div className="ml-auto flex items-center text-sm">
             <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mr-1.5">Saldo</span>
             <span className={`font-bold mr-4 ${saldo >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -471,8 +511,12 @@ export function JournalPage() {
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {isLoading ? (
           <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
-        ) : !eintraege?.length ? (
-          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Keine Buchungen gefunden.</p>
+        ) : !eintraegeGefiltert?.length ? (
+          <p className="text-slate-400 dark:text-slate-500 text-sm p-5">
+            {sucheText && eintraege?.length
+              ? `Keine Buchung zu „${suche.trim()}“ im gewählten Zeitraum gefunden.`
+              : 'Keine Buchungen gefunden.'}
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -499,7 +543,7 @@ export function JournalPage() {
               </tr>
             </thead>
             <tbody>
-              {eintraegeSortiert!.map((e) => {
+              {eintraegeGefiltert!.map((e) => {
                 const istAktiv = aktiverEintragId === e.id
                 const bereitsStorniert = !!e.storniert
                 const istStorno = !!e.ist_storno

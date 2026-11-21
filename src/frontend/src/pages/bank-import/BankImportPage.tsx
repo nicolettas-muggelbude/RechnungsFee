@@ -28,6 +28,7 @@ import {
   type BankAbgleichVorschlag,
 } from '../../api/client'
 import { BuchungForm } from '../journal/BuchungForm'
+import { betragPasst, jahresAuswahl } from '../../utils/betragssuche'
 import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
@@ -979,7 +980,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const [datumBis, _setDatumBis] = useState<string>(() => bankImportFilter.datumBis)
   const setDatumBis = (d: string) => { bankImportFilter.datumBis = d; _setDatumBis(d); setLimit(200) }
 
-  const aktivesJahr = new Date().getFullYear()
+  // Issue #565: Jahr wählbar statt fest das aktuelle Jahr
+  const [jahr, _setJahr] = useState<number>(() => bankImportFilter.jahr)
+  const setJahr = (j: number) => { bankImportFilter.jahr = j; _setJahr(j); setLimit(200) }
+  const aktivesJahr = jahr
   function monatsEnde(monatStr: string): string {
     const [y, m] = monatStr.split('-').map(Number)
     const letzterTag = new Date(y, m, 0).getDate()
@@ -1148,9 +1152,11 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     if (statusFilter === 'ignoriert' && !tx.ignoriert) return false
     if (suche) {
       const s = suche.toLowerCase()
+      // Issue #565: auch nach Betrag suchen (119 / 119,00 / -119,00)
       if (!((tx.partner_name ?? '').toLowerCase().includes(s) ||
             (tx.verwendungszweck ?? '').toLowerCase().includes(s) ||
-            (tx.buchungstext ?? '').toLowerCase().includes(s))) return false
+            (tx.buchungstext ?? '').toLowerCase().includes(s) ||
+            betragPasst(s, tx.betrag))) return false
     }
     return true
   })
@@ -1161,7 +1167,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
         <div className="flex items-center gap-3 flex-wrap">
           <input
             type="search"
-            placeholder="Partner, Verwendungszweck…"
+            placeholder="Partner, Verwendungszweck, Betrag…"
             value={suche}
             onChange={e => setSuche(e.target.value)}
             className="flex-1 min-w-[180px] text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
@@ -1182,6 +1188,16 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
               </button>
             ))}
           </div>
+          {filterModus === 'jahr' && (
+            <select
+              value={jahr}
+              onChange={e => setJahr(Number(e.target.value))}
+              aria-label="Jahr"
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            >
+              {jahresAuswahl().map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
+          )}
           {filterModus === 'monat' && (
             <input
               type="month"

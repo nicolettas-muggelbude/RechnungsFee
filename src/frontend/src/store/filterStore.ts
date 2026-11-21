@@ -28,6 +28,8 @@ export interface JournalFilterState {
   kategorieId:    string
   zahlungsartTyp: '' | 'bar' | 'unbar'
   nurBebuchte:    boolean
+  jahr:           number   // Issue #565: Jahr für den Modus „Jahr“
+  suche:          string   // Issue #565: Text- und Betragssuche
 }
 
 export const journalFilter: JournalFilterState = {
@@ -40,6 +42,8 @@ export const journalFilter: JournalFilterState = {
   kategorieId:    '',
   zahlungsartTyp: '',
   nurBebuchte:    false,
+  jahr:           new Date().getFullYear(),
+  suche:          '',
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +118,7 @@ export interface BankImportFilterState {
   datum:    string
   datumVon: string
   datumBis: string
+  jahr:     number   // Issue #565
 }
 
 // Voreinstellung "alle" – entspricht dem bisherigen Standardverhalten (kein Datumsfilter).
@@ -123,4 +128,5 @@ export const bankImportFilter: BankImportFilterState = {
   datum:    heute(),
   datumVon: heute(),
   datumBis: heute(),
+  jahr:     new Date().getFullYear(),
 }

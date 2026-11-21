@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.13',
     datum: 'in Arbeit',
     eintraege: [
+      { typ: 'neu', text: 'Journal: Suchfeld (auch mit Strg + F) für Beschreibung, Belegnummern, Rechnung, Kunde, Lieferant, Kategorie und Betrag – „119“ findet 119,00 bis 119,99 €, „119,00“ genau diesen Betrag. Im Modus „Jahr“ lässt sich das Jahr jetzt auswählen, z. B. für Nachbuchungen. Im Bank-Import findet die Suche jetzt auch Beträge, und das Jahr ist dort ebenfalls wählbar. Danke an dirkk (Issue #565).' },
       { typ: 'neu', text: 'Kategorien: Neue Kategorie „Durchlaufende Posten“ (SKR03 1590, SKR04 1370) und neue Kontenart „Neutral“. Sie ist bei Einnahmen und Ausgaben wählbar und zählt weder in der EÜR noch in der Umsatzsteuer-Voranmeldung, z. B. für eine doppelt erhaltene Zahlung, die du zurücküberweist: Eingang und Rückzahlung beide darauf buchen. Danke an dirkk (Issue #564).' },
       { typ: 'fix', text: 'Rechnungen: Eine von Hand eingegebene Rechnungsnummer, die schon vergeben ist, wird jetzt mit einem Hinweis abgelehnt – beim Anlegen und beim Ändern eines Entwurfs. Bisher wurde sie ohne Widerspruch übernommen. Danke an Markus (Issue #554).' },
       { typ: 'fix', text: 'Rechnung, Mahnung, Kontoauszug und Inkasso-Deckblatt: Ohne Firmennamen fehlte dein Name in der kleinen Absenderzeile über dem Adressfeld – sie begann direkt mit der Straße. Jetzt stehen dort Vor- und Nachname. Danke an Markus (Issue #558).' },
