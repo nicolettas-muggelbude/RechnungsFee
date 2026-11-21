@@ -629,6 +629,11 @@ function toQuery(params: Record<string, string | number | string[] | undefined |
   return teile.length ? `?${teile.join('&')}` : ''
 }
 
+// Issue #565: Jahre mit Buchungen bzw. Transaktionen für die Jahresauswahl
+export const getJournalJahre = () => request<number[]>('/journal/jahre')
+export const getBankTransaktionsJahre = (kontoId: number) =>
+  request<number[]>(`/bank-import/${kontoId}/jahre`)
+
 export const getJournal = (filter?: {
   monat?: string
   datum_von?: string

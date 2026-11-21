@@ -184,6 +184,13 @@ def get_kassenstand(db: Session = Depends(get_db)):
     return {"kassenstand": str(_get_bar_kassenstand(db))}
 
 
+@router.get("/jahre")
+def buchungsjahre(db: Session = Depends(get_db)) -> list[int]:
+    """Issue #565: Jahre mit Buchungen (absteigend) für die Jahresauswahl im Journal."""
+    jahre = db.query(extract("year", Journaleintrag.datum)).distinct().all()
+    return sorted({int(j[0]) for j in jahre if j[0] is not None}, reverse=True)
+
+
 @router.get("/naechste-belegnr")
 def naechste_belegnr(datum: date = Query(default=None), db: Session = Depends(get_db)):
     """Gibt die nächste freie Belegnummer zurück."""

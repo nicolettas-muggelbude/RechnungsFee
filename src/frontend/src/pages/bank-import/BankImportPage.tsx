@@ -7,7 +7,7 @@ import { bankImportFilter, type BankImportFilterModus } from '../../store/filter
 import {
   getKonten,
   getBankTemplates,
-  getBankTransaktionen,
+  getBankTransaktionen, getBankTransaktionsJahre,
   vorschauBankImport,
   leseGedroppteDatei,
   importiereBankTransaktionen,
@@ -1014,6 +1014,12 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   })
   const txs = txListe?.transaktionen ?? []
   const txsGesamt = txListe?.total ?? 0
+  // Issue #565: Jahresauswahl nur mit Jahren, in denen es Transaktionen gibt
+  const { data: bebuchteJahre } = useQuery({
+    queryKey: ['bank-transaktionen', konto.id, 'jahre'],
+    queryFn: () => getBankTransaktionsJahre(konto.id!),
+    enabled: !!konto.id,
+  })
 
   const anerkenneMut = useMutation({
     mutationFn: (rechnungId: number) => ueberzahlungAnerkennen(rechnungId),
@@ -1195,7 +1201,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
               aria-label="Jahr"
               className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
             >
-              {jahresAuswahl().map(j => <option key={j} value={j}>{j}</option>)}
+              {jahresAuswahl(bebuchteJahre, jahr).map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           )}
           {filterModus === 'monat' && (

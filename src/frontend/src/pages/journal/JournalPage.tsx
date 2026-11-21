@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getJournal, getKategorien, getKassenbuchExportUrl, getJournalExportUrl, openUrl, type JournalEintrag, type Schnellbuchung } from '../../api/client'
+import { getJournal, getJournalJahre, getKategorien, getKassenbuchExportUrl, getJournalExportUrl, openUrl, type JournalEintrag, type Schnellbuchung } from '../../api/client'
 import { BuchungForm } from './BuchungForm'
 import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { TagesabschlussDialog } from './TagesabschlussDialog'
@@ -225,6 +225,8 @@ export function JournalPage() {
     (eintraege ?? []).map(e => e.gruppe_id).filter((g): g is number => g != null)
   )
 
+  const { data: bebuchteJahre } = useQuery({ queryKey: ['journal', 'jahre'], queryFn: getJournalJahre })
+
   const { data: kategorien } = useQuery({
     queryKey: ['kategorien', nurBebuchte],
     queryFn: () => getKategorien(false, nurBebuchte),
@@ -367,7 +369,7 @@ export function JournalPage() {
             aria-label="Jahr"
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
           >
-            {jahresAuswahl().map((j) => <option key={j} value={j}>{j}</option>)}
+            {jahresAuswahl(bebuchteJahre, jahr).map((j) => <option key={j} value={j}>{j}</option>)}
           </select>
         )}
         {filterModus === 'datum' && (

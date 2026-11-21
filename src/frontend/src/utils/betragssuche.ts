@@ -26,8 +26,11 @@ export function betragPasst(suche: string, betrag: string | number | null | unde
   return b.mitNachkomma ? cent === b.cent : Math.floor(cent / 100) === Math.floor(b.cent / 100)
 }
 
-/** Jahre für die Jahresauswahl: aktuelles Jahr und die neun davor. */
-export function jahresAuswahl(): number[] {
-  const jetzt = new Date().getFullYear()
-  return Array.from({ length: 10 }, (_, i) => jetzt - i)
+/**
+ * Jahre für die Jahresauswahl: nur Jahre mit Buchungen, dazu immer das aktuelle und das
+ * gerade gewählte Jahr (damit die Auswahl nie leer ist bzw. ihren Wert verliert).
+ */
+export function jahresAuswahl(bebucht: number[] | undefined, gewaehlt: number): number[] {
+  const jahre = new Set([...(bebucht ?? []), new Date().getFullYear(), gewaehlt])
+  return [...jahre].sort((a, b) => b - a)
 }

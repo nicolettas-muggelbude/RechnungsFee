@@ -1148,6 +1148,19 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
                             hinweis=hinweis)
 
 
+@router.get("/{konto_id}/jahre")
+def transaktionsjahre(konto_id: int, db: Session = Depends(get_db)) -> list[int]:
+    """Issue #565: Jahre mit Transaktionen dieses Kontos (absteigend) für die Jahresauswahl."""
+    from sqlalchemy import extract
+    jahre = (
+        db.query(extract("year", BankTransaktion.datum))
+        .filter(BankTransaktion.konto_id == konto_id)
+        .distinct()
+        .all()
+    )
+    return sorted({int(j[0]) for j in jahre if j[0] is not None}, reverse=True)
+
+
 @router.get("/{konto_id}", response_model=BankTransaktionenListResponse)
 def get_transaktionen(
     konto_id: int,
