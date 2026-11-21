@@ -4945,7 +4945,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Für Rechnungen, die außerhalb von RechnungsFee geschrieben und verschickt wurden – z. B. beim Umstieg
               mit Originalnummer und -datum. Maßgeblich bleibt das Original: RechnungsFee erzeugt dafür kein eigenes
-              PDF, versendet und mahnt sie nicht. Zahlungen, Umsatzsteuer und offene Posten laufen normal.
+              PDF und versendet sie nicht. Zahlungen, Umsatzsteuer, offene Posten und Mahnungen laufen normal.
               Original und ggf. Berichtigung kannst du danach als Beleg anhängen.
             </span>
           </span>
