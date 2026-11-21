@@ -24,7 +24,7 @@ export type ChangelogVersion = {
 export const CHANGELOG: ChangelogVersion[] = [
   {
     version: 'v0.7.13',
-    datum: 'in Arbeit',
+    datum: 'November 2026',
     eintraege: [
       { typ: 'fix', text: 'GuV: Abschreibungen (AfA), Fortbildungskosten, Reparaturen, laufende EDV-Kosten, Verpflegungsmehraufwand, Homeoffice-Pauschale und Fahrtkosten mit privaten Fahrzeugen fehlten in der GuV – das Jahresergebnis war dadurch zu hoch. Die EÜR und die Schwellenwert-Warnung (§ 141 AO) waren nicht betroffen. Gefunden bei der Prüfung von Issue #579.' },
       { typ: 'neu', text: 'Zahlung korrigieren (Rechnungen): Neben Datum und Betrag lässt sich jetzt auch die Zahlungsart ändern, z. B. Karte statt Bar. Das Storno läuft mit der alten, die Neubuchung mit der neuen Zahlungsart – die Kasse wird dadurch automatisch berichtigt. Beim Wechsel auf eine Bar-Ausgabe wird der Kassenbestand geprüft. Außerdem bleiben bei der Korrektur Kunde, Lieferant, Bankkonto und die Verknüpfung zum Bank-Import erhalten (gingen bisher verloren). Freie Journalbuchungen ließen sich schon über „Bearbeiten“ korrigieren. Danke an trinity (Issue #576).' },

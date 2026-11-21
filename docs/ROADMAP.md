@@ -88,7 +88,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ## 📋 Nach v0.7.4 – vorgemerkt
 
-- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.13) – bisher ziehen Entwürfe von
+- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.14) – bisher ziehen Entwürfe von
   Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
   (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
   Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen
@@ -189,7 +189,7 @@ Ein eigenständiges Dokumentenmanagement fehlt noch:
 - [ ] Belegsuche über alle Belege: Dateiname, externe Rechnungsnummer, Lieferant, Betrag, Volltext (OCR)
 - [ ] Prüfsumme bei Export/Betriebsprüfung gegen die gespeicherte Datei verifizieren
 
-## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## 📋 v0.7.14 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
