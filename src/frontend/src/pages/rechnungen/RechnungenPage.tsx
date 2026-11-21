@@ -1178,6 +1178,10 @@ function RechnungDetail({
     onError: (e: Error) => setBelegFehler(e.message),
   })
 
+  // Issue #575: wie beleg_festgeschrieben() im Backend
+  const belegFestgeschrieben = !!rechnung.beleg && !rechnung.ist_entwurf
+    && !['Angebot', 'Auftrag', 'Proforma'].includes(rechnung.dokument_typ ?? '')
+
   const belegDeleteMutation = useMutation({
     mutationFn: () => deleteBeleg(rechnung.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rechnungen'] }),
@@ -2580,15 +2584,34 @@ function RechnungDetail({
                     {rechnung.beleg.hochgeladen_am.slice(0, 10)}
                   </span>
                 </div>
-                <button
-                  onClick={() => belegDeleteMutation.mutate()}
-                  disabled={belegDeleteMutation.isPending}
-                  className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                  title="Beleg entfernen"
-                >
-                  🗑
-                </button>
+                {/* Issue #575: nach dem Finalisieren ist der Beleg festgeschrieben (GoBD) */}
+                {belegFestgeschrieben ? (
+                  <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400" title="Festgeschrieben – Korrekturen über ein Storno">🔒</span>
+                ) : (
+                  <button
+                    onClick={() => belegDeleteMutation.mutate()}
+                    disabled={belegDeleteMutation.isPending}
+                    className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    title="Beleg entfernen"
+                  >
+                    🗑
+                  </button>
+                )}
               </div>
+              {belegFestgeschrieben && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Festgeschrieben – kann nicht mehr gelöscht oder ersetzt werden. Hochgeladen am{' '}
+                  {new Date(rechnung.beleg.hochgeladen_am).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
+                  {rechnung.beleg.sha256 && (
+                    <>
+                      {' · '}
+                      <span className="font-mono" title={`SHA-256: ${rechnung.beleg.sha256}`}>
+                        Prüfsumme {rechnung.beleg.sha256.slice(0, 12)}…
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
               {rechnung.beleg.pdfa_verfuegbar && (
                 <button
                   onClick={_openBelegPdfa}

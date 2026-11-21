@@ -4770,12 +4770,37 @@ def get_rechnung_zahlungen(rechnung_id: int, db: Session = Depends(get_db)):
 # Beleg-Upload / Download / Löschen
 # ---------------------------------------------------------------------------
 
+# Dokumente ohne GoBD-Bindung - ihr Beleg bleibt jederzeit änderbar (Issue #575)
+BELEG_FREI_DOKUMENTTYPEN = ("Angebot", "Auftrag", "Proforma")
+
+
+def beleg_festgeschrieben(rechnung: Rechnung) -> bool:
+    """Issue #575: Der Beleg einer finalisierten Rechnung ist der archivierte Originalbeleg
+    (GoBD) - er darf weder gelöscht noch ersetzt werden. Entwürfe bleiben korrigierbar, ein
+    fehlender Beleg darf jederzeit nachgereicht werden."""
+    return (
+        rechnung.beleg_id is not None
+        and not rechnung.ist_entwurf
+        and rechnung.dokument_typ not in BELEG_FREI_DOKUMENTTYPEN
+    )
+
+
+def _pruefe_beleg_aenderbar(rechnung: Rechnung, aktion: str) -> None:
+    if beleg_festgeschrieben(rechnung):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Der Beleg dieser Rechnung ist festgeschrieben (GoBD) und kann nicht mehr {aktion} werden. "
+                   "Korrekturen laufen über ein Storno.",
+        )
+
+
 @router.post("/{rechnung_id}/beleg", response_model=BelegResponse, status_code=201)
 async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
     """Dateianhang (PDF/Bild) an eine Rechnung hängen."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    _pruefe_beleg_aenderbar(rechnung, "ersetzt")
 
     mime = datei.content_type or ""
     if mime not in ERLAUBTE_MIME_TYPES:
@@ -4796,14 +4821,14 @@ async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Sess
 
     (ziel_dir / dateiname_lokal).write_bytes(inhalt)
 
-    # Alten Beleg ersetzen wenn vorhanden
+    # Alten Beleg ersetzen (nur Entwurf, s. o.) - Dateien erst nach dem Commit entfernen und nur,
+    # wenn den Beleg nichts anderes mehr verwendet (Issue #575)
+    alte_dateien: list[Path] = []
     if rechnung.beleg_id:
-        alter_beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
-        if alter_beleg:
-            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
-            if alter_pfad.exists():
-                alter_pfad.unlink()
-            db.delete(alter_beleg)
+        alte_id = rechnung.beleg_id
+        rechnung.beleg_id = None
+        db.flush()
+        alte_dateien = _beleg_loeschen_wenn_unbenutzt(alte_id, db)
 
     # PDF/A-Konvertierung: ZUGFeRD/XRechnung ist bereits PDF/A-3
     pdfa_pfad_rel: str | None = None
@@ -4828,6 +4853,7 @@ async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Sess
     db.flush()
     rechnung.beleg_id = beleg.id
     db.commit()
+    _dateien_entfernen(alte_dateien)
     db.refresh(beleg)
 
     # Konvertierung zu PDF/A (asynchron im Hintergrundthread, blockiert Antwort nicht)
@@ -4897,18 +4923,17 @@ def download_beleg(
 
 @router.delete("/{rechnung_id}/beleg", status_code=204)
 def delete_beleg(rechnung_id: int, db: Session = Depends(get_db)):
-    """Beleg von einer Rechnung entfernen und Datei löschen."""
+    """Beleg von einer Rechnung entfernen und Datei löschen (nur Entwürfe, Issue #575)."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung or not rechnung.beleg_id:
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
+    _pruefe_beleg_aenderbar(rechnung, "gelöscht")
+    beleg_id = rechnung.beleg_id
     rechnung.beleg_id = None
-    if beleg:
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if pfad.exists():
-            pfad.unlink()
-        db.delete(beleg)
+    db.flush()
+    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 # ---------------------------------------------------------------------------

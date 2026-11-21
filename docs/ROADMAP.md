@@ -177,6 +177,18 @@ Monatsabrechnung hoch, ersetzt sie den Vertrag.
 - [ ] Buchungsdetail, Beleg-Ansicht, GoBD-Export, DATEV-Belegexport auf mehrere Anhänge umstellen
 - [ ] Anhängen nach dem Festschreiben bleibt gesperrt (GoBD)
 
+## 📋 Belegverwaltung / DMS (Issue #575, Community-Wunsch Markus)
+
+Seit v0.7.13 ist der Beleg einer finalisierten Rechnung festgeschrieben (nicht löschbar, nicht
+ersetzbar, Prüfsumme und Upload-Zeitpunkt sichtbar) – wie im Journal nach dem Festschreiben.
+Ein eigenständiges Dokumentenmanagement fehlt noch:
+
+- [ ] Belegeingang ohne Buchung: Belege zuerst ablegen, später einer Rechnung/Buchung zuordnen
+- [ ] Herkunft je Beleg (Upload, Rechnungspostfach mit Absender/Betreff/Datum der Mail, Scan)
+- [ ] Änderungshistorie je Beleg (zugeordnet, Zuordnung gelöst, PDF/A erzeugt) – GoBD-geschützt
+- [ ] Belegsuche über alle Belege: Dateiname, externe Rechnungsnummer, Lieferant, Betrag, Volltext (OCR)
+- [ ] Prüfsumme bei Export/Betriebsprüfung gegen die gespeicherte Datei verifizieren
+
 ## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
