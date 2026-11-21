@@ -14,6 +14,7 @@ from io import BytesIO
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
     _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
+    art_nr_spalte, art_nr_anzeige,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -84,10 +85,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         pos_datum_str = _iso_zu_de(str(r.leistung_von or r.datum))
         ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
 
-        hat_artikelcode = any(
-            getattr(pos, "artikel", None) and pos.artikel.artikelcode
-            for pos in r.positionen
-        )
+        hat_artikelcode = art_nr_spalte(self._unt, r.positionen)  # Issue #562
         CODE_W = 20
 
         if ist_lieferschein:
@@ -158,7 +156,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_col], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
-                _beschr.append((col_w[2], pos.artikel.artikelcode))
+                _beschr.append((col_w[2], art_nr_anzeige(pos, self._unt)))
             _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H, vor_umbruch=lambda: _rahmen(tbl_top, self.get_y())):
@@ -204,8 +202,8 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             self.cell(col_w[1], ROW_H, pos_datum_str, align="L")
             self.set_xy(self.get_x(), row_y + DESC_OFFSET)
             if hat_artikelcode:
-                ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[2], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+                self.multi_cell(col_w[2], DESC_H, art_nr_anzeige(pos, self._unt),
+                                new_x="RIGHT", new_y="TOP", align="L")
             self.multi_cell(col_w[desc_col], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT", align="L")
 

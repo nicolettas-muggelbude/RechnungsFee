@@ -330,6 +330,7 @@ export type Unternehmen = {
   anrede_fallback?: string | null
   pdf_vorlage?: number
   pdf_positionsnummern?: boolean
+  pdf_artikelnummer?: boolean  // Issue #562: Spalte „Art.-Nr.“ auf Dokumenten
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null

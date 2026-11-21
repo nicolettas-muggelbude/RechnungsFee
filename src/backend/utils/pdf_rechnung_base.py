@@ -62,6 +62,28 @@ def dokument_text(r, unt: dict, feld: str) -> str:
     return _standardtext(unt, feld, dokument_typ)
 
 
+def art_nr_spalte(unt: dict, positionen) -> bool:
+    """Issue #562: Spalte „Art.-Nr.“ anzeigen? Über den Schalter in Einstellungen →
+    Rechnungsvorlagen, sobald mindestens eine Position einen Artikel hat. Snapshots finalisierter
+    Dokumente ohne den Schlüssel (vor #562) behalten das alte Verhalten: Spalte nur, wenn ein
+    Artikel einen eigenen Eintrag im Feld Artikelcode hat (Issue #169)."""
+    if "pdf_artikelnummer" in unt:
+        return bool(unt.get("pdf_artikelnummer")) and any(getattr(p, "artikel", None) for p in positionen)
+    return any(getattr(p, "artikel", None) and p.artikel.artikelcode for p in positionen)
+
+
+def art_nr_anzeige(pos, unt: dict) -> str:
+    """Issue #562: Inhalt der Spalte „Art.-Nr.“ - der eigene Eintrag im Feld Artikelcode, sonst
+    (nur mit dem neuen Schalter) der automatisch vergebene Code ART-#### (DB-Feld artikelnummer)."""
+    artikel = getattr(pos, "artikel", None)
+    if artikel is None:
+        return ""
+    eigener = (artikel.artikelcode or "").strip()
+    if eigener or "pdf_artikelnummer" not in unt:
+        return eigener
+    return artikel.artikelnummer or ""
+
+
 def absender_name(unt: dict) -> str:
     """Issue #558: Name des Ausstellers - Firmenname, sonst Vor- und Nachname (Freiberufler
     ohne Firmenbezeichnung). Bisher nahm die Absenderzeile nur den Firmennamen."""

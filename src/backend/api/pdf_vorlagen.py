@@ -133,6 +133,7 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "unterschrift_bild":       unternehmen.unterschrift_bild or "",
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "pdf_positionsnummern":    bool(unternehmen.pdf_positionsnummern),
+        "pdf_artikelnummer":    bool(unternehmen.pdf_artikelnummer),
     }
 
 

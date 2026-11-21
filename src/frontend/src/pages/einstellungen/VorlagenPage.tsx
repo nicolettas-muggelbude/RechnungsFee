@@ -19,6 +19,12 @@ export function VorlagenPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
   })
 
+  // Issue #562: Spalte „Art.-Nr.“ – gilt für beide Vorlagen
+  const artNrMutation = useMutation({
+    mutationFn: (an: boolean) => updateUnternehmen({ pdf_artikelnummer: an }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
+  })
+
   const aktuelleVorlage = unt?.pdf_vorlage ?? 0
 
   return (
@@ -75,6 +81,22 @@ export function VorlagenPage() {
           </span>
         </label>
       )}
+      <label className="mt-4 flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!unt?.pdf_artikelnummer}
+          onChange={(e) => artNrMutation.mutate(e.target.checked)}
+          className="mt-0.5 accent-blue-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Artikelnummern anzeigen</span>
+          <span className="block text-sm text-slate-500 dark:text-slate-400">
+            Zusätzliche Spalte „Art.-Nr.“ bei Positionen mit Artikel. Steht beim Artikel etwas im Feld
+            „Artikelcode“, erscheint dieser Eintrag, sonst die automatisch vergebene Nummer (z. B. ART-0005).
+            Gilt für neu finalisierte Dokumente, bereits finalisierte bleiben unverändert.
+          </span>
+        </span>
+      </label>
       {mutation.isSuccess && (
         <p className="mt-4 text-sm text-green-600">Vorlage gespeichert.</p>
       )}

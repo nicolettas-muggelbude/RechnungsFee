@@ -118,6 +118,9 @@ class Unternehmen(Base):
     anrede_fallback: Mapped[str | None] = mapped_column(Text)
     pdf_vorlage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pdf_positionsnummern: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)  # Issue #475
+    # Issue #562: Spalte „Art.-Nr.“ auf Dokumenten - eigener Eintrag (artikel.artikelcode), sonst
+    # automatischer Code (artikel.artikelnummer); im absender_snapshot eingefroren
+    pdf_artikelnummer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     einleitungstext: Mapped[str | None] = mapped_column(Text)
     schlusstext: Mapped[str | None] = mapped_column(Text)
     # Issue #368: eigene Standardtexte je optionalem Dokumenttyp (Rechnung nutzt weiterhin

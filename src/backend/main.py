@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 194
+SCHEMA_VERSION = 195
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4521,6 +4521,23 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 194"))
             conn.commit()
             print("[Migration] Schema auf Version 194 (Issue #561: unternehmen.mail_betreff_mahnung, mail_text_mahnung)")
+
+    if version < 195:
+        with engine.connect() as conn:
+            # Issue #562: Schalter für die Spalte „Art.-Nr.“ auf Dokumenten. Bisher erschien sie
+            # automatisch, sobald ein Artikel einen Artikelcode hatte - wer solche Einträge hat,
+            # bekommt den Schalter eingeschaltet, damit sich bei niemandem ungefragt etwas ändert.
+            _u195 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if _u195 and "pdf_artikelnummer" not in _u195:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN pdf_artikelnummer BOOLEAN NOT NULL DEFAULT 0"))
+                hat_codes = conn.execute(text(
+                    "SELECT 1 FROM artikel WHERE artikelcode IS NOT NULL AND TRIM(artikelcode) <> '' LIMIT 1"
+                )).first()
+                if hat_codes:
+                    conn.execute(text("UPDATE unternehmen SET pdf_artikelnummer = 1"))
+            conn.execute(text("PRAGMA user_version = 195"))
+            conn.commit()
+            print("[Migration] Schema auf Version 195 (Issue #562: unternehmen.pdf_artikelnummer)")
 
 
 def _migrate_kategorien() -> None:

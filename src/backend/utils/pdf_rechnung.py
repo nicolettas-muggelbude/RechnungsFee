@@ -16,6 +16,7 @@ from utils.pdf_rechnung_base import (
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W,
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
     _find_dejavu_dir, _person_bezeichnung, _logo_abmessungen, _adresszeilen,
+    art_nr_spalte, art_nr_anzeige,
 )
 from utils.pdf_shared import epc_qr_bytes
 
@@ -36,10 +37,7 @@ class RechnungPDF(RechnungPDFBase):
         r = self._r
         ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
 
-        hat_artikelcode = any(
-            getattr(pos, "artikel", None) and pos.artikel.artikelcode
-            for pos in r.positionen
-        )
+        hat_artikelcode = art_nr_spalte(self._unt, r.positionen)  # Issue #562
         CODE_W = 20
 
         if ist_lieferschein:
@@ -110,15 +108,15 @@ class RechnungPDF(RechnungPDFBase):
                 # dieselbe Nummer wie in der E-Rechnung (line_id) und in Vorlage 1
                 self.cell(col_w[0], DESC_H, str(pos.position_nr), align="R")
             if hat_artikelcode:
-                ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[code_idx], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+                self.multi_cell(col_w[code_idx], DESC_H, art_nr_anzeige(pos, self._unt),
+                                new_x="RIGHT", new_y="TOP", align="L")
 
         DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
         for pos in r.positionen:
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_idx], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
-                _beschr.append((col_w[code_idx], pos.artikel.artikelcode))
+                _beschr.append((col_w[code_idx], art_nr_anzeige(pos, self._unt)))
             _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H):
