@@ -17,6 +17,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
@@ -251,6 +252,10 @@ def _faellige_naechste_stufe(db: Session, rechnung: Rechnung, heute: date) -> Op
         .first()
     )
     if letzte is None or letzte.versendet_am is None:
+        # Importierte Rechnung, zuletzt im Altsystem gemahnt (Migration 196)
+        if rechnung.altsystem_mahnstufe and rechnung.altsystem_gemahnt_am:
+            faellig = rechnung.altsystem_gemahnt_am + timedelta(days=naechste.tage_nach_vorheriger)
+            return naechste if faellig <= heute else None
         return None
     faellig = letzte.versendet_am.date() + timedelta(days=naechste.tage_nach_vorheriger)
     return naechste if faellig <= heute else None
@@ -288,7 +293,6 @@ def faellig_liste(db: Session = Depends(get_db)):
             Rechnung.typ == "ausgang",
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
-            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
             Rechnung.faellig_am.isnot(None),
             # Issue #419 Phase 2b: eine verrechnete Abschlagsrechnung hat keinen eigenen
@@ -336,7 +340,6 @@ def kunden_uebersicht(db: Session = Depends(get_db)):
             Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
-            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
             Rechnung.faellig_am.isnot(None),
         )
@@ -772,8 +775,6 @@ def _berechne_mahnung(
     rechnungen = db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids)).all()
     if not rechnungen:
         raise HTTPException(status_code=404, detail="Keine Rechnungen gefunden.")
-    if any(r.import_quelle for r in rechnungen):
-        raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung kann nicht gemahnt werden – maßgeblich ist das Original.")
     kunde_ids = {r.kunde_id for r in rechnungen}
     if len(kunde_ids) > 1:
         raise HTTPException(status_code=422, detail="Alle Rechnungen müssen zum selben Kunden gehören.")
@@ -803,7 +804,6 @@ def _berechne_mahnung(
             Rechnung.verrechnet_in_rechnung_id.is_(None),
             Rechnung.ist_entwurf == False,  # noqa: E712
             Rechnung.storniert == False,  # noqa: E712
-            Rechnung.import_quelle.is_(None),
             Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
         ).all()
         aktuelle = max(
@@ -834,7 +834,6 @@ def _berechne_mahnung(
                 Rechnung.verrechnet_in_rechnung_id.is_(None),
                 Rechnung.ist_entwurf == False,  # noqa: E712
                 Rechnung.storniert == False,  # noqa: E712
-                Rechnung.import_quelle.is_(None),
                 Rechnung.zahlungsstatus.in_(["offen", "teilweise"]),
                 Rechnung.faellig_am.isnot(None),
                 Rechnung.faellig_am < heute,
@@ -1223,7 +1222,11 @@ def mahnung_loeschen(mahnung_id: int, db: Session = Depends(get_db)):
             .order_by(Mahnung.stufe.desc())
             .first()
         )
-        rechnung.mahnstufe_aktuell = hoechste_verbleibende[0] if hoechste_verbleibende else 0
+        # nicht unter die im Altsystem bereits verschickte Stufe zurückfallen (Migration 196)
+        rechnung.mahnstufe_aktuell = max(
+            hoechste_verbleibende[0] if hoechste_verbleibende else 0,
+            rechnung.altsystem_mahnstufe or 0,
+        )
 
     # Ohne expliziten flush() liest die folgende max_verbleibend-Abfrage noch den alten
     # mahnstufe_aktuell-Wert (Bug gefunden 2026-08-02: Rückbau der Kundensperrung lief dadurch
@@ -1359,8 +1362,6 @@ def mahnung_pdf_bytes(db: Session, mahnung: Mahnung, nur_ansehen: bool = False) 
     rechnungen_by_id = {
         r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_([l.rechnung_id for l in links])).all()
     }
-    if any(r.import_quelle for r in rechnungen_by_id.values()):
-        raise HTTPException(status_code=409, detail="Diese Mahnung enthält eine importierte Rechnung und kann nicht ausgegeben werden.")
     positionen = []
     for link in links:
         r = rechnungen_by_id.get(link.rechnung_id)
@@ -1404,6 +1405,60 @@ def mahnung_pdf_bytes(db: Session, mahnung: Mahnung, nur_ansehen: bool = False) 
     return pdf_bytes, dateiname
 
 
+def original_der_importierten_rechnung(db: Session, rechnung: Rechnung) -> Optional[tuple[bytes, str]]:
+    """Original einer importierten bzw. extern erstellten Rechnung als (Inhalt, Dateiendung):
+    der angehängte Beleg, sonst ein archiviertes Original-PDF. None, wenn keins vorliegt - für
+    solche Rechnungen erzeugt RechnungsFee bewusst kein eigenes PDF (wäre eine zweite Rechnung)."""
+    from pathlib import Path
+    from database.connection import APP_DATA_DIR
+    from database.models import Beleg
+    if rechnung.beleg_id:
+        beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
+        if beleg:
+            pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+            if pfad.is_file():
+                return pfad.read_bytes(), (Path(beleg.original_name).suffix.lower() or ".pdf")
+    if rechnung.original_pdf_pfad:
+        pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
+        if pfad.is_file():
+            return pfad.read_bytes(), ".pdf"
+    return None
+
+
+class AltsystemMahnstufeRequest(BaseModel):
+    stufe: int = 0                  # 0 = im Altsystem nicht gemahnt
+    datum: Optional[date] = None    # Pflicht bei stufe > 0
+
+
+@router.put("/rechnungen/{rechnung_id}/altsystem")
+def altsystem_mahnstufe_setzen(rechnung_id: int, data: AltsystemMahnstufeRequest, db: Session = Depends(get_db)):
+    """Im Altsystem bereits verschickte Mahnstufe einer importierten Rechnung festhalten
+    (Migration 196) - nur solange in RechnungsFee noch keine Mahnung für sie existiert."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if not rechnung.import_quelle or rechnung.typ != "ausgang":
+        raise HTTPException(status_code=422, detail="Nur bei importierten bzw. extern erstellten Ausgangsrechnungen möglich.")
+    if db.query(MahnungRechnung).filter(MahnungRechnung.rechnung_id == rechnung_id).first():
+        raise HTTPException(status_code=409, detail="Für diese Rechnung gibt es in RechnungsFee schon eine Mahnung – die Stufe aus dem Altsystem lässt sich nicht mehr ändern.")
+    if data.stufe < 0:
+        raise HTTPException(status_code=422, detail="Ungültige Mahnstufe.")
+    if data.stufe > 0:
+        if not db.query(Mahnstufe).filter(Mahnstufe.stufe == data.stufe).first():
+            raise HTTPException(status_code=422, detail=f"Mahnstufe {data.stufe} gibt es nicht.")
+        if not data.datum:
+            raise HTTPException(status_code=422, detail="Bitte das Datum der letzten Mahnung im Altsystem angeben.")
+        if data.datum > date.today():
+            raise HTTPException(status_code=422, detail="Das Datum darf nicht in der Zukunft liegen.")
+    rechnung.altsystem_mahnstufe = data.stufe
+    rechnung.altsystem_gemahnt_am = data.datum if data.stufe > 0 else None
+    rechnung.mahnstufe_aktuell = data.stufe
+    db.commit()
+    return {"altsystem_mahnstufe": rechnung.altsystem_mahnstufe,
+            "altsystem_gemahnt_am": rechnung.altsystem_gemahnt_am,
+            "mahnstufe_aktuell": rechnung.mahnstufe_aktuell}
+
+
 def sammle_mahnung_anhaenge(db: Session, mahnung: Mahnung) -> list[tuple[bytes, str]]:
     """Zusätzliche Dokumentanhänge für den Mail-Versand dieser Mahnung, je nach Konfiguration
     ihrer Mahnstufe (Migration 137, Nutzer-Feedback: "Unter Einstellungen will ich für jede
@@ -1424,8 +1479,14 @@ def sammle_mahnung_anhaenge(db: Session, mahnung: Mahnung) -> list[tuple[bytes, 
             if not r:
                 continue
             try:
-                resp = rechnung_als_pdf(rechnung_id=rid, db=db)
                 nr = (r.rechnungsnummer or str(rid)).replace("/", "-").replace(" ", "_")
+                if r.import_quelle:
+                    # Kein neues PDF erzeugen (wäre eine zweite Rechnung) - angehängtes Original
+                    original = original_der_importierten_rechnung(db, r)
+                    if original:
+                        anhaenge.append((original[0], f"Rechnung_{nr}{original[1]}"))
+                    continue
+                resp = rechnung_als_pdf(rechnung_id=rid, db=db)
                 anhaenge.append((resp.body, f"Rechnung_{nr}.pdf"))
             except Exception:
                 import logging
@@ -1578,9 +1639,15 @@ def generate_inkasso_zip(db: Session, kunde_id: int) -> tuple[bytes, str]:
     rechnung_pdfs: list[tuple[str, bytes]] = []
     rechnungen_deckblatt: list[dict] = []
     for r in offene_rechnungen:
-        resp = rechnung_als_pdf(rechnung_id=r.id, db=db)
         nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
-        rechnung_pdfs.append((f"rechnungen/{nr}.pdf", resp.body))
+        if r.import_quelle:
+            # Importierte Rechnung: angehängtes Original statt eines neu erzeugten PDFs
+            original = original_der_importierten_rechnung(db, r)
+            if original:
+                rechnung_pdfs.append((f"rechnungen/{nr}{original[1]}", original[0]))
+        else:
+            resp = rechnung_als_pdf(rechnung_id=r.id, db=db)
+            rechnung_pdfs.append((f"rechnungen/{nr}.pdf", resp.body))
         rechnungen_deckblatt.append({
             "rechnungsnummer": r.rechnungsnummer,
             "datum": str(r.datum),

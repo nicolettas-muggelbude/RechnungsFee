@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 195
+SCHEMA_VERSION = 196
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4538,6 +4538,20 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 195"))
             conn.commit()
             print("[Migration] Schema auf Version 195 (Issue #562: unternehmen.pdf_artikelnummer)")
+
+    if version < 196:
+        with engine.connect() as conn:
+            # Community-Frage: importierte/extern erstellte Rechnungen dürfen gemahnt werden. Eine
+            # im Altsystem bereits verschickte Mahnstufe samt Datum wird festgehalten, damit die
+            # Zählung nicht wieder bei der Zahlungserinnerung anfängt.
+            _r196 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            for name, typ in [("altsystem_mahnstufe", "INTEGER NOT NULL DEFAULT 0"),
+                              ("altsystem_gemahnt_am", "DATE")]:
+                if _r196 and name not in _r196:
+                    conn.execute(text(f"ALTER TABLE rechnungen ADD COLUMN {name} {typ}"))
+            conn.execute(text("PRAGMA user_version = 196"))
+            conn.commit()
+            print("[Migration] Schema auf Version 196 (rechnungen.altsystem_mahnstufe, altsystem_gemahnt_am)")
 
 
 def _migrate_kategorien() -> None:

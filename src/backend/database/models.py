@@ -835,7 +835,7 @@ class Rechnung(Base):
     beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id"))
     notizen: Mapped[str | None] = mapped_column(Text)
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
-    import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, nicht neu ausgeben/mahnen
+    import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, kein neues PDF/kein Versand (mahnbar seit Migration 196)
     kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
     bemerkung_erechnung: Mapped[str | None] = mapped_column(Text)  # eigene Bemerkung -> ZUGFeRD BT-22, Vorrang vor notizen (Issue #474)
     # Issue #492: steuerfreie Leistung nach § 4 UStG (Grund aus unternehmen.steuerbefreiung_4,
@@ -865,6 +865,10 @@ class Rechnung(Base):
     storniert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ueberzahlung_anerkannt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     mahnstufe_aktuell: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Migration 196: im Altsystem bereits verschickte Mahnstufe einer importierten/extern erstellten
+    # Rechnung (0 = keine) und deren Datum - Untergrenze für mahnstufe_aktuell, Basis der Fälligkeit
+    altsystem_mahnstufe: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    altsystem_gemahnt_am: Mapped[date | None] = mapped_column(Date, nullable=True)
     storno_grund: Mapped[str | None] = mapped_column(String(500))
     storno_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     # Tag des Forderungsausfalls (zahlungsstatus "uneinbringlich", §17 Abs. 2 Nr. 1 UStG) - Monat

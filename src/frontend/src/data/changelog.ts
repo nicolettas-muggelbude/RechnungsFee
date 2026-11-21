@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.14',
+    datum: 'in Arbeit',
+    eintraege: [
+      { typ: 'verbesserung', text: 'Mahnwesen: Importierte und extern erstellte Ausgangsrechnungen kannst du jetzt mahnen – bisher waren sie komplett gesperrt. Als Rechnungsanhang geht das angehängte Original mit, ein neues Rechnungs-PDF entsteht nicht. Hast du im Altsystem schon gemahnt, trägst du im Detailbereich der Rechnung Stufe und Datum ein, dann geht die Zählung dort weiter. Danke an die Community für die Frage.' },
+    ],
+  },
+  {
     version: 'v0.7.13',
     datum: 'November 2026',
     eintraege: [

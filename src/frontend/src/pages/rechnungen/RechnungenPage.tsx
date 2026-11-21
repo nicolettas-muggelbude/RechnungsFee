@@ -16,7 +16,7 @@ import {
   getUstSaetze, getKassenstand,
   uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, leseGedroppteDatei, dateiInSpeicher,
   getBuchungsvorlage, erledigtVorlage,
-  getMahnwesenEinstellungen, getRechnungMahnungen,
+  getMahnwesenEinstellungen, getRechnungMahnungen, setzeAltsystemMahnstufe,
   getZugferdAnhaenge, uploadZugferdAnhang, deleteZugferdAnhang,
   STEUERBEFREIUNGEN_4, type Rechnung, type RechnungCreate, type RechnungUpdate, type RechnungspositionCreate, type BarZahlungCreate, type BarZahlungResult,
   getPostfachEingang, postfachAbrufen, postfachVerwerfen, postfachUebernommen, postfachDateiPfad, ladePostfachDatei,
@@ -1063,6 +1063,83 @@ function ZahlungsDialog({
 // Rechnungs-Detail
 // ---------------------------------------------------------------------------
 
+// Importierte/extern erstellte Ausgangsrechnung: im Altsystem bereits verschickte Mahnstufe
+// festhalten, damit die Zählung dort weitergeht (Migration 196). Nur bis zur ersten Mahnung in
+// RechnungsFee änderbar.
+function AltsystemMahnstufe({ rechnung }: { rechnung: Rechnung }) {
+  const qc = useQueryClient()
+  const { data: einst } = useQuery({
+    queryKey: ['mahnwesen-einstellungen'],
+    queryFn: getMahnwesenEinstellungen,
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: mahnungen = [] } = useQuery({
+    queryKey: ['rechnung-mahnungen', rechnung.id],
+    queryFn: () => getRechnungMahnungen(rechnung.id),
+    enabled: !!einst?.aktiv,
+  })
+  const [stufe, setStufe] = useState(String(rechnung.altsystem_mahnstufe ?? 0))
+  const [datum, setDatum] = useState(rechnung.altsystem_gemahnt_am ?? '')
+  const [fehler, setFehler] = useState<string | null>(null)
+  const mut = useMutation({
+    mutationFn: () => setzeAltsystemMahnstufe(rechnung.id, Number(stufe), Number(stufe) > 0 ? (datum || null) : null),
+    onSuccess: () => {
+      setFehler(null)
+      qc.invalidateQueries({ queryKey: ['rechnungen'] })
+      qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+      qc.invalidateQueries({ queryKey: ['mahnwesen-faellig'] })
+    },
+    onError: (e: Error) => setFehler(e.message),
+  })
+  if (!einst?.aktiv) return null
+  const stufen = [...(einst.mahnstufen ?? [])].sort((a, b) => a.stufe - b.stufe)
+  const bezeichnung = (n: number) => stufen.find((s) => s.stufe === n)?.bezeichnung ?? `Stufe ${n}`
+  if (mahnungen.length > 0) {
+    return rechnung.altsystem_mahnstufe ? (
+      <p className="mt-2 text-xs">
+        Im Altsystem bereits gemahnt: {bezeichnung(rechnung.altsystem_mahnstufe)}
+        {rechnung.altsystem_gemahnt_am && <> am {formatDatum(rechnung.altsystem_gemahnt_am)}</>}
+      </p>
+    ) : null
+  }
+  const geaendert = stufe !== String(rechnung.altsystem_mahnstufe ?? 0) || datum !== (rechnung.altsystem_gemahnt_am ?? '')
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <label htmlFor="altsystem-stufe">Im Altsystem bereits gemahnt:</label>
+      <select
+        id="altsystem-stufe"
+        value={stufe}
+        onChange={(e) => setStufe(e.target.value)}
+        className="border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+      >
+        <option value="0">nein</option>
+        {stufen.map((s) => <option key={s.id} value={s.stufe}>{s.bezeichnung}</option>)}
+      </select>
+      {stufe !== '0' && (
+        <>
+          <span>am</span>
+          <DateInput
+            value={datum}
+            onChange={setDatum}
+            className="border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+          />
+        </>
+      )}
+      {geaendert && (
+        <button
+          type="button"
+          onClick={() => mut.mutate()}
+          disabled={mut.isPending || (stufe !== '0' && !datum)}
+          className="rounded bg-amber-600 px-2 py-0.5 font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          Speichern
+        </button>
+      )}
+      {fehler && <p role="alert" className="w-full text-red-600 dark:text-red-400">{fehler}</p>}
+    </div>
+  )
+}
+
 function RechnungMahnungenSection({ rechnung, navigate }: { rechnung: Rechnung; navigate: ReturnType<typeof useNavigate> }) {
   const { data: einst } = useQuery({
     queryKey: ['mahnwesen-einstellungen'],
@@ -1569,7 +1646,8 @@ function RechnungDetail({
             {rechnung.import_quelle === 'extern'
               ? 'Extern erstellt – das Original liegt außerhalb von RechnungsFee.'
               : 'Importiert – Original im Altsystem.'}{' '}
-            Diese Rechnung bleibt als offener Posten sichtbar, kann aber nicht neu als PDF erzeugt, versendet oder gemahnt werden. Original und ggf. Berichtigung kannst du unten als Beleg anhängen.
+            Diese Rechnung bleibt als offener Posten sichtbar und kann gemahnt werden, aber nicht neu als PDF erzeugt oder versendet werden. Original und ggf. Berichtigung kannst du unten als Beleg anhängen – eine Mahnung schickt dann das Original als Rechnungsanhang mit.
+            {rechnung.typ === 'ausgang' && <AltsystemMahnstufe rechnung={rechnung} />}
           </div>
         )}
 
@@ -1581,7 +1659,7 @@ function RechnungDetail({
               onClick={() => {
                 const setzen = !rechnung.import_quelle
                 const frage = setzen
-                  ? 'Diese Rechnung als extern erstellt kennzeichnen? RechnungsFee erzeugt dafür dann kein eigenes PDF mehr, versendet und mahnt sie nicht – maßgeblich ist dein Original.'
+                  ? 'Diese Rechnung als extern erstellt kennzeichnen? RechnungsFee erzeugt dafür dann kein eigenes PDF mehr und versendet sie nicht – maßgeblich ist dein Original. Mahnen bleibt möglich.'
                   : 'Kennzeichnung „extern erstellt" entfernen? Danach kann RechnungsFee wieder ein eigenes PDF erzeugen und versenden.'
                 if (window.confirm(frage)) externMutation.mutate(setzen)
               }}

@@ -84,7 +84,7 @@ Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern 
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
 
-`SCHEMA_VERSION = 195` – zentrale Konstante (wird in `main.py` gepflegt).
+`SCHEMA_VERSION = 196` – zentrale Konstante (wird in `main.py` gepflegt).
 
 ### Ablauf beim App-Start
 ```
@@ -344,6 +344,7 @@ Jede Änderung an Kategorien muss an **drei Stellen** gleichzeitig erfolgen:
 | 193 | Issue #578: anlageverzeichnis.afa_sofort BOOLEAN NOT NULL DEFAULT 0 – voller Abzug im Anschaffungsjahr für EDV/Software mit Nutzungsdauer 1 Jahr (BMF-Schreiben Computerhardware/Software, „wird nicht beanstandet“) statt Monatsprinzip (bisher z. B. Kauf im Mai: 8/12 im Kaufjahr, 4/12 im Folgejahr). Bewusst Opt-in je Anlagegut: bestehende Einträge rechnen unverändert, damit bereits abgegebene EÜR-Jahre stimmen; im Formular bei neuen EDV-Gütern mit ND 1 (linear) vorausgewählt. Validierung (`AnlagegutBase.check_afa_methode`): nur typ=edv, ND 1, linear. `_afa_jahresplan()` liefert dann eine einzige Zeile im Kaufjahr |
 | 194 | Issue #561: unternehmen.mail_betreff_mahnung VARCHAR(500) + mail_text_mahnung TEXT – eigene Mailvorlage für Mahnungen (Reiter „Mahnung“ unter Mailvorlagen, eigene Platzhalter {bezeichnung} {stufe} {mahnnummer} {rechnungsnummer} {kunde} {firmenname}); bisher fest eingebauter Text. `MahnungMailDialog.tsx::mahnungMailVorlage()` für SMTP-Dialog und Mailprogramm-Weg: Betreff = `mahnstufen.betreff_vorlage` (Nebenfund: wurde gespeichert, aber nie verwendet) → Mailvorlage → Standard; Text = Mailvorlage → Standard (Standard = bisheriger Text). `mahnstufen.text_vorlage` bleibt der Brieftext im Mahnungs-PDF |
 | 195 | Issue #562: unternehmen.pdf_artikelnummer BOOLEAN NOT NULL DEFAULT 0 – Schalter „Artikelnummern anzeigen“ (Einstellungen → Rechnungsvorlagen, beide Vorlagen): Spalte „Art.-Nr.“ bei jeder Position mit Artikel; Inhalt = eigener Eintrag im Feld Artikelcode (DB `artikel.artikelcode`), sonst automatische Nummer ART-#### (DB `artikel.artikelnummer`) – `pdf_rechnung_base.py::art_nr_spalte()/art_nr_anzeige()`. Migration setzt den Schalter auf 1, wenn schon Artikel mit Artikelcode existieren (bisher erschien die Spalte automatisch, Issue #169). Im absender_snapshot eingefroren; Snapshots ohne den Schlüssel behalten das alte Verhalten (Spalte nur bei eigenem Eintrag, kein ART-#### als Rückfall) |
+| 196 | Community-Frage nach v0.7.13: importierte/extern erstellte Ausgangsrechnungen sind mahnbar (Sperre aus PR #446 war zu streng – Grund war nur das Erzeugen eines neuen Rechnungs-PDFs). rechnungen.altsystem_mahnstufe INTEGER NOT NULL DEFAULT 0 + altsystem_gemahnt_am DATE: im Altsystem bereits verschickte Stufe, nur bis zur ersten Mahnung in RechnungsFee änderbar (`PUT /mahnwesen/rechnungen/{id}/altsystem`); Untergrenze für mahnstufe_aktuell (auch beim Löschen eines Entwurfs), `_faellige_naechste_stufe()` rechnet ohne versendete Mahnung ab altsystem_gemahnt_am. Anhang „Rechnung“ und Inkasso-Paket nutzen `original_der_importierten_rechnung()` (Beleg, sonst original_pdf_pfad) statt `rechnung_als_pdf()`; ohne Original kein Anhang. PDF-Erzeugung und Mailversand der Rechnung bleiben gesperrt, offene importierte Gutschriften werden weiterhin nicht automatisch verrechnet |
 
 ### `_backup_datenbank()`
 - `sqlite3.connect().backup()` – WAL-sicher, konsistentes Snapshot

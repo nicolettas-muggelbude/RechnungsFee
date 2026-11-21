@@ -1544,6 +1544,8 @@ export type Rechnung = {
   notizen: string | null
   externe_belegnr: string | null
   import_quelle?: string | null
+  altsystem_mahnstufe?: number            // Migration 196: im Altsystem bereits gemahnt bis Stufe
+  altsystem_gemahnt_am?: string | null
   kunden_bestellnummer?: string | null
   bemerkung_erechnung?: string | null
   positionen: Rechnungsposition[]
@@ -3579,6 +3581,12 @@ export type MahnwesenKundeUebersicht = {
 
 export const getMahnwesenEinstellungen = () =>
   request<MahnwesenEinstellungen>('/mahnwesen/einstellungen')
+// Importierte Rechnung: im Altsystem bereits verschickte Mahnstufe (0 = keine) und deren Datum
+export const setzeAltsystemMahnstufe = (rechnungId: number, stufe: number, datum: string | null) =>
+  request<{ altsystem_mahnstufe: number; altsystem_gemahnt_am: string | null; mahnstufe_aktuell: number }>(
+    `/mahnwesen/rechnungen/${rechnungId}/altsystem`,
+    { method: 'PUT', body: JSON.stringify({ stufe, datum }) },
+  )
 export const updateMahnwesenEinstellungen = (data: MahnwesenEinstellungenUpdate) =>
   request<MahnwesenEinstellungen>('/mahnwesen/einstellungen', { method: 'PUT', body: JSON.stringify(data) })
 export const createMahnstufe = (data: MahnstufeCreate) =>

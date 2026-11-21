@@ -359,6 +359,8 @@ class RechnungResponse(BaseModel):
     zahlungsstatus: str
     zahlungsdatum: Optional[date]
     mahnstufe_aktuell: int = 0
+    altsystem_mahnstufe: int = 0                 # Migration 196
+    altsystem_gemahnt_am: Optional[date] = None
     notizen: Optional[str]
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
