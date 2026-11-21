@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { sucheArtikel, type ArtikelSuche } from '../api/client'
+import { artikelNrAnzeige } from '../utils/artikelnummer'
 
 interface Props {
   value: string
@@ -94,7 +95,7 @@ export function ArtikelAutocomplete({ value, onChange, onArtikelWahl, placeholde
                 )}
               </div>
               <div className="text-slate-400 dark:text-slate-500">
-                {a.artikelnummer} · {a.einheit} · {parseFloat(String(a.vk_brutto)).toFixed(2).replace('.', ',')} € (brutto)
+                {artikelNrAnzeige(a)} · {a.einheit} · {parseFloat(String(a.vk_brutto)).toFixed(2).replace('.', ',')} € (brutto)
               </div>
             </button>
           ))}

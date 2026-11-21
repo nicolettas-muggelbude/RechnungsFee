@@ -2042,6 +2042,7 @@ export type Artikel = {
 export type ArtikelSuche = {
   id: number
   artikelnummer: string
+  artikelcode?: string | null  // Issue #562: eigene Artikelnummer
   typ: ArtikelTyp
   bezeichnung: string
   einheit: string

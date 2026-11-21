@@ -118,6 +118,7 @@ def suche_artikel(
         result.append(ArtikelSucheResponse(
             id=a.id,
             artikelnummer=a.artikelnummer,
+            artikelcode=a.artikelcode,
             typ=a.typ,
             bezeichnung=a.bezeichnung,
             einheit=a.einheit,

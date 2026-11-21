@@ -77,6 +77,23 @@ def test_pdf_zeigt_beide_nummern(rechnung, erzeuge):
     assert "Art.-Nr." in text_ and "PR-4711" in text_ and "ART-0005" in text_
 
 
+def test_suche_und_inventur_zeigen_eigene_nummer(rechnung):
+    """Artikelauswahl liefert den Artikelcode mit, die Inventurliste zeigt die eigene Nummer."""
+    from sqlalchemy.orm import object_session
+    from api.artikel import suche_artikel
+    from api.inventurliste import _inventur_zeilen
+    db = object_session(rechnung)
+    treffer = {t.bezeichnung: t for t in suche_artikel(q="e", db=db)}
+    assert treffer["Leiste"].artikelcode == "PR-4711"
+    assert treffer["Schraube"].artikelcode is None
+    for a in db.query(Artikel):
+        a.lager_aktiv = True
+        a.bestand_aktuell = Decimal("1")
+    db.commit()
+    assert {z.bezeichnung: z.artikelnummer for z in _inventur_zeilen(db)} == {
+        "Leiste": "PR-4711", "Schraube": "ART-0005"}
+
+
 @pytest.mark.parametrize("mit_code", [True, False])
 def test_migration_195(tmp_path, monkeypatch, mit_code):
     from database.models import Unternehmen

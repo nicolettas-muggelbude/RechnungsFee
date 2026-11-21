@@ -146,6 +146,7 @@ class ArtikelSucheResponse(BaseModel):
     """Kompaktes Schema für Autocomplete in Rechnungspositionen."""
     id: int
     artikelnummer: str
+    artikelcode: Optional[str] = None  # Issue #562: eigene Artikelnummer, in der Auswahl angezeigt
     typ: str
     bezeichnung: str
     einheit: str
