@@ -278,7 +278,7 @@ class Kategorie(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    kontenart: Mapped[str] = mapped_column(String(20), nullable=False)  # Aufwand|Erlös|Privat|Anlage
+    kontenart: Mapped[str] = mapped_column(String(20), nullable=False)  # Aufwand|Erlös|Privat|Anlage|Neutral (#564: erfolgsneutral, beide Seiten)
     konto_skr03: Mapped[str | None] = mapped_column(String(10))
     konto_skr04: Mapped[str | None] = mapped_column(String(10))
     konto_skr49: Mapped[str | None] = mapped_column(String(10))

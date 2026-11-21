@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.13',
     datum: 'in Arbeit',
     eintraege: [
+      { typ: 'neu', text: 'Kategorien: Neue Kategorie „Durchlaufende Posten“ (SKR03 1590, SKR04 1370) und neue Kontenart „Neutral“. Sie ist bei Einnahmen und Ausgaben wählbar und zählt weder in der EÜR noch in der Umsatzsteuer-Voranmeldung, z. B. für eine doppelt erhaltene Zahlung, die du zurücküberweist: Eingang und Rückzahlung beide darauf buchen. Danke an dirkk (Issue #564).' },
       { typ: 'fix', text: 'Rechnungen: Eine von Hand eingegebene Rechnungsnummer, die schon vergeben ist, wird jetzt mit einem Hinweis abgelehnt – beim Anlegen und beim Ändern eines Entwurfs. Bisher wurde sie ohne Widerspruch übernommen. Danke an Markus (Issue #554).' },
       { typ: 'fix', text: 'Rechnung, Mahnung, Kontoauszug und Inkasso-Deckblatt: Ohne Firmennamen fehlte dein Name in der kleinen Absenderzeile über dem Adressfeld – sie begann direkt mit der Straße. Jetzt stehen dort Vor- und Nachname. Danke an Markus (Issue #558).' },
       { typ: 'fix', text: 'Mahnwesen: „Drucken“ zeigt die Zahlungserinnerung bzw. Mahnung jetzt im Fenster an – bisher blieb es weiß, nur „Ansehen“ funktionierte. Danke an Markus (Issue #559).' },

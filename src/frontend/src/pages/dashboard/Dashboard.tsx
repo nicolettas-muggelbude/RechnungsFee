@@ -1308,7 +1308,8 @@ export function Dashboard() {
   const alle = eintraege ?? []
 
   // Betriebsbuchungen (ohne Privat)
-  const betrieb = alle.filter((e) => e.kategorie_kontenart !== 'Privat')
+  // Issue #564: Durchlaufende Posten (Neutral) sind weder Einnahme noch Ausgabe
+  const betrieb = alle.filter((e) => e.kategorie_kontenart !== 'Privat' && e.kategorie_kontenart !== 'Neutral')
   const privat  = alle.filter((e) => e.kategorie_kontenart === 'Privat')
 
   const einnahmen = betrieb
@@ -1325,7 +1326,7 @@ export function Dashboard() {
   // Verlust = 0 (negatives Einkommen gibt es bei §11b nicht)
   function calcZufluss(entries: typeof aktuelleEintraege) {
     const list = (entries ?? []).filter(
-      (e) => e.kategorie_kontenart !== 'Privat' && e.beschreibung !== 'Kassenanfangsbestand'
+      (e) => e.kategorie_kontenart !== 'Privat' && e.kategorie_kontenart !== 'Neutral' && e.beschreibung !== 'Kassenanfangsbestand'
     )
     const ein = list.filter((e) => e.art === 'Einnahme').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
     const aus = list.filter((e) => e.art === 'Ausgabe').reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)

@@ -34,7 +34,7 @@ _log_handler.setFormatter(logging.Formatter(
 logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
-from database.seed import run_all_seeds
+from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
 SCHEMA_VERSION = 195
@@ -4713,6 +4713,8 @@ def _migrate_kategorien() -> None:
             {"name": "Rentenversicherung (freiwillig)",      "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C4",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Riester-Beiträge",                     "kontenart": "Privat",  "konto_skr03": "1820", "konto_skr04": "2200", "eks_kategorie": "C9",    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             {"name": "Sonstige Absetzungen",                 "kontenart": "Privat",  "konto_skr03": "1800", "konto_skr04": "2100", "eks_kategorie": "C10",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+            # Issue #564: erfolgsneutral, bei Einnahme und Ausgabe wählbar (Kontenart Neutral)
+            {"name": "Durchlaufende Posten",             "kontenart": "Neutral", "konto_skr03": "1590", "konto_skr04": "1370", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": DURCHLAUFENDE_POSTEN_BESCHREIBUNG},
             # Issue #61 – Forderungsausfall
             {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "2400", "konto_skr04": "6930", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
             # Issue #106 – fehlende EÜR-Zeilen

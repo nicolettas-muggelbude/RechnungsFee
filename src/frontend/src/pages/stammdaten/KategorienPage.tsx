@@ -15,9 +15,11 @@ const KONTENART_META: Record<string, { label: string; cls: string; beschreibung:
   Aufwand: { label: 'Aufwand',  cls: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',                 beschreibung: 'Betriebsausgaben' },
   Anlage:  { label: 'Anlage',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',             beschreibung: 'Anlagevermögen' },
   Privat:  { label: 'Privat',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',         beschreibung: 'Private Entnahmen/Einlagen' },
+  // Issue #564: bei Einnahme und Ausgabe wählbar, weder EÜR noch UStVA
+  Neutral: { label: 'Neutral',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',         beschreibung: 'Durchlaufende Posten (nicht in EÜR/UStVA)' },
 }
 
-const REIHENFOLGE = ['Erlös', 'Aufwand', 'Anlage', 'Privat']
+const REIHENFOLGE = ['Erlös', 'Aufwand', 'Anlage', 'Privat', 'Neutral']
 
 function UstBadge({ satz }: { satz: number }) {
   if (satz === 0)  return <span className="text-xs text-slate-400 dark:text-slate-500">§19 / 0 %</span>
@@ -161,6 +163,7 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
               <option>Erlös</option>
               <option>Anlage</option>
               <option>Privat</option>
+              <option value="Neutral">Neutral (durchlaufend)</option>
             </select>
           </div>
 

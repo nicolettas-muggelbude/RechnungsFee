@@ -296,7 +296,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     if (!kat) return
 
     // Privat-Buchung: immer USt=0, kein Vorsteuerabzug, kein Sonderfall
-    if (kat.kontenart === 'Privat') {
+    // Issue #564: Durchlaufende Posten (Neutral) ebenso ohne USt
+    if (kat.kontenart === 'Privat' || kat.kontenart === 'Neutral') {
       setValue('ust_satz', '0')
       setValue('vorsteuerabzug', false)
       setValue('ust_sonderfall', '')
@@ -316,6 +317,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   const gewaehlteKat = (kategorien ?? []).find((k) => String(k.id) === kategorie_id)
   const istPrivatKategorie = gewaehlteKat?.kontenart === 'Privat'
+  const istNeutralKategorie = gewaehlteKat?.kontenart === 'Neutral'
   const ist25aAnkauf = gewaehlteKat?.name?.includes('§25a')
   const istFahrtkostenKat = gewaehlteKat?.eks_kategorie === 'B6_5'
   // SKR04 4125 seit Migration 179 (vorher fälschlich 3125, kann bei eigenen Anpassungen noch stehen)
@@ -403,6 +405,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat = alle.filter((k) => k.kontenart === 'Anlage')
   const entnahmeKat = privatKat.filter((k) => k.euer_zeile !== 107)
+  // Issue #564: erfolgsneutrale Kategorien (Durchlaufende Posten) auf beiden Seiten
+  const neutralKat = alle.filter((k) => k.kontenart === 'Neutral')
 
   function renderKategorieOptgroups(artWert: string) {
     return artWert === 'Einnahme' ? (
@@ -410,9 +414,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
         <optgroup label="Erlöse">
           {erloeseKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
         </optgroup>
-        {einlageKat.length > 0 && (
+        {einlageKat.length + neutralKat.length > 0 && (
           <optgroup label="Sonstiges">
-            {einlageKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
+            {[...einlageKat, ...neutralKat].map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
       </>
@@ -426,9 +430,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {anlageKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
-        {entnahmeKat.length > 0 && (
+        {entnahmeKat.length + neutralKat.length > 0 && (
           <optgroup label="Sonstiges">
-            {entnahmeKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
+            {[...entnahmeKat, ...neutralKat].map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
       </>
@@ -817,6 +821,17 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               </div>
             )}
 
+            {/* Durchlaufende Posten (Issue #564) */}
+            {istNeutralKategorie && (
+              <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                <span>
+                  <strong>Durchlaufender Posten</strong> – zählt weder in der EÜR noch in der
+                  Umsatzsteuer-Voranmeldung. Eingang und Rückzahlung beide auf diese Kategorie
+                  buchen, dann gleicht sich der Betrag aus. USt ist automatisch 0 %.
+                </span>
+              </div>
+            )}
+
             {/* §25a-Hinweis */}
             {ist25aAnkauf && (
               <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-2 text-xs text-orange-800 dark:text-orange-300">
@@ -941,12 +956,12 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                 </label>
                 <select
                   {...register('ust_satz')}
-                  disabled={sperreUstAufNull || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst}
+                  disabled={sperreUstAufNull || istPrivatKategorie || istNeutralKategorie || ist25aAnkauf || istEinfuhrUst}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
-                  {sperreUstAufNull || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst ? (
+                  {sperreUstAufNull || istPrivatKategorie || istNeutralKategorie || ist25aAnkauf || istEinfuhrUst ? (
                     <option value="0">
-                      {sperreUstAufNull ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : istEinfuhrUst ? 'entfällt (voller Betrag = Steuer)' : '0 % (§25a – kein VSt-Abzug)'}
+                      {sperreUstAufNull ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : istNeutralKategorie ? '0 % (durchlaufend)' : istEinfuhrUst ? 'entfällt (voller Betrag = Steuer)' : '0 % (§25a – kein VSt-Abzug)'}
                     </option>
                   ) : (
                     aktiveSaetze.map((s) => {
@@ -985,7 +1000,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             )}
 
             {/* Vorsteuerabzug */}
-            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !ist25aAnkauf && (
+            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !istNeutralKategorie && !ist25aAnkauf && (
               <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
                 <span className="flex items-center gap-1">
@@ -996,7 +1011,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             )}
 
             {/* Reverse Charge / Sonderfall */}
-            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !ist25aAnkauf && (
+            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !istNeutralKategorie && !ist25aAnkauf && (
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 flex items-center gap-1">
                   Steuerlicher Sonderfall (Reverse Charge)

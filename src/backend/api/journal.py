@@ -204,7 +204,8 @@ def monat_statistik(monat: str = Query(..., description="Format: YYYY-MM"), db: 
     # betrieblichen Einnahmen/Ausgaben und werden herausgefiltert.
     betrieb_filter = or_(
         Journaleintrag.kategorie_id.is_(None),
-        Kategorie.kontenart != "Privat",
+        # Issue #564: Durchlaufende Posten (Neutral) ebenfalls nicht betrieblich
+        Kategorie.kontenart.notin_(["Privat", "Neutral"]),
     )
     einnahmen = (
         db.query(func.sum(Journaleintrag.brutto_betrag))
@@ -323,6 +324,10 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
             vorsteuerabzug = False
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
+        elif kat.kontenart == "Neutral":
+            # Issue #564: Durchlaufende Posten - keine USt, kein Vorsteuerabzug
+            ust_satz = Decimal("0")
+            vorsteuerabzug = False
         if ist_ig_lieferung_konto(kat.konto_skr03, kat.konto_skr04) and not steuerbefreiung_grund:
             steuerbefreiung_grund = "§4 Nr. 1b UStG"
         if not data.ust_sonderfall and not data.ist_ig_erwerb:
@@ -751,6 +756,9 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
                 vorsteuerabzug = False
                 if not steuerbefreiung_grund:
                     steuerbefreiung_grund = "Privatbuchung"
+            elif split_kat.kontenart == "Neutral":
+                ust_satz = Decimal("0")
+                vorsteuerabzug = False
             if ist_ig_lieferung_konto(split_kat.konto_skr03, split_kat.konto_skr04) and not steuerbefreiung_grund:
                 steuerbefreiung_grund = "§4 Nr. 1b UStG"
         pos_sf = pos.ust_sonderfall or ("ig_erwerb" if pos.ist_ig_erwerb else None)
