@@ -155,13 +155,12 @@ Seit v0.7.13 können direkt gebuchte Ausgaben (Journal, Split, Buchungsvorlage) 
 tragen (`journal.lieferant_id`, Migration 192). Der DATEV-Export nutzt bisher nur bei Einnahmen den
 Debitor des Kunden als Personenkonto.
 
-- [ ] DATEV-Export: bei Ausgaben mit `lieferant_id` die Kreditornummer (`lieferanten.kreditor_nr`,
-  Migration 115) als Personenkonto, analog zum Debitor bei Einnahmen (`datev.py`, `debitor_map`)
-- [ ] Prüfen: Wechselwirkung mit Zahlungen auf Eingangsrechnungen (dort Kreditor über die Rechnung)
-  und mit Buchungen ohne Lieferant (unverändert)
-- [ ] Debitor bei Zahlungen auf Ausgangsrechnungen: Spalte 48 nutzt nur `journal.kunde_id`, das bei
-  Rechnungszahlungen leer ist (Issue #577 löste nur die Anzeige) – analog zum Kreditor über
-  `rechnung.kunde_id` ermitteln
+- [x] DATEV-Export: bei Ausgaben mit `lieferant_id` die Kreditornummer (`lieferanten.kreditor_nr`,
+  Migration 115) als Personenkonto, analog zum Debitor bei Einnahmen (`datev.py`, `_personenkonto()`)
+- [x] Prüfen: Wechselwirkung mit Zahlungen auf Eingangsrechnungen (Partner kommt immer zuerst aus der
+  Rechnung, auch bei Erstattungen) und mit Buchungen ohne Lieferant (unverändert leer)
+- [x] Debitor bei Zahlungen auf Ausgangsrechnungen über `rechnung.kunde_id`; Storno-Gegenbuchungen
+  ohne eigenen Partner bekommen das Personenkonto der Originalbuchung (`gruppe_id`)
 - [ ] Lieferanten-Historie/Kontokorrent: direkte Ausgaben zeigen oder bewusst weglassen (keine
   Verbindlichkeit) – entscheiden
 

@@ -310,26 +310,59 @@ def datev_buchungsstapel(
         .all()
     )
 
-    # Lookup-Maps für Spalte 48: Kreditoren-/Debitorennummer
-    kunde_ids = {j.kunde_id for j in eintraege if j.kunde_id}
+    # Lookup-Maps für Spalte 48: Kreditoren-/Debitorennummer.
+    # Issue #566 (v0.7.14): Partner zuerst über die Rechnung (Ausgangsrechnung → Debitor des
+    # Kunden, Eingangsrechnung → Kreditor des Lieferanten, unabhängig von der Buchungsrichtung -
+    # Rechnungszahlungen tragen selbst kein kunde_id, #577), sonst Kunde bzw. Lieferant der
+    # direkten Buchung. Storno-Gegenbuchungen übernehmen Kunde/Lieferant nicht (#566) - sie
+    # bekommen das Personenkonto ihrer Originalbuchung (gruppe_id), damit sich beide im
+    # Personenkonto aufheben.
     rechnung_ids_set = {j.rechnung_id for j in eintraege if j.rechnung_id}
+    eintrag_ids = {j.id for j in eintraege}
+    original_map: dict[int, Journaleintrag] = {j.id: j for j in eintraege}
+    fehlende_originale = {j.gruppe_id for j in eintraege if j.gruppe_id and j.gruppe_id not in eintrag_ids}
+    if fehlende_originale:
+        for o in db.query(Journaleintrag).filter(Journaleintrag.id.in_(fehlende_originale)).all():
+            original_map[o.id] = o
+            if o.rechnung_id:
+                rechnung_ids_set.add(o.rechnung_id)
+    rechnung_map: dict[int, Rechnung] = {
+        r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids_set)).all()
+    }
+    kunde_ids = {j.kunde_id for j in original_map.values() if j.kunde_id} | {
+        r.kunde_id for r in rechnung_map.values() if r.typ == "ausgang" and r.kunde_id
+    }
+    lieferant_ids = {j.lieferant_id for j in original_map.values() if j.lieferant_id} | {
+        r.lieferant_id for r in rechnung_map.values() if r.typ == "eingang" and r.lieferant_id
+    }
     debitor_map: dict[int, str] = {
         k.id: k.debitor_nr
         for k in db.query(Kunde).filter(Kunde.id.in_(kunde_ids)).all()
         if k.debitor_nr
     }
-    rechnung_map: dict[int, Rechnung] = {
-        r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids_set)).all()
-    }
-    rechnung_lieferant: dict[int, int] = {
-        r_id: r.lieferant_id for r_id, r in rechnung_map.items() if r.lieferant_id
-    }
-    lieferant_ids = set(rechnung_lieferant.values())
     kreditor_map: dict[int, str] = {
         lf.id: lf.kreditor_nr
         for lf in db.query(Lieferant).filter(Lieferant.id.in_(lieferant_ids)).all()
         if lf.kreditor_nr
     }
+
+    def _personenkonto_direkt(e: Journaleintrag) -> str:
+        r = rechnung_map.get(e.rechnung_id) if e.rechnung_id else None
+        if r is not None:
+            if r.typ == "ausgang":
+                return debitor_map.get(r.kunde_id, "") if r.kunde_id else ""
+            return kreditor_map.get(r.lieferant_id, "") if r.lieferant_id else ""
+        if e.kunde_id:
+            return debitor_map.get(e.kunde_id, "")
+        if e.lieferant_id:
+            return kreditor_map.get(e.lieferant_id, "")
+        return ""
+
+    def _personenkonto(e: Journaleintrag) -> str:
+        nr = _personenkonto_direkt(e)
+        if not nr and e.gruppe_id and e.gruppe_id in original_map:
+            nr = _personenkonto_direkt(original_map[e.gruppe_id])
+        return nr
 
     # Belege je Journaleintrag einmalig ermitteln (journal.beleg_id oder ueber die
     # verknuepfte Rechnung rechnung.beleg_id). dateiname (mit Endung) wird fuer die
@@ -393,13 +426,7 @@ def datev_buchungsstapel(
         buchungstext = j.beschreibung[:60]
 
         # Spalte 48: Kreditoren-/Debitorennummer
-        personenkonto = ""
-        if j.art == "Einnahme" and j.kunde_id:
-            personenkonto = debitor_map.get(j.kunde_id, "")
-        elif j.art == "Ausgabe" and j.rechnung_id:
-            lf_id = rechnung_lieferant.get(j.rechnung_id)
-            if lf_id:
-                personenkonto = kreditor_map.get(lf_id, "")
+        personenkonto = _personenkonto(j)
 
         leere_felder = [""] * 35    # Felder 15–49
         if j.id in beleg_info:
