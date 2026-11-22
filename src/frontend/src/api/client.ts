@@ -559,7 +559,7 @@ export type JournalEintrag = {
   kunde_zugferd_aktiv: boolean
   lieferant_id?: number | null    // Issue #566
   lieferant_name?: string | null
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   art: 'Einnahme' | 'Ausgabe'
   netto_betrag: string
   ust_satz: string
@@ -598,7 +598,7 @@ export type JournalEintragCreate = {
   kategorie_id?: number
   kunde_id?: number
   lieferant_id?: number  // Issue #566: nur bei Ausgaben
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   art: 'Einnahme' | 'Ausgabe'
   brutto_betrag: string
   ust_satz: string
@@ -668,7 +668,7 @@ export type SplitPosition = {
 export type SplitBuchungCreate = {
   datum: string
   art: 'Einnahme' | 'Ausgabe'
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   externe_belegnr?: string
   kunde_id?: number
   lieferant_id?: number  // Issue #566: nur bei Ausgaben
@@ -731,7 +731,7 @@ export const getJournalExportUrl = async (
 
 export const korrigiereZahlung = (
   rechnungId: number, journalId: number, neuesDatum: string, neuerBetrag?: string,
-  neueZahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal',  // Issue #576
+  neueZahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Privat',  // Issue #576, Privat #470
 ) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/zahlung/${journalId}/korrigieren`, {
     method: 'PUT',
@@ -1708,7 +1708,7 @@ export type ZahlungSplitPosition = {
 export type BarZahlungCreate = {
   betrag?: string
   datum: string
-  zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Keine' | 'Privat'  // Privat: Issue #470
   beschreibung?: string
   kategorie_id?: number
   split?: ZahlungSplitPosition[]

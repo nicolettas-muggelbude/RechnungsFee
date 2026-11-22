@@ -3437,6 +3437,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         )
 
     ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
+    # Issue #470: „Privat bezahlt“ nur für die Zahlung einer Eingangsrechnung (Betriebsausgabe aus
+    # privaten Mitteln = Einlage), nicht für Ausgangsrechnungen oder Erstattungen
+    if data.zahlungsart == "Privat" and (rechnung.typ != "eingang" or ist_gutschrift or rechnung.brutto_gesamt < 0):
+        raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur beim Bezahlen einer Eingangsrechnung.")
     # Issue #419 Phase 2b: eine Schlussrechnung kann durch Abschlags-Verrechnung einen
     # negativen Gesamtbetrag haben (Kunde hat de facto ein Guthaben) - fachlich dieselbe
     # Erstattungs-Situation wie eine Gutschrift (Geld fließt an den Kunden zurück statt
@@ -3951,7 +3955,7 @@ class ZahlungKorrigieren(BaseModel):
     neues_datum: date
     neuer_betrag: Decimal | None = None  # None = Betrag unverändert
     # Issue #576: None = Zahlungsart unverändert
-    neue_zahlungsart: Literal["Bar", "Karte", "Bank", "PayPal"] | None = None
+    neue_zahlungsart: Literal["Bar", "Karte", "Bank", "PayPal", "Privat"] | None = None  # Privat: Issue #470
 
 
 @router.put("/{rechnung_id}/zahlung/{journal_id}/korrigieren", response_model=RechnungResponse)
@@ -4054,8 +4058,10 @@ def zahlung_korrigieren(
     # Issue #576: Zahlungsart wechseln
     neue_zahlungsart = e.zahlungsart if nur_storno else (data.neue_zahlungsart or e.zahlungsart)
     if neue_zahlungsart != e.zahlungsart:
-        if e.zahlungsart not in ("Bar", "Karte", "Bank", "PayPal"):
+        if e.zahlungsart not in ("Bar", "Karte", "Bank", "PayPal", "Privat"):
             raise HTTPException(status_code=409, detail=f"Bei einer Buchung mit Zahlungsart „{e.zahlungsart}“ lässt sich die Zahlungsart nicht ändern.")
+        if neue_zahlungsart == "Privat" and e.art != "Ausgabe":
+            raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur bei Ausgaben.")
         if db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).first():
             raise HTTPException(
                 status_code=409,

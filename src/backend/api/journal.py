@@ -429,9 +429,16 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
     )
 
 
+def _pruefe_privat_bezahlt(zahlungsart: str, art: str) -> None:
+    """Issue #470: „Privat bezahlt“ = Betriebsausgabe aus privaten Mitteln (Einlage) - nur bei Ausgaben."""
+    if zahlungsart == "Privat" and art != "Ausgabe":
+        raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur bei Ausgaben.")
+
+
 @router.post("", response_model=JournalEintragResponse, status_code=201)
 def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
     """Legt einen neuen Journaleintrag an (innerhalb von 5 Min. direkt korrigierbar)."""
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     # Barkassen-Prüfung: Bar-Ausgabe darf den Kassenstand nicht übersteigen
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         kassenstand = _get_bar_kassenstand(db)
@@ -468,6 +475,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     Innerhalb von 5 Minuten nach Erstellung: direkte Korrektur (unsichtbar, GoBD-konform
     da noch keine Festschreibung). Danach: automatische Stornobuchung + korrigierte Neubuchung.
     """
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     original = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not original:
         raise HTTPException(404, "Journaleintrag nicht gefunden.")
@@ -798,6 +806,7 @@ def delete_anhang(eintrag_id: int, db: Session = Depends(get_db)):
 @router.post("/split", response_model=list[JournalEintragResponse], status_code=201)
 def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
     """Erstellt mehrere Journaleinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     # Barkassen-Prüfung für Split-Ausgaben (nur Bar, Gesamtbetrag aller Positionen)
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         gesamt = sum(pos.brutto_betrag for pos in data.positionen)

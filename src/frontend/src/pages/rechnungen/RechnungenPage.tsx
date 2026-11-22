@@ -566,7 +566,7 @@ function ZahlungsDialog({
     if (wahl === 'leistungsdatum' && leistungsdatum) return leistungsdatum
     return heuteIso()
   })
-  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bar')
+  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Privat'>('Bar')
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
@@ -856,7 +856,10 @@ function ZahlungsDialog({
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Zahlungsart</label>
             <div className="flex rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden text-sm">
-              {([['Bar', 'Bar'], ['Karte', 'Karte'], ['PayPal', 'PayPal'], ['Bank', 'Bank']] as const).map(([val, label]) => (
+              {((rechnung.typ === 'eingang' && !istGutschrift
+                ? [['Bar', 'Bar'], ['Karte', 'Karte'], ['PayPal', 'PayPal'], ['Bank', 'Bank'], ['Privat', 'Privat bezahlt']]
+                : [['Bar', 'Bar'], ['Karte', 'Karte'], ['PayPal', 'PayPal'], ['Bank', 'Bank']]
+              ) as ['Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Privat', string][]).map(([val, label]) => (
                 <button
                   key={val}
                   type="button"
@@ -1271,7 +1274,7 @@ function RechnungDetail({
   const korrigiereZahlungMutation = useMutation({
     mutationFn: () => korrigiereZahlung(
       rechnung.id, korrigiereZahlungId!, korrigiereDatum, korrigiereBetrag || undefined,
-      (korrigiereZahlungsart || undefined) as 'Bar' | 'Karte' | 'Bank' | 'PayPal' | undefined,
+      (korrigiereZahlungsart || undefined) as 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Privat' | undefined,
     ),
     onSuccess: (r) => {
       setKorrigiereZahlungId(null)
@@ -2528,7 +2531,7 @@ function RechnungDetail({
                             aria-label="Betrag (0 = Zahlung zurücknehmen)"
                             className="w-24 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                           />
-                          {['Bar', 'Karte', 'Bank', 'PayPal'].includes(z.zahlungsart) && (
+                          {['Bar', 'Karte', 'Bank', 'PayPal', 'Privat'].includes(z.zahlungsart) && (
                             <select
                               value={korrigiereZahlungsart}
                               onChange={(e) => setKorrigiereZahlungsart(e.target.value)}
@@ -2540,6 +2543,7 @@ function RechnungDetail({
                               <option value="Karte">Karte</option>
                               <option value="Bank">Bank</option>
                               <option value="PayPal">PayPal</option>
+                              {z.art === 'Ausgabe' && <option value="Privat">Privat bezahlt</option>}
                             </select>
                           )}
                           <button

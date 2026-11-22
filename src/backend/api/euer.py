@@ -202,6 +202,19 @@ def _zeile_13_beitrag(e: Journaleintrag, ku: Optional[bool], haupt_zeile: Option
     return ZERO
 
 
+ZEILE_EINLAGEN = 107  # Basis (Vordruck 2026: 108, formular_zeile)
+
+
+def _privat_bezahlt_beitrag(e: Journaleintrag) -> Decimal:
+    """Issue #470: aus privaten Mitteln bezahlte Betriebsausgabe = Einlage (Hinweiszeile 107).
+    Ausgabe +brutto, Storno-Gegenbuchung (art=Einnahme) -brutto. Betriebsausgabe und Vorsteuer
+    bleiben unverändert in ihren eigenen Zeilen."""
+    if e.zahlungsart != "Privat":
+        return ZERO
+    betrag = e.brutto_betrag or ZERO
+    return betrag if e.art == "Ausgabe" else -betrag
+
+
 def _euer_haupt_beitrag(e: Journaleintrag, ku: Optional[bool] = None) -> tuple[Optional[int], Decimal]:
     """Hauptzeilen-Zuordnung einer Journalbuchung: (euer_zeile, beitrag) - die Summe der
     Beiträge einer Zeile ist deren EÜR-Wert. Zeile None = keine Hauptzeilenzuordnung.
@@ -380,6 +393,9 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
 
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
+        einlage = _privat_bezahlt_beitrag(e)
+        if einlage:
+            zeilen[ZEILE_EINLAGEN] = zeilen.get(ZEILE_EINLAGEN, ZERO) + einlage
         euer_zeile = kat.euer_zeile if kat else None
         if euer_zeile is not None and euer_zeile not in EUR_ZEILEN_META and kat.kontenart != "Anlage":
             unbekannte_zeilen.setdefault(euer_zeile, set()).add(kat.name)
@@ -675,6 +691,10 @@ def _euer_kategorien_beitraege(
     for e in eintraege:
         kat: Optional[Kategorie] = e.kategorie
         kat_name = kat.name if kat else "Unbekannt"
+
+        einlage = _privat_bezahlt_beitrag(e)
+        if einlage:
+            add(ZEILE_EINLAGEN, "Privat bezahlte Betriebsausgaben", einlage, e)
 
         if kat and kat.kontenart == "Anlage":
             continue

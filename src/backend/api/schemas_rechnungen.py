@@ -861,7 +861,7 @@ class BarZahlungCreate(BaseModel):
     @field_validator("zahlungsart")
     @classmethod
     def check_zahlungsart(cls, v: str) -> str:
-        if v not in ("Bar", "Karte", "PayPal", "Bank"):
+        if v not in ("Bar", "Karte", "PayPal", "Bank", "Privat"):  # Privat: Issue #470
             raise ValueError("zahlungsart muss Bar, Karte, PayPal oder Bank sein")
         return v
 

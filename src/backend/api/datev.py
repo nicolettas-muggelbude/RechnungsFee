@@ -161,6 +161,21 @@ def _bu(j: Journaleintrag, skr: str, konto: Optional[str], db: Optional[Session]
     return ""
 
 
+def _privateinlage_konto(kontenrahmen: str, db: Optional[Session]) -> str:
+    if db is not None:
+        kat = (
+            db.query(Kategorie)
+            .filter(Kategorie.kontenart == "Privat", Kategorie.euer_zeile == 107)
+            .order_by((Kategorie.name != "Privateinlage"), Kategorie.id)
+            .first()
+        )
+        if kat:
+            konto = kat.konto_skr03 if kontenrahmen == "SKR03" else kat.konto_skr04
+            if konto:
+                return konto
+    return "1890" if kontenrahmen == "SKR03" else "2180"
+
+
 def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = None) -> Optional[str]:
     za = j.zahlungsart
     if za == "Keine":
@@ -192,6 +207,11 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = Non
                 if konto:
                     return konto
         za = "Bank"  # Fallback falls keine passende Hauptbuchung gefunden wird
+
+    if za == "Privat":
+        # Issue #470: Betriebsausgabe aus privaten Mitteln - Gegenkonto ist das Privateinlage-Konto
+        # (aus der Kategorie „Privateinlage“, damit eigene Kontenanpassungen greifen)
+        return _privateinlage_konto(unt.kontenrahmen, db)
 
     # Bankkonto mit eigener DATEV-Kontonummer hat Vorrang vor globalem datev_konto_bank
     if za == "Bank" and j.konto_id and db is not None:

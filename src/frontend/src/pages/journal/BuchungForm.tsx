@@ -39,7 +39,7 @@ const singleSchema = z.object({
     .string()
     .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, 'Betrag muss positiv sein'),
   ust_satz: z.string(),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine', 'Privat']),
   kategorie_id: z.string().optional(),
   kunde_id: z.string().optional(),
   lieferant_id: z.string().optional(),
@@ -61,7 +61,7 @@ const positionSchema = z.object({
 const splitSchema = z.object({
   datum: z.string().min(1, 'Datum erforderlich'),
   art: z.enum(['Einnahme', 'Ausgabe']),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine', 'Privat']),
   externe_belegnr: z.string().optional(),
   kunde_id: z.string().optional(),
   lieferant_id: z.string().optional(),
@@ -75,7 +75,7 @@ interface InitialWerte {
   datum?: string
   art?: 'Einnahme' | 'Ausgabe'
   brutto_betrag?: string
-  zahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'
   beschreibung?: string
   kategorie_id?: string
 }
@@ -698,6 +698,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                   >
                     {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                    {/* Issue #470: aus privaten Mitteln bezahlte Betriebsausgabe = Einlage */}
+                    {art === 'Ausgabe' && <option value="Privat">Privat bezahlt</option>}
                   </select>
                 )}
               </div>
@@ -1119,6 +1121,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                   >
                     {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                    {artSplit === 'Ausgabe' && <option value="Privat">Privat bezahlt</option>}
                   </select>
                 )}
               </div>

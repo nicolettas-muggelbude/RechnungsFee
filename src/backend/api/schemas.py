@@ -435,7 +435,7 @@ class JournalEintragCreate(BaseModel):
     @field_validator("zahlungsart")
     @classmethod
     def check_zahlungsart(cls, v: str) -> str:
-        if v not in ("Bar", "Karte", "Bank", "PayPal", "Keine"):
+        if v not in ("Bar", "Karte", "Bank", "PayPal", "Keine", "Privat"):  # Privat: Issue #470
             raise ValueError("zahlungsart muss Bar, Karte, Bank, PayPal oder Keine sein")
         return v
 
@@ -595,7 +595,7 @@ class SplitBuchungCreate(BaseModel):
     @field_validator("zahlungsart")
     @classmethod
     def check_zahlungsart(cls, v: str) -> str:
-        if v not in ("Bar", "Karte", "Bank", "PayPal", "Keine"):
+        if v not in ("Bar", "Karte", "Bank", "PayPal", "Keine", "Privat"):  # Privat: Issue #470
             raise ValueError("zahlungsart muss Bar, Karte, Bank, PayPal oder Keine sein")
         return v
 

@@ -189,20 +189,22 @@ Ein eigenständiges Dokumentenmanagement fehlt noch:
 - [ ] Belegsuche über alle Belege: Dateiname, externe Rechnungsnummer, Lieferant, Betrag, Volltext (OCR)
 - [ ] Prüfsumme bei Export/Betriebsprüfung gegen die gespeicherte Datei verifizieren
 
-## 📋 v0.7.14 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## ✅ v0.7.14 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
 nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen das Bankkonto.
 
-- [ ] Zahlungsart „Privat bezahlt“ in „Zahlung erfassen“ (Eingangsrechnung), Buchungsformular und
-  Bank-/CSV-Import
-- [ ] DATEV: Gegenkonto = Privateinlage-Konto (SKR03 1890 / SKR04 2180, aus der Kategorie
-  „Privateinlage“, damit eigene Anpassungen greifen)
-- [ ] EÜR Zeile 107 (Basis) / 108 (2026): Summe dieser Ausgaben (brutto) als Einlage, zusätzlich zur
-  Kategorie „Privateinlage“; Betriebsausgabe und Vorsteuer bleiben wie gebucht
-- [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
-- [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
+- [x] Zahlungsart „Privat bezahlt“ (`zahlungsart="Privat"`, nur Ausgaben) in „Zahlung erfassen“
+  (Eingangsrechnung), Buchungsformular und Split-Buchung
+- [ ] Bank-/CSV-Import: offen – ein importiertes Konto ist ein Betriebskonto; „Privat bezahlt“ ergibt
+  dort nur Sinn, wenn ein Privatkonto importiert wird (eigener Kontotyp) – bei Bedarf nachziehen
+- [x] DATEV: Gegenkonto = Privateinlage-Konto (`datev.py::_privateinlage_konto()`, aus der Kategorie
+  „Privateinlage“, Rückfall SKR03 1890 / SKR04 2180)
+- [x] EÜR Zeile 107 (Basis) / 108 (2026): brutto als Einlage (`euer.py::_privat_bezahlt_beitrag()`),
+  auch in der Kategorie-Aufschlüsselung; Betriebsausgabe und Vorsteuer bleiben wie gebucht
+- [x] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Bar, keine Bankbuchung)
+- [x] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart (Storno übernimmt sie, Korrektur bietet sie bei Ausgaben an)
 
 ## 📋 v0.7.12 – Reverse Charge mit privatem Anteil (Issue #503)
 
