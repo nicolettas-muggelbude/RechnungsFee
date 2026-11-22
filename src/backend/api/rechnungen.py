@@ -3993,10 +3993,16 @@ def zahlung_korrigieren(
             detail="§25a-Differenzbesteuerungs-Buchungen können hier nicht korrigiert werden – bitte stornieren und neu buchen.",
         )
 
-    if data.neuer_betrag is not None and data.neuer_betrag != abs(e.brutto_betrag):
+    # Betrag 0 = Zahlung zurücknehmen: nur das Storno, keine Neubuchung (Issue #567-Folgefund -
+    # eine falsch erfasste Zahlung ließ sich bisher gar nicht zurücknehmen)
+    nur_storno = data.neuer_betrag is not None and data.neuer_betrag.quantize(Decimal("0.01"), ROUND_HALF_UP) == 0
+    if nur_storno and e.brutto_betrag == 0:
+        raise HTTPException(status_code=409, detail="Diese Buchung hat bereits 0 € – da gibt es nichts zurückzunehmen.")
+
+    if not nur_storno and data.neuer_betrag is not None and data.neuer_betrag != abs(e.brutto_betrag):
         neuer_brutto_abs = data.neuer_betrag.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        if neuer_brutto_abs <= 0:
-            raise HTTPException(status_code=422, detail="Betrag muss größer als 0 sein.")
+        if neuer_brutto_abs < 0:
+            raise HTTPException(status_code=422, detail="Betrag darf nicht negativ sein.")
 
         # Verfügbarer Restbetrag inkl. des Betrags, der gerade ersetzt wird
         restbetrag_ohne_diese = abs(rechnung.brutto_gesamt) - (abs(rechnung.bezahlt_betrag) - abs(e.brutto_betrag))
@@ -4042,7 +4048,7 @@ def zahlung_korrigieren(
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
 
     # Issue #576: Zahlungsart wechseln
-    neue_zahlungsart = data.neue_zahlungsart or e.zahlungsart
+    neue_zahlungsart = e.zahlungsart if nur_storno else (data.neue_zahlungsart or e.zahlungsart)
     if neue_zahlungsart != e.zahlungsart:
         if e.zahlungsart not in ("Bar", "Karte", "Bank", "PayPal"):
             raise HTTPException(status_code=409, detail=f"Bei einer Buchung mit Zahlungsart „{e.zahlungsart}“ lässt sich die Zahlungsart nicht ändern.")
@@ -4078,7 +4084,7 @@ def zahlung_korrigieren(
     storno = Journaleintrag(
         datum=storno_datum,
         belegnr=_naechste_belegnr_journal(db, storno_datum),
-        beschreibung=f"STORNO {e.belegnr}: Korrektur",
+        beschreibung=f"STORNO {e.belegnr}: " + ("Zahlung zurückgenommen" if nur_storno else "Korrektur"),
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
         konto_ust_skr03=e.konto_ust_skr03, konto_ust_skr04=e.konto_ust_skr04,
@@ -4091,6 +4097,16 @@ def zahlung_korrigieren(
     )
     storno.signatur = signatur_journaleintrag(storno)
     db.add(storno)
+
+    if nur_storno:
+        db.flush()
+        # Bank-Transaktion wird wieder offen und kann neu zugeordnet werden
+        db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).update({"journal_id": None})
+        db.expire(rechnung, ["journaleintraege"])
+        _aktualisiere_zahlungsstatus(rechnung)
+        db.commit()
+        db.refresh(rechnung)
+        return RechnungResponse.from_orm_extended(rechnung)
 
     neu = Journaleintrag(
         datum=data.neues_datum,

@@ -2521,9 +2521,11 @@ function RechnungDetail({
                           <input
                             type="number"
                             step="0.01"
-                            min="0.01"
+                            min="0"
                             value={korrigiereBetrag}
                             onChange={(e) => setKorrigiereBetrag(e.target.value)}
+                            title="0 € nimmt die Zahlung zurück (Storno ohne Neubuchung)"
+                            aria-label="Betrag (0 = Zahlung zurücknehmen)"
                             className="w-24 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                           />
                           {['Bar', 'Karte', 'Bank', 'PayPal'].includes(z.zahlungsart) && (
@@ -2541,7 +2543,12 @@ function RechnungDetail({
                             </select>
                           )}
                           <button
-                            onClick={() => korrigiereZahlungMutation.mutate()}
+                            onClick={() => {
+                              // Issue #567-Folgefund: 0 € = Zahlung zurücknehmen (nur Storno)
+                              if (parseFloat(korrigiereBetrag.replace(',', '.')) === 0
+                                && !window.confirm('Zahlung zurücknehmen? RechnungsFee bucht dafür ein Storno, eine neue Zahlung wird nicht angelegt. Die Rechnung ist danach um diesen Betrag wieder offen.')) return
+                              korrigiereZahlungMutation.mutate()
+                            }}
                             disabled={korrigiereZahlungMutation.isPending}
                             className="bg-blue-600 text-white rounded-lg px-3 py-1 text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
                           >

@@ -110,3 +110,36 @@ def test_zahlung_aus_bank_import_zahlungsart_gesperrt_konto_bleibt(db):
     assert neu.konto_id == k.id
     db.refresh(tx)
     assert tx.journal_id == neu.id
+
+
+def test_betrag_0_nimmt_zahlung_zurueck(db):
+    """Folgefund #567: Betrag 0 = nur Storno, keine Neubuchung; Rechnung wieder offen,
+    Kasse berichtigt, Bank-Transaktion wieder frei."""
+    _kassenanfang(db, Decimal("100"))
+    r, z = _zahlung(db, "ausgang", "Einnahme", "Bar")
+    zahlung_korrigieren(r.id, z.id, ZahlungKorrigieren(neues_datum=z.datum, neuer_betrag=Decimal("0")), db)
+    eintraege = db.query(Journaleintrag).filter(Journaleintrag.rechnung_id == r.id).all()
+    assert len(eintraege) == 2  # Original + Storno
+    storno = next(e for e in eintraege if e.id != z.id)
+    assert storno.beschreibung == "STORNO J-1: Zahlung zurückgenommen"
+    db.refresh(r)
+    assert r.bezahlt_betrag == Decimal("0") and r.zahlungsstatus == "offen"
+    assert _kasse(db) == Decimal("100")
+    with pytest.raises(HTTPException):  # zweites Zurücknehmen geht nicht
+        zahlung_korrigieren(r.id, z.id, ZahlungKorrigieren(neues_datum=z.datum, neuer_betrag=Decimal("0")), db)
+
+
+def test_betrag_0_gibt_bank_transaktion_frei(db):
+    k = Konto(name="Giro", anbieter="Bank", kontoart="giro")
+    db.add_all([k, BankTemplate(id="CAMT_XML", name="CAMT", bank="x", format="CAMT", column_mapping="{}")])
+    db.flush()
+    r, z = _zahlung(db, "ausgang", "Einnahme", "Bank", konto_id=k.id)
+    imp = BankImport(konto_id=k.id, template_id="CAMT_XML", dateiname="x.csv")
+    db.add(imp)
+    db.flush()
+    tx = BankTransaktion(konto_id=k.id, import_id=imp.id, datum=z.datum, betrag=Decimal("50"), journal_id=z.id)
+    db.add(tx)
+    db.commit()
+    zahlung_korrigieren(r.id, z.id, ZahlungKorrigieren(neues_datum=z.datum, neuer_betrag=Decimal("0")), db)
+    db.refresh(tx)
+    assert tx.journal_id is None
