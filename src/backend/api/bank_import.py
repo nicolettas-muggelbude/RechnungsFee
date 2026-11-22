@@ -564,6 +564,9 @@ def _buche_pfad_a(
 
     eintrag = None
     for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+        # Issue #567-Folgefund: keine 0-€-Buchung für eine bereits voll bezahlte Kategorie
+        if g_betrag == 0 and len(ust_gruppen) > 1:
+            continue
         if hat_gemischte_25a and i < len(gruppen_keys):
             key = gruppen_keys[i]
             g_kat_id, g_kat_obj = gruppen_kategorie.get(key, (kat_id, kat))
@@ -649,7 +652,7 @@ def _buche_pfad_a(
         )
         e.signatur = signatur_journaleintrag(e)
         db.add(e)
-        if i == 0:
+        if eintrag is None:
             eintrag = e
     db.flush()
 

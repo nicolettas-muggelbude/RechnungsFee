@@ -3879,6 +3879,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # nachgebucht wird (siehe Lücke oben) - dann keinen sinnlosen 0-€-Journaleintrag erzeugen.
     if betrag > Decimal("0.004"):
         for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+            # Issue #567-Folgefund (Markus): eine bereits voll bezahlte Kategorie bekommt 0 € -
+            # dafür keine 0-€-Buchung anlegen (ließ sich danach über „Zahlung korrigieren“ erhöhen)
+            if g_betrag == 0 and len(ust_gruppen) > 1:
+                continue
             # Bei gemischten Rechnungen (§25a + regulär) bekommt jede Gruppe ihre eigene
             # Kategorie und Marge statt der einen Rechnungs-weiten Kategorie/Marge (Issue #305).
             if hat_gemischte_25a and i < len(gruppen_keys):
@@ -3895,7 +3899,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             e = _erstelle_eintrag(g_kat_id, g_kat_obj, g_betrag, beschreibung, g_satz, g_ust_skr03, g_ust_skr04,
                                   marge_25a=g_marge_anteil)
             db.add(e)
-            if i == 0:
+            if erster_eintrag is None:
                 erster_eintrag = e
     eintrag = erster_eintrag
 
@@ -4004,7 +4008,7 @@ def zahlung_korrigieren(
         # Issue #567-Folgefund (Markus): bei Kategorie je Position darf eine Kategorie nicht
         # mehr bekommen als ihre Positionen ausmachen (bisher nur Prüfung der Rechnungssumme).
         if (
-            rechnung.typ == "ausgang" and e.art == "Einnahme" and e.brutto_betrag > 0
+            rechnung.typ == "ausgang" and e.art == "Einnahme" and e.brutto_betrag >= 0  # auch 0-€-Altbuchungen
             and neuer_brutto_abs > e.brutto_betrag
             and ausgangs_positionskategorien_aktiv(rechnung)
         ):

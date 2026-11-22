@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.14',
     datum: 'in Arbeit',
     eintraege: [
+      { typ: 'fix', text: 'Kategorie je Position: War eine Kategorie (z. B. Übungsleiter) schon voll bezahlt, legte die nächste Teilzahlung für sie eine Buchung über 0 € an. Die ließ sich über „Zahlung korrigieren“ erhöhen, ohne dass geprüft wurde, ob die Kategorie schon voll bezahlt ist – die Kontenübersicht zeigte dann zu viel. Jetzt entsteht keine 0-€-Buchung mehr, und auch bestehende 0-€-Buchungen lassen sich nur bis zum offenen Anteil der Kategorie erhöhen. Danke an Markus (Issue #567).' },
       { typ: 'verbesserung', text: 'Mahnwesen: Importierte und extern erstellte Ausgangsrechnungen kannst du jetzt mahnen – bisher waren sie komplett gesperrt. Als Rechnungsanhang geht das angehängte Original mit, ein neues Rechnungs-PDF entsteht nicht. Hast du im Altsystem schon gemahnt, trägst du im Detailbereich der Rechnung Stufe und Datum ein, dann geht die Zählung dort weiter. Danke an sho94os (Issue #580).' },
     ],
   },

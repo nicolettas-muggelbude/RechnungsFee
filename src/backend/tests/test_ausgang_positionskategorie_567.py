@@ -273,3 +273,36 @@ def test_korrektur_ueber_kategorie_anteil_abgelehnt(db):
                             ZahlungKorrigieren(neues_datum=date(2026, 3, 20), neuer_betrag=Decimal("300.01")), db)
     assert exc.value.status_code == 422
     assert "300.00" in exc.value.detail
+
+
+def test_voll_bezahlte_kategorie_bekommt_keine_0_euro_buchung(db):
+    """Folgefund (Markus): Nach voll bezahlter Übungsleiter-Kategorie legte die nächste Teilzahlung
+    eine 0-€-Buchung auf ihr an. Die ließ sich per „Zahlung korrigieren“ erhöhen, weil die
+    Kategorie-Prüfung nur bei Beträgen über 0 griff - die Kategorie bekam mehr als ihre Positionen."""
+    from api.rechnungen import ZahlungKorrigieren, zahlung_korrigieren
+    _ku(db)
+    ul = _kat(db, "Übungsleiter § 3 Nr. 26")
+    r = _rechnung(db, [_pos("Führung", "300", "0", ul), _pos("Fotos", "100", "0")])
+    _zahlen(db, r, betrag=Decimal("200"))  # 150 / 50
+    zahlung_korrigieren(r.id, _eintrag(db, r, "Übungsleiter § 3 Nr. 26").id,
+                        ZahlungKorrigieren(neues_datum=date(2026, 3, 20), neuer_betrag=Decimal("300")), db)
+    db.expire_all()
+    _zahlen(db, r, betrag=Decimal("30"))  # geht komplett auf „Fotos“
+    db.expire_all()
+    ul_eintraege = db.query(Journaleintrag).filter(
+        Journaleintrag.rechnung_id == r.id, Journaleintrag.kategorie_id == ul.id,
+        ~Journaleintrag.beschreibung.like("STORNO %"),
+    ).all()
+    assert all(e.brutto_betrag != 0 for e in ul_eintraege)
+
+    # Altbestand: eine 0-€-Buchung aus v0.7.13 darf nicht über den Kategorie-Anteil erhöht werden
+    null = Journaleintrag(datum=date(2026, 3, 21), belegnr="J-NULL", beschreibung="Zahlung", zahlungsart="Bank",
+                          art="Einnahme", kategorie_id=ul.id, netto_betrag=Decimal("0"), ust_satz=Decimal("0"),
+                          ust_betrag=Decimal("0"), vorsteuer_betrag=Decimal("0"), brutto_betrag=Decimal("0"),
+                          rechnung_id=r.id, immutable=True)
+    db.add(null)
+    db.commit()
+    with pytest.raises(HTTPException) as exc:
+        zahlung_korrigieren(r.id, null.id,
+                            ZahlungKorrigieren(neues_datum=date(2026, 3, 21), neuer_betrag=Decimal("20")), db)
+    assert exc.value.status_code == 422
