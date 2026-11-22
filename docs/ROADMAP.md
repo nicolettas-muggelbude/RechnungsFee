@@ -88,7 +88,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ## 📋 Nach v0.7.4 – vorgemerkt
 
-- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.14) – bisher ziehen Entwürfe von
+- [x] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – umgesetzt in v0.7.14: `NUMMER_BEI_FINALISIERUNG` / `_nummer_beim_finalisieren()` in `api/rechnungen.py`; Proforma→Rechnung behält die sofortige Nummer, weil dort direkt die Zahlung gebucht wird) – bisher ziehen Entwürfe von
   Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
   (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
   Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen

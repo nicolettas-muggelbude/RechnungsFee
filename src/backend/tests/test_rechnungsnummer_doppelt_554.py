@@ -41,7 +41,7 @@ def _daten(db, **extra) -> RechnungCreate:
 
 
 def test_manuelle_nummer_doppelt_abgelehnt(db):
-    erste = create_rechnung(_daten(db), db)
+    erste = create_rechnung(_daten(db, ist_entwurf=False), db)
     assert erste.rechnungsnummer == "RE-260001"
     with pytest.raises(HTTPException) as e:
         create_rechnung(_daten(db, rechnungsnummer=" RE-260001 "), db)
@@ -65,7 +65,7 @@ def test_gleiche_nummer_in_anderer_richtung_erlaubt(db):
 
 
 def test_aendern_auf_vergebene_nummer_abgelehnt(db):
-    create_rechnung(_daten(db), db)
+    create_rechnung(_daten(db, ist_entwurf=False), db)
     zweite = create_rechnung(_daten(db), db)
     with pytest.raises(HTTPException) as e:
         update_rechnung(zweite.id, RechnungUpdate(rechnungsnummer="RE-260001"), db)

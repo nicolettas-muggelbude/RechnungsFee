@@ -781,7 +781,7 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0">{r.rechnungsnummer ?? '—'}</span>
+                  <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0">{r.rechnungsnummer ?? (r.ist_entwurf ? 'Entwurf' : '—')}</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-200">{formatEuro(r.brutto_gesamt)}</span>
                 </div>
                 <div className="text-slate-400 dark:text-slate-500">{formatDatum(r.datum)}</div>

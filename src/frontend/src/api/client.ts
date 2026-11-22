@@ -2670,7 +2670,7 @@ export type EntwurfErgebnis = {
   vorlage_id: number
   vorlage_bezeichnung: string
   rechnung_id: number
-  rechnungsnummer: string
+  rechnungsnummer: string | null  // Issue #465: Entwurf ohne Nummer
   preisaenderungen: Preisaenderung[]
 }
 

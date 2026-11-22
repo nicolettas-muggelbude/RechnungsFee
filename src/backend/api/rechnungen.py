@@ -1576,7 +1576,8 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     rechnungsnummer = (data.rechnungsnummer or "").strip() or None
     if rechnungsnummer:
         _pruefe_rechnungsnummer_frei(data.typ, rechnungsnummer, db)  # Issue #554
-    if not rechnungsnummer:
+    # Issue #465/#551: Entwürfe von Rechnung/Abschlag/Gutschrift erst beim Finalisieren nummerieren
+    if not rechnungsnummer and not nummer_erst_beim_finalisieren(data.dokument_typ, data.ist_entwurf):
         if data.dokument_typ == "Lieferschein":
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
             if nk:
@@ -1971,6 +1972,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 ),
             )
         rechnung.ist_entwurf = data.ist_entwurf
+        if war_entwurf and not data.ist_entwurf:
+            _nummer_beim_finalisieren(rechnung, db)  # Issue #465/#551
         # Lagerführung: Entwurf → Finalisiert (nur über diesen Pfad; /finalisieren bucht eigenständig)
         if war_entwurf and not data.ist_entwurf:
             db.flush()  # neue Positionen in DB schreiben bevor Relationship-Cache geleert wird
@@ -2142,6 +2145,7 @@ def finalisiere_rechnung(
                        + ", ".join(fehlend) + ". Bitte ergänzen und dann finalisieren.",
             )
 
+    _nummer_beim_finalisieren(rechnung, db)  # Issue #465/#551: erst jetzt aus dem Kreis
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -4383,7 +4387,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Für diese Rechnung wurde bereits eine Ersatzrechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -4529,20 +4533,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
 
     heute = date.today()
 
-    # Rechnungsnummer aus eigenem Gutschrift-Nummernkreis
-    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "gutschrift").first()
-    if nk:
-        # Jahreswechsel-Reset nur vorwärts (Issue #426).
-        if nk.reset_jaehrlich and nk.letztes_jahr and heute.year > nk.letztes_jahr:
-            nk.naechste_nr = 1
-        if not nk.letztes_jahr or heute.year > nk.letztes_jahr:
-            nk.letztes_jahr = heute.year
-        nr = nk.naechste_nr
-        nk.naechste_nr += 1
-        rechnungsnummer = _belegnr_aus_format(nk.format, heute, nr)
-    else:
-        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Gutschrift").count()
-        rechnungsnummer = f"GS-{str(heute.year)[-2:]}{count + 1:04d}"
+    # Issue #465/#551: Nummer aus dem Gutschrift-Kreis erst beim Finalisieren (_nummer_beim_finalisieren)
+    rechnungsnummer = None
 
     orig_nr = original.rechnungsnummer or f"#{original.id}"
 
@@ -5028,7 +5020,7 @@ def _setze_skonto_vorgabe(rechnung: "Rechnung", db: Session) -> None:
 def _lieferschein_zu_rechnung_konvertieren(
     lieferscheine: list,
     datum: date,
-    rechnungsnummer: str,
+    rechnungsnummer: Optional[str],
     leistung_von: Optional[date],
     leistung_bis: Optional[date],
     faellig_am: Optional[date],
@@ -5167,6 +5159,47 @@ def _naechste_rechnungsnummer(datum: date, db: Session) -> str:
     return f"{str(datum.year)[-2:]}{count + 1:04d}"
 
 
+# Issue #465/#551: diese Dokumenttypen bekommen ihre Nummer erst beim Finalisieren - Entwürfe
+# bleiben ohne Nummer (außer von Hand eingetragen). Gelöschte Entwürfe hinterlassen so keine
+# Lücken, und spät finalisierte Entwürfe brechen die Reihenfolge nicht. Angebot, Auftrag und
+# Lieferschein behalten ihre Nummer ab Anlage (eigene Kreise, keine Rechnungen), Proforma-Entwürfe
+# waren schon immer ohne Nummer.
+NUMMER_BEI_FINALISIERUNG = ("Rechnung", "Abschlagsrechnung", "Gutschrift")
+
+
+def nummer_erst_beim_finalisieren(dokument_typ: Optional[str], ist_entwurf: bool) -> bool:
+    return bool(ist_entwurf) and (dokument_typ or "Rechnung") in NUMMER_BEI_FINALISIERUNG
+
+
+def _nummer_beim_finalisieren(rechnung: "Rechnung", db: Session) -> None:
+    """Vergibt die Nummer aus dem passenden Kreis zum Rechnungsdatum, falls noch keine da ist."""
+    if rechnung.rechnungsnummer or (rechnung.dokument_typ or "Rechnung") not in NUMMER_BEI_FINALISIERUNG:
+        return
+    d = rechnung.datum
+    if rechnung.dokument_typ == "Gutschrift":
+        nr = naechste_nummer("gutschrift", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Gutschrift").count()
+            nr = f"GS-{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.dokument_typ == "Abschlagsrechnung":
+        nr = naechste_nummer("abschlagsrechnung", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Abschlagsrechnung").count()
+            nr = f"AR-{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.typ == "eingang":
+        nr = naechste_nummer("rechnung_eingang", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.typ == "eingang").count()
+            nr = f"{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.vorlage_id:
+        # wiederkehrende Rechnung: eigener Kreis, falls aktiv (Issue #399)
+        from api.wiederkehrend import _naechste_rechnungsnr
+        nr = _naechste_rechnungsnr(d, db)
+    else:
+        nr = _naechste_rechnungsnummer(d, db)
+    rechnung.rechnungsnummer = nr
+
+
 @router.post("/{ls_id}/rechnung-erstellen", response_model=RechnungResponse, status_code=201)
 def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Rechnung aus einem einzelnen Lieferschein."""
@@ -5175,7 +5208,7 @@ def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Lieferschein nicht gefunden.")
     if ls.lieferschein_zu_rechnung_id:
         raise HTTPException(status_code=409, detail="Lieferschein wurde bereits abgerechnet.")
-    rechnungsnummer = _naechste_rechnungsnummer(date.today(), db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     rechnung = _lieferschein_zu_rechnung_konvertieren(
         lieferscheine=[ls],
         datum=date.today(),
@@ -5364,7 +5397,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus diesem Angebot wurde bereits eine Rechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -5754,7 +5787,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Rechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -5979,7 +6012,7 @@ def sammelrechnung_erstellen(data: SammelrechnungCreate, db: Session = Depends(g
     kunden = {ls.kunde_id for ls in lieferscheine}
     if len(kunden) > 1:
         raise HTTPException(status_code=422, detail="Sammelrechnung nur für Lieferscheine desselben Kunden möglich.")
-    rechnungsnummer = _naechste_rechnungsnummer(data.datum, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     rechnung = _lieferschein_zu_rechnung_konvertieren(
         lieferscheine=lieferscheine,
         datum=data.datum,

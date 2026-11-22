@@ -999,7 +999,7 @@ export function WiederkehrendePage() {
               <span className="text-green-600 dark:text-green-400 text-xl">✓</span>
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                  RE-Entwurf <span className="font-bold">{letzterEntwurf.rechnungsnummer}</span> erstellt aus „{letzterEntwurf.vorlage_bezeichnung}"
+                  Rechnungsentwurf{letzterEntwurf.rechnungsnummer && <> <span className="font-bold">{letzterEntwurf.rechnungsnummer}</span></>} erstellt aus „{letzterEntwurf.vorlage_bezeichnung}"
                 </p>
                 {letzterEntwurf.preisaenderungen.length > 0 && (
                   <div>

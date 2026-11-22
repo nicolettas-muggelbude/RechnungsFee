@@ -630,7 +630,7 @@ export function AppLayout() {
             <span className="text-blue-600 dark:text-blue-400 text-base leading-none">🔁</span>
             <p className="text-sm text-blue-800 dark:text-blue-300 flex-1">
               {wiederErgebnisse.length === 1
-                ? <>Entwurf <span className="font-semibold">{wiederErgebnisse[0].rechnungsnummer}</span> aus Vorlage „{wiederErgebnisse[0].vorlage_bezeichnung}" erstellt.</>
+                ? <>Rechnungsentwurf{wiederErgebnisse[0].rechnungsnummer && <> <span className="font-semibold">{wiederErgebnisse[0].rechnungsnummer}</span></>} aus Vorlage „{wiederErgebnisse[0].vorlage_bezeichnung}" erstellt.</>
                 : <>{wiederErgebnisse.length} Rechnungs-Entwürfe aus wiederkehrenden Vorlagen erstellt.</>
               }
               {wiederErgebnisse.some(e => e.preisaenderungen.length > 0) && (

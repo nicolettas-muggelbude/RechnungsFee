@@ -1634,7 +1634,7 @@ function RechnungDetail({
       {datumDialog}
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? '(keine Nummer)'}</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">{rechnung.rechnungsnummer ?? (rechnung.ist_entwurf ? 'Entwurf – Nummer beim Finalisieren' : '(keine Nummer)')}</p>
           <p className="text-xs text-slate-400 dark:text-slate-500">{rechnung.typ === 'ausgang' ? 'Ausgangsrechnung' : 'Eingangsrechnung'}</p>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xl">×</button>
@@ -3824,7 +3824,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
             value={rechnungsnummer}
             onChange={(e) => setRechnungsnummer(e.target.value)}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
-            placeholder="wird automatisch vergeben"
+            placeholder="wird beim Finalisieren automatisch vergeben"
           />
         </div>
         <div>
@@ -6160,7 +6160,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                       )}
                       <td className="px-5 py-3 text-slate-500 dark:text-slate-400">{formatDatum(r.datum)}</td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">
-                        {r.rechnungsnummer ?? '—'}
+                        {r.rechnungsnummer ?? (r.ist_entwurf ? 'Entwurf' : '—')}
                         {r.dokument_typ === 'Gutschrift' && <span className="ml-1.5 text-[10px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded px-1">Gutschrift</span>}
                         {r.dokument_typ === 'Lieferschein' && (
                           lieferscheinModus
