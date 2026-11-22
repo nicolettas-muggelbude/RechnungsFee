@@ -372,10 +372,20 @@ def datev_buchungsstapel(
     # Bei Ausgangsrechnungen gibt es keinen Beleg-Datensatz, sondern das archivierte
     # Original-PDF (rechnung.original_pdf_pfad, siehe pdf_kopie.py) - auf Peters
     # Wunsch (Issue #306) werden auch diese mitexportiert.
-    beleg_info: dict[int, tuple[Beleg | Path, str]] = {}
+    beleg_info: dict[int, tuple[Beleg | Path | bytes, str]] = {}
     if mit_belegen:
+        from utils.belege_zusammenfuehren import belege_als_ein_pdf
         for j in eintraege:
             rechnung_obj = rechnung_map.get(j.rechnung_id) if j.rechnung_id else None
+
+            # Issue #568 Stufe 2: mehrere Belege an der Buchung - DATEV kennt nur einen
+            # Beleglink je Buchung, deshalb zu einem PDF zusammengeführt
+            anhaenge = [a.beleg for a in (j.anhaenge or []) if a.beleg is not None]
+            if len(anhaenge) > 1:
+                zusammen = belege_als_ein_pdf(anhaenge, APP_DATA_DIR / "uploads")
+                if zusammen:
+                    beleg_info[j.id] = (zusammen, f"{j.belegnr}.pdf")
+                    continue
 
             beleg_id = j.beleg_id or (rechnung_obj.beleg_id if rechnung_obj else None)
             if beleg_id:
@@ -488,7 +498,12 @@ def datev_buchungsstapel(
             if dateiname in geschrieben:
                 continue
 
-            if isinstance(quelle, Beleg):
+            if isinstance(quelle, bytes):
+                # zusammengeführte Belege (Issue #568)
+                zf.writestr(dateiname, quelle)
+                geschrieben.add(dateiname)
+                belege_gefunden += 1
+            elif isinstance(quelle, Beleg):
                 beleg = quelle
                 if beleg.beleg_pdfa_pfad:
                     pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad

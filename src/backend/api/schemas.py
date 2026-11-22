@@ -11,6 +11,11 @@ from pydantic import BaseModel, field_validator, model_validator
 from .schemas_rechnungen import BelegResponse
 
 
+class JournalAnhangResponse(BelegResponse):
+    """Issue #568 Stufe 2: ein Beleg einer Journalbuchung (anhang_id = journal_anhaenge.id)."""
+    anhang_id: int
+
+
 # ---------------------------------------------------------------------------
 # Unternehmen
 # ---------------------------------------------------------------------------
@@ -486,6 +491,8 @@ class JournalEintragResponse(BaseModel):
     gruppe_id: Optional[int] = None
     beleg_id: Optional[int] = None
     beleg: Optional[BelegResponse] = None
+    # Issue #568 Stufe 2: alle Belege der Buchung (beleg = erster davon)
+    belege_anhaenge: List[JournalAnhangResponse] = []
     # Storno-Status (Issue #321) - bisher nur ueber String-Praefix "STORNO " in der
     # Beschreibung erkennbar; wird jetzt vom Server ausgewertet und mitgeliefert.
     storniert: bool = False               # True wenn eine Gegenbuchung existiert
@@ -503,6 +510,10 @@ class JournalEintragResponse(BaseModel):
         data = cls.model_validate(obj)
         if obj.beleg:
             data.beleg = BelegResponse.from_beleg(obj.beleg)
+        data.belege_anhaenge = [
+            JournalAnhangResponse(anhang_id=a.id, **BelegResponse.from_beleg(a.beleg).model_dump())
+            for a in getattr(obj, "anhaenge", None) or [] if a.beleg is not None
+        ]
         if obj.kunde:
             parts = [obj.kunde.firmenname or "", obj.kunde.vorname or "", obj.kunde.nachname or ""]
             data.kunde_name = " ".join(p for p in parts if p) or None
@@ -569,6 +580,10 @@ class SplitBuchungCreate(BaseModel):
     # sind ab Erstellung immutable, ein Beleg kann daher nicht wie bei Einzelbuchungen per
     # separatem Upload NACH der Erstellung angehaengt werden, sondern muss schon beim
     # Anlegen mitgegeben werden.
+    beleg_ids: List[int] = []  # Issue #568 Stufe 2: mehrere vorab hochgeladene Belege
+
+    def alle_beleg_ids(self) -> list[int]:
+        return list(dict.fromkeys(([self.beleg_id] if self.beleg_id else []) + list(self.beleg_ids)))
 
     @field_validator("art")
     @classmethod

@@ -583,6 +583,7 @@ export type JournalEintrag = {
   gruppe_id?: number | null
   beleg_id?: number | null
   beleg?: Beleg | null
+  belege_anhaenge?: JournalAnhang[]   // Issue #568 Stufe 2: alle Belege der Buchung
   storniert?: boolean
   storno_belegnr?: string | null
   ist_storno?: boolean
@@ -673,6 +674,7 @@ export type SplitBuchungCreate = {
   lieferant_id?: number  // Issue #566: nur bei Ausgaben
   positionen: SplitPosition[]
   beleg_id?: number
+  beleg_ids?: number[]  // Issue #568 Stufe 2
 }
 
 export const createSplitBuchung = (data: SplitBuchungCreate) =>
@@ -1346,9 +1348,19 @@ export async function uploadJournalAnhang(eintragId: number, datei: File): Promi
   return res.json()
 }
 
-export async function getJournalAnhangUrl(eintragId: number): Promise<string> {
+export async function getJournalAnhangUrl(eintragId: number, anhangId?: number): Promise<string> {
   const base = await getBaseUrl()
-  return `${base}/journal/${eintragId}/anhang`
+  return `${base}/journal/${eintragId}/anhang${anhangId ? `?anhang_id=${anhangId}` : ''}`
+}
+
+// Issue #568 Stufe 2: mehrere Belege je Buchung
+export type JournalAnhang = Beleg & { anhang_id: number }
+export const deleteJournalEinzelAnhang = (eintragId: number, anhangId: number) =>
+  request<void>(`/journal/${eintragId}/anhang/${anhangId}`, { method: 'DELETE' })
+/** Alle Belege einer Buchung - fällt auf den einzelnen Beleg zurück (Altbestand). */
+export function journalBelege(e: Pick<JournalEintrag, 'belege_anhaenge' | 'beleg'>): JournalAnhang[] {
+  if (e.belege_anhaenge?.length) return e.belege_anhaenge
+  return e.beleg ? [{ ...e.beleg, anhang_id: 0 }] : []
 }
 
 // Split-Buchungen sind ab Erstellung immutable (kein 5-Minuten-Fenster) - Beleg muss daher
@@ -2771,8 +2783,8 @@ export const updateBuchungsvorlage = (id: number, data: Partial<BuchungsvorlageC
   request<Buchungsvorlage>(`/buchungsvorlagen/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteBuchungsvorlage = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}`, { method: 'DELETE' })
-export const buchungAusfuehren = (id: number, belegId?: number) =>
-  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
+export const buchungAusfuehren = (id: number, belegIds: number[] = []) =>
+  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_ids: belegIds }) })
 export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)

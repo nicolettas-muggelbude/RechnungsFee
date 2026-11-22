@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  stornoJournaleintrag, getUnternehmen, getJournalBelegUrl, getJournalAnhangUrl, openUrl, isTauri, type JournalEintrag,
+  stornoJournaleintrag, getUnternehmen, getJournalBelegUrl, getJournalAnhangUrl, journalBelege, openUrl, isTauri, type JournalEintrag,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 
@@ -173,17 +173,23 @@ export function BuchungDetail({ eintrag: e, bereitsStorniert, onClose, onBearbei
 
         {/* Issue #569: angehängten Beleg (Quittung, Vertrag …) ansehen - „PDF öffnen“ zeigt nur
             den von RechnungsFee erzeugten Buchungsbeleg */}
-        {e.beleg_id && (
-          <div className="mb-3 flex items-center gap-2 text-sm">
-            <span className="text-slate-500 dark:text-slate-400">📎 Angehängter Beleg:</span>
-            <button
-              type="button"
-              onClick={async () => openUrl(await getJournalAnhangUrl(e.id))}
-              className="text-blue-600 dark:text-blue-400 hover:underline truncate text-left"
-              title="Angehängten Beleg ansehen"
-            >
-              {e.beleg?.original_name ?? 'ansehen'}
-            </button>
+        {/* Issue #568 Stufe 2: alle angehängten Belege */}
+        {journalBelege(e).length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">
+              📎 {journalBelege(e).length === 1 ? 'Angehängter Beleg:' : 'Angehängte Belege:'}
+            </span>
+            {journalBelege(e).map((a) => (
+              <button
+                key={a.anhang_id || a.id}
+                type="button"
+                onClick={async () => openUrl(await getJournalAnhangUrl(e.id, a.anhang_id || undefined))}
+                className="text-blue-600 dark:text-blue-400 hover:underline truncate text-left"
+                title="Angehängten Beleg ansehen"
+              >
+                {a.original_name}
+              </button>
+            ))}
           </div>
         )}
 

@@ -433,6 +433,25 @@ class Journaleintrag(Base):
     )
     rechnung: Mapped["Rechnung | None"] = relationship(back_populates="journaleintraege")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
+    # Issue #568 Stufe 2: alle Belege der Buchung (beleg_id bleibt der erste/Hauptbeleg)
+    anhaenge: Mapped[list["JournalAnhang"]] = relationship(
+        back_populates="journaleintrag", order_by="JournalAnhang.id",
+    )
+
+
+class JournalAnhang(Base):
+    """Issue #568 Stufe 2: mehrere Belege je Journalbuchung (z. B. Vertrag + Monatsabrechnung).
+    Nur im Korrekturfenster änderbar; bei festgeschriebener Buchung verhindert der Trigger
+    protect_journal_anhaenge_delete das Entfernen (GoBD)."""
+    __tablename__ = "journal_anhaenge"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    journal_id: Mapped[int] = mapped_column(ForeignKey("journal.id"), nullable=False, index=True)
+    beleg_id: Mapped[int] = mapped_column(ForeignKey("belege.id"), nullable=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    journaleintrag: Mapped["Journaleintrag"] = relationship(back_populates="anhaenge")
+    beleg: Mapped["Beleg"] = relationship()
 
 
 class Tagesabschluss(Base):

@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 196
+SCHEMA_VERSION = 197
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -708,6 +708,7 @@ def _run_migrations() -> None:
             # (identisches Muster wie beim journal-Trigger oben, Issue #268-Folgefehler).
             "protect_vorsteuer_ansprueche_update",
             "protect_vorsteuer_ansprueche_delete",
+            "protect_journal_anhaenge_delete",  # Issue #568
         ]:
             conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
         conn.commit()
@@ -4553,6 +4554,32 @@ def _run_migrations() -> None:
             conn.commit()
             print("[Migration] Schema auf Version 196 (rechnungen.altsystem_mahnstufe, altsystem_gemahnt_am)")
 
+    if version < 197:
+        with engine.connect() as conn:
+            # Issue #568 Stufe 2: mehrere Belege je Journalbuchung. Bestehende Belege werden als
+            # erster Anhang übernommen - nur INSERT in die neue Tabelle, die (ggf. versiegelte)
+            # journal-Zeile selbst bleibt unverändert.
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS journal_anhaenge ("
+                " id INTEGER PRIMARY KEY,"
+                " journal_id INTEGER NOT NULL REFERENCES journal(id),"
+                " beleg_id INTEGER NOT NULL REFERENCES belege(id),"
+                " erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP)"
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_journal_anhaenge_journal_id ON journal_anhaenge (journal_id)"))
+            _j197 = {r[1] for r in conn.execute(text("PRAGMA table_info(journal)")).fetchall()}
+            if "beleg_id" in _j197:
+                conn.execute(text(
+                    "INSERT INTO journal_anhaenge (journal_id, beleg_id) "
+                    "SELECT j.id, j.beleg_id FROM journal j "
+                    "WHERE j.beleg_id IS NOT NULL "
+                    "AND NOT EXISTS (SELECT 1 FROM journal_anhaenge a WHERE a.journal_id = j.id AND a.beleg_id = j.beleg_id) "
+                    "ORDER BY j.id"
+                ))
+            conn.execute(text("PRAGMA user_version = 197"))
+            conn.commit()
+            print("[Migration] Schema auf Version 197 (Issue #568: journal_anhaenge)")
+
 
 def _migrate_kategorien() -> None:
     """EKS-Zuordnungen auf offizielles Formular (04/2025) bringen und fehlende Kategorien eintragen."""
@@ -5025,6 +5052,16 @@ def _setup_gobd_triggers() -> None:
         BEGIN
             SELECT RAISE(ABORT,
                 'GoBD-Verstoß: Einträge im Änderungsprotokoll können nicht gelöscht werden.');
+        END
+        """,
+        # Issue #568 Stufe 2: Anhang einer festgeschriebenen Buchung bleibt erhalten
+        """
+        CREATE TRIGGER IF NOT EXISTS protect_journal_anhaenge_delete
+        BEFORE DELETE ON journal_anhaenge
+        WHEN (SELECT immutable FROM journal WHERE id = OLD.journal_id) = 1
+        BEGIN
+            SELECT RAISE(ABORT,
+                'GoBD-Verstoß: Belege einer festgeschriebenen Buchung können nicht entfernt werden.');
         END
         """,
     ]

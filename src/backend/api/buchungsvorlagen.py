@@ -68,6 +68,7 @@ class BuchungsvorlageCreate(BaseModel):
 
 class BuchenRequest(BaseModel):
     beleg_id: Optional[int] = None
+    beleg_ids: list[int] = []  # Issue #568 Stufe 2: mehrere eigene Belege
 
 
 class BuchungsvorlageUpdate(BaseModel):
@@ -345,15 +346,18 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
     # Issue #568: ohne eigenen Beleg beim Buchen den Vertrag der Vorlage als eigene Kopie
     # anhängen - eigene Datei im Journal-Ordner (Vorlagen speichern relativ zu uploads/belege/,
     # das Journal relativ zu uploads/), hält den Stand zum Buchungszeitpunkt fest (GoBD).
-    beleg_id = data.beleg_id
-    if beleg_id is None and v.beleg_id and v.beleg is not None:
+    # Issue #568 Stufe 2: eigene Belege UND Vertrag - der Vertrag wird immer als eigene Kopie
+    # angehängt, nicht mehr nur ohne eigenen Beleg (vorher ersetzte die Monatsabrechnung ihn).
+    beleg_ids = list(dict.fromkeys(([data.beleg_id] if data.beleg_id else []) + list(data.beleg_ids)))
+    if v.beleg_id and v.beleg is not None:
         quelle = BELEG_DIR / v.beleg.dateiname
         if quelle.exists():
             from api.journal import beleg_aus_bytes_speichern
             kopie = beleg_aus_bytes_speichern(
                 quelle.read_bytes(), v.beleg.original_name or quelle.name, v.beleg.mime_type or "", db,
             )
-            beleg_id = kopie.id
+            beleg_ids.append(kopie.id)
+    beleg_id = beleg_ids[0] if beleg_ids else None
 
     belegnr = _naechste_belegnr(db, faellig_am)
     eintrag = Journaleintrag(
@@ -383,6 +387,10 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
     )
     eintrag.signatur = signatur_journaleintrag(eintrag)
     db.add(eintrag)
+    db.flush()
+    from database.models import JournalAnhang
+    for bid in beleg_ids:
+        db.add(JournalAnhang(journal_id=eintrag.id, beleg_id=bid))
 
     v.letzte_buchung = heute
     v.erstellte_buchungen = (v.erstellte_buchungen or 0) + 1
@@ -391,7 +399,7 @@ def buche_vorlage(vorlage_id: int, data: BuchenRequest = BuchenRequest(), db: Se
     db.commit()
     db.refresh(eintrag)
     from api.schemas import JournalEintragResponse
-    resp = JournalEintragResponse.model_validate(eintrag)
+    resp = JournalEintragResponse.from_orm_with_kunde(eintrag)
     resp.hinweis = hinweis_freie_ig_buchung(eintrag)  # Issue #497
     return resp
 

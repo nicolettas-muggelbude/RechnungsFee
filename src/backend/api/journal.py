@@ -22,7 +22,9 @@ from sqlalchemy import func, extract, or_
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import BankTransaktion, Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
+from database.models import (
+    BankTransaktion, Beleg, Journaleintrag, JournalAnhang, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis,
+)
 from utils.signatur import signatur_journaleintrag
 from utils.konten import ist_ig_lieferung_konto
 from utils.zm_meldezeitraum import hinweis_freie_ig_buchung
@@ -540,6 +542,8 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
     db.flush()  # neu.id wird fuer die Bank-Verknuepfung unten benoetigt
+    # Issue #568 Stufe 2: alle Belege wandern mit zur Korrektur-Buchung
+    anhaenge_uebernehmen(db, original, neu)
 
     # Bank-Verknuepfung wandert mit auf die Neubuchung (Issue #322) - sonst zeigt
     # BankTransaktion.journal_id dauerhaft auf die stornierte, wirtschaftlich nicht mehr
@@ -627,38 +631,53 @@ def beleg_aus_bytes_speichern(inhalt: bytes, dateiname: str, mime: str, db: Sess
     return beleg
 
 
+def anhang_belege(eintrag: Journaleintrag) -> list[Beleg]:
+    """Issue #568 Stufe 2: alle Belege einer Buchung in Reihenfolge des Anhängens. Fällt auf
+    beleg_id zurück, falls (noch) keine Anhang-Zeilen existieren."""
+    belege = [a.beleg for a in (eintrag.anhaenge or []) if a.beleg is not None]
+    if not belege and eintrag.beleg is not None:
+        belege = [eintrag.beleg]
+    return belege
+
+
+def anhang_hinzufuegen(db: Session, eintrag: Journaleintrag, beleg_id: int) -> None:
+    """Beleg an eine Buchung hängen. beleg_id der Buchung = erster Beleg (für ältere Leser);
+    bei bereits gespeicherten, festgeschriebenen Buchungen wird beleg_id nicht mehr angefasst."""
+    db.add(JournalAnhang(journal_id=eintrag.id, beleg_id=beleg_id))
+    if eintrag.beleg_id is None and (eintrag in db.new or not eintrag.immutable):
+        eintrag.beleg_id = beleg_id
+
+
+def anhaenge_uebernehmen(db: Session, quelle: Journaleintrag, ziel: Journaleintrag) -> None:
+    """Alle Belege von quelle an ziel hängen (Korrektur-Neubuchung, Issue #568)."""
+    for b in anhang_belege(quelle):
+        db.add(JournalAnhang(journal_id=ziel.id, beleg_id=b.id))
+
+
+def _pruefe_anhang_aenderbar(eintrag: Journaleintrag, aktion: str) -> None:
+    if eintrag.immutable:
+        # protect_journal_update/-anhaenge_delete würden ohnehin ablehnen (GoBD) - verständliche Meldung
+        raise HTTPException(
+            status_code=409,
+            detail=f"Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nicht mehr {aktion} werden.",
+        )
+
+
 @router.post("/{eintrag_id}/anhang", response_model=BelegResponse, status_code=201)
 async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Dateianhang (PDF/Bild) an eine Journalbuchung hängen (Issue #310). Eigene Route
-    "/anhang" statt "/beleg" - unter "/beleg" existiert bereits der druckbare HTML-Beleg
-    (siehe get_beleg() weiter unten), das waere sonst eine Routenkollision."""
+    """Weiteren Beleg (PDF/Bild) an eine Journalbuchung hängen (Issue #310, seit #568 Stufe 2
+    mehrere je Buchung). Eigene Route "/anhang" statt "/beleg" - unter "/beleg" existiert bereits
+    der druckbare HTML-Beleg (siehe get_beleg() weiter unten)."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not eintrag:
         raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
-    if eintrag.immutable:
-        # protect_journal_update-Trigger wuerde das UPDATE ohnehin ablehnen (GoBD) -
-        # hier vorab mit verstaendlicher Meldung statt rohem DB-Fehler.
-        raise HTTPException(
-            status_code=409,
-            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
-        )
-
-    # Alten Beleg ersetzen wenn vorhanden - Datei nur löschen, wenn ihn nichts anderes mehr
-    # verwendet (Issue #568-Nebenfund)
-    alte_dateien: list[Path] = []
-    if eintrag.beleg_id:
-        from api.rechnungen import _beleg_loeschen_wenn_unbenutzt
-        alte_id = eintrag.beleg_id
-        eintrag.beleg_id = None
-        db.flush()
-        alte_dateien = _beleg_loeschen_wenn_unbenutzt(alte_id, db)
-        db.flush()
-
+    _pruefe_anhang_aenderbar(eintrag, "angehängt")
+    if eintrag.beleg_id and not eintrag.anhaenge:
+        # Altbestand vor Migration 197 ohne Anhang-Zeile: ersten Beleg nachtragen
+        db.add(JournalAnhang(journal_id=eintrag.id, beleg_id=eintrag.beleg_id))
     beleg = await _beleg_datei_speichern(datei, db)
-    eintrag.beleg_id = beleg.id
+    anhang_hinzufuegen(db, eintrag, beleg.id)
     db.commit()
-    from api.rechnungen import _dateien_entfernen
-    _dateien_entfernen(alte_dateien)
     return BelegResponse.from_beleg(beleg)
 
 
@@ -677,15 +696,23 @@ async def upload_anhang_vorab(datei: UploadFile = File(...), db: Session = Depen
 def download_anhang(
     eintrag_id: int,
     version: str = Query("original", description="'original' oder 'pdfa'"),
+    anhang_id: Optional[int] = Query(None, description="Issue #568: bestimmter Anhang, sonst der erste"),
     db: Session = Depends(get_db),
 ):
     """Angehängte Datei einer Journalbuchung herunterladen. Mit ?version=pdfa die PDF/A-Version."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
-    if not eintrag or not eintrag.beleg_id:
+    if not eintrag:
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+    if anhang_id is not None:
+        anhang = db.query(JournalAnhang).filter(
+            JournalAnhang.id == anhang_id, JournalAnhang.journal_id == eintrag_id,
+        ).first()
+        beleg = anhang.beleg if anhang else None
+    else:
+        belege = anhang_belege(eintrag)
+        beleg = belege[0] if belege else None
     if not beleg:
-        raise HTTPException(status_code=404, detail="Beleg-Datensatz nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
 
     if version == "pdfa":
         if not beleg.beleg_pdfa_pfad:
@@ -712,24 +739,58 @@ def download_anhang(
     )
 
 
+def _anhaenge_entfernen(db: Session, eintrag: Journaleintrag, anhaenge: list[JournalAnhang]) -> list[Path]:
+    """Anhang-Zeilen löschen, beleg_id auf den nächsten verbliebenen Beleg setzen und Belege
+    ohne weitere Verwendung samt Datei zum Entfernen vormerken (Issue #568-Nebenfund)."""
+    from api.rechnungen import _beleg_loeschen_wenn_unbenutzt
+    entfernte_ids = [a.beleg_id for a in anhaenge]
+    for a in anhaenge:
+        db.delete(a)
+    db.flush()
+    db.expire(eintrag, ["anhaenge"])
+    rest = [a.beleg_id for a in eintrag.anhaenge]
+    if eintrag.beleg_id in entfernte_ids or (eintrag.beleg_id and not rest):
+        eintrag.beleg_id = rest[0] if rest else None
+    db.flush()
+    dateien: list[Path] = []
+    for bid in dict.fromkeys(entfernte_ids):
+        dateien += _beleg_loeschen_wenn_unbenutzt(bid, db)
+    return dateien
+
+
+@router.delete("/{eintrag_id}/anhang/{anhang_id}", status_code=204)
+def delete_einzelanhang(eintrag_id: int, anhang_id: int, db: Session = Depends(get_db)):
+    """Issue #568 Stufe 2: einen Beleg von einer Journalbuchung entfernen (nur im Korrekturfenster)."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag:
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
+    _pruefe_anhang_aenderbar(eintrag, "entfernt")
+    anhang = db.query(JournalAnhang).filter(
+        JournalAnhang.id == anhang_id, JournalAnhang.journal_id == eintrag_id,
+    ).first()
+    if not anhang:
+        raise HTTPException(status_code=404, detail="Beleg nicht gefunden.")
+    from api.rechnungen import _dateien_entfernen
+    dateien = _anhaenge_entfernen(db, eintrag, [anhang])
+    db.commit()
+    _dateien_entfernen(dateien)
+
+
 @router.delete("/{eintrag_id}/anhang", status_code=204)
 def delete_anhang(eintrag_id: int, db: Session = Depends(get_db)):
-    """Beleg-Anhang von einer Journalbuchung entfernen und Datei löschen."""
+    """Alle Belege einer Journalbuchung entfernen (nur im Korrekturfenster)."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
-    if not eintrag or not eintrag.beleg_id:
+    if not eintrag or not (eintrag.beleg_id or eintrag.anhaenge):
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    if eintrag.immutable:
-        raise HTTPException(
-            status_code=409,
-            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – der Beleg kann nicht mehr entfernt werden.",
-        )
-    # Datei nur löschen, wenn den Beleg nichts anderes mehr verwendet (Issue #568-Nebenfund:
-    # bisher wurde sie ungeprüft gelöscht - ein geteilter Beleg ging dabei verloren)
+    _pruefe_anhang_aenderbar(eintrag, "entfernt")
     from api.rechnungen import _beleg_loeschen_wenn_unbenutzt, _dateien_entfernen
-    beleg_id = eintrag.beleg_id
-    eintrag.beleg_id = None
-    db.flush()
-    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
+    if eintrag.anhaenge:
+        dateien = _anhaenge_entfernen(db, eintrag, list(eintrag.anhaenge))
+    else:
+        beleg_id = eintrag.beleg_id
+        eintrag.beleg_id = None
+        db.flush()
+        dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
     _dateien_entfernen(dateien)
 
@@ -837,12 +898,18 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             steuerbefreiung_grund=steuerbefreiung_grund,
             ist_ig_erwerb=(pos_sf == "ig_erwerb"),
             ust_sonderfall=pos_sf,
-            beleg_id=data.beleg_id,  # muss beim Anlegen mitgegeben werden, s. SplitBuchungCreate
+            # muss beim Anlegen mitgegeben werden, s. SplitBuchungCreate (erster = Hauptbeleg)
+            beleg_id=(data.alle_beleg_ids() or [None])[0],
             immutable=True,
         )
         journaleintrag.signatur = signatur_journaleintrag(journaleintrag)
         db.add(journaleintrag)
         ergebnisse.append(journaleintrag)
+    db.flush()
+    # Issue #568 Stufe 2: alle Belege an jede Position der Split-Buchung
+    for e in ergebnisse:
+        for bid in data.alle_beleg_ids():
+            db.add(JournalAnhang(journal_id=e.id, beleg_id=bid))
     db.commit()
     for e in ergebnisse:
         db.refresh(e)

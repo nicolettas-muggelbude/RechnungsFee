@@ -19,7 +19,9 @@ import {
   getUstSaetze,
   uploadJournalAnhang,
   uploadJournalAnhangVorab,
-  deleteJournalAnhang,
+  deleteJournalEinzelAnhang,
+  journalBelege,
+  type JournalAnhang,
   getJournalAnhangUrl,
   openUrl,
   type JournalEintrag,
@@ -106,8 +108,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const [keineGeldbewegung, setKeineGeldbewegung] = useState(false)
   const [kmAnzahl, setKmAnzahl] = useState<string>(bearbeiten?.km_anzahl ? String(bearbeiten.km_anzahl) : '')
   const [showNeuKategorie, setShowNeuKategorie] = useState(false)
-  const [belegDatei, setBelegDatei] = useState<File | null>(null)
-  const [belegVorhanden, setBelegVorhanden] = useState(bearbeiten?.beleg ?? null)
+  // Issue #568 Stufe 2: mehrere Belege je Buchung
+  const [belegDateien, setBelegDateien] = useState<File[]>([])
+  const [belegeVorhanden, setBelegeVorhanden] = useState<JournalAnhang[]>(bearbeiten ? journalBelege(bearbeiten) : [])
   // Refs: verhindern dass useEffects beim ersten Kategorien-Laden die bearbeiten-Werte überschreiben
   // Issue #273: Schnellbuchungen bringen ihre eigene Kategorie mit – die darf vom
   // Standardkategorie-Effekt nicht überschrieben/gelöscht werden, genau wie beim Bearbeiten.
@@ -457,9 +460,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       // Beleg-Upload (Issue #310): erst nachdem die Buchung ihre id hat - die Buchung ist
       // dabei noch nicht immutable (Erstellung bzw. innerhalb des 5-Minuten-Fensters),
       // der GoBD-Trigger blockiert das UPDATE des beleg_id-Feldes daher nicht.
-      if (belegDatei) {
+      for (const datei of belegDateien) {
         try {
-          await uploadJournalAnhang(data.id, belegDatei)
+          await uploadJournalAnhang(data.id, datei)
         } catch (e) {
           console.error('Beleg-Upload fehlgeschlagen', e)
         }
@@ -472,15 +475,15 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   })
 
   const belegLoeschenMutation = useMutation({
-    mutationFn: () => deleteJournalAnhang(bearbeiten!.id),
-    onSuccess: () => {
-      setBelegVorhanden(null)
+    mutationFn: (a: JournalAnhang) => deleteJournalEinzelAnhang(bearbeiten!.id, a.anhang_id),
+    onSuccess: (_r, a) => {
+      setBelegeVorhanden((liste) => liste.filter((x) => x.anhang_id !== a.anhang_id))
       qc.invalidateQueries({ queryKey: ['journal'] })
     },
   })
 
-  async function belegAnsehen() {
-    const url = await getJournalAnhangUrl(bearbeiten!.id)
+  async function belegAnsehen(a: JournalAnhang) {
+    const url = await getJournalAnhangUrl(bearbeiten!.id, a.anhang_id || undefined)
     await openUrl(url)
   }
 
@@ -528,11 +531,11 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   async function onSubmitSplit(values: SplitValues) {
     // Beleg muss vor dem Anlegen hochgeladen werden - Split-Buchungen sind ab Erstellung
     // immutable, ein nachtraeglicher Upload wie bei der Einzelbuchung ist nicht moeglich.
-    let belegId: number | undefined
-    if (belegDatei) {
+    const belegIds: number[] = []
+    for (const datei of belegDateien) {
       try {
-        const beleg = await uploadJournalAnhangVorab(belegDatei)
-        belegId = beleg.id
+        const beleg = await uploadJournalAnhangVorab(datei)
+        belegIds.push(beleg.id)
       } catch (e) {
         console.error('Beleg-Upload fehlgeschlagen', e)
       }
@@ -556,7 +559,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
           vorsteuerabzug: p.vorsteuerabzug,
         }
       }),
-      beleg_id: belegId,
+      beleg_ids: belegIds,
     })
   }
 
@@ -730,51 +733,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {/* Beleg (Issue #310) */}
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                Belege <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auch mehrere)</span>
               </label>
-              {belegVorhanden ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={belegAnsehen}
-                    className="flex-1 text-left text-blue-600 dark:text-blue-400 hover:underline truncate"
-                  >
-                    📎 {belegVorhanden.original_name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => belegLoeschenMutation.mutate()}
-                    disabled={belegLoeschenMutation.isPending}
-                    title="Beleg entfernen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : belegDatei ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setBelegDatei(null)}
-                    title="Auswahl verwerfen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-                  <span>📎</span>
-                  <span>PDF oder Bild anhängen</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png,image/tiff"
-                    className="hidden"
-                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
+              <BelegeAuswahl
+                vorhanden={belegeVorhanden}
+                onAnsehen={belegAnsehen}
+                onEntfernen={(a) => belegLoeschenMutation.mutate(a)}
+                entfernenLaeuft={belegLoeschenMutation.isPending}
+                dateien={belegDateien}
+                setDateien={setBelegDateien}
+              />
             </div>
 
             {/* Kategorie */}
@@ -1172,32 +1140,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {/* Beleg (Issue #310) - ein Beleg gilt fuer die gesamte Split-Buchung */}
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, für alle Positionen gemeinsam)</span>
+                Belege <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auch mehrere, für alle Positionen gemeinsam)</span>
               </label>
-              {belegDatei ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setBelegDatei(null)}
-                    title="Auswahl verwerfen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-                  <span>📎</span>
-                  <span>PDF oder Bild anhängen</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png,image/tiff"
-                    className="hidden"
-                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
+              <BelegeAuswahl dateien={belegDateien} setDateien={setBelegDateien} />
             </div>
 
             {/* Kunde (nur Einnahmen) */}
@@ -1475,5 +1420,74 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       />
     )}
     </>
+  )
+}
+
+
+// Issue #568 Stufe 2: vorhandene Belege (ansehen/entfernen) + neu ausgewählte Dateien (mehrere)
+function BelegeAuswahl({ vorhanden = [], onAnsehen, onEntfernen, entfernenLaeuft, dateien, setDateien }: {
+  vorhanden?: JournalAnhang[]
+  onAnsehen?: (a: JournalAnhang) => void
+  onEntfernen?: (a: JournalAnhang) => void
+  entfernenLaeuft?: boolean
+  dateien: File[]
+  setDateien: (f: File[]) => void
+}) {
+  const zeile = 'flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2'
+  return (
+    <div className="space-y-1.5">
+      {vorhanden.map((a) => (
+        <div key={a.anhang_id || a.id} className={zeile}>
+          <button
+            type="button"
+            onClick={() => onAnsehen?.(a)}
+            className="flex-1 text-left text-blue-600 dark:text-blue-400 hover:underline truncate"
+          >
+            📎 {a.original_name}
+          </button>
+          {onEntfernen && (
+            <button
+              type="button"
+              onClick={() => onEntfernen(a)}
+              disabled={entfernenLaeuft}
+              title="Beleg entfernen"
+              aria-label={`Beleg ${a.original_name} entfernen`}
+              className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      {dateien.map((d, i) => (
+        <div key={`${d.name}-${i}`} className={zeile}>
+          <span className="flex-1 truncate">📎 {d.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
+          <button
+            type="button"
+            onClick={() => setDateien(dateien.filter((_, j) => j !== i))}
+            title="Auswahl verwerfen"
+            aria-label={`Auswahl ${d.name} verwerfen`}
+            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+        <span>📎</span>
+        <span>{vorhanden.length + dateien.length > 0 ? 'Weiteren Beleg anhängen' : 'PDF oder Bild anhängen'}</span>
+        <input
+          type="file"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/tiff"
+          className="hidden"
+          onChange={(e) => {
+            const neu = Array.from(e.target.files ?? [])
+            if (neu.length) setDateien([...dateien, ...neu])
+            e.target.value = ''
+          }}
+        />
+      </label>
+    </div>
   )
 }

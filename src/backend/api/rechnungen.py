@@ -2987,10 +2987,10 @@ def _beleg_loeschen_wenn_unbenutzt(beleg_id: int, db: Session, basis: Path | Non
     basis: Verzeichnis, relativ zu dem beleg.dateiname gespeichert ist - Standard uploads/,
     Buchungsvorlagen legen ihre Belege abweichend relativ zu uploads/belege/ ab."""
     from database.models import (
-        Buchungsvorlage, DokumentenPaketBeleg, KundeBeleg, Rechnungsvorlage, RechnungZugferdAnhang,
+        Buchungsvorlage, DokumentenPaketBeleg, JournalAnhang, KundeBeleg, Rechnungsvorlage, RechnungZugferdAnhang,
     )
-    for modell in (Rechnung, Journaleintrag, RechnungZugferdAnhang, KundeBeleg, DokumentenPaketBeleg,
-                   Rechnungsvorlage, Buchungsvorlage):
+    for modell in (Rechnung, Journaleintrag, JournalAnhang, RechnungZugferdAnhang, KundeBeleg,
+                   DokumentenPaketBeleg, Rechnungsvorlage, Buchungsvorlage):
         if db.query(modell).filter(modell.beleg_id == beleg_id).first():
             return []
     beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()

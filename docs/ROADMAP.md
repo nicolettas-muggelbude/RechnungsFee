@@ -170,11 +170,12 @@ Seit v0.7.13 hängt das Buchen aus einer Vorlage den Vertrag als eigene Kopie an
 Journalbuchung trägt aber weiterhin nur einen Beleg (`journal.beleg_id`) – lädt man beim Buchen eine
 Monatsabrechnung hoch, ersetzt sie den Vertrag.
 
-- [ ] Neue Tabelle für Journal-Anhänge (Junction wie `rechnung_zugferd_anhaenge`), `journal.beleg_id`
-  als ersten Anhang übernehmen (Datenmigration ohne Änderung der versiegelten Zeile)
-- [ ] Buchungsformular, Split, Buchungsvorlage: mehrere Belege; Vorlage hängt Vertrag **und** eigenen Beleg an
-- [ ] Buchungsdetail, Beleg-Ansicht, GoBD-Export, DATEV-Belegexport auf mehrere Anhänge umstellen
-- [ ] Anhängen nach dem Festschreiben bleibt gesperrt (GoBD)
+- [x] Neue Tabelle `journal_anhaenge` (Migration 197), `journal.beleg_id` als ersten Anhang übernommen
+  (nur INSERT, versiegelte Zeile unverändert); `beleg_id` bleibt Hauptbeleg für ältere Leser
+- [x] Buchungsformular, Split, Buchungsvorlage: mehrere Belege; Vorlage hängt Vertrag **und** eigene Belege an
+- [x] Buchungsdetail, Beleg-Ansicht, GoBD-Export (alle einzeln), DATEV-Belegexport (zu einem PDF
+  zusammengeführt, `utils/belege_zusammenfuehren.py`)
+- [x] Anhängen/Entfernen nach dem Festschreiben gesperrt (API + Trigger `protect_journal_anhaenge_delete`)
 
 ## 📋 Belegverwaltung / DMS (Issue #575, Community-Wunsch Markus)
 
