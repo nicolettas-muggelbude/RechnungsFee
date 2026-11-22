@@ -642,6 +642,7 @@ export const getJournal = (filter?: {
   art?: string
   zahlungsart_typ?: 'bar' | 'unbar'
   gruppe_id?: number
+  lieferant_id?: number  // Issue #566: direkte Ausgaben eines Lieferanten
 }) => request<JournalEintrag[]>(`/journal${toQuery(filter ?? {})}`)
 export const createJournaleintrag = (data: JournalEintragCreate) =>
   request<JournalEintrag>('/journal', { method: 'POST', body: JSON.stringify(data) })

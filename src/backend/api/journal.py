@@ -265,10 +265,13 @@ def list_eintraege(
     art: Optional[str] = Query(None, description="Einnahme oder Ausgabe"),
     zahlungsart_typ: Optional[str] = Query(None, description="bar oder unbar"),
     gruppe_id: Optional[int] = Query(None, description="Zeigt nur die Buchungsgruppe (Original+Storno+ggf. Neu) dieser Wurzel-id"),
+    lieferant_id: Optional[int] = Query(None, description="Issue #566: direkt gebuchte Ausgaben dieses Lieferanten"),
     db: Session = Depends(get_db),
 ):
     """Journaleinträge mit optionalen Filtern."""
     q = db.query(Journaleintrag)
+    if lieferant_id is not None:
+        q = q.filter(Journaleintrag.lieferant_id == lieferant_id)
     if gruppe_id is not None:
         # Original selbst hat gruppe_id=NULL (GoBD: kein nachtraegliches UPDATE moeglich),
         # daher zusaetzlich nach eigener id filtern.

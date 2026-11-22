@@ -93,3 +93,14 @@ def test_storno_im_zeitraum_original_davor(db):
     db.commit()
     _buchung(db, "J-STORNO", "Einnahme", gruppe_id=original.id)
     assert _feld48(db) == {"J-STORNO": "70001"}
+
+
+def test_journal_filter_lieferant(db):
+    """Reiter „Ausgaben“ beim Lieferanten: nur seine direkt gebuchten Ausgaben."""
+    from api.journal import list_eintraege
+    lf = db.query(Lieferant).one()
+    _buchung(db, "J-MIT", "Ausgabe", lieferant_id=lf.id)
+    _buchung(db, "J-OHNE", "Ausgabe")
+    treffer = list_eintraege(monat=None, datum_von=None, datum_bis=None, kategorie_id=None, art=None,
+                             zahlungsart_typ=None, gruppe_id=None, lieferant_id=lf.id, db=db)
+    assert [e.belegnr for e in treffer] == ["J-MIT"]

@@ -161,8 +161,8 @@ Debitor des Kunden als Personenkonto.
   Rechnung, auch bei Erstattungen) und mit Buchungen ohne Lieferant (unverändert leer)
 - [x] Debitor bei Zahlungen auf Ausgangsrechnungen über `rechnung.kunde_id`; Storno-Gegenbuchungen
   ohne eigenen Partner bekommen das Personenkonto der Originalbuchung (`gruppe_id`)
-- [ ] Lieferanten-Historie/Kontokorrent: direkte Ausgaben zeigen oder bewusst weglassen (keine
-  Verbindlichkeit) – entscheiden
+- [x] Lieferanten: direkte Ausgaben im neuen Reiter „Ausgaben“ (`GET /journal?lieferant_id=`), im
+  Kontokorrent bewusst nicht (sofort bezahlt, keine Verbindlichkeit)
 
 ## 📋 v0.7.14 – Mehrere Belege je Buchung (Issue #568, Stufe 2)
 
