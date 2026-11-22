@@ -2040,7 +2040,7 @@ function ThunderbirdSektion({ data }: { data: Unternehmen }) {
         />
         <div>
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            Thunderbird für den Versand von Rechnungen, Angeboten, Aufträgen und Proforma-Rechnungen nutzen
+            Thunderbird für den Mailversand nutzen (Rechnungen, Angebote, Aufträge, Proforma, Mahnungen, Kontoauszüge, Buchungsbelege)
           </span>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Hat Vorrang vor SMTP. RechnungsFee öffnet ein vorausgefülltes Thunderbird-Compose-Fenster (Empfänger, Betreff, Text, PDF-Anhang und ggf. das Dokumentenpaket) – den eigentlichen Versand inklusive eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung übernimmt Thunderbird unverändert wie bei jeder anderen Mail. Mahnungen laufen weiterhin über SMTP bzw. das Standard-Mailprogramm.

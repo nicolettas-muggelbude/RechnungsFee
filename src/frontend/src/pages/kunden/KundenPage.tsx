@@ -9,6 +9,7 @@ import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { istEuLand } from '../../utils/laender'
 import { LandCombobox } from '../../components/LandCombobox'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { kontokorrentMailOhneSmtp } from '../../utils/mailOhneSmtp'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -281,11 +282,16 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
   })
 
   const mailMut = useMutation({
-    mutationFn: () => sendeKontokorrentMail(kunde.id!, {
-      an: mailAn, cc: mailCc || undefined,
-      betreff: mailBetreff, text: mailText,
-      von, bis,
-    }),
+    mutationFn: async () => {
+      const daten = { an: mailAn, cc: mailCc || undefined, betreff: mailBetreff, text: mailText, von, bis }
+      // Issue #582: wie bei Rechnungen - Thunderbird hat Vorrang, ohne SMTP das Mailprogramm
+      const unt = await qc.fetchQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+      if (unt?.thunderbird_aktiv || !unt?.smtp_aktiv) {
+        await kontokorrentMailOhneSmtp('kunden', kunde.id!, daten, !!unt?.thunderbird_aktiv)
+        return { ok: true }
+      }
+      return sendeKontokorrentMail(kunde.id!, daten)
+    },
     onSuccess: () => { setMailSent(true); setTimeout(() => { setShowMail(false); setMailSent(false) }, 1500) },
   })
 

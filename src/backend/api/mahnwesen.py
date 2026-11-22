@@ -1561,6 +1561,32 @@ def mahnung_pdf(mahnung_id: int, nur_ansehen: bool = False, download: bool = Fal
     )
 
 
+# Issue #582: Zusatzanhänge der Mahnstufe (Rechnungen, bisherige Mahnungen, Kontokorrent) auch
+# für den Versand über Thunderbird bzw. das Mailprogramm - bisher nur beim SMTP-Versand
+@router.get("/{mahnung_id}/zusatzanhaenge")
+def mahnung_zusatzanhaenge(mahnung_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    mahnung = db.query(Mahnung).filter(Mahnung.id == mahnung_id).first()
+    if not mahnung:
+        raise HTTPException(status_code=404, detail="Mahnung nicht gefunden.")
+    return [{"index": i, "dateiname": name} for i, (_, name) in enumerate(sammle_mahnung_anhaenge(db, mahnung))]
+
+
+@router.get("/{mahnung_id}/zusatzanhaenge/{index}")
+def mahnung_zusatzanhang(mahnung_id: int, index: int, db: Session = Depends(get_db)):
+    mahnung = db.query(Mahnung).filter(Mahnung.id == mahnung_id).first()
+    if not mahnung:
+        raise HTTPException(status_code=404, detail="Mahnung nicht gefunden.")
+    anhaenge = sammle_mahnung_anhaenge(db, mahnung)
+    if not 0 <= index < len(anhaenge):
+        raise HTTPException(status_code=404, detail="Anhang nicht gefunden.")
+    inhalt, dateiname = anhaenge[index]
+    media = "application/pdf" if dateiname.lower().endswith(".pdf") else "application/octet-stream"
+    return Response(
+        content=inhalt, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{dateiname}"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Inkasso-Paket (Abschnitt E)
 # ---------------------------------------------------------------------------

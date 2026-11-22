@@ -137,3 +137,25 @@ def test_migration_196(tmp_path, monkeypatch):
         spalten = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)"))}
         assert {"altsystem_mahnstufe", "altsystem_gemahnt_am"} <= spalten
         assert conn.execute(text("PRAGMA user_version")).scalar() == main.SCHEMA_VERSION
+
+
+def test_zusatzanhaenge_endpunkte_fuer_thunderbird(db, tmp_path, monkeypatch):
+    """Issue #582: Zusatzanhänge der Stufe als Liste + einzeln abrufbar (Thunderbird/Mailprogramm)."""
+    import database.connection as dc
+    monkeypatch.setattr(dc, "APP_DATA_DIR", tmp_path)
+    r = _import(db)
+    (tmp_path / "uploads" / "belege").mkdir(parents=True)
+    (tmp_path / "uploads" / "belege" / "orig.pdf").write_bytes(b"%PDF-original")
+    b = Beleg(dateiname="belege/orig.pdf", original_name="Rechnung ALT-1.pdf", mime_type="application/pdf",
+              dateigroesse=13, sha256="x")
+    db.add(b)
+    db.flush()
+    r.beleg_id = b.id
+    db.commit()
+    mw.altsystem_mahnstufe_setzen(r.id, mw.AltsystemMahnstufeRequest(stufe=2, datum=HEUTE - timedelta(days=30)), db)
+    mahnung = mw.erstellen(MahnungErstellenRequest(rechnung_ids=[r.id], stufe=3), db)
+    liste = mw.mahnung_zusatzanhaenge(mahnung.id, db)
+    assert liste == [{"index": 0, "dateiname": "Rechnung_ALT-1.pdf"}]
+    assert mw.mahnung_zusatzanhang(mahnung.id, 0, db).body == b"%PDF-original"
+    with pytest.raises(HTTPException):
+        mw.mahnung_zusatzanhang(mahnung.id, 5, db)

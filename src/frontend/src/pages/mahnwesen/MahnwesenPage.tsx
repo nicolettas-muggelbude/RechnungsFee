@@ -4,12 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getMahnwesenKundenUebersicht, getMahnwesenEinstellungen, mahnungVorschau, mahnungErstellen,
   mahnungVorschauGebuehr, mahnungErstellenGebuehr, bezahleMahngebuehrKunde, mahnungZahlungErfassen,
-  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, openUrl,
+  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, getMahnungZusatzanhaenge, getMahnungZusatzanhangUrl, downloadMahnungZusatzanhang, openUrl,
   getUnternehmen, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
   type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult, type Mahnstufe,
 } from '../../api/client'
 import { MahnungMailDialog, mahnungMailVorlage } from '../../components/MahnungMailDialog'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
 import { DateInput } from '../../components/DateInput'
 
 function formatEuro(v: string | number): string {
@@ -85,6 +86,14 @@ async function mahnungMailFallback(
     return
   }
   await downloadMahnungPdfForMail(m.id)
+  // Issue #582: Zusatzanhänge der Stufe ebenfalls herunterladen (zum Anhängen von Hand)
+  try {
+    for (const a of await getMahnungZusatzanhaenge(m.id)) {
+      await downloadMahnungZusatzanhang(m.id, a.index, a.dateiname)
+    }
+  } catch (e) {
+    console.error('Zusatzanhänge der Mahnung', e)
+  }
   qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
   qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
   qc.invalidateQueries({ queryKey: ['rechnungen'] })
@@ -97,6 +106,39 @@ async function mahnungMailFallback(
     await openUrl(mailtoUrl)
   } else {
     window.location.href = mailtoUrl
+  }
+}
+
+/** Issue #582: Versand über Thunderbird (Einstellung „Thunderbird-Versand“, hat wie bei Rechnungen
+ *  Vorrang vor SMTP) - Mahnungs-PDF und alle Zusatzanhänge der Stufe als Anhänge. Der Abruf des
+ *  PDFs (ohne nur_ansehen) setzt die Mahnung serverseitig auf „versendet“, wie der Download. */
+async function mahnungThunderbird(
+  m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number,
+  unternehmen: Unternehmen | null | undefined, mahnstufen?: Mahnstufe[],
+) {
+  if (!m.kunde_email) {
+    window.alert('Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.')
+    return
+  }
+  try {
+    const vorlage = mahnungMailVorlage(m, unternehmen, mahnstufen)
+    const pdfUrl = await getMahnungPdfUrl(m.id, false, m.mahnnummer)
+    const zusatz = await getMahnungZusatzanhaenge(m.id)
+    const anhaenge = [
+      { url: pdfUrl, dateiname: `${(m.mahnnummer || 'Mahnung').replace(/[/ ]/g, '_')}.pdf` },
+      ...await Promise.all(zusatz.map(async (a) => ({ url: await getMahnungZusatzanhangUrl(m.id, a.index), dateiname: a.dateiname }))),
+    ]
+    await sendeUeberThunderbird({ an: m.kunde_email, betreff: vorlage.betreff, text: vorlage.text, anhaenge })
+    qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
+    qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+  } catch (e) {
+    if (e instanceof ThunderbirdNichtGefundenError) {
+      window.alert('Thunderbird wurde nicht gefunden. Prüfe die Installation oder schalte unter Einstellungen → Unternehmen → E-Mail den Thunderbird-Versand aus.\n\n'
+        + e.details.map((d) => `${d.programm}: ${d.fehler}`).join('\n'))
+    } else {
+      window.alert(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+    }
   }
 }
 
@@ -526,8 +568,12 @@ function KundeDetail({
                     </button>
                     <button
                       type="button"
-                      onClick={() => unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)}
-                      title={unternehmen?.smtp_aktiv ? undefined : 'Kein SMTP eingerichtet – öffnet dein E-Mail-Programm, PDF wird heruntergeladen'}
+                      onClick={() => unternehmen?.thunderbird_aktiv
+                        ? mahnungThunderbird(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)
+                        : unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)}
+                      title={unternehmen?.thunderbird_aktiv
+                        ? 'Öffnet eine neue Mail in Thunderbird mit der Mahnung und den Anhängen der Stufe'
+                        : unternehmen?.smtp_aktiv ? undefined : 'Kein SMTP eingerichtet – öffnet dein E-Mail-Programm, die PDFs werden heruntergeladen'}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                     >
                       ✉️ Mail{!unternehmen?.smtp_aktiv ? ' …' : ''}

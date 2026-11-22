@@ -7,6 +7,7 @@ import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { LandCombobox } from '../../components/LandCombobox'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { kontokorrentMailOhneSmtp } from '../../utils/mailOhneSmtp'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,7 +15,7 @@ import {
   getLieferanten, createLieferant, updateLieferant, deleteLieferant,
   anonymisiereLieferant, dsgvoExportLieferant, dsgvoExportLieferantPdf,
   getKontokorrentLieferant, downloadKontokorrentPdfLieferant, sendeKontokorrentMailLieferant,
-  getNaechsteKreditorNr, getLieferantenguthaben, forderungVerrechnen, getRechnungen, getJournal,
+  getNaechsteKreditorNr, getLieferantenguthaben, forderungVerrechnen, getRechnungen, getJournal, getUnternehmen,
   type Lieferant, type AnonymisierungResult, type KontokorrentBewegung,
 } from '../../api/client'
 
@@ -90,11 +91,16 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
   })
 
   const mailMut = useMutation({
-    mutationFn: () => sendeKontokorrentMailLieferant(lieferant.id!, {
-      an: mailAn, cc: mailCc || undefined,
-      betreff: mailBetreff, text: mailText,
-      von, bis,
-    }),
+    mutationFn: async () => {
+      const daten = { an: mailAn, cc: mailCc || undefined, betreff: mailBetreff, text: mailText, von, bis }
+      // Issue #582: wie bei Rechnungen - Thunderbird hat Vorrang, ohne SMTP das Mailprogramm
+      const unt = await qc.fetchQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+      if (unt?.thunderbird_aktiv || !unt?.smtp_aktiv) {
+        await kontokorrentMailOhneSmtp('lieferanten', lieferant.id!, daten, !!unt?.thunderbird_aktiv)
+        return { ok: true }
+      }
+      return sendeKontokorrentMailLieferant(lieferant.id!, daten)
+    },
     onSuccess: () => { setMailSent(true); setTimeout(() => { setShowMail(false); setMailSent(false) }, 1500) },
   })
 

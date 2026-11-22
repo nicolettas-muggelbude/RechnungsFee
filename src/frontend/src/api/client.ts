@@ -1233,6 +1233,13 @@ async function _speichernUnter(blob: Blob, dateiname: string, filterName: string
  *  Der <a download>-Weg ist unter Linux (WebKitGTK) nicht zuverlässig verdrahtet - der Klick
  *  löst dort keinen sichtbaren Download aus (unter Windows/WebView2 schon), deshalb der
  *  Tauri-Zweig für alle Plattformen einheitlich über den nativen Dialog. */
+/** Lädt eine Backend-Adresse herunter und speichert sie als Datei (Issue #582: Mail ohne SMTP). */
+export async function ladeDateiHerunter(url: string, dateiname: string): Promise<void> {
+  const res = await apiFetch(url)
+  if (!res.ok) throw new Error(`Download fehlgeschlagen: ${res.status}`)
+  await _triggerBlobDownload(await res.blob(), dateiname)
+}
+
 async function _triggerBlobDownload(blob: Blob, filename: string) {
   if (isTauri()) {
     const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : undefined
@@ -3673,6 +3680,20 @@ export async function downloadInkassoPaket(kundeId: number): Promise<void> {
 
 /** Lädt eine Mahnungs-PDF als Datei herunter (kein Viewer) - Mail-Fallback ohne SMTP,
  *  analog downloadPdfForMail(). Zählt wie Drucken/SMTP-Versand als "verlässt das Haus". */
+// Issue #582: Zusatzanhänge der Mahnstufe (Rechnungen, bisherige Mahnungen, Kontokorrent)
+// für Thunderbird bzw. das Mailprogramm - bisher nur beim SMTP-Versand
+export const getMahnungZusatzanhaenge = (mahnungId: number) =>
+  request<{ index: number; dateiname: string }[]>(`/mahnwesen/${mahnungId}/zusatzanhaenge`)
+export async function getMahnungZusatzanhangUrl(mahnungId: number, index: number): Promise<string> {
+  const base = await getBaseUrl()
+  return `${base}/mahnwesen/${mahnungId}/zusatzanhaenge/${index}`
+}
+export async function downloadMahnungZusatzanhang(mahnungId: number, index: number, dateiname: string): Promise<void> {
+  const res = await apiFetch(await getMahnungZusatzanhangUrl(mahnungId, index))
+  if (!res.ok) throw new Error(`Anhang-Download fehlgeschlagen: ${res.status}`)
+  await _triggerBlobDownload(await res.blob(), dateiname)
+}
+
 export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void> {
   const base = await getBaseUrl()
   const res = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf?download=true`)
