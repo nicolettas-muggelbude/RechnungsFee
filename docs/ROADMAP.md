@@ -505,6 +505,15 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 ## 💡 Ideen (ohne Zeitplan)
 
+- **Prüfung eingehender E-Rechnungen (Validator)** – Community-Wunsch Markus (2026-11-23): beim Import
+  einer ZUGFeRD-/XRechnung prüfen, ob sie formal korrekt ist, und das Ergebnis als verständliche Liste
+  zeigen, die man an den Lieferanten weitergeben kann. Bisher nur Plausibilität (Konfidenz je Feld,
+  Summenabgleich in `utils/rechnungs_parser.py`), XSD/Schematron sind in factur-x bewusst aus
+  (`check_xsd=False`, `check_schematron=False`). Stufe 1: XSD-Prüfung offline mit den in factur-x
+  mitgelieferten Schemas (Syntax/Struktur). Stufe 2: Schematron-Geschäftsregeln (EN 16931, XRechnung
+  KoSIT) – Regelwerke mitliefern und pflegen, saxonche im Sidecar-Build zuverlässig bündeln.
+  Ergebnis nur als Hinweis, der Import bleibt möglich.
+
 - **Kalenderansicht** (Issue #198, Folge-Feature) – Vollständige Monatsansicht mit Buchungen, Steuerfristen und Feiertagen. Setzt Steuer-Fristenliste voraus. Größerer Scope, kein fester Zeitplan.
 
 - **Artikel-Varianten** – Varianten eines Artikels (z. B. Größe, Farbe) mit eigenem Preis und Bestand; Auswahl direkt in der Rechnungsposition (Issue #171)
