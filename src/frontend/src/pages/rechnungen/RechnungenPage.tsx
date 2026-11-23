@@ -6230,6 +6230,12 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                             🔗 Kette anzeigen
                           </button>
                         )}
+                        {r.typ === 'eingang' && r.externe_belegnr && (
+                          // Issue #581: Rechnungsnummer des Lieferanten sichtbar (war nur durchsuchbar)
+                          <div className="mt-0.5 font-sans text-[11px] text-slate-500 dark:text-slate-400" title="Rechnungsnummer des Lieferanten">
+                            Lief.-Nr. {r.externe_belegnr}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-slate-700 dark:text-slate-200">
                         {r.typ === 'ausgang'

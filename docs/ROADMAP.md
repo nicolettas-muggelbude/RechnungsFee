@@ -446,6 +446,12 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs und TD1; Duplikat
   #500 aus PR #473) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern).
   Vor dem Übernehmen immer erst lokal sichern (TD1). Gilt für alle externen Ziele (lokal, SMB, FTPS).
+- [ ] **Spalten ein-/ausblenden** (Issue #581, Markus) – Menü „Spalten“ je Liste, auf der
+  gemeinsamen, barrierefreien Tabellen-Grundlage aus v0.8.0 (21 Seiten mit eigenen Tabellen, keine
+  gemeinsame Komponente); Menü per Tastatur und Screenreader bedienbar; Auswahl in der DB gespeichert
+  (wandert mit dem Backup, Muster wie `dashboard_config`); Anfang: Rechnungen, Journal, Kunden,
+  Lieferanten; zusätzliche Spalten wie Lieferanten-Rechnungsnr., Kategorie, Fälligkeit.
+  Vorab in v0.7.14: Lieferanten-Rechnungsnr. als zweite Zeile in der Eingangsrechnungsliste.
 - [ ] **FTPS als externes Backup-Ziel** (Issue #461, TD1) – viele haben über ihre Webseite einen
   FTP-Zugang. FTPS (`ftplib.FTP_TLS`, keine zusätzliche Bibliothek) als Standard; unverschlüsseltes FTP
   nur als bewusst gewählte Option mit Warnung (Zugangsdaten gehen im Klartext übers Netz – die
