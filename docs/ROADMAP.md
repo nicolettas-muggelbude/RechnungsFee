@@ -454,6 +454,31 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ---
 
+## 📋 v0.9.0 – REST-API, MCP-Server und Konnektoren
+
+Reihenfolge: zuerst die öffentliche REST-API als gemeinsamer Weg, MCP und Konnektoren setzen darauf
+auf, statt eigene Zugänge zu bauen.
+
+- [ ] **Öffentliche REST-API** (Issue #513) – das Backend ist intern bereits eine REST-API (FastAPI,
+  ~300 Endpunkte), aber unversioniert, nur mit Sitzungsschlüssel (seit v0.7.12) und auf zufälligem
+  Port. Für Dritte: stabile, versionierte Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von
+  der internen); feste Adresse, standardmäßig nur lokal, optional im Netzwerk; Schreibzugriffe über
+  dieselben Wege wie die Oberfläche (GoBD, Nummernkreise, Signaturen), kein Datenbankzugriff.
+  Einschränkung Desktop-App: nur erreichbar, solange RechnungsFee läuft.
+  - **API-Tokens** mit Recht lesen / schreiben, in den Einstellungen erzeugt, nur einmal angezeigt,
+    danach nur als Hash gespeichert, jederzeit sperrbar.
+  - **Erster Schritt** (DonKeWu, Belege aus paperless-ngx): Kategorien und Buchungen lesen;
+    Eingangsrechnungs-**Entwürfe** mit Beleg und Kategorie je Position anlegen (statt direkter,
+    sofort signierter Journalbuchungen); in der App Sammelaktion „Entwürfe prüfen und finalisieren“
+    mit Vorschau.
+  - Danach: Kunden, Artikel, Ausgangsrechnungs-Entwürfe anlegen, Rechnungen und Angebote lesen inkl. PDF.
+- [ ] **MCP-Server** (Issue #429) – Model-Context-Protocol-Server für KI-Assistenten auf Basis der
+  REST-API (gleiche Tokens und Rechte, keine eigenen Endpunkte).
+- [ ] **Konnektoren** auf Basis der REST-API: Zammad und paperless-ngx (#473), Etsy/Onlineshops (#469),
+  hellocash und Kassensysteme (#13, POS). Je Konnektor eigener Umfang, Reihenfolge nach Nachfrage.
+
+---
+
 ## 📋 Vor v1.0 – Konto je Zahlung (Issue #162)
 
 Zusammen mit der POS-Anbindung (jede POS-Buchung bucht auf eine bestimmte Kasse), nach v0.8.0.
@@ -534,7 +559,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Erweiterbare Kontenpläne** – Built-in-Pakete (SKR03 vollständig) und CSV-Import eigener Kontenpläne
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
-- **hellocash-Anbindung** – REST-API (Issue #13)
 - **AQBanking als Option** – Kontoumsätze direkt von der Bank abrufen (FinTS/HBCI über AQBanking) als Alternative zum bestehenden CSV-/CAMT-Import; optional, der Datei-Import bleibt. Kein fester Zeitplan.
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
@@ -556,7 +580,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 - **Sammelposten / Sammelabschreibung (§6 Abs. 2a EStG)** – Wahlrecht für bewegliche Wirtschaftsgüter zwischen 250 € und 1.000 € netto: Pool pro Wirtschaftsjahr, pauschale Auflösung über 5 Jahre à 20 % (Anlage EÜR Zeile 37, Hilfsblatt Zeilen 63–81). Braucht eigene mehrjährige Pool-Verwaltung (ähnlich Anlagenverzeichnis, aber pro Jahrgang statt pro Einzelgut) – deutlich aufwändiger als die übrige EÜR/AVEÜR-Logik. Zurückgestellt bis explizit nachgefragt (Issue #265, Diskussion 2026-07).
 
-- **MCP-Server** (Issue #429) – eigener Model-Context-Protocol-Server, der die Backend-API (Rechnung erstellen, Zahlung erfassen, Journal abfragen etc.) als Tools für KI-Assistenten (z. B. Claude) exponiert. Vorschlag bisher sehr knapp, kein konkreter Anwendungsfall genannt – Rückfrage im Issue gestellt, Umfang/Priorität noch unklar.
 
 - **Bestellwesen (Einkauf)** – Spiegelbild zu Angebot/Auftrag auf der Lieferantenseite, als
   Schalter unter Funktionen: Bestellung an Lieferanten als eigener Dokumenttyp (Nummernkreis z. B.
@@ -574,11 +597,3 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
   gibt die Seriennummer wieder frei; passt zu §25a (Gebrauchtwarenhandel).
   Offen: nur Rückverfolgung oder auch Garantiefristen mit Ablauf und Erinnerung?
 
-- **Öffentliche REST-API** (Issue #513; Anwendungsfälle Zammad/paperless #473, MCP #429, Etsy #469, POS) – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
-  aber unversioniert, ohne Anmeldung und auf zufälligem Port. Für Dritte nötig: stabile, versionierte
-  Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von der internen), API-Tokens mit Rechten
-  (lesen / schreiben), in den Einstellungen erzeug- und widerrufbar; feste Adresse, standardmäßig
-  nur lokal, optional im Netzwerk; Schreibzugriffe über dieselben Wege wie die Oberfläche (GoBD,
-  Nummernkreise, Signaturen). Einschränkung Desktop-App: nur erreichbar, solange RechnungsFee läuft.
-  **Grundlage für MCP-Server (#429) und hellocash-Anbindung (#13)**, statt dass beide eigene Wege gehen.
-  Offen: Hauptzweck (Shop legt Rechnungen an, eigene Skripte/Auswertungen, Anbindung anderer Programme)?
