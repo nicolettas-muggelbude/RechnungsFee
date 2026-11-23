@@ -13,6 +13,7 @@ import { KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahm
 import { LandCombobox } from '../../components/LandCombobox'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { validiereIban, ladeOpenIbanDaten, OPEN_IBAN_BANK_FALLBACK, OPEN_IBAN_BIC_FALLBACK, openIbanBankdatenFehlgeschlagen, OPEN_IBAN_LAND_TOOLTIP } from '../../utils/iban'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfskomponenten
@@ -285,9 +286,11 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
             Einleitungstext für {typLabel}
           </label>
-          <textarea
+          <MarkdownTextfeld
             value={(form[einleitungKey] as string | null | undefined) ?? ''}
-            onChange={ev => set(einleitungKey, ev.target.value || null)}
+            onChange={v => set(einleitungKey, v || null)}
+            vorschau
+            aria-label={`Einleitungstext für ${typLabel}`}
             rows={3}
             placeholder="Erscheint vor der Positionstabelle."
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
@@ -297,9 +300,11 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
             Schlusstext für {typLabel}
           </label>
-          <textarea
+          <MarkdownTextfeld
             value={(form[schlussKey] as string | null | undefined) ?? ''}
-            onChange={ev => set(schlussKey, ev.target.value || null)}
+            onChange={v => set(schlussKey, v || null)}
+            vorschau
+            aria-label={`Schlusstext für ${typLabel}`}
             rows={3}
             placeholder="Erscheint nach Positionen/Summen."
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
@@ -307,7 +312,6 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 md:col-span-2 -mt-2">
           Leer lassen wenn kein Standardtext gewünscht. Pro Dokument überschreibbar.
-          Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*kursiv*</code> · Zeilenumbruch mit Enter
         </p>
       </div>
     )
@@ -1962,9 +1966,11 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">HTML-Tags wie <code className="font-mono">&lt;pre&gt;</code> werden ebenfalls unterstützt.</p>
             </div>
           )}
-          <textarea
+          <MarkdownTextfeld
             value={signatur}
-            onChange={ev => setSignatur(ev.target.value)}
+            onChange={setSignatur}
+            links
+            aria-label="Signatur-Text"
             rows={8}
             className={`${inputCls} resize-y font-mono text-xs`}
             placeholder={DEFAULT_SIGNATUR(data.firmenname)}

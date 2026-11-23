@@ -22,6 +22,7 @@ import type { RechnungVorschauRequest } from '../../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -630,14 +631,14 @@ function AuftragFormular({
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
-        <textarea value={einleitungstext} onChange={e => setEinleitungstext(e.target.value)}
+        <MarkdownTextfeld value={einleitungstext} onChange={setEinleitungstext} vorschau aria-label="Einleitungstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für Aufträge." />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
-        <textarea value={schlusstext} onChange={e => setSchlusstext(e.target.value)}
+        <MarkdownTextfeld value={schlusstext} onChange={setSchlusstext} vorschau aria-label="Schlusstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für Aufträge." />
       </div>

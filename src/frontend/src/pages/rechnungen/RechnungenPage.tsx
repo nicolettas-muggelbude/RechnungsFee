@@ -45,6 +45,7 @@ import { istEuLand } from '../../utils/laender'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
 import { LandCombobox } from '../../components/LandCombobox'
 import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../store/filterStore'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -4864,16 +4865,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       {typ === 'ausgang' && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
-          <textarea
+          <MarkdownTextfeld
             value={einleitungstext}
-            onChange={(e) => setEinleitungstext(e.target.value)}
+            onChange={setEinleitungstext}
+            vorschau
+            aria-label="Einleitungstext"
             rows={3}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für diesen Dokumenttyp."
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">*kursiv*</code> · Zeilenumbruch mit Enter
-          </p>
         </div>
       )}
 
@@ -4899,16 +4899,15 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       {typ === 'ausgang' && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
-          <textarea
+          <MarkdownTextfeld
             value={schlusstext}
-            onChange={(e) => setSchlusstext(e.target.value)}
+            onChange={setSchlusstext}
+            vorschau
+            aria-label="Schlusstext"
             rows={3}
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400"
             placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für diesen Dokumenttyp."
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-600 dark:text-slate-300">*kursiv*</code> · Zeilenumbruch mit Enter
-          </p>
         </div>
       )}
 
