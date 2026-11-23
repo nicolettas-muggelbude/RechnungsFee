@@ -2242,6 +2242,20 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 )
         raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung: PDF-Erzeugung ist gesperrt – maßgeblich ist das Original. Ein vorhandenes Original-PDF kann als Beleg angehängt werden.")
 
+    # Issue #591: Eingangsrechnung/Lieferantengutschrift - das Original ist das Dokument des
+    # Lieferanten. Statt einer Rechnungsvorlage (eigene Firma als Absender, eigene Bankdaten)
+    # ein internes Erfassungsblatt - ohne Archivierung, ohne „ausgegeben“, ohne KOPIE-Stempel.
+    # Ist ein Originalbeleg angehängt, zeigt die App diesen statt des Blatts.
+    if rechnung.typ == "eingang":
+        from utils.pdf_eingangsrechnung import erstelle_eingangsrechnung_erfassung
+        unt_obj = db.query(Unternehmen).first()
+        unt_daten = {c.name: getattr(unt_obj, c.name) for c in unt_obj.__table__.columns} if unt_obj else {}
+        nr = (rechnung.externe_belegnr or rechnung.rechnungsnummer or str(rechnung_id)).replace("/", "-").replace(" ", "_")
+        return Response(
+            content=erstelle_eingangsrechnung_erfassung(rechnung, unt_daten), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="Erfassung_{nr}.pdf"', "Cache-Control": "no-store"},
+        )
+
     # Absenderdaten: Snapshot hat Vorrang vor aktuellen Stammdaten (GoBD – finalisierte Dokumente sind unveränderlich)
     unternehmen = db.query(Unternehmen).first()
     if rechnung.absender_snapshot:

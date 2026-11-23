@@ -83,6 +83,9 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
         raise HTTPException(404, "Dokument nicht gefunden")
     if r.import_quelle:
         raise HTTPException(409, "Extern erstellte bzw. importierte Rechnung: Versand ist gesperrt – maßgeblich ist das Original.")
+    if r.typ == "eingang":
+        # Issue #591: Eingangsrechnungen stammen vom Lieferanten - kein eigener Versand
+        raise HTTPException(409, "Eingangsrechnungen werden nicht aus RechnungsFee versendet.")
 
     u = db.query(Unternehmen).first()
     unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}

@@ -1676,7 +1676,30 @@ function RechnungDetail({
 
         {/* Aktionsleiste */}
         <div className="flex flex-wrap gap-2">
-          {rechnung.import_quelle ? (
+          {rechnung.typ === 'eingang' && !rechnung.import_quelle ? (
+            // Issue #591: Eingangsrechnung = Dokument des Lieferanten - kein eigenes Rechnungs-PDF,
+            // kein Druck als „Original“, kein Versand. Mit Beleg das Original, sonst ein Erfassungsblatt.
+            rechnung.beleg ? (
+              <button
+                onClick={_openBeleg}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                📄 Original öffnen
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  const url = dokumentPdfUrl(await getApiBase(), rechnung)
+                  if (isTauri()) openInPdfWindow(url, 'Erfassungsblatt')
+                  else window.open(url, '_blank')
+                }}
+                title="Internes Blatt mit den erfassten Daten – das Original des Lieferanten ist noch nicht als Beleg angehängt"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                📄 Erfassungsblatt
+              </button>
+            )
+          ) : rechnung.import_quelle ? (
             <span className="self-center text-xs text-amber-700 dark:text-amber-300">
               PDF- und Mailversand gesperrt – {rechnung.import_quelle === 'extern' ? 'Original extern erstellt' : 'Original im Altsystem'}
             </span>
