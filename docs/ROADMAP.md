@@ -505,18 +505,21 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 ## 💡 Ideen (ohne Zeitplan)
 
-- **Prüfung eingehender E-Rechnungen (Validator)** – Community-Wunsch Markus (2026-11-23): beim Import
-  einer ZUGFeRD-/XRechnung prüfen, ob sie formal korrekt ist, und das Ergebnis als verständliche Liste
-  zeigen, die man an den Lieferanten weitergeben kann. Bisher nur Plausibilität (Konfidenz je Feld,
-  Summenabgleich in `utils/rechnungs_parser.py`), XSD/Schematron sind in factur-x bewusst aus
-  (`check_xsd=False`, `check_schematron=False`). Stufe 1: XSD-Prüfung offline mit den in factur-x
-  mitgelieferten Schemas (Syntax/Struktur). Stufe 2: Schematron-Geschäftsregeln (EN 16931, XRechnung
-  KoSIT) – Regelwerke mitliefern und pflegen, saxonche im Sidecar-Build zuverlässig bündeln.
-  Ergebnis nur als Hinweis, der Import bleibt möglich.
-  **Auch für eigene Rechnungen** (Nachfrage Markus): dieselbe Prüfung beim Finalisieren bzw. vor dem
-  ersten Versand der eigenen ZUGFeRD-/XRechnung-XML (bisher nur `zugferd.py::xrechnung_pflicht_fehler()`
-  für öffentliche Auftraggeber, sonst keine Prüfung); Fehler verständlich anzeigen, bevor der Kunde
-  sie bemerkt. Zusätzlich die erzeugte XML in der Testsuite gegen XSD/Schematron prüfen (Qualitätssicherung).
+- **E-Rechnungen prüfen** – Community-Wunsch Markus (2026-11-23), Umfang abgestimmt:
+  - **Eigene Rechnungen – Normprüfung in der Testsuite statt je Rechnung:** Das XML entsteht aus
+    Code, ein korrekt erzeugter Fall ist bei jeder Rechnung korrekt. Deshalb jeden Weg durch den
+    Code einmal als Test (Kleinunternehmer, Reverse Charge, ig. Lieferung, Drittland, § 25a, mehrere
+    Steuersätze, Rabatte, Gutschrift, Abschlag mit Abzug, öffentliche Auftraggeber/XRechnung,
+    Einmalkunde) gegen XSD und Schematron (EN 16931, XRechnung KoSIT) prüfen – läuft bei jeder
+    Änderung und jedem Bibliotheks-Update mit. Dazu **Rundlauf-Tests** für die Zuordnung (erzeugen →
+    mit dem eigenen Import wieder einlesen → Feld für Feld vergleichen), weil ein Validator falsch
+    zugeordnete, aber formal gültige Felder nicht findet.
+  - **Eigene Rechnungen – je Rechnung nur Vollständigkeit der Daten** vor dem Finalisieren (fehlt
+    Kundenadresse, USt-IdNr. bei Reverse Charge, eigene Steuernummer …), ohne Validator; Vorbild
+    `zugferd.py::xrechnung_pflicht_fehler()` für öffentliche Auftraggeber.
+  - **Eingangsrechnungen – keine Normprüfung:** Verantwortung für die E-Rechnung liegt beim
+    Lieferanten. Weiter Plausibilität (`utils/rechnungs_parser.py`) und zusätzlich ein Hinweis, wenn
+    eine Pflichtangabe nach § 14 Abs. 4 UStG fehlt, die für den eigenen Vorsteuerabzug zählt.
 
 - **Kalenderansicht** (Issue #198, Folge-Feature) – Vollständige Monatsansicht mit Buchungen, Steuerfristen und Feiertagen. Setzt Steuer-Fristenliste voraus. Größerer Scope, kein fester Zeitplan.
 
