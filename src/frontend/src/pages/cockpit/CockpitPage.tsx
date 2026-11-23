@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { getCockpit, type CockpitDaten } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 // ── Hilfsfunktionen ────────────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ function useZeitraum() {
     art === 'quartal' ? `${jahr}-Q${quartal}` :
     String(jahr)
 
-  const jahre = Array.from({ length: 6 }, (_, i) => aktJahr - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
 
   return { art, setArt, jahr, setJahr, monat, setMonat, quartal, setQuartal, wert, jahre }
 }

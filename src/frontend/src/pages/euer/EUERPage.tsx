@@ -5,6 +5,7 @@ import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, getJournalBelegUrl, ge
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 const ABSCHNITT_LABEL: Record<string, string> = {
   A: 'A – Betriebseinnahmen',
@@ -144,7 +145,7 @@ export function EUERPage() {
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [detailansicht, setDetailansicht] = useState(false)
   const [stornierteAusblenden, setStornierteAusblenden] = useState(false)
-  const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
 
   const { data: ergebnis, isLoading, error } = useQuery<EUERErgebnis>({

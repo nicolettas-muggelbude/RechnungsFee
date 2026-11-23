@@ -9,6 +9,7 @@ import {
   getAfaPlan, getAveurPdfUrl, getAveurZusammenfassung, openUrl,
   type Anlagegut, type AnlagegutCreate, type AnlagegutTyp,
 } from '../../api/client'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 const AKTUELLES_JAHR = new Date().getFullYear()
 
@@ -307,6 +308,7 @@ export function AnlageverzeichnisPage() {
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('anlageverzeichnis', 50)
   const [jahr, setJahr] = useState(AKTUELLES_JAHR)
+  const buchungsjahre = useBuchungsjahre()  // Issue #589
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [selId, setSelId] = useState<number | null>(null)
   const [planGut, setPlanGut] = useState<Anlagegut | null>(null)
@@ -367,7 +369,7 @@ export function AnlageverzeichnisPage() {
             <div className="flex gap-2 items-center">
               <select value={jahr} onChange={e => setJahr(parseInt(e.target.value))}
                 className="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-sm dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {Array.from({ length: 6 }, (_, i) => AKTUELLES_JAHR - i).map(y => (
+                {buchungsjahre.map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
