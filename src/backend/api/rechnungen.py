@@ -2223,7 +2223,7 @@ def setze_extern_erstellt(rechnung_id: int, data: ExternErstelltRequest, db: Ses
 
 
 @router.get("/{rechnung_id}/pdf")
-def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False, kopie: bool = False, nur_ansehen: bool = False, db: Session = Depends(get_db)):
+def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False, kopie: bool = False, nur_ansehen: bool = False, stornorechnung: bool = False, db: Session = Depends(get_db)):
     """PDF der Rechnung generieren und zurückgeben.
     Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
     Folge-Abrufe erhalten ein KOPIE-Banner.
@@ -2429,8 +2429,9 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     if nur_ansehen:
         darf_archiviert = False  # kein Archiv, kein Kopie-Stempel, kein Status-Touch
 
-    # Stornierte Rechnung: "Ansehen" zeigt immer das Original vor dem Storno
-    if nur_ansehen and _ist_storno_pdf:
+    # Stornierte Rechnung: "Ansehen" zeigt das Original vor dem Storno, mit stornorechnung=true
+    # die Stornorechnung selbst (Issue #595) - frisch erzeugt wie beim Drucken, ohne Archiv
+    if nur_ansehen and _ist_storno_pdf and not stornorechnung:
         if rechnung.original_pdf_pfad:
             orig_pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
             if orig_pfad.exists():
@@ -2576,7 +2577,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
 
 
 @router.get("/{rechnung_id}/pdf-ansehen", response_class=HTMLResponse)
-def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db)):
+def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db), stornorechnung: bool = False):
     """Liefert die Nur-Ansicht-Hülle (Titelleiste, Drucken/Speichern per Tastenkürzel
     blockiert) als echte HTML-Seite statt der bisherigen blob:-URL im Frontend (Issue #371:
     eine blob:-URL, in einem Fenster erzeugt, kann von einem separaten nativen
@@ -2586,7 +2587,9 @@ def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db)
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    titel = html.escape(rechnung.rechnungsnummer or "Dokument")
+    storno = bool(stornorechnung and rechnung.storniert)
+    titel = html.escape((rechnung.storno_rechnungsnummer if storno else None) or rechnung.rechnungsnummer or "Dokument")
+    query = "nur_ansehen=true&stornorechnung=true" if storno else "nur_ansehen=true"
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -2616,7 +2619,7 @@ iframe {{
 </head>
 <body>
 <div class="titelleiste">{titel} – nur zur Ansicht</div>
-<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', 'nur_ansehen=true'))}"></iframe></div>
+<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', query))}"></iframe></div>
 <script>
 document.addEventListener('keydown', function(e) {{
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's')) {{
@@ -4397,6 +4400,8 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
     original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if original.typ == "eingang":
+        return _korrigierte_eingangsrechnung(original, db)
     if original.typ != "ausgang":
         raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für Ausgangsrechnungen möglich.")
     if original.dokument_typ != "Rechnung":
@@ -4480,6 +4485,66 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
 
     original.ersatzrechnung_id = ersatz.id
     ersatz.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+    db.refresh(ersatz)
+    return RechnungResponse.from_orm_extended(ersatz)
+
+
+def _korrigierte_eingangsrechnung(original: Rechnung, db: Session) -> RechnungResponse:
+    """Issue #595: Nach dem Storno einer Eingangsrechnung die korrigierte Rechnung des
+    Lieferanten als Entwurf erfassen - Lieferant, Positionen und Kategorie aus dem Original,
+    Rechnungsnummer des Lieferanten, Datum und Beleg trägt man selbst ein. Verknüpfung wie bei
+    der Ersatzrechnung (ersatzrechnung_id / ersatz_fuer_rechnung_id), damit die Kette bleibt."""
+    if original.dokument_typ != "Rechnung":
+        raise HTTPException(status_code=409, detail="Nur für Eingangsrechnungen möglich, nicht für Lieferantengutschriften.")
+    if not original.storniert:
+        raise HTTPException(status_code=409, detail="Nur stornierte Eingangsrechnungen können ersetzt werden.")
+    if original.ersatzrechnung_id:
+        raise HTTPException(status_code=409, detail="Für diese Eingangsrechnung wurde bereits eine korrigierte Rechnung erfasst.")
+
+    ersatz = Rechnung(
+        typ="eingang",
+        dokument_typ="Rechnung",
+        rechnungsnummer=None,          # interne Nummer beim Finalisieren (Issue #465/#551)
+        externe_belegnr=None,          # neue Rechnungsnummer des Lieferanten
+        datum=date.today(),
+        leistung_von=original.leistung_von,
+        leistung_bis=original.leistung_bis,
+        lieferant_id=original.lieferant_id,
+        partner_freitext=original.partner_freitext,
+        partner_strasse=original.partner_strasse,
+        partner_hausnummer=original.partner_hausnummer,
+        partner_plz=original.partner_plz,
+        partner_ort=original.partner_ort,
+        partner_land=original.partner_land,
+        kategorie_id=original.kategorie_id,
+        notizen=original.notizen,
+        eingabemodus=original.eingabemodus,
+        rabatt_prozent=original.rabatt_prozent,
+        rabatt_betrag=original.rabatt_betrag,
+        skonto_prozent=original.skonto_prozent,
+        skonto_tage=original.skonto_tage,
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_entwurf=True,
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        ersatz_fuer_rechnung_id=original.id,
+        netto_gesamt=original.netto_gesamt,
+        ust_gesamt=original.ust_gesamt,
+        brutto_gesamt=original.brutto_gesamt,
+    )
+    db.add(ersatz)
+    db.flush()
+    for pos in sorted(original.positionen, key=lambda p: p.position_nr):
+        db.add(Rechnungsposition(
+            rechnung_id=ersatz.id, artikel_id=pos.artikel_id, position_nr=pos.position_nr,
+            beschreibung=pos.beschreibung, menge=pos.menge, einheit=pos.einheit, netto=pos.netto,
+            rabatt_prozent=pos.rabatt_prozent, ust_satz=pos.ust_satz, ust_betrag=pos.ust_betrag,
+            brutto=pos.brutto, differenzbesteuerung=pos.differenzbesteuerung,
+            ek_netto_25a=pos.ek_netto_25a, ust_satz_25a=pos.ust_satz_25a, kategorie_id=pos.kategorie_id,
+        ))
+    original.ersatzrechnung_id = ersatz.id
     db.commit()
     db.refresh(ersatz)
     return RechnungResponse.from_orm_extended(ersatz)

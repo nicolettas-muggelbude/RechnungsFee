@@ -173,6 +173,12 @@ def erstelle_eingangsrechnung_erfassung(r, unt: dict) -> bytes:
         status = "storniert"
     pdf.cell(0, 5, f"Status: {status}   ·   bezahlt: {_fmt_euro(bezahlt)}   ·   offen: {_fmt_euro(offen)}",
              new_x="LMARGIN", new_y="NEXT")
+    if r.storniert:
+        # Issue #595: Stornodatum und Grund auf dem Blatt
+        teile = [f"Storniert am {_wert(getattr(r, 'storno_datum', None))}"]
+        if (getattr(r, "storno_grund", None) or "").strip():
+            teile.append(f"Grund: {r.storno_grund.strip()}")
+        pdf.multi_cell(0, 5, "   ·   ".join(teile), new_x="LMARGIN", new_y="NEXT", align="L")
     for e in sorted(getattr(r, "journaleintraege", []) or [], key=lambda j: (j.datum, j.id)):
         pdf.set_text_color(*GRAU)
         pdf.cell(0, 4.5, f"{e.datum.strftime('%d.%m.%Y')}  {e.belegnr}  {e.zahlungsart}  "

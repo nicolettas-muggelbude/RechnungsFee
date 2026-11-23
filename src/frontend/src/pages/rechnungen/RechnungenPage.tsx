@@ -1512,12 +1512,16 @@ function RechnungDetail({
     _zeigePdf(dokumentPdfUrl(base, rechnung), 'Rechnung')
   }
 
-  async function handleAnsehen() {
+  /** stornorechnung=true: die Stornorechnung statt des Originals ansehen (Issue #595) */
+  async function handleAnsehen(stornorechnung = false) {
     const base = await getApiBase()
     if (isTauri()) {
-      openInPdfWindow(`${base}/rechnungen/${rechnung.id}/pdf-ansehen`, rechnung.rechnungsnummer ?? 'Dokument')
+      openInPdfWindow(
+        `${base}/rechnungen/${rechnung.id}/pdf-ansehen${stornorechnung ? '?stornorechnung=true' : ''}`,
+        (stornorechnung ? rechnung.storno_rechnungsnummer : null) ?? rechnung.rechnungsnummer ?? 'Dokument',
+      )
     } else {
-      window.open(dokumentPdfUrl(base, rechnung, '?nur_ansehen=true'), '_blank')
+      window.open(dokumentPdfUrl(base, rechnung, `?nur_ansehen=true${stornorechnung ? '&stornorechnung=true' : ''}`), '_blank')
     }
   }
 
@@ -1713,11 +1717,19 @@ function RechnungDetail({
           ) : (
             <>
               <button
-                onClick={handleAnsehen}
+                onClick={() => handleAnsehen()}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
               >
-                👁 Ansehen
+                👁 {rechnung.storniert && rechnung.dokument_typ === 'Rechnung' ? 'Original ansehen' : 'Ansehen'}
               </button>
+              {rechnung.storniert && rechnung.dokument_typ === 'Rechnung' && (
+                <button
+                  onClick={() => handleAnsehen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+                >
+                  👁 Stornorechnung ansehen
+                </button>
+              )}
               <button
                 onClick={handleDrucken}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
@@ -1807,13 +1819,14 @@ function RechnungDetail({
           {rechnung.zahlungsstatus === 'uneinbringlich' && rechnung.dokument_typ !== 'Lieferschein' && (
             <span className="self-center text-xs text-slate-400 dark:text-slate-500 italic">Uneinbringlich ausgebucht</span>
           )}
-          {rechnung.storniert && rechnung.typ === 'ausgang' && rechnung.dokument_typ === 'Rechnung' && !rechnung.ersatzrechnung_id && (
+          {rechnung.storniert && rechnung.dokument_typ === 'Rechnung' && !rechnung.ersatzrechnung_id && (
             <button
               onClick={() => ersatzrechnungMutation.mutate()}
               disabled={ersatzrechnungMutation.isPending}
+              title={rechnung.typ === 'eingang' ? 'Entwurf mit Lieferant, Positionen und Kategorie aus dieser Rechnung – Rechnungsnummer des Lieferanten, Datum und Beleg trägst du ein' : undefined}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-950 text-green-700 dark:text-green-400 font-medium disabled:opacity-50"
             >
-              {ersatzrechnungMutation.isPending ? '…' : '→ Ersatzrechnung erstellen'}
+              {ersatzrechnungMutation.isPending ? '…' : rechnung.typ === 'eingang' ? '→ Korrigierte Rechnung erfassen' : '→ Ersatzrechnung erstellen'}
             </button>
           )}
           {rechnung.typ === 'ausgang' && rechnung.dokument_typ === 'Rechnung' && !zeigStornoEingabe && !zeigForderungsausfall && (
