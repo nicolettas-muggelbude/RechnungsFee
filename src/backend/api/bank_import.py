@@ -388,7 +388,7 @@ def _match_kundenguthaben(
             if rechnung and rechnung.kunde_id:
                 kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first()
                 if kunde:
-                    kunde_name = (kunde.firma or f"{kunde.vorname or ''} {kunde.nachname or ''}").strip()
+                    kunde_name = (kunde.firmenname or f"{kunde.vorname or ''} {kunde.nachname or ''}").strip()
                     if _name_match(kunde_name, tx.partner_name):
                         return f
 
@@ -432,7 +432,7 @@ def _match_lieferantenguthaben(
             if rechnung and rechnung.lieferant_id:
                 lieferant = db.query(Lieferant).filter(Lieferant.id == rechnung.lieferant_id).first()
                 if lieferant:
-                    lieferant_name = (lieferant.firma or f"{lieferant.vorname or ''} {lieferant.nachname or ''}").strip()
+                    lieferant_name = (lieferant.firmenname or f"{lieferant.vorname or ''} {lieferant.nachname or ''}").strip()
                     if _name_match(lieferant_name, tx.partner_name):
                         return f
 
