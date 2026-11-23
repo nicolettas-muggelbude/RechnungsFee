@@ -14,7 +14,7 @@ from io import BytesIO
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
     _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
-    art_nr_spalte, art_nr_anzeige,
+    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -118,6 +118,15 @@ class RechnungPDFVorlage1(RechnungPDFBase):
 
         # desc_col: Index der Beschreibungs-Spalte (nach Pos., Datum, ggf. Art.-Nr.)
         desc_col = 3 if hat_artikelcode else 2
+
+        # Issue #586: Kleinunternehmer (§ 19 UStG) - keine Spalte „USt %“, Breite an die Beschreibung
+        ohne_ust = ohne_ust_spalte(self._unt, r) and "USt %" in headers
+        if ohne_ust:
+            i_ust = headers.index("USt %")
+            col_w[desc_col] += col_w[i_ust]
+            for liste in (col_w, headers, aligns):
+                del liste[i_ust]
+            headers[-1] = "Betrag"
         other_x  = L_MARGIN + sum(col_w[:desc_col + 1])  # X-Start der Spalten nach der Beschreibung
 
         tbl_x   = L_MARGIN
@@ -184,8 +193,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 netto_ges_vor = pos.netto * pos.menge * _sign
                 netto_ges_eff = (pos.brutto - pos.ust_betrag) * _sign
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(pos.netto), align="R")
-                self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
-                self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(netto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
                 # pos.netto ist bei eingabemodus="brutto" bereits der eingegebene Brutto-
                 # Einzelpreis (Issue #332) - keine Umrechnung mit dem USt-Satz mehr nötig.
@@ -193,8 +203,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(ep_brutto), align="R")
-                self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
-                self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
 
             # Zurück zum Zeilenanfang: Pos., Datum, Art.-Nr., dann Beschreibung mit multi_cell
             self.set_xy(L_MARGIN, row_y)

@@ -62,6 +62,12 @@ def dokument_text(r, unt: dict, feld: str) -> str:
     return _standardtext(unt, feld, dokument_typ)
 
 
+def ohne_ust_spalte(unt: dict, r) -> bool:
+    """Issue #586: Ausgangsdokument eines Kleinunternehmers (§ 19 UStG) - keine Spalte „USt %“.
+    Maßgeblich ist der Status im Absender-Snapshot (bzw. in den aktuellen Stammdaten)."""
+    return bool(unt.get("ist_kleinunternehmer")) and getattr(r, "typ", "ausgang") == "ausgang"
+
+
 def art_nr_spalte(unt: dict, positionen) -> bool:
     """Issue #562: Spalte „Art.-Nr.“ anzeigen? Über den Schalter in Einstellungen →
     Rechnungsvorlagen, sobald mindestens eine Position einen Artikel hat. Snapshots finalisierter

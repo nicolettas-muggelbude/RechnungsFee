@@ -16,7 +16,7 @@ from utils.pdf_rechnung_base import (
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W,
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
     _find_dejavu_dir, _person_bezeichnung, _logo_abmessungen, _adresszeilen,
-    art_nr_spalte, art_nr_anzeige,
+    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte,
 )
 from utils.pdf_shared import epc_qr_bytes
 
@@ -67,6 +67,17 @@ class RechnungPDF(RechnungPDFBase):
                 col_w   = [72, 16, 17, 27, 14, 34]
                 headers = ["Beschreibung", "Menge", "Einheit", "Einzelpreis", "USt %", "Brutto"]
                 aligns  = ["L",            "R",     "L",       "R",           "R",     "R"]
+
+        # Issue #586: Kleinunternehmer (§ 19 UStG) weisen keine Umsatzsteuer aus - keine Spalte
+        # „USt %“ (0 % stünde für steuerfreie Umsätze), ihre Breite geht an die Beschreibung, und
+        # der Betrag heißt weder Netto noch Brutto
+        ohne_ust = ohne_ust_spalte(self._unt, r) and not ist_lieferschein
+        if ohne_ust:
+            i_ust = headers.index("USt %")
+            col_w[int(hat_artikelcode)] += col_w[i_ust]
+            for liste in (col_w, headers, aligns):
+                del liste[i_ust]
+            headers[-1] = "Betrag"
 
         # Issue #475: optionale Spalte "Pos." ganz links - die Breite geht von der Beschreibung ab,
         # damit die Tabelle und der Summenblock unverändert bündig bleiben
@@ -150,8 +161,9 @@ class RechnungPDF(RechnungPDFBase):
                 netto_ges_vor = pos.netto * pos.menge * _sign
                 netto_ges_eff = (pos.brutto - pos.ust_betrag) * _sign
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(pos.netto), align="R")
-                self.cell(col_w[desc_idx + 4], ROW_H, ust_label, align="R")
-                self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(netto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_idx + 4], ROW_H, ust_label, align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
                 # pos.netto ist bei eingabemodus="brutto" bereits der eingegebene Brutto-
                 # Einzelpreis (Issue #332) - KEINE Umrechnung mit dem USt-Satz mehr nötig/zulässig,
@@ -161,8 +173,9 @@ class RechnungPDF(RechnungPDFBase):
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
                 self.cell(col_w[desc_idx + 3], ROW_H, _fmt_euro(ep_brutto), align="R")
-                self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
-                self.cell(col_w[desc_idx + 5], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_idx + 4], ROW_H, ust_label,            align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
             self.set_xy(L_MARGIN, row_y + DESC_OFFSET)
             _pos_und_code(pos)
             self.multi_cell(col_w[desc_idx], DESC_H, pos.beschreibung or "",
