@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -227,8 +228,9 @@ function KundeDetail({
   const [zeigGebuehrZahlung, setZeigGebuehrZahlung] = useState(false)
   const [gebuehrBetrag, setGebuehrBetrag] = useState(kunde.offener_betrag_gesamt.replace('.', ','))
   const [gebuehrDatum, setGebuehrDatum] = useState(heuteIso())
-  const [gebuehrZahlungsart, setGebuehrZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bank')
+  const [gebuehrZahlungsart, setGebuehrZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>(() => letzteZahlungsart('Bank'))
   const gebuehrZahlungMut = useMutation({
+    onMutate: () => merkeZahlungsart(gebuehrZahlungsart),
     mutationFn: () => bezahleMahngebuehrKunde(kunde.kunde_id, gebuehrBetrag.replace(',', '.'), gebuehrDatum, gebuehrZahlungsart),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
@@ -240,9 +242,10 @@ function KundeDetail({
   const [zahlungFuerMahnungId, setZahlungFuerMahnungId] = useState<number | null>(null)
   const [zahlungBetrag, setZahlungBetrag] = useState('')
   const [zahlungDatum, setZahlungDatum] = useState(heuteIso())
-  const [zahlungZahlungsart, setZahlungZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bank')
+  const [zahlungZahlungsart, setZahlungZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>(() => letzteZahlungsart('Bank'))
   const [zahlungResultat, setZahlungResultat] = useState<{ mahnungId: number; ergebnis: MahnungZahlungResult } | null>(null)
   const zahlungMut = useMutation({
+    onMutate: () => merkeZahlungsart(zahlungZahlungsart),
     mutationFn: (mahnungId: number) => mahnungZahlungErfassen(mahnungId, zahlungBetrag.replace(',', '.'), zahlungDatum, zahlungZahlungsart),
     onSuccess: (ergebnis, mahnungId) => {
       qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })

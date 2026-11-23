@@ -3,6 +3,7 @@ import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DateInput } from '../../components/DateInput'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -679,7 +680,7 @@ function ProformaDetail({
   const [thunderbirdFehlerDetails, setThunderbirdFehlerDetails] = useState<{ programm: string; fehler: string }[]>([])
   const [thunderbirdLaeuft, setThunderbirdLaeuft] = useState(false)
   const [zeigZahlungsForm, setZeigZahlungsForm] = useState(false)
-  const [zahlungsart, setZahlungsart] = useState('Bank')
+  const [zahlungsart, setZahlungsart] = useState<string>(() => letzteZahlungsart('Bank'))
   const leistungsdatum = proforma.leistung_bis ?? proforma.leistung_von ?? null
   const [bezahltAm, setBezahltAm] = useState(() => {
     const wahl = letzteZahlungsdatumWahl()
@@ -800,6 +801,7 @@ function ProformaDetail({
     if (!zeigZahlungsForm) { setZeigZahlungsForm(true); return }
     setKonvLaedt(true)
     try {
+      merkeZahlungsart(zahlungsart)
       const re = await rechnungAusProforma(proforma.id, { zahlungsart, bezahlt_am: bezahltAm })
       qc.invalidateQueries({ queryKey: ['proformas'] })
       navigate(`/rechnungen?id=${re.id}`)

@@ -43,6 +43,7 @@ import { useRechnungsdatumFrage } from '../../hooks/useRechnungsdatumFrage'
 import { getKontorahmenModus, katLabel, KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahmen'
 import { istEuLand } from '../../utils/laender'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { LandCombobox } from '../../components/LandCombobox'
 import { rechnungenFilter, lieferscheinFilter, abschlagFilter } from '../../store/filterStore'
 import MarkdownTextfeld from '../../components/MarkdownTextfeld'
@@ -567,7 +568,7 @@ function ZahlungsDialog({
     if (wahl === 'leistungsdatum' && leistungsdatum) return leistungsdatum
     return heuteIso()
   })
-  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Privat'>('Bar')
+  const [zahlungsart, setZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Privat'>(() => letzteZahlungsart())
   const [beschreibung, setBeschreibung] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
@@ -698,6 +699,7 @@ function ZahlungsDialog({
       }
     }
 
+    merkeZahlungsart(zahlungsart)
     mutation.mutate(payload)
   }
 

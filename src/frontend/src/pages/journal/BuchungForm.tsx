@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { DateInput } from '../../components/DateInput'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { KategorieErstellenModal } from '../../components/KategorieErstellenModal'
@@ -185,7 +186,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     } : {
       datum: initialWerte?.datum ?? initialDatum ?? heute(),
       art: initialWerte?.art ?? 'Einnahme',
-      zahlungsart: initialWerte?.zahlungsart ?? 'Bar',
+      zahlungsart: initialWerte?.zahlungsart ?? letzteZahlungsart(),
       ust_satz: '0',
       vorsteuerabzug: true,
       beschreibung: initialWerte?.beschreibung ?? '',
@@ -207,7 +208,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     defaultValues: {
       datum: initialDatum ?? heute(),
       art: 'Ausgabe',
-      zahlungsart: 'Bar',
+      zahlungsart: letzteZahlungsart(),
       positionen: [
         { beschreibung: '', kategorie_id: '', brutto_betrag: '', ust_satz: '19', vorsteuerabzug: true },
         { beschreibung: '', kategorie_id: '', brutto_betrag: '', ust_satz: '19', vorsteuerabzug: true },
@@ -511,6 +512,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       eingabeModus === 'netto'
         ? nettoToBrutto(values.brutto_betrag, values.ust_satz)
         : values.brutto_betrag
+    if (!bearbeiten) merkeZahlungsart(values.zahlungsart)
     singleMutation.mutate({
       datum: values.datum,
       beschreibung: values.beschreibung,
@@ -540,6 +542,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
         console.error('Beleg-Upload fehlgeschlagen', e)
       }
     }
+    merkeZahlungsart(values.zahlungsart)
     splitMutation.mutate({
       datum: values.datum,
       art: values.art,
