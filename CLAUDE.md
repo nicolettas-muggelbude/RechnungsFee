@@ -45,6 +45,7 @@ Label **`awaiting-response`** auf ein Issue setzen → schließt sich automatisc
 | Strg + F | Suchfeld fokussieren (wenn Seite eine Suche hat) | `AppLayout.tsx` keydown-Handler → `[data-search-input]` fokussieren |
 | Strg + Shift + E | Direkt zu Eingangsrechnungen | `AppLayout.tsx` keydown-Handler → `/rechnungen?typ=eingang`; `RechnungenPage` liest `?typ=`-Parameter |
 | + | Journal: „Neue Buchung"-Fenster öffnen | `JournalPage.tsx` keydown-Handler → `setShowBuchung(true)`; nur wenn kein Eingabefeld fokussiert und kein anderer Dialog offen ist |
+| Strg + B / Strg + I / Strg + K | Fett / Kursiv / Link (Link nur Mail-Signatur) in Einleitungs-/Schlusstext und Signatur | `components/MarkdownTextfeld.tsx` keydown am Textfeld → Markdown-Zeichen um die Auswahl setzen/entfernen (Issue #583) |
 | E / A (im Fenster „Neue Buchung") | Art zwischen Einnahme/Ausgabe wechseln | `BuchungForm.tsx` keydown-Handler → `setValue`/`setValueS('art', ...)` je nach Split-Modus; nur wenn kein Eingabefeld fokussiert und keine Modifier-Taste gedrückt ist |
 
 ---
