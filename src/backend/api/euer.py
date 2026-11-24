@@ -215,6 +215,23 @@ def _privat_bezahlt_beitrag(e: Journaleintrag) -> Decimal:
     return betrag if e.art == "Ausgabe" else -betrag
 
 
+def _anlage_zugang_beitrag(e: Journaleintrag) -> Decimal:
+    """Issue #578: Anschaffungskosten einer Anlage-Buchung für den AVEÜR-Hinweis - netto plus
+    nicht abgezogene Vorsteuer (gleiche Basis wie Abschnitt B in _euer_haupt_beitrag), nicht
+    brutto: die abziehbare Vorsteuer steht in Zeile 57 und gehört nicht zu den
+    Anschaffungskosten. Kauf (Ausgabe) +, Storno-Gegenbuchung (art=Einnahme) − (Issue #439)."""
+    if e.art == "Ausgabe":
+        vz = Decimal("1")
+        vorsteuer_abgezogen = e.vorsteuer_betrag or ZERO
+    else:
+        vz = Decimal("-1")
+        vorsteuer_abgezogen = -(e.vorsteuer_betrag or ZERO)
+    basis = (e.netto_betrag or ZERO) + ((e.ust_betrag or ZERO) - vorsteuer_abgezogen)
+    if e.ust_sonderfall:
+        basis = e.netto_betrag or ZERO
+    return vz * basis
+
+
 def _euer_haupt_beitrag(e: Journaleintrag, ku: Optional[bool] = None) -> tuple[Optional[int], Decimal]:
     """Hauptzeilen-Zuordnung einer Journalbuchung: (euer_zeile, beitrag) - die Summe der
     Beiträge einer Zeile ist deren EÜR-Wert. Zeile None = keine Hauptzeilenzuordnung.
@@ -405,8 +422,11 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         # mit positivem Betrag und wurde bisher mitaddiert statt abgezogen (jeder Storno erhöhte
         # die Summe). Stornovariante mit gleicher art und negiertem Betrag hebt sich ebenso auf.
         if kat and kat.kontenart == "Anlage":
-            vz = Decimal("1") if e.art == "Ausgabe" else Decimal("-1")
-            anlage_summe += vz * (e.brutto_betrag or ZERO)
+            anlage_summe += _anlage_zugang_beitrag(e)
+            # Issue #578: die Vorsteuer aus dem Anlagekauf ist trotzdem abziehbar (Zeile 57) -
+            # bisher fiel sie mit dem continue still aus der EÜR
+            for ust_zeile, _ust_name, ust_beitrag in _euer_ust_beitraege(e):
+                zeilen[ust_zeile] = zeilen.get(ust_zeile, ZERO) + ust_beitrag
             continue
 
         haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
@@ -697,6 +717,9 @@ def _euer_kategorien_beitraege(
             add(ZEILE_EINLAGEN, "Privat bezahlte Betriebsausgaben", einlage, e)
 
         if kat and kat.kontenart == "Anlage":
+            # Issue #578: Vorsteuer aus dem Anlagekauf gehört in Zeile 57 (wie _berechne_euer)
+            for ust_zeile, ust_kat_name, ust_beitrag in _euer_ust_beitraege(e):
+                add(ust_zeile, ust_kat_name, ust_beitrag, e)
             continue
 
         haupt_zeile, haupt_beitrag = _euer_haupt_beitrag(e, ku_status[e.id])
