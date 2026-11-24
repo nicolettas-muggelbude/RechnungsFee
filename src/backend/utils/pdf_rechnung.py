@@ -16,7 +16,7 @@ from utils.pdf_rechnung_base import (
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W,
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
     _find_dejavu_dir, _person_bezeichnung, _logo_abmessungen, _adresszeilen,
-    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte,
+    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte, ist_abschlag_abzug,
 )
 from utils.pdf_shared import epc_qr_bytes
 
@@ -124,6 +124,8 @@ class RechnungPDF(RechnungPDFBase):
 
         DESC_H = 3.5  # Zeilenhöhe Beschreibung – bleibt kompakt für mehrzeilige Texte
         for pos in r.positionen:
+            if ist_abschlag_abzug(pos):
+                continue  # Issue #600: Abzug steht im Summenblock
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_idx], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):

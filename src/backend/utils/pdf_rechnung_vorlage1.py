@@ -14,7 +14,7 @@ from io import BytesIO
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
     _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
-    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte,
+    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte, ist_abschlag_abzug,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -162,6 +162,8 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
         for pos in r.positionen:
+            if ist_abschlag_abzug(pos):
+                continue  # Issue #600: Abzug steht im Summenblock
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_col], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
