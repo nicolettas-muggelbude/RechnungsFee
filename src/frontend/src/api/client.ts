@@ -362,6 +362,7 @@ export type Unternehmen = {
   imap_passwort_gesetzt?: boolean
   imap_ordner?: string
   imap_beim_start?: boolean
+  imap_intervall_minuten?: number  // Issue #592: 0 = aus
   imap_zertifikat_ignorieren?: boolean
   imap_zertifikat_fingerprint?: string | null
   zugferd_anhaenge_aktiv?: boolean

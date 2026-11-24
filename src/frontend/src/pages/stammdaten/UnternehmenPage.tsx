@@ -1722,6 +1722,7 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
   const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [ordner, setOrdner] = useState(data.imap_ordner ?? 'INBOX')
   const [beimStart, setBeimStart] = useState(data.imap_beim_start ?? false)
+  const [intervall, setIntervall] = useState(String(data.imap_intervall_minuten ?? 0))  // Issue #592
   const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.imap_zertifikat_ignorieren ?? false)
   const fingerprint = data.imap_zertifikat_fingerprint
   const [gespeichert, setGespeichert] = useState(false)
@@ -1745,6 +1746,7 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
       imap_passwort_entfernen: passwortEntfernen && !passwort,
       imap_ordner: ordner.trim() || 'INBOX',
       imap_beim_start: beimStart,
+      imap_intervall_minuten: parseInt(intervall) || 0,
       imap_zertifikat_ignorieren: zertifikatIgnorieren,
     }),
     onSuccess: () => {
@@ -1830,6 +1832,19 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
             <input type="checkbox" id="imap-start" checked={beimStart} onChange={e => setBeimStart(e.target.checked)} className="rounded" />
             <label htmlFor="imap-start" className="text-sm text-slate-600 dark:text-slate-300">Beim Start von RechnungsFee automatisch abrufen</label>
           </div>
+
+          <div className="flex items-center gap-3">
+            <label htmlFor="imap-intervall" className="text-sm text-slate-600 dark:text-slate-300">Während RechnungsFee läuft abrufen</label>
+            <select id="imap-intervall" value={intervall} onChange={e => setIntervall(e.target.value)} className={inputCls + " w-auto"}>
+              <option value="0">nicht automatisch</option>
+              <option value="15">alle 15 Minuten</option>
+              <option value="30">alle 30 Minuten</option>
+              <option value="60">alle 60 Minuten</option>
+            </select>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+            Neue Rechnungen zeigt das Dashboard an. Übernommen wird weiterhin nur, was du selbst bestätigst.
+          </p>
 
           <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300">
             <strong>Microsoft-Konten (Outlook.com/Microsoft 365)</strong> werden noch nicht unterstützt – dort ist eine

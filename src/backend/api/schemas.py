@@ -122,6 +122,7 @@ class UnternehmenBase(BaseModel):
     imap_user: Optional[str] = None
     imap_ordner: str = "INBOX"
     imap_beim_start: bool = False
+    imap_intervall_minuten: int = 0  # Issue #592: 0 = aus, sonst 15/30/60
     imap_zertifikat_ignorieren: bool = False
     imap_zertifikat_fingerprint: Optional[str] = None
     zugferd_anhaenge_aktiv: bool = False
@@ -160,6 +161,13 @@ class UnternehmenBase(BaseModel):
     bank_import_manuell: bool = False
     dashboard_config: Optional[str] = None
     datenmigration_aktiv: bool = False
+
+    @field_validator("imap_intervall_minuten")
+    @classmethod
+    def check_imap_intervall(cls, v: int) -> int:
+        if v not in (0, 15, 30, 60):
+            raise ValueError("Abrufintervall muss 0 (aus), 15, 30 oder 60 Minuten sein")
+        return v
 
     @field_validator("versteuerungsart")
     @classmethod

@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 197
+SCHEMA_VERSION = 198
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4579,6 +4579,17 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 197"))
             conn.commit()
             print("[Migration] Schema auf Version 197 (Issue #568: journal_anhaenge)")
+
+    if version < 198:
+        with engine.connect() as conn:
+            # Issue #592: Rechnungspostfach regelmäßig im Hintergrund abrufen, solange die App läuft
+            # (0 = aus, sonst 15/30/60 Minuten) - neue Rechnungen zeigt das Dashboard an
+            _u198 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if _u198 and "imap_intervall_minuten" not in _u198:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN imap_intervall_minuten INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("PRAGMA user_version = 198"))
+            conn.commit()
+            print("[Migration] Schema auf Version 198 (Issue #592: imap_intervall_minuten)")
 
 
 def _migrate_kategorien() -> None:

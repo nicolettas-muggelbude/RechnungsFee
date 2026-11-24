@@ -5512,6 +5512,8 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     const typParam = searchParams.get('typ')
     if (typParam === 'eingang' || typParam === 'ausgang') {
       setTyp(typParam)
+      // ?postfach=1: Rechnungspostfach direkt öffnen (Dashboard, Issue #592)
+      if (typParam === 'eingang' && searchParams.get('postfach') === '1') setZeigPostfach(true)
       // ?vorlage=ID: Eingangsrechnung aus Buchungsvorlage vorausfüllen (Warte-auf-Beleg)
       const vorlageParam = searchParams.get('vorlage')
       if (typParam === 'eingang' && vorlageParam) {

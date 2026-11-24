@@ -178,6 +178,8 @@ class Unternehmen(Base):
     imap_passwort: Mapped[str | None] = mapped_column(Text)
     imap_ordner: Mapped[str] = mapped_column(String(200), default="INBOX", server_default="INBOX", nullable=False)
     imap_beim_start: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #592: Abruf im Hintergrund alle N Minuten, solange die App läuft (0 = aus)
+    imap_intervall_minuten: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     # Trust-on-First-Use analog SMTP (Issue #336) - eigener Fingerabdruck, IMAP-Server kann ein anderer sein
     imap_zertifikat_ignorieren: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     imap_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))

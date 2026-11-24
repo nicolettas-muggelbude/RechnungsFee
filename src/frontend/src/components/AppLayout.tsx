@@ -350,6 +350,19 @@ export function AppLayout() {
       .catch((e) => console.warn('[RechnungsFee] Postfach-Abruf beim Start fehlgeschlagen:', e))
   }, [unt?.postfach_aktiv, unt?.imap_beim_start]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Issue #592: regelmäßig abrufen, solange die App läuft. Fehler (z. B. kein Netz) bleiben still -
+  // sichtbar werden sie beim Abruf von Hand im Postfach-Fenster. Neue Rechnungen zeigt das Dashboard.
+  const postfachIntervall = unt?.postfach_aktiv ? (unt.imap_intervall_minuten ?? 0) : 0
+  useEffect(() => {
+    if (postfachIntervall <= 0) return
+    const id = window.setInterval(() => {
+      postfachAbrufen()
+        .then(() => qcPostfach.invalidateQueries({ queryKey: ['postfach-eingang'] }))
+        .catch((e) => console.warn('[RechnungsFee] Postfach-Abruf im Hintergrund fehlgeschlagen:', e))
+    }, postfachIntervall * 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [postfachIntervall]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Nur relevant/sichtbar sobald mehr als ein Profil existiert - bei genau einem Profil
   // (der Normalfall) wäre die Anzeige nur Rauschen, siehe Profile.md.
   const { data: profilListe } = useQuery({
