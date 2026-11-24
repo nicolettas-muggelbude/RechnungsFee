@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.14',
     datum: 'in Arbeit',
     eintraege: [
+      { typ: 'verbesserung', text: 'Rechnungsvorlage „Sandra grün“: Der Zusatz „Nur für Kleinunternehmer“ ist entfallen. Die Vorlage zeigt bei Umsatzsteuer schon länger eine Spalte „USt %“ und den Steuerbetrag und passt damit für alle Unternehmensformen.' },
       { typ: 'fix', text: 'EÜR: Die Vorsteuer aus dem Kauf von Anlagegütern (z. B. PC über „EDV / Software“, Fahrzeugkauf) fehlte in Zeile 57 „Abziehbare Vorsteuerbeträge“, in der UStVA war sie enthalten. Der Hinweis zu den Anlagezugängen nennt jetzt die Anschaffungskosten (netto, bei Kleinunternehmern brutto) statt immer den Bruttobetrag. Danke an Moog (Issue #578).' },
       { typ: 'verbesserung', text: 'Zahlungsart: Zahlung erfassen, Neue Buchung und Split-Buchung im Journal, Zahlungen im Mahnwesen und Rechnung aus Proforma starten jetzt mit der zuletzt gebuchten Zahlungsart statt immer mit „Bar“ (bzw. „Bank“). „Privat bezahlt“ wird nicht gemerkt. Danke an ma42 (Issue #590).' },
       { typ: 'verbesserung', text: 'Einleitungs- und Schlusstext (Rechnung, Angebot, Auftrag, Proforma und Standardtexte in den Einstellungen): Formatierleiste mit Fett und Kursiv statt Markdown-Hinweis, auch per Strg+B / Strg+I, dazu eine Vorschau unter dem Feld. Die Mail-Signatur hat zusätzlich einen Knopf für Links (Strg+K). Danke an Markus (Issue #583).' },

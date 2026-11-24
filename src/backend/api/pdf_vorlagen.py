@@ -26,8 +26,8 @@ VORLAGEN = [
     },
     {
         "id": 1,
-        "name": "Sandra grün – Nur für Kleinunternehmer",
-        "beschreibung": "Nur für Kleinunternehmer (§ 19 UStG) · Grünes Design · Spalten: Datum, Beschreibung, Saldo · Überweisungsblock mit IBAN",
+        "name": "Sandra grün",
+        "beschreibung": "Grünes Design · Spalten: Datum, Beschreibung, USt % (nicht bei Kleinunternehmern), Betrag · Überweisungsblock mit IBAN · für alle Unternehmensformen",
     },
 ]
 
