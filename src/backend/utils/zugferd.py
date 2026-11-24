@@ -41,6 +41,11 @@ def _d(wert) -> Decimal:
     return Decimal(str(wert)).quantize(Decimal("0.01"))
 
 
+def _eur(wert) -> str:
+    """Betrag für Freitext (BT-22): 1.234,56 EUR."""
+    return f"{_d(wert):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " EUR"
+
+
 def _ust_satz(satz: Decimal) -> Decimal:
     """19.00 → 19, 7.00 → 7, 5.50 → 5.50 – normalize() ist sicher für kleine Prozentwerte."""
     return Decimal(str(satz)).quantize(Decimal("0.01")).normalize()
@@ -376,7 +381,30 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # brutto - ust_betrag ergibt daher die korrekte Netto-Positionssumme, unabhängig
     # vom eingabemodus (netto/brutto) - direkt pos.netto als Zeilensumme zu verwenden
     # ignorierte Menge und Rabatt komplett (Issue #389).
-    for pos in sorted(rechnung.positionen, key=lambda p: p.position_nr):
+    # Issue #600: Schlussrechnung - die Positionen bilden die GESAMTE Leistung ab, die verrechneten
+    # Abschlagsrechnungen gehen als Vorauszahlung in BT-113 (brutto) statt als negative Zeile.
+    # BT-113 kann die darin enthaltene Steuer nicht aufschlüsseln; § 14 Abs. 5 Satz 2 UStG verlangt
+    # aber Entgelt und Steuerbetrag je Abschlag - deshalb zusätzlich die Aufstellung als
+    # Bemerkung (BT-22) und, bei genau einem Abschlag, der Verweis auf ihn (BG-3, in CII nur 0..1).
+    from utils.pdf_rechnung_base import abschlag_abzuege, ist_abschlag_abzug
+    abzuege = abschlag_abzuege(rechnung.positionen)
+    leistung_positionen = [p for p in rechnung.positionen if not ist_abschlag_abzug(p)]
+    if abzuege:
+        note = IncludedNote()
+        note.subject_code._text = "AAI"
+        note.content._text = "Abzüglich bereits gezahlter Abschlagsrechnungen: " + "; ".join(
+            f"{a['bezeichnung']}: netto {_eur(a['netto'])}"
+            + "".join(f", USt {str(_ust_satz(s)).replace('.', ',')} % {_eur(u)}" for s, u in a["ust_je_satz"])
+            + f", brutto {_eur(a['brutto'])}"
+            for a in abzuege
+        )
+        doc.header.notes.add(note)
+        if len(abzuege) == 1 and abzuege[0]["nummer"] and abzuege[0]["datum"]:
+            ref = doc.trade.settlement.invoice_referenced_document
+            ref.issuer_assigned_id = abzuege[0]["nummer"]
+            ref.issue_date_time = abzuege[0]["datum"]
+
+    for pos in sorted(leistung_positionen, key=lambda p: p.position_nr):
         li = LineItem()
         li.document.line_id._text = str(pos.position_nr)
         li.product.name = pos.beschreibung or "-"
@@ -405,7 +433,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
     # ── Steuer-Zusammenfassung (pro USt-Satz) ─────────────────────────────────
     steuern: dict[str, dict] = {}
-    for pos in rechnung.positionen:
+    for pos in leistung_positionen:
         key = str(pos.ust_satz)
         if key not in steuern:
             steuern[key] = {"satz": pos.ust_satz, "basis": Decimal("0"), "betrag": Decimal("0")}
@@ -435,7 +463,8 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     line_total = sum(e["basis"]  for e in steuern.values())
     tax_total  = sum(e["betrag"] for e in steuern.values())
     grand_total = line_total + tax_total
-    prepaid     = rechnung.bezahlt_betrag or Decimal("0")
+    # bereits auf diese Rechnung gezahlt + verrechnete Abschlagsrechnungen (Issue #600)
+    prepaid     = (rechnung.bezahlt_betrag or Decimal("0")) + sum((a["brutto"] for a in abzuege), Decimal("0"))
 
     ms = doc.trade.settlement.monetary_summation
     ms.line_total      = _d(line_total)

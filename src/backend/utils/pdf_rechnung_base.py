@@ -307,8 +307,11 @@ def abschlag_abzuege(positionen) -> list[dict]:
             continue
         ust = -Decimal(str(pos.ust_betrag or 0))
         brutto = -Decimal(str(pos.brutto or 0))
+        ab = getattr(pos, "abschlag_rechnung", None)
         g = gruppen.setdefault(pos.abschlag_rechnung_id, {
-            "bezeichnung": _abschlag_bezeichnung(pos), "netto": Decimal("0"), "ust": Decimal("0"),
+            "bezeichnung": _abschlag_bezeichnung(pos),
+            "nummer": getattr(ab, "rechnungsnummer", None), "datum": getattr(ab, "datum", None),
+            "netto": Decimal("0"), "ust": Decimal("0"),
             "brutto": Decimal("0"), "ust_satz": {},
         })
         g["netto"] += brutto - ust

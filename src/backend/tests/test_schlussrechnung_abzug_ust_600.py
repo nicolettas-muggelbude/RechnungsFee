@@ -121,3 +121,33 @@ def test_ohne_abschlag_unveraendert(db, erzeuge):
     db.refresh(r)
     t = _text(r, UNT, erzeuge, True)
     assert "Gesamtbetrag" in t and "Leistung gesamt" not in t and "Zu zahlen" not in t
+
+
+# ── E-Rechnung (ZUGFeRD/XRechnung) ───────────────────────────────────────────
+from utils.zugferd import generate_zugferd_xml  # noqa: E402
+
+UNT_XML = {**UNT, "land": "DE", "ust_idnr": "", "email": "a@b.de", "telefon": "1", "iban": ""}
+
+
+def test_xml_volle_leistung_und_vorauszahlung(db):
+    xml = generate_zugferd_xml(_schluss(db), UNT_XML).decode("utf-8")
+    # keine negative Abzugszeile mehr, Positionen = gesamte Leistung
+    assert "-500.00" not in xml and xml.count("<ram:IncludedSupplyChainTradeLineItem>") == 1
+    assert "<ram:TaxBasisTotalAmount>1000.00</ram:TaxBasisTotalAmount>" in xml
+    assert "<ram:GrandTotalAmount>1190.00</ram:GrandTotalAmount>" in xml
+    assert "<ram:TotalPrepaidAmount>595.00</ram:TotalPrepaidAmount>" in xml
+    assert "<ram:DuePayableAmount>595.00</ram:DuePayableAmount>" in xml
+    # Aufstellung mit Steuerbetrag (BT-22) und Verweis auf die Abschlagsrechnung (BG-3)
+    assert ("Abschlagsrechnung AR-260001 vom 01.10.2026: netto 500,00 EUR, USt 19 % 95,00 EUR, "
+            "brutto 595,00 EUR") in xml
+    ref = xml.split("<ram:InvoiceReferencedDocument>")[1].split("</ram:InvoiceReferencedDocument>")[0]
+    assert "<ram:IssuerAssignedID>AR-260001</ram:IssuerAssignedID>" in ref and "20261001" in ref
+
+
+def test_xml_mehrere_abschlaege_ohne_bg3(db):
+    xml = generate_zugferd_xml(_schluss(db, zweiter_abschlag=True, unbezahlt=True), UNT_XML).decode("utf-8")
+    assert "<ram:TotalPrepaidAmount>595.00</ram:TotalPrepaidAmount>" in xml
+    assert "<ram:DuePayableAmount>595.00</ram:DuePayableAmount>" in xml
+    assert "AR-260001 vom 01.10.2026" in xml and "AR-260002 vom 15.10.2026" in xml
+    assert "AR-260009" not in xml  # unbezahlt, kein Abzug
+    assert "InvoiceReferencedDocument" not in xml
