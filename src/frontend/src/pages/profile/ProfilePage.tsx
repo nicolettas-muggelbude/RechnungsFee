@@ -43,6 +43,27 @@ function NeustartHinweis({ profilName }: { profilName: string }) {
   )
 }
 
+const PW_MIN = 4   // wie profil_zugang.MIN_LAENGE im Backend
+
+function FormFehler({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <p role="alert" className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+      {text}
+    </p>
+  )
+}
+
+/** Live-Hinweis unter dem neuen Passwort: zu kurz / Wiederholung passt nicht. */
+function PasswortPruefung({ pw, pw2 }: { pw: string; pw2: string }) {
+  if (!pw) return null
+  const text = pw.length < PW_MIN
+    ? `Noch ${PW_MIN - pw.length} Zeichen – mindestens ${PW_MIN}.`
+    : pw2 && pw !== pw2 ? 'Die beiden Passwörter stimmen nicht überein.' : null
+  if (!text) return null
+  return <p className="text-xs text-amber-700 dark:text-amber-300" aria-live="polite">{text}</p>
+}
+
 /** Issue #593: Hinweis beim Anlegen bzw. Festlegen eines Passworts (nicht auf dem Startbildschirm). */
 function PasswortHinweis() {
   return (
@@ -76,6 +97,9 @@ export function ProfilePage() {
   const [pwAlt, setPwAlt] = useState('')
   const [pwNeu, setPwNeu] = useState('')
   const [pwNeu2, setPwNeu2] = useState('')
+  // Meldungen direkt im jeweiligen Passwortformular statt im allgemeinen Fehlerfeld weiter unten
+  const [formFehler, setFormFehler] = useState<string | null>(null)
+  const [pwMeldung, setPwMeldung] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({ queryKey: ['profile'], queryFn: getProfile })
 
@@ -89,7 +113,7 @@ export function ProfilePage() {
       setNeustartFuer(name)
       qc.invalidateQueries({ queryKey: ['profile'] })
     },
-    onError: (e: Error) => setFehler(e.message),
+    onError: (e: Error) => setFormFehler(e.message),
   })
 
   const aktivierenMut = useMutation({
@@ -101,17 +125,19 @@ export function ProfilePage() {
       setNeustartFuer(name)
       qc.invalidateQueries({ queryKey: ['profile'] })
     },
-    onError: (e: Error) => { setFehler(e.message); setAktivierenPw('') },
+    onError: (e: Error) => { setFormFehler(e.message); setAktivierenPw('') },
   })
 
   const passwortMut = useMutation({
     mutationFn: ({ name, alt, neu }: { name: string; alt: string; neu: string }) => setzeProfilPasswort(name, alt, neu),
-    onSuccess: (liste) => {
+    onSuccess: (liste, { name, neu }) => {
       setFehler(null)
+      setFormFehler(null)
       setPasswortFuer(null)
+      setPwMeldung(neu ? `Passwort für „${name}" gespeichert.` : `Passwort für „${name}" entfernt.`)
       qc.setQueryData(['profile'], liste)
     },
-    onError: (e: Error) => { setFehler(e.message); setPwAlt('') },
+    onError: (e: Error) => { setFormFehler(e.message); setPwAlt('') },
   })
 
   const startMut = useMutation({
@@ -167,18 +193,26 @@ export function ProfilePage() {
   function anlegen() {
     const name = neuerName.trim()
     if (!name) return
-    if (neuesPw !== neuesPw2) { setFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    if (neuesPw && neuesPw.length < PW_MIN) { setFormFehler(`Das Passwort muss mindestens ${PW_MIN} Zeichen lang sein.`); return }
+    if (neuesPw !== neuesPw2) { setFormFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    setFormFehler(null)
     createMut.mutate({ name, passwort: neuesPw })
   }
 
   function aktivieren(name: string, hatPasswort: boolean) {
     setFehler(null)
+    setFormFehler(null)
+    setPwMeldung(null)
+    setPasswortFuer(null)
     if (hatPasswort) { setAktivierenFuer(name); setAktivierenPw(''); return }
     aktivierenMut.mutate({ name })
   }
 
   function passwortStarten(name: string) {
     setFehler(null)
+    setFormFehler(null)
+    setPwMeldung(null)
+    setAktivierenFuer(null)
     setPasswortFuer(name)
     setPwAlt('')
     setPwNeu('')
@@ -186,7 +220,9 @@ export function ProfilePage() {
   }
 
   function passwortSpeichern(name: string, entfernen = false) {
-    if (!entfernen && pwNeu !== pwNeu2) { setFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    if (!entfernen && pwNeu.length < PW_MIN) { setFormFehler(`Das Passwort muss mindestens ${PW_MIN} Zeichen lang sein.`); return }
+    if (!entfernen && pwNeu !== pwNeu2) { setFormFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    setFormFehler(null)
     passwortMut.mutate({ name, alt: pwAlt, neu: entfernen ? '' : pwNeu })
   }
 
@@ -323,9 +359,10 @@ export function ProfilePage() {
                 </div>
 
                 {aktivierenFuer === p.name && (
+                  <div className="mx-4 mb-3 space-y-2">
                   <form
-                    onSubmit={(e) => { e.preventDefault(); aktivierenMut.mutate({ name: p.name, passwort: aktivierenPw }) }}
-                    className="mx-4 mb-3 flex items-end gap-2"
+                    onSubmit={(e) => { e.preventDefault(); setFormFehler(null); aktivierenMut.mutate({ name: p.name, passwort: aktivierenPw }) }}
+                    className="flex items-end gap-2"
                   >
                     <div className="flex-1">
                       <label htmlFor={`aktivieren-pw-${p.name}`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
@@ -338,11 +375,13 @@ export function ProfilePage() {
                       className="shrink-0 px-3 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors">
                       Wechseln
                     </button>
-                    <button type="button" onClick={() => setAktivierenFuer(null)}
+                    <button type="button" onClick={() => { setAktivierenFuer(null); setFormFehler(null) }}
                       className="shrink-0 px-3 py-2 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                       Abbrechen
                     </button>
                   </form>
+                  <FormFehler text={formFehler} />
+                  </div>
                 )}
 
                 {passwortFuer === p.name && (
@@ -372,9 +411,11 @@ export function ProfilePage() {
                           autoComplete="new-password" className={inputCls} />
                       </div>
                     </div>
+                    <PasswortPruefung pw={pwNeu} pw2={pwNeu2} />
                     <PasswortHinweis />
+                    <FormFehler text={formFehler} />
                     <div className="flex flex-wrap gap-2">
-                      <button type="submit" disabled={passwortMut.isPending || !pwNeu || (p.passwort && !pwAlt)}
+                      <button type="submit" disabled={passwortMut.isPending || pwNeu.length < PW_MIN || pwNeu !== pwNeu2 || (p.passwort && !pwAlt)}
                         className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors">
                         Speichern
                       </button>
@@ -384,7 +425,7 @@ export function ProfilePage() {
                           Passwort entfernen
                         </button>
                       )}
-                      <button type="button" onClick={() => setPasswortFuer(null)}
+                      <button type="button" onClick={() => { setPasswortFuer(null); setFormFehler(null) }}
                         className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                         Abbrechen
                       </button>
@@ -395,6 +436,12 @@ export function ProfilePage() {
               ))}
             </div>
           </div>
+
+          {pwMeldung && (
+            <p role="status" className="text-sm text-green-800 dark:text-green-200 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+              ✓ {pwMeldung}
+            </p>
+          )}
 
           <label className="flex items-start gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm px-4 py-3 cursor-pointer">
             <input
@@ -453,10 +500,12 @@ export function ProfilePage() {
                     disabled={!neuesPw} autoComplete="new-password" className={inputCls} />
                 </div>
               </div>
+              <PasswortPruefung pw={neuesPw} pw2={neuesPw2} />
               <PasswortHinweis />
+              <FormFehler text={formFehler} />
               <button
                 type="submit"
-                disabled={createMut.isPending || !neuerName.trim() || (!!neuesPw && neuesPw !== neuesPw2)}
+                disabled={createMut.isPending || !neuerName.trim() || (!!neuesPw && (neuesPw.length < PW_MIN || neuesPw !== neuesPw2))}
                 className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 Anlegen
