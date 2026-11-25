@@ -17,6 +17,7 @@ from utils.pdf_rechnung_base import (
     ADRESS_Y, HEADER_LINE_Y, BLOCK_X, BLOCK_W, FOOTER_H,
     _find_dejavu_dir, _person_bezeichnung, _logo_abmessungen, _adresszeilen,
     art_nr_spalte, art_nr_anzeige, ohne_ust_spalte, ist_abschlag_abzug,
+    pos_datum_spalten, positionsdatum,
 )
 from utils.pdf_shared import epc_qr_bytes
 
@@ -81,16 +82,22 @@ class RechnungPDF(RechnungPDFBase):
 
         # Issue #475: optionale Spalte "Pos." ganz links - die Breite geht von der Beschreibung ab,
         # damit die Tabelle und der Summenblock unverändert bündig bleiben
-        mit_pos = bool(self._unt.get("pdf_positionsnummern"))
-        POS_W = 9
+        # Issue #594: Spalte "Datum" danach, ebenfalls von der Beschreibung
+        mit_pos, mit_datum = pos_datum_spalten(self._unt, vorlage1=False)
+        POS_W, DATUM_W = 9, 17
+        if mit_datum:
+            col_w[int(hat_artikelcode)] -= DATUM_W
+            col_w   = [DATUM_W] + col_w
+            headers = ["Datum"] + headers
+            aligns  = ["L"] + aligns
         if mit_pos:
-            col_w[int(hat_artikelcode)] -= POS_W
+            col_w[int(mit_datum) + int(hat_artikelcode)] -= POS_W
             col_w   = [POS_W] + col_w
             headers = ["Pos."] + headers
             aligns  = ["R"] + aligns
 
         # code_idx/desc_idx: Index der Artikelcode-/Beschreibungs-Spalte; other_x: X-Start der Mengenspalte
-        code_idx = int(mit_pos)
+        code_idx = int(mit_pos) + int(mit_datum)
         desc_idx = code_idx + int(hat_artikelcode)
         other_x  = L_MARGIN + sum(col_w[:desc_idx + 1])
 
@@ -118,6 +125,8 @@ class RechnungPDF(RechnungPDFBase):
             if mit_pos:
                 # dieselbe Nummer wie in der E-Rechnung (line_id) und in Vorlage 1
                 self.cell(col_w[0], DESC_H, str(pos.position_nr), align="R")
+            if mit_datum:
+                self.cell(col_w[int(mit_pos)], DESC_H, positionsdatum(pos, r), align="L")
             if hat_artikelcode:
                 self.multi_cell(col_w[code_idx], DESC_H, art_nr_anzeige(pos, self._unt),
                                 new_x="RIGHT", new_y="TOP", align="L")

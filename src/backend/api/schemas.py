@@ -84,6 +84,7 @@ class UnternehmenBase(BaseModel):
     pdf_vorlage: int = 0
     pdf_positionsnummern: bool = False
     pdf_artikelnummer: bool = False  # Issue #562
+    pdf_positionsdatum: bool = False  # Issue #594
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
     einleitungstext_angebot: Optional[str] = None

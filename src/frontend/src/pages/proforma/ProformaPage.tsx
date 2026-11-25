@@ -55,6 +55,7 @@ interface Pos {
   ust_satz: string
   rabatt_prozent?: string
   artikel_id?: number
+  leistungsdatum?: string  // Issue #594
 }
 
 function leerePos(): Pos {
@@ -95,7 +96,7 @@ function formatMenge(v: string | number): string {
 }
 
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer, mitDatum,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
@@ -104,6 +105,7 @@ function PositionenTabelle({
   eingabeModus: EingabeModus
   summen: { netto: number; ust: number; brutto: number }
   istKleinunternehmer: boolean
+  mitDatum: boolean  // Issue #594: Leistungsdatum je Position
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
@@ -120,6 +122,7 @@ function PositionenTabelle({
       <table className="w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-900">
           <tr>
+            {mitDatum && <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-32">Datum</th>}
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
@@ -134,6 +137,12 @@ function PositionenTabelle({
         <tbody>
           {positionen.map((pos, i) => (
             <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+              {mitDatum && (
+                <td className="px-2 py-1.5">
+                  <input type="date" value={pos.leistungsdatum ?? ''} aria-label="Leistungsdatum"
+                    onChange={e => update(i, 'leistungsdatum', e.target.value)} className={cellInput} />
+                </td>
+              )}
               <td className="px-2 py-1.5">
                 <ArtikelAutocomplete
                   value={pos.beschreibung}
@@ -196,7 +205,7 @@ function PositionenTabelle({
           {!istKleinunternehmer && (
             <>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
                   Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
                 <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
@@ -204,7 +213,7 @@ function PositionenTabelle({
                 </td>
               </tr>
               <tr className="border-t border-slate-100 dark:border-slate-700">
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                 <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
                   {summen.ust.toFixed(2).replace('.', ',')} €
                 </td>
@@ -212,7 +221,7 @@ function PositionenTabelle({
             </>
           )}
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
+            <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
               {summen.brutto.toFixed(2).replace('.', ',')} €
             </td>
@@ -320,6 +329,7 @@ function ProformaFormular({
         einzelpreis: String(p.netto),
         ust_satz: String(p.ust_satz),
         rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
+        leistungsdatum: p.leistungsdatum ?? '',
       }))
     }
     return [leerePos()]
@@ -390,6 +400,7 @@ function ProformaFormular({
           ust_satz: unternehmen?.ist_kleinunternehmer ? '0' : String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
+          leistungsdatum: p.leistungsdatum || undefined,
         }
       })
 
@@ -566,6 +577,7 @@ function ProformaFormular({
           eingabeModus={eingabeModus}
           summen={summen}
           istKleinunternehmer={unternehmen?.ist_kleinunternehmer ?? false}
+          mitDatum={!!unternehmen?.pdf_positionsdatum}
         />
       </div>
 

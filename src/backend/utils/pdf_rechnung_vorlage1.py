@@ -4,7 +4,8 @@ Rechnungs-PDF Vorlage 1 – Grün / Kleinunternehmer mit Zahlungsziel.
 Community-Vorlage (Issue #33, Einreicher: trinity2701).
 
 Layout:
-  Spalten: Pos. | Datum | Beschreibung | Einzelpreis | USt % | Netto/Saldo
+  Spalten: [Pos.] | [Datum] | Beschreibung | Einzelpreis | USt % | Netto/Saldo
+  (Pos./Datum über die Schalter pdf_positionsnummern/pdf_positionsdatum, Issue #594)
   Anrede + Einleitung vor der Tabelle.
   Bezahldaten-Block im Tabellenstil unterhalb der Summen.
 """
@@ -15,6 +16,7 @@ from utils.pdf_rechnung_base import (
     RechnungPDFBase,
     _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
     art_nr_spalte, art_nr_anzeige, ohne_ust_spalte, ist_abschlag_abzug,
+    pos_datum_spalten, positionsdatum,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
@@ -82,7 +84,6 @@ class RechnungPDFVorlage1(RechnungPDFBase):
     def _render_positionen(self):
         from decimal import Decimal
         r = self._r
-        pos_datum_str = _iso_zu_de(str(r.leistung_von or r.datum))
         ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
 
         hat_artikelcode = art_nr_spalte(self._unt, r.positionen)  # Issue #562
@@ -127,6 +128,18 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             for liste in (col_w, headers, aligns):
                 del liste[i_ust]
             headers[-1] = "Betrag"
+
+        # Issue #594: „Pos.“ und „Datum“ über die Schalter wie in der Standardvorlage - eine
+        # ausgeblendete Spalte gibt ihre Breite an die Beschreibung
+        mit_pos, mit_datum = pos_datum_spalten(self._unt, vorlage1=True)
+        for name, an in (("Datum", mit_datum), ("Pos.", mit_pos)):
+            if not an:
+                i = headers.index(name)
+                col_w[desc_col] += col_w[i]
+                for liste in (col_w, headers, aligns):
+                    del liste[i]
+                desc_col -= 1
+        code_idx = desc_col - 1  # Art.-Nr. steht direkt vor der Beschreibung
         other_x  = L_MARGIN + sum(col_w[:desc_col + 1])  # X-Start der Spalten nach der Beschreibung
 
         tbl_x   = L_MARGIN
@@ -167,7 +180,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_col], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
-                _beschr.append((col_w[2], art_nr_anzeige(pos, self._unt)))
+                _beschr.append((col_w[code_idx], art_nr_anzeige(pos, self._unt)))
             _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H, vor_umbruch=lambda: _rahmen(tbl_top, self.get_y())):
@@ -211,11 +224,13 @@ class RechnungPDFVorlage1(RechnungPDFBase):
 
             # Zurück zum Zeilenanfang: Pos., Datum, Art.-Nr., dann Beschreibung mit multi_cell
             self.set_xy(L_MARGIN, row_y)
-            self.cell(col_w[0], ROW_H, str(pos.position_nr), align="R")
-            self.cell(col_w[1], ROW_H, pos_datum_str, align="L")
+            if mit_pos:
+                self.cell(col_w[0], ROW_H, str(pos.position_nr), align="R")
+            if mit_datum:
+                self.cell(col_w[int(mit_pos)], ROW_H, positionsdatum(pos, r), align="L")
             self.set_xy(self.get_x(), row_y + DESC_OFFSET)
             if hat_artikelcode:
-                self.multi_cell(col_w[2], DESC_H, art_nr_anzeige(pos, self._unt),
+                self.multi_cell(col_w[code_idx], DESC_H, art_nr_anzeige(pos, self._unt),
                                 new_x="RIGHT", new_y="TOP", align="L")
             self.multi_cell(col_w[desc_col], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT", align="L")

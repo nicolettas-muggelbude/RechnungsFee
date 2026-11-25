@@ -426,6 +426,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         if not ist_nicht_steuerbar:  # BR-O-05: bei O kein Steuersatz
             li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
 
+        # Issue #594: Leistungsdatum der Position als Leistungszeitraum der Zeile (BT-134/BT-135,
+        # Beginn = Ende) - nur wenn die Position ein eigenes Datum hat
+        if getattr(pos, "leistungsdatum", None):
+            li.settlement.period.start._value = pos.leistungsdatum
+            li.settlement.period.end._value = pos.leistungsdatum
+
         # Zeilensumme (BT-131) – Menge x Einzelpreis, nach Rabatt
         li.settlement.monetary_summation.total_amount = netto_gesamt
 

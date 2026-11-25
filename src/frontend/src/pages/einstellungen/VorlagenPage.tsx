@@ -25,6 +25,12 @@ export function VorlagenPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
   })
 
+  // Issue #594: Spalte „Datum“ und Datumsfeld je Position – gilt für beide Vorlagen
+  const datumMutation = useMutation({
+    mutationFn: (an: boolean) => updateUnternehmen({ pdf_positionsdatum: an }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['unternehmen'] }),
+  })
+
   const aktuelleVorlage = unt?.pdf_vorlage ?? 0
 
   return (
@@ -64,23 +70,39 @@ export function VorlagenPage() {
           </div>
         ))}
       </div>
-      {aktuelleVorlage === 0 && (
-        <label className="mt-6 flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={!!unt?.pdf_positionsnummern}
-            onChange={(e) => posMutation.mutate(e.target.checked)}
-            className="mt-0.5 accent-blue-600"
-          />
-          <span>
-            <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Positionsnummern anzeigen</span>
-            <span className="block text-sm text-slate-500 dark:text-slate-400">
-              Zusätzliche Spalte „Pos.“ (1, 2, 3 …) in Rechnungen, Angeboten, Aufträgen, Proforma-Rechnungen,
-              Lieferscheinen und Gutschriften. Gilt für neu finalisierte Dokumente, bereits finalisierte bleiben unverändert.
-            </span>
+      {/* Issue #594: alle Spalten-Schalter gelten für beide Vorlagen */}
+      <label className="mt-6 flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!unt?.pdf_positionsnummern}
+          onChange={(e) => posMutation.mutate(e.target.checked)}
+          className="mt-0.5 accent-blue-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Positionsnummern anzeigen</span>
+          <span className="block text-sm text-slate-500 dark:text-slate-400">
+            Zusätzliche Spalte „Pos.“ (1, 2, 3 …) in Rechnungen, Angeboten, Aufträgen, Proforma-Rechnungen,
+            Lieferscheinen und Gutschriften. Gilt für neu finalisierte Dokumente, bereits finalisierte bleiben unverändert.
           </span>
-        </label>
-      )}
+        </span>
+      </label>
+      <label className="mt-4 flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!unt?.pdf_positionsdatum}
+          onChange={(e) => datumMutation.mutate(e.target.checked)}
+          className="mt-0.5 accent-blue-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Leistungsdatum je Position</span>
+          <span className="block text-sm text-slate-500 dark:text-slate-400">
+            Im Formular bekommt jede Position ein eigenes Datumsfeld, im Dokument erscheint die Spalte „Datum“ –
+            praktisch für Sammelrechnungen. Ohne eigenes Datum steht dort der Leistungsbeginn bzw. das Rechnungsdatum.
+            Ist kein Leistungszeitraum eingetragen, wird er aus dem frühesten und spätesten Positionsdatum gebildet.
+            Gilt für neu finalisierte Dokumente, bereits finalisierte bleiben unverändert.
+          </span>
+        </span>
+      </label>
       <label className="mt-4 flex items-start gap-3 cursor-pointer">
         <input
           type="checkbox"

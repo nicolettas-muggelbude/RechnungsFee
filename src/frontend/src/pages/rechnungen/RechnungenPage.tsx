@@ -2955,6 +2955,7 @@ type Positionszeile = {
   art_minusbestand_erlaubt?: boolean
   art_typ?: ArtikelTyp  // Artikel-Typ (artikel/dienstleistung/fremdleistung) - fuer ig.Lieferung/Reverse-Charge-Erkennung
   abschlag_rechnung_id?: number  // Issue #419: markiert eine automatisch generierte Abzugszeile
+  leistungsdatum?: string  // Issue #594: Leistungsdatum der Position (JJJJ-MM-TT)
   leistung_von_abschlag_id?: number  // Issue #419: markiert eine aus der Abschlagsrechnung übernommene Leistungsposition (nur Frontend, verhindert doppeltes Übernehmen - wird nicht ans Backend gesendet)
 }
 
@@ -3113,6 +3114,7 @@ function RechnungForm({
         kategorie_id: p.kategorie_id != null ? String(p.kategorie_id) : undefined,
         differenzbesteuerung: p.differenzbesteuerung ?? false,
         art_typ: (p.artikel_typ as ArtikelTyp | null) ?? undefined,
+        leistungsdatum: p.leistungsdatum ?? '',
       }))
     }
     // Plain-PDF-Prefill: Brutto/Netto-Betrag und USt-Satz aus Texterkennung vorfüllen
@@ -3537,6 +3539,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
     || positionen.some((p) => p.differenzbesteuerung || p.abschlag_rechnung_id)
   )
   const zeigeKatSpalte = typ === 'eingang' || !ausgangKatGesperrt
+  // Issue #594: Leistungsdatum je Position (Schalter unter Einstellungen → Rechnungsvorlagen)
+  const zeigeDatum = typ === 'ausgang' && !!unternehmen?.pdf_positionsdatum
 
   // Summenberechnung (Issue #332): das Formular rechnet nicht mehr selbst, sondern fragt beim
   // Backend dieselbe Berechnung ab die auch beim Speichern läuft (debounced) - siehe
@@ -3793,6 +3797,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           differenzbesteuerung: istDiff,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
           abschlag_rechnung_id: p.abschlag_rechnung_id,
+          leistungsdatum: p.leistungsdatum || undefined,
         } as RechnungspositionCreate
       }),
       rabatt_prozent: rechnungRabattNum > 0 && rechnungRabattModus === 'prozent' ? rechnungRabattNum : undefined,
@@ -4594,6 +4599,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
           <table className="w-full text-xs">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr>
+                {zeigeDatum && <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-32">Datum</th>}
                 <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
                 <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
                 <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
@@ -4621,6 +4627,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   // als "–" ausgeblendet, der tatsächliche Abzugsbetrag (bereits das fertige
                   // Vorzeichen-Ergebnis aus Netto × Menge) steht stattdessen klar in einer Zahl.
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
+                    {zeigeDatum && <td className="px-3 py-1.5"></td>}
                     <td className="px-3 py-1.5 italic whitespace-pre-wrap">{pos.beschreibung}</td>
                     <td className="px-3 py-1.5 text-right">–</td>
                     <td className="px-3 py-1.5">–</td>
@@ -4645,6 +4652,13 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                   </tr>
                 ) : (
                 <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+                  {zeigeDatum && (
+                    <td className="px-2 py-1.5">
+                      <input type="date" value={pos.leistungsdatum ?? ''} aria-label="Leistungsdatum"
+                        onChange={(e) => updatePosition(i, 'leistungsdatum', e.target.value)}
+                        className="w-full border-0 outline-none bg-transparent text-slate-700 dark:text-slate-200 text-xs" />
+                    </td>
+                  )}
                   <td className={`px-2 py-1.5 ${fehlerRing(positionenFehlen && !pos.beschreibung.trim())}`}>
                     <ArtikelAutocomplete
                       value={pos.beschreibung}
@@ -4769,20 +4783,20 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               {!sperreUstAufNull && (
                 <>
                   <tr>
-                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
+                    <td colSpan={(zeigeKatSpalte ? 6 : 5) + (zeigeDatum ? 1 : 0)} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs" title="ohne MwSt">
                       Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                     </td>
                     <td colSpan={2} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">{formatEuro(anzeigeSummen.netto)}</td>
                   </tr>
                   <tr>
-                    <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                    <td colSpan={(zeigeKatSpalte ? 6 : 5) + (zeigeDatum ? 1 : 0)} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                     <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(anzeigeSummen.ust)}</td>
                   </tr>
                 </>
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
+                  <td colSpan={(zeigeKatSpalte ? 6 : 5) + (zeigeDatum ? 1 : 0)} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">
                     Zwischensumme Brutto
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatEuro(summen.brutto)}</td>
@@ -4790,7 +4804,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
               )}
               {rechnungRabattNum > 0 && (
                 <tr>
-                  <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
+                  <td colSpan={(zeigeKatSpalte ? 6 : 5) + (zeigeDatum ? 1 : 0)} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
                     {rechnungRabattModus === 'betrag' ? 'Abzug' : `Rabatt ${rechnungRabattNum} %`}
                   </td>
                   <td colSpan={2} className="px-3 py-2 text-right text-slate-400 dark:text-slate-500 text-xs">
@@ -4801,7 +4815,7 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
                 </tr>
               )}
               <tr>
-                <td colSpan={zeigeKatSpalte ? 6 : 5} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
+                <td colSpan={(zeigeKatSpalte ? 6 : 5) + (zeigeDatum ? 1 : 0)} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">
                   Brutto{eingabeModus === 'netto' && <span className="text-slate-400 dark:text-slate-500 font-normal"> (berechnet)</span>}
                 </td>
                 <td colSpan={2} className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">{formatEuro(anzeigeSummen.brutto)}</td>

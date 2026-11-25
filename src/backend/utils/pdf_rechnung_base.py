@@ -78,6 +78,25 @@ def art_nr_spalte(unt: dict, positionen) -> bool:
     return any(getattr(p, "artikel", None) and p.artikel.artikelcode for p in positionen)
 
 
+def pos_datum_spalten(unt: dict, vorlage1: bool) -> tuple[bool, bool]:
+    """Issue #594: Spalten „Pos.“ und „Datum“ (in dieser Reihenfolge) - in beiden Vorlagen über die
+    Schalter in Einstellungen → Rechnungsvorlagen. Snapshots finalisierter Dokumente ohne den
+    Schlüssel pdf_positionsdatum (vor #594) behalten das alte Verhalten: „Sandra grün“ zeigt beide
+    Spalten immer, die Standardvorlage „Pos.“ nach Schalter und kein Datum."""
+    if "pdf_positionsdatum" in unt:
+        return bool(unt.get("pdf_positionsnummern")), bool(unt.get("pdf_positionsdatum"))
+    if vorlage1:
+        return True, True
+    return bool(unt.get("pdf_positionsnummern")), False
+
+
+def positionsdatum(pos, r) -> str:
+    """Issue #594: Datum in der Spalte „Datum“ - eigenes Leistungsdatum der Position, sonst
+    Leistungsbeginn des Dokuments, sonst Rechnungsdatum."""
+    d = getattr(pos, "leistungsdatum", None) or getattr(r, "leistung_von", None) or r.datum
+    return _iso_zu_de(str(d))
+
+
 def art_nr_anzeige(pos, unt: dict) -> str:
     """Issue #562: Inhalt der Spalte „Art.-Nr.“ - der eigene Eintrag im Feld Artikelcode, sonst
     (nur mit dem neuen Schalter) der automatisch vergebene Code ART-#### (DB-Feld artikelnummer)."""

@@ -27,7 +27,7 @@ VORLAGEN = [
     {
         "id": 1,
         "name": "Sandra grün",
-        "beschreibung": "Grünes Design · Spalten: Datum, Beschreibung, USt % (nicht bei Kleinunternehmern), Betrag · Überweisungsblock mit IBAN · für alle Unternehmensformen",
+        "beschreibung": "Grünes Design · Spalten: Beschreibung, USt % (nicht bei Kleinunternehmern), Betrag, Pos. und Datum über die Schalter unten · Überweisungsblock mit IBAN · für alle Unternehmensformen",
     },
 ]
 
@@ -134,6 +134,7 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "pdf_positionsnummern":    bool(unternehmen.pdf_positionsnummern),
         "pdf_artikelnummer":    bool(unternehmen.pdf_artikelnummer),
+        "pdf_positionsdatum":   bool(unternehmen.pdf_positionsdatum),
     }
 
 

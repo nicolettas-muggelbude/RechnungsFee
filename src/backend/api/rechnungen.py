@@ -574,6 +574,7 @@ def _absender_snapshot(db: Session) -> str:
         "pdf_vorlage":             int(unt.pdf_vorlage or 0),
         "pdf_positionsnummern":            bool(unt.pdf_positionsnummern),
         "pdf_artikelnummer":            bool(unt.pdf_artikelnummer),
+        "pdf_positionsdatum":           bool(unt.pdf_positionsdatum),
         "unterschrift_bild":       unt.unterschrift_bild or "",
         "unterschrift_auf_rechnung": bool(unt.unterschrift_auf_rechnung),
         "qr_zahlung_aktiv":        bool(unt.qr_zahlung_aktiv),
@@ -1395,8 +1396,10 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
             differenzbesteuerung=getattr(pos_data, "differenzbesteuerung", False),
             artikel_id=pos_data.artikel_id,
             kategorie_id=pos_data.kategorie_id,
+            leistungsdatum=getattr(pos_data, "leistungsdatum", None),
         )
         db.add(pos)
+    leistungszeitraum_aus_positionen(auftrag, data.positionen)  # Issue #594
     db.flush()
     db.expire(auftrag, ["positionen"])
     _pruefe_ausgangs_positionskategorien(auftrag, db)  # Issue #567
@@ -1768,9 +1771,11 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
             ek_netto_25a=ek_netto_25a,
             ust_satz_25a=ust_satz_25a,
             abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
+            leistungsdatum=getattr(pos_data, "leistungsdatum", None),
         )
         db.add(pos)
 
+    leistungszeitraum_aus_positionen(rechnung, data.positionen)  # Issue #594
     db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
     db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
     _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
@@ -1929,9 +1934,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 brutto=erg.brutto,
                 differenzbesteuerung=ist_diff,
                 abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
+                leistungsdatum=getattr(pos_data, "leistungsdatum", None),
             )
             db.add(pos)
 
+        leistungszeitraum_aus_positionen(rechnung, data.positionen)  # Issue #594
         db.flush()
         db.expire(rechnung, ["positionen"])
         _synchronisiere_abschlagsverrechnung(rechnung, alte_abschlag_ids, db)
@@ -2297,6 +2304,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 "pdf_vorlage":                unternehmen.pdf_vorlage if unternehmen else 0,
                 "pdf_positionsnummern":               bool(unternehmen.pdf_positionsnummern),
                 "pdf_artikelnummer":               bool(unternehmen.pdf_artikelnummer),
+                "pdf_positionsdatum":              bool(unternehmen.pdf_positionsdatum),
                 "unterschrift_bild":          unternehmen.unterschrift_bild or "",
                 "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
                 "qr_zahlung_aktiv":           unternehmen.qr_zahlung_aktiv or False,
@@ -2785,6 +2793,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
         "pdf_positionsnummern":            bool(unternehmen.pdf_positionsnummern),
         "pdf_artikelnummer":            bool(unternehmen.pdf_artikelnummer),
+        "pdf_positionsdatum":           bool(unternehmen.pdf_positionsdatum),
         "unterschrift_bild":       unternehmen.unterschrift_bild or "",
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "qr_zahlung_aktiv":        unternehmen.qr_zahlung_aktiv or False,
@@ -4481,6 +4490,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
             kategorie_id=pos.kategorie_id,
+            leistungsdatum=pos.leistungsdatum,
         ))
 
     original.ersatzrechnung_id = ersatz.id
@@ -4543,6 +4553,7 @@ def _korrigierte_eingangsrechnung(original: Rechnung, db: Session) -> RechnungRe
             rabatt_prozent=pos.rabatt_prozent, ust_satz=pos.ust_satz, ust_betrag=pos.ust_betrag,
             brutto=pos.brutto, differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a, ust_satz_25a=pos.ust_satz_25a, kategorie_id=pos.kategorie_id,
+            leistungsdatum=pos.leistungsdatum,
         ))
     original.ersatzrechnung_id = ersatz.id
     db.commit()
@@ -4690,6 +4701,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
             differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
+            leistungsdatum=pos.leistungsdatum,
         )
         db.add(neue_pos)
         netto_sum += pos.netto * menge_neg
@@ -5180,6 +5192,7 @@ def _lieferschein_zu_rechnung_konvertieren(
                 differenzbesteuerung=pos.differenzbesteuerung,
                 ek_netto_25a=pos.ek_netto_25a,
                 ust_satz_25a=pos.ust_satz_25a,
+                leistungsdatum=pos.leistungsdatum,
             )
             db.add(neue_pos)
             # pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (inkl. Menge, Issue #332)
@@ -5761,6 +5774,19 @@ def _naechste_auftragsnummer(datum: date, db: Session) -> str:
     return f"AU-{str(datum.year)[-2:]}{count + 1:04d}"
 
 
+def leistungszeitraum_aus_positionen(doc: "Rechnung", positionen) -> None:
+    """Issue #594: Haben Positionen ein eigenes Leistungsdatum und ist der Leistungszeitraum des
+    Dokuments leer, wird er vom frühesten bis zum spätesten Positionsdatum gesetzt. Sonst stünde
+    im Kopf das Rechnungsdatum als Leistungsdatum (Pflichtangabe § 14 Abs. 4 Nr. 6 UStG).
+    Ein eingetragener Zeitraum bleibt unverändert."""
+    if doc.leistung_von:
+        return
+    daten = sorted(d for d in (getattr(p, "leistungsdatum", None) for p in positionen or []) if d)
+    if daten:
+        doc.leistung_von = daten[0]
+        doc.leistung_bis = daten[-1] if daten[-1] != daten[0] else None
+
+
 def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> None:
     """Kopiert Positionen von einem Dokument zum anderen."""
     for pos in quell.positionen:
@@ -5780,6 +5806,7 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
+            leistungsdatum=pos.leistungsdatum,
         )
         db.add(neue_pos)
     if ziel.typ == "ausgang" and ziel.dokument_typ in ("Rechnung", "Abschlagsrechnung", "Proforma"):

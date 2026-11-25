@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
 
-SCHEMA_VERSION = 198
+SCHEMA_VERSION = 199
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4590,6 +4590,25 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 198"))
             conn.commit()
             print("[Migration] Schema auf Version 198 (Issue #592: imap_intervall_minuten)")
+
+    if version < 199:
+        with engine.connect() as conn:
+            # Issue #594: Leistungsdatum je Position (Sammelrechnung) und Schalter für die Spalte
+            # „Datum“. Die Spalten „Pos.“ und „Datum“ hängen jetzt in beiden Vorlagen an den
+            # Schaltern - „Sandra grün“ (Vorlage 1) hatte beide bisher immer. Wer sie nutzt,
+            # bekommt beide Schalter eingeschaltet, damit sich das Bild nicht ungefragt ändert.
+            _p199 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungspositionen)")).fetchall()}
+            if _p199 and "leistungsdatum" not in _p199:
+                conn.execute(text("ALTER TABLE rechnungspositionen ADD COLUMN leistungsdatum DATE"))
+            _u199 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            if _u199 and "pdf_positionsdatum" not in _u199:
+                conn.execute(text("ALTER TABLE unternehmen ADD COLUMN pdf_positionsdatum BOOLEAN NOT NULL DEFAULT 0"))
+                conn.execute(text(
+                    "UPDATE unternehmen SET pdf_positionsnummern = 1, pdf_positionsdatum = 1 WHERE pdf_vorlage = 1"
+                ))
+            conn.execute(text("PRAGMA user_version = 199"))
+            conn.commit()
+            print("[Migration] Schema auf Version 199 (Issue #594: Leistungsdatum je Position)")
 
 
 def _migrate_kategorien() -> None:

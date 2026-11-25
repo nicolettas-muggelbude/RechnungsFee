@@ -57,6 +57,7 @@ class RechnungspositionCreate(BaseModel):
     # Issue #419 Phase 2: markiert eine automatisch generierte Abzugszeile (negierte Menge),
     # die eine Abschlagsrechnung in einer Schlussrechnung verrechnet.
     abschlag_rechnung_id: Optional[int] = None
+    leistungsdatum: Optional[date] = None  # Issue #594
 
     @field_validator("ust_satz")
     @classmethod
@@ -83,6 +84,7 @@ class RechnungspositionResponse(BaseModel):
     differenzbesteuerung: bool = False
     artikelcode: Optional[str] = None
     abschlag_rechnung_id: Optional[int] = None
+    leistungsdatum: Optional[date] = None  # Issue #594
 
     model_config = {"from_attributes": True}
 

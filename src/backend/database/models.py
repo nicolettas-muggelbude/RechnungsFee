@@ -121,6 +121,8 @@ class Unternehmen(Base):
     # Issue #562: Spalte „Art.-Nr.“ auf Dokumenten - eigener Eintrag (artikel.artikelcode), sonst
     # automatischer Code (artikel.artikelnummer); im absender_snapshot eingefroren
     pdf_artikelnummer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #594: Spalte „Datum“ je Position in beiden Vorlagen und Datumsfeld im Positionsformular
+    pdf_positionsdatum: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     einleitungstext: Mapped[str | None] = mapped_column(Text)
     schlusstext: Mapped[str | None] = mapped_column(Text)
     # Issue #368: eigene Standardtexte je optionalem Dokumenttyp (Rechnung nutzt weiterhin
@@ -987,6 +989,9 @@ class Rechnungsposition(Base):
     # Positions-Kopie). Verhindert, dass der generische Positions-Editor eine solche Zeile
     # unbemerkt loescht/aendert, ohne dass die Abschlagsrechnung davon erfaehrt.
     abschlag_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"))
+    # Issue #594: Leistungsdatum der einzelnen Position (Sammelrechnung); leer = Leistungsdatum
+    # bzw. -zeitraum der Rechnung
+    leistungsdatum: Mapped[date | None] = mapped_column(Date)
 
     rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen", foreign_keys=[rechnung_id])
     abschlag_rechnung: Mapped["Rechnung | None"] = relationship(foreign_keys=[abschlag_rechnung_id])

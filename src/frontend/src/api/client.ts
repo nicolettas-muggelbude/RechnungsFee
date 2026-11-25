@@ -331,6 +331,7 @@ export type Unternehmen = {
   pdf_vorlage?: number
   pdf_positionsnummern?: boolean
   pdf_artikelnummer?: boolean  // Issue #562: Spalte „Art.-Nr.“ auf Dokumenten
+  pdf_positionsdatum?: boolean  // Issue #594: Spalte „Datum“ und Datumsfeld je Position
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
@@ -1492,6 +1493,7 @@ export type Rechnungsposition = {
   rabatt_prozent?: string
   artikelcode: string | null
   abschlag_rechnung_id?: number | null
+  leistungsdatum?: string | null  // Issue #594
 }
 
 export type RechnungspositionCreate = {
@@ -1505,6 +1507,7 @@ export type RechnungspositionCreate = {
   differenzbesteuerung?: boolean
   rabatt_prozent?: number
   abschlag_rechnung_id?: number
+  leistungsdatum?: string  // Issue #594: Leistungsdatum der Position (JJJJ-MM-TT)
 }
 
 export type RechnungsKettenGlied = {
