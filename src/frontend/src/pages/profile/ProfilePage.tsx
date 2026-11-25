@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getProfile, createProfil, aktiviereProfil, benenneProfilUm, archiviereProfil,
   stelleProfilWiederHer, loescheArchiviertesProfil, isTauri,
+  setzeProfilPasswort, setzeProfilStartEinstellungen,
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
 
-async function neustart() {
+export async function neustart() {
   // Zwingend: nur ein Neustart lädt database/connection.py mit dem neuen Profil-Zeiger
   // neu ein (mehrere Backend-Module binden APP_DATA_DIR-abgeleitete Pfade zur
   // Importzeit, ein Wechsel zur Laufzeit würde zu Datensalat zwischen Profilen führen).
@@ -42,6 +43,18 @@ function NeustartHinweis({ profilName }: { profilName: string }) {
   )
 }
 
+/** Issue #593: Hinweis beim Anlegen bzw. Festlegen eines Passworts (nicht auf dem Startbildschirm). */
+function PasswortHinweis() {
+  return (
+    <p className="text-xs text-slate-500 dark:text-slate-400">
+      Das Passwort sperrt den Zugang zum Profil in RechnungsFee. Die Daten auf der Festplatte werden dadurch
+      nicht verschlüsselt – wer an deinen Benutzerordner kommt, kann sie weiterhin lesen. Schutz bei Verlust
+      oder Diebstahl des Geräts bietet die Festplattenverschlüsselung deines Betriebssystems (BitLocker,
+      FileVault, LUKS). Mindestens 4 Zeichen.
+    </p>
+  )
+}
+
 export function ProfilePage() {
   const mxAuto = useMxAuto()
   const qc = useQueryClient()
@@ -54,13 +67,25 @@ export function ProfilePage() {
   const [loeschenFuer, setLoeschenFuer] = useState<string | null>(null)
   const [loeschenEingabe, setLoeschenEingabe] = useState('')
 
+  // Issue #593: optionales Passwort je Profil
+  const [neuesPw, setNeuesPw] = useState('')
+  const [neuesPw2, setNeuesPw2] = useState('')
+  const [aktivierenFuer, setAktivierenFuer] = useState<string | null>(null)
+  const [aktivierenPw, setAktivierenPw] = useState('')
+  const [passwortFuer, setPasswortFuer] = useState<string | null>(null)
+  const [pwAlt, setPwAlt] = useState('')
+  const [pwNeu, setPwNeu] = useState('')
+  const [pwNeu2, setPwNeu2] = useState('')
+
   const { data, isLoading } = useQuery({ queryKey: ['profile'], queryFn: getProfile })
 
   const createMut = useMutation({
-    mutationFn: (name: string) => createProfil(name),
-    onSuccess: (_, name) => {
+    mutationFn: ({ name, passwort }: { name: string; passwort: string }) => createProfil(name, passwort),
+    onSuccess: (_, { name }) => {
       setFehler(null)
       setNeuerName('')
+      setNeuesPw('')
+      setNeuesPw2('')
       setNeustartFuer(name)
       qc.invalidateQueries({ queryKey: ['profile'] })
     },
@@ -68,12 +93,30 @@ export function ProfilePage() {
   })
 
   const aktivierenMut = useMutation({
-    mutationFn: (name: string) => aktiviereProfil(name),
-    onSuccess: (_, name) => {
+    mutationFn: ({ name, passwort }: { name: string; passwort?: string }) => aktiviereProfil(name, passwort),
+    onSuccess: (_, { name }) => {
       setFehler(null)
+      setAktivierenFuer(null)
+      setAktivierenPw('')
       setNeustartFuer(name)
       qc.invalidateQueries({ queryKey: ['profile'] })
     },
+    onError: (e: Error) => { setFehler(e.message); setAktivierenPw('') },
+  })
+
+  const passwortMut = useMutation({
+    mutationFn: ({ name, alt, neu }: { name: string; alt: string; neu: string }) => setzeProfilPasswort(name, alt, neu),
+    onSuccess: (liste) => {
+      setFehler(null)
+      setPasswortFuer(null)
+      qc.setQueryData(['profile'], liste)
+    },
+    onError: (e: Error) => { setFehler(e.message); setPwAlt('') },
+  })
+
+  const startMut = useMutation({
+    mutationFn: (an: boolean) => setzeProfilStartEinstellungen(an),
+    onSuccess: (liste) => { setFehler(null); qc.setQueryData(['profile'], liste) },
     onError: (e: Error) => setFehler(e.message),
   })
 
@@ -124,7 +167,27 @@ export function ProfilePage() {
   function anlegen() {
     const name = neuerName.trim()
     if (!name) return
-    createMut.mutate(name)
+    if (neuesPw !== neuesPw2) { setFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    createMut.mutate({ name, passwort: neuesPw })
+  }
+
+  function aktivieren(name: string, hatPasswort: boolean) {
+    setFehler(null)
+    if (hatPasswort) { setAktivierenFuer(name); setAktivierenPw(''); return }
+    aktivierenMut.mutate({ name })
+  }
+
+  function passwortStarten(name: string) {
+    setFehler(null)
+    setPasswortFuer(name)
+    setPwAlt('')
+    setPwNeu('')
+    setPwNeu2('')
+  }
+
+  function passwortSpeichern(name: string, entfernen = false) {
+    if (!entfernen && pwNeu !== pwNeu2) { setFehler('Die beiden Passwörter stimmen nicht überein.'); return }
+    passwortMut.mutate({ name, alt: pwAlt, neu: entfernen ? '' : pwNeu })
   }
 
   function umbenennenStarten(name: string) {
@@ -173,7 +236,8 @@ export function ProfilePage() {
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
               {isLoading && <p className="p-4 text-sm text-slate-400">Lade Profile…</p>}
               {data?.profile.map((p) => (
-                <div key={p.name} className="flex items-center justify-between px-4 py-3">
+                <div key={p.name}>
+                <div className="flex items-center justify-between px-4 py-3">
                   {umbenennenFuer === p.name ? (
                     <div className="flex items-center gap-2 flex-1">
                       <input
@@ -207,6 +271,7 @@ export function ProfilePage() {
                     <>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                        {p.passwort && <span title="Mit Passwort geschützt" aria-label="Mit Passwort geschützt">🔒</span>}
                         {p.aktiv && (
                           <span className="text-[10px] font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded px-1.5 py-0.5">
                             aktiv
@@ -217,7 +282,7 @@ export function ProfilePage() {
                         {!p.aktiv && (
                           <button
                             type="button"
-                            onClick={() => aktivierenMut.mutate(p.name)}
+                            onClick={() => aktivieren(p.name, p.passwort)}
                             disabled={aktivierenMut.isPending}
                             className="px-3 py-1.5 text-xs border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 disabled:opacity-50 transition-colors"
                           >
@@ -231,6 +296,15 @@ export function ProfilePage() {
                           className="px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                         >
                           ✏️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => passwortStarten(p.name)}
+                          title={p.passwort ? 'Passwort ändern oder entfernen' : 'Passwort festlegen'}
+                          aria-label={p.passwort ? 'Passwort ändern oder entfernen' : 'Passwort festlegen'}
+                          className="px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          🔑
                         </button>
                         {!p.aktiv && (
                           <button
@@ -247,9 +321,97 @@ export function ProfilePage() {
                     </>
                   )}
                 </div>
+
+                {aktivierenFuer === p.name && (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); aktivierenMut.mutate({ name: p.name, passwort: aktivierenPw }) }}
+                    className="mx-4 mb-3 flex items-end gap-2"
+                  >
+                    <div className="flex-1">
+                      <label htmlFor={`aktivieren-pw-${p.name}`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                        Passwort für „{p.name}"
+                      </label>
+                      <input id={`aktivieren-pw-${p.name}`} type="password" value={aktivierenPw}
+                        onChange={(e) => setAktivierenPw(e.target.value)} autoFocus autoComplete="current-password" className={inputCls} />
+                    </div>
+                    <button type="submit" disabled={aktivierenMut.isPending || !aktivierenPw}
+                      className="shrink-0 px-3 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors">
+                      Wechseln
+                    </button>
+                    <button type="button" onClick={() => setAktivierenFuer(null)}
+                      className="shrink-0 px-3 py-2 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                      Abbrechen
+                    </button>
+                  </form>
+                )}
+
+                {passwortFuer === p.name && (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); passwortSpeichern(p.name) }}
+                    className="mx-4 mb-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3"
+                  >
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                      {p.passwort ? `Passwort für „${p.name}" ändern oder entfernen` : `Passwort für „${p.name}" festlegen`}
+                    </p>
+                    {p.passwort && (
+                      <div>
+                        <label htmlFor={`pw-alt-${p.name}`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Bisheriges Passwort</label>
+                        <input id={`pw-alt-${p.name}`} type="password" value={pwAlt} onChange={(e) => setPwAlt(e.target.value)}
+                          autoFocus autoComplete="current-password" className={inputCls} />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label htmlFor={`pw-neu-${p.name}`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Neues Passwort</label>
+                        <input id={`pw-neu-${p.name}`} type="password" value={pwNeu} onChange={(e) => setPwNeu(e.target.value)}
+                          autoFocus={!p.passwort} autoComplete="new-password" className={inputCls} />
+                      </div>
+                      <div>
+                        <label htmlFor={`pw-neu2-${p.name}`} className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Wiederholen</label>
+                        <input id={`pw-neu2-${p.name}`} type="password" value={pwNeu2} onChange={(e) => setPwNeu2(e.target.value)}
+                          autoComplete="new-password" className={inputCls} />
+                      </div>
+                    </div>
+                    <PasswortHinweis />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="submit" disabled={passwortMut.isPending || !pwNeu || (p.passwort && !pwAlt)}
+                        className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors">
+                        Speichern
+                      </button>
+                      {p.passwort && (
+                        <button type="button" onClick={() => passwortSpeichern(p.name, true)} disabled={passwortMut.isPending || !pwAlt}
+                          className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 transition-colors">
+                          Passwort entfernen
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setPasswortFuer(null)}
+                        className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                        Abbrechen
+                      </button>
+                    </div>
+                  </form>
+                )}
+                </div>
               ))}
             </div>
           </div>
+
+          <label className="flex items-start gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!data?.auswahl_beim_start}
+              onChange={(e) => startMut.mutate(e.target.checked)}
+              disabled={startMut.isPending || !data}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">Profilauswahl beim Start anzeigen</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                RechnungsFee fragt beim Start, welches Profil du öffnen möchtest. Profile mit Passwort fragen
+                beim Start immer nach dem Passwort, auch ohne diese Auswahl.
+              </span>
+            </span>
+          </label>
 
           {fehler && (
             <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
@@ -263,24 +425,43 @@ export function ProfilePage() {
               Startet mit einer komplett leeren Datenbank – nach dem Neustart führt dich der
               Einrichtungs-Assistent durch die Ersteinrichtung, genau wie bei der ersten Installation.
             </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={neuerName}
-                onChange={(e) => setNeuerName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') anlegen() }}
-                placeholder="z. B. Freiberuflich"
-                className={inputCls}
-              />
+            <form onSubmit={(e) => { e.preventDefault(); anlegen() }} className="space-y-3">
+              <div>
+                <label htmlFor="profil-neu-name" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Name</label>
+                <input
+                  id="profil-neu-name"
+                  type="text"
+                  value={neuerName}
+                  onChange={(e) => setNeuerName(e.target.value)}
+                  placeholder="z. B. Freiberuflich"
+                  className={inputCls}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="profil-neu-pw" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    Passwort (optional)
+                  </label>
+                  <input id="profil-neu-pw" type="password" value={neuesPw} onChange={(e) => setNeuesPw(e.target.value)}
+                    autoComplete="new-password" className={inputCls} />
+                </div>
+                <div>
+                  <label htmlFor="profil-neu-pw2" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    Passwort wiederholen
+                  </label>
+                  <input id="profil-neu-pw2" type="password" value={neuesPw2} onChange={(e) => setNeuesPw2(e.target.value)}
+                    disabled={!neuesPw} autoComplete="new-password" className={inputCls} />
+                </div>
+              </div>
+              <PasswortHinweis />
               <button
-                type="button"
-                onClick={anlegen}
-                disabled={createMut.isPending || !neuerName.trim()}
-                className="shrink-0 px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                type="submit"
+                disabled={createMut.isPending || !neuerName.trim() || (!!neuesPw && neuesPw !== neuesPw2)}
+                className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 Anlegen
               </button>
-            </div>
+            </form>
           </div>
 
           {!!data?.archiviert.length && (

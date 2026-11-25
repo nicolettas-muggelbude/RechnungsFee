@@ -5122,6 +5122,8 @@ def _migrate_signaturen_sicher() -> None:
 
 @app.on_event("startup")
 def startup():
+    from utils import profil_zugang
+    profil_zugang.initialisiere()   # Issue #593: Freigabeschein verbrauchen, ggf. sperren
     _prüfe_wiederherstellung()   # Vor create_all – DB muss ggf. erst ersetzt werden
     Base.metadata.create_all(bind=engine)
     _run_migrations()

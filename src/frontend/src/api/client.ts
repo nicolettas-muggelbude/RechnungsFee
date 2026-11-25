@@ -71,7 +71,8 @@ export async function signiereUrl(url: string): Promise<string> {
 async function waitForBackend(baseUrl: string): Promise<void> {
   for (let i = 0; i < 300; i++) {
     try {
-      const res = await apiFetch(`${baseUrl}/setup/status`)
+      // Issue #593: /profile/start antwortet auch bei gesperrtem Profil (setup/status dann 423)
+      const res = await apiFetch(`${baseUrl}/profile/start`)
       if (res.ok) return
     } catch {
       // Backend noch nicht bereit
@@ -232,16 +233,37 @@ export const getKleinunternehmerUmsatz = () =>
   }>('/setup/kleinunternehmer-umsatz')
 
 // --- Profilmanager ---
-export type ProfilItem = { name: string; aktiv: boolean }
-export const getProfile = () => request<{ profile: ProfilItem[]; archiviert: string[] }>('/profile')
-export const createProfil = (name: string) =>
+// Issue #593: passwort = Profil ist mit Passwort gesperrt
+export type ProfilItem = { name: string; aktiv: boolean; passwort: boolean }
+export type ProfilListe = { profile: ProfilItem[]; archiviert: string[]; auswahl_beim_start: boolean }
+export const getProfile = () => request<ProfilListe>('/profile')
+export const createProfil = (name: string, passwort?: string) =>
   request<{ neustart_erforderlich: boolean }>('/profile', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, passwort: passwort || null }),
   })
-export const aktiviereProfil = (name: string) =>
+export const aktiviereProfil = (name: string, passwort?: string) =>
   request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/aktivieren`, {
     method: 'POST',
+    body: JSON.stringify({ passwort: passwort || null }),
+  })
+// Issue #593: Startbildschirm (auch bei gesperrtem Profil erreichbar)
+export type ProfilStart = { profile: ProfilItem[]; gesperrt: boolean; auswahl_anzeigen: boolean }
+export const getProfilStart = () => request<ProfilStart>('/profile/start')
+export const meldeProfilAn = (name: string, passwort?: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/anmelden`, {
+    method: 'POST',
+    body: JSON.stringify({ passwort: passwort || null }),
+  })
+export const setzeProfilPasswort = (name: string, altesPasswort: string, neuesPasswort: string) =>
+  request<ProfilListe>(`/profile/${encodeURIComponent(name)}/passwort`, {
+    method: 'POST',
+    body: JSON.stringify({ altes_passwort: altesPasswort || null, neues_passwort: neuesPasswort || null }),
+  })
+export const setzeProfilStartEinstellungen = (auswahlBeimStart: boolean) =>
+  request<ProfilListe>('/profile/start/einstellungen', {
+    method: 'PUT',
+    body: JSON.stringify({ auswahl_beim_start: auswahlBeimStart }),
   })
 export const benenneProfilUm = (name: string, neuerName: string) =>
   request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}`, {

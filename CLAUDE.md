@@ -81,6 +81,8 @@ cd src/frontend && npm run dev   # dann http://localhost:5173
 
 Seit v0.6.0 zeigt `APP_DATA_DIR` nicht mehr direkt auf den Basisordner, sondern eine Ebene tiefer auf das jeweils **aktive Profil** (`BASE_DIR/profile/<Name>/`, Zeiger in `BASE_DIR/profile.json`). Ein Profilwechsel erfordert zwingend einen Prozess-Neustart – siehe [Wiki: Profile](https://github.com/nicolettas-muggelbude/RechnungsFee/wiki/Profile).
 
+**Passwort je Profil / Startauswahl (Issue #593):** `utils/profil_zugang.py` – scrypt-Hash in `profile/<Name>/zugang.json` (Zugangssperre, keine Verschlüsselung; vergessen → Datei löschen). Gesperrt antwortet `SicherheitMiddleware` mit 423, offen bleiben nur `GET /api/profile/start`, `POST /api/profile/<name>/anmelden`, Backup beim Schließen, Shutdown. Schalter `auswahl_beim_start` liegt in `profile.json` (Zeiger-Schreibzugriffe nur über `_schreibe_zeiger()`, das weitere Schlüssel erhält). Wechsel mit geprüftem Passwort legt `.freigabe.json` (120 s) ins Zielprofil, der neue Prozess verbraucht sie beim Start. Tests: `conftest.py` setzt den Zustand auf entsperrt.
+
 **Wichtig für neuen Code:** Immer `APP_DATA_DIR` aus `database.connection` importieren, nie einen eigenen Datenpfad hartkodieren (z. B. `Path.home() / ".local/share/RechnungsFee"`) – so ein eigenständiger Pfad umgeht sowohl die Profiltrennung als auch die Windows/macOS-Pfadlogik. Genau dieser Fehler steckte bis v0.6.0 in `api/unternehmen.py` (Logo-Upload) und führte nach der Profilmanager-Migration zu 404 beim Logo-Abruf, weil die Datei woanders lag als der eigene hartkodierte Pfad annahm.
 
 ## DB-Schema-Versionierung (`src/backend/main.py`)
