@@ -33,23 +33,28 @@ VORLAGEN = [
 
 
 def _demo_rechnung(unt: dict) -> Any:
-    """Erzeugt eine Muster-Rechnung mit Dummy-Daten für die Vorschau."""
+    """Erzeugt eine Muster-Rechnung mit Dummy-Daten für die Vorschau. Zwei Positionen haben einen
+    Artikel (einmal mit eigenem Artikelcode, einmal nur mit automatischer Nummer), alle ein eigenes
+    Leistungsdatum - sonst blieben die Spalten „Art.-Nr.“ (#562) und „Datum“ (#594) in der
+    Vorschau leer bzw. zeigten überall dasselbe Datum."""
     pos1 = SimpleNamespace(
-        position_nr=1,
+        position_nr=1, leistungsdatum=date(2024, 3, 4),
+        artikel=SimpleNamespace(artikelcode="WEB-START", artikelnummer="ART-0001"),
         beschreibung="Webdesign – Startseite", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("800.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "152.00"),
         brutto=Decimal("800.00" if unt.get("ist_kleinunternehmer") else "952.00"),
     )
     pos2 = SimpleNamespace(
-        position_nr=2,
+        position_nr=2, leistungsdatum=date(2024, 3, 12), artikel=None,
         beschreibung="Logo-Erstellung und CI-Konzept", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("300.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "57.00"),
         brutto=Decimal("300.00" if unt.get("ist_kleinunternehmer") else "357.00"),
     )
     pos3 = SimpleNamespace(
-        position_nr=3,
+        position_nr=3, leistungsdatum=date(2024, 3, 28),
+        artikel=SimpleNamespace(artikelcode=None, artikelnummer="ART-0007"),
         beschreibung="Technischer Support (3 Stunden)", menge=Decimal("3"), einheit="Std",
         netto=Decimal("180.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "34.20"),
