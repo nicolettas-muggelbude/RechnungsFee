@@ -8,7 +8,7 @@ import {
   getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
-  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, oeffnePaketVorschau,
+  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, oeffnePaketVorschau, meldeVerlauf,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -717,6 +717,8 @@ function AngebotDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, angebot)
+      // Issue #596: Ausgabe im Dokumentverlauf festhalten
+      if (!angebot.ist_entwurf) void meldeVerlauf(angebot.id, { art: 'pdf', kanal: 'druck', kopie: angebot.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, `Angebot ${angebot.rechnungsnummer ?? ''}`)
       } else {
@@ -730,6 +732,7 @@ function AngebotDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, angebot)
+      if (!angebot.ist_entwurf) void meldeVerlauf(angebot.id, { art: 'gedruckt', kanal: 'druck', kopie: angebot.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, 'Angebot drucken')
       } else {
@@ -767,6 +770,9 @@ function AngebotDetail({
             ...(await paketAnhaenge(angebot.dokumentenpaket_id)),
           ],
         })
+        await meldeVerlauf(angebot.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: angebot.ausgegeben, empfaenger: email, betreff,
+        })
         setZeigMailEingabe(false)
         setMailAdresse('')
       } catch (e) {
@@ -802,6 +808,9 @@ function AngebotDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(angebot.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: angebot.ausgegeben, empfaenger: email, betreff,
+    })
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)

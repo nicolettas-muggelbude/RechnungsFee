@@ -10,7 +10,7 @@ import {
   getProformas, getKunden, getUstSaetze, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusProforma,
-  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail,
+  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, meldeVerlauf,
   getDokumentenPakete, oeffnePaketVorschau,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
@@ -722,6 +722,8 @@ function ProformaDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, proforma)
+      // Issue #596: Ausgabe im Dokumentverlauf festhalten
+      if (!proforma.ist_entwurf) void meldeVerlauf(proforma.id, { art: 'pdf', kanal: 'druck', kopie: proforma.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, `Proforma ${proforma.rechnungsnummer ?? ''}`)
       } else {
@@ -735,6 +737,7 @@ function ProformaDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, proforma)
+      if (!proforma.ist_entwurf) void meldeVerlauf(proforma.id, { art: 'gedruckt', kanal: 'druck', kopie: proforma.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, 'Proforma drucken')
       } else {
@@ -772,6 +775,9 @@ function ProformaDetail({
             ...(await paketAnhaenge(proforma.dokumentenpaket_id)),
           ],
         })
+        await meldeVerlauf(proforma.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: proforma.ausgegeben, empfaenger: email, betreff,
+        })
         qc.invalidateQueries({ queryKey: ['proformas'] })
         setZeigMailEingabe(false)
         setMailAdresse('')
@@ -803,6 +809,9 @@ function ProformaDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(proforma.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: proforma.ausgegeben, empfaenger: email, betreff,
+    })
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)

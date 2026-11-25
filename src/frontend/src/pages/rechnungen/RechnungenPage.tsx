@@ -23,7 +23,7 @@ import {
   type PostfachEintrag, type PostfachAbrufErgebnis,
   type ArtikelSuche, type ArtikelTyp, type AnalyseErgebnis, type LieferantVorschlag, type ZahlungSplitPosition, type ZahlungKompakt,
   type RechnungVorschauRequest,
-  dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete,
+  dokumentPdfUrl, oeffnePaketVorschau, getDokumentenPakete, meldeVerlauf,
 } from '../../api/client'
 import { useRechnungVorschau } from '../../hooks/useRechnungVorschau'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -33,6 +33,7 @@ import { KundeErstellenModal } from '../../components/KundeErstellenModal'
 import { ArtikelFormModal } from '../artikel/ArtikelPage'
 import { ArtikelAutocomplete } from '../../components/ArtikelAutocomplete'
 import { MailDialog } from '../../components/MailDialog'
+import { VersandSymbol, VerlaufListe } from '../../components/DokumentVerlauf'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
@@ -1498,6 +1499,7 @@ function RechnungDetail({
   async function handleDrucken() {
     const base = await getApiBase()
     const url = dokumentPdfUrl(base, rechnung)
+    if (!rechnung.ist_entwurf) void meldeVerlauf(rechnung.id, { art: 'gedruckt', kanal: 'druck', kopie: rechnung.ausgegeben })
     // Archivierung passiert serverseitig beim Laden der URL, unabhängig vom Aufrufer -
     // kurze Verzögerung damit die Liste den neuen "ausgegeben"-Status zuverlässig zeigt.
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
@@ -1511,6 +1513,7 @@ function RechnungDetail({
 
   async function handlePdfOeffnen() {
     const base = await getApiBase()
+    if (!rechnung.ist_entwurf) void meldeVerlauf(rechnung.id, { art: 'pdf', kanal: 'druck', kopie: rechnung.ausgegeben })
     setTimeout(() => qc.invalidateQueries({ queryKey: ['rechnungen'] }), 1500)
     _zeigePdf(dokumentPdfUrl(base, rechnung), 'Rechnung')
   }
@@ -1590,6 +1593,10 @@ function RechnungDetail({
             dateiname: `${rechnung.dokument_typ === 'Lieferschein' ? 'Lieferschein' : 'Rechnung'}_${rechnung.rechnungsnummer ?? rechnung.id}.pdf`,
           }, ...(await paketAnhaenge(rechnung.dokumentenpaket_id))],
         })
+        await meldeVerlauf(rechnung.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: rechnung.ausgegeben,
+          empfaenger: email, betreff: subjectText,
+        })
         qc.invalidateQueries({ queryKey: ['rechnungen'] })
         setZeigMailEingabe(false)
         setMailAdresse('')
@@ -1633,6 +1640,11 @@ function RechnungDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(rechnung.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: rechnung.ausgegeben,
+      empfaenger: email, betreff: subjectText,
+    })
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
@@ -2169,6 +2181,17 @@ function RechnungDetail({
                 {new Date(rechnung.ausgegeben_am).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
+          )}
+          {/* Issue #596: was wann mit dem Dokument passiert ist */}
+          {rechnung.typ === 'ausgang' && !rechnung.ist_entwurf && (
+            <details className="pt-1">
+              <summary className="cursor-pointer text-slate-500 dark:text-slate-400 select-none">
+                Verlauf ({rechnung.verlauf?.length ?? 0})
+              </summary>
+              <div className="mt-2">
+                <VerlaufListe eintraege={[...(rechnung.verlauf ?? [])].reverse()} />
+              </div>
+            </details>
           )}
           {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && !rechnung.kunde_oeffentlich && (
             <div className="flex justify-between">
@@ -5597,6 +5620,8 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const [vorKundeId, setVorKundeId] = useState<string | undefined>()
   const [fehler, setFehler] = useState<string | null>(null)
   const [sortFaellig, setSortFaellig] = useState<'asc' | 'desc' | null>(null)
+  // Issue #596: nur Dokumente, die noch nicht gedruckt oder versendet wurden
+  const [nurUnversendet, setNurUnversendet] = useState(false)
   const listContainerRef = useRef<HTMLDivElement>(null)
   const [zeigImport, setZeigImport] = useState(false)
   const [importPrefill, setImportPrefill] = useState<AnalyseErgebnis | null>(null)
@@ -5796,6 +5821,9 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
     let result = lsFilterRechnungId != null && lieferscheinModus
       ? liste.filter(r => r.lieferschein_zu_rechnung_id === lsFilterRechnungId)
       : liste
+    if (nurUnversendet) {
+      result = result.filter(r => r.typ === 'ausgang' && !r.ist_entwurf && !r.storniert && !r.letzter_versand)
+    }
     if (lieferscheinModus && lsAbrechnungFilter) {
       result = result.filter(r => {
         if (lsAbrechnungFilter === 'offen') return !r.lieferschein_zu_rechnung_id
@@ -6042,6 +6070,18 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
             ) : (
               <StatusMultiSelect value={zahlungsstatus} onChange={setZahlungsstatus} />
             )}
+
+            {typ !== 'eingang' && (
+              <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={nurUnversendet}
+                  onChange={(e) => setNurUnversendet(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                />
+                Noch nicht versendet
+              </label>
+            )}
           </div>
 
           {/* Fehlermeldung */}
@@ -6180,6 +6220,9 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                       </>
                     )}
                     <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                    {typ !== 'eingang' && (
+                      <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide w-16" title="Zuletzt gedruckt oder versendet">Versand</th>
+                    )}
                     {typ !== 'ausgang' && (
                       <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide w-8" title="Beleg angehängt">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 mx-auto">
@@ -6303,6 +6346,11 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                                 ? <span className="text-xs px-2 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800" title={`Verrechnet in ${r.verrechnet_in_rechnung_nr ?? ''}`}>Verrechnet</span>
                                 : <StatusBadge status={r.zahlungsstatus as 'offen' | 'teilweise' | 'bezahlt' | 'uneinbringlich'} />}
                       </td>
+                      {typ !== 'eingang' && (
+                        <td className="px-3 py-3 text-center">
+                          {r.typ === 'ausgang' && !r.ist_entwurf && <VersandSymbol eintrag={r.letzter_versand} />}
+                        </td>
+                      )}
                       {typ !== 'ausgang' && (
                         <td className="px-3 py-3 text-center">
                           {r.typ === 'eingang' && r.beleg && (

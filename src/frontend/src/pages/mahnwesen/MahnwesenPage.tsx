@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getMahnwesenKundenUebersicht, getMahnwesenEinstellungen, mahnungVorschau, mahnungErstellen,
   mahnungVorschauGebuehr, mahnungErstellenGebuehr, bezahleMahngebuehrKunde, mahnungZahlungErfassen,
-  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, getMahnungZusatzanhaenge, getMahnungZusatzanhangUrl, downloadMahnungZusatzanhang, openUrl,
+  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, getMahnungZusatzanhaenge, getMahnungZusatzanhangUrl, downloadMahnungZusatzanhang, openUrl, meldeMahnungVerlauf,
   getUnternehmen, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
   type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult, type Mahnstufe,
@@ -63,6 +63,7 @@ function mahnungStatusLabel(status: string): string {
  *  Der Status „versendet“ wird serverseitig beim Laden der Adresse gesetzt. */
 async function mahnungDrucken(m: { id: number; mahnnummer?: string | null }, qc: ReturnType<typeof useQueryClient>) {
   const url = await getMahnungPdfUrl(m.id, false, m.mahnnummer)
+  void meldeMahnungVerlauf(m.id, { art: 'mahnung_gedruckt', kanal: 'druck' })  // Issue #596
   setTimeout(() => {
     qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
     qc.invalidateQueries({ queryKey: ['kunde-mahnungen'] })
@@ -108,6 +109,9 @@ async function mahnungMailFallback(
   } else {
     window.location.href = mailtoUrl
   }
+  await meldeMahnungVerlauf(m.id, {
+    art: 'mahnung_uebergeben', kanal: 'mailprogramm', empfaenger: m.kunde_email, betreff: vorlage.betreff,
+  })
 }
 
 /** Issue #582: Versand über Thunderbird (Einstellung „Thunderbird-Versand“, hat wie bei Rechnungen
@@ -130,6 +134,9 @@ async function mahnungThunderbird(
       ...await Promise.all(zusatz.map(async (a) => ({ url: await getMahnungZusatzanhangUrl(m.id, a.index), dateiname: a.dateiname }))),
     ]
     await sendeUeberThunderbird({ an: m.kunde_email, betreff: vorlage.betreff, text: vorlage.text, anhaenge })
+    await meldeMahnungVerlauf(m.id, {
+      art: 'mahnung_uebergeben', kanal: 'thunderbird', empfaenger: m.kunde_email, betreff: vorlage.betreff,
+    })
     qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
     qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
     qc.invalidateQueries({ queryKey: ['rechnungen'] })

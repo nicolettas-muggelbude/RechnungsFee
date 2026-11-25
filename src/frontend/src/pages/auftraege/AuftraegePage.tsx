@@ -8,7 +8,7 @@ import {
   getAuftraege, getRechnung, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   auftragErstellen, updateRechnung, deleteRechnung,
   rechnungAusAuftrag, lieferscheinAusAuftrag, proformaAusAuftrag, auftragStatusSetzen,
-  getApiBase, openUrl, isTauri, openInPdfWindow, oeffnePaketVorschau,
+  getApiBase, openUrl, isTauri, openInPdfWindow, oeffnePaketVorschau, meldeVerlauf,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -732,6 +732,8 @@ function AuftragDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, auftrag)
+      // Issue #596: Ausgabe im Dokumentverlauf festhalten
+      if (!auftrag.ist_entwurf) void meldeVerlauf(auftrag.id, { art: 'pdf', kanal: 'druck', kopie: auftrag.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, `Auftrag ${auftrag.rechnungsnummer ?? ''}`)
       } else {
@@ -745,6 +747,7 @@ function AuftragDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, auftrag)
+      if (!auftrag.ist_entwurf) void meldeVerlauf(auftrag.id, { art: 'gedruckt', kanal: 'druck', kopie: auftrag.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, 'Auftrag drucken')
       } else {
@@ -779,6 +782,9 @@ function AuftragDetail({
             ...(await paketAnhaenge(auftrag.dokumentenpaket_id)),
           ],
         })
+        await meldeVerlauf(auftrag.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: auftrag.ausgegeben, empfaenger: auftrag.kunde_email ?? undefined, betreff,
+        })
       } catch (e) {
         if (e instanceof ThunderbirdNichtGefundenError) {
           setThunderbirdFehlerDetails(e.details)
@@ -807,6 +813,9 @@ function AuftragDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(auftrag.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: auftrag.ausgegeben, empfaenger: undefined, betreff,
+    })
     setZeigSmtpHinweis(true)
     // Issue #477: fehlt ein Paket, bleibt der Hinweis stehen bis er weggeklickt wird
     if (!auftrag.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)

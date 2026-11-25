@@ -337,6 +337,10 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
         .count()
     )
 
+    # Issue #596: Mailadressen/Betreffe im Dokumentverlauf entfernen
+    from utils.dokument_verlauf import anonymisiere as _verlauf_anonymisieren
+    _verlauf_anonymisieren(db, kunde_id=kunde_id)
+
     # Rechnungen: kunde_id entfernen, Name als partner_freitext sichern
     rechnungen = db.query(Rechnung).filter(Rechnung.kunde_id == kunde_id).all()
     for r in rechnungen:

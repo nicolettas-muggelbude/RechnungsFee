@@ -1309,6 +1309,41 @@ export async function downloadPdfForMail(rechnungId: number): Promise<void> {
   await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'rechnung.pdf')
 }
 
+// --- Dokumentverlauf (Issue #596) ---
+export type VerlaufArt =
+  | 'ausgegeben' | 'gedruckt' | 'pdf' | 'mail_gesendet' | 'mail_uebergeben'
+  | 'mahnung_gesendet' | 'mahnung_uebergeben' | 'mahnung_gedruckt'
+export type VerlaufKanal = 'druck' | 'smtp' | 'thunderbird' | 'mailprogramm' | 'unbekannt'
+export type VerlaufEintrag = {
+  id: number
+  zeitpunkt: string
+  art: VerlaufArt
+  kanal: VerlaufKanal
+  kopie: boolean
+  empfaenger: string | null
+  betreff: string | null
+  rechnung_id: number | null
+  mahnung_id: number | null
+  rechnungsnummer?: string | null
+  dokument_typ?: string | null
+  mahnnummer?: string | null
+}
+type VerlaufMeldung = { art: VerlaufArt; kanal: VerlaufKanal; kopie?: boolean; empfaenger?: string; betreff?: string }
+/** Druck/PDF und Übergabe an Thunderbird/Mailprogramm melden (SMTP protokolliert das Backend
+ *  selbst). Fehler werden verschluckt – der Verlauf darf Drucken/Mailen nie blockieren. */
+export async function meldeVerlauf(rechnungId: number, m: VerlaufMeldung): Promise<void> {
+  try {
+    await request(`/verlauf/rechnung/${rechnungId}`, { method: 'POST', body: JSON.stringify(m) })
+  } catch { /* nur Verlauf */ }
+}
+export async function meldeMahnungVerlauf(mahnungId: number, m: VerlaufMeldung): Promise<void> {
+  try {
+    await request(`/verlauf/mahnung/${mahnungId}`, { method: 'POST', body: JSON.stringify(m) })
+  } catch { /* nur Verlauf */ }
+}
+export const getPartnerVerlauf = (art: 'kunde' | 'lieferant', id: number) =>
+  request<VerlaufEintrag[]>(`/verlauf/${art}/${id}`)
+
 // --- Nummernkreise ---
 export type Nummernkreis = {
   id: number
@@ -1603,6 +1638,9 @@ export type Rechnung = {
   ist_entwurf: boolean
   ausgegeben: boolean
   ausgegeben_am: string | null
+  // Issue #596: Druck-/Versandverlauf
+  verlauf?: VerlaufEintrag[]
+  letzter_versand?: VerlaufEintrag | null
   immutable: boolean
   storniert: boolean
   storno_grund: string | null

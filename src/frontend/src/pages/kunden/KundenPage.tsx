@@ -3,6 +3,7 @@ import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
+import { PartnerVerlauf } from '../../components/DokumentVerlauf'
 import { leitwegIdFehler } from '../../utils/leitwegId'
 import { DateInput } from '../../components/DateInput'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
@@ -675,7 +676,7 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
 function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'kontokorrent' }) {
   const navigate = useNavigate()
   const [offeneRechnung, setOffeneRechnung] = useState<number | null>(null)
-  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent'>(initialTab ?? 'rechnungen')
+  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent' | 'verlauf'>(initialTab ?? 'rechnungen')
   const [debitorEdit, setDebitorEdit] = useState(false)
   const [debitorNr, setDebitorNr] = useState(kunde.debitor_nr ?? '')
   const qcKontokorrent = useQueryClient()
@@ -726,9 +727,14 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
             className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'kontokorrent' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
             Kontokorrent
           </button>
+          {/* Issue #596: was wann gedruckt, gemailt oder gemahnt wurde */}
+          <button onClick={() => setTab('verlauf')}
+            className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'verlauf' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            Verlauf
+          </button>
         </div>
         {/* Aktions-Buttons – nur bei Rechnungen/Angebote-Tab */}
-        {tab !== 'dokumente' && tab !== 'kontokorrent' && (
+        {tab !== 'dokumente' && tab !== 'kontokorrent' && tab !== 'verlauf' && (
           <div className="flex flex-wrap gap-1">
             <button
               onClick={() => navigate(`/rechnungen?neue_aus_kunde=${kunde.id}`)}
@@ -767,7 +773,9 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
         )}
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        {tab === 'kontokorrent' ? (
+        {tab === 'verlauf' ? (
+          <PartnerVerlauf art="kunde" id={kunde.id!} />
+        ) : tab === 'kontokorrent' ? (
           <KundeKontokorrent kunde={kunde} debitorNr={debitorNr} setDebitorNr={setDebitorNr} debitorEdit={debitorEdit} setDebitorEdit={setDebitorEdit} qc={qcKontokorrent} />
         ) : tab === 'dokumente' ? (
           <KundeDokumente kundeId={kunde.id!} />

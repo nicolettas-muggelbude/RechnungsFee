@@ -370,7 +370,10 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
 
     from api.rechnungen import XRECHNUNG_DOKUMENTTYPEN, vermerke_xrechnung_original, xrechnung_xml_fuer
     frisches_xml: Optional[str] = None
+    war_ausgegeben = False   # Issue #596: Kopie oder Original im Verlauf
     if req.rechnung_id:
+        _vorher = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        war_ausgegeben = bool(_vorher and (_vorher.ausgegeben or _vorher.original_pdf_pfad))
         pdf_bytes, dateiname, frisches_original = _pdf_bytes_fuer(req.rechnung_id, db)
         # Issue #530: an öffentliche Auftraggeber geht die XRechnung-XML (das Original) zuerst mit
         r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
@@ -428,6 +431,19 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
         vermerke_xrechnung_original(r, frisches_xml)
         db.commit()
+
+    # Issue #596: Versand im Dokumentverlauf festhalten (nur hier steht fest, dass er klappte)
+    from utils.dokument_verlauf import protokolliere, protokolliere_mahnung
+    an = ", ".join(e for e in empfaenger if e)
+    if req.rechnung_id:
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        if r:
+            protokolliere(db, art="mail_gesendet", kanal="smtp", rechnung=r,
+                          kopie=war_ausgegeben, empfaenger=an, betreff=req.betreff)
+    if req.mahnung_id:
+        protokolliere_mahnung(db, mahnung, art="mahnung_gesendet", kanal="smtp",
+                              empfaenger=an, betreff=req.betreff)
+    db.commit()
 
     return {"ok": True}
 

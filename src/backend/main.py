@@ -35,9 +35,9 @@ logging.root.setLevel(logging.INFO)
 logging.root.addHandler(_log_handler)
 # ─────────────────────────────────────────────────────────────────────────────
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
-from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import
+from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 199
+SCHEMA_VERSION = 200
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -134,6 +134,7 @@ app.include_router(cockpit.router)
 app.include_router(datenmigration.router)
 app.include_router(mahnwesen.router)
 app.include_router(rechnungen_import.router)
+app.include_router(verlauf.router)
 
 
 @app.post("/api/shutdown")
@@ -4609,6 +4610,37 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 199"))
             conn.commit()
             print("[Migration] Schema auf Version 199 (Issue #594: Leistungsdatum je Position)")
+
+    if version < 200:
+        with engine.connect() as conn:
+            # Issue #596: Tabelle dokument_verlauf legt normalerweise create_all() an – hier zusätzlich
+            # (checkfirst), damit der Block auch auf Teil-Schemata läuft. Für den Altbestand wird kein
+            # Verlauf erfunden – nur je ausgegebenem Dokument ein Eintrag „ausgegeben“ zum bekannten
+            # Zeitpunkt der ersten Ausgabe (Weg unbekannt) und je versendeter Mahnung einer je
+            # gemahnter Rechnung.
+            from database.models import DokumentVerlauf
+            DokumentVerlauf.__table__.create(conn, checkfirst=True)
+            _tab200 = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+            _r200 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if {"ausgegeben_am", "ist_entwurf", "kunde_id", "lieferant_id"} <= _r200:
+                conn.execute(text("""
+                    INSERT INTO dokument_verlauf (zeitpunkt, rechnung_id, kunde_id, lieferant_id, art, kanal, kopie)
+                    SELECT r.ausgegeben_am, r.id, r.kunde_id, r.lieferant_id, 'ausgegeben', 'unbekannt', 0
+                    FROM rechnungen r
+                    WHERE r.ausgegeben_am IS NOT NULL AND r.ist_entwurf = 0
+                      AND NOT EXISTS (SELECT 1 FROM dokument_verlauf v WHERE v.rechnung_id = r.id)
+                """))
+            if {"mahnungen", "mahnungen_rechnungen"} <= _tab200:
+                conn.execute(text("""
+                    INSERT INTO dokument_verlauf (zeitpunkt, rechnung_id, mahnung_id, kunde_id, art, kanal, kopie)
+                    SELECT m.versendet_am, mr.rechnung_id, m.id, m.kunde_id, 'mahnung_gesendet', 'unbekannt', 0
+                    FROM mahnungen m JOIN mahnungen_rechnungen mr ON mr.mahnung_id = m.id
+                    WHERE m.status IN ('versendet', 'storniert') AND m.versendet_am IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM dokument_verlauf v WHERE v.mahnung_id = m.id)
+                """))
+            conn.execute(text("PRAGMA user_version = 200"))
+            conn.commit()
+            print("[Migration] Schema auf Version 200 (Issue #596: Dokumentverlauf)")
 
 
 def _migrate_kategorien() -> None:

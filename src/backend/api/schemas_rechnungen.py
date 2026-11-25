@@ -332,6 +332,25 @@ class ZahlungKompakt(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class VerlaufEintrag(BaseModel):
+    """Issue #596: ein Ereignis im Dokumentverlauf (utils/dokument_verlauf.py)."""
+    id: int
+    zeitpunkt: datetime
+    art: str
+    kanal: str
+    kopie: bool = False
+    empfaenger: Optional[str] = None
+    betreff: Optional[str] = None
+    rechnung_id: Optional[int] = None
+    mahnung_id: Optional[int] = None
+    # nur im Partner-Verlauf (Kunden-/Lieferantenstamm) gefüllt
+    rechnungsnummer: Optional[str] = None
+    dokument_typ: Optional[str] = None
+    mahnnummer: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class RechnungResponse(BaseModel):
     id: int
     typ: str
@@ -385,6 +404,9 @@ class RechnungResponse(BaseModel):
     steuerfrei_4: bool = False  # Issue #492
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
+    # Issue #596: Druck-/Versandverlauf und letzter Versand (Spalte „Versand“ in der Liste)
+    verlauf: List[VerlaufEintrag] = []
+    letzter_versand: Optional[VerlaufEintrag] = None
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
     # Wie zahlungen, aber dokumentuebergreifend: bezieht bei einer Ersatzrechnungs-Kette
@@ -782,6 +804,10 @@ class RechnungResponse(BaseModel):
                             data.herkunft_proforma_nr = eltern_prf.rechnungsnummer
             except Exception:
                 pass
+        # Issue #596
+        from utils.dokument_verlauf import VERSAND_ARTEN
+        versand = [v for v in data.verlauf if v.art in VERSAND_ARTEN]
+        data.letzter_versand = versand[-1] if versand else None
         return data
 
 

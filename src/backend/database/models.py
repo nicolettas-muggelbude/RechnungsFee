@@ -505,6 +505,31 @@ class AenderungsProtokoll(Base):
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class DokumentVerlauf(Base):
+    """Issue #596: was wann mit einem Dokument passiert ist (gedruckt/PDF erzeugt, per SMTP
+    gesendet, an Thunderbird/Mailprogramm übergeben, Mahnung versendet). Nur Anhängen, nie
+    ändern. kunde_id/lieferant_id als Stand zum Zeitpunkt des Ereignisses, damit der Verlauf
+    im Kunden-/Lieferantenstamm auch Mahnungen (mehrere Rechnungen) zeigt. Bewusst ohne FK auf
+    kunden/lieferanten (Anonymisieren leert nur empfaenger/betreff, siehe utils/dokument_verlauf)."""
+    __tablename__ = "dokument_verlauf"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    zeitpunkt: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), index=True)
+    mahnung_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    kunde_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    lieferant_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    # gedruckt | pdf | mail_gesendet | mail_uebergeben | mahnung_gesendet | mahnung_uebergeben | ausgegeben
+    art: Mapped[str] = mapped_column(String(30), nullable=False)
+    # druck | smtp | thunderbird | mailprogramm | unbekannt
+    kanal: Mapped[str] = mapped_column(String(20), nullable=False, default="unbekannt")
+    kopie: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    empfaenger: Mapped[str | None] = mapped_column(String(500))
+    betreff: Mapped[str | None] = mapped_column(String(500))
+
+    rechnung: Mapped["Rechnung | None"] = relationship(back_populates="verlauf")
+
+
 # ---------------------------------------------------------------------------
 # Kunden & Lieferanten
 # ---------------------------------------------------------------------------
@@ -961,6 +986,11 @@ class Rechnung(Base):
     journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="rechnung")
     vorsteuer_ansprueche: Mapped[list["VorsteuerAnspruch"]] = relationship(back_populates="rechnung")
     zugferd_anhaenge: Mapped[list["RechnungZugferdAnhang"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan", order_by="RechnungZugferdAnhang.id")
+    # Issue #596: Druck/Versand-Verlauf; selectin = ein Query für die ganze Rechnungsliste
+    verlauf: Mapped[list["DokumentVerlauf"]] = relationship(
+        back_populates="rechnung", cascade="all, delete-orphan", lazy="selectin",
+        order_by="DokumentVerlauf.zeitpunkt",
+    )
 
 
 class Rechnungsposition(Base):

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PartnerVerlauf } from '../../components/DokumentVerlauf'
 import { useSearchParams } from 'react-router-dom'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
@@ -63,7 +64,7 @@ function formatDatum(iso: string): string {
 
 function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; initialTab?: 'kontokorrent' }) {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'details' | 'kontokorrent' | 'ausgaben'>(initialTab ?? 'details')
+  const [tab, setTab] = useState<'details' | 'kontokorrent' | 'ausgaben' | 'verlauf'>(initialTab ?? 'details')
   const [kreditorEdit, setKreditorEdit] = useState(false)
   const [kreditorNr, setKreditorNr] = useState(lieferant.kreditor_nr ?? '')
 
@@ -188,12 +189,18 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
             className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'ausgaben' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
             Ausgaben
           </button>
+          <button onClick={() => setTab('verlauf')}
+            className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'verlauf' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            Verlauf
+          </button>
         </div>
       </div>
 
       {/* Scrollbarer Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {tab === 'ausgaben' ? (
+        {tab === 'verlauf' ? (
+          <PartnerVerlauf art="lieferant" id={lieferant.id!} />
+        ) : tab === 'ausgaben' ? (
           <div className="space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Direkt gebuchte Ausgaben mit diesem Lieferanten (Journal, Split-Buchung, Buchungsvorlage).
