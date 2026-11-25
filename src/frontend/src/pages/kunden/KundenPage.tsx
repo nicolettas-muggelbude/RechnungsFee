@@ -886,7 +886,12 @@ const schema = z.object({
     if (!data.email?.trim()) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Pflichtfeld für öffentliche Auftraggeber (XRechnung)' })
   }
   if (!data.zugferd_aktiv && !data.oeffentlicher_auftraggeber) return
-  if (!data.firmenname?.trim()) ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Pflichtfeld für ZUGFeRD' })
+  // Freiberufler/Selbstständige als Kunden haben oft keinen Firmennamen - die E-Rechnung nimmt dann
+  // Vor- und Nachname als Käufername (zugferd.py::_kunde_name). Keine Steuernummer nötig: die des
+  // Käufers kommt in EN 16931 nicht vor, die USt-IdNr. nur bei §13b/ig. Lieferung.
+  if (!data.firmenname?.trim() && !(data.vorname?.trim() && data.nachname?.trim())) {
+    ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Für ZUGFeRD Firmenname oder Vor- und Nachname angeben' })
+  }
   if (!data.strasse?.trim()) ctx.addIssue({ code: 'custom', path: ['strasse'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.plz?.trim()) ctx.addIssue({ code: 'custom', path: ['plz'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.ort?.trim()) ctx.addIssue({ code: 'custom', path: ['ort'], message: 'Pflichtfeld für ZUGFeRD' })
@@ -989,7 +994,6 @@ export function KundenPage() {
   })
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
-  const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
   const watchLand = useWatch({ control, name: 'land' })
   const watchUstIdnrValidiert = useWatch({ control, name: 'ust_idnr_validiert' })
   const watchUstIdnrValidierungDatum = useWatch({ control, name: 'ust_idnr_validierung_datum' })
@@ -998,7 +1002,6 @@ export function KundenPage() {
   // Issue #530: Schalter nur sichtbar, wenn die Funktion an ist – oder der Kunde schon so markiert ist
   const zeigOeffentlich = !!unternehmenStamm?.oeffentliche_auftraggeber_aktiv || !!editKunde?.oeffentlicher_auftraggeber
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim()) || !!watchOeffentlich
-  const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim() && !watchOeffentlich)
   // Drittland: weder Deutschland noch EU-Mitglied (Issue #315) - dort gilt keine USt-IdNr.,
   // sondern je nach Land eine andere Steuer-/Unternehmens-ID
   const istDrittland = !!watchLand && watchLand !== 'DE' && !istEuLand(watchLand)
@@ -1502,11 +1505,6 @@ export function KundenPage() {
                       }
                     </span>
                   </label>
-                  {zugferdOhneUstId && (
-                    <p className="text-amber-600 dark:text-amber-400 text-xs mt-1 ml-6">
-                      Hinweis: Ohne USt-IdNr. oder Steuernummer ist das ZUGFeRD-XML steuerlich unvollständig.
-                    </p>
-                  )}
                 </div>
                 {zeigOeffentlich && (
                   <div className="col-span-2 space-y-2">
