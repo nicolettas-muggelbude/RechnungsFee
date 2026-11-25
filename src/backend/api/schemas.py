@@ -115,6 +115,10 @@ class UnternehmenBase(BaseModel):
     smtp_von_adresse: Optional[str] = None
     smtp_zertifikat_ignorieren: bool = False
     smtp_zertifikat_fingerprint: Optional[str] = None
+    # Issue #596: Kopie im Ordner „Gesendet“ per IMAP
+    gesendet_imap_aktiv: bool = False
+    gesendet_imap_host: Optional[str] = None
+    gesendet_imap_port: int = 993
     thunderbird_aktiv: bool = False
     postfach_aktiv: bool = False
     imap_host: Optional[str] = None
@@ -223,7 +227,14 @@ class UnternehmenBase(BaseModel):
             raise ValueError("Anzahl externer Backups muss zwischen 1 und 999 liegen")
         return v
 
-    @field_validator("smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user")
+    @field_validator("gesendet_imap_port")
+    @classmethod
+    def check_gesendet_imap_port(cls, v: int) -> int:
+        if not 1 <= v <= 65535:
+            raise ValueError("IMAP-Port muss zwischen 1 und 65535 liegen")
+        return v
+
+    @field_validator("smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user", "gesendet_imap_host")
     @classmethod
     def bereinige_mailzugang(cls, v: Optional[str]) -> Optional[str]:
         # Issue #537: unsichtbare Zeichen aus kopierten Zugangsdaten (sonst UnicodeEncodeError)

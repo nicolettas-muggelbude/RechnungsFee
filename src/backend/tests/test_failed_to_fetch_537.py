@@ -93,7 +93,10 @@ def test_unsichtbare_zeichen_entfernt():
 
 def test_schema_bereinigt_smtp_felder_aber_nicht_passwort():
     validator = UnternehmenBase.__pydantic_decorators__.field_validators["bereinige_mailzugang"]
-    assert set(validator.info.fields) == {"smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user"}
+    assert set(validator.info.fields) == {
+        "smtp_host", "smtp_user", "smtp_von_adresse", "imap_host", "imap_user",
+        "gesendet_imap_host",  # Issue #596
+    }
     assert UnternehmenBase.bereinige_mailzugang("info@firma.de ") == "info@firma.de"
 
 

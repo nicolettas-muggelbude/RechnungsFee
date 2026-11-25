@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 200
+SCHEMA_VERSION = 201
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4641,6 +4641,21 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 200"))
             conn.commit()
             print("[Migration] Schema auf Version 200 (Issue #596: Dokumentverlauf)")
+
+    if version < 201:
+        with engine.connect() as conn:
+            # Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“ (Opt-in)
+            _u201 = {r[1] for r in conn.execute(text("PRAGMA table_info(unternehmen)")).fetchall()}
+            for name, typ in [
+                ("gesendet_imap_aktiv", "BOOLEAN NOT NULL DEFAULT 0"),
+                ("gesendet_imap_host", "VARCHAR(200)"),
+                ("gesendet_imap_port", "INTEGER NOT NULL DEFAULT 993"),
+            ]:
+                if _u201 and name not in _u201:
+                    conn.execute(text(f"ALTER TABLE unternehmen ADD COLUMN {name} {typ}"))
+            conn.execute(text("PRAGMA user_version = 201"))
+            conn.commit()
+            print("[Migration] Schema auf Version 201 (Issue #596: Ablage im Ordner Gesendet)")
 
 
 def _migrate_kategorien() -> None:

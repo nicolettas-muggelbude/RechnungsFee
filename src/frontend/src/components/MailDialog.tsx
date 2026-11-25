@@ -73,6 +73,7 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [gesendet, setGesendet] = useState(false)
+  const [hinweis, setHinweis] = useState<string | null>(null)  // Issue #596: Ordner „Gesendet“
 
   async function senden() {
     if (!an.trim()) return
@@ -87,9 +88,10 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
         rechnung_id: dokument.id,
         dokumentenpaket_id: dokument.dokumentenpaket_id ?? undefined,
       }
-      await sendeMailMitAnhang(req)
+      const r = await sendeMailMitAnhang(req)
+      setHinweis(r?.hinweis ?? null)
       setGesendet(true)
-      setTimeout(onClose, 1500)
+      if (!r?.hinweis) setTimeout(onClose, 1500)
     } catch (e: any) {
       setFehler(e?.message ?? 'Unbekannter Fehler')
     } finally {
@@ -110,8 +112,9 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
         </div>
 
         {gesendet ? (
-          <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
-            ✓ Mail wurde gesendet
+          <div className="flex flex-col items-start gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
+            <span>✓ Mail wurde gesendet</span>
+            {hinweis && <span className="font-normal text-amber-700 dark:text-amber-300">{hinweis}</span>}
           </div>
         ) : (
           <>

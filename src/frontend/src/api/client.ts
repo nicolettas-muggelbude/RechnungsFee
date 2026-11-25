@@ -375,6 +375,10 @@ export type Unternehmen = {
   smtp_von_adresse?: string | null
   smtp_zertifikat_ignorieren?: boolean
   smtp_zertifikat_fingerprint?: string | null
+  // Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“
+  gesendet_imap_aktiv?: boolean
+  gesendet_imap_host?: string | null
+  gesendet_imap_port?: number
   thunderbird_aktiv?: boolean
   // Issue #451: Rechnungspostfach per IMAP
   postfach_aktiv?: boolean
@@ -2657,14 +2661,15 @@ export type MailSendenRequest = {
   dsgvo_lieferant_id?: number
 }
 
+// hinweis: Mail gesendet, aber Kopie im Ordner „Gesendet“ (IMAP) fehlgeschlagen (Issue #596)
 export const sendeMailMitAnhang = (data: MailSendenRequest) =>
-  request<{ ok: boolean }>('/mail/senden', {
+  request<{ ok: boolean; hinweis?: string | null }>('/mail/senden', {
     method: 'POST',
     body: JSON.stringify(data),
   })
 
 export const sendeTestMail = (an: string) =>
-  request<{ ok: boolean }>('/mail/test', {
+  request<{ ok: boolean; hinweis?: string | null }>('/mail/test', {
     method: 'POST',
     body: JSON.stringify({ an }),
   })

@@ -50,6 +50,7 @@ export function MahnungMailDialog({ mahnung, unternehmen, mahnstufen, onClose, o
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [gesendet, setGesendet] = useState(false)
+  const [hinweis, setHinweis] = useState<string | null>(null)  // Issue #596: Ordner „Gesendet“
 
   async function senden() {
     if (!an.trim()) return
@@ -63,10 +64,11 @@ export function MahnungMailDialog({ mahnung, unternehmen, mahnstufen, onClose, o
         text,
         mahnung_id: mahnung.id,
       }
-      await sendeMailMitAnhang(req)
+      const r = await sendeMailMitAnhang(req)
+      setHinweis(r?.hinweis ?? null)
       setGesendet(true)
       onGesendet?.()
-      setTimeout(onClose, 1500)
+      if (!r?.hinweis) setTimeout(onClose, 1500)
     } catch (e: any) {
       setFehler(e?.message ?? 'Unbekannter Fehler')
     } finally {
@@ -87,8 +89,9 @@ export function MahnungMailDialog({ mahnung, unternehmen, mahnstufen, onClose, o
         </div>
 
         {gesendet ? (
-          <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
-            ✓ Mail wurde gesendet
+          <div className="flex flex-col items-start gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
+            <span>✓ Mail wurde gesendet</span>
+            {hinweis && <span className="font-normal text-amber-700 dark:text-amber-300">{hinweis}</span>}
           </div>
         ) : (
           <>

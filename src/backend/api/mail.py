@@ -11,7 +11,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 from typing import Optional
 
 import markdown as md
@@ -179,6 +179,10 @@ def _build_message(
     if cc:
         msg["Cc"] = cc
     msg["Subject"] = betreff
+    # Issue #596: setzte bisher erst der SMTP-Server - die Kopie im Ordner „Gesendet“ (IMAP)
+    # braucht beides selbst, sonst zeigt das Mailprogramm dort kein Datum
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=von_adresse.rpartition("@")[2] or None)
 
     signatur_md = (u.mail_signatur or "").strip()
 
@@ -275,7 +279,10 @@ def _smtp_passwort(u: Unternehmen) -> str:
     return passwort
 
 
-def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
+def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> Optional[str]:
+    """Versand per SMTP; wirft bei Fehlern HTTPException. Rückgabe: Hinweis, falls die Kopie im
+    Ordner „Gesendet“ (IMAP, Issue #596) nicht abgelegt werden konnte – der Versand selbst hat
+    dann trotzdem geklappt."""
     port = u.smtp_port or 587
     host = bereinige_mailfeld(u.smtp_host) or ""
     user = bereinige_mailfeld(u.smtp_user) or ""
@@ -356,6 +363,13 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
     except OSError as e:
         raise HTTPException(400, f"Netzwerkfehler: {e}")
 
+    # Issue #596: Kopie im Ordner „Gesendet“ ablegen (Opt-in, IMAP mit den Zugangsdaten des
+    # Mailversands) - Fehler dabei brechen den bereits erfolgten Versand nie ab
+    if getattr(u, "gesendet_imap_aktiv", False):
+        from utils.gesendet_ablage import lege_gesendet_ab
+        return lege_gesendet_ab(u, msg.as_bytes(), user, passwort)
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Endpunkte
@@ -416,7 +430,7 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         empfaenger.append(req.cc)
 
     msg = _build_message(u, req.an, req.cc, req.betreff, req.text, attachments)
-    _sende(u, msg, empfaenger, db)
+    hinweis = _sende(u, msg, empfaenger, db)
 
     # Erst nach erfolgreichem Versand als ausgegeben markieren (Issue #410) - _sende() wirft bei
     # jedem Fehler eine HTTPException, der Code hier wird dann nicht erreicht.
@@ -445,7 +459,7 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
                               empfaenger=an, betreff=req.betreff)
     db.commit()
 
-    return {"ok": True}
+    return {"ok": True, "hinweis": hinweis}
 
 
 @router.post("/test")
@@ -457,5 +471,5 @@ def test_mail(req: TestMailRequest, db: Session = Depends(get_db)):
         "Diese Nachricht bestätigt, dass dein SMTP-Versand funktioniert.",
         [],
     )
-    _sende(u, msg, [req.an], db)
-    return {"ok": True}
+    hinweis = _sende(u, msg, [req.an], db)
+    return {"ok": True, "hinweis": hinweis}

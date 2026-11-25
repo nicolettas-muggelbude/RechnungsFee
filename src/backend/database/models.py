@@ -165,6 +165,11 @@ class Unternehmen(Base):
     # Trust-on-First-Use: SHA-256-Fingerabdruck des beim ersten Verbindungsaufbau akzeptierten
     # Zertifikats (nur relevant/gesetzt wenn smtp_zertifikat_ignorieren aktiv ist, Issue #336)
     smtp_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    # Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“ ablegen (Opt-in; Benutzer
+    # und Passwort vom Mailversand, nur Server/Port eigen) - utils/gesendet_ablage.py
+    gesendet_imap_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    gesendet_imap_host: Mapped[str | None] = mapped_column(String(200))
+    gesendet_imap_port: Mapped[int] = mapped_column(Integer, default=993, server_default="993", nullable=False)
     # Thunderbird als Mailversand-Option (Issue #147): hat Vorrang vor smtp_aktiv, wenn gesetzt -
     # RechnungsFee übergibt Empfänger/Betreff/Text/Anhang an ein Thunderbird-Compose-Fenster,
     # Versand (inkl. Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird
