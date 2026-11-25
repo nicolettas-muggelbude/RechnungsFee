@@ -84,7 +84,7 @@ class RechnungPDF(RechnungPDFBase):
         # damit die Tabelle und der Summenblock unverändert bündig bleiben
         # Issue #594: Spalte "Datum" danach, ebenfalls von der Beschreibung
         mit_pos, mit_datum = pos_datum_spalten(self._unt, vorlage1=False)
-        POS_W, DATUM_W = 9, 17
+        POS_W, DATUM_W = 9, 20  # 20 mm: Datum plus Abstand zur Beschreibung
         if mit_datum:
             col_w[int(hat_artikelcode)] -= DATUM_W
             col_w   = [DATUM_W] + col_w
