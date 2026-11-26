@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 201
+SCHEMA_VERSION = 202
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4656,6 +4656,18 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 201"))
             conn.commit()
             print("[Migration] Schema auf Version 201 (Issue #596: Ablage im Ordner Gesendet)")
+
+    if version < 202:
+        with engine.connect() as conn:
+            # Issue #597: Abschlagsrechnung aus Angebot/Auftrag – Verknüpfung auf der Abschlagsrechnung
+            _r202 = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)")).fetchall()}
+            if _r202 and "abschlag_zu_dokument_id" not in _r202:
+                conn.execute(text(
+                    "ALTER TABLE rechnungen ADD COLUMN abschlag_zu_dokument_id INTEGER REFERENCES rechnungen(id)"
+                ))
+            conn.execute(text("PRAGMA user_version = 202"))
+            conn.commit()
+            print("[Migration] Schema auf Version 202 (Issue #597: Abschlag aus Angebot/Auftrag)")
 
 
 def _migrate_kategorien() -> None:

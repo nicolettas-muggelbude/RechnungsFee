@@ -22,6 +22,7 @@ import type { RechnungVorschauRequest } from '../../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
+import { AbschlagErstellenKnopf, AbschlagListe } from '../../components/AbschlagAusDokument'
 import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
@@ -957,6 +958,15 @@ function AngebotDetail({
               → {angebot.rechnung_zu_angebot_nr ?? `RE #${angebot.rechnung_zu_angebot_id}`}
             </button>
           )}
+          {/* → Abschlagsrechnung (Issue #597); nach einem Auftrag laufen Abschläge über den Auftrag */}
+          {unternehmen?.abschlagsrechnungen_aktiv && !angebot.rechnung_zu_angebot_id && !angebot.auftrag_zu_angebot_id && (
+            <AbschlagErstellenKnopf
+              dokument={angebot}
+              className={btnGreen}
+              gesperrt={!!angebot.ist_entwurf || angebot.angebot_status === 'abgelehnt'}
+              gesperrtTitel={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : 'Angebot wurde abgelehnt'}
+            />
+          )}
           {unternehmen?.lieferschein_aktiv && (
             !angebot.lieferschein_zu_angebot_id ? (
               <button
@@ -1007,8 +1017,8 @@ function AngebotDetail({
           )}
           <button
             onClick={onDelete}
-            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id)}
-            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
+            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id || angebot.abschlaege?.length)}
+            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id || angebot.abschlaege?.length ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
             className={btnRed}
           >
             🗑 Löschen
@@ -1076,6 +1086,8 @@ function AngebotDetail({
             onClose={() => setZeigMailDialog(false)}
           />
         )}
+
+        <AbschlagListe dokument={angebot} />
 
         {/* Status-Umschalter */}
         {!angebot.rechnung_zu_angebot_id && (

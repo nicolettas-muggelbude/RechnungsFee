@@ -1702,6 +1702,11 @@ export type Rechnung = {
   herkunft_auftrag_nr: string | null
   herkunft_proforma_id: number | null
   herkunft_proforma_nr: string | null
+  // Issue #597: Abschlagsrechnung aus Angebot/Auftrag
+  abschlag_zu_dokument_id?: number | null
+  abschlag_zu_dokument_nr?: string | null
+  abschlag_zu_dokument_typ?: string | null
+  abschlaege?: AbschlagKompakt[]
   erstellt_am: string
   aktualisiert_am: string
   rabatt_prozent: string
@@ -1839,6 +1844,22 @@ export const auftragErstellen = (data: RechnungCreate) =>
 
 export const auftragAusAngebot = (angebotId: number) =>
   request<Rechnung>(`/rechnungen/${angebotId}/auftrag-aus-angebot`, { method: 'POST' })
+
+export interface AbschlagKompakt {
+  id: number
+  rechnungsnummer: string | null
+  datum: string
+  brutto_gesamt: string
+  bezahlt_betrag: string
+  zahlungsstatus: string | null
+  ist_entwurf: boolean
+  storniert: boolean
+  verrechnet_in_rechnung_id: number | null
+}
+
+/** Issue #597: Abschlagsrechnung (Entwurf) über Prozent oder Bruttobetrag eines Angebots/Auftrags */
+export const abschlagAusDokument = (dokId: number, daten: { prozent?: number; betrag?: number }) =>
+  request<Rechnung>(`/rechnungen/${dokId}/abschlag-aus-dokument`, { method: 'POST', body: JSON.stringify(daten) })
 
 export const rechnungAusAuftrag = (auftragId: number) =>
   request<Rechnung>(`/rechnungen/${auftragId}/rechnung-aus-auftrag`, { method: 'POST' })

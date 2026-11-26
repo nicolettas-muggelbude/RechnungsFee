@@ -2924,6 +2924,13 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         or rechnung.proforma_zu_auftrag_id
     ):
         raise HTTPException(status_code=409, detail="Auftrag kann nicht gelöscht werden, da bereits Dokumente daraus erstellt wurden.")
+    if (ist_angebot or ist_auftrag) and db.query(Rechnung.id).filter(
+        Rechnung.abschlag_zu_dokument_id == rechnung_id
+    ).first():
+        raise HTTPException(  # Issue #597
+            status_code=409,
+            detail=f"{rechnung.dokument_typ} kann nicht gelöscht werden, da bereits Abschlagsrechnungen daraus erstellt wurden.",
+        )
     # FK-Rückverweise zurücksetzen
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_rechnung_id == rechnung_id).update(
         {"lieferschein_zu_rechnung_id": None}
@@ -5483,6 +5490,212 @@ class AngebotStatusUpdate(BaseModel):
     status: str  # offen | akzeptiert | abgelehnt | abgelaufen
 
 
+# ---------------------------------------------------------------------------
+# Issue #597: Abschlagsrechnung aus Angebot/Auftrag, Abzug in der Schlussrechnung
+# ---------------------------------------------------------------------------
+
+def abschlaege_zu_dokument(db: Session, dok: "Rechnung") -> list["Rechnung"]:
+    """Abschlagsrechnungen eines Angebots oder Auftrags. Gehören Angebot und Auftrag zusammen
+    (Auftrag aus Angebot), zählen die Abschläge beider – es ist dasselbe Projekt."""
+    ids = {dok.id}
+    if dok.dokument_typ == "Auftrag":
+        angebot = db.query(Rechnung.id).filter(
+            Rechnung.auftrag_zu_angebot_id == dok.id, Rechnung.dokument_typ == "Angebot"
+        ).first()
+        if angebot:
+            ids.add(angebot[0])
+    elif dok.dokument_typ == "Angebot" and dok.auftrag_zu_angebot_id:
+        ids.add(dok.auftrag_zu_angebot_id)
+    return (
+        db.query(Rechnung)
+        .filter(Rechnung.abschlag_zu_dokument_id.in_(ids), Rechnung.dokument_typ == "Abschlagsrechnung")
+        .order_by(Rechnung.datum, Rechnung.id)
+        .all()
+    )
+
+
+def _neu_berechnen(rechnung: "Rechnung", db: Session) -> None:
+    """Positionswerte und Summen über die gemeinsame Berechnung (#332) neu setzen."""
+    unternehmen = db.query(Unternehmen).first()
+    ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
+    steuerfrei = bool(
+        rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung or rechnung.ist_drittland_leistung
+        or rechnung.ist_ausfuhrlieferung or rechnung.steuerfrei_4
+    )
+    positionen = sorted(rechnung.positionen, key=lambda p: p.position_nr or 0)
+    summen = _berechne_rechnung(
+        positionen, rechnung.eingabemodus or "netto", rechnung.rabatt_prozent or Decimal("0"),
+        rechnung.rabatt_betrag, ist_ku, steuerfrei,
+    )
+    for pos, erg in zip(positionen, summen.positionen):
+        pos.ust_satz, pos.ust_betrag, pos.brutto = erg.ust_satz, erg.ust_betrag, erg.brutto
+    rechnung.netto_gesamt = summen.netto_gesamt
+    rechnung.ust_gesamt = summen.ust_gesamt
+    rechnung.brutto_gesamt = summen.brutto_gesamt
+
+
+def _abschlaege_abziehen(db: Session, dok: "Rechnung", rechnung: "Rechnung") -> None:
+    """Schlussrechnung aus Angebot/Auftrag: bezahlte Abschläge dieses Projekts als Abzug
+    eintragen – wie die Auswahl im Formular (#419), Abzug = tatsächlich gezahlter Betrag je
+    USt-Satz. Unbezahlte bleiben außen vor und stehen weiter in der Auswahl im Formular."""
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    offene = [
+        a for a in abschlaege_zu_dokument(db, dok)
+        if not a.storniert and not a.ist_entwurf and not a.verrechnet_in_rechnung_id
+    ]
+    if not offene:
+        return
+    nr = max((p.position_nr or 0 for p in rechnung.positionen), default=0)
+    hinzu = False
+    for a in offene:
+        je_satz = _bezahlte_betraege_je_satz(db, a)
+        einheit = a.positionen[0].einheit if a.positionen else "pauschal"
+        for satz, brutto in je_satz:
+            netto = brutto if (rechnung.eingabemodus == "brutto" or not satz) else (
+                brutto * 100 / (100 + satz)).quantize(_Q4, ROUND_HALF_UP)
+            nr += 1
+            db.add(Rechnungsposition(
+                rechnung_id=rechnung.id, position_nr=nr,
+                beschreibung=f"Abzgl. Abschlagsrechnung {a.rechnungsnummer} vom {a.datum.strftime('%d.%m.%Y')}",
+                menge=Decimal("-1"), einheit=einheit, netto=netto, rabatt_prozent=Decimal("0"),
+                ust_satz=satz, ust_betrag=Decimal("0"), brutto=Decimal("0"),
+                abschlag_rechnung_id=a.id,
+            ))
+            hinzu = True
+    if not hinzu:
+        return
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    _neu_berechnen(rechnung, db)
+    _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
+
+
+class AbschlagAusDokumentRequest(BaseModel):
+    prozent: Optional[Decimal] = None   # Anteil am Dokumentbetrag
+    betrag: Optional[Decimal] = None    # Bruttobetrag
+
+
+def _zahl_text(wert: Decimal) -> str:
+    text = f"{wert.normalize():f}"
+    return text.replace(".", ",")
+
+
+@router.post("/{dok_id}/abschlag-aus-dokument", response_model=RechnungResponse, status_code=201)
+def abschlag_aus_dokument(dok_id: int, data: AbschlagAusDokumentRequest, db: Session = Depends(get_db)):
+    """Issue #597: Abschlagsrechnung (Entwurf) über einen Anteil eines Angebots oder Auftrags.
+    Je USt-Satz des Dokuments eine anteilige Position; Rechnungsrabatt ist eingerechnet."""
+    dok = db.query(Rechnung).filter(
+        Rechnung.id == dok_id, Rechnung.dokument_typ.in_(["Angebot", "Auftrag"])
+    ).first()
+    if not dok:
+        raise HTTPException(status_code=404, detail="Angebot oder Auftrag nicht gefunden.")
+    unternehmen = db.query(Unternehmen).first()
+    if not (unternehmen and unternehmen.abschlagsrechnungen_aktiv):
+        raise HTTPException(
+            status_code=409,
+            detail="Abschlagsrechnungen sind nicht eingeschaltet (Einstellungen → Unternehmen → Funktionen).",
+        )
+    art = dok.dokument_typ
+    if dok.storniert or (art == "Auftrag" and dok.auftrag_status in ("storniert", "abgeschlossen")):
+        raise HTTPException(status_code=409, detail=f"Für diesen {art} lässt sich keine Abschlagsrechnung mehr erstellen.")
+    if dok.rechnung_zu_auftrag_id or dok.rechnung_zu_angebot_id:
+        raise HTTPException(status_code=409, detail=f"Aus diesem {art} wurde bereits die Rechnung erstellt.")
+    if (data.prozent is None) == (data.betrag is None):
+        raise HTTPException(status_code=422, detail="Bitte entweder einen Prozentsatz oder einen Betrag angeben.")
+    if data.prozent is not None and not (Decimal("0") < data.prozent <= Decimal("100")):
+        raise HTTPException(status_code=422, detail="Der Prozentsatz muss zwischen 0 und 100 liegen.")
+    if data.betrag is not None and data.betrag <= 0:
+        raise HTTPException(status_code=422, detail="Der Betrag muss größer als 0 sein.")
+    gesamt_brutto = dok.brutto_gesamt or Decimal("0")
+    if gesamt_brutto <= 0 or not dok.positionen:
+        raise HTTPException(status_code=409, detail=f"Der {art} hat keinen Betrag.")
+
+    anteil = data.prozent / 100 if data.prozent is not None else data.betrag / gesamt_brutto
+    ziel_brutto = (gesamt_brutto * anteil).quantize(_Q2, ROUND_HALF_UP) if data.prozent is not None else data.betrag
+    bisher = sum(
+        (a.brutto_gesamt or Decimal("0")) for a in abschlaege_zu_dokument(db, dok) if not a.storniert
+    )
+    if ziel_brutto > gesamt_brutto - bisher + Decimal("0.01"):
+        def _euro(v: Decimal) -> str:
+            return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Der Abschlag ({_euro(ziel_brutto)}) übersteigt den noch nicht abgerechneten Betrag "
+                f"({_euro(max(gesamt_brutto - bisher, Decimal('0')))})."
+            ),
+        )
+
+    # Anteile je USt-Satz – in der Eingaberichtung des Dokuments, damit die Summe exakt bleibt
+    brutto_modus = (dok.eingabemodus or "netto") == "brutto"
+    je_satz: dict[Decimal, Decimal] = {}
+    for p in dok.positionen:
+        if p.abschlag_rechnung_id:
+            continue
+        wert = (p.brutto or Decimal("0")) if brutto_modus else (p.brutto or Decimal("0")) - (p.ust_betrag or Decimal("0"))
+        satz = p.ust_satz or Decimal("0")
+        je_satz[satz] = je_satz.get(satz, Decimal("0")) + wert
+    summe = sum(je_satz.values())
+    if summe <= 0:
+        raise HTTPException(status_code=409, detail=f"Der {art} hat keinen Betrag.")
+    gesamt_basis = gesamt_brutto if brutto_modus else (dok.netto_gesamt or Decimal("0"))
+    ziel_basis = (gesamt_basis * anteil).quantize(_Q2, ROUND_HALF_UP)
+    saetze = sorted(je_satz, key=lambda s: je_satz[s], reverse=True)
+    werte: dict[Decimal, Decimal] = {}
+    for s in saetze[1:]:
+        werte[s] = (ziel_basis * je_satz[s] / summe).quantize(_Q2, ROUND_HALF_UP)
+    werte[saetze[0]] = ziel_basis - sum(werte.values())  # Rest auf den größten Satz
+
+    nr_text = dok.rechnungsnummer or f"vom {dok.datum.strftime('%d.%m.%Y')}"
+    titel = (
+        f"Abschlag {_zahl_text(data.prozent)} % auf {art} {nr_text}" if data.prozent is not None
+        else f"Abschlag auf {art} {nr_text}"
+    )
+    heute = date.today()
+    zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
+    abschlag = Rechnung(
+        typ="ausgang", rechnungsnummer=None, datum=heute,
+        faellig_am=heute + timedelta(days=int(zahlungsziel)),
+        leistung_von=dok.leistung_von, leistung_bis=dok.leistung_bis,
+        kunde_id=dok.kunde_id, partner_freitext=dok.partner_freitext,
+        partner_strasse=dok.partner_strasse, partner_hausnummer=dok.partner_hausnummer,
+        partner_plz=dok.partner_plz, partner_ort=dok.partner_ort, partner_land=dok.partner_land,
+        kunden_bestellnummer=dok.kunden_bestellnummer,
+        empfaenger_adresse_id=dok.empfaenger_adresse_id, lieferadresse_id=dok.lieferadresse_id,
+        bemerkung_erechnung=dok.bemerkung_erechnung,
+        ist_reverse_charge=dok.ist_reverse_charge, ist_eu_lieferung=dok.ist_eu_lieferung,
+        ist_drittland_leistung=dok.ist_drittland_leistung, ist_ausfuhrlieferung=dok.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(getattr(dok, "steuerfrei_4", False)),
+        ist_entwurf=True, dokument_typ="Abschlagsrechnung",
+        bezahlt=False, bezahlt_betrag=Decimal("0.00"), zahlungsstatus="offen",
+        eingabemodus=dok.eingabemodus or "netto",
+        rabatt_prozent=Decimal("0"), rabatt_betrag=None,
+        netto_gesamt=Decimal("0.00"), ust_gesamt=Decimal("0.00"), brutto_gesamt=Decimal("0.00"),
+        abschlag_zu_dokument_id=dok.id,
+    )
+    abschlag.skonto_prozent, abschlag.skonto_tage = dok.skonto_prozent, dok.skonto_tage
+    _setze_skonto_vorgabe(abschlag, db)
+    db.add(abschlag)
+    db.flush()
+    for i, s in enumerate(saetze, start=1):
+        if not werte[s]:
+            continue
+        db.add(Rechnungsposition(
+            rechnung_id=abschlag.id, position_nr=i,
+            beschreibung=titel if len(saetze) == 1 else f"{titel} – Anteil {_zahl_text(s)} % USt",
+            menge=Decimal("1"), einheit="pauschal", netto=werte[s], rabatt_prozent=Decimal("0"),
+            ust_satz=s, ust_betrag=Decimal("0"), brutto=Decimal("0"),
+        ))
+    db.flush()
+    db.expire(abschlag, ["positionen"])
+    _neu_berechnen(abschlag, db)
+    abschlag.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+    db.refresh(abschlag)
+    return RechnungResponse.from_orm_extended(abschlag)
+
+
 @router.post("/{angebot_id}/rechnung-aus-angebot", response_model=RechnungResponse, status_code=201)
 def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     """Konvertiert ein Angebot in eine Ausgangsrechnung (Positionen werden übernommen)."""
@@ -5537,6 +5750,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(angebot, rechnung, db)
+    _abschlaege_abziehen(db, angebot, rechnung)  # Issue #597
 
     angebot.rechnung_zu_angebot_id = rechnung.id
     angebot.angebot_status = "akzeptiert"
@@ -5942,6 +6156,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(auftrag, rechnung, db)
+    _abschlaege_abziehen(db, auftrag, rechnung)  # Issue #597
     auftrag.rechnung_zu_auftrag_id = rechnung.id
     if auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
         auftrag.auftrag_status = "in_bearbeitung"

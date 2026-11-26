@@ -351,6 +351,19 @@ class VerlaufEintrag(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AbschlagKompakt(BaseModel):
+    """Issue #597: Abschlagsrechnung zu einem Angebot/Auftrag (Detailansicht)."""
+    id: int
+    rechnungsnummer: Optional[str] = None
+    datum: date
+    brutto_gesamt: Decimal
+    bezahlt_betrag: Decimal = Decimal("0")
+    zahlungsstatus: Optional[str] = None
+    ist_entwurf: bool = False
+    storniert: bool = False
+    verrechnet_in_rechnung_id: Optional[int] = None
+
+
 class RechnungResponse(BaseModel):
     id: int
     typ: str
@@ -477,6 +490,11 @@ class RechnungResponse(BaseModel):
     herkunft_auftrag_nr: Optional[str] = None
     herkunft_proforma_id: Optional[int] = None
     herkunft_proforma_nr: Optional[str] = None
+    # Issue #597: Abschlagsrechnung aus Angebot/Auftrag
+    abschlag_zu_dokument_id: Optional[int] = None   # auf Abschlagsrechnung: Herkunft
+    abschlag_zu_dokument_nr: Optional[str] = None   # wird in from_orm_extended befüllt
+    abschlag_zu_dokument_typ: Optional[str] = None  # wird in from_orm_extended befüllt
+    abschlaege: List[AbschlagKompakt] = []           # auf Angebot/Auftrag, wird in from_orm_extended befüllt
     erstellt_am: datetime
     aktualisiert_am: datetime
 
@@ -804,6 +822,23 @@ class RechnungResponse(BaseModel):
                             data.herkunft_proforma_nr = eltern_prf.rechnungsnummer
             except Exception:
                 pass
+        # Issue #597: Abschlagsrechnungen zu Angebot/Auftrag und Herkunft einer Abschlagsrechnung
+        try:
+            from sqlalchemy import inspect as _sa_inspect
+            session = _sa_inspect(obj).session
+            if session is not None:
+                _dt = getattr(obj, "dokument_typ", None)
+                if _dt in ("Angebot", "Auftrag"):
+                    from api.rechnungen import abschlaege_zu_dokument
+                    data.abschlaege = [AbschlagKompakt.model_validate(a, from_attributes=True)
+                                       for a in abschlaege_zu_dokument(session, obj)]
+                elif _dt == "Abschlagsrechnung" and obj.abschlag_zu_dokument_id:
+                    _quelle = session.get(obj.__class__, obj.abschlag_zu_dokument_id)
+                    if _quelle:
+                        data.abschlag_zu_dokument_nr = _quelle.rechnungsnummer
+                        data.abschlag_zu_dokument_typ = _quelle.dokument_typ
+        except Exception:
+            pass
         # Issue #596
         from utils.dokument_verlauf import VERSAND_ARTEN
         versand = [v for v in data.verlauf if v.art in VERSAND_ARTEN]

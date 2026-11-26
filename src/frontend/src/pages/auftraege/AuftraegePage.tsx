@@ -22,6 +22,7 @@ import type { RechnungVorschauRequest } from '../../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
+import { AbschlagErstellenKnopf, AbschlagListe } from '../../components/AbschlagAusDokument'
 import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
@@ -970,6 +971,16 @@ function AuftragDetail({
             </button>
           )}
 
+          {/* → Abschlagsrechnung (Issue #597) */}
+          {unternehmen?.abschlagsrechnungen_aktiv && !auftrag.rechnung_zu_auftrag_id && (
+            <AbschlagErstellenKnopf
+              dokument={auftrag}
+              className={btnGreen}
+              gesperrt={!!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'abgeschlossen'}
+              gesperrtTitel={auftrag.ist_entwurf ? 'Erst finalisieren' : 'Auftrag ist abgeschlossen oder storniert'}
+            />
+          )}
+
           {/* → Lieferschein */}
           {unternehmen?.lieferschein_aktiv && (
             !auftrag.lieferschein_zu_auftrag_id ? (
@@ -1024,8 +1035,8 @@ function AuftragDetail({
             </button>
           )}
 
-          <button onClick={onDelete} disabled={hatBezug}
-            title={hatBezug ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt' : undefined}
+          <button onClick={onDelete} disabled={hatBezug || (auftrag.abschlaege?.length ?? 0) > 0}
+            title={hatBezug || (auftrag.abschlaege?.length ?? 0) > 0 ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt' : undefined}
             className={btnRed}>🗑️ Löschen</button>
         </div>
 
@@ -1039,6 +1050,8 @@ function AuftragDetail({
             </button>
           </div>
         )}
+
+        <AbschlagListe dokument={auftrag} />
 
         {/* Status */}
         <div>

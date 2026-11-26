@@ -974,6 +974,9 @@ class Rechnung(Base):
     # verrechnet wurde - bewusst umgekehrte Richtung zum sonst ueblichen Muster oben, weil hier
     # die Quelle zeitlich zuerst entsteht statt aus dem Ziel abgeleitet zu werden.
     verrechnet_in_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+    # Issue #597: auf der Abschlagsrechnung, aus welchem Angebot/Auftrag sie erstellt wurde
+    # (mehrere Abschläge je Dokument möglich, daher auf der Abschlagsrechnung statt am Dokument)
+    abschlag_zu_dokument_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
 
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

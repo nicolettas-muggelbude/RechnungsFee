@@ -6278,6 +6278,11 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
                             aus {r.herkunft_auftrag_nr ?? r.herkunft_proforma_nr}
                           </span>
                         )}
+                        {r.dokument_typ === 'Abschlagsrechnung' && r.abschlag_zu_dokument_nr && (
+                          <span className="ml-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1">
+                            aus {r.abschlag_zu_dokument_nr}
+                          </span>
+                        )}
                         {r.ist_entwurf && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1">Entwurf</span>}
                         {r.storniert && <span className="ml-1.5 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1">Storniert</span>}
                         {r.rechnungs_kette.length > 1 && (
