@@ -2904,6 +2904,87 @@ def rechnung_als_xrechnung(rechnung_id: int, db: Session = Depends(get_db)):
     )
 
 
+# ---------------------------------------------------------------------------
+# Issue #598: lesbare Ansicht von E-Rechnungen (XRechnung/ZUGFeRD-XML als PDF)
+# ---------------------------------------------------------------------------
+
+def einvoice_ansicht_antwort(daten: bytes, dateiname: str, quelle: str = "") -> Response:
+    """PDF der lesbaren Ansicht – inline (openUrl → Anzeigefenster, CLAUDE.md)."""
+    from utils.einvoice_ansicht import KeineEInvoice, ansicht_pdf
+    try:
+        pdf = ansicht_pdf(daten, quelle)
+    except KeineEInvoice as e:
+        raise HTTPException(422, str(e))
+    name = re.sub(r"[^\w.\-]+", "_", dateiname) or "E-Rechnung"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{name}_Ansicht.pdf"', "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/{rechnung_id}/xrechnung/ansicht")
+def eigene_einvoice_ansicht(rechnung_id: int, db: Session = Depends(get_db)):
+    """Eigene Ausgangsrechnung: was steht in der E-Rechnung? Vorrang hat, was tatsächlich
+    verschickt wurde (archivierte XRechnung, sonst die XML im Original-PDF); sonst der aktuelle
+    Stand, ohne etwas zu archivieren."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.typ != "ausgang" or rechnung.import_quelle:
+        raise HTTPException(400, "Die Ansicht gibt es nur für in RechnungsFee erstellte Ausgangsrechnungen.")
+    nr = rechnung.rechnungsnummer or f"Entwurf_{rechnung.id}"
+    for rel, quelle in ((rechnung.original_xml_pfad, "archivierte XRechnung (so versendet)"),
+                        (rechnung.original_pdf_pfad, "aus dem versendeten PDF")):
+        if rel and (APP_DATA_DIR / rel).is_file():
+            daten = (APP_DATA_DIR / rel).read_bytes()
+            if daten[:4] == b"%PDF":
+                try:
+                    return einvoice_ansicht_antwort(daten, nr, quelle)
+                except HTTPException:
+                    continue  # PDF ohne eingebettete XML (z. B. vor ZUGFeRD) → frisch erzeugen
+            return einvoice_ansicht_antwort(daten, nr, quelle)
+    if rechnung.absender_snapshot:
+        try:
+            unt_dict = json.loads(rechnung.absender_snapshot)
+        except (json.JSONDecodeError, ValueError):
+            unt_dict = {}
+    else:
+        u = db.query(Unternehmen).first()
+        unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
+    from utils.zugferd import generate_zugferd_xml
+    try:
+        xml_bytes = generate_zugferd_xml(rechnung, unt_dict)
+    except Exception as e:  # noqa: BLE001 – Entwurf mit fehlenden Angaben
+        raise HTTPException(422, f"Die E-Rechnung lässt sich noch nicht erzeugen: {e}")
+    quelle = "Vorschau des Entwurfs" if rechnung.ist_entwurf else "aktueller Stand (noch nicht versendet)"
+    return einvoice_ansicht_antwort(xml_bytes, nr, quelle)
+
+
+@router.get("/{rechnung_id}/beleg/ansicht")
+def beleg_einvoice_ansicht(rechnung_id: int, db: Session = Depends(get_db)):
+    """Angehängter Beleg (z. B. XRechnung eines Lieferanten) als lesbare Ansicht."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first() if rechnung and rechnung.beleg_id else None
+    if not beleg:
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
+    pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+    if not pfad.is_file():
+        raise HTTPException(status_code=404, detail="Beleg-Datei nicht gefunden.")
+    return einvoice_ansicht_antwort(pfad.read_bytes(), Path(beleg.original_name).stem, beleg.original_name)
+
+
+@router.get("/temp/{token}/ansicht")
+def temp_einvoice_ansicht(token: str):
+    """Importdialog: hochgeladene Datei (XML oder ZUGFeRD-PDF) als lesbare Ansicht."""
+    if not re.fullmatch(r"[0-9a-f\-]{36}", token):
+        raise HTTPException(status_code=404)
+    for ext in (".xml", ".pdf"):
+        pfad = TEMP_DIR / f"{token}{ext}"
+        if pfad.exists():
+            return einvoice_ansicht_antwort(pfad.read_bytes(), "Import")
+    raise HTTPException(status_code=404)
+
+
 @router.delete("/{rechnung_id}", status_code=204)
 def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()

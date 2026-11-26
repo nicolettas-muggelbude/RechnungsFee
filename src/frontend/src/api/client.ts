@@ -1395,6 +1395,16 @@ export async function getBelegUrl(rechnungId: number): Promise<string> {
   return `${base}/rechnungen/${rechnungId}/beleg`
 }
 
+/** Issue #598: lesbare Ansicht einer E-Rechnung (PDF) – pfad z. B. `/rechnungen/12/beleg/ansicht` */
+export async function getEInvoiceAnsichtUrl(pfad: string): Promise<string> {
+  return `${await getBaseUrl()}${pfad}`
+}
+
+/** Issue #598: ist die Datei eine XML-E-Rechnung? (MIME-Typ oder Dateiendung) */
+export function istXmlDatei(mime?: string | null, name?: string | null): boolean {
+  return !!(mime && /xml/i.test(mime)) || !!(name && /\.xml$/i.test(name))
+}
+
 export async function getBelegPdfaUrl(rechnungId: number): Promise<string> {
   const base = await getBaseUrl()
   return `${base}/rechnungen/${rechnungId}/beleg?version=pdfa`

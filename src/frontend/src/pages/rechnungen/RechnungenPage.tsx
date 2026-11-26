@@ -11,7 +11,7 @@ import {
   getLieferscheine, rechnungAusLieferschein, sammelrechnungErstellen, lieferscheinAusRechnung,
   getLieferadressen, getOffeneAbschlaege, type OffenerAbschlag,
   getKunden, getLieferanten, getKategorien, getUnternehmen, getApiBase, isTauri, openUrl, openInPdfWindow, downloadPdfForMail,
-  getXRechnungUrl, speichereXRechnung,
+  getXRechnungUrl, speichereXRechnung, getEInvoiceAnsichtUrl, istXmlDatei,
   getRechnungenExportUrl, korrigiereZahlung,
   getUstSaetze, getKassenstand,
   uploadBeleg, setzeRechnungExternErstellt, getLetzterSteuerfall, getBelegUrl, getBelegPdfaUrl, deleteBeleg, analysiereRechnung, leseGedroppteDatei, dateiInSpeicher,
@@ -1296,6 +1296,10 @@ function RechnungDetail({
     const url = await getBelegPdfaUrl(rechnung.id)
     await openUrl(url)
   }
+  // Issue #598: E-Rechnung lesbar anzeigen (eigene Rechnung bzw. XML-Beleg)
+  async function _openEInvoiceAnsicht(pfad: string) {
+    await openUrl(await getEInvoiceAnsichtUrl(pfad))
+  }
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
   // Kategorien für den Kategorie-Tooltip an den Positionen - bewusst alle (nicht nur aktive),
   // damit auch deaktivierte Kategorien alter Rechnungen noch ihren Namen zeigen
@@ -2196,7 +2200,12 @@ function RechnungDetail({
           {rechnung.typ === 'ausgang' && rechnung.kunde_zugferd_aktiv && !rechnung.ist_entwurf && !rechnung.kunde_oeffentlich && (
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-slate-400">E-Rechnung</span>
-              <span className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">ZUGFeRD ✓</span>
+              <span className="flex items-center gap-2">
+                <button type="button" onClick={() => _openEInvoiceAnsicht(`/rechnungen/${rechnung.id}/xrechnung/ansicht`)}
+                  title="Zeigt lesbar an, was in den E-Rechnungsdaten (XML) dieser Rechnung steht"
+                  className="text-xs text-violet-700 dark:text-violet-300 hover:underline">Daten ansehen</button>
+                <span className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">ZUGFeRD ✓</span>
+              </span>
             </div>
           )}
           {/* Issue #530: öffentlicher Auftraggeber – Original ist die XRechnung-XML (Upload ins Portal) */}
@@ -2213,6 +2222,9 @@ function RechnungDetail({
                 className="text-xs px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800 dark:hover:bg-violet-900">
                 ⬇ XRechnung (XML)
               </button>
+              <button type="button" onClick={() => _openEInvoiceAnsicht(`/rechnungen/${rechnung.id}/xrechnung/ansicht`)}
+                title="Zeigt lesbar an, was in der XRechnung steht"
+                className="text-xs text-violet-700 dark:text-violet-300 hover:underline">Ansehen</button>
             </div>
           )}
           {rechnung.storniert && rechnung.storno_datum && (
@@ -2752,6 +2764,12 @@ function RechnungDetail({
                     {rechnung.beleg.dateigroesse ? `${Math.round(rechnung.beleg.dateigroesse / 1024)} KB · ` : ''}
                     {rechnung.beleg.hochgeladen_am.slice(0, 10)}
                   </span>
+                  {istXmlDatei(rechnung.beleg.mime_type, rechnung.beleg.original_name) && (
+                    <button onClick={() => _openEInvoiceAnsicht(`/rechnungen/${rechnung.id}/beleg/ansicht`)}
+                      className="ml-2 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                      🧾 Lesbar anzeigen
+                    </button>
+                  )}
                 </div>
                 {/* Issue #575: nach dem Finalisieren ist der Beleg festgeschrieben (GoBD) */}
                 {belegFestgeschrieben ? (
@@ -5143,6 +5161,14 @@ function PostfachDialog({
     await openUrl(`${base}${postfachDateiPfad(e.id)}`)
   }
 
+  // Issue #598: XRechnung-Anhang lesbar statt als Rohtext
+  async function lesbarAnsehen(e: PostfachEintrag) {
+    const base = import.meta.env.DEV
+      ? `${window.location.protocol}//${window.location.host}/api`
+      : await getApiBase()
+    await openUrl(`${base}/postfach/eingang/${e.id}/ansicht`)
+  }
+
   async function uebernehmen(e: PostfachEintrag) {
     setLadeId(e.id)
     try { onUebernehmen(e) } finally { setLadeId(null) }
@@ -5210,8 +5236,12 @@ function PostfachDialog({
                       </>
                     ) : (
                       <>
+                        {istXmlDatei(e.mime_type, e.original_name) && (
+                          <button onClick={() => lesbarAnsehen(e)} title="E-Rechnung lesbar anzeigen"
+                            className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Lesbar</button>
+                        )}
                         <button onClick={() => ansehen(e)}
-                          className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Ansehen</button>
+                          className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{istXmlDatei(e.mime_type, e.original_name) ? 'XML' : 'Ansehen'}</button>
                         <button onClick={() => setVerwerfenId(e.id)}
                           className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Verwerfen</button>
                         <button onClick={() => uebernehmen(e)} disabled={ladeId === e.id}
@@ -5314,6 +5344,15 @@ function ImportDialog({
     await openUrl(`${base}${ergebnis.temp_url}`)
   }
 
+  // Issue #598: strukturierte E-Rechnung lesbar anzeigen
+  async function handleLesbarOeffnen() {
+    if (!ergebnis?.temp_url) return
+    const base = import.meta.env.DEV
+      ? `${window.location.protocol}//${window.location.host}/api`
+      : await getApiBase()
+    await openUrl(`${base}${ergebnis.temp_url}/ansicht`)
+  }
+
   const formatLabel: Record<string, string> = {
     zugferd: 'ZUGFeRD',
     xrechnung: 'XRechnung',
@@ -5382,6 +5421,12 @@ function ImportDialog({
                       ? 'Felder aus PDF-Text extrahiert – bitte prüfen'
                       : 'Keine Daten erkannt – bitte manuell ausfüllen'}
                 </span>
+                {(ergebnis.format === 'zugferd' || ergebnis.format === 'xrechnung') && ergebnis.temp_url && (
+                  <button type="button" onClick={handleLesbarOeffnen}
+                    className="ml-auto text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                    🧾 Lesbar anzeigen
+                  </button>
+                )}
               </div>
 
               {/* Warnungen */}
