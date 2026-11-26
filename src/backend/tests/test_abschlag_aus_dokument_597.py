@@ -201,3 +201,37 @@ def test_migration_202(tmp_path, monkeypatch):
         assert conn.execute(text("PRAGMA user_version")).scalar() == 202
         conn.execute(text("PRAGMA user_version = 201"))
     main._run_migrations()  # zweiter Lauf ändert nichts
+
+
+# ── Rechnungsrabatt gilt nicht für Abzugszeilen ──────────────────────────────
+
+def test_schlussrechnung_mit_rabatt_zieht_vollen_abschlag_ab(db):
+    s, k = db
+    auftrag = _auftrag(s, k, rabatt_prozent=Decimal("10"))  # 9000 netto
+    a = _bezahlt(s, _abschlag(s, auftrag, prozent=Decimal("30")))  # 2700 netto
+    schluss = s.get(Rechnung, rechnung_aus_auftrag(auftrag.id, s).id)
+    assert schluss.netto_gesamt == Decimal("6300.00")  # vorher 6570,00
+    assert schluss.brutto_gesamt == auftrag.brutto_gesamt - a.brutto_gesamt
+
+
+@pytest.mark.parametrize("modus", ["netto", "brutto"])
+def test_berechnung_rabatt_ohne_abzug_unveraendert(modus):
+    from types import SimpleNamespace as P
+    from api.rechnungen import _berechne_rechnung
+    leistung = P(netto=Decimal("1000"), menge=Decimal("1"), ust_satz=Decimal("19"))
+    abzug = P(netto=Decimal("300") if modus == "netto" else Decimal("357"), menge=Decimal("-1"),
+              ust_satz=Decimal("19"), abschlag_rechnung_id=1)
+    ohne = _berechne_rechnung([leistung], modus, Decimal("10"), None, False, False)
+    mit = _berechne_rechnung([leistung, abzug], modus, Decimal("10"), None, False, False)
+    assert mit.netto_gesamt == ohne.netto_gesamt - Decimal("300.00")
+    assert mit.brutto_gesamt == ohne.brutto_gesamt - Decimal("357.00")
+
+
+def test_berechnung_festbetrag_rabatt_bezieht_sich_nur_auf_leistung():
+    from types import SimpleNamespace as P
+    from api.rechnungen import _berechne_rechnung
+    leistung = P(netto=Decimal("1000"), menge=Decimal("1"), ust_satz=Decimal("19"))
+    abzug = P(netto=Decimal("300"), menge=Decimal("-1"), ust_satz=Decimal("19"), abschlag_rechnung_id=1)
+    erg = _berechne_rechnung([leistung, abzug], "netto", Decimal("0"), Decimal("119"), False, False)
+    # 1190 brutto - 119 Rabatt = 1071, minus 357 Abschlag = 714
+    assert erg.brutto_gesamt == Decimal("714.00")

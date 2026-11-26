@@ -3586,6 +3586,8 @@ const kundeIdNum = partnerId ? parseInt(partnerId) : null
       rabatt_prozent: parseFloat((p.rabatt_prozent ?? '').replace(',', '.')) || undefined,
       // Issue #459: Kategorie mitschicken - bei §13b/ig. Erwerb zählt die USt nicht zum Rechnungsbetrag
       kategorie_id: p.kategorie_id ? parseInt(p.kategorie_id) : undefined,
+      // Issue #597: Abzugszeilen bleiben vom Rechnungsrabatt ausgenommen - wie beim Speichern
+      abschlag_rechnung_id: p.abschlag_rechnung_id,
     })),
     kategorie_id: kategorieId ? parseInt(kategorieId) : undefined,
     eingabemodus: eingabeModus,

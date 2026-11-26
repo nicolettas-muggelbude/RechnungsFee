@@ -694,6 +694,7 @@ def _berechne_rechnung(
     netto_sum = Decimal("0.00")
     ust_sum = Decimal("0.00")
     brutto_sum = Decimal("0.00")
+    abzug_netto = abzug_ust = abzug_brutto = Decimal("0.00")  # Abschlags-Abzüge (#597)
 
     for idx, pos_data in enumerate(positionen_data):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
@@ -736,6 +737,13 @@ def _berechne_rechnung(
             brutto_pos = netto_pos + ust_pos
 
         positionen.append(_PositionsErgebnis(ust_satz, ust_pos, brutto_pos, netto_pos))
+        if getattr(pos_data, "abschlag_rechnung_id", None):
+            # Abzug einer verrechneten Abschlagsrechnung: fester, bereits gezahlter Betrag -
+            # der Rechnungsrabatt gilt nur für die Leistung, nicht für den Abzug (Issue #597)
+            abzug_netto += netto_pos
+            abzug_ust += ust_pos
+            abzug_brutto += brutto_pos
+            continue
         netto_sum += netto_pos
         ust_sum += ust_pos
         brutto_sum += brutto_pos
@@ -749,12 +757,12 @@ def _berechne_rechnung(
         faktor = Decimal("1")
 
     if eingabemodus == "brutto":
-        brutto_gesamt = (brutto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
-        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        brutto_gesamt = (brutto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_brutto
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_netto
         ust_gesamt = brutto_gesamt - netto_gesamt
     else:
-        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
-        ust_gesamt = (ust_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_netto
+        ust_gesamt = (ust_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_ust
         brutto_gesamt = netto_gesamt + ust_gesamt
 
     return RechnungSummen(positionen, netto_gesamt, ust_gesamt, brutto_gesamt)
