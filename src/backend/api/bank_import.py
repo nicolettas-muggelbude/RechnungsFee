@@ -1352,10 +1352,8 @@ def journal_verknuepfen(
         # update_eintrag() automatisch hier, das deckt aber nicht storno_eintrag()/
         # storno_rechnung(), wo es keine automatische Nachfolgebuchung gibt).
         alt = db.query(Journaleintrag).filter(Journaleintrag.id == tx.journal_id).first()
-        alt_ist_storniert = alt and db.query(Journaleintrag).filter(
-            Journaleintrag.gruppe_id == (alt.gruppe_id or alt.id),
-            Journaleintrag.beschreibung.like("STORNO %"),
-        ).first() is not None
+        from utils.storno_kette import storno_zu
+        alt_ist_storniert = alt is not None and storno_zu(db, alt) is not None  # Issue #601
         if not alt_ist_storniert:
             raise HTTPException(status_code=409, detail="bereits_verknuepft")
 

@@ -46,6 +46,7 @@ router = APIRouter(prefix="/api/journal", tags=["Journal"])
 
 
 from utils.belegnummer import belegnr_aus_format as _belegnr_aus_format
+from utils.storno_kette import ist_storno as ist_storno_eintrag, storno_bezug, storno_zu, stornos_je_glied
 
 
 def _storno_infos(db: Session, eintraege: list[Journaleintrag]) -> dict[int, dict]:
@@ -57,39 +58,27 @@ def _storno_infos(db: Session, eintraege: list[Journaleintrag]) -> dict[int, dic
     Stornieren selbst - macht sie fuer Lese-Endpunkte nutzbar statt sie clientseitig fragil
     nachzubauen (Issue #321).
 
-    Bekannte Einschraenkung: gruppe_id gruppiert die gesamte Korrekturkette unter der
-    Wurzel-id, nicht das einzelne Kettenglied - bei mehr als einer Korrektur derselben
-    Buchung (Original -> Storno -> Neu -> erneut storniert -> ...) markiert dieses Ergebnis
-    alle Nicht-Storno-Mitglieder der Kette als storniert, sobald irgendein Storno in der
-    Kette existiert. Deckt den weit ueberwiegenden Fall (eine Korrektur) exakt ab."""
+    Storniert ist nur das Kettenglied, dessen Belegnummer eine Gegenbuchung der Gruppe nennt
+    ("STORNO <Belegnr>: ...") - die Neubuchung einer Korrektur haengt an derselben gruppe_id,
+    ist aber gueltig (Issue #601, utils/storno_kette.py)."""
     wurzel_ids = {e.gruppe_id or e.id for e in eintraege}
     stornos = db.query(Journaleintrag).filter(
         Journaleintrag.beschreibung.like("STORNO %"),
         Journaleintrag.gruppe_id.in_(wurzel_ids),
     ).all() if wurzel_ids else []
-    storno_je_wurzel: dict[int, str] = {s.gruppe_id: s.belegnr for s in stornos if s.gruppe_id}
-
-    original_ids = {s.gruppe_id for s in stornos if s.gruppe_id}
-    originale = db.query(Journaleintrag.id, Journaleintrag.belegnr).filter(
-        Journaleintrag.id.in_(original_ids)
-    ).all() if original_ids else []
-    belegnr_je_original_id: dict[int, str] = dict(originale)
+    storno_je_glied = stornos_je_glied(stornos)
 
     ergebnis: dict[int, dict] = {}
     for e in eintraege:
         info = {"storniert": False, "storno_belegnr": None, "ist_storno": False, "storno_von_belegnr": None}
-        # gruppe_id kann nicht über JournalEintragCreate gesetzt werden - stammt ausschließlich
-        # von der Storno-Erstellung selbst. Beschreibungs-Praefix ALLEIN wuerde faelschlich auch
-        # eine eigene Buchung erfassen, deren Text zufaellig mit "STORNO " beginnt (Issue #321).
-        ist_storno = e.gruppe_id is not None and e.beschreibung.startswith("STORNO ")
-        if ist_storno:
+        if ist_storno_eintrag(e):
             info["ist_storno"] = True
-            info["storno_von_belegnr"] = belegnr_je_original_id.get(e.gruppe_id)
+            info["storno_von_belegnr"] = storno_bezug(e.beschreibung)
         else:
-            wurzel = e.gruppe_id or e.id
-            if wurzel in storno_je_wurzel:
+            gegen = storno_je_glied.get((e.gruppe_id or e.id, e.belegnr))
+            if gegen:
                 info["storniert"] = True
-                info["storno_belegnr"] = storno_je_wurzel[wurzel]
+                info["storno_belegnr"] = gegen
         ergebnis[e.id] = info
     return ergebnis
 
@@ -483,10 +472,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
         raise HTTPException(409, "Storno-Einträge können nicht bearbeitet werden.")
     if original.rechnung_id:
         raise HTTPException(409, "Rechnungsbuchungen können nur über die Rechnung bearbeitet werden.")
-    bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
-        Journaleintrag.beschreibung.like("STORNO %"),
-    ).first()
+    bereits_storniert = storno_zu(db, original)  # nur dieses Glied der Kette (Issue #601)
     if bereits_storniert:
         raise HTTPException(409, f"Diese Buchung wurde bereits storniert ({bereits_storniert.belegnr}).")
 
@@ -1248,10 +1234,7 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     if original.beschreibung.startswith("STORNO "):
         raise HTTPException(status_code=409, detail="Ein Storno-Eintrag kann nicht erneut storniert werden.")
     # Bereits stornierte Buchung erkennen
-    bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
-        Journaleintrag.beschreibung.like("STORNO %"),
-    ).first()
+    bereits_storniert = storno_zu(db, original)  # nur dieses Glied der Kette (Issue #601)
     if bereits_storniert:
         raise HTTPException(
             status_code=409,

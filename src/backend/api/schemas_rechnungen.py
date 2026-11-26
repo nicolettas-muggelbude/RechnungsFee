@@ -546,14 +546,14 @@ class RechnungResponse(BaseModel):
         # Storno-Status je Zahlung (Issue #321-Fortsetzung): "STORNO "-Praefix + gesetztes
         # gruppe_id (laesst sich clientseitig nicht setzen, siehe journal.py._storno_infos)
         # statt reiner Beschreibungs-Textpruefung im Frontend.
-        _storno_wurzeln: set[int] = set()
+        # Storniert nur das Glied, dessen Belegnr. eine Gegenbuchung nennt (Issue #601).
+        from utils.storno_kette import ist_storno as _ist_storno, stornos_je_glied
         for _z in data.zahlungen_kette:
-            _z.ist_storno = _z.gruppe_id is not None and _z.beschreibung.startswith("STORNO ")
-            if _z.ist_storno:
-                _storno_wurzeln.add(_z.gruppe_id)
+            _z.ist_storno = _ist_storno(_z)
+        _storno_je_glied = stornos_je_glied(data.zahlungen_kette)
         for _z in data.zahlungen_kette:
             if not _z.ist_storno:
-                _z.storniert = (_z.gruppe_id or _z.id) in _storno_wurzeln
+                _z.storniert = (_z.gruppe_id or _z.id, _z.belegnr) in _storno_je_glied
         # Rechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...): unabhaengig von
         # Zahlungen/Journalbuchungen sichtbar, da die Verknuepfung ueber ersatzrechnung_id/
         # ersatz_fuer_rechnung_id direkt auf Dokumentebene liegt (Issue #304).
