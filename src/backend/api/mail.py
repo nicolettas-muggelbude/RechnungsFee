@@ -25,7 +25,7 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils import geheimnisse
-from utils.mailfelder import bereinige_mailfeld, ist_ascii
+from utils.mailfelder import ascii_rechnername, bereinige_mailfeld, ist_ascii
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
     MailTLSConfigurationError,
@@ -182,7 +182,8 @@ def _build_message(
     # Issue #596: setzte bisher erst der SMTP-Server - die Kopie im Ordner „Gesendet“ (IMAP)
     # braucht beides selbst, sonst zeigt das Mailprogramm dort kein Datum
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=von_adresse.rpartition("@")[2] or None)
+    # ohne Domain nähme make_msgid den Rechnernamen – der kann Umlaute haben (Issue #537)
+    msg["Message-ID"] = make_msgid(domain=von_adresse.rpartition("@")[2] or ascii_rechnername())
 
     signatur_md = (u.mail_signatur or "").strip()
 
@@ -304,15 +305,18 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
         # _pruefe_gepinntes_zertifikat() unten die eigentliche Sicherheitsprüfung (TOFU-Pinning).
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+    # EHLO-Name selbst setzen: smtplib nähme sonst den Rechnernamen, und ein Umlaut darin
+    # (z. B. „Noël-PC“) ließ jeden Versand mit UnicodeEncodeError scheitern (Issue #537)
+    rechnername = ascii_rechnername()
     try:
         if u.smtp_ssl:
-            with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as srv:
+            with smtplib.SMTP_SSL(host, port, local_hostname=rechnername, context=ctx, timeout=15) as srv:
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
                 _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
-            with smtplib.SMTP(host, port, timeout=15) as srv:
+            with smtplib.SMTP(host, port, local_hostname=rechnername, timeout=15) as srv:
                 srv.ehlo()
                 srv.starttls(context=ctx)
                 srv.ehlo()
@@ -321,11 +325,14 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
                 _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
     except UnicodeEncodeError:
-        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen
+        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen. Mit Traceback
+        # ins Log: bisher blieb backend.log hier leer, die Stelle war nicht zu ermitteln (#537)
+        logger.warning("SMTP-Versand: Zeichen nicht als ASCII übertragbar", exc_info=True)
         raise HTTPException(
             400,
             "Die Mail enthält Zeichen, die der SMTP-Server nicht annimmt (z. B. einen Umlaut in der "
-            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen.",
+            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen. "
+            "Die genaue Stelle steht in der Protokolldatei backend.log.",
         )
     except smtplib.SMTPAuthenticationError:
         raise HTTPException(400, "SMTP-Authentifizierung fehlgeschlagen – Benutzer oder Passwort prüfen")

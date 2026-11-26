@@ -162,6 +162,113 @@ def test_utf8_passwort_abgelehnt_wird_auth_fehler():
         mail_mod._smtp_login(_FakeSMTP(code=535), "info@firma.de", "Pässwort")
 
 
+# ── Rechnername mit Umlaut (EHLO) ────────────────────────────────────────────
+
+from utils.mailfelder import ascii_rechnername
+
+
+class _Sock:
+    def __init__(self):
+        self.daten = b""
+
+    def sendall(self, b):
+        self.daten += b
+
+
+@pytest.mark.parametrize("name,erwartet", [
+    ("DESKTOP-AB12", "DESKTOP-AB12"),
+    ("noël-pc", "noël-pc".encode("idna").decode()),
+    ("", "localhost"),
+    ("a" * 70 + "ë", "localhost"),  # zu lang für IDNA
+])
+def test_ascii_rechnername(name, erwartet):
+    ergebnis = ascii_rechnername(name)
+    assert ergebnis == erwartet and ergebnis.isascii()
+
+
+def test_rechnername_aus_system(monkeypatch):
+    monkeypatch.setattr("socket.getfqdn", lambda: "Noël-PC")
+    assert ascii_rechnername().startswith("xn--")
+
+
+def test_ehlo_mit_umlaut_rechnername_scheiterte_jetzt_ascii():
+    srv = smtplib.SMTP()
+    srv.sock = _Sock()
+    with pytest.raises(UnicodeEncodeError):  # Ursache: smtplib sendet den Namen als ASCII
+        srv.putcmd("ehlo", "Noël-PC")
+    srv.putcmd("ehlo", ascii_rechnername("Noël-PC"))
+    assert srv.sock.daten.startswith(b"ehlo xn--")
+
+
+@pytest.mark.parametrize("ssl_an", [True, False])
+def test_sende_setzt_ascii_ehlo_namen(monkeypatch, ssl_an):
+    monkeypatch.setattr("socket.getfqdn", lambda: "Noël-PC")
+    monkeypatch.setattr(mail_mod, "_smtp_passwort", lambda u: "geheim")
+    aufrufe = []
+
+    class _Fake:
+        def __init__(self, host, port, **kw):
+            aufrufe.append(kw)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self, **kw):
+            pass
+
+        def login(self, user, pw):
+            pass
+
+        def sendmail(self, von, an, text):
+            text.encode("ascii")
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", _Fake)
+    monkeypatch.setattr(smtplib, "SMTP", _Fake)
+    u = Unternehmen(smtp_host="smtp.firma.de", smtp_port=465 if ssl_an else 587, smtp_ssl=ssl_an,
+                    smtp_user="info@firma.de", smtp_von_adresse="info@firma.de", firmenname="Noël")
+    msg = mail_mod._build_message(u, "a@b.de", None, "Test – ä", "Grüße", [])
+    mail_mod._sende(u, msg, ["a@b.de"], None)
+    assert aufrufe[0]["local_hostname"].startswith("xn--")
+
+
+def test_message_id_ohne_absenderdomain_ascii(monkeypatch):
+    monkeypatch.setattr("socket.getfqdn", lambda: "Noël-PC")
+    u = Unternehmen(firmenname="F", smtp_von_adresse="ohne-domain")
+    msg = mail_mod._build_message(u, "a@b.de", None, "T", "x", [])
+    assert msg["Message-ID"].isascii()
+    msg.as_string().encode("ascii")
+
+
+def test_unicode_fehler_landet_im_log(monkeypatch, caplog):
+    monkeypatch.setattr(mail_mod, "_smtp_passwort", lambda u: "geheim")
+
+    class _Kaputt:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            "ë".encode("ascii")
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", _Kaputt)
+    u = Unternehmen(smtp_host="smtp.firma.de", smtp_port=465, smtp_ssl=True,
+                    smtp_user="info@firma.de", smtp_von_adresse="info@firma.de")
+    msg = mail_mod._build_message(u, "a@b.de", None, "T", "x", [])
+    with caplog.at_level(logging.WARNING, logger=mail_mod.logger.name):
+        with pytest.raises(HTTPException) as e:
+            mail_mod._sende(u, msg, ["a@b.de"], None)
+    assert "backend.log" in e.value.detail
+    assert any(r.exc_info for r in caplog.records)
+
+
 # ── Nebenfund: Kontokorrent-Mail ──────────────────────────────────────────────
 
 @pytest.mark.parametrize("modul,funktion", [("api.kunden", "kontokorrent_mail"),
