@@ -25,6 +25,7 @@ from utils.bank_csv_parser import (
     decode_csv_text,
     detect_delimiter,
     detect_encoding,
+    extract_eigene_email,
     extract_konto_iban,
     extract_konto_iban_camt,
     extract_xml_from_zip,
@@ -74,6 +75,8 @@ class VorschauResponse(BaseModel):
     encoding: str
     konto_iban: Optional[str] = None          # aus CSV-Header extrahierte eigene IBAN
     erkanntes_konto_id: Optional[int] = None  # passendes Konto im System (None = nicht gefunden)
+    erkannte_email: Optional[str] = None      # eigene Adresse, wenn der Export keine IBAN trägt
+    email_konto_ids: list[int] = []           # Zahlungsdienstleister mit dieser Kennung
     transaktionen: list[TransaktionVorschau]
 
 
@@ -802,6 +805,26 @@ def _enriche_tx(tx: BankTransaktion, rechnungen_map: dict, journale_map: dict) -
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _konten_mit_kennung(db: Session, email: str) -> list[int]:
+    """Aktive Zahlungsdienstleister, deren Kennung exakt der Adresse entspricht.
+
+    Bankkonten bleiben außen vor – die haben eine IBAN. Vergleich ohne Großschreibung
+    und ohne Leerzeichen am Rand. Privatkonten sind für den Import nicht wählbar.
+    """
+    ziel = email.strip().lower()
+    konten = (
+        db.query(Konto)
+        .filter(
+            Konto.aktiv == True,
+            Konto.kontoart == "zahlungsdienstleister",
+            Konto.kontotyp != "privat",
+        )
+        .order_by(Konto.id)
+        .all()
+    )
+    return [k.id for k in konten if (k.kennung or "").strip().lower() == ziel]
+
+
 def _vorschau_fuer_bytes(
     raw: bytes,
     konto_id: Optional[int],
@@ -927,9 +950,12 @@ def _vorschau_fuer_bytes(
             detail="Kein passendes Template gefunden. Bitte Template manuell auswählen.",
         )
 
-    # IBAN aus CSV-Header extrahieren und Konto im System suchen
+    # IBAN aus CSV-Header extrahieren und Konto im System suchen.
+    # Fehlt die IBAN (PayPal), gilt die eigene E-Mail gegen die Kennung der Zahlungsdienstleister.
     konto_iban = extract_konto_iban(raw, template)
     erkanntes_konto_id = konto_id  # übernehmen falls manuell übergeben
+    erkannte_email: Optional[str] = None
+    email_konto_ids: list[int] = []
 
     if konto_iban and konto_id is None:
         konto = db.query(Konto).filter(
@@ -938,6 +964,14 @@ def _vorschau_fuer_bytes(
         ).first()
         if konto:
             erkanntes_konto_id = konto.id
+    elif konto_id is None:
+        erkannte_email = extract_eigene_email(raw)
+        if erkannte_email:
+            email_konto_ids = _konten_mit_kennung(db, erkannte_email)
+            if len(email_konto_ids) == 1:
+                erkanntes_konto_id = email_konto_ids[0]
+            elif not email_konto_ids:
+                erkannte_email = None
 
     transaktionen, enc = parse_csv_mit_template(raw, template)
     hashes = _vorhandene_hashes(db, erkanntes_konto_id) if erkanntes_konto_id else set()
@@ -966,6 +1000,8 @@ def _vorschau_fuer_bytes(
         encoding=enc,
         konto_iban=konto_iban,
         erkanntes_konto_id=erkanntes_konto_id,
+        erkannte_email=erkannte_email,
+        email_konto_ids=email_konto_ids,
         transaktionen=result,
     )
 
