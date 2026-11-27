@@ -6,6 +6,7 @@ Ausgeschlossen: Privatentnahmen/Einlagen (euer_zeile 106/107), Anlage-Buchungen,
 """
 
 import calendar
+from datetime import date as dt_date_type
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -81,6 +82,109 @@ def _ausgabe_netto(e: Journaleintrag, kat: Optional[Kategorie]) -> Decimal:
         # Charge, #486 Storno-Spiegel der Vorsteuer)
         return _euer_haupt_beitrag(e)[1]
     return ZERO
+
+
+def _zaehlt_in_kacheln(kat: Optional[Kategorie]) -> bool:
+    """Dashboard-Kacheln (Dashboard.tsx): alles außer Privat und durchlaufenden Posten (Issue #564)."""
+    return not kat or kat.kontenart not in ("Privat", "Neutral")
+
+
+def _ueberleitung_grund(kat: Optional[Kategorie], brutto: Decimal, ein: Decimal, aus: Decimal) -> str:
+    """Issue #603: warum der Kachelbetrag (brutto) vom Cockpit (netto, EÜR-relevant) abweicht."""
+    if not kat:
+        return "Keine Kategorie: zählt weder im Cockpit noch in der EÜR. Buchung prüfen."
+    if kat.kontenart == "Privat":
+        return "Privatbuchung: zählt nirgends als Betriebseinnahme oder -ausgabe."
+    if kat.kontenart == "Neutral":
+        return "Durchlaufender Posten: zählt nirgends."
+    if kat.kontenart == "Anlage":
+        return "Anlagekauf: zählt in der EÜR über die Abschreibung (Anlagenverzeichnis), nicht mit dem Kaufpreis."
+    z = kat.euer_zeile
+    if z is None:
+        return "Kategorie ohne EÜR-Zeile: fällt aus Cockpit und EÜR. Kategorie prüfen."
+    if z in (106, 107):
+        return "Privatentnahme/-einlage (EÜR-Hinweiszeile): kein Gewinnbestandteil."
+    if z in _EINNAHMEN_ZEILEN_SKIP or z in _AUSGABEN_ZEILEN_SKIP:
+        return f"Umsatzsteuer/Vorsteuer (EÜR-Zeile {z}): steht in der EÜR, im Cockpit nicht (netto)."
+    if ein == ZERO and aus == ZERO:
+        return f"EÜR-Zeile {z} passt nicht zur Buchungsrichtung: zählt im Cockpit nicht."
+    if abs(ein) + abs(aus) != brutto:
+        return "Im Cockpit netto: Umsatzsteuer bzw. abziehbare Vorsteuer herausgerechnet."
+    return "Zählt unverändert."
+
+
+@router.get("/ueberleitung")
+def get_ueberleitung(
+    von: dt_date_type = Query(...),
+    bis: dt_date_type = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Issue #603: Überleitung Dashboard-Kacheln (brutto, alle Zahlungen) → Cockpit (netto,
+    EÜR-relevant) für denselben Zeitraum, je Kategorie und Kachelseite. Nutzt dieselben
+    Regeln wie get_cockpit (_einnahme_netto/_ausgabe_netto) und die Kacheln im Dashboard."""
+    eintraege = (
+        db.query(Journaleintrag)
+        .filter(Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
+        .all()
+    )
+
+    gruppen: dict[tuple[str, Optional[int]], dict] = {}
+    for e in eintraege:
+        kat: Optional[Kategorie] = e.kategorie
+        ein = _einnahme_netto(e, kat)
+        aus = _ausgabe_netto(e, kat)
+        in_kacheln = _zaehlt_in_kacheln(kat)
+        if in_kacheln:
+            seite = "eingaenge" if e.art == "Einnahme" else "ausgaenge"
+            brutto = e.brutto_betrag or ZERO
+        elif ein != ZERO or aus != ZERO:
+            seite, brutto = "nicht_in_kacheln", ZERO
+        else:
+            continue
+        key = (seite, kat.id if kat else None)
+        g = gruppen.setdefault(key, {
+            "kategorie_id": kat.id if kat else None,
+            "kategorie": kat.name if kat else "(ohne Kategorie)",
+            "kontenart": kat.kontenart if kat else None,
+            "euer_zeile": kat.euer_zeile if kat else None,
+            "anzahl": 0, "brutto": ZERO, "cockpit_einnahmen": ZERO, "cockpit_ausgaben": ZERO,
+        })
+        g["anzahl"] += 1
+        g["brutto"] += brutto
+        g["cockpit_einnahmen"] += ein
+        g["cockpit_ausgaben"] += aus
+
+    def r(v: Decimal) -> float:
+        return float(v.quantize(Q2, ROUND_HALF_UP))
+
+    ergebnis: dict[str, list] = {"eingaenge": [], "ausgaenge": [], "nicht_in_kacheln": []}
+    kat_cache = {k.id: k for k in db.query(Kategorie).all()}
+    for (seite, kat_id), g in gruppen.items():
+        kat = kat_cache.get(kat_id) if kat_id else None
+        ergebnis[seite].append({
+            **g,
+            "grund": _ueberleitung_grund(kat, g["brutto"], g["cockpit_einnahmen"], g["cockpit_ausgaben"]),
+            "brutto": r(g["brutto"]),
+            "cockpit_einnahmen": r(g["cockpit_einnahmen"]),
+            "cockpit_ausgaben": r(g["cockpit_ausgaben"]),
+        })
+    for liste in ergebnis.values():
+        liste.sort(key=lambda x: (-abs(x["brutto"]), x["kategorie"]))
+
+    def summe(feld: str, seite: Optional[str] = None) -> float:
+        return r(sum((Decimal(str(x[feld])) for s, l in ergebnis.items() if seite in (None, s) for x in l), ZERO))
+
+    return {
+        "von": von.isoformat(),
+        "bis": bis.isoformat(),
+        **ergebnis,
+        "summen": {
+            "kachel_eingaenge": summe("brutto", "eingaenge"),
+            "kachel_ausgaenge": summe("brutto", "ausgaenge"),
+            "cockpit_einnahmen": summe("cockpit_einnahmen"),
+            "cockpit_ausgaben": summe("cockpit_ausgaben"),
+        },
+    }
 
 
 @router.get("")

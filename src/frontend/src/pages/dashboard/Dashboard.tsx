@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, getCockpit, getMahnwesenEinstellungen, getMahnungenFaellig, getPostfachEingang, type Rechnung, type Forderung, type CockpitDaten } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { UeberleitungDialog } from '../../components/UeberleitungDialog'
 import { dashboardFilter, journalFilter } from '../../store/filterStore'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
@@ -1409,21 +1410,33 @@ export function Dashboard() {
 
   // Issue #603 Stufe 2: Kachel öffnet das Journal mit demselben Zeitraum (+ Art). Übrige
   // Journal-Filter werden zurückgesetzt, damit nichts unbemerkt weiter filtert.
-  function zeigeImJournal(artFilter: '' | 'Einnahme' | 'Ausgabe') {
+  function zeigeImJournal(artFilter: '' | 'Einnahme' | 'Ausgabe', kategorieId = '') {
     const istJahr = filterModus !== 'monat' && filterModus !== 'datum' && filterModus !== 'zeitraum'
     Object.assign(journalFilter, {
       modus: istJahr ? 'alle' : filterModus,
       monat, datum, datumVon, datumBis,
       jahr: aktivesJahr,
       art: artFilter,
-      kategorieId: '',
+      kategorieId,
       zahlungsartTyp: '',
       nurBebuchte: false,
       suche: '',
     })
     navigate('/journal')
   }
-  const kachelKlasse = 'text-left w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-colors cursor-pointer'
+  // Issue #603 Stufe 3: Datumsbereich der Kacheln für die Überleitung
+  function kachelDatumsbereich(): { von: string; bis: string } {
+    if (filterModus === 'monat') {
+      const [y, m] = monat.split('-').map(Number)
+      const letzter = new Date(y, m, 0).getDate()
+      return { von: `${monat}-01`, bis: `${monat}-${String(letzter).padStart(2, '0')}` }
+    }
+    if (filterModus === 'datum') return { von: datum, bis: datum }
+    if (filterModus === 'zeitraum') return { von: datumVon, bis: datumBis }
+    return { von: `${aktivesJahr}-01-01`, bis: `${aktivesJahr}-12-31` }
+  }
+  const [zeigUeberleitung, setZeigUeberleitung] = useState(false)
+  const kachelKlasse ='text-left w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-colors cursor-pointer'
   const kachelTitel = 'Buchungen im Journal anzeigen (dort stehen zusätzlich Privatbuchungen und durchlaufende Posten, die hier nicht mitzählen)'
   const letzteEintraege = alle
 
@@ -1500,7 +1513,25 @@ export function Dashboard() {
             <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 pl-1 flex items-center gap-1.5">
               Zahlungen {kachelZeitraum} · brutto
               <InfoTooltip side="bottom" text={KACHELN_HINWEIS} />
+              <button
+                type="button"
+                onClick={() => setZeigUeberleitung(true)}
+                className="ml-2 text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                Woher kommt der Unterschied zum Cockpit?
+              </button>
             </p>
+            {zeigUeberleitung && (
+              <UeberleitungDialog
+                {...kachelDatumsbereich()}
+                zeitraumLabel={kachelZeitraum}
+                onClose={() => setZeigUeberleitung(false)}
+                onKategorie={(z, seite) => {
+                  setZeigUeberleitung(false)
+                  zeigeImJournal(seite === 'eingaenge' ? 'Einnahme' : 'Ausgabe', z.kategorie_id !== null ? String(z.kategorie_id) : '')
+                }}
+              />
+            )}
             <div className="grid grid-cols-3 gap-4 mb-2">
               <button type="button" onClick={() => zeigeImJournal('Einnahme')} title={kachelTitel} className={kachelKlasse}>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Zahlungseingänge</p>

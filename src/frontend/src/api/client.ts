@@ -3428,6 +3428,31 @@ export type CockpitDaten = {
 export const getCockpit = (zeitraum: 'monat' | 'quartal' | 'jahr', wert: string) =>
   request<CockpitDaten>(`/cockpit?zeitraum=${zeitraum}&wert=${encodeURIComponent(wert)}`)
 
+// Issue #603: Überleitung Dashboard-Kacheln (brutto) → Cockpit (netto, EÜR-relevant)
+export interface UeberleitungZeile {
+  kategorie_id: number | null
+  kategorie: string
+  kontenart: string | null
+  euer_zeile: number | null
+  anzahl: number
+  brutto: number
+  cockpit_einnahmen: number
+  cockpit_ausgaben: number
+  grund: string
+}
+
+export interface UeberleitungDaten {
+  von: string
+  bis: string
+  eingaenge: UeberleitungZeile[]
+  ausgaenge: UeberleitungZeile[]
+  nicht_in_kacheln: UeberleitungZeile[]
+  summen: { kachel_eingaenge: number; kachel_ausgaenge: number; cockpit_einnahmen: number; cockpit_ausgaben: number }
+}
+
+export const getCockpitUeberleitung = (von: string, bis: string) =>
+  request<UeberleitungDaten>(`/cockpit/ueberleitung?von=${von}&bis=${bis}`)
+
 // ---------------------------------------------------------------------------
 // Datenübernahme / CSV-Import
 // ---------------------------------------------------------------------------
