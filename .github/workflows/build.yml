@@ -26,7 +26,9 @@ jobs:
         run: npm ci
       - name: TypeScript-Check
         working-directory: src/frontend
-        run: npx tsc --noEmit
+        # -b statt --noEmit: die Wurzel-tsconfig hat nur references, --noEmit prüfte dort nichts
+        # (gleiche Prüfung wie npm run build)
+        run: npx tsc -b
 
   build:
     needs: typecheck
