@@ -213,6 +213,23 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
           {/* Bankfelder */}
           {kontoart === 'bank' && (
             <>
+              {/* Issue #604: Kontoinhaber für QR-Code und E-Rechnung – zwischen Bank und IBAN wie im Onlinebanking */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+                  Kontoinhaber (optional)
+                  <InfoTooltip text="So, wie der Name bei deiner Bank hinterlegt ist. Banken prüfen vor einer Überweisung, ob der Empfängername zum Konto passt. Ist dieses Konto die IBAN auf deinen Rechnungen, steht der Name im Überweisungs-QR-Code, im Zahlungsblock und in der E-Rechnung. Leer lassen: Firmenname bzw. dein Vor- und Nachname aus den Stammdaten." />
+                </label>
+                <input
+                  {...register('kontoinhaber')}
+                  placeholder={standardInhaber ? `Standard: ${standardInhaber}` : 'z.B. Max Mustermann'}
+                  maxLength={70}
+                  className={inp}
+                />
+                {err((errors as any).kontoinhaber?.message)}
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Nur nötig, wenn das Konto nicht auf deinen Firmennamen läuft, z. B. als Einzelunternehmer mit Konto auf deinen eigenen Namen.
+                </p>
+              </div>
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">IBAN</label>
@@ -262,24 +279,6 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
                 <span>Bankname und BIC aus IBAN per Web</span>
               </button>
               <p className="text-xs text-slate-400 dark:text-slate-500 text-center">Sendet deine IBAN an openiban.com (Fremdanbieter) zur Abfrage</p>
-
-              {/* Issue #604: Kontoinhaber für QR-Code und E-Rechnung */}
-              <div>
-                <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
-                  Kontoinhaber (optional)
-                  <InfoTooltip text="So, wie der Name bei deiner Bank hinterlegt ist. Banken prüfen vor einer Überweisung, ob der Empfängername zum Konto passt. Ist dieses Konto die IBAN auf deinen Rechnungen, steht der Name im Überweisungs-QR-Code, im Zahlungsblock und in der E-Rechnung. Leer lassen: Firmenname bzw. dein Vor- und Nachname aus den Stammdaten." />
-                </label>
-                <input
-                  {...register('kontoinhaber')}
-                  placeholder={standardInhaber ? `Standard: ${standardInhaber}` : 'z.B. Max Mustermann'}
-                  maxLength={70}
-                  className={inp}
-                />
-                {err((errors as any).kontoinhaber?.message)}
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  Nur nötig, wenn das Konto nicht auf deinen Firmennamen läuft, z. B. als Einzelunternehmer mit Konto auf deinen eigenen Namen.
-                </p>
-              </div>
             </>
           )}
 
