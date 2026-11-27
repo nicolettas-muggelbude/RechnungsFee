@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
 import { PartnerVerlauf } from '../../components/DokumentVerlauf'
 import { leitwegIdFehler } from '../../utils/leitwegId'
@@ -919,6 +921,7 @@ export function KundenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('kunden', 33)
+  const detailBreite = useDetailBreite('kunden')
   const [selected, setSelected] = useState<Kunde | null>(null)
   const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
@@ -1321,8 +1324,9 @@ export function KundenPage() {
       )}
 
       {/* ── Rechte Spalte (Rechnungen oder Formular) ─────────────────── */}
+      {!showForm && <DetailTrennlinie detail={detailBreite} />}
       {!showForm && (
-        <div className="w-[28rem] shrink-0">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0`}>
           {selected ? (
             <KundeRechnungen key={selected.id} kunde={selected} initialTab={initialDetailTab} />
           ) : (

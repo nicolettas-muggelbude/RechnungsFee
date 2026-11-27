@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -1207,6 +1209,7 @@ export function AuftraegePage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('auftraege', 33)
+  const detailBreite = useDetailBreite('auftraege')
   const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
 
@@ -1502,8 +1505,9 @@ export function AuftraegePage() {
         </div>
       )}
 
+      {selAuftrag && !zeigFormular && <DetailTrennlinie detail={detailBreite} />}
       {selAuftrag && !zeigFormular && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col`}>
           <AuftragDetail
             auftrag={selAuftrag}
             onEdit={() => handleEdit(selAuftrag)}

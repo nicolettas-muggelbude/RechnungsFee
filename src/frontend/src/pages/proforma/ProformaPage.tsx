@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { letzteZahlungsdatumWahl, merkeZahlungsdatumWahl } from '../../utils/zahlungsdatumWahl'
 import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
@@ -1198,6 +1200,7 @@ export function ProformaPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('proforma', 33)
+  const detailBreite = useDetailBreite('proforma')
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [filterId, setFilterId] = useState<number | null>(null)
@@ -1463,8 +1466,9 @@ export function ProformaPage() {
       )}
 
       {/* Detail-Panel */}
+      {!formModus && selected && <DetailTrennlinie detail={detailBreite} />}
       {!formModus && selected && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto`}>
           <ProformaDetail
             proforma={selected}
             onEdit={() => setFormModus('bearbeiten')}

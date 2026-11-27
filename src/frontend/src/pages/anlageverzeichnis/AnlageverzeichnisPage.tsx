@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { ExportButtons } from '../../components/ExportButtons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -307,6 +309,7 @@ export function AnlageverzeichnisPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('anlageverzeichnis', 50)
+  const detailBreite = useDetailBreite('anlageverzeichnis')
   const [jahr, setJahr] = useState(AKTUELLES_JAHR)
   const buchungsjahre = useBuchungsjahre()  // Issue #589
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
@@ -469,8 +472,9 @@ export function AnlageverzeichnisPage() {
       )}
 
       {/* Rechte Spalte – Detail */}
+      {formModus === null && selGut && <DetailTrennlinie detail={detailBreite} />}
       {formModus === null && selGut && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-5">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-5`}>
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{selGut.bezeichnung}</h2>

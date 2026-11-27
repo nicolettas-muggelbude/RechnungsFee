@@ -122,13 +122,13 @@ export function AnsichtPage() {
             aktiv={einstellungen.splitter === 'auto'}
             onClick={() => set({ splitter: 'auto' })}
             titel="Automatisch (Standard)"
-            beschreibung="Die Listen-Spalte nimmt 1/3 der Breite ein, das Detail-Panel den Rest."
+            beschreibung="Beim Bearbeiten nimmt die Liste 1/3 der Breite ein, das Formular den Rest. Die Detailansicht hat eine feste Breite."
           />
           <OptionCard
             aktiv={einstellungen.splitter === 'manuell'}
             onClick={() => set({ splitter: 'manuell' })}
             titel="Manuell verschiebbar"
-            beschreibung="Die Trennlinie zwischen Liste und Detail lässt sich per Maus ziehen. Die Breite wird pro Seite gespeichert."
+            beschreibung="Die Trennlinie zur Detailansicht und zum Formular lässt sich per Maus ziehen, ein Doppelklick setzt sie zurück. Die Breite wird pro Seite gespeichert."
           />
         </div>
       </section>

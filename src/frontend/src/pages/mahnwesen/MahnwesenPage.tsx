@@ -13,6 +13,8 @@ import {
 import { MahnungMailDialog, mahnungMailVorlage } from '../../components/MahnungMailDialog'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
 import { DateInput } from '../../components/DateInput'
+import { useDetailBreite, type DetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 
 function formatEuro(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -155,8 +157,9 @@ async function mahnungThunderbird(
 // ---------------------------------------------------------------------------
 
 function KundeDetail({
-  kunde, onClose, onErstellt, unternehmen,
+  kunde, onClose, onErstellt, unternehmen, detailBreite,
 }: {
+  detailBreite: DetailBreite
   kunde: MahnwesenKundeUebersicht
   onClose: () => void
   onErstellt: (ergebnis: Mahnung, rechnungsnummern: Map<number, string>) => void
@@ -289,7 +292,7 @@ function KundeDetail({
   }
 
   return (
-    <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 h-full overflow-auto">
+    <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 h-full overflow-auto`}>
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">{kunde.kunde_name}</p>
@@ -707,6 +710,7 @@ function KundeDetail({
 export function MahnwesenPage() {
   const navigate = useNavigate()
   const [ausgewaehltKundeId, setAusgewaehltKundeId] = useState<number | null>(null)
+  const detailBreite = useDetailBreite('mahnwesen')
   const [statusFilter, setStatusFilter] = useState<Set<StatusKind>>(new Set(ALLE_STATUS))
   const [letzteErgebnisse, setLetzteErgebnisse] = useState<{ ergebnis: Mahnung; nrMap: Map<number, string> }[] | null>(null)
 
@@ -882,8 +886,10 @@ export function MahnwesenPage() {
         </div>
       </div>
 
+      {ausgewaehlt && <DetailTrennlinie detail={detailBreite} />}
       {ausgewaehlt && (
         <KundeDetail
+          detailBreite={detailBreite}
           kunde={ausgewaehlt}
           onClose={() => setAusgewaehltKundeId(null)}
           unternehmen={unternehmen}

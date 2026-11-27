@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -1251,6 +1253,7 @@ export function AngebotePage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('angebote', 33)
+  const detailBreite = useDetailBreite('angebote')
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
@@ -1479,8 +1482,9 @@ export function AngebotePage() {
           </div>
         </div>
       )}
+      {selected && !formModus && <DetailTrennlinie detail={detailBreite} />}
       {selected && !formModus && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col`}>
           <AngebotDetail
             angebot={selected}
             onEdit={() => setFormModus('bearbeiten')}

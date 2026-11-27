@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -691,6 +693,7 @@ export default function BuchungsvorlagenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('buchungsvorlagen', 33)
+  const detailBreite = useDetailBreite('buchungsvorlagen')
   const [selId, setSelId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [suche, setSuche] = useState('')
@@ -899,8 +902,9 @@ export default function BuchungsvorlagenPage() {
       )}
 
       {/* Rechte Spalte – Detail (schmal) */}
+      {formModus === null && selVorlage && <DetailTrennlinie detail={detailBreite} />}
       {formModus === null && selVorlage && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-6">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-6`}>
           <VorlageDetail
             vorlage={selVorlage}
             onBearbeiten={() => setFormModus('bearbeiten')}

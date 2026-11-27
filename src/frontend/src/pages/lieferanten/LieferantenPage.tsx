@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { LandCombobox } from '../../components/LandCombobox'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
@@ -516,6 +518,7 @@ export function LieferantenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('lieferanten', 33)
+  const detailBreite = useDetailBreite('lieferanten')
   const [selected, setSelected] = useState<Lieferant | null>(null)
   const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
@@ -757,8 +760,9 @@ export function LieferantenPage() {
       )}
 
       {/* ── Rechte Spalte (Detail oder Formular) ─────────────────────── */}
+      {!showForm && <DetailTrennlinie detail={detailBreite} />}
       {!showForm && (
-        <div className="w-[28rem] shrink-0">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0`}>
           {selected ? (
             <LieferantDetail key={selected.id} lieferant={selected} initialTab={initialDetailTab} />
           ) : (

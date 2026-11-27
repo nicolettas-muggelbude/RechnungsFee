@@ -410,6 +410,10 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
   Wiederkehrend). Kein Drag-and-drop ohne Tastaturalternative
 - [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
 - [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
+- [ ] Trennlinien (Liste ↔ Formular `useSplitterBreite`, Liste ↔ Detail `components/DetailTrennlinie.tsx`,
+  Issue #599) per Tastatur: fokussierbar, `role="separator"` + `aria-orientation="vertical"` +
+  `aria-valuenow/min/max`, Pfeiltasten verschieben (Umschalt = größere Schritte), Pos1/Ende = Min/Max,
+  Enter oder Doppelklick setzt zurück
 
 ### 4. Prüfwerkzeuge & Abnahme
 - [ ] `eslint-plugin-jsx-a11y` im Lint

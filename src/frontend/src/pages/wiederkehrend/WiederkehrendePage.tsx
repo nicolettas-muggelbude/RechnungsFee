@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, useLocation } from 'react-router-dom'
@@ -801,6 +803,7 @@ export function WiederkehrendePage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('wiederkehrend', 33)
+  const detailBreite = useDetailBreite('wiederkehrend')
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const [formModus, setFormModus] = useState<'neu' | number | null>(null)
@@ -1083,8 +1086,9 @@ export function WiederkehrendePage() {
       )}
 
       {/* Rechts: Detail-Panel */}
+      {selVorlage && formModus === null && <DetailTrennlinie detail={detailBreite} />}
       {selVorlage && formModus === null && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col`}>
           <VorlageDetail
             vorlage={selVorlage}
             onClose={() => setSelId(null)}

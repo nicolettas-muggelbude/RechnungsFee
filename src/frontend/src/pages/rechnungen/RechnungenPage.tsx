@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { listen } from '@tauri-apps/api/event'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -5540,6 +5542,7 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('rechnungen', 33)
+  const detailBreite = useDetailBreite('rechnungen')
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [typ, setTyp] = useState<'eingang' | 'ausgang'>('ausgang')
@@ -6472,8 +6475,9 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         </div>
       )}
 
+      {!formModus && <DetailTrennlinie detail={detailBreite} />}
       {!formModus && (
-        <div className="w-[28rem] shrink-0 h-full overflow-hidden">
+        <div className={`${detailBreite.breiteKlasse} shrink-0 h-full overflow-hidden`} style={detailBreite.style}>
           {selectedRechnung ? (
             <RechnungDetail
               key={`${selectedId ?? 0}-${detailVersion}`}
