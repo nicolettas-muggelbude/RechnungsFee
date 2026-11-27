@@ -54,6 +54,32 @@ function ibanFmt(iban: string): string {
   return iban.replace(/(.{4})/g, '$1 ').trim()
 }
 
+/** Dropdown zur Kontowahl im Import-Dialog (E-Mail-Treffer, Übersteuerung, ohne IBAN). */
+function KontoSelect({ konten, value, mitLeerOption = false, onWahl }: {
+  konten: Konto[]
+  value: number
+  mitLeerOption?: boolean
+  onWahl: (id: number) => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
+      <select
+        value={value || ''}
+        onChange={e => onWahl(Number(e.target.value))}
+        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+      >
+        {mitLeerOption && <option value="">– Konto wählen –</option>}
+        {konten.map(k => (
+          <option key={k.id} value={k.id}>
+            {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 
 // ---------------------------------------------------------------------------
 // Import-Dialog (3 Schritte)
@@ -98,15 +124,15 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     analyseStatus.art === 'email_match'
       ? (freieKontoauswahl ? (manuellKontoId || null) : analyseStatus.kontoId) :
     analyseStatus.art === 'email_auswahl' ? (manuellKontoId || null) :
-    analyseStatus.art === 'kein_iban' ? manuellKontoId :
+    analyseStatus.art === 'kein_iban' ? (manuellKontoId || null) :
     null
 
-  function uebernehmeVorschau(result: BankVorschauResponse) {
+  const uebernehmeVorschau = useCallback((result: BankVorschauResponse) => {
     if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
     setVorschau(result)
     setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
 
-    const emailIds = result.email_konto_ids ?? []
+    const emailIds = result.email_konto_ids
     if (result.konto_iban && result.erkanntes_konto_id) {
       const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
       setAnalyseStatus({
@@ -132,7 +158,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setManuellKontoId(prev => prev || geschaeftskonten[0]?.id || 0)
       setAnalyseStatus({ art: 'kein_iban' })
     }
-  }
+  }, [geschaeftskonten])
 
   async function analysiere() {
     if (!datei) return
@@ -159,40 +185,30 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       const erlaubte = (Array.isArray(paths) ? paths : [])
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
-      setFehler(null)
-      setFreieKontoauswahl(false)
-      setAnalyseStatus({ art: 'idle' })
-      setVorschau(null)
-      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+      neueDateiZuruecksetzen()
       try {
         const f = await leseGedroppteDatei(erlaubte[0])
         setDatei(f)
         // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
         // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
-        // uebernehmeVorschau setzt erkanntes_template, Auswahl und den Analyse-Status
-        // (IBAN- wie E-Mail-Kontoerkennung, Security-Audit F5: Upload als Datei, nie als Pfad)
         uebernehmeVorschau(await vorschauBankImport(f, undefined, undefined))
       } catch (e: unknown) {
         setFehler((e as Error).message)
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }
-  }, [schritt, geschaeftskonten])
+  }, [schritt, uebernehmeVorschau])
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     const f = e.dataTransfer.files[0]
     if (f) {
       setDatei(f)
-      setFreieKontoauswahl(false)
-      setAnalyseStatus({ art: 'idle' })
-      setVorschau(null)
-      setFehler(null)
-      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+      neueDateiZuruecksetzen()
     }
   }
 
-  // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
+    // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
   async function ladeVorschauMitKonto(kontoId: number) {
     if (!datei) return
     setFehler(null)
@@ -204,6 +220,27 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setFehler((e as Error).message)
     }
   }
+
+  // Zustand zurücksetzen, wenn eine neue Datei ins Spiel kommt (Template wieder auf Automatik)
+  function neueDateiZuruecksetzen() {
+    setFehler(null)
+    setFreieKontoauswahl(false)
+    setAnalyseStatus({ art: 'idle' })
+    setVorschau(null)
+    setTemplateId('')
+  }
+
+  // Manuell gewähltes Konto übernehmen und Vorschau neu laden (0 = noch nichts gewählt)
+  function waehleKonto(id: number) {
+    setManuellKontoId(id)
+    if (id) ladeVorschauMitKonto(id)
+  }
+
+  // Bei mehreren E-Mail-Treffern ohne Übersteuerung: nur die Kandidaten zur Auswahl
+  const sichtbareKonten =
+    analyseStatus.art === 'email_auswahl' && !freieKontoauswahl
+      ? geschaeftskonten.filter(k => k.id != null && analyseStatus.kontoIds.includes(k.id))
+      : geschaeftskonten
 
   const txAuswahl = vorschau?.transaktionen.filter(t => auswahl.has(t.dedupe_hash)) ?? []
   const txDuplikate = vorschau?.transaktionen.filter(t => t.ist_duplikat).length ?? 0
@@ -296,11 +333,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
-                    setFreieKontoauswahl(false)
-                    setAnalyseStatus({ art: 'idle' })
-                    setVorschau(null)
-                    setFehler(null)
-                    setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+                    neueDateiZuruecksetzen()
                   }}
                 />
               </div>
@@ -390,24 +423,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                     </div>
                   </div>
                   {freieKontoauswahl && (
-                    <div>
-                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
-                      <select
-                        value={manuellKontoId || ''}
-                        onChange={e => {
-                          const id = Number(e.target.value)
-                          setManuellKontoId(id)
-                          if (id) ladeVorschauMitKonto(id)
-                        }}
-                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                      >
-                        {geschaeftskonten.map(k => (
-                          <option key={k.id} value={k.id}>
-                            {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <KontoSelect konten={geschaeftskonten} value={manuellKontoId} onWahl={waehleKonto} />
                   )}
                 </div>
               )}
@@ -440,30 +456,12 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                       Anderes Konto wählen
                     </button>
                   )}
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
-                    <select
-                      value={manuellKontoId || ''}
-                      onChange={e => {
-                        const id = Number(e.target.value)
-                        setManuellKontoId(id)
-                        if (id) ladeVorschauMitKonto(id)
-                      }}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                    >
-                      {analyseStatus.art === 'email_auswahl' && (
-                        <option value="">– Konto wählen –</option>
-                      )}
-                      {(analyseStatus.art === 'email_auswahl' && !freieKontoauswahl
-                        ? geschaeftskonten.filter(k => k.id != null && analyseStatus.kontoIds.includes(k.id))
-                        : geschaeftskonten
-                      ).map(k => (
-                        <option key={k.id} value={k.id}>
-                          {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <KontoSelect
+                    konten={sichtbareKonten}
+                    value={manuellKontoId}
+                    mitLeerOption={analyseStatus.art === 'email_auswahl'}
+                    onWahl={waehleKonto}
+                  />
                   {vorschau && (
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {vorschau.transaktionen.length} Transaktionen
@@ -621,7 +619,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   </button>
                 ) : analyseStatus.art === 'iban_match' || analyseStatus.art === 'kein_iban' || analyseStatus.art === 'email_match' || analyseStatus.art === 'email_auswahl' ? (
                   <button
-                    disabled={(analyseStatus.art === 'kein_iban' || analyseStatus.art === 'email_auswahl') && !manuellKontoId}
+                    disabled={!aktuellesKontoId}
                     onClick={() => setSchritt(2)}
                     className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
                   >

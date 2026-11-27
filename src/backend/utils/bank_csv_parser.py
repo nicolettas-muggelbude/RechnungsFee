@@ -292,7 +292,7 @@ def extract_eigene_email(raw: bytes) -> Optional[str]:
         if absender is not None and empfaenger is not None:
             header_idx, absender_i, empfaenger_i = i, absender, empfaenger
             break
-    if header_idx is None or absender_i is None or empfaenger_i is None:
+    if header_idx is None:
         return None
 
     zaehler: dict[str, int] = {}
