@@ -27,6 +27,7 @@ function aktuellerMonat(): string {
 }
 
 type FilterModus = 'monat' | 'datum' | 'zeitraum' | 'alle' | 'jahr'
+const STORNOS_AUSBLENDEN_KEY = 'journal_stornos_ausblenden'
 
 function heuteIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -68,6 +69,15 @@ export function JournalPage() {
   const [suche, _setSuche] = useState<string>(() => journalFilter.suche)
   const setSuche = (s: string) => { journalFilter.suche = s; _setSuche(s) }
   const [gruppeIdFilter, setGruppeIdFilter] = useState<number | null>(null)
+  // Issue #602: stornierte Originale + Stornos nur in der Ansicht ausblenden (pro Gerät gespeichert,
+  // Standard eingeblendet). Summen, Exporte und Korrektur-Kette bleiben vollständig.
+  const [stornosAusblenden, _setStornosAusblenden] = useState<boolean>(() => {
+    try { return localStorage.getItem(STORNOS_AUSBLENDEN_KEY) === '1' } catch { return false }
+  })
+  const setStornosAusblenden = (v: boolean) => {
+    _setStornosAusblenden(v)
+    try { localStorage.setItem(STORNOS_AUSBLENDEN_KEY, v ? '1' : '0') } catch {}
+  }
   const [showBuchung, setShowBuchung] = useState(false)
   const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
   const [schnellbuchungWerte, setSchnellbuchungWerte] = useState<Schnellbuchung | null>(null)
@@ -220,6 +230,12 @@ export function JournalPage() {
           .some((f) => (f ?? '').toLowerCase().includes(sucheText))
         || betragPasst(sucheText, e.brutto_betrag) || betragPasst(sucheText, e.netto_betrag))
     : eintraegeSortiert
+
+  // Issue #602: Ausblenden gilt nicht in der Korrektur-Kette (dort soll alles sichtbar sein)
+  const stornoAusgeblendet = (e: { storniert?: boolean; ist_storno?: boolean }) =>
+    stornosAusblenden && gruppeIdFilter === null && (!!e.storniert || !!e.ist_storno)
+  const eintraegeSichtbar = eintraegeGefiltert?.filter((e) => !stornoAusgeblendet(e))
+  const anzahlAusgeblendet = (eintraegeGefiltert?.length ?? 0) - (eintraegeSichtbar?.length ?? 0)
 
   const gruppenWurzeln = new Set(
     (eintraege ?? []).map(e => e.gruppe_id).filter((g): g is number => g != null)
@@ -457,6 +473,20 @@ export function JournalPage() {
           <option value="unbar">Nur Unbar</option>
         </select>
 
+        {/* Issue #602: stornierte Buchungen ausblenden (nur Ansicht) */}
+        <button
+          onClick={() => setStornosAusblenden(!stornosAusblenden)}
+          aria-pressed={stornosAusblenden}
+          title="Stornierte Buchungen und ihre Stornos ausblenden. Summen, Exporte und die Korrektur-Kette bleiben vollständig."
+          className={`rounded-lg px-3 py-1.5 text-sm border transition-colors whitespace-nowrap ${
+            stornosAusblenden
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+          }`}
+        >
+          Stornierte ausblenden
+        </button>
+
         {/* Reset */}
         {hatAktiveFilter && (
           <button
@@ -496,6 +526,19 @@ export function JournalPage() {
         </div>
       )}
 
+      {anzahlAusgeblendet > 0 && (
+        <div className="shrink-0 px-6 pb-3">
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-300">
+            <span>
+              {anzahlAusgeblendet === 1 ? '1 Buchung ist' : `${anzahlAusgeblendet} Buchungen sind`} ausgeblendet (stornierte Buchungen und ihre Stornos). Die Summen oben zählen sie weiterhin mit.
+            </span>
+            <button onClick={() => setStornosAusblenden(false)} className="ml-auto text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-medium whitespace-nowrap">
+              Einblenden
+            </button>
+          </div>
+        </div>
+      )}
+
       {gruppeIdFilter !== null && (
         <div className="shrink-0 px-6 pb-3">
           <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2.5 text-sm text-blue-800 dark:text-blue-300">
@@ -513,9 +556,11 @@ export function JournalPage() {
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {isLoading ? (
           <p className="text-slate-400 dark:text-slate-500 text-sm p-5">Lade…</p>
-        ) : !eintraegeGefiltert?.length ? (
+        ) : !eintraegeSichtbar?.length ? (
           <p className="text-slate-400 dark:text-slate-500 text-sm p-5">
-            {sucheText && eintraege?.length
+            {anzahlAusgeblendet > 0
+              ? 'Im gewählten Zeitraum gibt es nur stornierte Buchungen, sie sind ausgeblendet.'
+              : sucheText && eintraege?.length
               ? `Keine Buchung zu „${suche.trim()}“ im gewählten Zeitraum gefunden.`
               : 'Keine Buchungen gefunden.'}
           </p>
@@ -545,7 +590,7 @@ export function JournalPage() {
               </tr>
             </thead>
             <tbody>
-              {eintraegeGefiltert!.map((e) => {
+              {eintraegeSichtbar!.map((e) => {
                 const istAktiv = aktiverEintragId === e.id
                 const bereitsStorniert = !!e.storniert
                 const istStorno = !!e.ist_storno
