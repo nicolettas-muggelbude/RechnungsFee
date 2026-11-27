@@ -17,6 +17,7 @@ from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
+from utils.kontoinhaber import kontoinhaber_von
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy import extract, func, or_
@@ -560,6 +561,7 @@ def _absender_snapshot(db: Session) -> str:
         "email":                   unt.email or "",
         "webseite":                unt.webseite or "",
         "iban":                    unt.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unt),  # Issue #604
         "bic":                     unt.bic or "",
         "bank_name":               unt.bank_name or "",
         "logo_pfad":               unt.logo_pfad or "",
@@ -2299,6 +2301,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 "email":                   unternehmen.email or "",
                 "webseite":                unternehmen.webseite or "",
                 "iban":                    unternehmen.iban or "",
+                "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
                 "bic":                     unternehmen.bic or "",
                 "bank_name":               unternehmen.bank_name or "",
                 "logo_pfad":               unternehmen.logo_pfad or "",
@@ -2788,6 +2791,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         "email":                   unternehmen.email or "",
         "webseite":                unternehmen.webseite or "",
         "iban":                    unternehmen.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
         "bic":                     unternehmen.bic or "",
         "bank_name":               unternehmen.bank_name or "",
         "logo_pfad":               unternehmen.logo_pfad or "",

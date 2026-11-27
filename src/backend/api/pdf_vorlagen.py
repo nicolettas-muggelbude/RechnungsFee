@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import Unternehmen
 from utils.pdf_rechnung import generate_rechnung_pdf
+from utils.kontoinhaber import kontoinhaber_von
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 
 router = APIRouter(prefix="/api/pdf-vorlagen", tags=["PDF-Vorlagen"])
@@ -123,6 +124,7 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "email":                   unternehmen.email or "",
         "webseite":                unternehmen.webseite or "",
         "iban":                    unternehmen.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
         "bic":                     unternehmen.bic or "",
         "bank_name":               unternehmen.bank_name or "",
         "logo_pfad":               unternehmen.logo_pfad or "",

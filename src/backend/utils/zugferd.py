@@ -402,6 +402,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         pm = PaymentMeans()
         pm.type_code._text = "58"
         pm.payee_account.iban = unternehmen["iban"]
+        # Issue #604: Kontoinhaber (BT-85) nur, wenn unter Einstellungen → Konten gepflegt
+        if (unternehmen.get("kontoinhaber") or "").strip():
+            pm.payee_account.account_name = unternehmen["kontoinhaber"].strip()
         if unternehmen.get("bic"):
             pm.payee_institution.bic = unternehmen["bic"]
         doc.trade.settlement.payment_means.add(pm)

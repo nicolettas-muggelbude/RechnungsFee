@@ -1065,6 +1065,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Fügt einen EPC-QR-Code (GiroCode) neben den Zahlungshinweis ein.
                 Kunden können damit per Banking-App direkt überweisen – mit vorausgefüllten Daten.
+                Als Empfänger steht dein Firmenname darin. Läuft das Konto auf einen anderen Namen, trage ihn unter Einstellungen → Konten beim Konto als „Kontoinhaber“ ein.
               </p>
             </div>
             {!form.iban?.trim() && (

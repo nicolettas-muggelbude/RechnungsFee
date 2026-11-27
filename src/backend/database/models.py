@@ -270,6 +270,9 @@ class Konto(Base):
     kontotyp: Mapped[str] = mapped_column(String(20), default="geschaeftlich", nullable=False)  # geschaeftlich|mischkonto
     ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     datev_kontonummer: Mapped[str | None] = mapped_column(String(8))  # individuelles DATEV-Gegenkonto (z.B. 1200, 1210)
+    # Issue #604: Name wie bei der Bank hinterlegt (Empfängerüberprüfung) – Empfänger im
+    # QR-Code/E-Rechnung, wenn dieses Konto die Rechnungs-IBAN ist; leer = Firmenname bzw. Vor-/Nachname
+    kontoinhaber: Mapped[str | None] = mapped_column(String(70))
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

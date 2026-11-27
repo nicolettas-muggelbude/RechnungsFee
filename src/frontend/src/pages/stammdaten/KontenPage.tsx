@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { getKontenAlle, createKonto, updateKonto, deleteKonto, type Konto } from '../../api/client'
+import { getKontenAlle, createKonto, updateKonto, deleteKonto, getUnternehmen, type Konto } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { validiereIban, ladeOpenIbanDaten, OPEN_IBAN_BANK_FALLBACK, OPEN_IBAN_BIC_FALLBACK, openIbanBankdatenFehlgeschlagen, OPEN_IBAN_LAND_TOOLTIP } from '../../utils/iban'
@@ -38,6 +38,7 @@ const schema = z.discriminatedUnion('kontoart', [
     kontotyp:          z.enum(['geschaeftlich', 'mischkonto', 'privat']),
     ist_standard:      z.boolean(),
     datev_kontonummer: z.string().optional().or(z.literal('')),
+    kontoinhaber:      z.string().max(70, 'Höchstens 70 Zeichen (Grenze des QR-Codes)').optional().or(z.literal('')),
   }),
   z.object({
     kontoart:          z.literal('zahlungsdienstleister'),
@@ -49,6 +50,7 @@ const schema = z.discriminatedUnion('kontoart', [
     kontotyp:          z.enum(['geschaeftlich', 'mischkonto', 'privat']),
     ist_standard:      z.boolean(),
     datev_kontonummer: z.string().optional().or(z.literal('')),
+    kontoinhaber:      z.string().optional().or(z.literal('')),
   }),
 ])
 type FormValues = z.infer<typeof schema>
@@ -64,17 +66,18 @@ function defaultValues(konto: Konto | null): FormValues {
     kontotyp:          konto.kontotyp,
     ist_standard:      konto.ist_standard,
     datev_kontonummer: konto.datev_kontonummer ?? '',
+    kontoinhaber:      konto.kontoinhaber ?? '',
   }
   return {
     kontoart: 'bank', name: '', anbieter: '', iban: '', bic: '',
     kennung: '', kontotyp: 'geschaeftlich', ist_standard: false,
-    datev_kontonummer: '',
+    datev_kontonummer: '', kontoinhaber: '',
   }
 }
 
 function defaultValuesWithIban(iban: string): FormValues {
   return { kontoart: 'bank', name: '', anbieter: '', iban, bic: '',
-    kennung: '', kontotyp: 'geschaeftlich', ist_standard: false, datev_kontonummer: '' }
+    kennung: '', kontotyp: 'geschaeftlich', ist_standard: false, datev_kontonummer: '', kontoinhaber: '' }
 }
 
 function formatIban(iban: string) {
@@ -92,6 +95,9 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
     defaultValues: konto ? defaultValues(konto) : initialIban ? defaultValuesWithIban(initialIban) : defaultValues(null),
   })
   const kontoart = useWatch({ control, name: 'kontoart' })
+  const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+  const standardInhaber = (unternehmen?.firmenname ?? '').trim()
+    || [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ')
   const [bankFehler, setBankFehler] = useState<string | null>(null)
   const [bicFehler, setBicFehler] = useState<string | null>(null)
 
@@ -114,6 +120,8 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
       kennung:           data.kennung           || undefined,
       iban:              data.iban              || undefined,
       datev_kontonummer: data.datev_kontonummer || undefined,
+      // Issue #604: leer mitsenden, damit „zurück auf Standard“ beim Bearbeiten wirkt
+      kontoinhaber:      data.kontoart === 'bank' ? (data.kontoinhaber ?? '').trim() : undefined,
     }
     if (konto) update.mutate(payload as FormValues)
     else create.mutate(payload as FormValues)
@@ -254,6 +262,24 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
                 <span>Bankname und BIC aus IBAN per Web</span>
               </button>
               <p className="text-xs text-slate-400 dark:text-slate-500 text-center">Sendet deine IBAN an openiban.com (Fremdanbieter) zur Abfrage</p>
+
+              {/* Issue #604: Kontoinhaber für QR-Code und E-Rechnung */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+                  Kontoinhaber (optional)
+                  <InfoTooltip text="So, wie der Name bei deiner Bank hinterlegt ist. Banken prüfen vor einer Überweisung, ob der Empfängername zum Konto passt. Ist dieses Konto die IBAN auf deinen Rechnungen, steht der Name im Überweisungs-QR-Code, im Zahlungsblock und in der E-Rechnung. Leer lassen: Firmenname bzw. dein Vor- und Nachname aus den Stammdaten." />
+                </label>
+                <input
+                  {...register('kontoinhaber')}
+                  placeholder={standardInhaber ? `Standard: ${standardInhaber}` : 'z.B. Max Mustermann'}
+                  maxLength={70}
+                  className={inp}
+                />
+                {err((errors as any).kontoinhaber?.message)}
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Nur nötig, wenn das Konto nicht auf deinen Firmennamen läuft, z. B. als Einzelunternehmer mit Konto auf deinen eigenen Namen.
+                </p>
+              </div>
             </>
           )}
 

@@ -59,6 +59,9 @@ def update_konto(konto_id: int, data: KontoUpdate, db: Session = Depends(get_db)
         db.query(Konto).update({"ist_standard": False})
     for key, value in data.model_dump(exclude_none=True).items():
         setattr(konto, key, value)
+    # Issue #604: leerer Kontoinhaber setzt auf Standard (Firmenname) zurück
+    if "kontoinhaber" in data.model_fields_set:
+        konto.kontoinhaber = (data.kontoinhaber or "").strip() or None
     db.commit()
     db.refresh(konto)
     return konto

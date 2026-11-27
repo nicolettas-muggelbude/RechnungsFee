@@ -21,6 +21,7 @@ from utils.pdf_rechnung_base import (
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
 from utils.pdf_shared import epc_qr_bytes
+from utils.kontoinhaber import zahlungsempfaenger
 
 # Vorlage-Farben: Grüntöne passend zu #eff4ef
 GRUEN_HELL = (239, 244, 239)
@@ -287,9 +288,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         bank    = unt.get("bank_name") or ""
         faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "nach Erhalt"
 
-        empfaenger = unt.get("firmenname") or " ".join(filter(None, [
-            unt.get("vorname"), unt.get("nachname")
-        ]))
+        empfaenger = zahlungsempfaenger(unt)  # Issue #604: Kontoinhaber aus Einstellungen → Konten
 
         zahlungsstatus = str(getattr(r, "zahlungsstatus", "offen") or "offen")
         zahlungen = [
@@ -409,9 +408,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         block_bottom = self.get_y()
 
         if qr_aktiv:
-            empf = unt.get("firmenname") or " ".join(
-                p for p in [unt.get("vorname"), unt.get("nachname")] if p
-            )
+            empf = empfaenger
             qr_voll = epc_qr_bytes(iban, bic, empf, float(r.brutto_gesamt), r.rechnungsnummer or "")
             qr_sk   = (
                 epc_qr_bytes(iban, bic, empf, float(sk_netto), r.rechnungsnummer or "")

@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 202
+SCHEMA_VERSION = 203
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4668,6 +4668,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 202"))
             conn.commit()
             print("[Migration] Schema auf Version 202 (Issue #597: Abschlag aus Angebot/Auftrag)")
+
+    if version < 203:
+        with engine.connect() as conn:
+            # Issue #604: Kontoinhaber je Konto (Empfänger im QR-Code/E-Rechnung), leer = wie bisher
+            _k203 = {r[1] for r in conn.execute(text("PRAGMA table_info(konten)")).fetchall()}
+            if _k203 and "kontoinhaber" not in _k203:
+                conn.execute(text("ALTER TABLE konten ADD COLUMN kontoinhaber VARCHAR(70)"))
+            conn.execute(text("PRAGMA user_version = 203"))
+            conn.commit()
+            print("[Migration] Schema auf Version 203 (Issue #604: Kontoinhaber je Konto)")
 
 
 def _migrate_kategorien() -> None:

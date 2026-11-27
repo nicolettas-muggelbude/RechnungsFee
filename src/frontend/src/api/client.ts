@@ -499,6 +499,7 @@ export type Konto = {
   kontotyp: 'geschaeftlich' | 'mischkonto' | 'privat'
   ist_standard: boolean
   datev_kontonummer?: string | null
+  kontoinhaber?: string | null  // Issue #604: Empfänger im QR-Code, leer = Firmenname
   aktiv?: boolean
   erstellt_am?: string
 }

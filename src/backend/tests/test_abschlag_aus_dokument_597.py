@@ -198,7 +198,7 @@ def test_migration_202(tmp_path, monkeypatch):
     with engine.begin() as conn:
         spalten = {r[1] for r in conn.execute(text("PRAGMA table_info(rechnungen)"))}
         assert "abschlag_zu_dokument_id" in spalten
-        assert conn.execute(text("PRAGMA user_version")).scalar() == 202
+        assert conn.execute(text("PRAGMA user_version")).scalar() == main.SCHEMA_VERSION
         conn.execute(text("PRAGMA user_version = 201"))
     main._run_migrations()  # zweiter Lauf ändert nichts
 

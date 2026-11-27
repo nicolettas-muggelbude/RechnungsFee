@@ -25,6 +25,7 @@ from fpdf import FPDF
 from utils.dokument_adressen import adressfeld_adresse, adresszeilen_weitere_adresse, lieferzeile_adresse
 from utils.logo import logo_datei
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
+from utils.kontoinhaber import abweichender_kontoinhaber
 
 _STANDARDTEXT_TYP_SUFFIX = {
     "Angebot": "_angebot", "Auftrag": "_auftrag",
@@ -605,6 +606,7 @@ class RechnungPDFBase(FPDF):
 
         _col(L_MARGIN + 2 * col_w, list(filter(None, [
             bank,
+            f"Kontoinhaber: {abweichender_kontoinhaber(unt)}" if abweichender_kontoinhaber(unt) else "",  # Issue #604
             f"IBAN: {iban}" if iban else "",
             f"BIC: {bic}" if bic else "",
             f"Seite {self.page_no()}  ·  {self._druckdatum}",

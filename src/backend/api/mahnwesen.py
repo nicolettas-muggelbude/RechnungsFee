@@ -28,6 +28,7 @@ from .rechnungen import gutschrift_verrechnen, GutschriftVerrechnenRequest
 from utils.pdf_inkasso_deckblatt import erstelle_inkasso_deckblatt_pdf
 from utils.pdf_kontokorrent import erstelle_kontokorrent_pdf
 from utils.pdf_mahnung import erstelle_mahnung_pdf
+from utils.kontoinhaber import kontoinhaber_fuer_iban
 from .schemas import (
     MahnstufeCreate,
     MahnstufeResponse,
@@ -1593,7 +1594,11 @@ def mahnung_zusatzanhang(mahnung_id: int, index: int, db: Session = Depends(get_
 
 def _unt_dict(db: Session) -> dict:
     unt = db.query(Unternehmen).first()
-    return {c.name: getattr(unt, c.name) for c in unt.__table__.columns} if unt else {}
+    if not unt:
+        return {}
+    d = {c.name: getattr(unt, c.name) for c in unt.__table__.columns}
+    d["kontoinhaber"] = kontoinhaber_fuer_iban(db, unt.iban)  # Issue #604
+    return d
 
 
 def generate_inkasso_zip(db: Session, kunde_id: int) -> tuple[bytes, str]:

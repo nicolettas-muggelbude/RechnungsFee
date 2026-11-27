@@ -6,7 +6,7 @@ Getrennt von den SQLAlchemy-Models (database/models.py).
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Optional, List
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .schemas_rechnungen import BelegResponse
 
@@ -313,6 +313,12 @@ class KontoBase(BaseModel):
     kontotyp: str = "geschaeftlich" # geschaeftlich|mischkonto|privat
     ist_standard: bool = False
     datev_kontonummer: Optional[str] = None  # individuelles DATEV-Gegenkonto (z.B. 1200, 1210)
+    kontoinhaber: Optional[str] = Field(None, max_length=70)  # Issue #604, EPC-QR: max. 70 Zeichen
+
+    @field_validator("kontoinhaber")
+    @classmethod
+    def leer_ist_standard(cls, v: Optional[str]) -> Optional[str]:
+        return (v or "").strip() or None
 
     @model_validator(mode="after")
     def check_felder(self) -> "KontoBase":
@@ -357,6 +363,7 @@ class KontoUpdate(BaseModel):
     kontotyp: Optional[str] = None
     ist_standard: Optional[bool] = None
     datev_kontonummer: Optional[str] = None
+    kontoinhaber: Optional[str] = Field(None, max_length=70)  # "" = zurück auf Standard
     aktiv: Optional[bool] = None
 
 

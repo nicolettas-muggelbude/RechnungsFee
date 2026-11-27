@@ -20,6 +20,7 @@ from utils.pdf_rechnung_base import (
     pos_datum_spalten, positionsdatum,
 )
 from utils.pdf_shared import epc_qr_bytes
+from utils.kontoinhaber import zahlungsempfaenger
 
 
 def _kunden_name(r) -> str:
@@ -325,9 +326,7 @@ class RechnungPDF(RechnungPDFBase):
 
                     qr_aktiv = unt.get("qr_zahlung_aktiv", False)
                     if qr_aktiv:
-                        empf = unt.get("firmenname") or " ".join(
-                            p for p in [unt.get("vorname"), unt.get("nachname")] if p
-                        )
+                        empf = zahlungsempfaenger(unt)  # Issue #604: Kontoinhaber aus Einstellungen → Konten
                         # Skonto-QR bestimmen
                         sk_proz = getattr(r, "skonto_prozent", None)
                         sk_tage = getattr(r, "skonto_tage",    None)
