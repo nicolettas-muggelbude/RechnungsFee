@@ -24,7 +24,7 @@ export type ChangelogVersion = {
 export const CHANGELOG: ChangelogVersion[] = [
   {
     version: 'v0.7.14',
-    datum: 'in Arbeit',
+    datum: 'November 2026',
     eintraege: [
       { typ: 'verbesserung', text: 'Bank-Import: Ein PayPal-Export enthält keine IBAN. RechnungsFee erkennt das passende Konto jetzt an deiner eigenen E-Mail-Adresse im Export, wenn sie beim Zahlungsdienstleister unter Einstellungen → Konten als Kennung eingetragen ist. Passen mehrere Konten zur Adresse, wählst du aus diesen aus, über „Anderes Konto wählen“ geht jederzeit auch ein anderes. Danke an gitmacer für den Beitrag (PR #605).' },
       { typ: 'fix', text: 'Journal und Bank-Import: Beim Wechsel des Jahres im Filter „Jahr“ blieb die Liste beim alten Jahr stehen, erst eine weitere Filteränderung (z. B. auf „Einnahmen“) lud das neue Jahr. Die Liste wechselt jetzt sofort. Danke an Markus für den Hinweis (Issue #603).' },

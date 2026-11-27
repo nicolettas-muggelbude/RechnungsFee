@@ -149,7 +149,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [x] Folge-Release v0.7.12: weitere Härtung zwischen Oberfläche und Hintergrunddienst (Sitzungsschlüssel,
   signierte Links, keine Dateipfade über die Schnittstelle, CSP, Passwörter im Schlüsselbund)
 
-## 📋 v0.7.14 – DATEV: Kreditor als Personenkonto bei direkten Ausgaben (Issue #566)
+## ✅ v0.7.14 – DATEV: Kreditor als Personenkonto bei direkten Ausgaben (Issue #566)
 
 Seit v0.7.13 können direkt gebuchte Ausgaben (Journal, Split, Buchungsvorlage) einen Lieferanten
 tragen (`journal.lieferant_id`, Migration 192). Der DATEV-Export nutzt bisher nur bei Einnahmen den
@@ -164,7 +164,7 @@ Debitor des Kunden als Personenkonto.
 - [x] Lieferanten: direkte Ausgaben im neuen Reiter „Ausgaben“ (`GET /journal?lieferant_id=`), im
   Kontokorrent bewusst nicht (sofort bezahlt, keine Verbindlichkeit)
 
-## 📋 v0.7.14 – Mehrere Belege je Buchung (Issue #568, Stufe 2)
+## ✅ v0.7.14 – Mehrere Belege je Buchung (Issue #568, Stufe 2)
 
 Seit v0.7.13 hängt das Buchen aus einer Vorlage den Vertrag als eigene Kopie an (Stufe 1). Eine
 Journalbuchung trägt aber weiterhin nur einen Beleg (`journal.beleg_id`) – lädt man beim Buchen eine
