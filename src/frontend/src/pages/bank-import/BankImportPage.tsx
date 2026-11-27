@@ -208,7 +208,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
     }
   }
 
-    // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
+  // Bei manueller Kontoauswahl: Vorschau mit konto_id neu laden (Duplikat-Check)
   async function ladeVorschauMitKonto(kontoId: number) {
     if (!datei) return
     setFehler(null)
@@ -406,7 +406,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                     <span className="text-green-500 text-base leading-none mt-0.5">✓</span>
                     <div className="flex-1">
                       <p className="text-xs text-green-700 dark:text-green-300">
-                        {analyseStatus.kontoName} Konto über {analyseStatus.email} erkannt.
+                        Konto „{analyseStatus.kontoName}“ über {analyseStatus.email} erkannt.
                       </p>
                       {!freieKontoauswahl && (
                         <button
