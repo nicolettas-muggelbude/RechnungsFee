@@ -1008,7 +1008,8 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const autoCleanupRan = useRef(false)
 
   const { data: txListe, isLoading } = useQuery({
-    queryKey: ['bank-transaktionen', konto.id, limit, filterModus, monat, datum, datumVon, datumBis],
+    // jahr gehört in den Schlüssel (Issue #603-Folgemeldung, gleicher Fehler wie im Journal)
+    queryKey: ['bank-transaktionen', konto.id, limit, filterModus, monat, datum, datumVon, datumBis, jahr],
     queryFn: () => getBankTransaktionen(konto.id!, { limit, von: effektivVon, bis: effektivBis }),
     enabled: !!konto.id,
   })

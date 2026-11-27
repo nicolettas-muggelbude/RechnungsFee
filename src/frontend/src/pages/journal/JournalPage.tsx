@@ -185,7 +185,8 @@ export function JournalPage() {
   }
 
   const { data: eintraege, isLoading } = useQuery({
-    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis, art, kategorieId, zahlungsartTyp, gruppeIdFilter],
+    // jahr gehört in den Schlüssel (Issue #603-Folgemeldung): sonst lud ein Jahreswechsel nichts neu
+    queryKey: ['journal', filterModus, monat, datum, datumVon, datumBis, jahr, art, kategorieId, zahlungsartTyp, gruppeIdFilter],
     queryFn: () => gruppeIdFilter
       // Korrektur-Kette anzeigen: ignoriert Datum/Kategorie/Art-Filter bewusst, damit
       // Original+Storno+Neu auch bei abweichendem Datum vollstaendig sichtbar sind.
