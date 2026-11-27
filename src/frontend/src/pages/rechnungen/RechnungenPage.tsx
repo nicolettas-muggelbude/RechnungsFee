@@ -6475,10 +6475,10 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
         </div>
       )}
 
-      {!formModus && <DetailTrennlinie detail={detailBreite} />}
-      {!formModus && (
+      {/* Detail-Panel nur bei Auswahl, sonst Liste durchgehend (wie die übrigen Listen) */}
+      {!formModus && selectedRechnung && <DetailTrennlinie detail={detailBreite} />}
+      {!formModus && selectedRechnung && (
         <div className={`${detailBreite.breiteKlasse} shrink-0 h-full overflow-hidden`} style={detailBreite.style}>
-          {selectedRechnung ? (
             <RechnungDetail
               key={`${selectedId ?? 0}-${detailVersion}`}
               rechnung={selectedRechnung}
@@ -6519,11 +6519,6 @@ export function RechnungenPage({ modus = 'rechnungen' }: { modus?: 'rechnungen' 
               }}
               onLieferscheinAusRechnung={lieferscheinAktiv ? (id) => lieferscheinAusRechnungMutation.mutate(id) : undefined}
             />
-          ) : (
-            <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
-              Rechnung auswählen
-            </div>
-          )}
         </div>
       )}
 
