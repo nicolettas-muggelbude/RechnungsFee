@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, getCockpit, getMahnwesenEinstellungen, getMahnungenFaellig, getPostfachEingang, type Rechnung, type Forderung, type CockpitDaten } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { dashboardFilter } from '../../store/filterStore'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
@@ -855,7 +856,7 @@ const WIDGET_DEFS: Array<{ id: string; label: string; warnung: boolean; nurTrans
   { id: 'mahnwesen_faellig',   label: 'Mahnungen fällig',                   warnung: false, nurMahnwesen: true },
   { id: 'postfach',            label: 'Rechnungspostfach',                  warnung: false },
   { id: 'cockpit_widget',      label: 'Cockpit (Monatsvergleich)',          warnung: false },
-  { id: 'kacheln',             label: 'Einnahmen / Ausgaben / Saldo',       warnung: false },
+  { id: 'kacheln',             label: 'Zahlungen (brutto) / Saldo',     warnung: false },
   { id: 'faellige',            label: 'Fällige Rechnungen',                 warnung: false },
   { id: 'letzte_buchungen',    label: 'Letzte Buchungen',                   warnung: false },
 ]
@@ -1194,6 +1195,28 @@ function trendPfeil(jetzt: number, vorjahr: number): { pfeil: string; farbe: str
   return { pfeil: '→', farbe: 'text-slate-400', diff: `±0 %` }
 }
 
+// Issue #603: Rechenwege von Cockpit-Widget und Kacheln offenlegen
+const COCKPIT_HINWEIS =
+  'Netto-Beträge (ohne Umsatzsteuer/Vorsteuer) des laufenden Monats, gerechnet wie die EÜR: ' +
+  'nur Kategorien mit EÜR-Zeile, ohne Anlagekäufe, ohne Umsatzsteuer-Zahlungen/-Erstattungen ans ' +
+  'Finanzamt und ohne Privatbuchungen.'
+const KACHELN_HINWEIS =
+  'Brutto-Beträge (mit Umsatzsteuer/Vorsteuer) aller Buchungen im gewählten Zeitraum, so wie das Geld ' +
+  'geflossen ist. Mitgezählt werden auch Anlagekäufe, Umsatzsteuer-Zahlungen/-Erstattungen und ' +
+  'Kategorien ohne EÜR-Zeile, nicht aber Privatbuchungen und durchlaufende Posten. Deshalb weichen die ' +
+  'Werte vom Cockpit (netto, nur EÜR-relevant) und von der EÜR ab.'
+
+function zeitraumText(modus: FilterModus, monat: string, datum: string, von: string, bis: string, jahr: number): string {
+  const de = (iso: string) => iso ? iso.split('-').reverse().join('.') : '…'
+  if (modus === 'monat') {
+    const [j, m] = monat.split('-').map(Number)
+    return new Date(j, (m || 1) - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  }
+  if (modus === 'datum') return de(datum)
+  if (modus === 'zeitraum') return `${de(von)} – ${de(bis)}`
+  return String(jahr)
+}
+
 function CockpitWidget() {
   const navigate = useNavigate()
   const now      = new Date()
@@ -1241,8 +1264,11 @@ function CockpitWidget() {
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-slate-700 dark:text-slate-200">Cockpit</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500">{monatLabel} · netto</p>
+          <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            Cockpit
+            <InfoTooltip side="bottom" text={COCKPIT_HINWEIS} />
+          </h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500">{monatLabel} (immer der laufende Monat) · netto</p>
         </div>
         <button
           onClick={() => navigate('/cockpit')}
@@ -1379,6 +1405,7 @@ export function Dashboard() {
     .filter((e) => e.art === 'Ausgabe')
     .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
   const saldo = einnahmen - ausgaben
+  const kachelZeitraum = zeitraumText(filterModus, monat, datum, datumVon, datumBis, aktivesJahr)
   const letzteEintraege = alle
 
   // §11b SGB II Zuflussprinzip: Einnahmen und Ausgaben brutto (tatsächlich geflossene Beträge)
@@ -1451,13 +1478,17 @@ export function Dashboard() {
       case 'kacheln':
         return (
           <div key="kacheln">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 pl-1 flex items-center gap-1.5">
+              Zahlungen {kachelZeitraum} · brutto
+              <InfoTooltip side="bottom" text={KACHELN_HINWEIS} />
+            </p>
             <div className="grid grid-cols-3 gap-4 mb-2">
               <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebseinnahmen</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Zahlungseingänge</p>
                 <p className="text-2xl font-bold text-green-600">{loaded ? formatEuro(einnahmen) : '—'}</p>
               </div>
               <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Betriebsausgaben</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Zahlungsausgänge</p>
                 <p className="text-2xl font-bold text-red-600">{loaded ? formatEuro(ausgaben) : '—'}</p>
               </div>
               <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
