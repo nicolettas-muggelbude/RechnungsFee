@@ -4,7 +4,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getJournal, getUnternehmen, updateUnternehmen, getKleinunternehmerUmsatz, getFaelligeRechnungen, pruefZM, getLagerwarnungListe, getFristen, getGUVSchwellenwert, getUeberzahlungen, ueberzahlungAnerkennen, getOffeneForderungen, forderungAusbuchen, getKategorien, getCockpit, getMahnwesenEinstellungen, getMahnungenFaellig, getPostfachEingang, type Rechnung, type Forderung, type CockpitDaten } from '../../api/client'
 import { DateInput } from '../../components/DateInput'
 import { InfoTooltip } from '../../components/InfoTooltip'
-import { dashboardFilter } from '../../store/filterStore'
+import { dashboardFilter, journalFilter } from '../../store/filterStore'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
 function formatEuro(val: string | number): string {
@@ -1406,6 +1406,25 @@ export function Dashboard() {
     .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
   const saldo = einnahmen - ausgaben
   const kachelZeitraum = zeitraumText(filterModus, monat, datum, datumVon, datumBis, aktivesJahr)
+
+  // Issue #603 Stufe 2: Kachel öffnet das Journal mit demselben Zeitraum (+ Art). Übrige
+  // Journal-Filter werden zurückgesetzt, damit nichts unbemerkt weiter filtert.
+  function zeigeImJournal(artFilter: '' | 'Einnahme' | 'Ausgabe') {
+    const istJahr = filterModus !== 'monat' && filterModus !== 'datum' && filterModus !== 'zeitraum'
+    Object.assign(journalFilter, {
+      modus: istJahr ? 'alle' : filterModus,
+      monat, datum, datumVon, datumBis,
+      jahr: aktivesJahr,
+      art: artFilter,
+      kategorieId: '',
+      zahlungsartTyp: '',
+      nurBebuchte: false,
+      suche: '',
+    })
+    navigate('/journal')
+  }
+  const kachelKlasse = 'text-left w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-colors cursor-pointer'
+  const kachelTitel = 'Buchungen im Journal anzeigen (dort stehen zusätzlich Privatbuchungen und durchlaufende Posten, die hier nicht mitzählen)'
   const letzteEintraege = alle
 
   // §11b SGB II Zuflussprinzip: Einnahmen und Ausgaben brutto (tatsächlich geflossene Beträge)
@@ -1483,18 +1502,18 @@ export function Dashboard() {
               <InfoTooltip side="bottom" text={KACHELN_HINWEIS} />
             </p>
             <div className="grid grid-cols-3 gap-4 mb-2">
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+              <button type="button" onClick={() => zeigeImJournal('Einnahme')} title={kachelTitel} className={kachelKlasse}>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Zahlungseingänge</p>
                 <p className="text-2xl font-bold text-green-600">{loaded ? formatEuro(einnahmen) : '—'}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+              </button>
+              <button type="button" onClick={() => zeigeImJournal('Ausgabe')} title={kachelTitel} className={kachelKlasse}>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Zahlungsausgänge</p>
                 <p className="text-2xl font-bold text-red-600">{loaded ? formatEuro(ausgaben) : '—'}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+              </button>
+              <button type="button" onClick={() => zeigeImJournal('')} title={kachelTitel} className={kachelKlasse}>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Saldo</p>
                 <p className={`text-2xl font-bold ${saldo >= 0 ? 'text-blue-600' : 'text-red-700'}`}>{loaded ? formatEuro(saldo) : '—'}</p>
-              </div>
+              </button>
             </div>
             {hatPrivatbuchungen ? (
               <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 pl-1">
