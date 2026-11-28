@@ -24,7 +24,7 @@ export type ChangelogVersion = {
 export const CHANGELOG: ChangelogVersion[] = [
   {
     version: 'v0.7.15',
-    datum: 'in Arbeit',
+    datum: 'November 2026',
     eintraege: [
       { typ: 'neu', text: 'Umbuchung zwischen eigenen Konten: Geld vom Geschäftskonto aufs Rücklagenkonto, zu PayPal oder als Abhebung in die Kasse lässt sich im Bank-Import über „Umbuchung“ buchen statt nur ignorieren. RechnungsFee sucht das Gegenstück auf dem anderen Konto und bucht beide Seiten zusammen auf die neue Kategorie „Geldtransit“, bei Abhebung oder Einzahlung auch die Bar-Seite in der Kasse. Die Konten passen damit im DATEV-Export zum Kontoauszug, EÜR und Umsatzsteuer bleiben unberührt. Bereits ignorierte Umbuchungen lassen sich nachträglich so buchen. Danke an Pascal für die Frage.' },
       { typ: 'verbesserung', text: 'Einstellungen → Konten: Jedes neue Konto bekommt automatisch eine eigene DATEV-Kontonummer (die nächste freie aus „Bank 1–5“), auch im Einrichtungsassistenten. Nennt dir dein Steuerbüro eine andere Nummer, trägst du sie einfach ein. Hat ein PayPal-Konto noch keine Nummer, steht dort ein Vorschlag zum Übernehmen. Sonst landen die PayPal-Umsätze im DATEV-Export (SKR04) auf dem Konto für Geldtransit, und der Export weist darauf hin.' },
