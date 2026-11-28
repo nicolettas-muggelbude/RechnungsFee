@@ -3,6 +3,7 @@ Unternehmer-Cockpit – Betriebswirtschaftliche Auswertung (BWA light)
 
 Alle Beträge netto (ohne USt/Vorsteuer), Zuflussprinzip (wie EÜR).
 Ausgeschlossen: Privatentnahmen/Einlagen (euer_zeile 106/107), Anlage-Buchungen, USt-Buchungen.
+Anlage-Käufe zählen stattdessen über die AfA aus dem Anlagenverzeichnis (Issue #607).
 """
 
 import calendar
@@ -25,6 +26,8 @@ Q2   = Decimal("0.01")
 _EINNAHMEN_ZEILEN_SKIP = {17, 18, 106, 107}
 # EÜR-Zeilen Abschnitt B (Ausgaben) ohne Vorsteuer-Summenzeile
 _AUSGABEN_ZEILEN_SKIP  = {57}
+# Issue #607: AfA aus dem Anlagenverzeichnis, gleicher Name wie die Journal-Kategorie (Zeile 33)
+AFA_KATEGORIE = "Abschreibungen (AfA)"
 
 
 def _parse_zeitraum(zeitraum: str, wert: str) -> tuple[list[tuple[int, int]], int, str]:
@@ -247,6 +250,17 @@ def get_cockpit(
                 key = "19" if satz == 19 else "7" if satz == 7 else "0"
                 ust_ein[key] = ust_ein.get(key, ZERO) + ein
 
+    # Issue #607: Anschaffungen auf Anlage-Kategorien zählen nicht mit dem Kaufpreis, sondern
+    # über die AfA aus dem Anlagenverzeichnis - wie in der EÜR (Zeile 33), monatsweise verteilt
+    from api.anlageverzeichnis import afa_je_monat, offene_anschaffungen
+    from database.models import Anlagegut
+    for gut in db.query(Anlagegut).filter(Anlagegut.aktiv == True).all():  # noqa: E712
+        for monat, afa in afa_je_monat(gut, jahr).items():
+            monats_aus[monat] += afa
+            if (jahr, monat) in periode_set:
+                kpi_aus += afa
+                kat_aus[AFA_KATEGORIE] = kat_aus.get(AFA_KATEGORIE, ZERO) + afa
+
     # Runden
     def r(v: Decimal) -> float:
         return float(v.quantize(Q2, ROUND_HALF_UP))
@@ -292,4 +306,6 @@ def get_cockpit(
         "monatsbalken": monatsbalken,
         "ausgaben_kategorien": ausgaben_kategorien,
         "einnahmen_nach_ust": einnahmen_nach_ust,
+        # Issue #607: Anlage-Käufe des Jahres ohne Eintrag im Anlagenverzeichnis (fehlen als Aufwand)
+        "offene_anschaffungen": offene_anschaffungen(db, von, bis),
     }

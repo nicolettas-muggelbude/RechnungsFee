@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, getJournalBelegUrl, getUnternehmen, openUrl, type EUERErgebnis, type EUERDetailErgebnis, type EUERKatBuchung } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
+import { OffeneAnschaffungenHinweis } from '../../components/OffeneAnschaffungenHinweis'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
 import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
@@ -342,11 +343,14 @@ export function EUERPage() {
                 <span className="ml-1">Anlagezugänge {ergebnis.jahr}: {euroFmt(ergebnis.anlage_zugaenge)}.</span>
               )}
             </div>
-          ) : parseFloat(ergebnis.anlage_zugaenge) > 0 ? (
+          ) : ergebnis.offene_anschaffungen?.length ? null : parseFloat(ergebnis.anlage_zugaenge) > 0 ? (
             <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
               <strong>Anlagezugänge {ergebnis.jahr}:</strong> {euroFmt(ergebnis.anlage_zugaenge)} (KFZ, EDV o.ä.) – erfasse die Wirtschaftsgüter unter <strong>Auswertung → Anlage AVEÜR</strong>, damit die AfA automatisch in Zeile {ergebnis.zeile_afa} einfließt.
             </div>
           ) : null}
+
+          {/* Issue #607: konkrete Käufe ohne Eintrag, mit direktem Weg ins Anlagenverzeichnis */}
+          <OffeneAnschaffungenHinweis liste={ergebnis.offene_anschaffungen} />
 
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Grundlage: Journalbuchungen {ergebnis.jahr} · Ist-Versteuerung (Zahlungsdatum).

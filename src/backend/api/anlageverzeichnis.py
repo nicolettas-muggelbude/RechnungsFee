@@ -46,6 +46,7 @@ class AnlagegutBase(BaseModel):
     verkauft_am: Optional[date] = None
     notizen: Optional[str] = None
     aktiv: bool = True
+    journal_id: Optional[int] = None  # Issue #607: Buchung, aus der das Anlagegut eingetragen wurde
 
     @model_validator(mode="after")
     def check_afa_methode(self) -> "AnlagegutBase":
@@ -224,6 +225,143 @@ def _afa_fuer_jahr(gut: Anlagegut, jahr: int) -> Decimal:
     return ZERO
 
 
+def afa_je_monat(gut: Anlagegut, jahr: int) -> dict[int, Decimal]:
+    """Issue #607: abziehbare AfA eines Jahres auf Monate verteilt (für das Cockpit, das
+    monatsweise rechnet). Summe = _afa_fuer_jahr(), damit Cockpit-Jahr und EÜR übereinstimmen.
+    Voller Abzug (afa_sofort): alles im Kaufmonat. Sonst gleichmäßig auf die Monate, für die im
+    Jahr AfA anfällt: Kaufjahr ab Kaufmonat, Restjahr bis vor den Kaufmonat, Verkaufsjahr bis
+    einschließlich Verkaufsmonat. Rundungsrest im letzten Monat."""
+    betrag = _afa_fuer_jahr(gut, jahr)
+    if betrag == ZERO:
+        return {}
+    kauf = gut.kaufdatum
+    if getattr(gut, "afa_sofort", False):
+        return {kauf.month: betrag}
+    von, bis = 1, 12
+    if jahr == kauf.year:
+        von = kauf.month
+    elif jahr == kauf.year + gut.nutzungsdauer_jahre and kauf.month > 1:
+        bis = kauf.month - 1
+    verkauf = getattr(gut, "verkauft_am", None)
+    if verkauf and verkauf.year == jahr and verkauf >= kauf:
+        bis = min(bis, verkauf.month)
+    monate = list(range(von, max(bis, von) + 1))
+    anteil = (betrag / len(monate)).quantize(ONE_CENT, ROUND_HALF_UP)
+    ergebnis = {m: anteil for m in monate}
+    ergebnis[monate[-1]] = betrag - anteil * (len(monate) - 1)
+    return ergebnis
+
+
+def _zahlung_praefix_weg(text: str) -> str:
+    """„Zahlung ER-260007: Hottgenroth Software AG“ → „Hottgenroth Software AG“."""
+    if text.startswith("Zahlung ") and ": " in text:
+        return text.split(": ", 1)[1].strip() or text
+    return text
+
+
+def _anschaffungskosten(e) -> Decimal:
+    """Bemessungsgrundlage der AfA: netto plus nicht abziehbare Vorsteuer - gleiche Basis wie
+    euer.py::_anlage_zugang_beitrag() (Kleinunternehmer = brutto, Regelbesteuerung = netto).
+    Bei einer Eingangsrechnung deren Gesamtbetrag (Teilzahlungen sind eine Anschaffung)."""
+    netto = Decimal(str(e.netto_betrag or 0))
+    ust = Decimal(str(e.ust_betrag or 0))
+    vorsteuer = Decimal(str(e.vorsteuer_betrag or 0))
+    if e.ust_sonderfall:
+        nicht_abziehbar_anteil = Decimal("0")
+    else:
+        nicht_abziehbar_anteil = ((ust - vorsteuer) / ust) if ust else Decimal("0")
+    r = getattr(e, "rechnung", None)
+    if r is not None and r.brutto_gesamt:
+        netto, ust = Decimal(str(r.netto_gesamt)), Decimal(str(r.ust_gesamt))
+    return (netto + ust * nicht_abziehbar_anteil).quantize(ONE_CENT, ROUND_HALF_UP)
+
+
+def offene_anschaffungen(db: Session, von: date, bis: date) -> list[dict]:
+    """Issue #607: Buchungen auf Anlage-Kategorien (Ausgabe, nicht storniert) im Zeitraum, die
+    nicht im Anlagenverzeichnis stehen. Ohne Eintrag dort fehlt der Aufwand in Cockpit UND EÜR
+    (die Anlage-Kategorie selbst hat keine EÜR-Zeile, der Aufwand kommt nur über die AfA).
+
+    Eingetragen gilt eine Buchung, wenn ein Anlagegut auf sie verweist (journal_id) - bei
+    Einträgen von vor dieser Verknüpfung, wenn ein Anlagegut ohne Verweis dieselben
+    Anschaffungskosten hat und höchstens 120 Tage vom Zahlungs- bzw. Rechnungsdatum entfernt
+    gekauft wurde (jedes Anlagegut zählt dabei nur für eine Buchung). Mehrere Zahlungen auf
+    dieselbe Eingangsrechnung erscheinen als eine Anschaffung."""
+    from database.models import Journaleintrag, Kategorie
+    from api.journal import _storno_infos
+
+    eintraege = (
+        db.query(Journaleintrag).join(Kategorie, Journaleintrag.kategorie_id == Kategorie.id)
+        .filter(Kategorie.kontenart == "Anlage", Journaleintrag.art == "Ausgabe",
+                Journaleintrag.datum >= von, Journaleintrag.datum <= bis)
+        .order_by(Journaleintrag.datum, Journaleintrag.id).all()
+    )
+    if not eintraege:
+        return []
+    infos = _storno_infos(db, eintraege)
+    gueter = db.query(Anlagegut).all()
+    verknuepft = {g.journal_id for g in gueter if g.journal_id}
+    ohne_verweis = [g for g in gueter if not g.journal_id]
+
+    ergebnis: list[dict] = []
+    rechnungen_gesehen: set[int] = set()
+    for e in eintraege:
+        info = infos.get(e.id, {})
+        if info.get("storniert") or info.get("ist_storno") or e.id in verknuepft:
+            continue
+        if e.rechnung_id:
+            if e.rechnung_id in rechnungen_gesehen:
+                continue
+            rechnungen_gesehen.add(e.rechnung_id)
+            # Ein Anlagegut, das auf eine andere Zahlung derselben Rechnung verweist, deckt sie ab
+            if any(j.id in verknuepft for j in db.query(Journaleintrag)
+                   .filter(Journaleintrag.rechnung_id == e.rechnung_id).all()):
+                continue
+        kosten = _anschaffungskosten(e)
+        bezugsdaten = [e.datum] + ([e.rechnung.datum] if e.rechnung is not None and e.rechnung.datum else [])
+        treffer = next((g for g in ohne_verweis
+                        if Decimal(str(g.kaufpreis_netto)) in (kosten, Decimal(str(e.netto_betrag)), Decimal(str(e.brutto_betrag)))
+                        and min(abs((g.kaufdatum - d).days) for d in bezugsdaten) <= 120), None)
+        if treffer is not None:
+            ohne_verweis.remove(treffer)
+            continue
+        ergebnis.append({
+            "journal_id": e.id,
+            "datum": e.datum.isoformat(),
+            "belegnr": e.belegnr,
+            "beschreibung": e.beschreibung,
+            "kategorie": e.kategorie.name if e.kategorie else None,
+            "betrag": float(kosten),
+        })
+    return ergebnis
+
+
+def vorschlag_aus_buchung(db: Session, journal_id: int) -> dict:
+    """Issue #607: vorausgefüllter Anlagegut-Eintrag aus einer Buchung auf einer Anlage-Kategorie."""
+    from database.models import Journaleintrag
+
+    e = db.get(Journaleintrag, journal_id)
+    if not e:
+        raise HTTPException(404, "Buchung nicht gefunden")
+    kat_name = (e.kategorie.name if e.kategorie else "").lower()
+    typ = "edv" if ("edv" in kat_name or "software" in kat_name) else "kfz" if "kfz" in kat_name else "sonstig"
+    r = e.rechnung
+    bezeichnung = _zahlung_praefix_weg(e.beschreibung)
+    if r is not None:
+        texte = [p.beschreibung.strip() for p in r.positionen if (p.beschreibung or "").strip()]
+        if len(texte) == 1:
+            bezeichnung = texte[0]
+    return {
+        "bezeichnung": bezeichnung[:200],
+        "typ": typ,
+        "kaufdatum": (r.datum if r is not None and r.datum else e.datum).isoformat(),
+        "kaufpreis_netto": str(_anschaffungskosten(e)),
+        # „Sofortabschreibung“-Kategorie: EDV mit ND 1 und vollem Abzug im Kaufjahr (#578)
+        "nutzungsdauer_jahre": 1 if typ == "edv" else 6 if typ == "kfz" else 5,
+        "afa_sofort": typ == "edv",
+        "journal_id": e.id,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CRUD-Endpunkte
 # ---------------------------------------------------------------------------
@@ -248,6 +386,8 @@ def aktualisieren(gut_id: int, data: AnlagegutCreate, db: Session = Depends(get_
     if not gut:
         raise HTTPException(404, "Wirtschaftsgut nicht gefunden")
     for k, v in data.model_dump().items():
+        if k == "journal_id" and k not in data.model_fields_set:
+            continue  # Issue #607: Verknüpfung bleibt beim Bearbeiten erhalten
         setattr(gut, k, v)
     db.commit()
     db.refresh(gut)
@@ -269,6 +409,17 @@ def abschreibungsplan(gut_id: int, db: Session = Depends(get_db)):
     if not gut:
         raise HTTPException(404, "Wirtschaftsgut nicht gefunden")
     return _afa_jahresplan(gut)
+
+
+@router.get("/offene-anschaffungen")
+def offene_anschaffungen_endpunkt(von: date = Query(...), bis: date = Query(...), db: Session = Depends(get_db)):
+    """Issue #607: Anlage-Buchungen im Zeitraum ohne Eintrag im Anlagenverzeichnis."""
+    return offene_anschaffungen(db, von, bis)
+
+
+@router.get("/vorschlag/{journal_id}")
+def vorschlag_endpunkt(journal_id: int, db: Session = Depends(get_db)):
+    return vorschlag_aus_buchung(db, journal_id)
 
 
 @router.get("/zusammenfassung")

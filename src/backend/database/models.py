@@ -1138,6 +1138,9 @@ class Anlagegut(Base):
     verkauft_am: Mapped[date | None] = mapped_column(Date)
     notizen: Mapped[str | None] = mapped_column(Text)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Issue #607: Buchung (Anlage-Kategorie), aus der das Gut eingetragen wurde - Hinweis
+    # „nicht im Anlagenverzeichnis“ in Cockpit/EÜR erkennt eingetragene Käufe darüber
+    journal_id: Mapped[int | None] = mapped_column(ForeignKey("journal.id", ondelete="SET NULL"))
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
 import { useDetailBreite } from '../../hooks/useDetailBreite'
@@ -8,7 +9,7 @@ import { ExportButtons } from '../../components/ExportButtons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getAnlagegueter, createAnlagegut, updateAnlagegut, deleteAnlagegut,
-  getAfaPlan, getAveurPdfUrl, getAveurZusammenfassung, openUrl,
+  getAfaPlan, getAveurPdfUrl, getAveurZusammenfassung, getAnlagegutVorschlag, openUrl,
   type Anlagegut, type AnlagegutCreate, type AnlagegutTyp,
 } from '../../api/client'
 import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
@@ -55,9 +56,10 @@ const LEER: AnlagegutCreate = {
 type AnlagegutFormState = Omit<AnlagegutCreate, 'nutzungsdauer_jahre'> & { nutzungsdauer_jahre: number | '' }
 
 function AnlagegutFormular({
-  initial, onSave, onAbbrechen,
+  initial, vorschlag, onSave, onAbbrechen,
 }: {
   initial?: Anlagegut
+  vorschlag?: Partial<AnlagegutCreate>  // Issue #607: aus einer Buchung vorausgefüllt
   onSave: (d: AnlagegutCreate) => void
   onAbbrechen: () => void
 }) {
@@ -77,7 +79,7 @@ function AnlagegutFormular({
           notizen: initial.notizen,
           aktiv: initial.aktiv,
         }
-      : LEER
+      : { ...LEER, ...vorschlag }
   )
 
   function set(key: keyof AnlagegutCreate, val: unknown) {
@@ -104,6 +106,11 @@ function AnlagegutFormular({
 
   return (
     <div className="space-y-4">
+      {vorschlag?.journal_id && (
+        <p role="status" className="text-xs bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 rounded-lg px-3 py-2">
+          Die Angaben stammen aus der Buchung. Prüfe sie kurz und lege das Wirtschaftsgut dann an.
+        </p>
+      )}
       <div>
         <label className={labelCls}>Bezeichnung *</label>
         <input className={inputCls} value={form.bezeichnung} onChange={e => set('bezeichnung', e.target.value)} placeholder="z. B. Laptop Dell XPS, Ford Transit" />
@@ -316,6 +323,24 @@ export function AnlageverzeichnisPage() {
   const [selId, setSelId] = useState<number | null>(null)
   const [planGut, setPlanGut] = useState<Anlagegut | null>(null)
 
+  // Issue #607: „Jetzt eintragen“ aus Cockpit/EÜR öffnet das Formular vorausgefüllt
+  const [searchParams, setSearchParams] = useSearchParams()
+  const ausJournal = Number(searchParams.get('aus_journal')) || null
+  const { data: vorschlag } = useQuery({
+    queryKey: ['anlagegut-vorschlag', ausJournal],
+    queryFn: () => getAnlagegutVorschlag(ausJournal!),
+    enabled: ausJournal !== null,
+  })
+  const [vorschlagOffen, setVorschlagOffen] = useState<number | null>(null)
+  if (vorschlag && vorschlagOffen !== vorschlag.journal_id) {
+    setVorschlagOffen(vorschlag.journal_id)
+    setFormModus('neu')
+    setSelId(null)
+  }
+  function vorschlagSchliessen() {
+    if (ausJournal !== null) setSearchParams({}, { replace: true })
+  }
+
   const { data: gueter = [] } = useQuery({ queryKey: ['anlagegueter'], queryFn: getAnlagegueter })
   const selGut = gueter.find(g => g.id === selId)
 
@@ -337,9 +362,10 @@ export function AnlageverzeichnisPage() {
     // bis dort zufällig ein Requery ausgelöst wird (Issue #294)
     qc.invalidateQueries({ queryKey: ['euer-berechnen'] })
     qc.invalidateQueries({ queryKey: ['euer-kategorien'] })
+    qc.invalidateQueries({ queryKey: ['cockpit'] })  // Issue #607: AfA im Cockpit
   }
 
-  const createMut = useMutation({ mutationFn: createAnlagegut, onSuccess: () => { invalidateAfa(); setFormModus(null) } })
+  const createMut = useMutation({ mutationFn: createAnlagegut, onSuccess: () => { invalidateAfa(); setFormModus(null); vorschlagSchliessen() } })
   const updateMut = useMutation({ mutationFn: ({ id, data }: { id: number; data: AnlagegutCreate }) => updateAnlagegut(id, data), onSuccess: () => { invalidateAfa(); setFormModus(null) } })
   const deleteMut = useMutation({ mutationFn: deleteAnlagegut, onSuccess: () => { invalidateAfa(); setSelId(null) } })
 
@@ -462,11 +488,13 @@ export function AnlageverzeichnisPage() {
             {formModus === 'neu' ? 'Wirtschaftsgut anlegen' : 'Wirtschaftsgut bearbeiten'}
           </h2>
           <AnlagegutFormular
+            key={formModus === 'neu' ? `neu-${ausJournal ?? ''}` : `bearbeiten-${selGut?.id}`}
             initial={formModus === 'bearbeiten' ? selGut : undefined}
+            vorschlag={formModus === 'neu' && ausJournal !== null && vorschlag ? vorschlag : undefined}
             onSave={d => formModus === 'neu'
               ? createMut.mutate(d)
               : selGut && updateMut.mutate({ id: selGut.id, data: d })}
-            onAbbrechen={() => setFormModus(null)}
+            onAbbrechen={() => { setFormModus(null); vorschlagSchliessen() }}
           />
         </div>
       )}

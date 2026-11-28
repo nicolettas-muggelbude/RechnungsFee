@@ -438,6 +438,12 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 
 ## 📋 v0.8.1 – vorgemerkt
 
+- [ ] **Anlagenverzeichnis schon beim Buchen** (Folge aus Issue #607) – wird eine Ausgabe (Journal,
+  Split, Zahlung einer Eingangsrechnung) auf einer Anlage-Kategorie gespeichert, direkt fragen
+  „Ins Anlagenverzeichnis übernehmen?“ und das Formular mit `GET /anlageverzeichnis/vorschlag/{journal_id}`
+  vorausfüllen. Seit v0.7.15 erscheinen fehlende Einträge nur nachträglich als Hinweis in Cockpit und
+  EÜR. Neuer Dialog → bewusst auf der barrierefreien Dialog-Basis aus v0.8.0.
+
 - [ ] **Modus „Nur Rechnungsstellung“** (Issue #501, Wunsch aus der Community) – Buchhaltung,
   Auswertungen und Eingangsrechnungen ausblenden, sichtbar bleiben Fakturierung und Stammdaten.
   Feld `unternehmen.ausgeblendete_bereiche` als Liste (vorbereitet für getrennte Schalter, Muster wie

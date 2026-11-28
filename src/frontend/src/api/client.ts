@@ -2556,6 +2556,7 @@ export type EUERErgebnis = {
   steuerfrei_taetigkeiten: SteuerfreieTaetigkeit[]
   anlage_zugaenge: string
   aveur_afa: string
+  offene_anschaffungen?: OffeneAnschaffung[]  // Issue #607
   ist_kleinunternehmer: boolean
   // Issue #470: Zeilennummern im Vordruck des Wirtschaftsjahres (2026: Ausgaben +1)
   zeile_summe_einnahmen: number
@@ -2920,11 +2921,35 @@ export type Anlagegut = {
   verkauft_am: string | null
   notizen: string | null
   aktiv: boolean
+  journal_id?: number | null  // Issue #607: Buchung, aus der das Gut eingetragen wurde
   erstellt_am: string
   aktualisiert_am: string
 }
 
 export type AnlagegutCreate = Omit<Anlagegut, 'id' | 'erstellt_am' | 'aktualisiert_am'>
+
+/** Issue #607: Buchung auf einer Anlage-Kategorie ohne Eintrag im Anlagenverzeichnis */
+export type OffeneAnschaffung = {
+  journal_id: number
+  datum: string
+  belegnr: string
+  beschreibung: string
+  kategorie: string | null
+  betrag: number
+}
+
+export type AnlagegutVorschlag = {
+  bezeichnung: string
+  typ: AnlagegutTyp
+  kaufdatum: string
+  kaufpreis_netto: string
+  nutzungsdauer_jahre: number
+  afa_sofort: boolean
+  journal_id: number
+}
+
+export const getAnlagegutVorschlag = (journalId: number) =>
+  request<AnlagegutVorschlag>(`/anlageverzeichnis/vorschlag/${journalId}`)
 
 export type AfaPlanZeile = {
   jahr: number
@@ -3426,9 +3451,10 @@ export type CockpitDaten = {
   monatsbalken: CockpitMonatsbalken[]
   ausgaben_kategorien: CockpitKategorie[]
   einnahmen_nach_ust: CockpitUStSatz[]
+  offene_anschaffungen?: OffeneAnschaffung[]  // Issue #607
 }
 
-export const getCockpit = (zeitraum: 'monat' | 'quartal' | 'jahr', wert: string) =>
+export const getCockpit =(zeitraum: 'monat' | 'quartal' | 'jahr', wert: string) =>
   request<CockpitDaten>(`/cockpit?zeitraum=${zeitraum}&wert=${encodeURIComponent(wert)}`)
 
 // Issue #603: Überleitung Dashboard-Kacheln (brutto) → Cockpit (netto, EÜR-relevant)

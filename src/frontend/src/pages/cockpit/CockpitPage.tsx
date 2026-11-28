@@ -8,6 +8,7 @@ import {
 import { getCockpit, type CockpitDaten } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
+import { OffeneAnschaffungenHinweis } from '../../components/OffeneAnschaffungenHinweis'
 
 // ── Hilfsfunktionen ────────────────────────────────────────────────────────────
 
@@ -217,7 +218,7 @@ export function CockpitPage() {
               label="Ausgaben"
               wert={eur(data.kpis.ausgaben)}
               farbe="text-red-500 dark:text-red-400"
-              tooltip="Summe aller Betriebsausgaben ohne abzugsfähige Vorsteuer im gewählten Zeitraum."
+              tooltip="Summe aller Betriebsausgaben ohne abzugsfähige Vorsteuer im gewählten Zeitraum. Anschaffungen wie Software, Computer oder Fahrzeuge zählen über die Abschreibung (AfA) aus dem Anlagenverzeichnis, nicht mit dem Kaufpreis."
             />
             <KpiCard
               label="Gewinn"
@@ -232,6 +233,14 @@ export function CockpitPage() {
               tooltip="Anteil des Gewinns an den Einnahmen in Prozent. Je höher, desto effizienter wirtschaftest du."
             />
           </div>
+
+          {/* Issue #607: Anlage-Käufe im Zeitraum ohne Eintrag im Anlagenverzeichnis */}
+          <OffeneAnschaffungenHinweis
+            liste={data.offene_anschaffungen?.filter((o) => {
+              const m = Number(o.datum.slice(5, 7))
+              return zr.art === 'jahr' || (zr.art === 'monat' ? m === zr.monat : Math.ceil(m / 3) === zr.quartal)
+            })}
+          />
 
           {/* Monatsbalken – Jahresverlauf */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">

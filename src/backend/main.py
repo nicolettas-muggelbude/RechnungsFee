@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 204
+SCHEMA_VERSION = 205
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4686,6 +4686,16 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 204"))
             conn.commit()
             print(f"[Migration] Schema auf Version 204 (Issue #606: {anzahl} Abschlagsverrechnung(en) wiederhergestellt)")
+
+    if version < 205:
+        with engine.connect() as conn:
+            # Issue #607: Anlagegut merkt sich die Buchung, aus der es eingetragen wurde
+            _a205 = {r[1] for r in conn.execute(text("PRAGMA table_info(anlageverzeichnis)")).fetchall()}
+            if _a205 and "journal_id" not in _a205:
+                conn.execute(text("ALTER TABLE anlageverzeichnis ADD COLUMN journal_id INTEGER REFERENCES journal(id) ON DELETE SET NULL"))
+            conn.execute(text("PRAGMA user_version = 205"))
+            conn.commit()
+            print("[Migration] Schema auf Version 205 (Issue #607: Anlagegut ↔ Buchung)")
 
 
 _ABSCHLAG_ZEILE_606 = "Abzgl. Abschlagsrechnung "

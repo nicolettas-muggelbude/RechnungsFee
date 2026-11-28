@@ -26,6 +26,8 @@ export const CHANGELOG: ChangelogVersion[] = [
     version: 'v0.7.15',
     datum: 'in Arbeit',
     eintraege: [
+      { typ: 'fix', text: 'Unternehmer-Cockpit: Anschaffungen wie Software, Computer oder Fahrzeuge fehlten komplett, weil sie nicht mit dem Kaufpreis, sondern über die Abschreibung zählen. Das Cockpit zeigt jetzt die Abschreibung (AfA) aus dem Anlagenverzeichnis als eigene Ausgabe, bei vollem Abzug im Kaufmonat, sonst verteilt auf die Monate. Der Gewinn im Cockpit passt damit zur EÜR. Danke an ludgerknorps (Issue #607).' },
+      { typ: 'neu', text: 'Cockpit und EÜR zeigen Anschaffungen, die noch nicht im Anlagenverzeichnis stehen und deshalb als Ausgabe fehlen. Über „Jetzt eintragen“ öffnet sich das Anlagenverzeichnis mit Bezeichnung, Kaufdatum und Betrag aus der Buchung, bei Software mit einem Jahr Nutzungsdauer und vollem Abzug. Bestätigen genügt (Issue #607).' },
       { typ: 'fix', text: 'Schlussrechnung: Wurde der Entwurf im Formular bearbeitet oder von dort finalisiert, gingen die Abzüge der Abschlagsrechnungen in normale Minuspositionen über. Das PDF zeigte sie dann wieder in der Positionstabelle statt im Summenblock mit Netto- und Steueranteil, und die Abschlagsrechnungen galten als nicht mehr verrechnet. Beim Update werden betroffene Schlussrechnungen automatisch repariert, die Beträge bleiben unverändert. Ein bereits gedrucktes oder versendetes Original-PDF bleibt so, wie es ausgegeben wurde. Danke an Markus (Issue #606).' },
     ],
   },

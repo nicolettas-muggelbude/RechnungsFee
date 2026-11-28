@@ -450,7 +450,7 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
     # großer, eigenständiger Eingriff in eine steuerlich sensible Kernberechnung. Bei
     # abweichendem Wirtschaftsjahr bleibt die AfA-Zuordnung zu "Jahr X" deshalb vorerst
     # kalenderjahrbasiert (Issue #404, bewusste Scope-Entscheidung).
-    from api.anlageverzeichnis import _afa_fuer_jahr
+    from api.anlageverzeichnis import _afa_fuer_jahr, offene_anschaffungen as _offene_anschaffungen
     gueter = db.query(Anlagegut).filter(Anlagegut.aktiv == True).all()
     aveur_afa = sum((_afa_fuer_jahr(g, jahr) for g in gueter), ZERO)
     if aveur_afa:
@@ -496,6 +496,8 @@ def _berechne_euer(jahr: int, db: Session) -> dict:
         "gewinn_verlust":  gewinn_verlust,
         "anlage_zugaenge": anlage_summe.quantize(q, ROUND_HALF_UP),
         "aveur_afa":       aveur_afa.quantize(q, ROUND_HALF_UP),
+        # Issue #607: Anlage-Käufe ohne Eintrag im Anlagenverzeichnis - fehlen als Aufwand
+        "offene_anschaffungen": _offene_anschaffungen(db, von, bis),
         "nicht_zugeordnet": [
             {"zeile": z, "betrag": zeilen.get(z, ZERO), "kategorien": sorted(namen)}
             for z, namen in sorted(unbekannte_zeilen.items())
@@ -795,6 +797,7 @@ class EUERErgebnis(BaseModel):
     steuerfrei_taetigkeiten: list[SteuerfreieTaetigkeit] = []
     anlage_zugaenge: Decimal
     aveur_afa: Decimal
+    offene_anschaffungen: list[dict] = []  # Issue #607
     ist_kleinunternehmer: bool
     # Issue #470: Zeilennummern im Vordruck des Wirtschaftsjahres (für Summen-/AfA-Hinweise)
     zeile_summe_einnahmen: int = 23
@@ -878,6 +881,7 @@ def euer_berechnen(
         steuerfrei_taetigkeiten=daten["steuerfrei_taetigkeiten"],
         anlage_zugaenge=daten["anlage_zugaenge"],
         aveur_afa=daten["aveur_afa"],
+        offene_anschaffungen=daten["offene_anschaffungen"],
         ist_kleinunternehmer=bool(unt.ist_kleinunternehmer),
         zeile_summe_einnahmen=formular_zeile(ZEILE_SUMME_EINNAHMEN, daten["jahr"]),
         zeile_summe_ausgaben=formular_zeile(ZEILE_SUMME_AUSGABEN, daten["jahr"]),
