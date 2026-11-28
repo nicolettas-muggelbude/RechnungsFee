@@ -1365,6 +1365,148 @@ def buche_transaktion(
     return resp
 
 
+# ---------------------------------------------------------------------------
+# Umbuchung zwischen eigenen Konten (Geldtransit) – Community-Frage Pascal
+# ---------------------------------------------------------------------------
+# Bisher wurden Umbuchungen nur „ignoriert“ (#379): erfolgsneutral, aber ohne Buchung - im
+# DATEV-Export wichen die Salden beider Konten vom Kontoauszug ab. Jetzt bucht jede Seite auf
+# „Geldtransit“ (Kontenart Neutral: weder EÜR noch UStVA), das Transitkonto gleicht sich aus.
+
+UMBUCHUNG_TAGE = 5
+
+
+class UmbuchungGegenstueck(BaseModel):
+    tx_id: int
+    konto_id: int
+    konto_name: str
+    datum: date
+    betrag: Decimal
+    partner_name: Optional[str] = None
+    verwendungszweck: Optional[str] = None
+
+
+class UmbuchungVorschlag(BaseModel):
+    gegenstuecke: list[UmbuchungGegenstueck]
+    kassenstand: Decimal
+
+
+class UmbuchungRequest(BaseModel):
+    # transaktion = Gegenstück aus einem anderen importierten Konto (gegen_tx_id),
+    # kasse = Gegenseite als Bar-Buchung (Abhebung/Einzahlung), keine = nur diese Seite
+    gegenseite: str = "keine"
+    gegen_tx_id: Optional[int] = None
+
+
+def _geldtransit_kategorie(db: Session) -> Kategorie:
+    from database.seed import GELDTRANSIT_NAME
+    kat = (db.query(Kategorie)
+           .filter(Kategorie.name == GELDTRANSIT_NAME, Kategorie.kontenart == "Neutral")
+           .first())
+    if not kat:
+        raise HTTPException(status_code=422, detail="Kategorie „Geldtransit“ nicht gefunden.")
+    return kat
+
+
+def _umbuchung_buchbar(tx: Optional[BankTransaktion]) -> BankTransaktion:
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaktion nicht gefunden.")
+    if tx.journal_id:
+        raise HTTPException(status_code=409, detail="bereits_gebucht")
+    return tx
+
+
+def _gegenstuecke(db: Session, tx: BankTransaktion) -> list[BankTransaktion]:
+    """Gegenstück auf einem anderen eigenen Konto: gleicher Betrag mit umgekehrtem Vorzeichen,
+    höchstens UMBUCHUNG_TAGE Tage entfernt, noch nicht gebucht. Bereits ignorierte zählen mit -
+    so wurden Umbuchungen bisher behandelt. Nächstes Datum zuerst."""
+    kandidaten = (
+        db.query(BankTransaktion)
+        .filter(BankTransaktion.konto_id != tx.konto_id,
+                BankTransaktion.betrag == -tx.betrag,
+                BankTransaktion.journal_id.is_(None),
+                BankTransaktion.datum >= tx.datum - timedelta(days=UMBUCHUNG_TAGE),
+                BankTransaktion.datum <= tx.datum + timedelta(days=UMBUCHUNG_TAGE))
+        .all()
+    )
+    return sorted(kandidaten, key=lambda k: (abs((k.datum - tx.datum).days), k.id))
+
+
+@router.get("/transaktion/{tx_id}/umbuchung", response_model=UmbuchungVorschlag)
+def umbuchung_vorschlag(tx_id: int, db: Session = Depends(get_db)):
+    from .journal import _get_bar_kassenstand
+    tx = _umbuchung_buchbar(db.query(BankTransaktion).filter(BankTransaktion.id == tx_id).first())
+    konten = {k.id: k.name for k in db.query(Konto).all()}
+    return UmbuchungVorschlag(
+        gegenstuecke=[UmbuchungGegenstueck(
+            tx_id=g.id, konto_id=g.konto_id, konto_name=konten.get(g.konto_id, "?"), datum=g.datum,
+            betrag=g.betrag, partner_name=g.partner_name, verwendungszweck=g.verwendungszweck,
+        ) for g in _gegenstuecke(db, tx)],
+        kassenstand=_get_bar_kassenstand(db),
+    )
+
+
+def _als_umbuchung_buchen(db: Session, tx: BankTransaktion, kat: Kategorie) -> Journaleintrag:
+    tx.kategorie_id = kat.id
+    tx.ignoriert = False
+    tx.ist_geschaeftlich = True
+    tx.user_ueberschrieben = True
+    return _buche_pfad_b(db, tx)
+
+
+@router.post("/transaktion/{tx_id}/umbuchung", response_model=list[BankTransaktionResponse], status_code=201)
+def umbuchung_buchen(tx_id: int, data: UmbuchungRequest = Body(...), db: Session = Depends(get_db)):
+    """Bucht eine Transaktion als Umbuchung auf Geldtransit, auf Wunsch zusammen mit der
+    Gegenseite (Gegenstück aus einem anderen Konto oder Bar-Buchung in der Kasse)."""
+    from .journal import _get_bar_kassenstand
+    if data.gegenseite not in ("transaktion", "kasse", "keine"):
+        raise HTTPException(status_code=422, detail="gegenseite muss transaktion, kasse oder keine sein")
+    tx = _umbuchung_buchbar(db.query(BankTransaktion).filter(BankTransaktion.id == tx_id).first())
+    kat = _geldtransit_kategorie(db)
+
+    gegen: Optional[BankTransaktion] = None
+    if data.gegenseite == "transaktion":
+        gegen = _umbuchung_buchbar(db.query(BankTransaktion).filter(BankTransaktion.id == data.gegen_tx_id).first())
+        if gegen.id not in {g.id for g in _gegenstuecke(db, tx)}:
+            raise HTTPException(status_code=409, detail="Die Transaktion passt nicht als Gegenstück "
+                                "(anderes Konto, gleicher Betrag mit umgekehrtem Vorzeichen, höchstens "
+                                f"{UMBUCHUNG_TAGE} Tage Abstand).")
+    elif data.gegenseite == "kasse" and tx.betrag > 0:
+        # Einzahlung aufs Konto: das Geld kommt aus der Kasse - Kassenbestand prüfen wie im Journal
+        kassenstand = _get_bar_kassenstand(db)
+        if tx.betrag > kassenstand:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, "
+                       f"Einzahlung: {tx.betrag:.2f} €.",
+            )
+
+    _als_umbuchung_buchen(db, tx, kat)
+    if gegen is not None:
+        _als_umbuchung_buchen(db, gegen, kat)
+    elif data.gegenseite == "kasse":
+        konto = db.query(Konto).filter(Konto.id == tx.konto_id).first()
+        kontoname = konto.name if konto else "Bankkonto"
+        felder = _felder_aus_data(JournalEintragCreate(
+            datum=tx.datum,
+            beschreibung=(f"Abhebung von {kontoname}" if tx.betrag < 0 else f"Einzahlung auf {kontoname}")[:255],
+            kategorie_id=kat.id,
+            zahlungsart="Bar",
+            art="Einnahme" if tx.betrag < 0 else "Ausgabe",
+            brutto_betrag=abs(tx.betrag),
+            ust_satz=Decimal("0"),
+            vorsteuerabzug=False,
+        ), db)
+        bar = Journaleintrag(belegnr=_naechste_belegnr(db, tx.datum), immutable=False, **felder)
+        bar.signatur = signatur_journaleintrag(bar)
+        db.add(bar)
+
+    db.commit()
+    ergebnis = [tx] + ([gegen] if gegen is not None else [])
+    for t in ergebnis:
+        db.refresh(t)
+    return [_enriche_tx(t, {}, {}) for t in ergebnis]
+
+
 class JournalVerknuepfenRequest(BaseModel):
     journal_id: int
 

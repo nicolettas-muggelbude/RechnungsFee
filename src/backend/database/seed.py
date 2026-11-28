@@ -14,6 +14,16 @@ DURCHLAUFENDE_POSTEN_BESCHREIBUNG = (
     "Zählt weder in der EÜR noch in der Umsatzsteuer-Voranmeldung."
 )
 
+# Umbuchung zwischen eigenen Konten: Bank ↔ Bank, Bank ↔ PayPal, Bank ↔ Kasse. Konten laut
+# DATEV-Kontenrahmen 2026: SKR03 1360 / SKR04 1460 „Geldtransit“.
+GELDTRANSIT_NAME = "Geldtransit"
+GELDTRANSIT_KONTEN = {"SKR03": "1360", "SKR04": "1460"}
+GELDTRANSIT_BESCHREIBUNG = (
+    "Geld, das zwischen deinen eigenen Konten wandert, z. B. vom Geschäftskonto aufs Rücklagenkonto, "
+    "auf PayPal oder als Abhebung in die Kasse. Beide Seiten hierauf buchen: die Abbuchung als Ausgabe, "
+    "den Eingang als Einnahme. Zählt weder in der EÜR noch in der Umsatzsteuer-Voranmeldung."
+)
+
 
 STANDARD_KATEGORIEN = [
     # ── Tabelle A: Betriebseinnahmen ──────────────────────────────────────
@@ -121,7 +131,9 @@ STANDARD_KATEGORIEN = [
     {"name": "Instandhaltungsrücklage (WEG)",          "kontenart": "Aufwand", "konto_skr03": "1500", "konto_skr04": "1300", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": "Rücklagen-Anteil des Hausgelds einer Wohnungseigentümergemeinschaft – Vermögen bei der WEG, beim Bezahlen keine Betriebsausgabe. Den laut Jahresabrechnung verwendeten Betrag als Ausgabe ohne Geldbewegung buchen (Issue #507)."},
     # Issue #564: erfolgsneutral, bei Einnahme und Ausgabe wählbar, weder EÜR noch UStVA
     {"name": "Durchlaufende Posten",          "kontenart": "Neutral", "konto_skr03": "1590", "konto_skr04": "1370", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": DURCHLAUFENDE_POSTEN_BESCHREIBUNG},
-    {"name": "Umsatzsteuer-Zahlung FA",       "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
+    # Umbuchung zwischen eigenen Konten (Community-Frage Pascal), erfolgsneutral wie Durchlaufende Posten
+    {"name": GELDTRANSIT_NAME,                "kontenart": "Neutral", "konto_skr03": "1360", "konto_skr04": "1460", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": GELDTRANSIT_BESCHREIBUNG},
+    {"name": "Umsatzsteuer-Zahlung FA",      "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # ── Tabelle B Ergänzungen ─────────────────────────────────────────────
     {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "2400", "konto_skr04": "6930", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Abschreibungen (AfA)",             "kontenart": "Aufwand", "konto_skr03": "4830", "konto_skr04": "6220", "eks_kategorie": None,    "euer_zeile": 33,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

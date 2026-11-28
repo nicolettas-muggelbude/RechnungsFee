@@ -213,8 +213,10 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = Non
         # (aus der Kategorie „Privateinlage“, damit eigene Kontenanpassungen greifen)
         return _privateinlage_konto(unt.kontenrahmen, db)
 
-    # Bankkonto mit eigener DATEV-Kontonummer hat Vorrang vor globalem datev_konto_bank
-    if za == "Bank" and j.konto_id and db is not None:
+    # Konto an der Buchung mit eigener DATEV-Kontonummer hat Vorrang vor der globalen Einstellung.
+    # Bis zur Geldtransit-Umsetzung nur bei "Bank" - eine PayPal-Buchung mit PayPal-Konto (z. B.
+    # aus einer Buchungsvorlage) übersprang die Nummer des Kontos.
+    if za in ("Bank", "Karte", "PayPal") and j.konto_id and db is not None:
         konto = db.query(Konto).filter(Konto.id == j.konto_id).first()
         if konto and konto.datev_kontonummer:
             return konto.datev_kontonummer
@@ -225,8 +227,30 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = Non
         "Karte":  unt.datev_konto_karte,
         "PayPal": unt.datev_konto_paypal,
     }
+    if konfig.get(za):
+        return konfig[za]
+    # Ohne globale Einstellung: das passende Konto aus Einstellungen → Konten (Journal und
+    # „Zahlung erfassen“ kennen nur die Zahlungsart, nicht das Konto - Konto je Zahlung: #162)
+    if db is not None and za in ("Bank", "Karte", "PayPal"):
+        nummer = _nummer_aus_konten(db, "zahlungsdienstleister" if za == "PayPal" else "bank")
+        if nummer:
+            return nummer
     d = _DEFAULTS.get(unt.kontenrahmen, _DEFAULTS["SKR04"])
-    return konfig.get(za) or d.get(za)
+    return d.get(za)
+
+
+def _nummer_aus_konten(db: Session, kontoart: str) -> Optional[str]:
+    """DATEV-Nummer des eindeutig passenden Kontos: bei Bank das Standardkonto (sonst das einzige
+    Bankkonto), bei PayPal der einzige Zahlungsdienstleister. Mehrdeutig → None (Standard)."""
+    konten = (db.query(Konto)
+              .filter(Konto.aktiv == True, Konto.kontoart == kontoart,  # noqa: E712
+                      Konto.datev_kontonummer.isnot(None), Konto.datev_kontonummer != "")
+              .all())
+    if kontoart == "bank":
+        standard = [k for k in konten if k.ist_standard]
+        if standard:
+            return standard[0].datev_kontonummer
+    return konten[0].datev_kontonummer if len(konten) == 1 else None
 
 
 def _sachkonto(j: Journaleintrag, skr: str, db: Optional[Session] = None) -> Optional[str]:
@@ -430,10 +454,17 @@ def datev_buchungsstapel(
     uebersprungen = 0
     leer_konto = 0
     verrechnung_belege: list[str] = []
+    # Zahlungen, deren Zahlungskonto das Geldtransit-Konto ist (PayPal ohne eigene Nummer: SKR04-
+    # Standard 1460) - vermischt sich beim Steuerbüro mit echten Umbuchungen
+    from utils.datev_konten import geldtransit_konto
+    transit = geldtransit_konto(skr)
+    geldtransit_kollision = 0
 
     for j in eintraege:
         konto = _sachkonto(j, skr, db)
         gegenkonto = _gegenkonto(j, unt, db)
+        if gegenkonto == transit:
+            geldtransit_kollision += 1
 
         if not gegenkonto:
             # zahlungsart='Keine' → kein Zahlungskonto, Buchung nicht exportierbar.
@@ -496,6 +527,7 @@ def datev_buchungsstapel(
         "X-Datev-Verrechnung": str(len(verrechnung_belege)),
         # Belegnummern können Nicht-ASCII enthalten (frei wählbares Nummernkreis-Format)
         "X-Datev-Verrechnung-Belege": quote(",".join(verrechnung_belege[:50])),
+        "X-Datev-Geldtransit-Kollision": str(geldtransit_kollision),
     }
 
     if not mit_belegen:

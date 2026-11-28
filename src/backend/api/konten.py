@@ -2,11 +2,14 @@
 API-Endpunkte für Bankkonten-Verwaltung.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Konto, BankTransaktion
+from utils.datev_konten import geldtransit_konto, kontenrahmen, naechste_freie_kontonummer
 from .schemas import KontoCreate, KontoUpdate, KontoResponse
 
 router = APIRouter(prefix="/api/konten", tags=["Stammdaten"])
@@ -30,6 +33,10 @@ def create_konto(data: KontoCreate, db: Session = Depends(get_db)):
     ist_erstes = db.query(Konto).count() == 0
     konto_data = data.model_dump()
     konto_data["ist_standard"] = data.ist_standard or ist_erstes
+    # Jedes Konto bekommt ein eigenes DATEV-Finanzkonto, auch wenn niemand eins einträgt
+    # (Setup-Wizard, Schnittstelle) - sonst landen z. B. PayPal-Umsätze auf Geldtransit
+    konto_data["datev_kontonummer"] = (data.datev_kontonummer or "").strip() or \
+        naechste_freie_kontonummer(db, data.kontoart)
     konto = Konto(**konto_data)
     # Wenn dieses Konto Standard wird, alle anderen zurücksetzen
     if konto.ist_standard:
@@ -38,6 +45,16 @@ def create_konto(data: KontoCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(konto)
     return konto
+
+
+@router.get("/datev-vorschlag")
+def datev_vorschlag(kontoart: str = "bank", konto_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Nächste freie DATEV-Nummer für ein (neues oder bestehendes) Konto, dazu die Nummer für
+    Geldtransit - PayPal ohne eigene Nummer landet im Export sonst dort."""
+    return {
+        "kontonummer": naechste_freie_kontonummer(db, kontoart, ausser_konto_id=konto_id),
+        "geldtransit": geldtransit_konto(kontenrahmen(db)),
+    }
 
 
 @router.get("/{konto_id}", response_model=KontoResponse)

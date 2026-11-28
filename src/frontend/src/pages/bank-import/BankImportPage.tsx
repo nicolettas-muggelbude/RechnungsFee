@@ -14,6 +14,8 @@ import {
   bucheTransaktion,
   verknuepfeBankTransaktionMitJournal,
   abgleichTransaktion,
+  getUmbuchungVorschlag,
+  bucheUmbuchung,
   autoBuchen,
   ueberzahlungAnerkennen,
   loescheTransaktion,
@@ -674,21 +676,37 @@ function KlassifizierungBadge({ tx }: { tx: BankTransaktion }) {
 interface KlassifizierungAktionenProps {
   tx: BankTransaktion
   onSetzen: (tx: BankTransaktion, patch: { ist_geschaeftlich: boolean; ignoriert: boolean }) => void
+  onUmbuchung: (tx: BankTransaktion) => void
   pending: boolean
 }
 
-function KlassifizierungAktionen({ tx, onSetzen, pending }: KlassifizierungAktionenProps) {
+function KlassifizierungAktionen({ tx, onSetzen, onUmbuchung, pending }: KlassifizierungAktionenProps) {
   if (tx.journal_id || tx.ist_privatentnahme || tx.ist_einlage || tx.ist_rueckerstattung) return null
+
+  const umbuchungKnopf = (
+    <button
+      onClick={() => onUmbuchung(tx)}
+      disabled={pending}
+      title="Geld zwischen deinen eigenen Konten, z. B. aufs Rücklagenkonto, zu PayPal oder in die Kasse"
+      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+    >
+      Umbuchung
+    </button>
+  )
 
   if (!tx.ist_geschaeftlich || tx.ignoriert) {
     return (
-      <button
-        onClick={() => onSetzen(tx, { ist_geschaeftlich: true, ignoriert: false })}
-        disabled={pending}
-        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
-      >
-        Zurücksetzen
-      </button>
+      <div className="flex items-center gap-2 mt-1">
+        <button
+          onClick={() => onSetzen(tx, { ist_geschaeftlich: true, ignoriert: false })}
+          disabled={pending}
+          className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+        >
+          Zurücksetzen
+        </button>
+        {/* Bisher wurden Umbuchungen ignoriert - so lassen sie sich nachträglich buchen */}
+        {tx.ignoriert && umbuchungKnopf}
+      </div>
     )
   }
 
@@ -701,6 +719,7 @@ function KlassifizierungAktionen({ tx, onSetzen, pending }: KlassifizierungAktio
       >
         Privat
       </button>
+      {umbuchungKnopf}
       <button
         onClick={() => onSetzen(tx, { ist_geschaeftlich: true, ignoriert: true })}
         disabled={pending}
@@ -708,6 +727,108 @@ function KlassifizierungAktionen({ tx, onSetzen, pending }: KlassifizierungAktio
       >
         Ignorieren
       </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Umbuchung zwischen eigenen Konten (Geldtransit)
+// ---------------------------------------------------------------------------
+
+type UmbuchungWahl = { art: 'transaktion'; txId: number } | { art: 'kasse' } | { art: 'keine' }
+
+function UmbuchungDialog({ tx, onBuchen, onClose, pending }: {
+  tx: BankTransaktion
+  onBuchen: (wahl: UmbuchungWahl) => void
+  onClose: () => void
+  pending: boolean
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['umbuchung-vorschlag', tx.id],
+    queryFn: () => getUmbuchungVorschlag(tx.id),
+  })
+  const [wahl, setWahl] = useState<UmbuchungWahl | null>(null)
+  const gegenstuecke = data?.gegenstuecke ?? []
+  // Vorauswahl: das passende Gegenstück, sonst nur diese Seite
+  const aktiv: UmbuchungWahl = wahl ?? (gegenstuecke[0] ? { art: 'transaktion', txId: gegenstuecke[0].tx_id } : { art: 'keine' })
+  const ab = parseFloat(tx.betrag) < 0
+  const kasseReicht = ab || parseFloat(data?.kassenstand ?? '0') >= parseFloat(tx.betrag)
+  const ist = (w: UmbuchungWahl) => aktiv.art === w.art && (w.art !== 'transaktion' || (aktiv.art === 'transaktion' && aktiv.txId === w.txId))
+  const option = 'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer'
+  const optionCls = (w: UmbuchungWahl) => `${option} ${ist(w) ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700'}`
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="umbuchung-titel"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg px-6 py-5 space-y-4">
+        <div>
+          <h2 id="umbuchung-titel" className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            Umbuchung {ab ? 'von' : 'auf'} diesem Konto: {euroFmt(Math.abs(parseFloat(tx.betrag)))}
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+            Geld zwischen deinen eigenen Konten ist weder Einnahme noch Ausgabe. Beide Seiten werden auf
+            „Geldtransit“ gebucht, damit die Konten im DATEV-Export zum Kontoauszug passen. Wo ist die Gegenseite?
+          </p>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-slate-400">Suche Gegenstück…</p>
+        ) : (
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Gegenseite der Umbuchung</legend>
+            {gegenstuecke.map(g => (
+              <label key={g.tx_id} className={optionCls({ art: 'transaktion', txId: g.tx_id })}>
+                <input type="radio" name="umbuchung" className="mt-0.5"
+                  checked={ist({ art: 'transaktion', txId: g.tx_id })}
+                  onChange={() => setWahl({ art: 'transaktion', txId: g.tx_id })} />
+                <span>
+                  <strong>{g.konto_name}</strong>: {euroFmt(g.betrag)} am {datumFmt(g.datum)}
+                  {(g.partner_name || g.verwendungszweck) && (
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      {[g.partner_name, g.verwendungszweck].filter(Boolean).join(' / ')}
+                    </span>
+                  )}
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">Beide Seiten werden zusammen gebucht.</span>
+                </span>
+              </label>
+            ))}
+            <label className={`${optionCls({ art: 'kasse' })} ${kasseReicht ? '' : 'opacity-50 cursor-not-allowed'}`}>
+              <input type="radio" name="umbuchung" className="mt-0.5" disabled={!kasseReicht}
+                checked={ist({ art: 'kasse' })} onChange={() => setWahl({ art: 'kasse' })} />
+              <span>
+                {ab ? 'Abhebung in die Kasse' : 'Einzahlung aus der Kasse'}
+                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                  {kasseReicht
+                    ? `Die Gegenseite wird als Bar-${ab ? 'Einnahme' : 'Ausgabe'} im Journal gebucht.`
+                    : `Der Kassenbestand (${euroFmt(data?.kassenstand ?? '0')}) reicht dafür nicht.`}
+                </span>
+              </span>
+            </label>
+            <label className={optionCls({ art: 'keine' })}>
+              <input type="radio" name="umbuchung" className="mt-0.5"
+                checked={ist({ art: 'keine' })} onChange={() => setWahl({ art: 'keine' })} />
+              <span>
+                Nur diese Seite buchen
+                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                  Die Gegenseite buchst du später selbst, z. B. wenn das andere Konto noch nicht importiert ist.
+                  Dort dann ebenfalls „Umbuchung“ wählen.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+            Abbrechen
+          </button>
+          <button onClick={() => onBuchen(aktiv)} disabled={isLoading || pending}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium">
+            {pending ? 'Buche…' : 'Als Umbuchung buchen'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1188,6 +1309,21 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     onError: (e: Error) => zeigToast(e.message || 'Fehler beim Klassifizieren.', false),
   })
 
+  const [umbuchungTx, setUmbuchungTx] = useState<BankTransaktion | null>(null)
+  const umbuchungMut = useMutation({
+    mutationFn: ({ tx, wahl }: { tx: BankTransaktion; wahl: UmbuchungWahl }) =>
+      bucheUmbuchung(tx.id, wahl.art, wahl.art === 'transaktion' ? wahl.txId : undefined),
+    onSuccess: (_, { wahl }) => {
+      // Gegenstück kann auf einem anderen Konto liegen → alle Kontolisten neu laden
+      qc.invalidateQueries({ queryKey: ['bank-transaktionen'] })
+      qc.invalidateQueries({ queryKey: ['journal'] })
+      qc.invalidateQueries({ queryKey: ['kassenstand'] })
+      setUmbuchungTx(null)
+      zeigToast(wahl.art === 'keine' ? 'Umbuchung gebucht (nur diese Seite)' : 'Umbuchung mit Gegenseite gebucht', true)
+    },
+    onError: (e: Error) => zeigToast(e.message || 'Fehler beim Buchen der Umbuchung.', false),
+  })
+
   const abgleichMut = useMutation({
     mutationFn: (tx: BankTransaktion) => abgleichTransaktion(tx.id),
     onSuccess: (vorschlaege, tx) => {
@@ -1457,8 +1593,9 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
                   <KlassifizierungBadge tx={tx} />
                   <KlassifizierungAktionen
                     tx={tx}
-                    pending={klassifiziereMut.isPending}
+                    pending={klassifiziereMut.isPending || umbuchungMut.isPending}
                     onSetzen={(t, patch) => klassifiziereMut.mutate({ tx: t, patch })}
+                    onUmbuchung={setUmbuchungTx}
                   />
                 </td>
                 <td className="px-4 py-2.5">
@@ -1479,6 +1616,15 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
           onZuordnen={(rechnungId, restPrivat) => bucheMut.mutate({ txId: abgleichDialog.tx.id, rechnungId, restPrivat })}
           onOhneRechnung={() => { setAbgleichDialog(null); proceedOhneAbgleich(abgleichDialog.tx) }}
           onClose={() => setAbgleichDialog(null)}
+        />
+      )}
+
+      {umbuchungTx && (
+        <UmbuchungDialog
+          tx={umbuchungTx}
+          pending={umbuchungMut.isPending}
+          onBuchen={wahl => umbuchungMut.mutate({ tx: umbuchungTx, wahl })}
+          onClose={() => setUmbuchungTx(null)}
         />
       )}
 

@@ -260,12 +260,17 @@ beiden Seiten „Ignoriert“ (#379) – erfolgsneutral, aber ohne Buchung. Folg
 Salden der beiden Bankkonten weichen von den Kontoauszügen ab. Gleiche Bauart wie das
 Verrechnungskonto oben, daher gemeinsam angehen.
 
-- [ ] Im Bank-Import „Umbuchung“ statt nur „Ignorieren“: erfolgsneutrale Buchung Bank → Geldtransit
-  (SKR03 1360 / SKR04 1460, am DATEV-Kontenrahmen 2026 prüfen) und Geldtransit → Zielkonto
-  (`konten.datev_kontonummer` je Konto, Migration 110)
-- [ ] Gegenstück auf dem anderen Konto vorschlagen (gleicher Betrag mit umgekehrtem Vorzeichen, Datum
-  ± wenige Tage), damit beide Seiten zusammen gebucht werden und der Transitsaldo 0 ergibt
-- [ ] EÜR/UStVA/Cockpit unberührt; bereits ignorierte Umbuchungen bleiben wie sie sind
+- [x] Im Bank-Import „Umbuchung“ statt nur „Ignorieren“ (v0.7.15): Kategorie „Geldtransit“ (Neutral,
+  SKR03 1360 / SKR04 1460, geprüft am DATEV-Kontenrahmen 2026), jede Seite bucht gegen ihr Konto
+  (`konten.datev_kontonummer`)
+- [x] Gegenstück auf dem anderen Konto vorschlagen (gleicher Betrag mit umgekehrtem Vorzeichen,
+  ± 5 Tage), beide Seiten zusammen buchen; alternativ Gegenseite bar in der Kasse (Abhebung/Einzahlung,
+  Kassenbestand geprüft) oder nur diese Seite
+- [x] EÜR/UStVA/Cockpit unberührt (Kontenart Neutral); bereits ignorierte Umbuchungen bleiben, lassen
+  sich aber nachträglich als Umbuchung buchen
+- [x] Jedes neue Konto bekommt beim Anlegen die nächste freie DATEV-Nummer (Bank 1–5), auch im
+  Setup-Wizard; PayPal-Konten ohne Nummer bekommen einen Vorschlag zum Übernehmen, der DATEV-Export
+  warnt, wenn Zahlungen auf Geldtransit landen (SKR04-PayPal-Standard 1460)
 
 ## 📋 v0.7.8 – vorgemerkt
 
@@ -502,6 +507,10 @@ Bereits vorhanden (Migration 110): `journal.konto_id`, `konten.datev_kontonummer
 das Konto, der DATEV-Export nutzt dann dessen Nummer als Gegenkonto.
 
 - [ ] Kontowahl bei „Zahlung erfassen“, im Buchungsformular und im CSV-Import statt nur Zahlungsart
+- [ ] Jedes unter Einstellungen → Konten angelegte Konto erscheint automatisch als Zahlungsweg in allen
+  Formularen (Journal, Split, Zahlung erfassen, Buchungsvorlagen, Schnellbuchungen, Filter), ohne
+  Code-Änderung je Anbieter. Grundlage seit v0.7.15: jedes neue Konto bekommt automatisch die nächste
+  freie DATEV-Nummer (`utils/datev_konten.py`), der Export nutzt sie bei jeder Buchung mit Konto
 - [ ] Kassen als Konten (Kontoart `bar`), Mehrfach-Kasse inkl. Kassenbuch/Tagesabschluss je Kasse
 - [ ] weitere Zahlungsdienste (Klarna, Mollie, Stripe) ohne Code-Änderung als Konto anlegbar
 - [ ] DATEV-Gegenkonto immer aus dem Konto; globale `unternehmen.datev_konto_*` danach entfernen

@@ -367,6 +367,15 @@ export function ExportPage() {
                       {datevErgebnis.verrechnung > datevErgebnis.verrechnung_belege.length && ' …'})</>}.
                   </p>
                 )}
+                {datevErgebnis.geldtransit_kollision > 0 && (
+                  <p role="alert" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                    {datevErgebnis.geldtransit_kollision} Zahlung{datevErgebnis.geldtransit_kollision !== 1 ? 'en' : ''} (meist
+                    PayPal) {datevErgebnis.geldtransit_kollision !== 1 ? 'liegen' : 'liegt'} im Export auf dem Konto für
+                    Geldtransit und {datevErgebnis.geldtransit_kollision !== 1 ? 'vermischen' : 'vermischt'} sich dort mit
+                    Umbuchungen. Gib dem Konto unter Einstellungen → Konten eine eigene DATEV-Nummer, dort steht ein
+                    Vorschlag zum Übernehmen.
+                  </p>
+                )}
                 <p className="mt-0.5 text-xs opacity-70">Datei gespeichert im Downloads-Ordner</p>
               </Erfolg>
             )}

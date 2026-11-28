@@ -511,6 +511,10 @@ export const updateKonto = (id: number, data: Partial<Omit<Konto, 'id' | 'erstel
   request<Konto>(`/konten/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteKonto = (id: number) =>
   request<void>(`/konten/${id}`, { method: 'DELETE' })
+/** Nächste freie DATEV-Nummer für ein Konto (Bank 1–5 im Kontenrahmen) + Geldtransit-Nummer */
+export const getKontoDatevVorschlag = (kontoart: Konto['kontoart'], kontoId?: number) =>
+  request<{ kontonummer: string | null; geldtransit: string }>(
+    `/konten/datev-vorschlag?kontoart=${kontoart}${kontoId ? `&konto_id=${kontoId}` : ''}`)
 
 // --- Kategorien ---
 export type Kategorie = {
@@ -1183,7 +1187,7 @@ export async function downloadDatevBuchungsstapel(
   von: string,
   bis: string,
   mitBelegen: boolean = true,
-): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null; verrechnung: number; verrechnung_belege: string[] }> {
+): Promise<{ filename: string; eintraege: number; uebersprungen: number; leer_konto: number; belege: number | null; verrechnung: number; verrechnung_belege: string[]; geldtransit_kollision: number }> {
   const base = await getBaseUrl()
   const res = await apiFetch(`${base}/datev/buchungsstapel?von=${von}&bis=${bis}&mit_belegen=${mitBelegen}`)
   if (!res.ok) throw new Error('DATEV-Export fehlgeschlagen')
@@ -1193,6 +1197,7 @@ export async function downloadDatevBuchungsstapel(
   const verrechnung = Number(res.headers.get('X-Datev-Verrechnung') ?? '0')
   const verrechnung_belege = decodeURIComponent(res.headers.get('X-Datev-Verrechnung-Belege') ?? '')
     .split(',').filter(Boolean)
+  const geldtransit_kollision = Number(res.headers.get('X-Datev-Geldtransit-Kollision') ?? '0')
   const belegeHeader = res.headers.get('X-Datev-Belege')
   const belege = belegeHeader !== null ? Number(belegeHeader) : null
   const blob = await res.blob()
@@ -1200,7 +1205,7 @@ export async function downloadDatevBuchungsstapel(
   const match = cd.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] ?? `DATEV_Buchungsstapel_${von}_${bis}.${mitBelegen ? 'zip' : 'csv'}`
   await _triggerBlobDownload(blob, filename)
-  return { filename, eintraege, uebersprungen, leer_konto, belege, verrechnung, verrechnung_belege }
+  return { filename, eintraege, uebersprungen, leer_konto, belege, verrechnung, verrechnung_belege, geldtransit_kollision }
 }
 
 // --- Backup ---
@@ -3334,6 +3339,23 @@ export const loescheUngebuchte = (kontoId: number) =>
 
 export const abgleichTransaktion = (txId: number) =>
   request<BankAbgleichVorschlag[]>(`/bank-import/transaktion/${txId}/abgleich`)
+
+// Umbuchung zwischen eigenen Konten (Geldtransit)
+export type UmbuchungGegenstueck = {
+  tx_id: number
+  konto_id: number
+  konto_name: string
+  datum: string
+  betrag: string
+  partner_name?: string | null
+  verwendungszweck?: string | null
+}
+export const getUmbuchungVorschlag = (txId: number) =>
+  request<{ gegenstuecke: UmbuchungGegenstueck[]; kassenstand: string }>(`/bank-import/transaktion/${txId}/umbuchung`)
+export const bucheUmbuchung = (txId: number, gegenseite: 'transaktion' | 'kasse' | 'keine', gegenTxId?: number) =>
+  request<BankTransaktion[]>(`/bank-import/transaktion/${txId}/umbuchung`, {
+    method: 'POST', body: JSON.stringify({ gegenseite, gegen_tx_id: gegenTxId ?? null }),
+  })
 
 export const bucheTransaktion = (
   txId: number,

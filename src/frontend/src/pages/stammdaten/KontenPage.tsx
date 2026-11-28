@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { getKontenAlle, createKonto, updateKonto, deleteKonto, getUnternehmen, type Konto } from '../../api/client'
+import { getKontenAlle, createKonto, updateKonto, deleteKonto, getUnternehmen, getKontoDatevVorschlag, type Konto } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { validiereIban, ladeOpenIbanDaten, OPEN_IBAN_BANK_FALLBACK, OPEN_IBAN_BIC_FALLBACK, openIbanBankdatenFehlgeschlagen, OPEN_IBAN_LAND_TOOLTIP } from '../../utils/iban'
@@ -90,11 +90,22 @@ function formatIban(iban: string) {
 
 function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; initialIban?: string; onClose: () => void }) {
   const qc = useQueryClient()
-  const { register, handleSubmit, control, getValues, setValue, trigger, clearErrors, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, getValues, setValue, trigger, clearErrors, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: konto ? defaultValues(konto) : initialIban ? defaultValuesWithIban(initialIban) : defaultValues(null),
   })
   const kontoart = useWatch({ control, name: 'kontoart' })
+  // Neues Konto: nächste freie DATEV-Nummer vorausfüllen, solange nichts Eigenes eingetragen ist
+  const { data: datevVorschlag } = useQuery({
+    queryKey: ['konto-datev-vorschlag', kontoart],
+    queryFn: () => getKontoDatevVorschlag(kontoart),
+    enabled: !konto,
+  })
+  useEffect(() => {
+    if (!konto && datevVorschlag?.kontonummer && !dirtyFields.datev_kontonummer) {
+      setValue('datev_kontonummer', datevVorschlag.kontonummer)
+    }
+  }, [konto, datevVorschlag, dirtyFields.datev_kontonummer, setValue])
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
   const standardInhaber = (unternehmen?.firmenname ?? '').trim()
     || [unternehmen?.vorname, unternehmen?.nachname].filter(Boolean).join(' ')
@@ -305,17 +316,21 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
 
           {/* DATEV-Kontonummer */}
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">
-              DATEV-Kontonummer (optional)
+            <label htmlFor="konto-datev" className="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+              DATEV-Kontonummer
             </label>
             <input
+              id="konto-datev"
               {...register('datev_kontonummer')}
               placeholder="z.B. 1200"
               maxLength={8}
+              aria-describedby="konto-datev-hilfe"
               className={inp}
             />
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-              Wird im DATEV-Export als Gegenkonto verwendet (überschreibt den globalen Wert unter Einstellungen → DATEV)
+            <p id="konto-datev-hilfe" className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+              Unter dieser Nummer erscheint das Konto im DATEV-Export für dein Steuerbüro. Neue Konten bekommen
+              automatisch die nächste freie Nummer. Nennt dir dein Steuerbüro eine andere, trag sie hier ein.
+              Ohne Steuerbüro kannst du sie so lassen.
             </p>
           </div>
 
@@ -336,6 +351,42 @@ function KontoModal({ konto, initialIban, onClose }: { konto: Konto | null; init
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+/** Bestehender Zahlungsdienstleister ohne DATEV-Nummer: der Export bucht ihn sonst auf den
+ *  globalen PayPal-Standard - in SKR04 ist das 1460, das Konto für Geldtransit. Ein Klick
+ *  übernimmt die nächste freie Nummer, niemand muss den Kontenrahmen kennen. */
+function DatevNummerVorschlag({ konto }: { konto: Konto }) {
+  const qc = useQueryClient()
+  const { data } = useQuery({
+    queryKey: ['konto-datev-vorschlag', konto.kontoart, konto.id],
+    queryFn: () => getKontoDatevVorschlag(konto.kontoart, konto.id),
+  })
+  const uebernehmen = useMutation({
+    mutationFn: (nummer: string) => updateKonto(konto.id!, { datev_kontonummer: nummer }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['konten'] })
+      qc.invalidateQueries({ queryKey: ['konto-datev-vorschlag'] })
+    },
+  })
+  if (!data?.kontonummer) return null
+  return (
+    <div role="status" className="mt-2 text-xs bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 rounded-lg px-3 py-2">
+      <p>
+        Dieses Konto hat noch keine eigene DATEV-Nummer. Im DATEV-Export landen die Umsätze dann
+        womöglich auf dem Konto für Geldtransit ({data.geldtransit}), wo sie sich mit Umbuchungen vermischen.
+        Vorschlag: <strong>{data.kontonummer}</strong>.
+      </p>
+      <button
+        type="button"
+        onClick={() => uebernehmen.mutate(data.kontonummer!)}
+        disabled={uebernehmen.isPending}
+        className="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-700 disabled:opacity-50"
+      >
+        {data.kontonummer} übernehmen
+      </button>
     </div>
   )
 }
@@ -446,6 +497,10 @@ export function KontenPage() {
               {k.kennung && (
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-mono">{k.kennung}</p>
               )}
+              {k.datev_kontonummer && (
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">DATEV-Konto: {k.datev_kontonummer}</p>
+              )}
+              {!k.datev_kontonummer && k.aktiv && k.kontoart === 'zahlungsdienstleister' && <DatevNummerVorschlag konto={k} />}
             </div>
             <div className="flex items-center gap-1 shrink-0 pt-0.5">
               <button
