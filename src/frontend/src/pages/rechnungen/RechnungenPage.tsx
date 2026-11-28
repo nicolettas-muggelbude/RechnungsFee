@@ -3158,6 +3158,9 @@ function RechnungForm({
         differenzbesteuerung: p.differenzbesteuerung ?? false,
         art_typ: (p.artikel_typ as ArtikelTyp | null) ?? undefined,
         leistungsdatum: p.leistungsdatum ?? '',
+        // Issue #606: Abzugszeile einer verrechneten Abschlagsrechnung bleibt markiert - sonst
+        // speichert das Formular sie als normale Minus-Position und gibt den Abschlag wieder frei
+        abschlag_rechnung_id: p.abschlag_rechnung_id ?? undefined,
       }))
     }
     // Plain-PDF-Prefill: Brutto/Netto-Betrag und USt-Satz aus Texterkennung vorfüllen

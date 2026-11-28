@@ -37,7 +37,7 @@ logging.root.addHandler(_log_handler)
 from database.seed import run_all_seeds, DURCHLAUFENDE_POSTEN_BESCHREIBUNG
 from api import unternehmen, konten, kategorien, setup, journal, kunden, lieferanten, tagesabschluss, nummernkreise, export, rechnungen, backup, artikel, artikel_gruppen, ust_saetze, pdf_vorlagen, eks, system, ustva, zm, euer, dokumentenpakete, mail, wiederkehrend, buchungsvorlagen, anlageverzeichnis, datev, anlage_s, anlage_g, fristen_api, guv, bank_templates, bank_import, auto_filter, forderungen, cockpit, datenmigration, kontenuebersicht, schnellbuchungen, mahnwesen, profile, kontokorrent, inventurliste, postfach, rechnungen_import, verlauf
 
-SCHEMA_VERSION = 203
+SCHEMA_VERSION = 204
 
 # Security-Audit F10: API-Dokumentation (komplette Endpunktliste) nur im Entwicklungsmodus,
 # nicht im ausgelieferten PyInstaller-Sidecar (sys.frozen).
@@ -4678,6 +4678,91 @@ def _run_migrations() -> None:
             conn.execute(text("PRAGMA user_version = 203"))
             conn.commit()
             print("[Migration] Schema auf Version 203 (Issue #604: Kontoinhaber je Konto)")
+
+    if version < 204:
+        with engine.connect() as conn:
+            # Issue #606: Formular verlor beim Bearbeiten die Abschlags-Verknüpfung der Abzugszeilen
+            anzahl = _repariere_abschlag_verknuepfung_606(conn)
+            conn.execute(text("PRAGMA user_version = 204"))
+            conn.commit()
+            print(f"[Migration] Schema auf Version 204 (Issue #606: {anzahl} Abschlagsverrechnung(en) wiederhergestellt)")
+
+
+_ABSCHLAG_ZEILE_606 = "Abzgl. Abschlagsrechnung "
+
+
+def _repariere_abschlag_verknuepfung_606(conn) -> int:
+    """Issue #606: Das Rechnungsformular übernahm beim Laden eines Entwurfs die Markierung
+    abschlag_rechnung_id nicht. Beim Speichern wurden die Abzugszeilen einer Schlussrechnung zu
+    normalen Minus-Positionen und _synchronisiere_abschlagsverrechnung() gab die Abschläge wieder
+    frei (verrechnet_in_rechnung_id = NULL, Kundenguthaben aus Überzahlung wieder offen).
+
+    Stellt beides wieder her, erkannt am automatisch erzeugten Zeilentext
+    „Abzgl. Abschlagsrechnung <Nr> vom …“. Nur wenn eindeutig: Abschlag desselben Kunden,
+    finalisiert, nicht storniert, gerade frei und nur von einer Schlussrechnung referenziert.
+    Beträge bleiben unverändert. Gibt die Zahl der wiederhergestellten Abschläge zurück."""
+    from utils.aenderungsprotokoll import protokolliere_aenderung
+
+    def _spalten(tabelle: str) -> set[str]:
+        return {r[1] for r in conn.execute(text(f"PRAGMA table_info({tabelle})")).fetchall()}
+
+    if not ({"abschlag_rechnung_id", "beschreibung", "brutto"} <= _spalten("rechnungspositionen")
+            and {"kunde_id", "dokument_typ", "verrechnet_in_rechnung_id", "storniert", "ist_entwurf"}
+            <= _spalten("rechnungen")):
+        return 0  # Schema ohne Abschlagsrechnungen - nichts zu reparieren
+    hat_forderungen = bool(_spalten("forderungen"))
+
+    zeilen = conn.execute(text("""
+        SELECT p.id, p.rechnung_id, p.beschreibung, r.kunde_id
+        FROM rechnungspositionen p JOIN rechnungen r ON r.id = p.rechnung_id
+        WHERE p.abschlag_rechnung_id IS NULL AND p.beschreibung LIKE :praefix
+          AND p.brutto < 0 AND r.typ = 'ausgang' AND COALESCE(r.storniert, 0) = 0
+          AND COALESCE(r.dokument_typ, 'Rechnung') = 'Rechnung'
+    """), {"praefix": _ABSCHLAG_ZEILE_606 + "%"}).fetchall()
+
+    # Abschlagsnummer → {schlussrechnung_id: [positions_ids]}
+    kandidaten: dict[tuple, dict[int, list[int]]] = {}
+    for pos_id, rechnung_id, beschreibung, kunde_id in zeilen:
+        nr = beschreibung[len(_ABSCHLAG_ZEILE_606):].split(" vom ")[0].strip()
+        if nr:
+            kandidaten.setdefault((nr, kunde_id), {}).setdefault(rechnung_id, []).append(pos_id)
+
+    grund = "Issue #606: Abschlags-Verknüpfung der Abzugszeile nach Bearbeiten im Formular verloren"
+    anzahl = 0
+    for (nr, kunde_id), je_rechnung in kandidaten.items():
+        if len(je_rechnung) != 1 or kunde_id is None:
+            continue  # mehrdeutig - von Hand prüfen
+        schluss_id, pos_ids = next(iter(je_rechnung.items()))
+        abschlag = conn.execute(text("""
+            SELECT id FROM rechnungen
+            WHERE dokument_typ = 'Abschlagsrechnung' AND rechnungsnummer = :nr AND kunde_id = :k
+              AND verrechnet_in_rechnung_id IS NULL AND COALESCE(storniert, 0) = 0
+              AND COALESCE(ist_entwurf, 0) = 0
+        """), {"nr": nr, "k": kunde_id}).fetchall()
+        if len(abschlag) != 1:
+            continue
+        abschlag_id = abschlag[0][0]
+        for pos_id in pos_ids:
+            conn.execute(text("UPDATE rechnungspositionen SET abschlag_rechnung_id = :a WHERE id = :p"),
+                         {"a": abschlag_id, "p": pos_id})
+            protokolliere_aenderung(conn, tabelle="rechnungspositionen", datensatz_id=pos_id,
+                                    feld="abschlag_rechnung_id", alter_wert=None, neuer_wert=abschlag_id,
+                                    migration_version=204, grund=grund)
+        conn.execute(text("UPDATE rechnungen SET verrechnet_in_rechnung_id = :s WHERE id = :a"),
+                     {"s": schluss_id, "a": abschlag_id})
+        protokolliere_aenderung(conn, tabelle="rechnungen", datensatz_id=abschlag_id,
+                                feld="verrechnet_in_rechnung_id", alter_wert=None, neuer_wert=schluss_id,
+                                migration_version=204, grund=grund)
+        # wie _synchronisiere_abschlagsverrechnung(): Überzahlung steckt im Abzug, Guthaben schließen
+        for (f_id,) in ([] if not hat_forderungen else conn.execute(text("""
+            SELECT id FROM forderungen WHERE typ = 'kundenguthaben' AND rechnung_id = :a AND status = 'offen'
+        """), {"a": abschlag_id}).fetchall()):
+            conn.execute(text("UPDATE forderungen SET status = 'ausgeglichen' WHERE id = :f"), {"f": f_id})
+            protokolliere_aenderung(conn, tabelle="forderungen", datensatz_id=f_id, feld="status",
+                                    alter_wert="offen", neuer_wert="ausgeglichen",
+                                    migration_version=204, grund=grund)
+        anzahl += 1
+    return anzahl
 
 
 def _migrate_kategorien() -> None:

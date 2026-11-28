@@ -23,6 +23,13 @@ export type ChangelogVersion = {
 
 export const CHANGELOG: ChangelogVersion[] = [
   {
+    version: 'v0.7.15',
+    datum: 'in Arbeit',
+    eintraege: [
+      { typ: 'fix', text: 'Schlussrechnung: Wurde der Entwurf im Formular bearbeitet oder von dort finalisiert, gingen die Abzüge der Abschlagsrechnungen in normale Minuspositionen über. Das PDF zeigte sie dann wieder in der Positionstabelle statt im Summenblock mit Netto- und Steueranteil, und die Abschlagsrechnungen galten als nicht mehr verrechnet. Beim Update werden betroffene Schlussrechnungen automatisch repariert, die Beträge bleiben unverändert. Ein bereits gedrucktes oder versendetes Original-PDF bleibt so, wie es ausgegeben wurde. Danke an Markus (Issue #606).' },
+    ],
+  },
+  {
     version: 'v0.7.14',
     datum: 'November 2026',
     eintraege: [
