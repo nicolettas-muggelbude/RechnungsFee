@@ -25,6 +25,14 @@ class AnlageSKfzHinweis(BaseModel):
     privat_anteil_prozent: Decimal
 
 
+class AnlageSNebentaetigkeit(BaseModel):
+    """Issue #567: Zeile 57/58 – Einnahmen aus nebenberuflicher Tätigkeit (§ 3 Nr. 26/26a EStG)."""
+    zeile: int                # 57 = erste Tätigkeit, 58 = alle weiteren (Vordruck 2025)
+    taetigkeit: str
+    einnahmen: Decimal        # Gesamtbetrag (Kz 191 bzw. 193)
+    steuerfrei: Decimal       # davon als steuerfrei behandelt (Kz 192 bzw. 194)
+
+
 class AnlageSErgebnis(BaseModel):
     jahr: int
     vorname: str
@@ -32,9 +40,27 @@ class AnlageSErgebnis(BaseModel):
     steuernummer: str
     finanzamt: str
     berufsbezeichnung: str
-    gewinn_verlust: Decimal   # positiv = Gewinn, negativ = Verlust
+    gewinn_verlust: Decimal   # positiv = Gewinn, negativ = Verlust (nach Abzug steuerfreier Einnahmen)
     kfz_hinweise: list[AnlageSKfzHinweis]
     taetigkeitsart: str
+    nebentaetigkeiten: list[AnlageSNebentaetigkeit] = []
+
+
+def _nebentaetigkeiten(steuerfrei_taetigkeiten: list[dict]) -> list[AnlageSNebentaetigkeit]:
+    """Größte Tätigkeit in Zeile 57, alle weiteren zusammengefasst in Zeile 58."""
+    posten = sorted(steuerfrei_taetigkeiten, key=lambda t: -t["einnahmen"])
+    if not posten:
+        return []
+    erste, weitere = posten[0], posten[1:]
+    ergebnis = [AnlageSNebentaetigkeit(zeile=57, taetigkeit=erste["taetigkeit"],
+                                       einnahmen=erste["einnahmen"], steuerfrei=erste["steuerfrei"])]
+    if weitere:
+        ergebnis.append(AnlageSNebentaetigkeit(
+            zeile=58, taetigkeit=", ".join(t["taetigkeit"] for t in weitere),
+            einnahmen=sum((t["einnahmen"] for t in weitere), Decimal("0")),
+            steuerfrei=sum((t["steuerfrei"] for t in weitere), Decimal("0")),
+        ))
+    return ergebnis
 
 
 @router.get("/berechnen", response_model=AnlageSErgebnis)
@@ -76,6 +102,7 @@ def anlage_s_berechnen(
             for k in kfz_list
         ],
         taetigkeitsart=unt.taetigkeitsart or "freiberuflich",
+        nebentaetigkeiten=_nebentaetigkeiten(euer.get("steuerfrei_taetigkeiten", [])),
     )
 
 
@@ -190,6 +217,17 @@ def _generate_anlage_s_pdf(ergebnis: AnlageSErgebnis) -> bytes:
     kz_label = "Gewinn freiberufliche Tätigkeit  (ELSTER KZ 100)" if ist_gewinn else "Verlust freiberufliche Tätigkeit  (ELSTER KZ 100)"
     text_row(kz_label, _euro(gv))
     pdf.ln(2)
+
+    # Issue #567: Einnahmen aus nebenberuflicher Tätigkeit (§ 3 Nr. 26/26a EStG)
+    if ergebnis.nebentaetigkeiten:
+        section_header("Einnahmen aus nebenberuflicher Tätigkeit")
+        for n in ergebnis.nebentaetigkeiten:
+            zeile_row(str(n.zeile), f"aus der Tätigkeit als: {n.taetigkeit}", "")
+            text_row("Gesamtbetrag  (ELSTER KZ 191)" if n.zeile == 57 else "Gesamtbetrag  (ELSTER KZ 193)",
+                     _euro(n.einnahmen))
+            text_row("davon als steuerfrei behandelt  (ELSTER KZ 192)" if n.zeile == 57
+                     else "davon als steuerfrei behandelt  (ELSTER KZ 194)", _euro(n.steuerfrei))
+        pdf.ln(2)
 
     # KFZ
     if ergebnis.kfz_hinweise:

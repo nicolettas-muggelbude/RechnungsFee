@@ -22,7 +22,9 @@ from sqlalchemy import func, extract, or_
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, APP_DATA_DIR
-from database.models import BankTransaktion, Beleg, Journaleintrag, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis
+from database.models import (
+    BankTransaktion, Beleg, Journaleintrag, JournalAnhang, Kategorie, Tagesabschluss, Unternehmen, Nummernkreis,
+)
 from utils.signatur import signatur_journaleintrag
 from utils.konten import ist_ig_lieferung_konto
 from utils.zm_meldezeitraum import hinweis_freie_ig_buchung
@@ -44,6 +46,7 @@ router = APIRouter(prefix="/api/journal", tags=["Journal"])
 
 
 from utils.belegnummer import belegnr_aus_format as _belegnr_aus_format
+from utils.storno_kette import ist_storno as ist_storno_eintrag, storno_bezug, storno_zu, stornos_je_glied
 
 
 def _storno_infos(db: Session, eintraege: list[Journaleintrag]) -> dict[int, dict]:
@@ -55,39 +58,27 @@ def _storno_infos(db: Session, eintraege: list[Journaleintrag]) -> dict[int, dic
     Stornieren selbst - macht sie fuer Lese-Endpunkte nutzbar statt sie clientseitig fragil
     nachzubauen (Issue #321).
 
-    Bekannte Einschraenkung: gruppe_id gruppiert die gesamte Korrekturkette unter der
-    Wurzel-id, nicht das einzelne Kettenglied - bei mehr als einer Korrektur derselben
-    Buchung (Original -> Storno -> Neu -> erneut storniert -> ...) markiert dieses Ergebnis
-    alle Nicht-Storno-Mitglieder der Kette als storniert, sobald irgendein Storno in der
-    Kette existiert. Deckt den weit ueberwiegenden Fall (eine Korrektur) exakt ab."""
+    Storniert ist nur das Kettenglied, dessen Belegnummer eine Gegenbuchung der Gruppe nennt
+    ("STORNO <Belegnr>: ...") - die Neubuchung einer Korrektur haengt an derselben gruppe_id,
+    ist aber gueltig (Issue #601, utils/storno_kette.py)."""
     wurzel_ids = {e.gruppe_id or e.id for e in eintraege}
     stornos = db.query(Journaleintrag).filter(
         Journaleintrag.beschreibung.like("STORNO %"),
         Journaleintrag.gruppe_id.in_(wurzel_ids),
     ).all() if wurzel_ids else []
-    storno_je_wurzel: dict[int, str] = {s.gruppe_id: s.belegnr for s in stornos if s.gruppe_id}
-
-    original_ids = {s.gruppe_id for s in stornos if s.gruppe_id}
-    originale = db.query(Journaleintrag.id, Journaleintrag.belegnr).filter(
-        Journaleintrag.id.in_(original_ids)
-    ).all() if original_ids else []
-    belegnr_je_original_id: dict[int, str] = dict(originale)
+    storno_je_glied = stornos_je_glied(stornos)
 
     ergebnis: dict[int, dict] = {}
     for e in eintraege:
         info = {"storniert": False, "storno_belegnr": None, "ist_storno": False, "storno_von_belegnr": None}
-        # gruppe_id kann nicht über JournalEintragCreate gesetzt werden - stammt ausschließlich
-        # von der Storno-Erstellung selbst. Beschreibungs-Praefix ALLEIN wuerde faelschlich auch
-        # eine eigene Buchung erfassen, deren Text zufaellig mit "STORNO " beginnt (Issue #321).
-        ist_storno = e.gruppe_id is not None and e.beschreibung.startswith("STORNO ")
-        if ist_storno:
+        if ist_storno_eintrag(e):
             info["ist_storno"] = True
-            info["storno_von_belegnr"] = belegnr_je_original_id.get(e.gruppe_id)
+            info["storno_von_belegnr"] = storno_bezug(e.beschreibung)
         else:
-            wurzel = e.gruppe_id or e.id
-            if wurzel in storno_je_wurzel:
+            gegen = storno_je_glied.get((e.gruppe_id or e.id, e.belegnr))
+            if gegen:
                 info["storniert"] = True
-                info["storno_belegnr"] = storno_je_wurzel[wurzel]
+                info["storno_belegnr"] = gegen
         ergebnis[e.id] = info
     return ergebnis
 
@@ -184,6 +175,13 @@ def get_kassenstand(db: Session = Depends(get_db)):
     return {"kassenstand": str(_get_bar_kassenstand(db))}
 
 
+@router.get("/jahre")
+def buchungsjahre(db: Session = Depends(get_db)) -> list[int]:
+    """Issue #565: Jahre mit Buchungen (absteigend) für die Jahresauswahl im Journal."""
+    jahre = db.query(extract("year", Journaleintrag.datum)).distinct().all()
+    return sorted({int(j[0]) for j in jahre if j[0] is not None}, reverse=True)
+
+
 @router.get("/naechste-belegnr")
 def naechste_belegnr(datum: date = Query(default=None), db: Session = Depends(get_db)):
     """Gibt die nächste freie Belegnummer zurück."""
@@ -204,7 +202,8 @@ def monat_statistik(monat: str = Query(..., description="Format: YYYY-MM"), db: 
     # betrieblichen Einnahmen/Ausgaben und werden herausgefiltert.
     betrieb_filter = or_(
         Journaleintrag.kategorie_id.is_(None),
-        Kategorie.kontenart != "Privat",
+        # Issue #564: Durchlaufende Posten (Neutral) ebenfalls nicht betrieblich
+        Kategorie.kontenart.notin_(["Privat", "Neutral"]),
     )
     einnahmen = (
         db.query(func.sum(Journaleintrag.brutto_betrag))
@@ -257,10 +256,13 @@ def list_eintraege(
     art: Optional[str] = Query(None, description="Einnahme oder Ausgabe"),
     zahlungsart_typ: Optional[str] = Query(None, description="bar oder unbar"),
     gruppe_id: Optional[int] = Query(None, description="Zeigt nur die Buchungsgruppe (Original+Storno+ggf. Neu) dieser Wurzel-id"),
+    lieferant_id: Optional[int] = Query(None, description="Issue #566: direkt gebuchte Ausgaben dieses Lieferanten"),
     db: Session = Depends(get_db),
 ):
     """Journaleinträge mit optionalen Filtern."""
     q = db.query(Journaleintrag)
+    if lieferant_id is not None:
+        q = q.filter(Journaleintrag.lieferant_id == lieferant_id)
     if gruppe_id is not None:
         # Original selbst hat gruppe_id=NULL (GoBD: kein nachtraegliches UPDATE moeglich),
         # daher zusaetzlich nach eigener id filtern.
@@ -323,6 +325,10 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
             vorsteuerabzug = False
             if not steuerbefreiung_grund:
                 steuerbefreiung_grund = "Privatbuchung"
+        elif kat.kontenart == "Neutral":
+            # Issue #564: Durchlaufende Posten - keine USt, kein Vorsteuerabzug
+            ust_satz = Decimal("0")
+            vorsteuerabzug = False
         if ist_ig_lieferung_konto(kat.konto_skr03, kat.konto_skr04) and not steuerbefreiung_grund:
             steuerbefreiung_grund = "§4 Nr. 1b UStG"
         if not data.ust_sonderfall and not data.ist_ig_erwerb:
@@ -395,6 +401,7 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
         konto_ust_skr03=konto_ust_skr03,
         konto_ust_skr04=konto_ust_skr04,
         kunde_id=data.kunde_id,
+        lieferant_id=data.lieferant_id if data.art == "Ausgabe" else None,  # Issue #566
         zahlungsart=data.zahlungsart,
         art=data.art,
         netto_betrag=netto,
@@ -411,9 +418,16 @@ def _felder_aus_data(data: "JournalEintragCreate", db: Session) -> dict:
     )
 
 
+def _pruefe_privat_bezahlt(zahlungsart: str, art: str) -> None:
+    """Issue #470: „Privat bezahlt“ = Betriebsausgabe aus privaten Mitteln (Einlage) - nur bei Ausgaben."""
+    if zahlungsart == "Privat" and art != "Ausgabe":
+        raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur bei Ausgaben.")
+
+
 @router.post("", response_model=JournalEintragResponse, status_code=201)
 def create_eintrag(data: JournalEintragCreate, db: Session = Depends(get_db)):
     """Legt einen neuen Journaleintrag an (innerhalb von 5 Min. direkt korrigierbar)."""
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     # Barkassen-Prüfung: Bar-Ausgabe darf den Kassenstand nicht übersteigen
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         kassenstand = _get_bar_kassenstand(db)
@@ -450,6 +464,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     Innerhalb von 5 Minuten nach Erstellung: direkte Korrektur (unsichtbar, GoBD-konform
     da noch keine Festschreibung). Danach: automatische Stornobuchung + korrigierte Neubuchung.
     """
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     original = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not original:
         raise HTTPException(404, "Journaleintrag nicht gefunden.")
@@ -457,10 +472,7 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
         raise HTTPException(409, "Storno-Einträge können nicht bearbeitet werden.")
     if original.rechnung_id:
         raise HTTPException(409, "Rechnungsbuchungen können nur über die Rechnung bearbeitet werden.")
-    bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
-        Journaleintrag.beschreibung.like("STORNO %"),
-    ).first()
+    bereits_storniert = storno_zu(db, original)  # nur dieses Glied der Kette (Issue #601)
     if bereits_storniert:
         raise HTTPException(409, f"Diese Buchung wurde bereits storniert ({bereits_storniert.belegnr}).")
 
@@ -524,6 +536,8 @@ def update_eintrag(eintrag_id: int, data: JournalEintragCreate, db: Session = De
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
     db.flush()  # neu.id wird fuer die Bank-Verknuepfung unten benoetigt
+    # Issue #568 Stufe 2: alle Belege wandern mit zur Korrektur-Buchung
+    anhaenge_uebernehmen(db, original, neu)
 
     # Bank-Verknuepfung wandert mit auf die Neubuchung (Issue #322) - sonst zeigt
     # BankTransaktion.journal_id dauerhaft auf die stornierte, wirtschaftlich nicht mehr
@@ -543,15 +557,20 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
     mime = datei.content_type or ""
     if mime not in ERLAUBTE_MIME_TYPES:
         raise HTTPException(status_code=422, detail=f"Dateityp '{mime}' nicht erlaubt. Erlaubt: PDF, JPEG, PNG, TIFF.")
-
     inhalt = await datei.read()
+    return beleg_aus_bytes_speichern(inhalt, datei.filename or "beleg", mime, db)
+
+
+def beleg_aus_bytes_speichern(inhalt: bytes, dateiname: str, mime: str, db: Session) -> Beleg:
+    """Legt einen Journal-Beleg (eigene Datei unter uploads/belege/JJJJ/MM/) aus Bytes an -
+    für Uploads und für die Kopie des Vertrags einer Buchungsvorlage (Issue #568)."""
     sha256 = hashlib.sha256(inhalt).hexdigest()
 
     jetzt = datetime.now()
     ziel_dir = BELEG_DIR / str(jetzt.year) / jetzt.strftime("%m")
     ziel_dir.mkdir(parents=True, exist_ok=True)
 
-    original_name = Path(datei.filename or "beleg")
+    original_name = Path(dateiname or "beleg")
     stem = original_name.stem[:50]
     suffix = original_name.suffix.lower() or ".bin"
     dateiname_lokal = f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
@@ -562,7 +581,7 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
     pdfa_pfad_rel: str | None = None
     if mime == "application/pdf":
         try:
-            ergebnis = analysiere_datei(datei.filename or "", inhalt)
+            ergebnis = analysiere_datei(dateiname or "", inhalt)
             if ergebnis.format in ("zugferd", "xrechnung"):
                 pdfa_pfad_rel = rel_pfad
         except Exception:
@@ -570,7 +589,7 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
 
     beleg = Beleg(
         dateiname=rel_pfad,
-        original_name=datei.filename or "beleg",
+        original_name=dateiname or "beleg",
         mime_type=mime,
         dateigroesse=len(inhalt),
         sha256=sha256,
@@ -606,34 +625,52 @@ async def _beleg_datei_speichern(datei: UploadFile, db: Session) -> Beleg:
     return beleg
 
 
+def anhang_belege(eintrag: Journaleintrag) -> list[Beleg]:
+    """Issue #568 Stufe 2: alle Belege einer Buchung in Reihenfolge des Anhängens. Fällt auf
+    beleg_id zurück, falls (noch) keine Anhang-Zeilen existieren."""
+    belege = [a.beleg for a in (eintrag.anhaenge or []) if a.beleg is not None]
+    if not belege and eintrag.beleg is not None:
+        belege = [eintrag.beleg]
+    return belege
+
+
+def anhang_hinzufuegen(db: Session, eintrag: Journaleintrag, beleg_id: int) -> None:
+    """Beleg an eine Buchung hängen. beleg_id der Buchung = erster Beleg (für ältere Leser);
+    bei bereits gespeicherten, festgeschriebenen Buchungen wird beleg_id nicht mehr angefasst."""
+    db.add(JournalAnhang(journal_id=eintrag.id, beleg_id=beleg_id))
+    if eintrag.beleg_id is None and (eintrag in db.new or not eintrag.immutable):
+        eintrag.beleg_id = beleg_id
+
+
+def anhaenge_uebernehmen(db: Session, quelle: Journaleintrag, ziel: Journaleintrag) -> None:
+    """Alle Belege von quelle an ziel hängen (Korrektur-Neubuchung, Issue #568)."""
+    for b in anhang_belege(quelle):
+        db.add(JournalAnhang(journal_id=ziel.id, beleg_id=b.id))
+
+
+def _pruefe_anhang_aenderbar(eintrag: Journaleintrag, aktion: str) -> None:
+    if eintrag.immutable:
+        # protect_journal_update/-anhaenge_delete würden ohnehin ablehnen (GoBD) - verständliche Meldung
+        raise HTTPException(
+            status_code=409,
+            detail=f"Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nicht mehr {aktion} werden.",
+        )
+
+
 @router.post("/{eintrag_id}/anhang", response_model=BelegResponse, status_code=201)
 async def upload_anhang(eintrag_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Dateianhang (PDF/Bild) an eine Journalbuchung hängen (Issue #310). Eigene Route
-    "/anhang" statt "/beleg" - unter "/beleg" existiert bereits der druckbare HTML-Beleg
-    (siehe get_beleg() weiter unten), das waere sonst eine Routenkollision."""
+    """Weiteren Beleg (PDF/Bild) an eine Journalbuchung hängen (Issue #310, seit #568 Stufe 2
+    mehrere je Buchung). Eigene Route "/anhang" statt "/beleg" - unter "/beleg" existiert bereits
+    der druckbare HTML-Beleg (siehe get_beleg() weiter unten)."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
     if not eintrag:
         raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
-    if eintrag.immutable:
-        # protect_journal_update-Trigger wuerde das UPDATE ohnehin ablehnen (GoBD) -
-        # hier vorab mit verstaendlicher Meldung statt rohem DB-Fehler.
-        raise HTTPException(
-            status_code=409,
-            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – ein Beleg kann nachträglich nicht mehr angehängt werden.",
-        )
-
-    # Alten Beleg ersetzen wenn vorhanden
-    if eintrag.beleg_id:
-        alter_beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
-        if alter_beleg:
-            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
-            if alter_pfad.exists():
-                alter_pfad.unlink()
-            db.delete(alter_beleg)
-            db.flush()
-
+    _pruefe_anhang_aenderbar(eintrag, "angehängt")
+    if eintrag.beleg_id and not eintrag.anhaenge:
+        # Altbestand vor Migration 197 ohne Anhang-Zeile: ersten Beleg nachtragen
+        db.add(JournalAnhang(journal_id=eintrag.id, beleg_id=eintrag.beleg_id))
     beleg = await _beleg_datei_speichern(datei, db)
-    eintrag.beleg_id = beleg.id
+    anhang_hinzufuegen(db, eintrag, beleg.id)
     db.commit()
     return BelegResponse.from_beleg(beleg)
 
@@ -653,15 +690,23 @@ async def upload_anhang_vorab(datei: UploadFile = File(...), db: Session = Depen
 def download_anhang(
     eintrag_id: int,
     version: str = Query("original", description="'original' oder 'pdfa'"),
+    anhang_id: Optional[int] = Query(None, description="Issue #568: bestimmter Anhang, sonst der erste"),
     db: Session = Depends(get_db),
 ):
     """Angehängte Datei einer Journalbuchung herunterladen. Mit ?version=pdfa die PDF/A-Version."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
-    if not eintrag or not eintrag.beleg_id:
+    if not eintrag:
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
+    if anhang_id is not None:
+        anhang = db.query(JournalAnhang).filter(
+            JournalAnhang.id == anhang_id, JournalAnhang.journal_id == eintrag_id,
+        ).first()
+        beleg = anhang.beleg if anhang else None
+    else:
+        belege = anhang_belege(eintrag)
+        beleg = belege[0] if belege else None
     if not beleg:
-        raise HTTPException(status_code=404, detail="Beleg-Datensatz nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
 
     if version == "pdfa":
         if not beleg.beleg_pdfa_pfad:
@@ -688,30 +733,66 @@ def download_anhang(
     )
 
 
+def _anhaenge_entfernen(db: Session, eintrag: Journaleintrag, anhaenge: list[JournalAnhang]) -> list[Path]:
+    """Anhang-Zeilen löschen, beleg_id auf den nächsten verbliebenen Beleg setzen und Belege
+    ohne weitere Verwendung samt Datei zum Entfernen vormerken (Issue #568-Nebenfund)."""
+    from api.rechnungen import _beleg_loeschen_wenn_unbenutzt
+    entfernte_ids = [a.beleg_id for a in anhaenge]
+    for a in anhaenge:
+        db.delete(a)
+    db.flush()
+    db.expire(eintrag, ["anhaenge"])
+    rest = [a.beleg_id for a in eintrag.anhaenge]
+    if eintrag.beleg_id in entfernte_ids or (eintrag.beleg_id and not rest):
+        eintrag.beleg_id = rest[0] if rest else None
+    db.flush()
+    dateien: list[Path] = []
+    for bid in dict.fromkeys(entfernte_ids):
+        dateien += _beleg_loeschen_wenn_unbenutzt(bid, db)
+    return dateien
+
+
+@router.delete("/{eintrag_id}/anhang/{anhang_id}", status_code=204)
+def delete_einzelanhang(eintrag_id: int, anhang_id: int, db: Session = Depends(get_db)):
+    """Issue #568 Stufe 2: einen Beleg von einer Journalbuchung entfernen (nur im Korrekturfenster)."""
+    eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
+    if not eintrag:
+        raise HTTPException(status_code=404, detail="Journaleintrag nicht gefunden.")
+    _pruefe_anhang_aenderbar(eintrag, "entfernt")
+    anhang = db.query(JournalAnhang).filter(
+        JournalAnhang.id == anhang_id, JournalAnhang.journal_id == eintrag_id,
+    ).first()
+    if not anhang:
+        raise HTTPException(status_code=404, detail="Beleg nicht gefunden.")
+    from api.rechnungen import _dateien_entfernen
+    dateien = _anhaenge_entfernen(db, eintrag, [anhang])
+    db.commit()
+    _dateien_entfernen(dateien)
+
+
 @router.delete("/{eintrag_id}/anhang", status_code=204)
 def delete_anhang(eintrag_id: int, db: Session = Depends(get_db)):
-    """Beleg-Anhang von einer Journalbuchung entfernen und Datei löschen."""
+    """Alle Belege einer Journalbuchung entfernen (nur im Korrekturfenster)."""
     eintrag = db.query(Journaleintrag).filter(Journaleintrag.id == eintrag_id).first()
-    if not eintrag or not eintrag.beleg_id:
+    if not eintrag or not (eintrag.beleg_id or eintrag.anhaenge):
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    if eintrag.immutable:
-        raise HTTPException(
-            status_code=409,
-            detail="Diese Buchung ist bereits festgeschrieben (GoBD) – der Beleg kann nicht mehr entfernt werden.",
-        )
-    beleg = db.query(Beleg).filter(Beleg.id == eintrag.beleg_id).first()
-    eintrag.beleg_id = None
-    if beleg:
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if pfad.exists():
-            pfad.unlink()
-        db.delete(beleg)
+    _pruefe_anhang_aenderbar(eintrag, "entfernt")
+    from api.rechnungen import _beleg_loeschen_wenn_unbenutzt, _dateien_entfernen
+    if eintrag.anhaenge:
+        dateien = _anhaenge_entfernen(db, eintrag, list(eintrag.anhaenge))
+    else:
+        beleg_id = eintrag.beleg_id
+        eintrag.beleg_id = None
+        db.flush()
+        dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 @router.post("/split", response_model=list[JournalEintragResponse], status_code=201)
 def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)):
     """Erstellt mehrere Journaleinträge als atomare Split-Buchung (ein Beleg, mehrere Positionen)."""
+    _pruefe_privat_bezahlt(data.zahlungsart, data.art)
     # Barkassen-Prüfung für Split-Ausgaben (nur Bar, Gesamtbetrag aller Positionen)
     if data.art == "Ausgabe" and data.zahlungsart == "Bar":
         gesamt = sum(pos.brutto_betrag for pos in data.positionen)
@@ -741,6 +822,9 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
                 vorsteuerabzug = False
                 if not steuerbefreiung_grund:
                     steuerbefreiung_grund = "Privatbuchung"
+            elif split_kat.kontenart == "Neutral":
+                ust_satz = Decimal("0")
+                vorsteuerabzug = False
             if ist_ig_lieferung_konto(split_kat.konto_skr03, split_kat.konto_skr04) and not steuerbefreiung_grund:
                 steuerbefreiung_grund = "§4 Nr. 1b UStG"
         pos_sf = pos.ust_sonderfall or ("ig_erwerb" if pos.ist_ig_erwerb else None)
@@ -797,6 +881,7 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             konto_ust_skr03=konto_ust_skr03,
             konto_ust_skr04=konto_ust_skr04,
             kunde_id=data.kunde_id,
+            lieferant_id=data.lieferant_id if data.art == "Ausgabe" else None,  # Issue #566
             zahlungsart=data.zahlungsart,
             art=data.art,
             netto_betrag=netto,
@@ -808,12 +893,18 @@ def create_split_buchung(data: SplitBuchungCreate, db: Session = Depends(get_db)
             steuerbefreiung_grund=steuerbefreiung_grund,
             ist_ig_erwerb=(pos_sf == "ig_erwerb"),
             ust_sonderfall=pos_sf,
-            beleg_id=data.beleg_id,  # muss beim Anlegen mitgegeben werden, s. SplitBuchungCreate
+            # muss beim Anlegen mitgegeben werden, s. SplitBuchungCreate (erster = Hauptbeleg)
+            beleg_id=(data.alle_beleg_ids() or [None])[0],
             immutable=True,
         )
         journaleintrag.signatur = signatur_journaleintrag(journaleintrag)
         db.add(journaleintrag)
         ergebnisse.append(journaleintrag)
+    db.flush()
+    # Issue #568 Stufe 2: alle Belege an jede Position der Split-Buchung
+    for e in ergebnisse:
+        for bid in data.alle_beleg_ids():
+            db.add(JournalAnhang(journal_id=e.id, beleg_id=bid))
     db.commit()
     for e in ergebnisse:
         db.refresh(e)
@@ -1143,10 +1234,7 @@ def storno_eintrag(eintrag_id: int, data: StornoRequest, db: Session = Depends(g
     if original.beschreibung.startswith("STORNO "):
         raise HTTPException(status_code=409, detail="Ein Storno-Eintrag kann nicht erneut storniert werden.")
     # Bereits stornierte Buchung erkennen
-    bereits_storniert = db.query(Journaleintrag).filter(
-        Journaleintrag.gruppe_id == (original.gruppe_id or original.id),
-        Journaleintrag.beschreibung.like("STORNO %"),
-    ).first()
+    bereits_storniert = storno_zu(db, original)  # nur dieses Glied der Kette (Issue #601)
     if bereits_storniert:
         raise HTTPException(
             status_code=409,

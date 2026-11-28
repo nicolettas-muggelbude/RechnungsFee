@@ -5,6 +5,7 @@ import { berechneEUER, berechneEUERDetail, getEUERPdfUrl, getJournalBelegUrl, ge
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 const ABSCHNITT_LABEL: Record<string, string> = {
   A: 'A – Betriebseinnahmen',
@@ -144,7 +145,7 @@ export function EUERPage() {
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [detailansicht, setDetailansicht] = useState(false)
   const [stornierteAusblenden, setStornierteAusblenden] = useState(false)
-  const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
 
   const { data: ergebnis, isLoading, error } = useQuery<EUERErgebnis>({
@@ -295,6 +296,34 @@ export function EUERPage() {
               )}
             </div>
           ))}
+
+          {/* Issue #567: Gewinnermittlung – steuerfreie Einnahmen § 3 Nr. 26/26a wieder abziehen */}
+          {parseFloat(ergebnis.abzug_steuerfrei) > 0 && (
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <div className="px-4 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40">
+                Ermittlung des Gewinns
+              </div>
+              <div className="flex items-center gap-3 px-4 py-2 text-sm">
+                <span className="flex-1 text-slate-700 dark:text-slate-200">Überschuss (Betriebseinnahmen − Betriebsausgaben)</span>
+                <span className="tabular-nums">{euroFmt(ergebnis.ueberschuss)}</span>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-2 text-sm">
+                <span className="font-mono text-xs text-slate-400 w-12 shrink-0">Z. {ergebnis.zeile_steuerfrei}</span>
+                <span className="flex-1 text-slate-700 dark:text-slate-200">
+                  abzüglich steuerfreier Einnahmen nach § 3 Nr. 26, 26a, 26b EStG
+                  <span className="block text-xs text-slate-400 dark:text-slate-500">
+                    {ergebnis.steuerfrei_taetigkeiten.map(t =>
+                      `${t.taetigkeit}: ${euroFmt(t.steuerfrei)} von ${euroFmt(t.einnahmen)} (Freibetrag ${euroFmt(t.freibetrag)})`
+                    ).join(' · ')}
+                  </span>
+                </span>
+                <span className="tabular-nums text-red-600 dark:text-red-400">−{euroFmt(ergebnis.abzug_steuerfrei)}</span>
+              </div>
+              <p className="px-4 pb-3 text-xs text-slate-400 dark:text-slate-500">
+                Der Freibetrag gilt je Person und Jahr für alle begünstigten Tätigkeiten zusammen. Hast du ihn schon anderweitig genutzt (z. B. als Arbeitnehmer im Verein), passe den Betrag in ELSTER an. Betriebsausgaben, die mit den steuerfreien Einnahmen zusammenhängen, sind nur abziehbar, soweit sie den Freibetrag übersteigen.
+              </p>
+            </div>
+          )}
 
           {/* Gewinn / Verlust */}
           <div className="rounded-xl overflow-hidden">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { sendeMailMitAnhang, type Rechnung, type Unternehmen, type MailSendenRequest } from '../api/client'
 import { Modal } from './Modal'
 
-type DokumentTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag'
+type DokumentTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Lieferschein'
 
 interface Props {
   dokument: Rechnung
@@ -34,6 +34,7 @@ const DEFAULT_BETREFF: Record<DokumentTyp, string> = {
   Angebot:  'Angebot {rechnungsnummer} – {firmenname}',
   Proforma: 'Proforma-Rechnung {rechnungsnummer} – {firmenname}',
   Auftrag:  'Auftragsbestätigung {rechnungsnummer} – {firmenname}',
+  Lieferschein: 'Lieferschein {rechnungsnummer} – {firmenname}',
 }
 
 const DEFAULT_TEXT: Record<DokumentTyp, string> = {
@@ -41,10 +42,14 @@ const DEFAULT_TEXT: Record<DokumentTyp, string> = {
   Angebot:  'Guten Tag {kunde},\n\nanbei finden Sie unser Angebot {rechnungsnummer} vom {datum} über {betrag} €.\n\nGültig bis: {gueltig_bis}\n\nMit freundlichen Grüßen\n{firmenname}',
   Proforma: 'Guten Tag {kunde},\n\nanbei erhalten Sie unsere Proforma-Rechnung {rechnungsnummer} vom {datum} über {betrag} €.\n\nBitte begleichen Sie den Betrag bis zum {faellig_am}.\n\nMit freundlichen Grüßen\n{firmenname}',
   Auftrag:  'Guten Tag {kunde},\n\nvielen Dank für Ihren Auftrag. Anbei finden Sie Ihre Auftragsbestätigung {rechnungsnummer} vom {datum} über {betrag} €.\n\nMit freundlichen Grüßen\n{firmenname}',
+  Lieferschein: 'Guten Tag {kunde},\n\nanbei erhalten Sie den Lieferschein {rechnungsnummer} vom {datum}.\n\nMit freundlichen Grüßen\n{firmenname}',
 }
 
 function getVorlage(typ: DokumentTyp, u: Unternehmen | null | undefined): { betreff: string; text: string } {
-  if (!u) return { betreff: DEFAULT_BETREFF[typ], text: DEFAULT_TEXT[typ] }
+  // Issue #570: unbekannter Typ → Rechnungs-Vorgabe statt undefined (sonst Absturz in .replace())
+  if (!(typ in DEFAULT_BETREFF)) typ = 'Rechnung'
+  // Lieferschein hat (noch) keine eigenen Mailvorlagen in den Einstellungen
+  if (!u || typ === 'Lieferschein') return { betreff: DEFAULT_BETREFF[typ], text: DEFAULT_TEXT[typ] }
   const betreff = (
     typ === 'Rechnung'  ? u.mail_betreff_vorlage :
     typ === 'Angebot'   ? u.mail_betreff_angebot :
@@ -69,6 +74,7 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [gesendet, setGesendet] = useState(false)
+  const [hinweis, setHinweis] = useState<string | null>(null)  // Issue #596: Ordner „Gesendet“
 
   async function senden() {
     if (!an.trim()) return
@@ -83,9 +89,10 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
         rechnung_id: dokument.id,
         dokumentenpaket_id: dokument.dokumentenpaket_id ?? undefined,
       }
-      await sendeMailMitAnhang(req)
+      const r = await sendeMailMitAnhang(req)
+      setHinweis(r?.hinweis ?? null)
       setGesendet(true)
-      setTimeout(onClose, 1500)
+      if (!r?.hinweis) setTimeout(onClose, 1500)
     } catch (e: any) {
       setFehler(e?.message ?? 'Unbekannter Fehler')
     } finally {
@@ -107,8 +114,9 @@ export function MailDialog({ dokument, dokumentTyp, unternehmen, onClose }: Prop
       </div>
 
       {gesendet ? (
-        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
-          ✓ Mail wurde gesendet
+        <div className="flex flex-col items-start gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4" role="status">
+          <span>✓ Mail wurde gesendet</span>
+          {hinweis && <span className="font-normal text-amber-700 dark:text-amber-300">{hinweis}</span>}
         </div>
       ) : (
         <>

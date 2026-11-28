@@ -14,6 +14,7 @@ import {
   toggleArtikelGruppeAktiv, deleteArtikelGruppe, getUnternehmen,
   archiviereArtikel, deleteArtikel,
 } from '../../api/client'
+import { artikelNrAnzeige } from '../../utils/artikelnummer'
 
 // ---------------------------------------------------------------------------
 // Typen-Config
@@ -456,7 +457,7 @@ export function ArtikelFormModal({
         lieferant_id: hatLieferant(v.typ) && v.lieferant_id ? Number(v.lieferant_id) : undefined,
         lieferanten_artikelnr: hatLieferant(v.typ) ? v.lieferanten_artikelnr || undefined : undefined,
         hersteller: hatHersteller(v.typ) ? v.hersteller || undefined : undefined,
-        artikelcode: hatHersteller(v.typ) ? v.artikelcode || undefined : undefined,
+        artikelcode: v.artikelcode || undefined,  // Issue #562: eigene Artikelnummer für alle Typen
         beschreibung: v.beschreibung || null,
         gruppe_id: v.gruppe_id ? Number(v.gruppe_id) : null,
         differenzbesteuerung: v.differenzbesteuerung,
@@ -689,19 +690,22 @@ export function ArtikelFormModal({
             </div>
           )}
 
-          {/* Hersteller/Artikelcode (nur bei Artikel) */}
-          {hatHersteller(typ) && (
-            <div className="grid grid-cols-2 gap-3">
+          {/* Hersteller (nur bei Artikel) / Artikelcode = eigene Artikelnummer (alle Typen, Issue #562) */}
+          <div className="grid grid-cols-2 gap-3">
+            {hatHersteller(typ) && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Hersteller</label>
                 <input {...register('hersteller')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Artikelcode</label>
-                <input {...register('artikelcode')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100" />
-              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="artikel-code">Artikelcode</label>
+              <input id="artikel-code" {...register('artikelcode')} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100" />
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                Eigene Artikelnummer (optional) – erscheint statt der automatischen Nummer in Listen, in der Artikelauswahl und auf Dokumenten.
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Gruppe */}
           <div>
@@ -867,7 +871,14 @@ function ArtikelDetail({ artikel, onEdit }: { artikel: Artikel; onEdit: () => vo
             )}
           </div>
           <h3 className="font-semibold text-slate-800 dark:text-slate-100">{artikel.bezeichnung}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{artikel.artikelnummer}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {artikelNrAnzeige(artikel)}
+            {artikel.artikelcode?.trim() && (
+              <span className="ml-2 text-slate-400 dark:text-slate-500" title="Automatisch vergebene Nummer (intern)">
+                · {artikel.artikelnummer}
+              </span>
+            )}
+          </p>
         </div>
         <button onClick={onEdit} className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0 mt-0.5">Bearbeiten</button>
       </div>
@@ -1311,7 +1322,7 @@ export function ArtikelPage() {
                   <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatEuro(a.vk_brutto)}</span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-slate-400 dark:text-slate-500">{a.artikelnummer}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">{artikelNrAnzeige(a)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${TYP_FARBEN[a.typ]}`}>
                     {TYP_LABELS[a.typ]}
                   </span>

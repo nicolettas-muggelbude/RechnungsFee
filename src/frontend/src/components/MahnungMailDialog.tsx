@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { sendeMailMitAnhang, type MahnungHistorieItem, type Unternehmen, type MailSendenRequest } from '../api/client'
+import {
+  sendeMailMitAnhang, type MahnungHistorieItem, type Mahnstufe, type Unternehmen, type MailSendenRequest,
+} from '../api/client'
 import { Modal } from './Modal'
 
 interface Props {
   mahnung: MahnungHistorieItem
   unternehmen: Unternehmen | null | undefined
+  mahnstufen?: Mahnstufe[]
   onClose: () => void
   onGesendet?: () => void
 }
 
 function platzhalterErsetzen(vorlage: string, m: MahnungHistorieItem, unternehmen: Unternehmen | null | undefined): string {
   return vorlage
+    .replace(/\{stufe\}/g, String(m.stufe ?? ''))
     .replace(/\{mahnnummer\}/g, m.mahnnummer ?? '—')
     .replace(/\{bezeichnung\}/g, m.bezeichnung ?? 'Mahnung')
     .replace(/\{rechnungsnummer\}/g, m.rechnungsnummern || '—')
@@ -23,14 +27,31 @@ const DEFAULT_TEXT =
   'Guten Tag {kunde},\n\nanbei erhalten Sie unser Schreiben „{bezeichnung}" zu Rechnung {rechnungsnummer}.\n\n' +
   'Bitte entnehmen Sie die Details dem beigefügten PDF.\n\nMit freundlichen Grüßen\n{firmenname}'
 
-export function MahnungMailDialog({ mahnung, unternehmen, onClose, onGesendet }: Props) {
+/** Issue #561: Betreff und Text der Mahnungs-Mail. Betreff: Vorlage der Mahnstufe, sonst
+ *  Mailvorlage „Mahnung“ (Einstellungen), sonst Standard. Text: Mailvorlage, sonst Standard.
+ *  Gemeinsam genutzt vom SMTP-Dialog und vom Versand über das Mailprogramm. */
+export function mahnungMailVorlage(
+  m: MahnungHistorieItem, unternehmen: Unternehmen | null | undefined, mahnstufen?: Mahnstufe[],
+): { betreff: string; text: string } {
+  const stufenBetreff = mahnstufen?.find((s) => s.stufe === m.stufe)?.betreff_vorlage?.trim()
+  const betreff = stufenBetreff || unternehmen?.mail_betreff_mahnung?.trim() || DEFAULT_BETREFF
+  const text = unternehmen?.mail_text_mahnung?.trim() || DEFAULT_TEXT
+  return {
+    betreff: platzhalterErsetzen(betreff, m, unternehmen),
+    text: platzhalterErsetzen(text, m, unternehmen),
+  }
+}
+
+export function MahnungMailDialog({ mahnung, unternehmen, mahnstufen, onClose, onGesendet }: Props) {
+  const vorlage = mahnungMailVorlage(mahnung, unternehmen, mahnstufen)
   const [an, setAn] = useState(mahnung.kunde_email ?? '')
   const [cc, setCc] = useState('')
-  const [betreff, setBetreff] = useState(platzhalterErsetzen(DEFAULT_BETREFF, mahnung, unternehmen))
-  const [text, setText] = useState(platzhalterErsetzen(DEFAULT_TEXT, mahnung, unternehmen))
+  const [betreff, setBetreff] = useState(vorlage.betreff)
+  const [text, setText] = useState(vorlage.text)
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [gesendet, setGesendet] = useState(false)
+  const [hinweis, setHinweis] = useState<string | null>(null)  // Issue #596: Ordner „Gesendet“
 
   async function senden() {
     if (!an.trim()) return
@@ -44,10 +65,11 @@ export function MahnungMailDialog({ mahnung, unternehmen, onClose, onGesendet }:
         text,
         mahnung_id: mahnung.id,
       }
-      await sendeMailMitAnhang(req)
+      const r = await sendeMailMitAnhang(req)
+      setHinweis(r?.hinweis ?? null)
       setGesendet(true)
       onGesendet?.()
-      setTimeout(onClose, 1500)
+      if (!r?.hinweis) setTimeout(onClose, 1500)
     } catch (e: any) {
       setFehler(e?.message ?? 'Unbekannter Fehler')
     } finally {
@@ -69,8 +91,9 @@ export function MahnungMailDialog({ mahnung, unternehmen, onClose, onGesendet }:
       </div>
 
       {gesendet ? (
-        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4">
-          ✓ Mail wurde gesendet
+        <div className="flex flex-col items-start gap-2 text-green-600 dark:text-green-400 text-sm font-medium py-4" role="status">
+          <span>✓ Mail wurde gesendet</span>
+          {hinweis && <span className="font-normal text-amber-700 dark:text-amber-300">{hinweis}</span>}
         </div>
       ) : (
         <>

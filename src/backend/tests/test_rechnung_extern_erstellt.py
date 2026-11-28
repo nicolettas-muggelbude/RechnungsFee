@@ -80,16 +80,14 @@ def test_extern_erstellt_sperrt_pdf_zugferd_ausgabe_ohne_angehaengten_beleg(db):
         assert exc.value.status_code == 409
 
 
-def test_extern_erstellt_sperrt_mailversand_und_mahnung(db):
+def test_extern_erstellt_sperrt_mailversand(db):
+    """Mailversand der Rechnung bleibt gesperrt; mahnen ist seit Migration 196 erlaubt
+    (test_mahnung_importierte_rechnung.py)."""
     from api.mail import _pdf_bytes_fuer
-    from api.mahnwesen import _berechne_mahnung
 
     antwort = create_rechnung(_daten(db), db=db)
     with pytest.raises(HTTPException) as exc:
         _pdf_bytes_fuer(antwort.id, db)
-    assert exc.value.status_code == 409
-    with pytest.raises(HTTPException) as exc:
-        _berechne_mahnung(db, [antwort.id], None, SimpleNamespace())
     assert exc.value.status_code == 409
 
 

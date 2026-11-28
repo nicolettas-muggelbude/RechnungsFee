@@ -40,6 +40,7 @@ class AnlagegutBase(BaseModel):
     kaufpreis_netto: Decimal
     nutzungsdauer_jahre: int
     afa_methode: str = "linear"
+    afa_sofort: bool = False        # Issue #578: voller Abzug im Anschaffungsjahr (EDV, ND 1)
     kennzeichen: Optional[str] = None
     privat_anteil_prozent: Decimal = ZERO
     verkauft_am: Optional[date] = None
@@ -50,6 +51,12 @@ class AnlagegutBase(BaseModel):
     def check_afa_methode(self) -> "AnlagegutBase":
         if self.afa_methode not in ("linear", "degressiv"):
             raise ValueError("afa_methode muss 'linear' oder 'degressiv' sein")
+        if self.afa_sofort and not (self.typ == "edv" and self.nutzungsdauer_jahre == 1
+                                    and self.afa_methode == "linear"):
+            raise ValueError(
+                "Der volle Abzug im Anschaffungsjahr gilt nur für EDV/Software mit einer Nutzungsdauer "
+                "von 1 Jahr (BMF-Schreiben zu Computerhardware und Software)."
+            )
         if self.afa_methode == "degressiv" and not degressiv_moeglich(self.kaufdatum):
             raise ValueError(
                 "Degressive AfA gilt nur für Anschaffungen zwischen 01.07.2025 und 31.12.2027 (§7 Abs. 2 EStG)."
@@ -86,8 +93,43 @@ def degressiv_moeglich(kaufdatum: date) -> bool:
 
 
 def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict]:
+    """Abschreibungsplan inkl. Verkauf: Nebenfund zu Issue #578 - „Verkauft am“ wurde bisher nur
+    gespeichert, die AfA lief nach dem Verkauf unverändert weiter. Jetzt im Veräußerungsjahr
+    zeitanteilig bis einschließlich Verkaufsmonat (R 7.4 Abs. 8 EStR), danach keine AfA mehr.
+    Beim vollen Abzug im Anschaffungsjahr (EDV, ND 1) bleibt es beim vollen Betrag."""
+    plan = _afa_jahresplan_ohne_verkauf(gut, bis_jahr)
+    verkauf = getattr(gut, "verkauft_am", None)
+    if not verkauf or verkauf < gut.kaufdatum or getattr(gut, "afa_sofort", False):
+        return plan
+    kauf = gut.kaufdatum
+    nd = gut.nutzungsdauer_jahre
+    ergebnis: list[dict] = []
+    for zeile in plan:
+        jahr = zeile["jahr"]
+        if jahr > verkauf.year:
+            break
+        if jahr == verkauf.year:
+            # Monate, für die diese Planzeile normalerweise gilt
+            if jahr == kauf.year:
+                monate_normal = 12 - kauf.month + 1
+            elif jahr == kauf.year + nd and kauf.month > 1:
+                monate_normal = kauf.month - 1          # Restjahr
+            else:
+                monate_normal = 12
+            monate_bis_verkauf = verkauf.month - (kauf.month - 1 if jahr == kauf.year else 0)
+            anteil = Decimal(min(monate_bis_verkauf, monate_normal)) / Decimal(monate_normal)
+            afa = (Decimal(str(zeile["afa_brutto"])) * anteil).quantize(ONE_CENT, ROUND_HALF_UP)
+            abziehbar = (Decimal(str(zeile["afa_abziehbar"])) * anteil).quantize(ONE_CENT, ROUND_HALF_UP)
+            rest_vorher = Decimal(str(zeile["restbuchwert_ende"])) + Decimal(str(zeile["afa_brutto"]))
+            zeile = {**zeile, "afa_brutto": float(afa), "afa_abziehbar": float(abziehbar),
+                     "restbuchwert_ende": float((rest_vorher - afa).quantize(ONE_CENT, ROUND_HALF_UP))}
+        ergebnis.append(zeile)
+    return ergebnis
+
+
+def _afa_jahresplan_ohne_verkauf(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict]:
     """
-    Gibt den vollständigen Abschreibungsplan zurück.
+    Gibt den vollständigen Abschreibungsplan zurück (ohne Berücksichtigung eines Verkaufs).
     Jedes Dict: { jahr, afa_brutto, afa_abziehbar, restbuchwert_ende }
 
     Monatsprinzip im Kaufjahr: AfA nur für die Monate ab Kaufmonat (inkl.).
@@ -100,6 +142,17 @@ def _afa_jahresplan(gut: Anlagegut, bis_jahr: Optional[int] = None) -> list[dict
     privat = Decimal(str(gut.privat_anteil_prozent)) / 100
     betrieb = Decimal("1") - privat
     ist_degressiv = gut.afa_methode == "degressiv"
+
+    # Issue #578: Computerhardware/Software mit ND 1 Jahr - voller Abzug im Anschaffungsjahr
+    # (BMF-Schreiben, „wird nicht beanstandet“), keine Verteilung nach Monaten
+    if getattr(gut, "afa_sofort", False) and gut.typ == "edv" and nd == 1 and not ist_degressiv:
+        return [{
+            "jahr": kauf.year,
+            "afa_brutto": float(preis),
+            "afa_abziehbar": float((preis * betrieb).quantize(ONE_CENT, ROUND_HALF_UP)),
+            "restbuchwert_ende": 0.0,
+            "wechsel_zu_linear": False,
+        }]
 
     afa_voll_linear = (preis / nd).quantize(ONE_CENT, ROUND_HALF_UP)
     degressiv_satz = min(Decimal("3") / nd, Decimal("0.30")) if ist_degressiv else None
@@ -441,7 +494,8 @@ def pdf_export(jahr: int = Query(...), db: Session = Depends(get_db)):
         "Hinweis: Anzeigehilfe auf Basis des Anlagenverzeichnisses. Bitte Werte in ELSTER (Anlage AVEÜR) oder mit dem "
         "Steuerberater übertragen. Nutzungsdauer nach AfA-Tabellen des BMF. Lineare oder degressive AfA "
         "(§7 Abs. 2 EStG, Investitionsbooster, nur für Anschaffungen 01.07.2025-31.12.2027; automatischer "
-        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat).", fill=True, align="L")
+        "Wechsel zu linear sobald günstiger). Monatsprinzip im Kaufjahr (ab Kaufmonat), außer bei EDV/Software "
+        "mit Nutzungsdauer 1 Jahr und gewähltem vollem Abzug im Anschaffungsjahr (BMF-Schreiben).", fill=True, align="L")
 
     # Footer
     pdf.set_y(-15)

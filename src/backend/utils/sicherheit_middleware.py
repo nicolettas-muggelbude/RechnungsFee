@@ -25,7 +25,7 @@ durchlaufen.
 """
 from urllib.parse import urlsplit
 
-from utils import sitzungstoken
+from utils import profil_zugang, sitzungstoken
 
 ERLAUBTE_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -115,6 +115,13 @@ class SicherheitMiddleware:
             )
         ):
             await _abweisen(send, 401, "Sitzungstoken fehlt oder ist ungültig.")
+            return
+
+        # Issue #593: Profil mit Passwort, noch nicht entsperrt
+        if profil_zugang.gesperrt() and not profil_zugang.erlaubt_wenn_gesperrt(
+            scope.get("method", "GET"), scope.get("path", "")
+        ):
+            await _abweisen(send, 423, "Profil ist gesperrt – bitte zuerst das Passwort eingeben.")
             return
 
         laenge = headers.get("content-length", "")

@@ -4,6 +4,7 @@ import { berechneAnlageS, getAnlageSPdfUrl, getUnternehmen, openUrl, type Anlage
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -67,7 +68,7 @@ export function AnlageSPage() {
   const mxAuto = useMxAuto()
   const now = new Date()
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
-  const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
 
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
@@ -157,6 +158,24 @@ export function AnlageSPage() {
               </span>
             </div>
           </Abschnitt>
+
+          {/* Issue #567: Einnahmen aus nebenberuflicher Tätigkeit (§ 3 Nr. 26/26a EStG) */}
+          {data.nebentaetigkeiten.length > 0 && (
+            <Abschnitt titel="Einnahmen aus nebenberuflicher Tätigkeit">
+              {data.nebentaetigkeiten.map(n => (
+                <div key={n.zeile}>
+                  <ZeileNr zeile={String(n.zeile)}
+                    label={n.zeile === 57 ? 'aus der Tätigkeit als' : 'aus allen weiteren Tätigkeiten'}
+                    wert={n.taetigkeit} />
+                  <ZeileText label={`Gesamtbetrag (KZ ${n.zeile === 57 ? 191 : 193})`} wert={euroFmt(n.einnahmen)} />
+                  <ZeileText label={`davon als steuerfrei behandelt (KZ ${n.zeile === 57 ? 192 : 194})`} wert={euroFmt(n.steuerfrei)} />
+                </div>
+              ))}
+              <p className="text-xs text-slate-400 dark:text-slate-500 py-2">
+                Zeilen nach Vordruck 2025. Der Gewinn oben ist bereits um den steuerfreien Teil gemindert. In ELSTER zusätzlich angeben, in welcher Zeile der steuerpflichtige Rest enthalten ist.
+              </p>
+            </Abschnitt>
+          )}
 
           {/* KFZ */}
           {data.kfz_hinweise.length > 0 && (

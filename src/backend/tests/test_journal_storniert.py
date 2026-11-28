@@ -85,7 +85,7 @@ def test_liste_liefert_storno_status_fuer_alle_eintraege(db):
     ergebnisse = {
         r.id: r for r in list_eintraege(
             monat=None, datum_von=None, datum_bis=None, kategorie_id=None,
-            art=None, zahlungsart_typ=None, gruppe_id=None, db=db,
+            art=None, zahlungsart_typ=None, gruppe_id=None, lieferant_id=None, db=db,
         )
     }
 

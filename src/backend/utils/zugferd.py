@@ -11,6 +11,7 @@ Nur für Ausgangsrechnungen (typ='ausgang'), nicht für Entwürfe oder storniert
 import base64
 from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 from database.connection import APP_DATA_DIR
 from utils.dokument_adressen import adressfeld_adresse, empfaenger_email, name_fuer_adresse
@@ -40,9 +41,52 @@ def _d(wert) -> Decimal:
     return Decimal(str(wert)).quantize(Decimal("0.01"))
 
 
+def _eur(wert) -> str:
+    """Betrag für Freitext (BT-22): 1.234,56 EUR."""
+    return f"{_d(wert):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " EUR"
+
+
 def _ust_satz(satz: Decimal) -> Decimal:
     """19.00 → 19, 7.00 → 7, 5.50 → 5.50 – normalize() ist sicher für kleine Prozentwerte."""
     return Decimal(str(satz)).quantize(Decimal("0.01")).normalize()
+
+
+def _rabatt_text(rechnung) -> str:
+    prozent = getattr(rechnung, "rabatt_prozent", None) or Decimal("0")
+    if prozent and not getattr(rechnung, "rabatt_betrag", None):
+        return f"Rabatt {format(Decimal(str(prozent)).normalize(), 'f').replace('.', ',')} %"  # 10 statt 1E+1
+    return "Rabatt"
+
+
+def _rabatt_je_satz(rechnung, steuern: dict, abzuege: list[dict]) -> dict[str, tuple[Decimal, Decimal]]:
+    """Rechnungsrabatt je Steuersatz als (Netto, USt) – Differenz zwischen den Positionssummen und
+    den gespeicherten Summen der Rechnung, anteilig nach Netto verteilt, Rest auf den größten Satz.
+    So stimmt die XML auf den Cent mit PDF und Buchhaltung überein. Leer ohne Rabatt."""
+    if not (getattr(rechnung, "rabatt_prozent", None) or getattr(rechnung, "rabatt_betrag", None)):
+        return {}
+    if not steuern:
+        return {}
+    abz_netto = sum((Decimal(str(a["netto"])) for a in abzuege), Decimal("0"))
+    abz_ust = sum((Decimal(str(a["ust"])) for a in abzuege), Decimal("0"))
+    ziel_netto = Decimal(str(rechnung.netto_gesamt or 0)) + abz_netto
+    ziel_ust = Decimal(str(rechnung.ust_gesamt or 0)) + abz_ust
+    summe_netto = sum((e["basis"] for e in steuern.values()), Decimal("0"))
+    summe_ust = sum((e["betrag"] for e in steuern.values()), Decimal("0"))
+    rabatt_netto = _d(summe_netto - ziel_netto)
+    rabatt_ust = _d(summe_ust - ziel_ust)
+    if not rabatt_netto and not rabatt_ust:
+        return {}
+    keys = sorted(steuern, key=lambda k: abs(steuern[k]["basis"]), reverse=True)
+    ergebnis: dict[str, tuple[Decimal, Decimal]] = {}
+    for k in keys[1:]:
+        anteil = steuern[k]["basis"] / summe_netto if summe_netto else Decimal("0")
+        ust_anteil = steuern[k]["betrag"] / summe_ust if summe_ust else Decimal("0")
+        ergebnis[k] = (_d(rabatt_netto * anteil), _d(rabatt_ust * ust_anteil))
+    ergebnis[keys[0]] = (
+        rabatt_netto - sum((n for n, _ in ergebnis.values()), Decimal("0")),
+        rabatt_ust - sum((u for _, u in ergebnis.values()), Decimal("0")),
+    )
+    return {k: v for k, v in ergebnis.items() if v[0] or v[1]}
 
 
 def _kunde_name(kunde) -> str:
@@ -159,7 +203,7 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         raise ValueError(f"ZUGFeRD-Pflichtfelder in Unternehmensdaten fehlen: {', '.join(_fehlend)}")
 
     from drafthorse.models.document import Document
-    from drafthorse.models.accounting import ApplicableTradeTax
+    from drafthorse.models.accounting import ApplicableTradeTax, CategoryTradeTax, TradeAllowanceCharge
     from drafthorse.models.note import IncludedNote
     from drafthorse.models.trade import LineItem
     from drafthorse.models.party import TaxRegistration
@@ -358,6 +402,9 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         pm = PaymentMeans()
         pm.type_code._text = "58"
         pm.payee_account.iban = unternehmen["iban"]
+        # Issue #604: Kontoinhaber (BT-85) nur, wenn unter Einstellungen → Konten gepflegt
+        if (unternehmen.get("kontoinhaber") or "").strip():
+            pm.payee_account.account_name = unternehmen["kontoinhaber"].strip()
         if unternehmen.get("bic"):
             pm.payee_institution.bic = unternehmen["bic"]
         doc.trade.settlement.payment_means.add(pm)
@@ -375,7 +422,30 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     # brutto - ust_betrag ergibt daher die korrekte Netto-Positionssumme, unabhängig
     # vom eingabemodus (netto/brutto) - direkt pos.netto als Zeilensumme zu verwenden
     # ignorierte Menge und Rabatt komplett (Issue #389).
-    for pos in sorted(rechnung.positionen, key=lambda p: p.position_nr):
+    # Issue #600: Schlussrechnung - die Positionen bilden die GESAMTE Leistung ab, die verrechneten
+    # Abschlagsrechnungen gehen als Vorauszahlung in BT-113 (brutto) statt als negative Zeile.
+    # BT-113 kann die darin enthaltene Steuer nicht aufschlüsseln; § 14 Abs. 5 Satz 2 UStG verlangt
+    # aber Entgelt und Steuerbetrag je Abschlag - deshalb zusätzlich die Aufstellung als
+    # Bemerkung (BT-22) und, bei genau einem Abschlag, der Verweis auf ihn (BG-3, in CII nur 0..1).
+    from utils.pdf_rechnung_base import abschlag_abzuege, ist_abschlag_abzug
+    abzuege = abschlag_abzuege(rechnung.positionen)
+    leistung_positionen = [p for p in rechnung.positionen if not ist_abschlag_abzug(p)]
+    if abzuege:
+        note = IncludedNote()
+        note.subject_code._text = "AAI"
+        note.content._text = "Abzüglich bereits gezahlter Abschlagsrechnungen: " + "; ".join(
+            f"{a['bezeichnung']}: netto {_eur(a['netto'])}"
+            + "".join(f", USt {str(_ust_satz(s)).replace('.', ',')} % {_eur(u)}" for s, u in a["ust_je_satz"])
+            + f", brutto {_eur(a['brutto'])}"
+            for a in abzuege
+        )
+        doc.header.notes.add(note)
+        if len(abzuege) == 1 and abzuege[0]["nummer"] and abzuege[0]["datum"]:
+            ref = doc.trade.settlement.invoice_referenced_document
+            ref.issuer_assigned_id = abzuege[0]["nummer"]
+            ref.issue_date_time = abzuege[0]["datum"]
+
+    for pos in sorted(leistung_positionen, key=lambda p: p.position_nr):
         li = LineItem()
         li.document.line_id._text = str(pos.position_nr)
         li.product.name = pos.beschreibung or "-"
@@ -397,6 +467,12 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
         if not ist_nicht_steuerbar:  # BR-O-05: bei O kein Steuersatz
             li.settlement.trade_tax.rate_applicable_percent = _ust_satz(pos.ust_satz)
 
+        # Issue #594: Leistungsdatum der Position als Leistungszeitraum der Zeile (BT-134/BT-135,
+        # Beginn = Ende) - nur wenn die Position ein eigenes Datum hat
+        if getattr(pos, "leistungsdatum", None):
+            li.settlement.period.start._value = pos.leistungsdatum
+            li.settlement.period.end._value = pos.leistungsdatum
+
         # Zeilensumme (BT-131) – Menge x Einzelpreis, nach Rabatt
         li.settlement.monetary_summation.total_amount = netto_gesamt
 
@@ -404,12 +480,35 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
     # ── Steuer-Zusammenfassung (pro USt-Satz) ─────────────────────────────────
     steuern: dict[str, dict] = {}
-    for pos in rechnung.positionen:
+    for pos in leistung_positionen:
         key = str(pos.ust_satz)
         if key not in steuern:
             steuern[key] = {"satz": pos.ust_satz, "basis": Decimal("0"), "betrag": Decimal("0")}
         steuern[key]["basis"] += _d(pos.brutto or 0) - _d(pos.ust_betrag or 0)
         steuern[key]["betrag"] += _d(pos.ust_betrag or 0)
+
+    # ── Rechnungsrabatt als Abschlag auf Belegebene (BG-20) ────────────────────
+    # Bisher fehlte der Rabatt in der XML ganz: Positionen und Summen ohne Rabatt, die E-Rechnung
+    # wich vom PDF und vom gespeicherten Betrag ab. Je Steuersatz ein Abschlag; Höhe so, dass die
+    # Summen exakt den gespeicherten Werten der Rechnung entsprechen (Leistung nach Rabatt =
+    # gespeicherte Summe + verrechnete Abschläge, die vom Rabatt ausgenommen sind).
+    rabatt_je_satz = _rabatt_je_satz(rechnung, steuern, abzuege)
+    for key, (r_netto, r_ust) in rabatt_je_satz.items():
+        steuern[key]["basis"] -= r_netto
+        steuern[key]["betrag"] -= r_ust
+        ac = TradeAllowanceCharge()
+        ac.indicator = False
+        ac.actual_amount = _d(r_netto)
+        ac.reason_code = "95"  # UNTDID 5189: Discount
+        ac.reason = _rabatt_text(rechnung)
+        kategorie = _steuerkategorie(steuern[key]["satz"], ist_ku, sonderfall)
+        cat = CategoryTradeTax()
+        cat.type_code = "VAT"
+        cat.category_code = kategorie
+        if kategorie != "O":  # BR-O-06: Abschlag „nicht steuerbar“ ohne Steuersatz
+            cat.rate_applicable_percent = _ust_satz(steuern[key]["satz"])
+        ac.trade_tax.add(cat)
+        doc.trade.settlement.allowance_charge.add(ac)
 
     for eintrag in steuern.values():
         tax = ApplicableTradeTax()
@@ -431,16 +530,19 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
 
     # ── Gesamtsummen ──────────────────────────────────────────────────────────
     # BR-CO-10/BR-CO-14: aus Positionen berechnen, nicht DB-Summen verwenden
-    line_total = sum(e["basis"]  for e in steuern.values())
+    allowance_total = sum((n for n, _ in rabatt_je_satz.values()), Decimal("0"))
+    tax_basis_total = sum(e["basis"]  for e in steuern.values())  # nach Rabatt
+    line_total = tax_basis_total + allowance_total                  # Summe der Positionen
     tax_total  = sum(e["betrag"] for e in steuern.values())
-    grand_total = line_total + tax_total
-    prepaid     = rechnung.bezahlt_betrag or Decimal("0")
+    grand_total = tax_basis_total + tax_total
+    # bereits auf diese Rechnung gezahlt + verrechnete Abschlagsrechnungen (Issue #600)
+    prepaid     = (rechnung.bezahlt_betrag or Decimal("0")) + sum((a["brutto"] for a in abzuege), Decimal("0"))
 
     ms = doc.trade.settlement.monetary_summation
     ms.line_total      = _d(line_total)
     ms.charge_total    = Decimal("0.00")
-    ms.allowance_total = Decimal("0.00")
-    ms.tax_basis_total = _d(line_total)
+    ms.allowance_total = _d(allowance_total)
+    ms.tax_basis_total = _d(tax_basis_total)
     ms.tax_total       = (_d(tax_total), "EUR")
     ms.grand_total     = _d(grand_total)
     ms.prepaid_total   = _d(prepaid)
@@ -473,8 +575,13 @@ def generate_zugferd_xml(rechnung, unternehmen: dict) -> bytes:
     return xml
 
 
-def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) -> bytes:
+def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True,
+                         vorlage: Optional[int] = None) -> bytes:
     """Erzeugt ein ZUGFeRD PDF/A-3 – normales PDF + eingebettetes XRechnung-XML.
+
+    vorlage: PDF-Vorlage für das sichtbare PDF; None = unternehmen["pdf_vorlage"]. Bis
+    Issue #556 war hier fest die Standard-Vorlage verdrahtet – mit ZUGFeRD wechselte eine
+    Rechnung in der Vorlage „Sandra grün“ beim Finalisieren ins Standardlayout.
 
     ist_netto: Erfassungsmodus der Rechnung (rechnung.eingabemodus, Issue #332) - bestimmt nur,
     wie das sichtbare PDF den gespeicherten Einzelpreis liest. Bisher fest Netto, deshalb hing
@@ -493,10 +600,14 @@ def generate_zugferd_pdf(rechnung, unternehmen: dict, ist_netto: bool = True) ->
     import facturx
     import facturx.facturx as _fx
     from utils.pdf_rechnung import generate_rechnung_pdf
+    from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 
+    if vorlage is None:
+        vorlage = int(unternehmen.get("pdf_vorlage") or 0)
     # sRGB-OutputIntent für PDF/A-3-Konformität
-    pdf_bytes = generate_rechnung_pdf(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
-                                      mit_output_intent=True, ist_netto=ist_netto)
+    erzeuge = generate_rechnung_pdf_vorlage1 if vorlage == 1 else generate_rechnung_pdf
+    pdf_bytes = erzeuge(rechnung, unternehmen, ist_kopie=False, ist_entwurf=False,
+                        mit_output_intent=True, ist_netto=ist_netto)
     xml_bytes = generate_zugferd_xml(rechnung, unternehmen)
 
     # XRechnung-Profil in facturx registrieren (einmalig; idempotent)

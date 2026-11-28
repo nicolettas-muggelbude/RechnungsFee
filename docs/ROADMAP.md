@@ -88,7 +88,7 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 
 ## 📋 Nach v0.7.4 – vorgemerkt
 
-- [ ] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – geplant für v0.7.13) – bisher ziehen Entwürfe von
+- [x] **Rechnungsnummer erst beim Finalisieren** (Issue #465, pasarn; erneut gemeldet in #551 von Markus – umgesetzt in v0.7.14: `NUMMER_BEI_FINALISIERUNG` / `_nummer_beim_finalisieren()` in `api/rechnungen.py`; Proforma→Rechnung behält die sofortige Nummer, weil dort direkt die Zahlung gebucht wird) – bisher ziehen Entwürfe von
   Ausgangs-/Eingangs-/Abschlagsrechnungen und Gutschriften ihre Nummer schon beim Anlegen
   (`_create_rechnung()` sowie ~10 Umwandlungswege: Angebot/Auftrag/Lieferschein/Proforma → Rechnung,
   Sammelrechnung, Ersatzrechnung, Gutschrift, wiederkehrende Rechnungen); gelöschte Entwürfe hinterlassen
@@ -149,20 +149,62 @@ kommen Rechnungen überwiegend per Mail. Zwei Zugangswege mit gemeinsamem Kern
 - [x] Folge-Release v0.7.12: weitere Härtung zwischen Oberfläche und Hintergrunddienst (Sitzungsschlüssel,
   signierte Links, keine Dateipfade über die Schnittstelle, CSP, Passwörter im Schlüsselbund)
 
-## 📋 v0.7.13 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
+## ✅ v0.7.14 – DATEV: Kreditor als Personenkonto bei direkten Ausgaben (Issue #566)
+
+Seit v0.7.13 können direkt gebuchte Ausgaben (Journal, Split, Buchungsvorlage) einen Lieferanten
+tragen (`journal.lieferant_id`, Migration 192). Der DATEV-Export nutzt bisher nur bei Einnahmen den
+Debitor des Kunden als Personenkonto.
+
+- [x] DATEV-Export: bei Ausgaben mit `lieferant_id` die Kreditornummer (`lieferanten.kreditor_nr`,
+  Migration 115) als Personenkonto, analog zum Debitor bei Einnahmen (`datev.py`, `_personenkonto()`)
+- [x] Prüfen: Wechselwirkung mit Zahlungen auf Eingangsrechnungen (Partner kommt immer zuerst aus der
+  Rechnung, auch bei Erstattungen) und mit Buchungen ohne Lieferant (unverändert leer)
+- [x] Debitor bei Zahlungen auf Ausgangsrechnungen über `rechnung.kunde_id`; Storno-Gegenbuchungen
+  ohne eigenen Partner bekommen das Personenkonto der Originalbuchung (`gruppe_id`)
+- [x] Lieferanten: direkte Ausgaben im neuen Reiter „Ausgaben“ (`GET /journal?lieferant_id=`), im
+  Kontokorrent bewusst nicht (sofort bezahlt, keine Verbindlichkeit)
+
+## ✅ v0.7.14 – Mehrere Belege je Buchung (Issue #568, Stufe 2)
+
+Seit v0.7.13 hängt das Buchen aus einer Vorlage den Vertrag als eigene Kopie an (Stufe 1). Eine
+Journalbuchung trägt aber weiterhin nur einen Beleg (`journal.beleg_id`) – lädt man beim Buchen eine
+Monatsabrechnung hoch, ersetzt sie den Vertrag.
+
+- [x] Neue Tabelle `journal_anhaenge` (Migration 197), `journal.beleg_id` als ersten Anhang übernommen
+  (nur INSERT, versiegelte Zeile unverändert); `beleg_id` bleibt Hauptbeleg für ältere Leser
+- [x] Buchungsformular, Split, Buchungsvorlage: mehrere Belege; Vorlage hängt Vertrag **und** eigene Belege an
+- [x] Buchungsdetail, Beleg-Ansicht, GoBD-Export (alle einzeln), DATEV-Belegexport (zu einem PDF
+  zusammengeführt, `utils/belege_zusammenfuehren.py`)
+- [x] Anhängen/Entfernen nach dem Festschreiben gesperrt (API + Trigger `protect_journal_anhaenge_delete`)
+
+## 📋 Belegverwaltung / DMS (Issue #575, Community-Wunsch Markus)
+
+Seit v0.7.13 ist der Beleg einer finalisierten Rechnung festgeschrieben (nicht löschbar, nicht
+ersetzbar, Prüfsumme und Upload-Zeitpunkt sichtbar) – wie im Journal nach dem Festschreiben.
+Ein eigenständiges Dokumentenmanagement fehlt noch:
+
+- [ ] Belegeingang ohne Buchung: Belege zuerst ablegen, später einer Rechnung/Buchung zuordnen
+- [ ] Herkunft je Beleg (Upload, Rechnungspostfach mit Absender/Betreff/Datum der Mail, Scan)
+- [ ] Änderungshistorie je Beleg (zugeordnet, Zuordnung gelöst, PDF/A erzeugt) – GoBD-geschützt
+- [ ] Belegsuche über alle Belege: Dateiname, externe Rechnungsnummer, Lieferant, Betrag, Volltext (OCR)
+- [ ] Prüfsumme bei Export/Betriebsprüfung gegen die gespeicherte Datei verifizieren
+
+## ✅ v0.7.14 – Zahlungsart „Privat bezahlt“ (Issue #470, Vorstufe zu #162)
 
 Betriebsausgaben, die privat bezahlt werden (Privatkonto, privates PayPal, bar aus der eigenen
 Tasche), sind eine Einlage. Bisher erscheinen sie nicht in EÜR-Zeile 108 (Vordruck 2026; Basis 107,
 nur Kategorie „Privateinlage“ zählt), und der DATEV-Export bucht sie gegen das Bankkonto.
 
-- [ ] Zahlungsart „Privat bezahlt“ in „Zahlung erfassen“ (Eingangsrechnung), Buchungsformular und
-  Bank-/CSV-Import
-- [ ] DATEV: Gegenkonto = Privateinlage-Konto (SKR03 1890 / SKR04 2180, aus der Kategorie
-  „Privateinlage“, damit eigene Anpassungen greifen)
-- [ ] EÜR Zeile 107 (Basis) / 108 (2026): Summe dieser Ausgaben (brutto) als Einlage, zusätzlich zur
-  Kategorie „Privateinlage“; Betriebsausgabe und Vorsteuer bleiben wie gebucht
-- [ ] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Geld aus dem Betrieb)
-- [ ] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart
+- [x] Zahlungsart „Privat bezahlt“ (`zahlungsart="Privat"`, nur Ausgaben) in „Zahlung erfassen“
+  (Eingangsrechnung), Buchungsformular und Split-Buchung
+- [ ] Bank-/CSV-Import: offen – ein importiertes Konto ist ein Betriebskonto; „Privat bezahlt“ ergibt
+  dort nur Sinn, wenn ein Privatkonto importiert wird (eigener Kontotyp) – bei Bedarf nachziehen
+- [x] DATEV: Gegenkonto = Privateinlage-Konto (`datev.py::_privateinlage_konto()`, aus der Kategorie
+  „Privateinlage“, Rückfall SKR03 1890 / SKR04 2180)
+- [x] EÜR Zeile 107 (Basis) / 108 (2026): brutto als Einlage (`euer.py::_privat_bezahlt_beitrag()`),
+  auch in der Kategorie-Aufschlüsselung; Betriebsausgabe und Vorsteuer bleiben wie gebucht
+- [x] Kassenbestand, Tagesabschluss und Bankabgleich unberührt (kein Bar, keine Bankbuchung)
+- [x] Storno/„Zahlung korrigieren“ mit derselben Zahlungsart (Storno übernimmt sie, Korrektur bietet sie bei Ausgaben an)
 
 ## 📋 v0.7.12 – Reverse Charge mit privatem Anteil (Issue #503)
 
@@ -376,6 +418,10 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] Positionstabellen: Beschreibung breiter bzw. mehrzeilig, mehr Platz für die Eingabe (Issue #557)
 - [ ] Zahlung buchen, Journal-Buchung, Eingangsrechnung importieren (inkl. Dropzone und Postfach)
 - [ ] Bestätigungsdialoge (Ja/Nein) per Enter/Leertaste, Esc schließt
+- [ ] Trennlinien (Liste ↔ Formular `useSplitterBreite`, Liste ↔ Detail `components/DetailTrennlinie.tsx`,
+  Issue #599) per Tastatur: fokussierbar, `role="separator"` + `aria-orientation="vertical"` +
+  `aria-valuenow/min/max`, Pfeiltasten verschieben (Umschalt = größere Schritte), Pos1/Ende = Min/Max,
+  Enter oder Doppelklick setzt zurück
 
 ### 4. Prüfwerkzeuge & Abnahme
 - [ ] `eslint-plugin-jsx-a11y` im Lint
@@ -421,11 +467,42 @@ Planung und Aufgabenverteilung: [Meilenstein „v0.8.0“](https://github.com/ni
 - [ ] **Mehrere Rechner: neueres Backup beim Start erkennen** (Issue #461, lindesbs und TD1; Duplikat
   #500 aus PR #473) – wer RechnungsFee abwechselnd auf zwei Rechnern nutzt und über die externen Backups abgleicht, soll beim Start erfahren, dass ein anderer Rechner ein neueres Backup geschrieben hat. Skizze: Opt-in-Schalter „Ich nutze RechnungsFee auf mehreren Rechnern“ (Standard aus – gleichzeitiges Arbeiten auf beiden Rechnern würde beim Übernehmen Daten überschreiben); Gerätekennung im Backup-Dateinamen (Rotations-Regex `_EXTERN_BACKUP_RE` anpassen); jeder Rechner merkt sich lokal außerhalb der DB (die mitwandert), welches Backup er zuletzt geschrieben/übernommen hat; Startprüfung der Zielordner (lokal/SMB) nur über Dateinamen, ohne Entschlüsseln; Hinweis „Neueres Backup von <Rechner> – übernehmen?“ über die vorhandene Wiederherstellung mit Neustart und gespeichertem Passwort; Konfliktwarnung, wenn auch lokal seit dem letzten Abgleich gearbeitet wurde (vorher automatisch lokal sichern).
   Vor dem Übernehmen immer erst lokal sichern (TD1). Gilt für alle externen Ziele (lokal, SMB, FTPS).
+- [ ] **Spalten ein-/ausblenden** (Issue #581, Markus) – Menü „Spalten“ je Liste, auf der
+  gemeinsamen, barrierefreien Tabellen-Grundlage aus v0.8.0 (21 Seiten mit eigenen Tabellen, keine
+  gemeinsame Komponente); Menü per Tastatur und Screenreader bedienbar; Auswahl in der DB gespeichert
+  (wandert mit dem Backup, Muster wie `dashboard_config`); Anfang: Rechnungen, Journal, Kunden,
+  Lieferanten; zusätzliche Spalten wie Lieferanten-Rechnungsnr., Kategorie, Fälligkeit.
+  Vorab in v0.7.14: Lieferanten-Rechnungsnr. als zweite Zeile in der Eingangsrechnungsliste.
 - [ ] **FTPS als externes Backup-Ziel** (Issue #461, TD1) – viele haben über ihre Webseite einen
   FTP-Zugang. FTPS (`ftplib.FTP_TLS`, keine zusätzliche Bibliothek) als Standard; unverschlüsseltes FTP
   nur als bewusst gewählte Option mit Warnung (Zugangsdaten gehen im Klartext übers Netz – die
   Backup-Datei selbst ist AES-256-verschlüsselt). Zugangsdaten wie bei SMB (`backup_smb_*`), Rotation
   über `_EXTERN_BACKUP_RE` wie bei lokal/SMB, Zertifikatsprüfung mit TOFU-Option wie bei SMTP/IMAP.
+
+---
+
+## 📋 v0.9.0 – REST-API, MCP-Server und Konnektoren
+
+Reihenfolge: zuerst die öffentliche REST-API als gemeinsamer Weg, MCP und Konnektoren setzen darauf
+auf, statt eigene Zugänge zu bauen.
+
+- [ ] **Öffentliche REST-API** (Issue #513) – das Backend ist intern bereits eine REST-API (FastAPI,
+  ~300 Endpunkte), aber unversioniert, nur mit Sitzungsschlüssel (seit v0.7.12) und auf zufälligem
+  Port. Für Dritte: stabile, versionierte Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von
+  der internen); feste Adresse, standardmäßig nur lokal, optional im Netzwerk; Schreibzugriffe über
+  dieselben Wege wie die Oberfläche (GoBD, Nummernkreise, Signaturen), kein Datenbankzugriff.
+  Einschränkung Desktop-App: nur erreichbar, solange RechnungsFee läuft.
+  - **API-Tokens** mit Recht lesen / schreiben, in den Einstellungen erzeugt, nur einmal angezeigt,
+    danach nur als Hash gespeichert, jederzeit sperrbar.
+  - **Erster Schritt** (DonKeWu, Belege aus paperless-ngx): Kategorien und Buchungen lesen;
+    Eingangsrechnungs-**Entwürfe** mit Beleg und Kategorie je Position anlegen (statt direkter,
+    sofort signierter Journalbuchungen); in der App Sammelaktion „Entwürfe prüfen und finalisieren“
+    mit Vorschau.
+  - Danach: Kunden, Artikel, Ausgangsrechnungs-Entwürfe anlegen, Rechnungen und Angebote lesen inkl. PDF.
+- [ ] **MCP-Server** (Issue #429) – Model-Context-Protocol-Server für KI-Assistenten auf Basis der
+  REST-API (gleiche Tokens und Rechte, keine eigenen Endpunkte).
+- [ ] **Konnektoren** auf Basis der REST-API: Zammad und paperless-ngx (#473), Etsy/Onlineshops (#469),
+  hellocash und Kassensysteme (#13, POS). Je Konnektor eigener Umfang, Reihenfolge nach Nachfrage.
 
 ---
 
@@ -480,6 +557,22 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 ## 💡 Ideen (ohne Zeitplan)
 
+- **E-Rechnungen prüfen** – Community-Wunsch Markus (2026-11-23), Umfang abgestimmt:
+  - **Eigene Rechnungen – Normprüfung in der Testsuite statt je Rechnung:** Das XML entsteht aus
+    Code, ein korrekt erzeugter Fall ist bei jeder Rechnung korrekt. Deshalb jeden Weg durch den
+    Code einmal als Test (Kleinunternehmer, Reverse Charge, ig. Lieferung, Drittland, § 25a, mehrere
+    Steuersätze, Rabatte, Gutschrift, Abschlag mit Abzug, öffentliche Auftraggeber/XRechnung,
+    Einmalkunde) gegen XSD und Schematron (EN 16931, XRechnung KoSIT) prüfen – läuft bei jeder
+    Änderung und jedem Bibliotheks-Update mit. Dazu **Rundlauf-Tests** für die Zuordnung (erzeugen →
+    mit dem eigenen Import wieder einlesen → Feld für Feld vergleichen), weil ein Validator falsch
+    zugeordnete, aber formal gültige Felder nicht findet.
+  - **Eigene Rechnungen – je Rechnung nur Vollständigkeit der Daten** vor dem Finalisieren (fehlt
+    Kundenadresse, USt-IdNr. bei Reverse Charge, eigene Steuernummer …), ohne Validator; Vorbild
+    `zugferd.py::xrechnung_pflicht_fehler()` für öffentliche Auftraggeber.
+  - **Eingangsrechnungen – keine Normprüfung:** Verantwortung für die E-Rechnung liegt beim
+    Lieferanten. Weiter Plausibilität (`utils/rechnungs_parser.py`) und zusätzlich ein Hinweis, wenn
+    eine Pflichtangabe nach § 14 Abs. 4 UStG fehlt, die für den eigenen Vorsteuerabzug zählt.
+
 - **Kalenderansicht** (Issue #198, Folge-Feature) – Vollständige Monatsansicht mit Buchungen, Steuerfristen und Feiertagen. Setzt Steuer-Fristenliste voraus. Größerer Scope, kein fester Zeitplan.
 
 - **Artikel-Varianten** – Varianten eines Artikels (z. B. Größe, Farbe) mit eigenem Preis und Bestand; Auswahl direkt in der Rechnungsposition (Issue #171)
@@ -493,14 +586,13 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 - **Erweiterbare Kontenpläne** – Built-in-Pakete (SKR03 vollständig) und CSV-Import eigener Kontenpläne
 - **LLM-gestützte Felderkennung** – lokales Modell via ollama als Opt-in für bessere OCR-Zuordnung
 - **Fahrtenbuch-App (Android/iOS)** – GPS-Erfassung, GoBD-konform, Export an RechnungsFee
-- **hellocash-Anbindung** – REST-API (Issue #13)
 - **AQBanking als Option** – Kontoumsätze direkt von der Bank abrufen (FinTS/HBCI über AQBanking) als Alternative zum bestehenden CSV-/CAMT-Import; optional, der Datei-Import bleibt. Kein fester Zeitplan.
 - **Docker-Version** – containerisiertes Deployment für Selbst-Hoster (Backend + Frontend als Docker-Image)
 - **Preiskalkulations-Modul** – Kalkulationsblatt pro Artikel/Leistung: Materialkosten, Stundensatz, Gemeinkosten-Aufschlag, Gewinnmarge → kalkulierter Verkaufspreis; Übernahme direkt in Rechnungsposition
 - **Offline-Handbuch** – eingebettetes Handbuch direkt in der App (Tauri-Webview oder lokale HTML-Seiten); kein Internetzugang nötig; synchronisiert mit der installierten Version
 - **Eigene PDF-Rechnungsvorlagen hochladen** (Issue #383) – setzt einen Umbau der PDF-Erzeugung von imperativem fpdf2-Zeichnen auf eine echte Template-Engine (z. B. HTML/CSS + Jinja + WeasyPrint) voraus; erst danach ist ein Upload-Feature mit Variablenliste sinnvoll möglich. Bis dahin: Wunschvorlagen werden auf Zuruf einzeln in der bestehenden fpdf2-Struktur nachgebaut.
 
-- **Vollständige BWA: Betriebswirtschaftliche Auswertung** – Erweiterung des Cockpits um Vorjahresvergleich als zweite Spalte (aktueller Monat / Quartal / Jahr vs. Vorjahresperiode), Exportfunktion als PDF im klassischen BWA-Format; für Nutzer die monatlich mit Steuerberater oder Bank kommunizieren (Issue #232)
+- **Vollständige BWA: Betriebswirtschaftliche Auswertung** – Erweiterung des Cockpits um Vorjahresvergleich als zweite Spalte (aktueller Monat / Quartal / Jahr vs. Vorjahresperiode), Exportfunktion als PDF im klassischen BWA-Format; für Nutzer die monatlich mit Steuerberater oder Bank kommunizieren (Issue #232, erneut gewünscht in #579 für Bank/Vermieter). Gliederung wie die Kurzfristige Erfolgsrechnung: Gesamtleistung → Rohertrag → Kostenarten (Personal, Raum, Versicherungen/Beiträge, Kfz, Werbung/Reisen, AfA, Instandhaltung, sonstige) → Betriebsergebnis → Zinsen → vorläufiges Ergebnis; Spalten Zeitraum + kumuliert, je mit Vorjahr und % der Gesamtleistung; Basis EÜR-Zuordnung (Ist-Prinzip, ohne Bestände). Community-Umfrage November 2026: 15 % der Stimmen.
 
 - **Konfigurierbarer Speicherort für archivierte Original-PDFs** (Issue #390) – Dateiname nach Rechnungsnummer statt interner DB-ID (z. B. `RE-260103_42.pdf`) ist seit v0.6.12 erledigt. Offen bleibt: selbst wählbarer Speicherort statt fest `uploads/rechnungen/` im Profil-Datenordner. Setzt eine Lösung für bereits archivierte Bestandsdateien voraus (alte Pfade bleiben in `rechnung.original_pdf_pfad` referenziert).
 
@@ -515,7 +607,6 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
 
 - **Sammelposten / Sammelabschreibung (§6 Abs. 2a EStG)** – Wahlrecht für bewegliche Wirtschaftsgüter zwischen 250 € und 1.000 € netto: Pool pro Wirtschaftsjahr, pauschale Auflösung über 5 Jahre à 20 % (Anlage EÜR Zeile 37, Hilfsblatt Zeilen 63–81). Braucht eigene mehrjährige Pool-Verwaltung (ähnlich Anlagenverzeichnis, aber pro Jahrgang statt pro Einzelgut) – deutlich aufwändiger als die übrige EÜR/AVEÜR-Logik. Zurückgestellt bis explizit nachgefragt (Issue #265, Diskussion 2026-07).
 
-- **MCP-Server** (Issue #429) – eigener Model-Context-Protocol-Server, der die Backend-API (Rechnung erstellen, Zahlung erfassen, Journal abfragen etc.) als Tools für KI-Assistenten (z. B. Claude) exponiert. Vorschlag bisher sehr knapp, kein konkreter Anwendungsfall genannt – Rückfrage im Issue gestellt, Umfang/Priorität noch unklar.
 
 - **Bestellwesen (Einkauf)** – Spiegelbild zu Angebot/Auftrag auf der Lieferantenseite, als
   Schalter unter Funktionen: Bestellung an Lieferanten als eigener Dokumenttyp (Nummernkreis z. B.
@@ -533,11 +624,3 @@ Wenn eine Beta-Funktion sich bei der Testgruppe bewährt hat, wird **nicht der g
   gibt die Seriennummer wieder frei; passt zu §25a (Gebrauchtwarenhandel).
   Offen: nur Rückverfolgung oder auch Garantiefristen mit Ablauf und Erinnerung?
 
-- **Öffentliche REST-API** (Issue #513; Anwendungsfälle Zammad/paperless #473, MCP #429, Etsy #469, POS) – das Backend ist intern bereits eine REST-API (FastAPI, ~300 Endpunkte),
-  aber unversioniert, ohne Anmeldung und auf zufälligem Port. Für Dritte nötig: stabile, versionierte
-  Schnittstelle `/api/v1/…` mit OpenAPI-Doku (entkoppelt von der internen), API-Tokens mit Rechten
-  (lesen / schreiben), in den Einstellungen erzeug- und widerrufbar; feste Adresse, standardmäßig
-  nur lokal, optional im Netzwerk; Schreibzugriffe über dieselben Wege wie die Oberfläche (GoBD,
-  Nummernkreise, Signaturen). Einschränkung Desktop-App: nur erreichbar, solange RechnungsFee läuft.
-  **Grundlage für MCP-Server (#429) und hellocash-Anbindung (#13)**, statt dass beide eigene Wege gehen.
-  Offen: Hauptzweck (Shop legt Rechnungen an, eigene Skripte/Auswertungen, Anbindung anderer Programme)?

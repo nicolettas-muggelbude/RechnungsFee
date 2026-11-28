@@ -161,6 +161,21 @@ def _bu(j: Journaleintrag, skr: str, konto: Optional[str], db: Optional[Session]
     return ""
 
 
+def _privateinlage_konto(kontenrahmen: str, db: Optional[Session]) -> str:
+    if db is not None:
+        kat = (
+            db.query(Kategorie)
+            .filter(Kategorie.kontenart == "Privat", Kategorie.euer_zeile == 107)
+            .order_by((Kategorie.name != "Privateinlage"), Kategorie.id)
+            .first()
+        )
+        if kat:
+            konto = kat.konto_skr03 if kontenrahmen == "SKR03" else kat.konto_skr04
+            if konto:
+                return konto
+    return "1890" if kontenrahmen == "SKR03" else "2180"
+
+
 def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = None) -> Optional[str]:
     za = j.zahlungsart
     if za == "Keine":
@@ -192,6 +207,11 @@ def _gegenkonto(j: Journaleintrag, unt: Unternehmen, db: Optional[Session] = Non
                 if konto:
                     return konto
         za = "Bank"  # Fallback falls keine passende Hauptbuchung gefunden wird
+
+    if za == "Privat":
+        # Issue #470: Betriebsausgabe aus privaten Mitteln - Gegenkonto ist das Privateinlage-Konto
+        # (aus der Kategorie „Privateinlage“, damit eigene Kontenanpassungen greifen)
+        return _privateinlage_konto(unt.kontenrahmen, db)
 
     # Bankkonto mit eigener DATEV-Kontonummer hat Vorrang vor globalem datev_konto_bank
     if za == "Bank" and j.konto_id and db is not None:
@@ -310,26 +330,59 @@ def datev_buchungsstapel(
         .all()
     )
 
-    # Lookup-Maps für Spalte 48: Kreditoren-/Debitorennummer
-    kunde_ids = {j.kunde_id for j in eintraege if j.kunde_id}
+    # Lookup-Maps für Spalte 48: Kreditoren-/Debitorennummer.
+    # Issue #566 (v0.7.14): Partner zuerst über die Rechnung (Ausgangsrechnung → Debitor des
+    # Kunden, Eingangsrechnung → Kreditor des Lieferanten, unabhängig von der Buchungsrichtung -
+    # Rechnungszahlungen tragen selbst kein kunde_id, #577), sonst Kunde bzw. Lieferant der
+    # direkten Buchung. Storno-Gegenbuchungen übernehmen Kunde/Lieferant nicht (#566) - sie
+    # bekommen das Personenkonto ihrer Originalbuchung (gruppe_id), damit sich beide im
+    # Personenkonto aufheben.
     rechnung_ids_set = {j.rechnung_id for j in eintraege if j.rechnung_id}
+    eintrag_ids = {j.id for j in eintraege}
+    original_map: dict[int, Journaleintrag] = {j.id: j for j in eintraege}
+    fehlende_originale = {j.gruppe_id for j in eintraege if j.gruppe_id and j.gruppe_id not in eintrag_ids}
+    if fehlende_originale:
+        for o in db.query(Journaleintrag).filter(Journaleintrag.id.in_(fehlende_originale)).all():
+            original_map[o.id] = o
+            if o.rechnung_id:
+                rechnung_ids_set.add(o.rechnung_id)
+    rechnung_map: dict[int, Rechnung] = {
+        r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids_set)).all()
+    }
+    kunde_ids = {j.kunde_id for j in original_map.values() if j.kunde_id} | {
+        r.kunde_id for r in rechnung_map.values() if r.typ == "ausgang" and r.kunde_id
+    }
+    lieferant_ids = {j.lieferant_id for j in original_map.values() if j.lieferant_id} | {
+        r.lieferant_id for r in rechnung_map.values() if r.typ == "eingang" and r.lieferant_id
+    }
     debitor_map: dict[int, str] = {
         k.id: k.debitor_nr
         for k in db.query(Kunde).filter(Kunde.id.in_(kunde_ids)).all()
         if k.debitor_nr
     }
-    rechnung_map: dict[int, Rechnung] = {
-        r.id: r for r in db.query(Rechnung).filter(Rechnung.id.in_(rechnung_ids_set)).all()
-    }
-    rechnung_lieferant: dict[int, int] = {
-        r_id: r.lieferant_id for r_id, r in rechnung_map.items() if r.lieferant_id
-    }
-    lieferant_ids = set(rechnung_lieferant.values())
     kreditor_map: dict[int, str] = {
         lf.id: lf.kreditor_nr
         for lf in db.query(Lieferant).filter(Lieferant.id.in_(lieferant_ids)).all()
         if lf.kreditor_nr
     }
+
+    def _personenkonto_direkt(e: Journaleintrag) -> str:
+        r = rechnung_map.get(e.rechnung_id) if e.rechnung_id else None
+        if r is not None:
+            if r.typ == "ausgang":
+                return debitor_map.get(r.kunde_id, "") if r.kunde_id else ""
+            return kreditor_map.get(r.lieferant_id, "") if r.lieferant_id else ""
+        if e.kunde_id:
+            return debitor_map.get(e.kunde_id, "")
+        if e.lieferant_id:
+            return kreditor_map.get(e.lieferant_id, "")
+        return ""
+
+    def _personenkonto(e: Journaleintrag) -> str:
+        nr = _personenkonto_direkt(e)
+        if not nr and e.gruppe_id and e.gruppe_id in original_map:
+            nr = _personenkonto_direkt(original_map[e.gruppe_id])
+        return nr
 
     # Belege je Journaleintrag einmalig ermitteln (journal.beleg_id oder ueber die
     # verknuepfte Rechnung rechnung.beleg_id). dateiname (mit Endung) wird fuer die
@@ -339,10 +392,20 @@ def datev_buchungsstapel(
     # Bei Ausgangsrechnungen gibt es keinen Beleg-Datensatz, sondern das archivierte
     # Original-PDF (rechnung.original_pdf_pfad, siehe pdf_kopie.py) - auf Peters
     # Wunsch (Issue #306) werden auch diese mitexportiert.
-    beleg_info: dict[int, tuple[Beleg | Path, str]] = {}
+    beleg_info: dict[int, tuple[Beleg | Path | bytes, str]] = {}
     if mit_belegen:
+        from utils.belege_zusammenfuehren import belege_als_ein_pdf
         for j in eintraege:
             rechnung_obj = rechnung_map.get(j.rechnung_id) if j.rechnung_id else None
+
+            # Issue #568 Stufe 2: mehrere Belege an der Buchung - DATEV kennt nur einen
+            # Beleglink je Buchung, deshalb zu einem PDF zusammengeführt
+            anhaenge = [a.beleg for a in (j.anhaenge or []) if a.beleg is not None]
+            if len(anhaenge) > 1:
+                zusammen = belege_als_ein_pdf(anhaenge, APP_DATA_DIR / "uploads")
+                if zusammen:
+                    beleg_info[j.id] = (zusammen, f"{j.belegnr}.pdf")
+                    continue
 
             beleg_id = j.beleg_id or (rechnung_obj.beleg_id if rechnung_obj else None)
             if beleg_id:
@@ -393,13 +456,7 @@ def datev_buchungsstapel(
         buchungstext = j.beschreibung[:60]
 
         # Spalte 48: Kreditoren-/Debitorennummer
-        personenkonto = ""
-        if j.art == "Einnahme" and j.kunde_id:
-            personenkonto = debitor_map.get(j.kunde_id, "")
-        elif j.art == "Ausgabe" and j.rechnung_id:
-            lf_id = rechnung_lieferant.get(j.rechnung_id)
-            if lf_id:
-                personenkonto = kreditor_map.get(lf_id, "")
+        personenkonto = _personenkonto(j)
 
         leere_felder = [""] * 35    # Felder 15–49
         if j.id in beleg_info:
@@ -461,7 +518,12 @@ def datev_buchungsstapel(
             if dateiname in geschrieben:
                 continue
 
-            if isinstance(quelle, Beleg):
+            if isinstance(quelle, bytes):
+                # zusammengeführte Belege (Issue #568)
+                zf.writestr(dateiname, quelle)
+                geschrieben.add(dateiname)
+                belege_gefunden += 1
+            elif isinstance(quelle, Beleg):
                 beleg = quelle
                 if beleg.beleg_pdfa_pfad:
                     pdfa_pfad = APP_DATA_DIR / "uploads" / beleg.beleg_pdfa_pfad

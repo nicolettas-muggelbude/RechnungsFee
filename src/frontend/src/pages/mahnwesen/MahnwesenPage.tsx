@@ -1,17 +1,20 @@
 import { useState } from 'react'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getMahnwesenKundenUebersicht, getMahnwesenEinstellungen, mahnungVorschau, mahnungErstellen,
   mahnungVorschauGebuehr, mahnungErstellenGebuehr, bezahleMahngebuehrKunde, mahnungZahlungErfassen,
-  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, openUrl,
-  getUnternehmen, getApiBase, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
+  getKundeMahnungen, deleteMahnung, getMahnungPdfUrl, downloadMahnungPdfForMail, getMahnungZusatzanhaenge, getMahnungZusatzanhangUrl, downloadMahnungZusatzanhang, openUrl, meldeMahnungVerlauf,
+  getUnternehmen, isTauri, openInPdfWindow, setMahnsperre, clearMahnsperre, downloadInkassoPaket,
   type MahnwesenKundeUebersicht, type MahnwesenRechnungMini, type MahnungVorschau,
-  type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult,
-  apiFetch,
+  type MahnungHistorieItem, type Mahnung, type Unternehmen, type MahnungZahlungResult, type Mahnstufe,
 } from '../../api/client'
-import { MahnungMailDialog } from '../../components/MahnungMailDialog'
+import { MahnungMailDialog, mahnungMailVorlage } from '../../components/MahnungMailDialog'
+import { sendeUeberThunderbird, ThunderbirdNichtGefundenError } from '../../utils/thunderbirdVersand'
 import { DateInput } from '../../components/DateInput'
+import { useDetailBreite, type DetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 
 function formatEuro(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -57,44 +60,95 @@ function mahnungStatusLabel(status: string): string {
   return status === 'entwurf' ? 'Entwurf' : status === 'versendet' ? 'Versendet' : status === 'storniert' ? 'Storniert' : status
 }
 
-async function mahnungDrucken(mahnungId: number, qc: ReturnType<typeof useQueryClient>) {
-  const base = await getApiBase()
-  const resp = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf`)
-  const blob = await resp.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
-  qc.invalidateQueries({ queryKey: ['kunde-mahnungen'] })
-  qc.invalidateQueries({ queryKey: ['rechnungen'] })
+/** Issue #559: direkte Backend-Adresse statt blob:-URL - ein eigenes Tauri-Fenster kann eine im
+ *  Hauptfenster erzeugte blob:-URL nicht auflösen und blieb weiß (wie Rechnungen, Issue #371).
+ *  Der Status „versendet“ wird serverseitig beim Laden der Adresse gesetzt. */
+async function mahnungDrucken(m: { id: number; mahnnummer?: string | null }, qc: ReturnType<typeof useQueryClient>) {
+  const url = await getMahnungPdfUrl(m.id, false, m.mahnnummer)
+  void meldeMahnungVerlauf(m.id, { art: 'mahnung_gedruckt', kanal: 'druck' })  // Issue #596
+  setTimeout(() => {
+    qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+    qc.invalidateQueries({ queryKey: ['kunde-mahnungen'] })
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+  }, 1500)
   if (isTauri()) {
-    openInPdfWindow(blobUrl, 'Mahnung drucken')
+    await openInPdfWindow(url, 'Mahnung drucken')
   } else {
-    const win = window.open(blobUrl, '_blank')
+    const win = window.open(url, '_blank')
     if (win) win.addEventListener('load', () => win.print())
   }
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
 }
 
 /** Mail-Fallback ohne SMTP: PDF herunterladen (zählt als versendet) + Standard-Mailprogramm mit
  *  vorausgefüllter Adresse/Betreff öffnen, analog handleMail() in RechnungenPage.tsx. */
-async function mahnungMailFallback(m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number) {
+async function mahnungMailFallback(
+  m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number,
+  unternehmen: Unternehmen | null | undefined, mahnstufen?: Mahnstufe[],
+) {
   if (!m.kunde_email) {
     window.alert('Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.')
     return
   }
   await downloadMahnungPdfForMail(m.id)
+  // Issue #582: Zusatzanhänge der Stufe ebenfalls herunterladen (zum Anhängen von Hand)
+  try {
+    for (const a of await getMahnungZusatzanhaenge(m.id)) {
+      await downloadMahnungZusatzanhang(m.id, a.index, a.dateiname)
+    }
+  } catch (e) {
+    console.error('Zusatzanhänge der Mahnung', e)
+  }
   qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
   qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
   qc.invalidateQueries({ queryKey: ['rechnungen'] })
-  const subject = encodeURIComponent(`${m.bezeichnung ?? 'Mahnung'} – Rechnung ${m.rechnungsnummern}`)
-  const body = encodeURIComponent(
-    `Guten Tag,\n\nanbei erhalten Sie unser Schreiben „${m.bezeichnung ?? 'Mahnung'}" zu Rechnung ${m.rechnungsnummern}.\n\n` +
-    `Bitte die heruntergeladene PDF-Datei als Anhang einfügen.\n\nMit freundlichen Grüßen`
-  )
+  // Issue #561: dieselbe Vorlage wie im SMTP-Dialog (Stufe → Mailvorlage „Mahnung“ → Standard)
+  const vorlage = mahnungMailVorlage(m, unternehmen, mahnstufen)
+  const subject = encodeURIComponent(vorlage.betreff)
+  const body = encodeURIComponent(vorlage.text)
   const mailtoUrl = `mailto:${m.kunde_email}?subject=${subject}&body=${body}`
   if (isTauri()) {
     await openUrl(mailtoUrl)
   } else {
     window.location.href = mailtoUrl
+  }
+  await meldeMahnungVerlauf(m.id, {
+    art: 'mahnung_uebergeben', kanal: 'mailprogramm', empfaenger: m.kunde_email, betreff: vorlage.betreff,
+  })
+}
+
+/** Issue #582: Versand über Thunderbird (Einstellung „Thunderbird-Versand“, hat wie bei Rechnungen
+ *  Vorrang vor SMTP) - Mahnungs-PDF und alle Zusatzanhänge der Stufe als Anhänge. Der Abruf des
+ *  PDFs (ohne nur_ansehen) setzt die Mahnung serverseitig auf „versendet“, wie der Download. */
+async function mahnungThunderbird(
+  m: MahnungHistorieItem, qc: ReturnType<typeof useQueryClient>, kundeId: number,
+  unternehmen: Unternehmen | null | undefined, mahnstufen?: Mahnstufe[],
+) {
+  if (!m.kunde_email) {
+    window.alert('Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.')
+    return
+  }
+  try {
+    const vorlage = mahnungMailVorlage(m, unternehmen, mahnstufen)
+    const pdfUrl = await getMahnungPdfUrl(m.id, false, m.mahnnummer)
+    const zusatz = await getMahnungZusatzanhaenge(m.id)
+    const anhaenge = [
+      { url: pdfUrl, dateiname: `${(m.mahnnummer || 'Mahnung').replace(/[/ ]/g, '_')}.pdf` },
+      ...await Promise.all(zusatz.map(async (a) => ({ url: await getMahnungZusatzanhangUrl(m.id, a.index), dateiname: a.dateiname }))),
+    ]
+    await sendeUeberThunderbird({ an: m.kunde_email, betreff: vorlage.betreff, text: vorlage.text, anhaenge })
+    await meldeMahnungVerlauf(m.id, {
+      art: 'mahnung_uebergeben', kanal: 'thunderbird', empfaenger: m.kunde_email, betreff: vorlage.betreff,
+    })
+    qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kundeId] })
+    qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
+    qc.invalidateQueries({ queryKey: ['rechnungen'] })
+  } catch (e) {
+    if (e instanceof ThunderbirdNichtGefundenError) {
+      window.alert('Thunderbird wurde nicht gefunden. Prüfe die Installation oder schalte unter Einstellungen → Unternehmen → E-Mail den Thunderbird-Versand aus.\n\n'
+        + e.details.map((d) => `${d.programm}: ${d.fehler}`).join('\n'))
+    } else {
+      window.alert(e instanceof Error ? e.message : 'Unbekannter Fehler beim Thunderbird-Versand')
+    }
   }
 }
 
@@ -103,8 +157,9 @@ async function mahnungMailFallback(m: MahnungHistorieItem, qc: ReturnType<typeof
 // ---------------------------------------------------------------------------
 
 function KundeDetail({
-  kunde, onClose, onErstellt, unternehmen,
+  kunde, onClose, onErstellt, unternehmen, detailBreite,
 }: {
+  detailBreite: DetailBreite
   kunde: MahnwesenKundeUebersicht
   onClose: () => void
   onErstellt: (ergebnis: Mahnung, rechnungsnummern: Map<number, string>) => void
@@ -183,8 +238,9 @@ function KundeDetail({
   const [zeigGebuehrZahlung, setZeigGebuehrZahlung] = useState(false)
   const [gebuehrBetrag, setGebuehrBetrag] = useState(kunde.offener_betrag_gesamt.replace('.', ','))
   const [gebuehrDatum, setGebuehrDatum] = useState(heuteIso())
-  const [gebuehrZahlungsart, setGebuehrZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bank')
+  const [gebuehrZahlungsart, setGebuehrZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>(() => letzteZahlungsart('Bank'))
   const gebuehrZahlungMut = useMutation({
+    onMutate: () => merkeZahlungsart(gebuehrZahlungsart),
     mutationFn: () => bezahleMahngebuehrKunde(kunde.kunde_id, gebuehrBetrag.replace(',', '.'), gebuehrDatum, gebuehrZahlungsart),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
@@ -196,9 +252,10 @@ function KundeDetail({
   const [zahlungFuerMahnungId, setZahlungFuerMahnungId] = useState<number | null>(null)
   const [zahlungBetrag, setZahlungBetrag] = useState('')
   const [zahlungDatum, setZahlungDatum] = useState(heuteIso())
-  const [zahlungZahlungsart, setZahlungZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>('Bank')
+  const [zahlungZahlungsart, setZahlungZahlungsart] = useState<'Bar' | 'Karte' | 'PayPal' | 'Bank'>(() => letzteZahlungsart('Bank'))
   const [zahlungResultat, setZahlungResultat] = useState<{ mahnungId: number; ergebnis: MahnungZahlungResult } | null>(null)
   const zahlungMut = useMutation({
+    onMutate: () => merkeZahlungsart(zahlungZahlungsart),
     mutationFn: (mahnungId: number) => mahnungZahlungErfassen(mahnungId, zahlungBetrag.replace(',', '.'), zahlungDatum, zahlungZahlungsart),
     onSuccess: (ergebnis, mahnungId) => {
       qc.invalidateQueries({ queryKey: ['mahnwesen-kunden'] })
@@ -235,7 +292,7 @@ function KundeDetail({
   }
 
   return (
-    <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 h-full overflow-auto">
+    <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 h-full overflow-auto`}>
       <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">{kunde.kunde_name}</p>
@@ -518,14 +575,18 @@ function KundeDetail({
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
                       👁 Ansehen
                     </button>
-                    <button type="button" onClick={() => mahnungDrucken(m.id, qc)}
+                    <button type="button" onClick={() => mahnungDrucken(m, qc)}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
                       🖨️ Drucken
                     </button>
                     <button
                       type="button"
-                      onClick={() => unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id)}
-                      title={unternehmen?.smtp_aktiv ? undefined : 'Kein SMTP eingerichtet – öffnet dein E-Mail-Programm, PDF wird heruntergeladen'}
+                      onClick={() => unternehmen?.thunderbird_aktiv
+                        ? mahnungThunderbird(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)
+                        : unternehmen?.smtp_aktiv ? setMailFuer(m) : mahnungMailFallback(m, qc, kunde.kunde_id, unternehmen, einst?.mahnstufen)}
+                      title={unternehmen?.thunderbird_aktiv
+                        ? 'Öffnet eine neue Mail in Thunderbird mit der Mahnung und den Anhängen der Stufe'
+                        : unternehmen?.smtp_aktiv ? undefined : 'Kein SMTP eingerichtet – öffnet dein E-Mail-Programm, die PDFs werden heruntergeladen'}
                       className="text-[11px] px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                     >
                       ✉️ Mail{!unternehmen?.smtp_aktiv ? ' …' : ''}
@@ -630,6 +691,7 @@ function KundeDetail({
         <MahnungMailDialog
           mahnung={mailFuer}
           unternehmen={unternehmen}
+          mahnstufen={einst?.mahnstufen}
           onClose={() => setMailFuer(null)}
           onGesendet={() => {
             qc.invalidateQueries({ queryKey: ['kunde-mahnungen', kunde.kunde_id] })
@@ -648,6 +710,7 @@ function KundeDetail({
 export function MahnwesenPage() {
   const navigate = useNavigate()
   const [ausgewaehltKundeId, setAusgewaehltKundeId] = useState<number | null>(null)
+  const detailBreite = useDetailBreite('mahnwesen')
   const [statusFilter, setStatusFilter] = useState<Set<StatusKind>>(new Set(ALLE_STATUS))
   const [letzteErgebnisse, setLetzteErgebnisse] = useState<{ ergebnis: Mahnung; nrMap: Map<number, string> }[] | null>(null)
 
@@ -823,8 +886,10 @@ export function MahnwesenPage() {
         </div>
       </div>
 
+      {ausgewaehlt && <DetailTrennlinie detail={detailBreite} />}
       {ausgewaehlt && (
         <KundeDetail
+          detailBreite={detailBreite}
           kunde={ausgewaehlt}
           onClose={() => setAusgewaehltKundeId(null)}
           unternehmen={unternehmen}

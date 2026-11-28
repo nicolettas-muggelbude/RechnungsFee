@@ -13,10 +13,11 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from utils.pdfa_konverter import konvertiere_zu_pdfa
+from utils.kontoinhaber import kontoinhaber_von
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy import extract, func, or_
@@ -26,7 +27,7 @@ from collections import defaultdict
 
 from database.connection import get_db, APP_DATA_DIR
 from database.models import (
-    Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
+    BankTransaktion, Beleg, Forderung, Kunde, Lieferant, Rechnung, RechnungZugferdAnhang, Rechnungsposition,
     Journaleintrag, Kategorie, Unternehmen, Nummernkreis, Artikel, VorsteuerAnspruch, Lagerbewegung,
 )
 from utils.signatur import signatur_journaleintrag, signatur_vorsteueranspruch
@@ -42,7 +43,7 @@ from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stem
 from .schemas_rechnungen import (
     BelegResponse, LieferantVorschlag, RechnungCreate, RechnungUpdate, RechnungResponse,
     BarZahlungCreate, BarZahlungResult, ZahlungKompakt, AnalyseResponse, ZahlungSplitPosition,
-    RechnungVorschauRequest, RechnungVorschauResponse, RechnungVorschauPosition,
+    RechnungVorschauRequest, RechnungVorschauResponse, RechnungVorschauPosition, RechnungspositionCreate,
 )
 from .schemas import StornoRequest
 from .nummernkreise import naechste_nummer
@@ -560,6 +561,7 @@ def _absender_snapshot(db: Session) -> str:
         "email":                   unt.email or "",
         "webseite":                unt.webseite or "",
         "iban":                    unt.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unt),  # Issue #604
         "bic":                     unt.bic or "",
         "bank_name":               unt.bank_name or "",
         "logo_pfad":               unt.logo_pfad or "",
@@ -573,6 +575,8 @@ def _absender_snapshot(db: Session) -> str:
         "anrede_fallback":         unt.anrede_fallback or "",
         "pdf_vorlage":             int(unt.pdf_vorlage or 0),
         "pdf_positionsnummern":            bool(unt.pdf_positionsnummern),
+        "pdf_artikelnummer":            bool(unt.pdf_artikelnummer),
+        "pdf_positionsdatum":           bool(unt.pdf_positionsdatum),
         "unterschrift_bild":       unt.unterschrift_bild or "",
         "unterschrift_auf_rechnung": bool(unt.unterschrift_auf_rechnung),
         "qr_zahlung_aktiv":        bool(unt.qr_zahlung_aktiv),
@@ -692,6 +696,7 @@ def _berechne_rechnung(
     netto_sum = Decimal("0.00")
     ust_sum = Decimal("0.00")
     brutto_sum = Decimal("0.00")
+    abzug_netto = abzug_ust = abzug_brutto = Decimal("0.00")  # Abschlags-Abzüge (#597)
 
     for idx, pos_data in enumerate(positionen_data):
         ist_diff = getattr(pos_data, "differenzbesteuerung", False)
@@ -734,6 +739,13 @@ def _berechne_rechnung(
             brutto_pos = netto_pos + ust_pos
 
         positionen.append(_PositionsErgebnis(ust_satz, ust_pos, brutto_pos, netto_pos))
+        if getattr(pos_data, "abschlag_rechnung_id", None):
+            # Abzug einer verrechneten Abschlagsrechnung: fester, bereits gezahlter Betrag -
+            # der Rechnungsrabatt gilt nur für die Leistung, nicht für den Abzug (Issue #597)
+            abzug_netto += netto_pos
+            abzug_ust += ust_pos
+            abzug_brutto += brutto_pos
+            continue
         netto_sum += netto_pos
         ust_sum += ust_pos
         brutto_sum += brutto_pos
@@ -747,12 +759,12 @@ def _berechne_rechnung(
         faktor = Decimal("1")
 
     if eingabemodus == "brutto":
-        brutto_gesamt = (brutto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
-        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        brutto_gesamt = (brutto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_brutto
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_netto
         ust_gesamt = brutto_gesamt - netto_gesamt
     else:
-        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
-        ust_gesamt = (ust_sum * faktor).quantize(_Q2, ROUND_HALF_UP)
+        netto_gesamt = (netto_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_netto
+        ust_gesamt = (ust_sum * faktor).quantize(_Q2, ROUND_HALF_UP) + abzug_ust
         brutto_gesamt = netto_gesamt + ust_gesamt
 
     return RechnungSummen(positionen, netto_gesamt, ust_gesamt, brutto_gesamt)
@@ -1394,8 +1406,10 @@ def auftrag_erstellen(data: "RechnungCreate", db: Session = Depends(get_db)):
             differenzbesteuerung=getattr(pos_data, "differenzbesteuerung", False),
             artikel_id=pos_data.artikel_id,
             kategorie_id=pos_data.kategorie_id,
+            leistungsdatum=getattr(pos_data, "leistungsdatum", None),
         )
         db.add(pos)
+    leistungszeitraum_aus_positionen(auftrag, data.positionen)  # Issue #594
     db.flush()
     db.expire(auftrag, ["positionen"])
     _pruefe_ausgangs_positionskategorien(auftrag, db)  # Issue #567
@@ -1572,8 +1586,11 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
     ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and data.typ == "ausgang")
 
     # Rechnungsnummer: aus Nummernkreis wenn nicht angegeben
-    rechnungsnummer = data.rechnungsnummer
-    if not rechnungsnummer:
+    rechnungsnummer = (data.rechnungsnummer or "").strip() or None
+    if rechnungsnummer:
+        _pruefe_rechnungsnummer_frei(data.typ, rechnungsnummer, db)  # Issue #554
+    # Issue #465/#551: Entwürfe von Rechnung/Abschlag/Gutschrift erst beim Finalisieren nummerieren
+    if not rechnungsnummer and not nummer_erst_beim_finalisieren(data.dokument_typ, data.ist_entwurf):
         if data.dokument_typ == "Lieferschein":
             nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "lieferschein").first()
             if nk:
@@ -1764,9 +1781,11 @@ def _create_rechnung(data: RechnungCreate, db: Session, import_quelle: str | Non
             ek_netto_25a=ek_netto_25a,
             ust_satz_25a=ust_satz_25a,
             abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
+            leistungsdatum=getattr(pos_data, "leistungsdatum", None),
         )
         db.add(pos)
 
+    leistungszeitraum_aus_positionen(rechnung, data.positionen)  # Issue #594
     db.flush()  # Positionen in DB schreiben (autoflush=False in Session)
     db.expire(rechnung, ["positionen"])  # Relationship-Cache invalidieren → fresh load
     _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
@@ -1797,6 +1816,12 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
     unternehmen = db.query(Unternehmen).first()
     # §19 UStG betrifft nur Ausgangsrechnungen (Issue #397) - siehe create_rechnung()
     ist_kleinunternehmer = bool(unternehmen and unternehmen.ist_kleinunternehmer and rechnung.typ == "ausgang")
+
+    # Issue #554: geänderte Nummer darf nicht schon vergeben sein
+    if data.rechnungsnummer is not None:
+        data.rechnungsnummer = data.rechnungsnummer.strip() or None
+        if data.rechnungsnummer and data.rechnungsnummer != rechnung.rechnungsnummer:
+            _pruefe_rechnungsnummer_frei(rechnung.typ, data.rechnungsnummer, db, ausser_id=rechnung.id)
 
     for field in ("rechnungsnummer", "datum", "leistung_von", "leistung_bis", "faellig_am", "kunde_id",
                   "lieferant_id", "partner_freitext", "partner_strasse", "partner_hausnummer",
@@ -1919,9 +1944,11 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 brutto=erg.brutto,
                 differenzbesteuerung=ist_diff,
                 abschlag_rechnung_id=getattr(pos_data, "abschlag_rechnung_id", None),
+                leistungsdatum=getattr(pos_data, "leistungsdatum", None),
             )
             db.add(pos)
 
+        leistungszeitraum_aus_positionen(rechnung, data.positionen)  # Issue #594
         db.flush()
         db.expire(rechnung, ["positionen"])
         _synchronisiere_abschlagsverrechnung(rechnung, alte_abschlag_ids, db)
@@ -1962,6 +1989,8 @@ def update_rechnung(rechnung_id: int, data: RechnungUpdate, db: Session = Depend
                 ),
             )
         rechnung.ist_entwurf = data.ist_entwurf
+        if war_entwurf and not data.ist_entwurf:
+            _nummer_beim_finalisieren(rechnung, db)  # Issue #465/#551
         # Lagerführung: Entwurf → Finalisiert (nur über diesen Pfad; /finalisieren bucht eigenständig)
         if war_entwurf and not data.ist_entwurf:
             db.flush()  # neue Positionen in DB schreiben bevor Relationship-Cache geleert wird
@@ -2133,6 +2162,7 @@ def finalisiere_rechnung(
                        + ", ".join(fehlend) + ". Bitte ergänzen und dann finalisieren.",
             )
 
+    _nummer_beim_finalisieren(rechnung, db)  # Issue #465/#551: erst jetzt aus dem Kreis
     rechnung.ist_entwurf = False
     rechnung.absender_snapshot = _absender_snapshot(db)
 
@@ -2210,7 +2240,7 @@ def setze_extern_erstellt(rechnung_id: int, data: ExternErstelltRequest, db: Ses
 
 
 @router.get("/{rechnung_id}/pdf")
-def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False, kopie: bool = False, nur_ansehen: bool = False, db: Session = Depends(get_db)):
+def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False, kopie: bool = False, nur_ansehen: bool = False, stornorechnung: bool = False, db: Session = Depends(get_db)):
     """PDF der Rechnung generieren und zurückgeben.
     Beim ersten Abruf wird die Rechnung automatisch als 'ausgegeben' markiert.
     Folge-Abrufe erhalten ein KOPIE-Banner.
@@ -2228,6 +2258,20 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                     headers={"Content-Disposition": f'inline; filename="{rechnung.rechnungsnummer or rechnung_id}_Original.pdf"', "Cache-Control": "no-store"},
                 )
         raise HTTPException(status_code=409, detail="Extern erstellte bzw. importierte Rechnung: PDF-Erzeugung ist gesperrt – maßgeblich ist das Original. Ein vorhandenes Original-PDF kann als Beleg angehängt werden.")
+
+    # Issue #591: Eingangsrechnung/Lieferantengutschrift - das Original ist das Dokument des
+    # Lieferanten. Statt einer Rechnungsvorlage (eigene Firma als Absender, eigene Bankdaten)
+    # ein internes Erfassungsblatt - ohne Archivierung, ohne „ausgegeben“, ohne KOPIE-Stempel.
+    # Ist ein Originalbeleg angehängt, zeigt die App diesen statt des Blatts.
+    if rechnung.typ == "eingang":
+        from utils.pdf_eingangsrechnung import erstelle_eingangsrechnung_erfassung
+        unt_obj = db.query(Unternehmen).first()
+        unt_daten = {c.name: getattr(unt_obj, c.name) for c in unt_obj.__table__.columns} if unt_obj else {}
+        nr = (rechnung.externe_belegnr or rechnung.rechnungsnummer or str(rechnung_id)).replace("/", "-").replace(" ", "_")
+        return Response(
+            content=erstelle_eingangsrechnung_erfassung(rechnung, unt_daten), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="Erfassung_{nr}.pdf"', "Cache-Control": "no-store"},
+        )
 
     # Absenderdaten: Snapshot hat Vorrang vor aktuellen Stammdaten (GoBD – finalisierte Dokumente sind unveränderlich)
     unternehmen = db.query(Unternehmen).first()
@@ -2257,6 +2301,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 "email":                   unternehmen.email or "",
                 "webseite":                unternehmen.webseite or "",
                 "iban":                    unternehmen.iban or "",
+                "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
                 "bic":                     unternehmen.bic or "",
                 "bank_name":               unternehmen.bank_name or "",
                 "logo_pfad":               unternehmen.logo_pfad or "",
@@ -2269,6 +2314,8 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
                 "anrede_fallback":            unternehmen.anrede_fallback or "",
                 "pdf_vorlage":                unternehmen.pdf_vorlage if unternehmen else 0,
                 "pdf_positionsnummern":               bool(unternehmen.pdf_positionsnummern),
+                "pdf_artikelnummer":               bool(unternehmen.pdf_artikelnummer),
+                "pdf_positionsdatum":              bool(unternehmen.pdf_positionsdatum),
                 "unterschrift_bild":          unternehmen.unterschrift_bild or "",
                 "unterschrift_auf_rechnung":  unternehmen.unterschrift_auf_rechnung or False,
                 "qr_zahlung_aktiv":           unternehmen.qr_zahlung_aktiv or False,
@@ -2401,8 +2448,9 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
     if nur_ansehen:
         darf_archiviert = False  # kein Archiv, kein Kopie-Stempel, kein Status-Touch
 
-    # Stornierte Rechnung: "Ansehen" zeigt immer das Original vor dem Storno
-    if nur_ansehen and _ist_storno_pdf:
+    # Stornierte Rechnung: "Ansehen" zeigt das Original vor dem Storno, mit stornorechnung=true
+    # die Stornorechnung selbst (Issue #595) - frisch erzeugt wie beim Drucken, ohne Archiv
+    if nur_ansehen and _ist_storno_pdf and not stornorechnung:
         if rechnung.original_pdf_pfad:
             orig_pfad = APP_DATA_DIR / rechnung.original_pdf_pfad
             if orig_pfad.exists():
@@ -2498,16 +2546,15 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
         # die PDF bleibt reine Sichtkopie (sonst lägen zwei Originale vor)
         and not ist_oeffentlicher_auftraggeber(rechnung)
     )
+    vorlage_nr = vorlage if vorlage >= 0 else int(unt_dict.get("pdf_vorlage") or 0)
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto)
+            pdf_bytes = generate_zugferd_pdf(rechnung, unt_dict, ist_netto=ist_netto, vorlage=vorlage_nr)
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("ZUGFeRD-Generierung fehlgeschlagen: %s", e, exc_info=True)
             kunde_zugferd = False
-            pdf_bytes = generate_rechnung_pdf(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
-    else:
-        vorlage_nr = vorlage if vorlage >= 0 else int(unt_dict.get("pdf_vorlage") or 0)
+    if not kunde_zugferd:
         if vorlage_nr == 1:
             pdf_bytes = generate_rechnung_pdf_vorlage1(rechnung, unt_dict, ist_kopie=False, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
         else:
@@ -2549,7 +2596,7 @@ def rechnung_als_pdf(rechnung_id: int, vorlage: int = -1, download: bool = False
 
 
 @router.get("/{rechnung_id}/pdf-ansehen", response_class=HTMLResponse)
-def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db)):
+def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db), stornorechnung: bool = False):
     """Liefert die Nur-Ansicht-Hülle (Titelleiste, Drucken/Speichern per Tastenkürzel
     blockiert) als echte HTML-Seite statt der bisherigen blob:-URL im Frontend (Issue #371:
     eine blob:-URL, in einem Fenster erzeugt, kann von einem separaten nativen
@@ -2559,7 +2606,9 @@ def rechnung_pdf_ansehen_wrapper(rechnung_id: int, db: Session = Depends(get_db)
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
-    titel = html.escape(rechnung.rechnungsnummer or "Dokument")
+    storno = bool(stornorechnung and rechnung.storniert)
+    titel = html.escape((rechnung.storno_rechnungsnummer if storno else None) or rechnung.rechnungsnummer or "Dokument")
+    query = "nur_ansehen=true&stornorechnung=true" if storno else "nur_ansehen=true"
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -2589,7 +2638,7 @@ iframe {{
 </head>
 <body>
 <div class="titelleiste">{titel} – nur zur Ansicht</div>
-<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', 'nur_ansehen=true'))}"></iframe></div>
+<div class="viewer"><iframe src="{html.escape(sitzungstoken.signiere(f'/api/rechnungen/{rechnung_id}/pdf', query))}"></iframe></div>
 <script>
 document.addEventListener('keydown', function(e) {{
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's')) {{
@@ -2742,6 +2791,7 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         "email":                   unternehmen.email or "",
         "webseite":                unternehmen.webseite or "",
         "iban":                    unternehmen.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
         "bic":                     unternehmen.bic or "",
         "bank_name":               unternehmen.bank_name or "",
         "logo_pfad":               unternehmen.logo_pfad or "",
@@ -2754,6 +2804,8 @@ def rechnung_als_zugferd(rechnung_id: int, db: Session = Depends(get_db)):
         "anrede_fallback":         unternehmen.anrede_fallback or "",
         "pdf_vorlage":             unternehmen.pdf_vorlage if unternehmen else 0,
         "pdf_positionsnummern":            bool(unternehmen.pdf_positionsnummern),
+        "pdf_artikelnummer":            bool(unternehmen.pdf_artikelnummer),
+        "pdf_positionsdatum":           bool(unternehmen.pdf_positionsdatum),
         "unterschrift_bild":       unternehmen.unterschrift_bild or "",
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "qr_zahlung_aktiv":        unternehmen.qr_zahlung_aktiv or False,
@@ -2856,6 +2908,87 @@ def rechnung_als_xrechnung(rechnung_id: int, db: Session = Depends(get_db)):
     )
 
 
+# ---------------------------------------------------------------------------
+# Issue #598: lesbare Ansicht von E-Rechnungen (XRechnung/ZUGFeRD-XML als PDF)
+# ---------------------------------------------------------------------------
+
+def einvoice_ansicht_antwort(daten: bytes, dateiname: str, quelle: str = "") -> Response:
+    """PDF der lesbaren Ansicht – inline (openUrl → Anzeigefenster, CLAUDE.md)."""
+    from utils.einvoice_ansicht import KeineEInvoice, ansicht_pdf
+    try:
+        pdf = ansicht_pdf(daten, quelle)
+    except KeineEInvoice as e:
+        raise HTTPException(422, str(e))
+    name = re.sub(r"[^\w.\-]+", "_", dateiname) or "E-Rechnung"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{name}_Ansicht.pdf"', "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/{rechnung_id}/xrechnung/ansicht")
+def eigene_einvoice_ansicht(rechnung_id: int, db: Session = Depends(get_db)):
+    """Eigene Ausgangsrechnung: was steht in der E-Rechnung? Vorrang hat, was tatsächlich
+    verschickt wurde (archivierte XRechnung, sonst die XML im Original-PDF); sonst der aktuelle
+    Stand, ohne etwas zu archivieren."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not rechnung:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if rechnung.typ != "ausgang" or rechnung.import_quelle:
+        raise HTTPException(400, "Die Ansicht gibt es nur für in RechnungsFee erstellte Ausgangsrechnungen.")
+    nr = rechnung.rechnungsnummer or f"Entwurf_{rechnung.id}"
+    for rel, quelle in ((rechnung.original_xml_pfad, "archivierte XRechnung (so versendet)"),
+                        (rechnung.original_pdf_pfad, "aus dem versendeten PDF")):
+        if rel and (APP_DATA_DIR / rel).is_file():
+            daten = (APP_DATA_DIR / rel).read_bytes()
+            if daten[:4] == b"%PDF":
+                try:
+                    return einvoice_ansicht_antwort(daten, nr, quelle)
+                except HTTPException:
+                    continue  # PDF ohne eingebettete XML (z. B. vor ZUGFeRD) → frisch erzeugen
+            return einvoice_ansicht_antwort(daten, nr, quelle)
+    if rechnung.absender_snapshot:
+        try:
+            unt_dict = json.loads(rechnung.absender_snapshot)
+        except (json.JSONDecodeError, ValueError):
+            unt_dict = {}
+    else:
+        u = db.query(Unternehmen).first()
+        unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
+    from utils.zugferd import generate_zugferd_xml
+    try:
+        xml_bytes = generate_zugferd_xml(rechnung, unt_dict)
+    except Exception as e:  # noqa: BLE001 – Entwurf mit fehlenden Angaben
+        raise HTTPException(422, f"Die E-Rechnung lässt sich noch nicht erzeugen: {e}")
+    quelle = "Vorschau des Entwurfs" if rechnung.ist_entwurf else "aktueller Stand (noch nicht versendet)"
+    return einvoice_ansicht_antwort(xml_bytes, nr, quelle)
+
+
+@router.get("/{rechnung_id}/beleg/ansicht")
+def beleg_einvoice_ansicht(rechnung_id: int, db: Session = Depends(get_db)):
+    """Angehängter Beleg (z. B. XRechnung eines Lieferanten) als lesbare Ansicht."""
+    rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first() if rechnung and rechnung.beleg_id else None
+    if not beleg:
+        raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
+    pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+    if not pfad.is_file():
+        raise HTTPException(status_code=404, detail="Beleg-Datei nicht gefunden.")
+    return einvoice_ansicht_antwort(pfad.read_bytes(), Path(beleg.original_name).stem, beleg.original_name)
+
+
+@router.get("/temp/{token}/ansicht")
+def temp_einvoice_ansicht(token: str):
+    """Importdialog: hochgeladene Datei (XML oder ZUGFeRD-PDF) als lesbare Ansicht."""
+    if not re.fullmatch(r"[0-9a-f\-]{36}", token):
+        raise HTTPException(status_code=404)
+    for ext in (".xml", ".pdf"):
+        pfad = TEMP_DIR / f"{token}{ext}"
+        if pfad.exists():
+            return einvoice_ansicht_antwort(pfad.read_bytes(), "Import")
+    raise HTTPException(status_code=404)
+
+
 @router.delete("/{rechnung_id}", status_code=204)
 def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
@@ -2884,6 +3017,13 @@ def delete_rechnung(rechnung_id: int, db: Session = Depends(get_db)):
         or rechnung.proforma_zu_auftrag_id
     ):
         raise HTTPException(status_code=409, detail="Auftrag kann nicht gelöscht werden, da bereits Dokumente daraus erstellt wurden.")
+    if (ist_angebot or ist_auftrag) and db.query(Rechnung.id).filter(
+        Rechnung.abschlag_zu_dokument_id == rechnung_id
+    ).first():
+        raise HTTPException(  # Issue #597
+            status_code=409,
+            detail=f"{rechnung.dokument_typ} kann nicht gelöscht werden, da bereits Abschlagsrechnungen daraus erstellt wurden.",
+        )
     # FK-Rückverweise zurücksetzen
     db.query(Rechnung).filter(Rechnung.lieferschein_zu_rechnung_id == rechnung_id).update(
         {"lieferschein_zu_rechnung_id": None}
@@ -2977,10 +3117,10 @@ def _beleg_loeschen_wenn_unbenutzt(beleg_id: int, db: Session, basis: Path | Non
     basis: Verzeichnis, relativ zu dem beleg.dateiname gespeichert ist - Standard uploads/,
     Buchungsvorlagen legen ihre Belege abweichend relativ zu uploads/belege/ ab."""
     from database.models import (
-        Buchungsvorlage, DokumentenPaketBeleg, KundeBeleg, Rechnungsvorlage, RechnungZugferdAnhang,
+        Buchungsvorlage, DokumentenPaketBeleg, JournalAnhang, KundeBeleg, Rechnungsvorlage, RechnungZugferdAnhang,
     )
-    for modell in (Rechnung, Journaleintrag, RechnungZugferdAnhang, KundeBeleg, DokumentenPaketBeleg,
-                   Rechnungsvorlage, Buchungsvorlage):
+    for modell in (Rechnung, Journaleintrag, JournalAnhang, RechnungZugferdAnhang, KundeBeleg,
+                   DokumentenPaketBeleg, Rechnungsvorlage, Buchungsvorlage):
         if db.query(modell).filter(modell.beleg_id == beleg_id).first():
             return []
     beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
@@ -3136,6 +3276,23 @@ def ausgangs_positionskategorien_aktiv(rechnung: "Rechnung") -> bool:
     return any(p.kategorie_id for p in rechnung.positionen)
 
 
+def _pruefe_rechnungsnummer_frei(
+    typ: str, rechnungsnummer: str, db: Session, ausser_id: Optional[int] = None,
+) -> None:
+    """Issue #554: Eine von Hand eingegebene Nummer darf nicht schon vergeben sein
+    (je Richtung ausgang/eingang, wie bei der Dubletten-Bereinigung in Migration 166)."""
+    q = db.query(Rechnung.id).filter(
+        Rechnung.typ == typ, Rechnung.rechnungsnummer == rechnungsnummer,
+    )
+    if ausser_id is not None:
+        q = q.filter(Rechnung.id != ausser_id)
+    if q.first():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Die Nummer {rechnungsnummer} ist bereits vergeben. Bitte wähle eine andere Nummer.",
+        )
+
+
 def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> None:
     """Issue #567: Positionskategorien einer Ausgangsrechnung nach dem Speichern prüfen.
     Nur Erlös-Kategorien (ohne USt-Sonderfall) sind zulässig; bei einem Sonderfall
@@ -3170,7 +3327,25 @@ def _pruefe_ausgangs_positionskategorien(rechnung: "Rechnung", db: Session) -> N
             )
 
 
-def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool):
+def _gebucht_je_kategorie_gruppe(
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
+) -> dict[tuple, Decimal]:
+    """Issue #567-Folgefund: bereits gebuchte Zahlungen je Gruppe (satz, False, kategorie_id) –
+    Storno-Gegenbuchungen tragen dieselbe rechnung_id und heben sich dadurch auf. Skonto- und
+    Mahngebühr-Buchungen laufen auf eigenen Kategorien und zählen hier nicht mit."""
+    gebucht: dict[tuple, Decimal] = {}
+    for e in db.query(Journaleintrag).filter(
+        Journaleintrag.rechnung_id == rechnung.id, Journaleintrag.art == "Einnahme",
+    ):
+        s = 0 if ist_kleinunternehmer else int(e.ust_satz or 0)
+        key = (s, False, e.kategorie_id)
+        gebucht[key] = gebucht.get(key, Decimal("0")) + (e.brutto_betrag or Decimal("0"))
+    return gebucht
+
+
+def _kategorie_buchungsgruppen(
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool, nach_offenem: bool = False,
+):
     """Issue #567: Buchungsgruppen je (USt-Satz, Kategorie) für Ausgangsrechnungen mit eigenen
     Positionskategorien. Positionen ohne Kategorie bekommen die automatische Erlös-Kategorie
     (_erloes_kategorie(), bei Kleinunternehmern „Betriebseinnahmen (Kleinunternehmer)“).
@@ -3196,13 +3371,25 @@ def _kategorie_buchungsgruppen(db: Session, rechnung: "Rechnung", ist_kleinunter
 
     # Gruppen ohne Betrag (z. B. Position + gleich hohe Minusposition) erzeugen keine 0-€-Buchung
     gruppen_brutto = {k: v for k, v in gruppen_brutto.items() if v != 0} or gruppen_brutto
-    gesamt = sum(gruppen_brutto.values()) or Decimal("1")
     gruppen_keys = sorted(gruppen_brutto, key=lambda k: (k[0], k[2] or 0))
     satz_summen: dict[int, Decimal] = {}
     for k, v in gruppen_brutto.items():
         satz_summen[k[0]] = satz_summen.get(k[0], Decimal("0")) + v
     ust_satz = Decimal(str(max(satz_summen, key=lambda s: satz_summen[s])))
-    satz_ratios = [(k[0], gruppen_brutto[k] / gesamt) for k in gruppen_keys]
+
+    # Issue #567-Folgefund (Markus): eine weitere Teilzahlung wird nach dem noch OFFENEN Betrag
+    # je Kategorie verteilt, nicht erneut nach dem Rechnungsanteil - sonst bekommt eine bereits
+    # voll bezahlte Kategorie wieder einen Anteil und der anderen fehlt er. Nur bei rein
+    # positiven Gruppen (Gruppen mit Minusbetrag, z. B. verrechnete Abschläge, behalten die
+    # bisherige Verteilung).
+    anteile = gruppen_brutto
+    if nach_offenem and all(v > 0 for v in gruppen_brutto.values()):
+        gebucht = _gebucht_je_kategorie_gruppe(db, rechnung, ist_kleinunternehmer)
+        offen = {k: max(v - gebucht.get(k, Decimal("0")), Decimal("0")) for k, v in gruppen_brutto.items()}
+        if sum(offen.values()) > 0:
+            anteile = offen
+    gesamt = sum(anteile.values()) or Decimal("1")
+    satz_ratios = [(k[0], anteile[k] / gesamt) for k in gruppen_keys]
     return satz_ratios, ust_satz, True, gruppen_keys, gruppen_kategorie, {}, gruppen_brutto
 
 
@@ -3216,7 +3403,7 @@ def _satz_ratios_je_satz(satz_ratios: list[tuple[int, Decimal]]) -> list[tuple[i
 
 
 def _ausgangs_buchungsgruppen(
-    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool,
+    db: Session, rechnung: "Rechnung", ist_kleinunternehmer: bool, nach_offenem: bool = False,
 ) -> tuple[
     list[tuple[int, Decimal]], Decimal, bool, list[tuple[int, bool]],
     dict[tuple[int, bool], tuple[int | None, "Kategorie | None"]],
@@ -3240,7 +3427,7 @@ def _ausgangs_buchungsgruppen(
     # normalen Leistungen) - eigener Gruppierungsweg, alle anderen Rechnungen laufen
     # unverändert durch den Code darunter.
     if ausgangs_positionskategorien_aktiv(rechnung):
-        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer)
+        return _kategorie_buchungsgruppen(db, rechnung, ist_kleinunternehmer, nach_offenem)
 
     satz_ratios: list[tuple[int, Decimal]] = [(0, Decimal("1"))]
     gruppen_keys: list[tuple[int, bool]] = []
@@ -3376,6 +3563,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         )
 
     ist_gutschrift = getattr(rechnung, "dokument_typ", "Rechnung") == "Gutschrift"
+    # Issue #470: „Privat bezahlt“ nur für die Zahlung einer Eingangsrechnung (Betriebsausgabe aus
+    # privaten Mitteln = Einlage), nicht für Ausgangsrechnungen oder Erstattungen
+    if data.zahlungsart == "Privat" and (rechnung.typ != "eingang" or ist_gutschrift or rechnung.brutto_gesamt < 0):
+        raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur beim Bezahlen einer Eingangsrechnung.")
     # Issue #419 Phase 2b: eine Schlussrechnung kann durch Abschlags-Verrechnung einen
     # negativen Gesamtbetrag haben (Kunde hat de facto ein Guthaben) - fachlich dieselbe
     # Erstattungs-Situation wie eine Gutschrift (Geld fließt an den Kunden zurück statt
@@ -3488,7 +3679,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
         (
             satz_ratios, ust_satz, hat_gemischte_25a, gruppen_keys,
             gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
-        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku, nach_offenem=True)
 
         ust_gruppen = _verteile_nach_satz(betrag, satz_ratios, art)
         if data.skonto_betrag and data.skonto_betrag > 0:
@@ -3822,6 +4013,10 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
     # nachgebucht wird (siehe Lücke oben) - dann keinen sinnlosen 0-€-Journaleintrag erzeugen.
     if betrag > Decimal("0.004"):
         for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+            # Issue #567-Folgefund (Markus): eine bereits voll bezahlte Kategorie bekommt 0 € -
+            # dafür keine 0-€-Buchung anlegen (ließ sich danach über „Zahlung korrigieren“ erhöhen)
+            if g_betrag == 0 and len(ust_gruppen) > 1:
+                continue
             # Bei gemischten Rechnungen (§25a + regulär) bekommt jede Gruppe ihre eigene
             # Kategorie und Marge statt der einen Rechnungs-weiten Kategorie/Marge (Issue #305).
             if hat_gemischte_25a and i < len(gruppen_keys):
@@ -3838,7 +4033,7 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
             e = _erstelle_eintrag(g_kat_id, g_kat_obj, g_betrag, beschreibung, g_satz, g_ust_skr03, g_ust_skr04,
                                   marge_25a=g_marge_anteil)
             db.add(e)
-            if i == 0:
+            if erster_eintrag is None:
                 erster_eintrag = e
     eintrag = erster_eintrag
 
@@ -3885,13 +4080,20 @@ def zahlung_bar_erstellen(rechnung_id: int, data: BarZahlungCreate, db: Session 
 class ZahlungKorrigieren(BaseModel):
     neues_datum: date
     neuer_betrag: Decimal | None = None  # None = Betrag unverändert
+    # Issue #576: None = Zahlungsart unverändert
+    neue_zahlungsart: Literal["Bar", "Karte", "Bank", "PayPal", "Privat"] | None = None  # Privat: Issue #470
 
 
 @router.put("/{rechnung_id}/zahlung/{journal_id}/korrigieren", response_model=RechnungResponse)
 def zahlung_korrigieren(
     rechnung_id: int, journal_id: int, data: ZahlungKorrigieren, db: Session = Depends(get_db),
 ):
-    """Korrigiert Datum und/oder Betrag einer einzelnen Zahlungsbuchung (Issue #261).
+    """Korrigiert Datum, Betrag und/oder Zahlungsart einer einzelnen Zahlungsbuchung
+    (Issue #261, Zahlungsart Issue #576).
+
+    Zahlungsart: das Storno läuft immer mit der ALTEN Zahlungsart, die Neubuchung mit der
+    neuen - eine versehentlich als Bar gebuchte Kartenzahlung nimmt den Betrag dadurch wieder
+    aus der Kasse (Ausgabe: gibt ihn zurück), die Neubuchung berührt die Kasse nicht.
 
     Rechnungsbuchungen sind immer immutable=True (kein Korrekturfenster wie im Journal
     möglich, s. journal.py update_eintrag) – jede Korrektur läuft daher über Storno +
@@ -3925,10 +4127,16 @@ def zahlung_korrigieren(
             detail="§25a-Differenzbesteuerungs-Buchungen können hier nicht korrigiert werden – bitte stornieren und neu buchen.",
         )
 
-    if data.neuer_betrag is not None and data.neuer_betrag != abs(e.brutto_betrag):
+    # Betrag 0 = Zahlung zurücknehmen: nur das Storno, keine Neubuchung (Issue #567-Folgefund -
+    # eine falsch erfasste Zahlung ließ sich bisher gar nicht zurücknehmen)
+    nur_storno = data.neuer_betrag is not None and data.neuer_betrag.quantize(Decimal("0.01"), ROUND_HALF_UP) == 0
+    if nur_storno and e.brutto_betrag == 0:
+        raise HTTPException(status_code=409, detail="Diese Buchung hat bereits 0 € – da gibt es nichts zurückzunehmen.")
+
+    if not nur_storno and data.neuer_betrag is not None and data.neuer_betrag != abs(e.brutto_betrag):
         neuer_brutto_abs = data.neuer_betrag.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        if neuer_brutto_abs <= 0:
-            raise HTTPException(status_code=422, detail="Betrag muss größer als 0 sein.")
+        if neuer_brutto_abs < 0:
+            raise HTTPException(status_code=422, detail="Betrag darf nicht negativ sein.")
 
         # Verfügbarer Restbetrag inkl. des Betrags, der gerade ersetzt wird
         restbetrag_ohne_diese = abs(rechnung.brutto_gesamt) - (abs(rechnung.bezahlt_betrag) - abs(e.brutto_betrag))
@@ -3937,17 +4145,30 @@ def zahlung_korrigieren(
                 status_code=422,
                 detail=f"Betrag ({neuer_brutto_abs} €) übersteigt den verfügbaren Restbetrag ({restbetrag_ohne_diese:.2f} €).",
             )
-        if e.zahlungsart == "Bar" and e.art == "Ausgabe" and neuer_brutto_abs > abs(e.brutto_betrag):
-            einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-                Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
-            ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
-                Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
-            kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
-            mehrbetrag = neuer_brutto_abs - abs(e.brutto_betrag)
-            if mehrbetrag > kassenstand:
-                raise HTTPException(status_code=409,
-                    detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, zusätzlich benötigt: {mehrbetrag:.2f} €.")
-
+        # Issue #567-Folgefund (Markus): bei Kategorie je Position darf eine Kategorie nicht
+        # mehr bekommen als ihre Positionen ausmachen (bisher nur Prüfung der Rechnungssumme).
+        if (
+            rechnung.typ == "ausgang" and e.art == "Einnahme" and e.brutto_betrag >= 0  # auch 0-€-Altbuchungen
+            and neuer_brutto_abs > e.brutto_betrag
+            and ausgangs_positionskategorien_aktiv(rechnung)
+        ):
+            _unt = db.query(Unternehmen).first()
+            _ku = bool(_unt and _unt.ist_kleinunternehmer)
+            _, _, _, _, _gk, _, _gb = _kategorie_buchungsgruppen(db, rechnung, _ku)
+            _key = (0 if _ku else int(e.ust_satz or 0), False, e.kategorie_id)
+            if _key in _gb:
+                _gebucht = _gebucht_je_kategorie_gruppe(db, rechnung, _ku).get(_key, Decimal("0"))
+                _frei = _gb[_key] - (_gebucht - e.brutto_betrag)
+                if neuer_brutto_abs > _frei:
+                    _kat = _gk[_key][1]
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Betrag ({neuer_brutto_abs} €) übersteigt den Anteil der Kategorie "
+                            f"„{_kat.name if _kat else 'automatisch'}“ auf dieser Rechnung "
+                            f"(noch {max(_frei, Decimal('0')):.2f} € möglich)."
+                        ),
+                    )
         neuer_brutto = neuer_brutto_abs if e.brutto_betrag >= 0 else -neuer_brutto_abs
         if e.ust_satz > 0:
             neuer_netto = (neuer_brutto_abs * 100 / (100 + e.ust_satz)).quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -3960,6 +4181,34 @@ def zahlung_korrigieren(
     else:
         neuer_brutto, neuer_netto, neuer_ust, neue_vorsteuer = e.brutto_betrag, e.netto_betrag, e.ust_betrag, e.vorsteuer_betrag
 
+    # Issue #576: Zahlungsart wechseln
+    neue_zahlungsart = e.zahlungsart if nur_storno else (data.neue_zahlungsart or e.zahlungsart)
+    if neue_zahlungsart != e.zahlungsart:
+        if e.zahlungsart not in ("Bar", "Karte", "Bank", "PayPal", "Privat"):
+            raise HTTPException(status_code=409, detail=f"Bei einer Buchung mit Zahlungsart „{e.zahlungsart}“ lässt sich die Zahlungsart nicht ändern.")
+        if neue_zahlungsart == "Privat" and e.art != "Ausgabe":
+            raise HTTPException(status_code=422, detail="„Privat bezahlt“ gibt es nur bei Ausgaben.")
+        if db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).first():
+            raise HTTPException(
+                status_code=409,
+                detail="Diese Zahlung stammt aus dem Bank-Import – die Zahlungsart lässt sich hier nicht ändern. "
+                       "Hebe die Verknüpfung im Bank-Import auf, wenn die Zuordnung falsch war.",
+            )
+
+    # Bar-Ausgabe: Kasse muss den Betrag hergeben - beim Wechsel auf Bar der volle Betrag,
+    # sonst nur ein Mehrbetrag. Das Storno der alten Bar-Buchung gibt ihren Betrag zurück.
+    if neue_zahlungsart == "Bar" and e.art == "Ausgabe":
+        benoetigt = abs(neuer_brutto) - (abs(e.brutto_betrag) if e.zahlungsart == "Bar" else Decimal("0"))
+        if benoetigt > 0:
+            einnahmen = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Einnahme", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            ausgaben = db.query(func.sum(Journaleintrag.brutto_betrag)).filter(
+                Journaleintrag.art == "Ausgabe", Journaleintrag.zahlungsart == "Bar").scalar() or Decimal("0")
+            kassenstand = Decimal(str(einnahmen)) - Decimal(str(ausgaben))
+            if benoetigt > kassenstand:
+                raise HTTPException(status_code=409,
+                    detail=f"Kassenstand nicht ausreichend. Aktueller Kassenstand: {kassenstand:.2f} €, zusätzlich benötigt: {benoetigt:.2f} €.")
+
     # Storno-Datum = Datum der Originalbuchung, nicht heute (wie journal.py, Issue #320):
     # korrigiert wird eine fehlerhafte Erfassung, kein Geldfluss von heute - sonst bliebe der
     # alte Betrag im Ursprungszeitraum (EÜR-Jahr, UStVA) stehen.
@@ -3971,7 +4220,7 @@ def zahlung_korrigieren(
     storno = Journaleintrag(
         datum=storno_datum,
         belegnr=_naechste_belegnr_journal(db, storno_datum),
-        beschreibung=f"STORNO {e.belegnr}: Korrektur",
+        beschreibung=f"STORNO {e.belegnr}: " + ("Zahlung zurückgenommen" if nur_storno else "Korrektur"),
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
         konto_ust_skr03=e.konto_ust_skr03, konto_ust_skr04=e.konto_ust_skr04,
@@ -3985,6 +4234,16 @@ def zahlung_korrigieren(
     storno.signatur = signatur_journaleintrag(storno)
     db.add(storno)
 
+    if nur_storno:
+        db.flush()
+        # Bank-Transaktion wird wieder offen und kann neu zugeordnet werden
+        db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).update({"journal_id": None})
+        db.expire(rechnung, ["journaleintraege"])
+        _aktualisiere_zahlungsstatus(rechnung)
+        db.commit()
+        db.refresh(rechnung)
+        return RechnungResponse.from_orm_extended(rechnung)
+
     neu = Journaleintrag(
         datum=data.neues_datum,
         belegnr=_naechste_belegnr_journal(db, data.neues_datum),
@@ -3992,18 +4251,24 @@ def zahlung_korrigieren(
         kategorie_id=e.kategorie_id,
         konto_skr03=e.konto_skr03, konto_skr04=e.konto_skr04,
         konto_ust_skr03=e.konto_ust_skr03, konto_ust_skr04=e.konto_ust_skr04,
-        zahlungsart=e.zahlungsart, art=e.art,
+        zahlungsart=neue_zahlungsart, art=e.art,
         netto_betrag=neuer_netto, ust_satz=e.ust_satz, ust_betrag=neuer_ust,
         vorsteuer_betrag=neue_vorsteuer, brutto_betrag=neuer_brutto,
         vorsteuerabzug=e.vorsteuerabzug,
         steuerbefreiung_grund=e.steuerbefreiung_grund,
         ist_ig_erwerb=e.ist_ig_erwerb, ust_sonderfall=e.ust_sonderfall,
         rechnung_id=rechnung_id, gruppe_id=e.gruppe_id or e.id, immutable=True,
+        # Issue #576-Nebenfund: Kunde/Lieferant/Bankkonto gingen bei der Korrektur verloren
+        # (DATEV-Gegenkonto bei Zahlungen aus dem Bank-Import); Konto nur bei gleicher Zahlungsart
+        kunde_id=e.kunde_id, lieferant_id=e.lieferant_id,
+        konto_id=e.konto_id if neue_zahlungsart == e.zahlungsart else None,
     )
     neu.signatur = signatur_journaleintrag(neu)
     db.add(neu)
 
     db.flush()
+    # Bank-Verknüpfung wandert mit auf die Neubuchung (wie journal.py, Issue #322)
+    db.query(BankTransaktion).filter(BankTransaktion.journal_id == e.id).update({"journal_id": neu.id})
     db.expire(rechnung, ["journaleintraege"])
     _aktualisiere_zahlungsstatus(rechnung)
     db.commit()
@@ -4177,6 +4442,63 @@ def storno_rechnung(rechnung_id: int, data: StornoRequest, db: Session = Depends
     return RechnungResponse.from_orm_extended(rechnung)
 
 
+@router.post("/{rechnung_id}/duplizieren", response_model=RechnungResponse, status_code=201)
+def rechnung_duplizieren(rechnung_id: int, mit_positionen: bool = True, db: Session = Depends(get_db)):
+    """Issue #560: neue Rechnung (Entwurf) nach dem Muster einer bestehenden - für Kunden mit
+    unregelmäßig wiederkehrenden Leistungen. Datum/Leistungsdatum heute, Nummer und Fälligkeit
+    wie bei einer neuen Rechnung; Kunde, Adressen, Texte, Steuerfall, Skonto, Rabatt und
+    Erfassungsmodus übernommen, Positionen auf Wunsch. Nicht übernommen: Bestellnummer,
+    E-Rechnungs-Bemerkung, Notizen, Zahlungen, Anhänge (gehören zur alten Rechnung).
+    Läuft über create_rechnung() - Berechnung, Kategorieprüfung und Nummernkreis unverändert."""
+    quelle = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
+    if not quelle:
+        raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if quelle.typ != "ausgang" or (quelle.dokument_typ or "Rechnung") != "Rechnung":
+        raise HTTPException(status_code=422, detail="Duplizieren ist nur für Ausgangsrechnungen möglich.")
+
+    positionen = []
+    if mit_positionen:
+        for p in sorted(quelle.positionen, key=lambda p: p.position_nr or 0):
+            if p.abschlag_rechnung_id:
+                continue  # verrechnete Abschläge gehören zur alten Schlussrechnung
+            positionen.append(RechnungspositionCreate(
+                beschreibung=p.beschreibung, menge=p.menge, einheit=p.einheit or "Stück",
+                netto=p.netto, rabatt_prozent=p.rabatt_prozent or Decimal("0"),
+                # §25a speichert in ust_satz 0, der echte Satz steht in ust_satz_25a
+                ust_satz=(p.ust_satz_25a if p.differenzbesteuerung and p.ust_satz_25a is not None else p.ust_satz),
+                artikel_id=p.artikel_id, kategorie_id=p.kategorie_id,
+                differenzbesteuerung=bool(p.differenzbesteuerung),
+            ))
+    if not positionen:
+        # Eine Rechnung braucht mindestens eine Position - leere Zeile zum Ausfüllen, Steuersatz
+        # wie die erste Position der Vorlage
+        erste = next((p for p in quelle.positionen if not p.abschlag_rechnung_id), None)
+        positionen = [RechnungspositionCreate(
+            beschreibung="", menge=Decimal("1"), netto=Decimal("0"),
+            ust_satz=erste.ust_satz if erste is not None else Decimal("19"),
+        )]
+
+    heute = date.today()
+    return create_rechnung(RechnungCreate(
+        typ="ausgang", dokument_typ="Rechnung", ist_entwurf=True,
+        datum=heute, leistung_von=heute,
+        faellig_am=_faelligkeit_vorgabe(db, heute),
+        kunde_id=quelle.kunde_id,
+        partner_freitext=quelle.partner_freitext, partner_strasse=quelle.partner_strasse,
+        partner_hausnummer=quelle.partner_hausnummer, partner_plz=quelle.partner_plz,
+        partner_ort=quelle.partner_ort, partner_land=quelle.partner_land,
+        empfaenger_adresse_id=quelle.empfaenger_adresse_id, lieferadresse_id=quelle.lieferadresse_id,
+        einleitungstext=quelle.einleitungstext, schlusstext=quelle.schlusstext,
+        eingabemodus=quelle.eingabemodus or "netto",
+        ist_reverse_charge=bool(quelle.ist_reverse_charge), ist_eu_lieferung=bool(quelle.ist_eu_lieferung),
+        ist_drittland_leistung=bool(quelle.ist_drittland_leistung),
+        ist_ausfuhrlieferung=bool(quelle.ist_ausfuhrlieferung), steuerfrei_4=bool(quelle.steuerfrei_4),
+        skonto_prozent=quelle.skonto_prozent, skonto_tage=quelle.skonto_tage,
+        rabatt_prozent=quelle.rabatt_prozent or Decimal("0"), rabatt_betrag=quelle.rabatt_betrag,
+        positionen=positionen,
+    ), db)
+
+
 @router.post("/{rechnung_id}/ersatzrechnung", response_model=RechnungResponse, status_code=201)
 def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
     """Erstellt aus einer stornierten Ausgangsrechnung eine neue Ersatzrechnung (Entwurf).
@@ -4187,6 +4509,8 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
     original = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    if original.typ == "eingang":
+        return _korrigierte_eingangsrechnung(original, db)
     if original.typ != "ausgang":
         raise HTTPException(status_code=409, detail="Ersatzrechnungen sind nur für Ausgangsrechnungen möglich.")
     if original.dokument_typ != "Rechnung":
@@ -4197,7 +4521,7 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Für diese Rechnung wurde bereits eine Ersatzrechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -4266,10 +4590,72 @@ def ersatzrechnung_erstellen(rechnung_id: int, db: Session = Depends(get_db)):
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
             kategorie_id=pos.kategorie_id,
+            leistungsdatum=pos.leistungsdatum,
         ))
 
     original.ersatzrechnung_id = ersatz.id
     ersatz.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+    db.refresh(ersatz)
+    return RechnungResponse.from_orm_extended(ersatz)
+
+
+def _korrigierte_eingangsrechnung(original: Rechnung, db: Session) -> RechnungResponse:
+    """Issue #595: Nach dem Storno einer Eingangsrechnung die korrigierte Rechnung des
+    Lieferanten als Entwurf erfassen - Lieferant, Positionen und Kategorie aus dem Original,
+    Rechnungsnummer des Lieferanten, Datum und Beleg trägt man selbst ein. Verknüpfung wie bei
+    der Ersatzrechnung (ersatzrechnung_id / ersatz_fuer_rechnung_id), damit die Kette bleibt."""
+    if original.dokument_typ != "Rechnung":
+        raise HTTPException(status_code=409, detail="Nur für Eingangsrechnungen möglich, nicht für Lieferantengutschriften.")
+    if not original.storniert:
+        raise HTTPException(status_code=409, detail="Nur stornierte Eingangsrechnungen können ersetzt werden.")
+    if original.ersatzrechnung_id:
+        raise HTTPException(status_code=409, detail="Für diese Eingangsrechnung wurde bereits eine korrigierte Rechnung erfasst.")
+
+    ersatz = Rechnung(
+        typ="eingang",
+        dokument_typ="Rechnung",
+        rechnungsnummer=None,          # interne Nummer beim Finalisieren (Issue #465/#551)
+        externe_belegnr=None,          # neue Rechnungsnummer des Lieferanten
+        datum=date.today(),
+        leistung_von=original.leistung_von,
+        leistung_bis=original.leistung_bis,
+        lieferant_id=original.lieferant_id,
+        partner_freitext=original.partner_freitext,
+        partner_strasse=original.partner_strasse,
+        partner_hausnummer=original.partner_hausnummer,
+        partner_plz=original.partner_plz,
+        partner_ort=original.partner_ort,
+        partner_land=original.partner_land,
+        kategorie_id=original.kategorie_id,
+        notizen=original.notizen,
+        eingabemodus=original.eingabemodus,
+        rabatt_prozent=original.rabatt_prozent,
+        rabatt_betrag=original.rabatt_betrag,
+        skonto_prozent=original.skonto_prozent,
+        skonto_tage=original.skonto_tage,
+        ist_reverse_charge=original.ist_reverse_charge,
+        ist_entwurf=True,
+        bezahlt=False,
+        bezahlt_betrag=Decimal("0.00"),
+        zahlungsstatus="offen",
+        ersatz_fuer_rechnung_id=original.id,
+        netto_gesamt=original.netto_gesamt,
+        ust_gesamt=original.ust_gesamt,
+        brutto_gesamt=original.brutto_gesamt,
+    )
+    db.add(ersatz)
+    db.flush()
+    for pos in sorted(original.positionen, key=lambda p: p.position_nr):
+        db.add(Rechnungsposition(
+            rechnung_id=ersatz.id, artikel_id=pos.artikel_id, position_nr=pos.position_nr,
+            beschreibung=pos.beschreibung, menge=pos.menge, einheit=pos.einheit, netto=pos.netto,
+            rabatt_prozent=pos.rabatt_prozent, ust_satz=pos.ust_satz, ust_betrag=pos.ust_betrag,
+            brutto=pos.brutto, differenzbesteuerung=pos.differenzbesteuerung,
+            ek_netto_25a=pos.ek_netto_25a, ust_satz_25a=pos.ust_satz_25a, kategorie_id=pos.kategorie_id,
+            leistungsdatum=pos.leistungsdatum,
+        ))
+    original.ersatzrechnung_id = ersatz.id
     db.commit()
     db.refresh(ersatz)
     return RechnungResponse.from_orm_extended(ersatz)
@@ -4343,20 +4729,8 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
 
     heute = date.today()
 
-    # Rechnungsnummer aus eigenem Gutschrift-Nummernkreis
-    nk = db.query(Nummernkreis).filter(Nummernkreis.typ == "gutschrift").first()
-    if nk:
-        # Jahreswechsel-Reset nur vorwärts (Issue #426).
-        if nk.reset_jaehrlich and nk.letztes_jahr and heute.year > nk.letztes_jahr:
-            nk.naechste_nr = 1
-        if not nk.letztes_jahr or heute.year > nk.letztes_jahr:
-            nk.letztes_jahr = heute.year
-        nr = nk.naechste_nr
-        nk.naechste_nr += 1
-        rechnungsnummer = _belegnr_aus_format(nk.format, heute, nr)
-    else:
-        count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Gutschrift").count()
-        rechnungsnummer = f"GS-{str(heute.year)[-2:]}{count + 1:04d}"
+    # Issue #465/#551: Nummer aus dem Gutschrift-Kreis erst beim Finalisieren (_nummer_beim_finalisieren)
+    rechnungsnummer = None
 
     orig_nr = original.rechnungsnummer or f"#{original.id}"
 
@@ -4427,6 +4801,7 @@ def create_gutschrift(rechnung_id: int, db: Session = Depends(get_db)):
             differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
+            leistungsdatum=pos.leistungsdatum,
         )
         db.add(neue_pos)
         netto_sum += pos.netto * menge_neg
@@ -4632,12 +5007,37 @@ def get_rechnung_zahlungen(rechnung_id: int, db: Session = Depends(get_db)):
 # Beleg-Upload / Download / Löschen
 # ---------------------------------------------------------------------------
 
+# Dokumente ohne GoBD-Bindung - ihr Beleg bleibt jederzeit änderbar (Issue #575)
+BELEG_FREI_DOKUMENTTYPEN = ("Angebot", "Auftrag", "Proforma")
+
+
+def beleg_festgeschrieben(rechnung: Rechnung) -> bool:
+    """Issue #575: Der Beleg einer finalisierten Rechnung ist der archivierte Originalbeleg
+    (GoBD) - er darf weder gelöscht noch ersetzt werden. Entwürfe bleiben korrigierbar, ein
+    fehlender Beleg darf jederzeit nachgereicht werden."""
+    return (
+        rechnung.beleg_id is not None
+        and not rechnung.ist_entwurf
+        and rechnung.dokument_typ not in BELEG_FREI_DOKUMENTTYPEN
+    )
+
+
+def _pruefe_beleg_aenderbar(rechnung: Rechnung, aktion: str) -> None:
+    if beleg_festgeschrieben(rechnung):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Der Beleg dieser Rechnung ist festgeschrieben (GoBD) und kann nicht mehr {aktion} werden. "
+                   "Korrekturen laufen über ein Storno.",
+        )
+
+
 @router.post("/{rechnung_id}/beleg", response_model=BelegResponse, status_code=201)
 async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Session = Depends(get_db)):
     """Dateianhang (PDF/Bild) an eine Rechnung hängen."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung:
         raise HTTPException(status_code=404, detail="Rechnung nicht gefunden.")
+    _pruefe_beleg_aenderbar(rechnung, "ersetzt")
 
     mime = datei.content_type or ""
     if mime not in ERLAUBTE_MIME_TYPES:
@@ -4658,14 +5058,14 @@ async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Sess
 
     (ziel_dir / dateiname_lokal).write_bytes(inhalt)
 
-    # Alten Beleg ersetzen wenn vorhanden
+    # Alten Beleg ersetzen (nur Entwurf, s. o.) - Dateien erst nach dem Commit entfernen und nur,
+    # wenn den Beleg nichts anderes mehr verwendet (Issue #575)
+    alte_dateien: list[Path] = []
     if rechnung.beleg_id:
-        alter_beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
-        if alter_beleg:
-            alter_pfad = APP_DATA_DIR / "uploads" / alter_beleg.dateiname
-            if alter_pfad.exists():
-                alter_pfad.unlink()
-            db.delete(alter_beleg)
+        alte_id = rechnung.beleg_id
+        rechnung.beleg_id = None
+        db.flush()
+        alte_dateien = _beleg_loeschen_wenn_unbenutzt(alte_id, db)
 
     # PDF/A-Konvertierung: ZUGFeRD/XRechnung ist bereits PDF/A-3
     pdfa_pfad_rel: str | None = None
@@ -4690,6 +5090,7 @@ async def upload_beleg(rechnung_id: int, datei: UploadFile = File(...), db: Sess
     db.flush()
     rechnung.beleg_id = beleg.id
     db.commit()
+    _dateien_entfernen(alte_dateien)
     db.refresh(beleg)
 
     # Konvertierung zu PDF/A (asynchron im Hintergrundthread, blockiert Antwort nicht)
@@ -4759,18 +5160,17 @@ def download_beleg(
 
 @router.delete("/{rechnung_id}/beleg", status_code=204)
 def delete_beleg(rechnung_id: int, db: Session = Depends(get_db)):
-    """Beleg von einer Rechnung entfernen und Datei löschen."""
+    """Beleg von einer Rechnung entfernen und Datei löschen (nur Entwürfe, Issue #575)."""
     rechnung = db.query(Rechnung).filter(Rechnung.id == rechnung_id).first()
     if not rechnung or not rechnung.beleg_id:
         raise HTTPException(status_code=404, detail="Kein Beleg vorhanden.")
-    beleg = db.query(Beleg).filter(Beleg.id == rechnung.beleg_id).first()
+    _pruefe_beleg_aenderbar(rechnung, "gelöscht")
+    beleg_id = rechnung.beleg_id
     rechnung.beleg_id = None
-    if beleg:
-        pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
-        if pfad.exists():
-            pfad.unlink()
-        db.delete(beleg)
+    db.flush()
+    dateien = _beleg_loeschen_wenn_unbenutzt(beleg_id, db)
     db.commit()
+    _dateien_entfernen(dateien)
 
 
 # ---------------------------------------------------------------------------
@@ -4786,10 +5186,38 @@ class SammelrechnungCreate(BaseModel):
     notizen: Optional[str] = None
 
 
+def _skonto_vorgabe(db: Session, kunde_id: Optional[int]) -> tuple[Optional[Decimal], Optional[int]]:
+    """Issue #563: Skonto wie im Rechnungsformular - Kunde vor Unternehmens-Standard."""
+    if kunde_id:
+        k = db.query(Kunde).filter(Kunde.id == kunde_id).first()
+        if k and k.skonto_prozent is not None:
+            return k.skonto_prozent, k.skonto_tage
+    unt = db.query(Unternehmen).first()
+    if unt and unt.standard_skonto_prozent is not None:
+        return unt.standard_skonto_prozent, unt.standard_skonto_tage
+    return None, None
+
+
+def _faelligkeit_vorgabe(db: Session, datum: date) -> Optional[date]:
+    """Issue #563: Fälligkeit aus dem Standard-Zahlungsziel (0 = keine Vorgabe, wie Issue #411)."""
+    unt = db.query(Unternehmen).first()
+    tage = 14 if unt is None or unt.standard_zahlungsziel is None else int(unt.standard_zahlungsziel)
+    if tage == 0:
+        return None
+    from datetime import timedelta
+    return datum + timedelta(days=tage)
+
+
+def _setze_skonto_vorgabe(rechnung: "Rechnung", db: Session) -> None:
+    """Issue #563: bei Umwandlungen zur Rechnung Skonto vorbelegen, wenn die Quelle keins hat."""
+    if rechnung.skonto_prozent is None:
+        rechnung.skonto_prozent, rechnung.skonto_tage = _skonto_vorgabe(db, rechnung.kunde_id)
+
+
 def _lieferschein_zu_rechnung_konvertieren(
     lieferscheine: list,
     datum: date,
-    rechnungsnummer: str,
+    rechnungsnummer: Optional[str],
     leistung_von: Optional[date],
     leistung_bis: Optional[date],
     faellig_am: Optional[date],
@@ -4832,6 +5260,10 @@ def _lieferschein_zu_rechnung_konvertieren(
         ust_gesamt=Decimal("0.00"),
         brutto_gesamt=Decimal("0.00"),
     )
+    # Issue #563: Lieferscheine kennen weder Fälligkeit noch Skonto - Vorgaben wie im Formular
+    if rechnung.faellig_am is None:
+        rechnung.faellig_am = _faelligkeit_vorgabe(db, datum)
+    _setze_skonto_vorgabe(rechnung, db)
     db.add(rechnung)
     db.flush()
 
@@ -4860,6 +5292,7 @@ def _lieferschein_zu_rechnung_konvertieren(
                 differenzbesteuerung=pos.differenzbesteuerung,
                 ek_netto_25a=pos.ek_netto_25a,
                 ust_satz_25a=pos.ust_satz_25a,
+                leistungsdatum=pos.leistungsdatum,
             )
             db.add(neue_pos)
             # pos.brutto/pos.ust_betrag sind bereits fertige Positionssummen (inkl. Menge, Issue #332)
@@ -4924,6 +5357,47 @@ def _naechste_rechnungsnummer(datum: date, db: Session) -> str:
     return f"{str(datum.year)[-2:]}{count + 1:04d}"
 
 
+# Issue #465/#551: diese Dokumenttypen bekommen ihre Nummer erst beim Finalisieren - Entwürfe
+# bleiben ohne Nummer (außer von Hand eingetragen). Gelöschte Entwürfe hinterlassen so keine
+# Lücken, und spät finalisierte Entwürfe brechen die Reihenfolge nicht. Angebot, Auftrag und
+# Lieferschein behalten ihre Nummer ab Anlage (eigene Kreise, keine Rechnungen), Proforma-Entwürfe
+# waren schon immer ohne Nummer.
+NUMMER_BEI_FINALISIERUNG = ("Rechnung", "Abschlagsrechnung", "Gutschrift")
+
+
+def nummer_erst_beim_finalisieren(dokument_typ: Optional[str], ist_entwurf: bool) -> bool:
+    return bool(ist_entwurf) and (dokument_typ or "Rechnung") in NUMMER_BEI_FINALISIERUNG
+
+
+def _nummer_beim_finalisieren(rechnung: "Rechnung", db: Session) -> None:
+    """Vergibt die Nummer aus dem passenden Kreis zum Rechnungsdatum, falls noch keine da ist."""
+    if rechnung.rechnungsnummer or (rechnung.dokument_typ or "Rechnung") not in NUMMER_BEI_FINALISIERUNG:
+        return
+    d = rechnung.datum
+    if rechnung.dokument_typ == "Gutschrift":
+        nr = naechste_nummer("gutschrift", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Gutschrift").count()
+            nr = f"GS-{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.dokument_typ == "Abschlagsrechnung":
+        nr = naechste_nummer("abschlagsrechnung", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.dokument_typ == "Abschlagsrechnung").count()
+            nr = f"AR-{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.typ == "eingang":
+        nr = naechste_nummer("rechnung_eingang", db, d)
+        if not nr:
+            count = db.query(Rechnung).filter(Rechnung.typ == "eingang").count()
+            nr = f"{str(d.year)[-2:]}{count + 1:04d}"
+    elif rechnung.vorlage_id:
+        # wiederkehrende Rechnung: eigener Kreis, falls aktiv (Issue #399)
+        from api.wiederkehrend import _naechste_rechnungsnr
+        nr = _naechste_rechnungsnr(d, db)
+    else:
+        nr = _naechste_rechnungsnummer(d, db)
+    rechnung.rechnungsnummer = nr
+
+
 @router.post("/{ls_id}/rechnung-erstellen", response_model=RechnungResponse, status_code=201)
 def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
     """Erstellt eine Rechnung aus einem einzelnen Lieferschein."""
@@ -4932,7 +5406,7 @@ def rechnung_aus_lieferschein(ls_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Lieferschein nicht gefunden.")
     if ls.lieferschein_zu_rechnung_id:
         raise HTTPException(status_code=409, detail="Lieferschein wurde bereits abgerechnet.")
-    rechnungsnummer = _naechste_rechnungsnummer(date.today(), db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     rechnung = _lieferschein_zu_rechnung_konvertieren(
         lieferscheine=[ls],
         datum=date.today(),
@@ -5109,6 +5583,212 @@ class AngebotStatusUpdate(BaseModel):
     status: str  # offen | akzeptiert | abgelehnt | abgelaufen
 
 
+# ---------------------------------------------------------------------------
+# Issue #597: Abschlagsrechnung aus Angebot/Auftrag, Abzug in der Schlussrechnung
+# ---------------------------------------------------------------------------
+
+def abschlaege_zu_dokument(db: Session, dok: "Rechnung") -> list["Rechnung"]:
+    """Abschlagsrechnungen eines Angebots oder Auftrags. Gehören Angebot und Auftrag zusammen
+    (Auftrag aus Angebot), zählen die Abschläge beider – es ist dasselbe Projekt."""
+    ids = {dok.id}
+    if dok.dokument_typ == "Auftrag":
+        angebot = db.query(Rechnung.id).filter(
+            Rechnung.auftrag_zu_angebot_id == dok.id, Rechnung.dokument_typ == "Angebot"
+        ).first()
+        if angebot:
+            ids.add(angebot[0])
+    elif dok.dokument_typ == "Angebot" and dok.auftrag_zu_angebot_id:
+        ids.add(dok.auftrag_zu_angebot_id)
+    return (
+        db.query(Rechnung)
+        .filter(Rechnung.abschlag_zu_dokument_id.in_(ids), Rechnung.dokument_typ == "Abschlagsrechnung")
+        .order_by(Rechnung.datum, Rechnung.id)
+        .all()
+    )
+
+
+def _neu_berechnen(rechnung: "Rechnung", db: Session) -> None:
+    """Positionswerte und Summen über die gemeinsame Berechnung (#332) neu setzen."""
+    unternehmen = db.query(Unternehmen).first()
+    ist_ku = bool(unternehmen and unternehmen.ist_kleinunternehmer)
+    steuerfrei = bool(
+        rechnung.ist_reverse_charge or rechnung.ist_eu_lieferung or rechnung.ist_drittland_leistung
+        or rechnung.ist_ausfuhrlieferung or rechnung.steuerfrei_4
+    )
+    positionen = sorted(rechnung.positionen, key=lambda p: p.position_nr or 0)
+    summen = _berechne_rechnung(
+        positionen, rechnung.eingabemodus or "netto", rechnung.rabatt_prozent or Decimal("0"),
+        rechnung.rabatt_betrag, ist_ku, steuerfrei,
+    )
+    for pos, erg in zip(positionen, summen.positionen):
+        pos.ust_satz, pos.ust_betrag, pos.brutto = erg.ust_satz, erg.ust_betrag, erg.brutto
+    rechnung.netto_gesamt = summen.netto_gesamt
+    rechnung.ust_gesamt = summen.ust_gesamt
+    rechnung.brutto_gesamt = summen.brutto_gesamt
+
+
+def _abschlaege_abziehen(db: Session, dok: "Rechnung", rechnung: "Rechnung") -> None:
+    """Schlussrechnung aus Angebot/Auftrag: bezahlte Abschläge dieses Projekts als Abzug
+    eintragen – wie die Auswahl im Formular (#419), Abzug = tatsächlich gezahlter Betrag je
+    USt-Satz. Unbezahlte bleiben außen vor und stehen weiter in der Auswahl im Formular."""
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    offene = [
+        a for a in abschlaege_zu_dokument(db, dok)
+        if not a.storniert and not a.ist_entwurf and not a.verrechnet_in_rechnung_id
+    ]
+    if not offene:
+        return
+    nr = max((p.position_nr or 0 for p in rechnung.positionen), default=0)
+    hinzu = False
+    for a in offene:
+        je_satz = _bezahlte_betraege_je_satz(db, a)
+        einheit = a.positionen[0].einheit if a.positionen else "pauschal"
+        for satz, brutto in je_satz:
+            netto = brutto if (rechnung.eingabemodus == "brutto" or not satz) else (
+                brutto * 100 / (100 + satz)).quantize(_Q4, ROUND_HALF_UP)
+            nr += 1
+            db.add(Rechnungsposition(
+                rechnung_id=rechnung.id, position_nr=nr,
+                beschreibung=f"Abzgl. Abschlagsrechnung {a.rechnungsnummer} vom {a.datum.strftime('%d.%m.%Y')}",
+                menge=Decimal("-1"), einheit=einheit, netto=netto, rabatt_prozent=Decimal("0"),
+                ust_satz=satz, ust_betrag=Decimal("0"), brutto=Decimal("0"),
+                abschlag_rechnung_id=a.id,
+            ))
+            hinzu = True
+    if not hinzu:
+        return
+    db.flush()
+    db.expire(rechnung, ["positionen"])
+    _neu_berechnen(rechnung, db)
+    _synchronisiere_abschlagsverrechnung(rechnung, set(), db)
+
+
+class AbschlagAusDokumentRequest(BaseModel):
+    prozent: Optional[Decimal] = None   # Anteil am Dokumentbetrag
+    betrag: Optional[Decimal] = None    # Bruttobetrag
+
+
+def _zahl_text(wert: Decimal) -> str:
+    text = f"{wert.normalize():f}"
+    return text.replace(".", ",")
+
+
+@router.post("/{dok_id}/abschlag-aus-dokument", response_model=RechnungResponse, status_code=201)
+def abschlag_aus_dokument(dok_id: int, data: AbschlagAusDokumentRequest, db: Session = Depends(get_db)):
+    """Issue #597: Abschlagsrechnung (Entwurf) über einen Anteil eines Angebots oder Auftrags.
+    Je USt-Satz des Dokuments eine anteilige Position; Rechnungsrabatt ist eingerechnet."""
+    dok = db.query(Rechnung).filter(
+        Rechnung.id == dok_id, Rechnung.dokument_typ.in_(["Angebot", "Auftrag"])
+    ).first()
+    if not dok:
+        raise HTTPException(status_code=404, detail="Angebot oder Auftrag nicht gefunden.")
+    unternehmen = db.query(Unternehmen).first()
+    if not (unternehmen and unternehmen.abschlagsrechnungen_aktiv):
+        raise HTTPException(
+            status_code=409,
+            detail="Abschlagsrechnungen sind nicht eingeschaltet (Einstellungen → Unternehmen → Funktionen).",
+        )
+    art = dok.dokument_typ
+    if dok.storniert or (art == "Auftrag" and dok.auftrag_status in ("storniert", "abgeschlossen")):
+        raise HTTPException(status_code=409, detail=f"Für diesen {art} lässt sich keine Abschlagsrechnung mehr erstellen.")
+    if dok.rechnung_zu_auftrag_id or dok.rechnung_zu_angebot_id:
+        raise HTTPException(status_code=409, detail=f"Aus diesem {art} wurde bereits die Rechnung erstellt.")
+    if (data.prozent is None) == (data.betrag is None):
+        raise HTTPException(status_code=422, detail="Bitte entweder einen Prozentsatz oder einen Betrag angeben.")
+    if data.prozent is not None and not (Decimal("0") < data.prozent <= Decimal("100")):
+        raise HTTPException(status_code=422, detail="Der Prozentsatz muss zwischen 0 und 100 liegen.")
+    if data.betrag is not None and data.betrag <= 0:
+        raise HTTPException(status_code=422, detail="Der Betrag muss größer als 0 sein.")
+    gesamt_brutto = dok.brutto_gesamt or Decimal("0")
+    if gesamt_brutto <= 0 or not dok.positionen:
+        raise HTTPException(status_code=409, detail=f"Der {art} hat keinen Betrag.")
+
+    anteil = data.prozent / 100 if data.prozent is not None else data.betrag / gesamt_brutto
+    ziel_brutto = (gesamt_brutto * anteil).quantize(_Q2, ROUND_HALF_UP) if data.prozent is not None else data.betrag
+    bisher = sum(
+        (a.brutto_gesamt or Decimal("0")) for a in abschlaege_zu_dokument(db, dok) if not a.storniert
+    )
+    if ziel_brutto > gesamt_brutto - bisher + Decimal("0.01"):
+        def _euro(v: Decimal) -> str:
+            return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Der Abschlag ({_euro(ziel_brutto)}) übersteigt den noch nicht abgerechneten Betrag "
+                f"({_euro(max(gesamt_brutto - bisher, Decimal('0')))})."
+            ),
+        )
+
+    # Anteile je USt-Satz – in der Eingaberichtung des Dokuments, damit die Summe exakt bleibt
+    brutto_modus = (dok.eingabemodus or "netto") == "brutto"
+    je_satz: dict[Decimal, Decimal] = {}
+    for p in dok.positionen:
+        if p.abschlag_rechnung_id:
+            continue
+        wert = (p.brutto or Decimal("0")) if brutto_modus else (p.brutto or Decimal("0")) - (p.ust_betrag or Decimal("0"))
+        satz = p.ust_satz or Decimal("0")
+        je_satz[satz] = je_satz.get(satz, Decimal("0")) + wert
+    summe = sum(je_satz.values())
+    if summe <= 0:
+        raise HTTPException(status_code=409, detail=f"Der {art} hat keinen Betrag.")
+    gesamt_basis = gesamt_brutto if brutto_modus else (dok.netto_gesamt or Decimal("0"))
+    ziel_basis = (gesamt_basis * anteil).quantize(_Q2, ROUND_HALF_UP)
+    saetze = sorted(je_satz, key=lambda s: je_satz[s], reverse=True)
+    werte: dict[Decimal, Decimal] = {}
+    for s in saetze[1:]:
+        werte[s] = (ziel_basis * je_satz[s] / summe).quantize(_Q2, ROUND_HALF_UP)
+    werte[saetze[0]] = ziel_basis - sum(werte.values())  # Rest auf den größten Satz
+
+    nr_text = dok.rechnungsnummer or f"vom {dok.datum.strftime('%d.%m.%Y')}"
+    titel = (
+        f"Abschlag {_zahl_text(data.prozent)} % auf {art} {nr_text}" if data.prozent is not None
+        else f"Abschlag auf {art} {nr_text}"
+    )
+    heute = date.today()
+    zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
+    abschlag = Rechnung(
+        typ="ausgang", rechnungsnummer=None, datum=heute,
+        faellig_am=heute + timedelta(days=int(zahlungsziel)),
+        leistung_von=dok.leistung_von, leistung_bis=dok.leistung_bis,
+        kunde_id=dok.kunde_id, partner_freitext=dok.partner_freitext,
+        partner_strasse=dok.partner_strasse, partner_hausnummer=dok.partner_hausnummer,
+        partner_plz=dok.partner_plz, partner_ort=dok.partner_ort, partner_land=dok.partner_land,
+        kunden_bestellnummer=dok.kunden_bestellnummer,
+        empfaenger_adresse_id=dok.empfaenger_adresse_id, lieferadresse_id=dok.lieferadresse_id,
+        bemerkung_erechnung=dok.bemerkung_erechnung,
+        ist_reverse_charge=dok.ist_reverse_charge, ist_eu_lieferung=dok.ist_eu_lieferung,
+        ist_drittland_leistung=dok.ist_drittland_leistung, ist_ausfuhrlieferung=dok.ist_ausfuhrlieferung,
+        steuerfrei_4=bool(getattr(dok, "steuerfrei_4", False)),
+        ist_entwurf=True, dokument_typ="Abschlagsrechnung",
+        bezahlt=False, bezahlt_betrag=Decimal("0.00"), zahlungsstatus="offen",
+        eingabemodus=dok.eingabemodus or "netto",
+        rabatt_prozent=Decimal("0"), rabatt_betrag=None,
+        netto_gesamt=Decimal("0.00"), ust_gesamt=Decimal("0.00"), brutto_gesamt=Decimal("0.00"),
+        abschlag_zu_dokument_id=dok.id,
+    )
+    abschlag.skonto_prozent, abschlag.skonto_tage = dok.skonto_prozent, dok.skonto_tage
+    _setze_skonto_vorgabe(abschlag, db)
+    db.add(abschlag)
+    db.flush()
+    for i, s in enumerate(saetze, start=1):
+        if not werte[s]:
+            continue
+        db.add(Rechnungsposition(
+            rechnung_id=abschlag.id, position_nr=i,
+            beschreibung=titel if len(saetze) == 1 else f"{titel} – Anteil {_zahl_text(s)} % USt",
+            menge=Decimal("1"), einheit="pauschal", netto=werte[s], rabatt_prozent=Decimal("0"),
+            ust_satz=s, ust_betrag=Decimal("0"), brutto=Decimal("0"),
+        ))
+    db.flush()
+    db.expire(abschlag, ["positionen"])
+    _neu_berechnen(abschlag, db)
+    abschlag.absender_snapshot = _absender_snapshot(db)
+    db.commit()
+    db.refresh(abschlag)
+    return RechnungResponse.from_orm_extended(abschlag)
+
+
 @router.post("/{angebot_id}/rechnung-aus-angebot", response_model=RechnungResponse, status_code=201)
 def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
     """Konvertiert ein Angebot in eine Ausgangsrechnung (Positionen werden übernommen)."""
@@ -5121,7 +5801,7 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus diesem Angebot wurde bereits eine Rechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -5157,9 +5837,13 @@ def rechnung_aus_angebot(angebot_id: int, db: Session = Depends(get_db)):
         ust_gesamt=angebot.ust_gesamt,
         brutto_gesamt=angebot.brutto_gesamt,
     )
+    # Issue #563: Skonto aus dem Angebot, sonst Vorgabe (Kunde, dann Einstellungen)
+    rechnung.skonto_prozent, rechnung.skonto_tage = angebot.skonto_prozent, angebot.skonto_tage
+    _setze_skonto_vorgabe(rechnung, db)
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(angebot, rechnung, db)
+    _abschlaege_abziehen(db, angebot, rechnung)  # Issue #597
 
     angebot.rechnung_zu_angebot_id = rechnung.id
     angebot.angebot_status = "akzeptiert"
@@ -5397,6 +6081,19 @@ def _naechste_auftragsnummer(datum: date, db: Session) -> str:
     return f"AU-{str(datum.year)[-2:]}{count + 1:04d}"
 
 
+def leistungszeitraum_aus_positionen(doc: "Rechnung", positionen) -> None:
+    """Issue #594: Haben Positionen ein eigenes Leistungsdatum und ist der Leistungszeitraum des
+    Dokuments leer, wird er vom frühesten bis zum spätesten Positionsdatum gesetzt. Sonst stünde
+    im Kopf das Rechnungsdatum als Leistungsdatum (Pflichtangabe § 14 Abs. 4 Nr. 6 UStG).
+    Ein eingetragener Zeitraum bleibt unverändert."""
+    if doc.leistung_von:
+        return
+    daten = sorted(d for d in (getattr(p, "leistungsdatum", None) for p in positionen or []) if d)
+    if daten:
+        doc.leistung_von = daten[0]
+        doc.leistung_bis = daten[-1] if daten[-1] != daten[0] else None
+
+
 def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> None:
     """Kopiert Positionen von einem Dokument zum anderen."""
     for pos in quell.positionen:
@@ -5416,6 +6113,7 @@ def _kopiere_positionen(quell: "Rechnung", ziel: "Rechnung", db: Session) -> Non
             differenzbesteuerung=pos.differenzbesteuerung,
             ek_netto_25a=pos.ek_netto_25a,
             ust_satz_25a=pos.ust_satz_25a,
+            leistungsdatum=pos.leistungsdatum,
         )
         db.add(neue_pos)
     if ziel.typ == "ausgang" and ziel.dokument_typ in ("Rechnung", "Abschlagsrechnung", "Proforma"):
@@ -5508,7 +6206,7 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Aus diesem Auftrag wurde bereits eine Rechnung erstellt.")
 
     heute = date.today()
-    rechnungsnummer = _naechste_rechnungsnummer(heute, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     unternehmen = db.query(Unternehmen).first()
     zahlungsziel = getattr(unternehmen, "standard_zahlungsziel", 14) or 14
     from datetime import timedelta
@@ -5547,9 +6245,11 @@ def rechnung_aus_auftrag(auftrag_id: int, db: Session = Depends(get_db)):
         skonto_prozent=auftrag.skonto_prozent,
         skonto_tage=auftrag.skonto_tage,
     )
+    _setze_skonto_vorgabe(rechnung, db)  # Issue #563: Auftrag ohne Skonto → Vorgabe
     db.add(rechnung)
     db.flush()
     _kopiere_positionen(auftrag, rechnung, db)
+    _abschlaege_abziehen(db, auftrag, rechnung)  # Issue #597
     auftrag.rechnung_zu_auftrag_id = rechnung.id
     if auftrag.auftrag_status not in ("abgeschlossen", "storniert"):
         auftrag.auftrag_status = "in_bearbeitung"
@@ -5732,7 +6432,7 @@ def sammelrechnung_erstellen(data: SammelrechnungCreate, db: Session = Depends(g
     kunden = {ls.kunde_id for ls in lieferscheine}
     if len(kunden) > 1:
         raise HTTPException(status_code=422, detail="Sammelrechnung nur für Lieferscheine desselben Kunden möglich.")
-    rechnungsnummer = _naechste_rechnungsnummer(data.datum, db)
+    rechnungsnummer = None  # Issue #465/#551: Nummer erst beim Finalisieren
     rechnung = _lieferschein_zu_rechnung_konvertieren(
         lieferscheine=lieferscheine,
         datum=data.datum,

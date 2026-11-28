@@ -9,9 +9,9 @@ import {
   getUnternehmen,
   updateUnternehmen,
 } from '../api/client'
+import { useBuchungsjahre } from '../hooks/useBuchungsjahre'
 
 const AKTUELLES_JAHR = new Date().getFullYear()
-const JAHRE = Array.from({ length: 5 }, (_, i) => AKTUELLES_JAHR - i)
 
 type Zeitraum = 'q1' | 'q2' | 'q3' | 'q4' | 'h1' | 'h2' | 'jahr' | 'custom'
 type Tab = 'gobd' | 'datev' | 'csv'
@@ -40,6 +40,7 @@ function ZeitraumAuswahl({
   bisCustom: string; setBisCustom: (v: string) => void
   accent: string
 }) {
+  const jahre = useBuchungsjahre()  // Issue #589
   const sel = `border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${accent} bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100`
   const inp = `border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 ${accent}`
   return (
@@ -47,7 +48,7 @@ function ZeitraumAuswahl({
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Jahr</label>
         <select value={jahr} onChange={(e) => setJahr(Number(e.target.value))} className={sel}>
-          {JAHRE.map((j) => <option key={j} value={j}>{j}</option>)}
+          {jahre.map((j) => <option key={j} value={j}>{j}</option>)}
         </select>
       </div>
       <div className="space-y-1">
@@ -99,6 +100,7 @@ function Fehler({ text }: { text: string }) {
 
 export function ExportPage() {
   const mxAuto = useMxAuto()
+  const jahre = useBuchungsjahre()  // Issue #589
   const [aktTab, setAktTab] = useState<Tab>('gobd')
 
   // GoBD
@@ -259,7 +261,7 @@ export function ExportPage() {
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Wirtschaftsjahr</label>
                 <select value={gobdJahr} onChange={(e) => setGobdJahr(Number(e.target.value))}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100">
-                  {JAHRE.map((j) => <option key={j} value={j}>{j}</option>)}
+                  {jahre.map((j) => <option key={j} value={j}>{j}</option>)}
                 </select>
               </div>
               <button onClick={handleGobd} disabled={gobdLaedt}

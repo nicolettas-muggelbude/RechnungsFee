@@ -35,11 +35,14 @@ WARNUNG_PROZENT = Decimal("0.80")
 GUV_POSITIONEN = [
     (1, "Umsatzerlöse",                              "ertrag",  [12, 15, 16]),
     (2, "Sonstige betriebliche Erträge",              "ertrag",  [18, 20, 21]),
-    (3, "Materialaufwand",                            "aufwand", [27, 28, 29]),
+    (3, "Materialaufwand",                            "aufwand", [27, 29]),
     (4, "Personalaufwand",                            "aufwand", [30]),
-    (5, "Abschreibungen",                             "aufwand", [36]),
+    # Issue #579-Nebenfund: AfA liegt seit Migration 121 auf Zeile 33 (nicht mehr 36 = GWG) und
+    # fehlte dadurch in der GuV, ebenso die später ergänzten Zeilen 45/48/50/64/66/71.
+    # test_guv_zeilen_579.py prüft, dass jede EÜR-Zeile hier oder in _GUV_AUSGESCHLOSSEN steht.
+    (5, "Abschreibungen",                             "aufwand", [33, 36]),
     # Zeile 56 (Schuldzinsen) bewusst in sonstige Aufwendungen – kein eigener Finanzaufwand-Ausweis
-    (6, "Sonstige betriebliche Aufwendungen",         "aufwand", [39, 41, 43, 44, 46, 47, 49, 51, 52, 54, 56, 58, 60, 63, 65, 68, 69, 70]),
+    (6, "Sonstige betriebliche Aufwendungen",         "aufwand", [39, 41, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 58, 60, 63, 64, 65, 66, 68, 69, 70, 71]),
 ]
 
 # Zeilen 17 (vereinnahmte USt) und 57 (Vorsteuer) sind Steuer-Durchlaufposten →

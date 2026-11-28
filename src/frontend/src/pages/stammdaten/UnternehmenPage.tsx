@@ -13,6 +13,7 @@ import { KONTORAHMEN_LS_KEY, type KontorahmenModus } from '../../utils/kontorahm
 import { LandCombobox } from '../../components/LandCombobox'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { validiereIban, ladeOpenIbanDaten, OPEN_IBAN_BANK_FALLBACK, OPEN_IBAN_BIC_FALLBACK, openIbanBankdatenFehlgeschlagen, OPEN_IBAN_LAND_TOOLTIP } from '../../utils/iban'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfskomponenten
@@ -285,9 +286,11 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
             Einleitungstext für {typLabel}
           </label>
-          <textarea
+          <MarkdownTextfeld
             value={(form[einleitungKey] as string | null | undefined) ?? ''}
-            onChange={ev => set(einleitungKey, ev.target.value || null)}
+            onChange={v => set(einleitungKey, v || null)}
+            vorschau
+            aria-label={`Einleitungstext für ${typLabel}`}
             rows={3}
             placeholder="Erscheint vor der Positionstabelle."
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
@@ -297,9 +300,11 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block">
             Schlusstext für {typLabel}
           </label>
-          <textarea
+          <MarkdownTextfeld
             value={(form[schlussKey] as string | null | undefined) ?? ''}
-            onChange={ev => set(schlussKey, ev.target.value || null)}
+            onChange={v => set(schlussKey, v || null)}
+            vorschau
+            aria-label={`Schlusstext für ${typLabel}`}
             rows={3}
             placeholder="Erscheint nach Positionen/Summen."
             className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 resize-y"
@@ -307,7 +312,6 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 md:col-span-2 -mt-2">
           Leer lassen wenn kein Standardtext gewünscht. Pro Dokument überschreibbar.
-          Markdown: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">**fett**</code> <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*kursiv*</code> · Zeilenumbruch mit Enter
         </p>
       </div>
     )
@@ -1061,6 +1065,7 @@ function FirmendatenSektion({ data, activeTab }: { data: Unternehmen; activeTab:
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Fügt einen EPC-QR-Code (GiroCode) neben den Zahlungshinweis ein.
                 Kunden können damit per Banking-App direkt überweisen – mit vorausgefüllten Daten.
+                Als Empfänger steht dein Firmenname darin. Läuft das Konto auf einen anderen Namen, trage ihn unter Einstellungen → Konten beim Konto als „Kontoinhaber“ ein.
               </p>
             </div>
             {!form.iban?.trim() && (
@@ -1399,9 +1404,23 @@ const PLATZHALTER = [
   { key: '{firmenname}',      desc: 'Dein Firmenname' },
 ]
 
-type VorlagenTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag'
+type VorlagenTyp = 'Rechnung' | 'Angebot' | 'Proforma' | 'Auftrag' | 'Mahnung'
+
+// Issue #561: Platzhalter der Mahnungs-Mail (eigene Liste - kein Betrag/Datum der Rechnung)
+const PLATZHALTER_MAHNUNG = [
+  { key: '{bezeichnung}', desc: 'Mahnstufe (z. B. Zahlungserinnerung)' },
+  { key: '{mahnnummer}', desc: 'Nummer der Mahnung' },
+  { key: '{rechnungsnummer}', desc: 'Gemahnte Rechnung(en)' },
+  { key: '{kunde}', desc: 'Kundenname' },
+  { key: '{firmenname}', desc: 'Dein Firmenname' },
+]
 
 const VORLAGEN_DEFAULT: Record<VorlagenTyp, { betreff: string; text: string }> = {
+  // Issue #561: Vorgabe = bisher fest eingebauter Text im Mahnungs-Mailversand
+  Mahnung: {
+    betreff: '{bezeichnung} – Rechnung {rechnungsnummer}',
+    text: 'Guten Tag {kunde},\n\nanbei erhalten Sie unser Schreiben „{bezeichnung}" zu Rechnung {rechnungsnummer}.\n\nBitte entnehmen Sie die Details dem beigefügten PDF.\n\nMit freundlichen Grüßen\n{firmenname}',
+  },
   Rechnung: {
     betreff: 'Rechnung {rechnungsnummer}',
     text: 'Hallo {kunde},\n\nanbei findest du die Rechnung {rechnungsnummer} vom {datum}.\n\nBetrag: {betrag}\nFällig bis: {faellig_am}\n\nBitte überweise den Betrag auf das angegebene Konto.\n\nViele Grüße\n{firmenname}',
@@ -1421,10 +1440,10 @@ const VORLAGEN_DEFAULT: Record<VorlagenTyp, { betreff: string; text: string }> =
 }
 
 function betreffFeld(typ: VorlagenTyp): keyof Unternehmen {
-  return typ === 'Rechnung' ? 'mail_betreff_vorlage' : typ === 'Angebot' ? 'mail_betreff_angebot' : typ === 'Proforma' ? 'mail_betreff_proforma' : 'mail_betreff_auftrag'
+  return typ === 'Rechnung' ? 'mail_betreff_vorlage' : typ === 'Angebot' ? 'mail_betreff_angebot' : typ === 'Proforma' ? 'mail_betreff_proforma' : typ === 'Mahnung' ? 'mail_betreff_mahnung' : 'mail_betreff_auftrag'
 }
 function textFeld(typ: VorlagenTyp): keyof Unternehmen {
-  return typ === 'Rechnung' ? 'mail_text_vorlage' : typ === 'Angebot' ? 'mail_text_angebot' : typ === 'Proforma' ? 'mail_text_proforma' : 'mail_text_auftrag'
+  return typ === 'Rechnung' ? 'mail_text_vorlage' : typ === 'Angebot' ? 'mail_text_angebot' : typ === 'Proforma' ? 'mail_text_proforma' : typ === 'Mahnung' ? 'mail_text_mahnung' : 'mail_text_auftrag'
 }
 
 function MailVorlageSektion({ data }: { data: Unternehmen }) {
@@ -1454,7 +1473,8 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
     onError: (e: Error) => setFehler(e.message),
   })
 
-  const typen: VorlagenTyp[] = ['Rechnung', 'Angebot', 'Proforma', 'Auftrag']
+  const typen: VorlagenTyp[] = ['Rechnung', 'Angebot', 'Proforma', 'Auftrag', 'Mahnung']
+  const platzhalter = aktTyp === 'Mahnung' ? PLATZHALTER_MAHNUNG : PLATZHALTER
 
   return (
     <div className="space-y-5">
@@ -1470,7 +1490,7 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
       <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
         <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Verfügbare Platzhalter</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-          {PLATZHALTER.map(p => (
+          {platzhalter.map(p => (
             <div key={p.key} className="flex gap-2 text-xs">
               <code className="text-blue-700 dark:text-blue-300 font-mono whitespace-nowrap">{p.key}</code>
               <span className="text-blue-600 dark:text-blue-400">{p.desc}</span>
@@ -1478,6 +1498,13 @@ function MailVorlageSektion({ data }: { data: Unternehmen }) {
           ))}
         </div>
       </div>
+
+      {aktTyp === 'Mahnung' && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Gilt für den Mailversand aller Mahnstufen. Hat eine Mahnstufe unter Einstellungen → Mahnwesen eine
+          eigene Betreff-Vorlage, wird diese verwendet. Der Text im Mahnungs-PDF wird dort je Stufe festgelegt.
+        </p>
+      )}
 
       <Field label="Betreff">
         <input type="text" value={betreff} onChange={ev => setBetreff(ev.target.value)} className={inputCls} />
@@ -1519,6 +1546,11 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
   const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [von, setVon] = useState(data.smtp_von_adresse ?? '')
   const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.smtp_zertifikat_ignorieren ?? false)
+  // Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“
+  const [gesendetAktiv, setGesendetAktiv] = useState(data.gesendet_imap_aktiv ?? false)
+  const [gesendetHost, setGesendetHost] = useState(data.gesendet_imap_host ?? '')
+  const [gesendetPort, setGesendetPort] = useState(String(data.gesendet_imap_port ?? 993))
+  const [testHinweis, setTestHinweis] = useState<string | null>(null)
   const fingerprint = data.smtp_zertifikat_fingerprint
   const zertifikatZuruecksetzenMut = useMutation({
     mutationFn: () => updateUnternehmen({ smtp_zertifikat_fingerprint: null }),
@@ -1541,6 +1573,9 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
       smtp_passwort_entfernen: passwortEntfernen && !passwort,
       smtp_von_adresse: von || null,
       smtp_zertifikat_ignorieren: zertifikatIgnorieren,
+      gesendet_imap_aktiv: gesendetAktiv,
+      gesendet_imap_host: gesendetHost.trim() || null,
+      gesendet_imap_port: parseInt(gesendetPort) || 993,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unternehmen'] })
@@ -1557,10 +1592,12 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
     if (!testMail.trim()) return
     setTestStatus('sending')
     setTestFehler(null)
+    setTestHinweis(null)
     try {
-      await sendeTestMail(testMail.trim())
+      const r = await sendeTestMail(testMail.trim())
+      setTestHinweis(r?.hinweis ?? null)
       setTestStatus('ok')
-      setTimeout(() => setTestStatus('idle'), 3000)
+      if (!r?.hinweis) setTimeout(() => setTestStatus('idle'), 3000)
     } catch (e) {
       setTestStatus('error')
       setTestFehler(e instanceof Error ? e.message : 'Unbekannter Fehler')
@@ -1648,6 +1685,41 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
             </div>
           )}
 
+          <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <input type="checkbox" id="gesendet-imap" checked={gesendetAktiv}
+                onChange={e => {
+                  setGesendetAktiv(e.target.checked)
+                  if (e.target.checked && !gesendetHost && host.startsWith('smtp.')) setGesendetHost('imap.' + host.slice(5))
+                }} className="rounded mt-0.5" />
+              <label htmlFor="gesendet-imap" className="text-sm text-slate-600 dark:text-slate-300">
+                Kopie im Ordner „Gesendet“ ablegen (IMAP)
+                <span className="block text-xs text-slate-400 dark:text-slate-500 font-normal mt-0.5">
+                  Wie ein Mailprogramm legt RechnungsFee nach dem Versand eine Kopie in den Ordner „Gesendet“ deines
+                  Mailkontos. Benutzername und Passwort von oben werden übernommen. Bei Gmail und Outlook nicht
+                  einschalten – die legen gesendete Mails selbst ab, sonst steht jede Mail doppelt da.
+                </span>
+              </label>
+            </div>
+            {gesendetAktiv && (
+              <div className="ml-7 grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <Field label="IMAP-Server (Host)">
+                    <input type="text" value={gesendetHost} onChange={e => setGesendetHost(e.target.value)}
+                      placeholder="imap.example.de" className={inputCls} />
+                  </Field>
+                </div>
+                <Field label="IMAP-Port">
+                  <input type="number" value={gesendetPort} onChange={e => setGesendetPort(e.target.value)}
+                    placeholder="993" className={inputCls} />
+                </Field>
+                <p className="col-span-3 text-xs text-slate-400 dark:text-slate-500 -mt-1">
+                  Port 993 = SSL/TLS, Port 143 = STARTTLS. Prüfen kannst du es mit der Testmail unten.
+                </p>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
@@ -1673,7 +1745,8 @@ function SmtpSektion({ data }: { data: Unternehmen }) {
               {testStatus === 'sending' ? 'Sende…' : '✉️ Testmail'}
             </button>
           </div>
-          {testStatus === 'ok' && <p className="text-sm text-green-600 dark:text-green-400">✓ Testmail gesendet</p>}
+          {testStatus === 'ok' && <p className="text-sm text-green-600 dark:text-green-400">✓ Testmail gesendet{gesendetAktiv && !testHinweis ? ' und im Ordner „Gesendet“ abgelegt' : ''}</p>}
+          {testStatus === 'ok' && testHinweis && <p className="text-sm text-amber-700 dark:text-amber-300">{testHinweis}</p>}
           {testStatus === 'error' && <p className="text-sm text-red-600 dark:text-red-400">{testFehler}</p>}
         </>
       )}
@@ -1696,6 +1769,7 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
   const [passwortEntfernen, setPasswortEntfernen] = useState(false)
   const [ordner, setOrdner] = useState(data.imap_ordner ?? 'INBOX')
   const [beimStart, setBeimStart] = useState(data.imap_beim_start ?? false)
+  const [intervall, setIntervall] = useState(String(data.imap_intervall_minuten ?? 0))  // Issue #592
   const [zertifikatIgnorieren, setZertifikatIgnorieren] = useState(data.imap_zertifikat_ignorieren ?? false)
   const fingerprint = data.imap_zertifikat_fingerprint
   const [gespeichert, setGespeichert] = useState(false)
@@ -1719,6 +1793,7 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
       imap_passwort_entfernen: passwortEntfernen && !passwort,
       imap_ordner: ordner.trim() || 'INBOX',
       imap_beim_start: beimStart,
+      imap_intervall_minuten: parseInt(intervall) || 0,
       imap_zertifikat_ignorieren: zertifikatIgnorieren,
     }),
     onSuccess: () => {
@@ -1804,6 +1879,19 @@ function PostfachSektion({ data }: { data: Unternehmen }) {
             <input type="checkbox" id="imap-start" checked={beimStart} onChange={e => setBeimStart(e.target.checked)} className="rounded" />
             <label htmlFor="imap-start" className="text-sm text-slate-600 dark:text-slate-300">Beim Start von RechnungsFee automatisch abrufen</label>
           </div>
+
+          <div className="flex items-center gap-3">
+            <label htmlFor="imap-intervall" className="text-sm text-slate-600 dark:text-slate-300">Während RechnungsFee läuft abrufen</label>
+            <select id="imap-intervall" value={intervall} onChange={e => setIntervall(e.target.value)} className={inputCls + " w-auto"}>
+              <option value="0">nicht automatisch</option>
+              <option value="15">alle 15 Minuten</option>
+              <option value="30">alle 30 Minuten</option>
+              <option value="60">alle 60 Minuten</option>
+            </select>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+            Neue Rechnungen zeigt das Dashboard an. Übernommen wird weiterhin nur, was du selbst bestätigst.
+          </p>
 
           <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300">
             <strong>Microsoft-Konten (Outlook.com/Microsoft 365)</strong> werden noch nicht unterstützt – dort ist eine
@@ -1940,9 +2028,11 @@ function SignaturSektion({ data }: { data: Unternehmen }) {
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">HTML-Tags wie <code className="font-mono">&lt;pre&gt;</code> werden ebenfalls unterstützt.</p>
             </div>
           )}
-          <textarea
+          <MarkdownTextfeld
             value={signatur}
-            onChange={ev => setSignatur(ev.target.value)}
+            onChange={setSignatur}
+            links
+            aria-label="Signatur-Text"
             rows={8}
             className={`${inputCls} resize-y font-mono text-xs`}
             placeholder={DEFAULT_SIGNATUR(data.firmenname)}
@@ -2018,7 +2108,7 @@ function ThunderbirdSektion({ data }: { data: Unternehmen }) {
         />
         <div>
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            Thunderbird für den Versand von Rechnungen, Angeboten, Aufträgen und Proforma-Rechnungen nutzen
+            Thunderbird für den Mailversand nutzen (Rechnungen, Angebote, Aufträge, Proforma, Mahnungen, Kontoauszüge, Buchungsbelege)
           </span>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Hat Vorrang vor SMTP. RechnungsFee öffnet ein vorausgefülltes Thunderbird-Compose-Fenster (Empfänger, Betreff, Text, PDF-Anhang und ggf. das Dokumentenpaket) – den eigentlichen Versand inklusive eigener Signatur, Regeln und ggf. eingerichteter Verschlüsselung übernimmt Thunderbird unverändert wie bei jeder anderen Mail. Mahnungen laufen weiterhin über SMTP bzw. das Standard-Mailprogramm.

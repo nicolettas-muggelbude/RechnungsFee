@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
+import { PartnerVerlauf } from '../../components/DokumentVerlauf'
 import { leitwegIdFehler } from '../../utils/leitwegId'
 import { DateInput } from '../../components/DateInput'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { istEuLand } from '../../utils/laender'
 import { LandCombobox } from '../../components/LandCombobox'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { kontokorrentMailOhneSmtp } from '../../utils/mailOhneSmtp'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -281,11 +285,16 @@ function KundeKontokorrent({ kunde, debitorNr, setDebitorNr, debitorEdit, setDeb
   })
 
   const mailMut = useMutation({
-    mutationFn: () => sendeKontokorrentMail(kunde.id!, {
-      an: mailAn, cc: mailCc || undefined,
-      betreff: mailBetreff, text: mailText,
-      von, bis,
-    }),
+    mutationFn: async () => {
+      const daten = { an: mailAn, cc: mailCc || undefined, betreff: mailBetreff, text: mailText, von, bis }
+      // Issue #582: wie bei Rechnungen - Thunderbird hat Vorrang, ohne SMTP das Mailprogramm
+      const unt = await qc.fetchQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+      if (unt?.thunderbird_aktiv || !unt?.smtp_aktiv) {
+        await kontokorrentMailOhneSmtp('kunden', kunde.id!, daten, !!unt?.thunderbird_aktiv)
+        return { ok: true }
+      }
+      return sendeKontokorrentMail(kunde.id!, daten)
+    },
     onSuccess: () => { setMailSent(true); setTimeout(() => { setShowMail(false); setMailSent(false) }, 1500) },
   })
 
@@ -669,7 +678,7 @@ function KundeDokumente({ kundeId }: { kundeId: number }) {
 function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'kontokorrent' }) {
   const navigate = useNavigate()
   const [offeneRechnung, setOffeneRechnung] = useState<number | null>(null)
-  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent'>(initialTab ?? 'rechnungen')
+  const [tab, setTab] = useState<'rechnungen' | 'angebote' | 'dokumente' | 'kontokorrent' | 'verlauf'>(initialTab ?? 'rechnungen')
   const [debitorEdit, setDebitorEdit] = useState(false)
   const [debitorNr, setDebitorNr] = useState(kunde.debitor_nr ?? '')
   const qcKontokorrent = useQueryClient()
@@ -720,9 +729,14 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
             className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'kontokorrent' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
             Kontokorrent
           </button>
+          {/* Issue #596: was wann gedruckt, gemailt oder gemahnt wurde */}
+          <button onClick={() => setTab('verlauf')}
+            className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'verlauf' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            Verlauf
+          </button>
         </div>
         {/* Aktions-Buttons – nur bei Rechnungen/Angebote-Tab */}
-        {tab !== 'dokumente' && tab !== 'kontokorrent' && (
+        {tab !== 'dokumente' && tab !== 'kontokorrent' && tab !== 'verlauf' && (
           <div className="flex flex-wrap gap-1">
             <button
               onClick={() => navigate(`/rechnungen?neue_aus_kunde=${kunde.id}`)}
@@ -761,7 +775,9 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
         )}
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        {tab === 'kontokorrent' ? (
+        {tab === 'verlauf' ? (
+          <PartnerVerlauf art="kunde" id={kunde.id!} />
+        ) : tab === 'kontokorrent' ? (
           <KundeKontokorrent kunde={kunde} debitorNr={debitorNr} setDebitorNr={setDebitorNr} debitorEdit={debitorEdit} setDebitorEdit={setDebitorEdit} qc={qcKontokorrent} />
         ) : tab === 'dokumente' ? (
           <KundeDokumente kundeId={kunde.id!} />
@@ -781,7 +797,7 @@ function KundeRechnungen({ kunde, initialTab }: { kunde: Kunde; initialTab?: 'ko
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0">{r.rechnungsnummer ?? '—'}</span>
+                  <span className="font-mono text-slate-400 dark:text-slate-500 shrink-0">{r.rechnungsnummer ?? (r.ist_entwurf ? 'Entwurf' : '—')}</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-200">{formatEuro(r.brutto_gesamt)}</span>
                 </div>
                 <div className="text-slate-400 dark:text-slate-500">{formatDatum(r.datum)}</div>
@@ -872,7 +888,12 @@ const schema = z.object({
     if (!data.email?.trim()) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Pflichtfeld für öffentliche Auftraggeber (XRechnung)' })
   }
   if (!data.zugferd_aktiv && !data.oeffentlicher_auftraggeber) return
-  if (!data.firmenname?.trim()) ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Pflichtfeld für ZUGFeRD' })
+  // Freiberufler/Selbstständige als Kunden haben oft keinen Firmennamen - die E-Rechnung nimmt dann
+  // Vor- und Nachname als Käufername (zugferd.py::_kunde_name). Keine Steuernummer nötig: die des
+  // Käufers kommt in EN 16931 nicht vor, die USt-IdNr. nur bei §13b/ig. Lieferung.
+  if (!data.firmenname?.trim() && !(data.vorname?.trim() && data.nachname?.trim())) {
+    ctx.addIssue({ code: 'custom', path: ['firmenname'], message: 'Für ZUGFeRD Firmenname oder Vor- und Nachname angeben' })
+  }
   if (!data.strasse?.trim()) ctx.addIssue({ code: 'custom', path: ['strasse'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.plz?.trim()) ctx.addIssue({ code: 'custom', path: ['plz'], message: 'Pflichtfeld für ZUGFeRD' })
   if (!data.ort?.trim()) ctx.addIssue({ code: 'custom', path: ['ort'], message: 'Pflichtfeld für ZUGFeRD' })
@@ -900,6 +921,7 @@ export function KundenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('kunden', 33)
+  const detailBreite = useDetailBreite('kunden')
   const [selected, setSelected] = useState<Kunde | null>(null)
   const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
@@ -975,7 +997,6 @@ export function KundenPage() {
   })
   const watchFirmenname = useWatch({ control, name: 'firmenname' })
   const watchUstIdnr = useWatch({ control, name: 'ust_idnr' })
-  const watchZugferd = useWatch({ control, name: 'zugferd_aktiv' })
   const watchLand = useWatch({ control, name: 'land' })
   const watchUstIdnrValidiert = useWatch({ control, name: 'ust_idnr_validiert' })
   const watchUstIdnrValidierungDatum = useWatch({ control, name: 'ust_idnr_validierung_datum' })
@@ -984,7 +1005,6 @@ export function KundenPage() {
   // Issue #530: Schalter nur sichtbar, wenn die Funktion an ist – oder der Kunde schon so markiert ist
   const zeigOeffentlich = !!unternehmenStamm?.oeffentliche_auftraggeber_aktiv || !!editKunde?.oeffentlicher_auftraggeber
   const zugferdAutoAktiv = !!(watchFirmenname?.trim() && watchUstIdnr?.trim()) || !!watchOeffentlich
-  const zugferdOhneUstId = !!(watchZugferd && !watchUstIdnr?.trim() && !watchOeffentlich)
   // Drittland: weder Deutschland noch EU-Mitglied (Issue #315) - dort gilt keine USt-IdNr.,
   // sondern je nach Land eine andere Steuer-/Unternehmens-ID
   const istDrittland = !!watchLand && watchLand !== 'DE' && !istEuLand(watchLand)
@@ -1304,8 +1324,9 @@ export function KundenPage() {
       )}
 
       {/* ── Rechte Spalte (Rechnungen oder Formular) ─────────────────── */}
+      {!showForm && <DetailTrennlinie detail={detailBreite} />}
       {!showForm && (
-        <div className="w-[28rem] shrink-0">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0`}>
           {selected ? (
             <KundeRechnungen key={selected.id} kunde={selected} initialTab={initialDetailTab} />
           ) : (
@@ -1488,11 +1509,6 @@ export function KundenPage() {
                       }
                     </span>
                   </label>
-                  {zugferdOhneUstId && (
-                    <p className="text-amber-600 dark:text-amber-400 text-xs mt-1 ml-6">
-                      Hinweis: Ohne USt-IdNr. oder Steuernummer ist das ZUGFeRD-XML steuerlich unvollständig.
-                    </p>
-                  )}
                 </div>
                 {zeigOeffentlich && (
                   <div className="col-span-2 space-y-2">

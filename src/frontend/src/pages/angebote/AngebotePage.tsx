@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -8,7 +10,7 @@ import {
   getAngebote, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   createRechnung, updateRechnung, deleteRechnung,
   rechnungAusAngebot, lieferscheinAusAngebot, proformaAusAngebot, auftragAusAngebot, angebotStatusSetzen,
-  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, oeffnePaketVorschau,
+  openUrl, getApiBase, isTauri, openInPdfWindow, downloadPdfForMail, oeffnePaketVorschau, meldeVerlauf,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -22,6 +24,8 @@ import type { RechnungVorschauRequest } from '../../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
+import { AbschlagErstellenKnopf, AbschlagListe } from '../../components/AbschlagAusDokument'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -75,6 +79,7 @@ interface Pos {
   ust_satz: string
   rabatt_prozent?: string
   artikel_id?: number
+  leistungsdatum?: string  // Issue #594
 }
 
 function leerePos(): Pos {
@@ -115,7 +120,7 @@ function formatMenge(v: string | number): string {
 }
 
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer, mitDatum,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
@@ -124,6 +129,7 @@ function PositionenTabelle({
   eingabeModus: EingabeModus
   summen: { netto: number; ust: number; brutto: number }
   istKleinunternehmer: boolean
+  mitDatum: boolean  // Issue #594: Leistungsdatum je Position
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
@@ -140,6 +146,7 @@ function PositionenTabelle({
       <table className="w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-900">
           <tr>
+            {mitDatum && <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-32">Datum</th>}
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
@@ -154,6 +161,12 @@ function PositionenTabelle({
         <tbody>
           {positionen.map((pos, i) => (
             <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+              {mitDatum && (
+                <td className="px-2 py-1.5">
+                  <input type="date" value={pos.leistungsdatum ?? ''} aria-label="Leistungsdatum"
+                    onChange={e => update(i, 'leistungsdatum', e.target.value)} className={cellInput} />
+                </td>
+              )}
               <td className="px-2 py-1.5">
                 <ArtikelAutocomplete
                   value={pos.beschreibung}
@@ -216,7 +229,7 @@ function PositionenTabelle({
           {!istKleinunternehmer && (
             <>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
                   Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
                 <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
@@ -224,7 +237,7 @@ function PositionenTabelle({
                 </td>
               </tr>
               <tr className="border-t border-slate-100 dark:border-slate-700">
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                 <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
                   {summen.ust.toFixed(2).replace('.', ',')} €
                 </td>
@@ -232,7 +245,7 @@ function PositionenTabelle({
             </>
           )}
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
+            <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
               {summen.brutto.toFixed(2).replace('.', ',')} €
             </td>
@@ -323,6 +336,7 @@ function AngebotFormular({
         einzelpreis: String(p.netto),
         ust_satz: String(p.ust_satz),
         rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
+        leistungsdatum: p.leistungsdatum ?? '',
       }))
     }
     return [leerePos()]
@@ -401,6 +415,7 @@ function AngebotFormular({
           ust_satz: unternehmen?.ist_kleinunternehmer ? '0' : String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
+          leistungsdatum: p.leistungsdatum || undefined,
         }
       })
 
@@ -578,6 +593,7 @@ function AngebotFormular({
           eingabeModus={eingabeModus}
           summen={summen}
           istKleinunternehmer={unternehmen?.ist_kleinunternehmer ?? false}
+          mitDatum={!!unternehmen?.pdf_positionsdatum}
         />
       </div>
 
@@ -611,14 +627,14 @@ function AngebotFormular({
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
-        <textarea value={einleitungstext} onChange={e => setEinleitungstext(e.target.value)}
+        <MarkdownTextfeld value={einleitungstext} onChange={setEinleitungstext} vorschau aria-label="Einleitungstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für Angebote." />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
-        <textarea value={schlusstext} onChange={e => setSchlusstext(e.target.value)}
+        <MarkdownTextfeld value={schlusstext} onChange={setSchlusstext} vorschau aria-label="Schlusstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für Angebote." />
       </div>
@@ -704,6 +720,8 @@ function AngebotDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, angebot)
+      // Issue #596: Ausgabe im Dokumentverlauf festhalten
+      if (!angebot.ist_entwurf) void meldeVerlauf(angebot.id, { art: 'pdf', kanal: 'druck', kopie: angebot.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, `Angebot ${angebot.rechnungsnummer ?? ''}`)
       } else {
@@ -717,6 +735,7 @@ function AngebotDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, angebot)
+      if (!angebot.ist_entwurf) void meldeVerlauf(angebot.id, { art: 'gedruckt', kanal: 'druck', kopie: angebot.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, 'Angebot drucken')
       } else {
@@ -754,6 +773,9 @@ function AngebotDetail({
             ...(await paketAnhaenge(angebot.dokumentenpaket_id)),
           ],
         })
+        await meldeVerlauf(angebot.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: angebot.ausgegeben, empfaenger: email, betreff,
+        })
         setZeigMailEingabe(false)
         setMailAdresse('')
       } catch (e) {
@@ -789,6 +811,9 @@ function AngebotDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(angebot.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: angebot.ausgegeben, empfaenger: email, betreff,
+    })
     setZeigMailEingabe(false)
     setMailAdresse('')
     setZeigSmtpHinweis(true)
@@ -935,6 +960,15 @@ function AngebotDetail({
               → {angebot.rechnung_zu_angebot_nr ?? `RE #${angebot.rechnung_zu_angebot_id}`}
             </button>
           )}
+          {/* → Abschlagsrechnung (Issue #597); nach einem Auftrag laufen Abschläge über den Auftrag */}
+          {unternehmen?.abschlagsrechnungen_aktiv && !angebot.rechnung_zu_angebot_id && !angebot.auftrag_zu_angebot_id && (
+            <AbschlagErstellenKnopf
+              dokument={angebot}
+              className={btnGreen}
+              gesperrt={!!angebot.ist_entwurf || angebot.angebot_status === 'abgelehnt'}
+              gesperrtTitel={angebot.ist_entwurf ? 'Erst Entwurf finalisieren' : 'Angebot wurde abgelehnt'}
+            />
+          )}
           {unternehmen?.lieferschein_aktiv && (
             !angebot.lieferschein_zu_angebot_id ? (
               <button
@@ -985,8 +1019,8 @@ function AngebotDetail({
           )}
           <button
             onClick={onDelete}
-            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id)}
-            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
+            disabled={!!(angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id || angebot.abschlaege?.length)}
+            title={angebot.rechnung_zu_angebot_id || angebot.lieferschein_zu_angebot_id || angebot.proforma_zu_angebot_id || angebot.auftrag_zu_angebot_id || angebot.abschlaege?.length ? 'Nicht löschbar – Dokumente wurden aus diesem Angebot erstellt' : undefined}
             className={btnRed}
           >
             🗑 Löschen
@@ -1054,6 +1088,8 @@ function AngebotDetail({
             onClose={() => setZeigMailDialog(false)}
           />
         )}
+
+        <AbschlagListe dokument={angebot} />
 
         {/* Status-Umschalter */}
         {!angebot.rechnung_zu_angebot_id && (
@@ -1217,6 +1253,7 @@ export function AngebotePage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('angebote', 33)
+  const detailBreite = useDetailBreite('angebote')
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
@@ -1445,8 +1482,9 @@ export function AngebotePage() {
           </div>
         </div>
       )}
+      {selected && !formModus && <DetailTrennlinie detail={detailBreite} />}
       {selected && !formModus && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col`}>
           <AngebotDetail
             angebot={selected}
             onEdit={() => setFormModus('bearbeiten')}

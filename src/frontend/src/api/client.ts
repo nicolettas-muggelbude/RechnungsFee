@@ -71,7 +71,8 @@ export async function signiereUrl(url: string): Promise<string> {
 async function waitForBackend(baseUrl: string): Promise<void> {
   for (let i = 0; i < 300; i++) {
     try {
-      const res = await apiFetch(`${baseUrl}/setup/status`)
+      // Issue #593: /profile/start antwortet auch bei gesperrtem Profil (setup/status dann 423)
+      const res = await apiFetch(`${baseUrl}/profile/start`)
       if (res.ok) return
     } catch {
       // Backend noch nicht bereit
@@ -232,16 +233,37 @@ export const getKleinunternehmerUmsatz = () =>
   }>('/setup/kleinunternehmer-umsatz')
 
 // --- Profilmanager ---
-export type ProfilItem = { name: string; aktiv: boolean }
-export const getProfile = () => request<{ profile: ProfilItem[]; archiviert: string[] }>('/profile')
-export const createProfil = (name: string) =>
+// Issue #593: passwort = Profil ist mit Passwort gesperrt
+export type ProfilItem = { name: string; aktiv: boolean; passwort: boolean }
+export type ProfilListe = { profile: ProfilItem[]; archiviert: string[]; auswahl_beim_start: boolean }
+export const getProfile = () => request<ProfilListe>('/profile')
+export const createProfil = (name: string, passwort?: string) =>
   request<{ neustart_erforderlich: boolean }>('/profile', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, passwort: passwort || null }),
   })
-export const aktiviereProfil = (name: string) =>
+export const aktiviereProfil = (name: string, passwort?: string) =>
   request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/aktivieren`, {
     method: 'POST',
+    body: JSON.stringify({ passwort: passwort || null }),
+  })
+// Issue #593: Startbildschirm (auch bei gesperrtem Profil erreichbar)
+export type ProfilStart = { profile: ProfilItem[]; gesperrt: boolean; auswahl_anzeigen: boolean }
+export const getProfilStart = () => request<ProfilStart>('/profile/start')
+export const meldeProfilAn = (name: string, passwort?: string) =>
+  request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}/anmelden`, {
+    method: 'POST',
+    body: JSON.stringify({ passwort: passwort || null }),
+  })
+export const setzeProfilPasswort = (name: string, altesPasswort: string, neuesPasswort: string) =>
+  request<ProfilListe>(`/profile/${encodeURIComponent(name)}/passwort`, {
+    method: 'POST',
+    body: JSON.stringify({ altes_passwort: altesPasswort || null, neues_passwort: neuesPasswort || null }),
+  })
+export const setzeProfilStartEinstellungen = (auswahlBeimStart: boolean) =>
+  request<ProfilListe>('/profile/start/einstellungen', {
+    method: 'PUT',
+    body: JSON.stringify({ auswahl_beim_start: auswahlBeimStart }),
   })
 export const benenneProfilUm = (name: string, neuerName: string) =>
   request<{ neustart_erforderlich: boolean }>(`/profile/${encodeURIComponent(name)}`, {
@@ -330,6 +352,8 @@ export type Unternehmen = {
   anrede_fallback?: string | null
   pdf_vorlage?: number
   pdf_positionsnummern?: boolean
+  pdf_artikelnummer?: boolean  // Issue #562: Spalte „Art.-Nr.“ auf Dokumenten
+  pdf_positionsdatum?: boolean  // Issue #594: Spalte „Datum“ und Datumsfeld je Position
   logo_pfad?: string | null
   mail_betreff_vorlage?: string | null
   mail_text_vorlage?: string | null
@@ -339,6 +363,8 @@ export type Unternehmen = {
   mail_text_proforma?: string | null
   mail_betreff_auftrag?: string | null
   mail_text_auftrag?: string | null
+  mail_betreff_mahnung?: string | null  // Issue #561
+  mail_text_mahnung?: string | null
   mail_signatur?: string | null
   smtp_aktiv?: boolean
   smtp_host?: string | null
@@ -349,6 +375,10 @@ export type Unternehmen = {
   smtp_von_adresse?: string | null
   smtp_zertifikat_ignorieren?: boolean
   smtp_zertifikat_fingerprint?: string | null
+  // Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“
+  gesendet_imap_aktiv?: boolean
+  gesendet_imap_host?: string | null
+  gesendet_imap_port?: number
   thunderbird_aktiv?: boolean
   // Issue #451: Rechnungspostfach per IMAP
   postfach_aktiv?: boolean
@@ -359,6 +389,7 @@ export type Unternehmen = {
   imap_passwort_gesetzt?: boolean
   imap_ordner?: string
   imap_beim_start?: boolean
+  imap_intervall_minuten?: number  // Issue #592: 0 = aus
   imap_zertifikat_ignorieren?: boolean
   imap_zertifikat_fingerprint?: string | null
   zugferd_anhaenge_aktiv?: boolean
@@ -468,6 +499,7 @@ export type Konto = {
   kontotyp: 'geschaeftlich' | 'mischkonto' | 'privat'
   ist_standard: boolean
   datev_kontonummer?: string | null
+  kontoinhaber?: string | null  // Issue #604: Empfänger im QR-Code, leer = Firmenname
   aktiv?: boolean
   erstellt_am?: string
 }
@@ -494,12 +526,15 @@ export type Kategorie = {
   user_modified_skr04: boolean
   eks_kategorie?: string
   euer_zeile?: number
+  steuerfrei_paragraf?: SteuerfreiParagraf | null  // Issue #567
   vorsteuer_prozent: string
   ust_satz_standard: number
   ist_system: boolean
   aktiv: boolean
   beschreibung: string | null
 }
+// Issue #567: steuerfreie Einnahmen nach § 3 EStG (Übungsleiter / Ehrenamt)
+export type SteuerfreiParagraf = '3_26' | '3_26a'
 export type KategorieCreate = {
   name: string
   kontenart: string
@@ -510,6 +545,7 @@ export type KategorieCreate = {
   vorsteuer_prozent?: number
   ust_satz_standard?: number
   beschreibung?: string | null
+  steuerfrei_paragraf?: SteuerfreiParagraf | null
 }
 export const getKategorien = (nurAktive = false, nurBebuchte = false) => {
   const params = new URLSearchParams()
@@ -550,7 +586,9 @@ export type JournalEintrag = {
   kunde_name: string | null
   kunde_email: string | null
   kunde_zugferd_aktiv: boolean
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  lieferant_id?: number | null    // Issue #566
+  lieferant_name?: string | null
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   art: 'Einnahme' | 'Ausgabe'
   netto_betrag: string
   ust_satz: string
@@ -574,6 +612,7 @@ export type JournalEintrag = {
   gruppe_id?: number | null
   beleg_id?: number | null
   beleg?: Beleg | null
+  belege_anhaenge?: JournalAnhang[]   // Issue #568 Stufe 2: alle Belege der Buchung
   storniert?: boolean
   storno_belegnr?: string | null
   ist_storno?: boolean
@@ -587,7 +626,8 @@ export type JournalEintragCreate = {
   beschreibung: string
   kategorie_id?: number
   kunde_id?: number
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  lieferant_id?: number  // Issue #566: nur bei Ausgaben
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   art: 'Einnahme' | 'Ausgabe'
   brutto_betrag: string
   ust_satz: string
@@ -619,6 +659,11 @@ function toQuery(params: Record<string, string | number | string[] | undefined |
   return teile.length ? `?${teile.join('&')}` : ''
 }
 
+// Issue #565: Jahre mit Buchungen bzw. Transaktionen für die Jahresauswahl
+export const getJournalJahre = () => request<number[]>('/journal/jahre')
+export const getBankTransaktionsJahre = (kontoId: number) =>
+  request<number[]>(`/bank-import/${kontoId}/jahre`)
+
 export const getJournal = (filter?: {
   monat?: string
   datum_von?: string
@@ -627,6 +672,7 @@ export const getJournal = (filter?: {
   art?: string
   zahlungsart_typ?: 'bar' | 'unbar'
   gruppe_id?: number
+  lieferant_id?: number  // Issue #566: direkte Ausgaben eines Lieferanten
 }) => request<JournalEintrag[]>(`/journal${toQuery(filter ?? {})}`)
 export const createJournaleintrag = (data: JournalEintragCreate) =>
   request<JournalEintrag>('/journal', { method: 'POST', body: JSON.stringify(data) })
@@ -651,11 +697,13 @@ export type SplitPosition = {
 export type SplitBuchungCreate = {
   datum: string
   art: 'Einnahme' | 'Ausgabe'
-  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'  // Privat: Issue #470
   externe_belegnr?: string
   kunde_id?: number
+  lieferant_id?: number  // Issue #566: nur bei Ausgaben
   positionen: SplitPosition[]
   beleg_id?: number
+  beleg_ids?: number[]  // Issue #568 Stufe 2
 }
 
 export const createSplitBuchung = (data: SplitBuchungCreate) =>
@@ -711,10 +759,12 @@ export const getJournalExportUrl = async (
 }
 
 export const korrigiereZahlung = (
-  rechnungId: number, journalId: number, neuesDatum: string, neuerBetrag?: string
+  rechnungId: number, journalId: number, neuesDatum: string, neuerBetrag?: string,
+  neueZahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Privat',  // Issue #576, Privat #470
 ) =>
   request<Rechnung>(`/rechnungen/${rechnungId}/zahlung/${journalId}/korrigieren`, {
-    method: 'PUT', body: JSON.stringify({ neues_datum: neuesDatum, neuer_betrag: neuerBetrag || undefined }),
+    method: 'PUT',
+    body: JSON.stringify({ neues_datum: neuesDatum, neuer_betrag: neuerBetrag || undefined, neue_zahlungsart: neueZahlungsart }),
   })
 
 export const getRechnungenExportUrl = async (
@@ -1212,6 +1262,13 @@ async function _speichernUnter(blob: Blob, dateiname: string, filterName: string
  *  Der <a download>-Weg ist unter Linux (WebKitGTK) nicht zuverlässig verdrahtet - der Klick
  *  löst dort keinen sichtbaren Download aus (unter Windows/WebView2 schon), deshalb der
  *  Tauri-Zweig für alle Plattformen einheitlich über den nativen Dialog. */
+/** Lädt eine Backend-Adresse herunter und speichert sie als Datei (Issue #582: Mail ohne SMTP). */
+export async function ladeDateiHerunter(url: string, dateiname: string): Promise<void> {
+  const res = await apiFetch(url)
+  if (!res.ok) throw new Error(`Download fehlgeschlagen: ${res.status}`)
+  await _triggerBlobDownload(await res.blob(), dateiname)
+}
+
 async function _triggerBlobDownload(blob: Blob, filename: string) {
   if (isTauri()) {
     const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : undefined
@@ -1256,6 +1313,41 @@ export async function downloadPdfForMail(rechnungId: number): Promise<void> {
   const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";\r\n]+)/i)
   await _triggerBlobDownload(blob, match?.[1]?.trim() ?? 'rechnung.pdf')
 }
+
+// --- Dokumentverlauf (Issue #596) ---
+export type VerlaufArt =
+  | 'ausgegeben' | 'gedruckt' | 'pdf' | 'mail_gesendet' | 'mail_uebergeben'
+  | 'mahnung_gesendet' | 'mahnung_uebergeben' | 'mahnung_gedruckt'
+export type VerlaufKanal = 'druck' | 'smtp' | 'thunderbird' | 'mailprogramm' | 'unbekannt'
+export type VerlaufEintrag = {
+  id: number
+  zeitpunkt: string
+  art: VerlaufArt
+  kanal: VerlaufKanal
+  kopie: boolean
+  empfaenger: string | null
+  betreff: string | null
+  rechnung_id: number | null
+  mahnung_id: number | null
+  rechnungsnummer?: string | null
+  dokument_typ?: string | null
+  mahnnummer?: string | null
+}
+type VerlaufMeldung = { art: VerlaufArt; kanal: VerlaufKanal; kopie?: boolean; empfaenger?: string; betreff?: string }
+/** Druck/PDF und Übergabe an Thunderbird/Mailprogramm melden (SMTP protokolliert das Backend
+ *  selbst). Fehler werden verschluckt – der Verlauf darf Drucken/Mailen nie blockieren. */
+export async function meldeVerlauf(rechnungId: number, m: VerlaufMeldung): Promise<void> {
+  try {
+    await request(`/verlauf/rechnung/${rechnungId}`, { method: 'POST', body: JSON.stringify(m) })
+  } catch { /* nur Verlauf */ }
+}
+export async function meldeMahnungVerlauf(mahnungId: number, m: VerlaufMeldung): Promise<void> {
+  try {
+    await request(`/verlauf/mahnung/${mahnungId}`, { method: 'POST', body: JSON.stringify(m) })
+  } catch { /* nur Verlauf */ }
+}
+export const getPartnerVerlauf = (art: 'kunde' | 'lieferant', id: number) =>
+  request<VerlaufEintrag[]>(`/verlauf/${art}/${id}`)
 
 // --- Nummernkreise ---
 export type Nummernkreis = {
@@ -1304,6 +1396,16 @@ export async function getBelegUrl(rechnungId: number): Promise<string> {
   return `${base}/rechnungen/${rechnungId}/beleg`
 }
 
+/** Issue #598: lesbare Ansicht einer E-Rechnung (PDF) – pfad z. B. `/rechnungen/12/beleg/ansicht` */
+export async function getEInvoiceAnsichtUrl(pfad: string): Promise<string> {
+  return `${await getBaseUrl()}${pfad}`
+}
+
+/** Issue #598: ist die Datei eine XML-E-Rechnung? (MIME-Typ oder Dateiendung) */
+export function istXmlDatei(mime?: string | null, name?: string | null): boolean {
+  return !!(mime && /xml/i.test(mime)) || !!(name && /\.xml$/i.test(name))
+}
+
 export async function getBelegPdfaUrl(rechnungId: number): Promise<string> {
   const base = await getBaseUrl()
   return `${base}/rechnungen/${rechnungId}/beleg?version=pdfa`
@@ -1327,9 +1429,19 @@ export async function uploadJournalAnhang(eintragId: number, datei: File): Promi
   return res.json()
 }
 
-export async function getJournalAnhangUrl(eintragId: number): Promise<string> {
+export async function getJournalAnhangUrl(eintragId: number, anhangId?: number): Promise<string> {
   const base = await getBaseUrl()
-  return `${base}/journal/${eintragId}/anhang`
+  return `${base}/journal/${eintragId}/anhang${anhangId ? `?anhang_id=${anhangId}` : ''}`
+}
+
+// Issue #568 Stufe 2: mehrere Belege je Buchung
+export type JournalAnhang = Beleg & { anhang_id: number }
+export const deleteJournalEinzelAnhang = (eintragId: number, anhangId: number) =>
+  request<void>(`/journal/${eintragId}/anhang/${anhangId}`, { method: 'DELETE' })
+/** Alle Belege einer Buchung - fällt auf den einzelnen Beleg zurück (Altbestand). */
+export function journalBelege(e: Pick<JournalEintrag, 'belege_anhaenge' | 'beleg'>): JournalAnhang[] {
+  if (e.belege_anhaenge?.length) return e.belege_anhaenge
+  return e.beleg ? [{ ...e.beleg, anhang_id: 0 }] : []
 }
 
 // Split-Buchungen sind ab Erstellung immutable (kein 5-Minuten-Fenster) - Beleg muss daher
@@ -1453,6 +1565,7 @@ export type Rechnungsposition = {
   rabatt_prozent?: string
   artikelcode: string | null
   abschlag_rechnung_id?: number | null
+  leistungsdatum?: string | null  // Issue #594
 }
 
 export type RechnungspositionCreate = {
@@ -1466,6 +1579,7 @@ export type RechnungspositionCreate = {
   differenzbesteuerung?: boolean
   rabatt_prozent?: number
   abschlag_rechnung_id?: number
+  leistungsdatum?: string  // Issue #594: Leistungsdatum der Position (JJJJ-MM-TT)
 }
 
 export type RechnungsKettenGlied = {
@@ -1526,6 +1640,8 @@ export type Rechnung = {
   notizen: string | null
   externe_belegnr: string | null
   import_quelle?: string | null
+  altsystem_mahnstufe?: number            // Migration 196: im Altsystem bereits gemahnt bis Stufe
+  altsystem_gemahnt_am?: string | null
   kunden_bestellnummer?: string | null
   bemerkung_erechnung?: string | null
   positionen: Rechnungsposition[]
@@ -1537,6 +1653,9 @@ export type Rechnung = {
   ist_entwurf: boolean
   ausgegeben: boolean
   ausgegeben_am: string | null
+  // Issue #596: Druck-/Versandverlauf
+  verlauf?: VerlaufEintrag[]
+  letzter_versand?: VerlaufEintrag | null
   immutable: boolean
   storniert: boolean
   storno_grund: string | null
@@ -1594,6 +1713,11 @@ export type Rechnung = {
   herkunft_auftrag_nr: string | null
   herkunft_proforma_id: number | null
   herkunft_proforma_nr: string | null
+  // Issue #597: Abschlagsrechnung aus Angebot/Auftrag
+  abschlag_zu_dokument_id?: number | null
+  abschlag_zu_dokument_nr?: string | null
+  abschlag_zu_dokument_typ?: string | null
+  abschlaege?: AbschlagKompakt[]
   erstellt_am: string
   aktualisiert_am: string
   rabatt_prozent: string
@@ -1675,7 +1799,7 @@ export type ZahlungSplitPosition = {
 export type BarZahlungCreate = {
   betrag?: string
   datum: string
-  zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Keine'
+  zahlungsart: 'Bar' | 'Karte' | 'PayPal' | 'Bank' | 'Keine' | 'Privat'  // Privat: Issue #470
   beschreibung?: string
   kategorie_id?: number
   split?: ZahlungSplitPosition[]
@@ -1731,6 +1855,22 @@ export const auftragErstellen = (data: RechnungCreate) =>
 
 export const auftragAusAngebot = (angebotId: number) =>
   request<Rechnung>(`/rechnungen/${angebotId}/auftrag-aus-angebot`, { method: 'POST' })
+
+export interface AbschlagKompakt {
+  id: number
+  rechnungsnummer: string | null
+  datum: string
+  brutto_gesamt: string
+  bezahlt_betrag: string
+  zahlungsstatus: string | null
+  ist_entwurf: boolean
+  storniert: boolean
+  verrechnet_in_rechnung_id: number | null
+}
+
+/** Issue #597: Abschlagsrechnung (Entwurf) über Prozent oder Bruttobetrag eines Angebots/Auftrags */
+export const abschlagAusDokument = (dokId: number, daten: { prozent?: number; betrag?: number }) =>
+  request<Rechnung>(`/rechnungen/${dokId}/abschlag-aus-dokument`, { method: 'POST', body: JSON.stringify(daten) })
 
 export const rechnungAusAuftrag = (auftragId: number) =>
   request<Rechnung>(`/rechnungen/${auftragId}/rechnung-aus-auftrag`, { method: 'POST' })
@@ -1937,6 +2077,9 @@ export const gutschriftVerrechnen = (gutschriftId: number, rechnungId: number) =
 
 export const ersatzrechnungErstellen = (id: number) =>
   request<Rechnung>(`/rechnungen/${id}/ersatzrechnung`, { method: 'POST' })
+// Issue #560: neue Rechnung (Entwurf) nach dem Muster einer bestehenden
+export const rechnungDuplizieren = (id: number, mitPositionen: boolean) =>
+  request<Rechnung>(`/rechnungen/${id}/duplizieren?mit_positionen=${mitPositionen}`, { method: 'POST' })
 
 export const finalisiereRechnung = (id: number, datumHeute = false) =>
   request<Rechnung>(`/rechnungen/${id}/finalisieren${datumHeute ? '?datum_heute=true' : ''}`, { method: 'POST' })
@@ -2028,6 +2171,7 @@ export type Artikel = {
 export type ArtikelSuche = {
   id: number
   artikelnummer: string
+  artikelcode?: string | null  // Issue #562: eigene Artikelnummer
   typ: ArtikelTyp
   bezeichnung: string
   einheit: string
@@ -2389,6 +2533,14 @@ export type EUERZeileAuswahl = {
 // Issue #470: gültige EÜR-Zeilen (Basis Vordruck 2025) für die Kategorie-Auswahl
 export const getEUERZeilen = () => request<EUERZeileAuswahl[]>('/euer/zeilen')
 
+export type SteuerfreieTaetigkeit = {
+  paragraf: SteuerfreiParagraf
+  taetigkeit: string
+  einnahmen: string
+  steuerfrei: string
+  freibetrag: string
+}
+
 export type EUERErgebnis = {
   jahr: number
   zeilen: EUERZeile[]
@@ -2397,6 +2549,11 @@ export type EUERErgebnis = {
   summe_einnahmen: string
   summe_ausgaben: string
   gewinn_verlust: string
+  // Issue #567: Überschuss vor dem Abzug steuerfreier Einnahmen § 3 Nr. 26/26a (Zeile 78, 2026: 79)
+  ueberschuss: string
+  abzug_steuerfrei: string
+  zeile_steuerfrei: number
+  steuerfrei_taetigkeiten: SteuerfreieTaetigkeit[]
   anlage_zugaenge: string
   aveur_afa: string
   ist_kleinunternehmer: boolean
@@ -2471,6 +2628,15 @@ export type AnlageSErgebnis = {
   gewinn_verlust: string
   kfz_hinweise: AnlageSKfzHinweis[]
   taetigkeitsart: string
+  // Issue #567: Zeile 57/58 – Einnahmen aus nebenberuflicher Tätigkeit
+  nebentaetigkeiten: AnlageSNebentaetigkeit[]
+}
+
+export type AnlageSNebentaetigkeit = {
+  zeile: number
+  taetigkeit: string
+  einnahmen: string
+  steuerfrei: string
 }
 
 export const berechneAnlageS = (jahr: number) =>
@@ -2527,14 +2693,15 @@ export type MailSendenRequest = {
   dsgvo_lieferant_id?: number
 }
 
+// hinweis: Mail gesendet, aber Kopie im Ordner „Gesendet“ (IMAP) fehlgeschlagen (Issue #596)
 export const sendeMailMitAnhang = (data: MailSendenRequest) =>
-  request<{ ok: boolean }>('/mail/senden', {
+  request<{ ok: boolean; hinweis?: string | null }>('/mail/senden', {
     method: 'POST',
     body: JSON.stringify(data),
   })
 
 export const sendeTestMail = (an: string) =>
-  request<{ ok: boolean }>('/mail/test', {
+  request<{ ok: boolean; hinweis?: string | null }>('/mail/test', {
     method: 'POST',
     body: JSON.stringify({ an }),
   })
@@ -2611,7 +2778,7 @@ export type EntwurfErgebnis = {
   vorlage_id: number
   vorlage_bezeichnung: string
   rechnung_id: number
-  rechnungsnummer: string
+  rechnungsnummer: string | null  // Issue #465: Entwurf ohne Nummer
   preisaenderungen: Preisaenderung[]
 }
 
@@ -2688,6 +2855,10 @@ export type Buchungsvorlage = {
   kategorie_name: string | null
   konto_id: number | null
   konto_name: string | null
+  // Issue #566: Zahlungsart der Buchung und Kunde bei Einnahme-Vorlagen
+  zahlungsart: 'Bank' | 'Bar' | 'Karte' | 'PayPal'
+  kunde_id: number | null
+  kunde_name: string | null
   betrag: string
   ist_brutto: boolean
   ust_satz: string
@@ -2705,7 +2876,7 @@ export type Buchungsvorlage = {
 }
 
 export type BuchungsvorlageCreate = Omit<Buchungsvorlage,
-  'id' | 'lieferant_name' | 'kategorie_name' | 'konto_name' |
+  'id' | 'lieferant_name' | 'kategorie_name' | 'konto_name' | 'kunde_name' |
   'beleg_id' | 'beleg_name' | 'letzte_buchung' | 'erstellte_buchungen' | 'erstellt_am'>
 
 export const getBuchungsvorlagen = () =>
@@ -2720,8 +2891,8 @@ export const updateBuchungsvorlage = (id: number, data: Partial<BuchungsvorlageC
   request<Buchungsvorlage>(`/buchungsvorlagen/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteBuchungsvorlage = (id: number) =>
   request<void>(`/buchungsvorlagen/${id}`, { method: 'DELETE' })
-export const buchungAusfuehren = (id: number, belegId?: number) =>
-  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_id: belegId ?? null }) })
+export const buchungAusfuehren = (id: number, belegIds: number[] = []) =>
+  request<JournalEintrag>(`/buchungsvorlagen/${id}/buchen`, { method: 'POST', body: JSON.stringify({ beleg_ids: belegIds }) })
 export const uploadBuchungsvorlageBeleg = (id: number, datei: File) => {
   const form = new FormData()
   form.append('datei', datei)
@@ -2743,6 +2914,7 @@ export type Anlagegut = {
   kaufpreis_netto: string
   nutzungsdauer_jahre: number
   afa_methode: string
+  afa_sofort?: boolean  // Issue #578: voller Abzug im Anschaffungsjahr (EDV, ND 1)
   kennzeichen: string | null
   privat_anteil_prozent: string
   verkauft_am: string | null
@@ -2988,6 +3160,8 @@ export type BankVorschauResponse = {
   encoding: string
   konto_iban: string | null
   erkanntes_konto_id: number | null
+  erkannte_email: string | null
+  email_konto_ids: number[]
   transaktionen: BankTransaktionVorschau[]
 }
 
@@ -3256,6 +3430,31 @@ export type CockpitDaten = {
 
 export const getCockpit = (zeitraum: 'monat' | 'quartal' | 'jahr', wert: string) =>
   request<CockpitDaten>(`/cockpit?zeitraum=${zeitraum}&wert=${encodeURIComponent(wert)}`)
+
+// Issue #603: Überleitung Dashboard-Kacheln (brutto) → Cockpit (netto, EÜR-relevant)
+export interface UeberleitungZeile {
+  kategorie_id: number | null
+  kategorie: string
+  kontenart: string | null
+  euer_zeile: number | null
+  anzahl: number
+  brutto: number
+  cockpit_einnahmen: number
+  cockpit_ausgaben: number
+  grund: string
+}
+
+export interface UeberleitungDaten {
+  von: string
+  bis: string
+  eingaenge: UeberleitungZeile[]
+  ausgaenge: UeberleitungZeile[]
+  nicht_in_kacheln: UeberleitungZeile[]
+  summen: { kachel_eingaenge: number; kachel_ausgaenge: number; cockpit_einnahmen: number; cockpit_ausgaben: number }
+}
+
+export const getCockpitUeberleitung = (von: string, bis: string) =>
+  request<UeberleitungDaten>(`/cockpit/ueberleitung?von=${von}&bis=${bis}`)
 
 // ---------------------------------------------------------------------------
 // Datenübernahme / CSV-Import
@@ -3530,6 +3729,12 @@ export type MahnwesenKundeUebersicht = {
 
 export const getMahnwesenEinstellungen = () =>
   request<MahnwesenEinstellungen>('/mahnwesen/einstellungen')
+// Importierte Rechnung: im Altsystem bereits verschickte Mahnstufe (0 = keine) und deren Datum
+export const setzeAltsystemMahnstufe = (rechnungId: number, stufe: number, datum: string | null) =>
+  request<{ altsystem_mahnstufe: number; altsystem_gemahnt_am: string | null; mahnstufe_aktuell: number }>(
+    `/mahnwesen/rechnungen/${rechnungId}/altsystem`,
+    { method: 'PUT', body: JSON.stringify({ stufe, datum }) },
+  )
 export const updateMahnwesenEinstellungen = (data: MahnwesenEinstellungenUpdate) =>
   request<MahnwesenEinstellungen>('/mahnwesen/einstellungen', { method: 'PUT', body: JSON.stringify(data) })
 export const createMahnstufe = (data: MahnstufeCreate) =>
@@ -3603,6 +3808,20 @@ export async function downloadInkassoPaket(kundeId: number): Promise<void> {
 
 /** Lädt eine Mahnungs-PDF als Datei herunter (kein Viewer) - Mail-Fallback ohne SMTP,
  *  analog downloadPdfForMail(). Zählt wie Drucken/SMTP-Versand als "verlässt das Haus". */
+// Issue #582: Zusatzanhänge der Mahnstufe (Rechnungen, bisherige Mahnungen, Kontokorrent)
+// für Thunderbird bzw. das Mailprogramm - bisher nur beim SMTP-Versand
+export const getMahnungZusatzanhaenge = (mahnungId: number) =>
+  request<{ index: number; dateiname: string }[]>(`/mahnwesen/${mahnungId}/zusatzanhaenge`)
+export async function getMahnungZusatzanhangUrl(mahnungId: number, index: number): Promise<string> {
+  const base = await getBaseUrl()
+  return `${base}/mahnwesen/${mahnungId}/zusatzanhaenge/${index}`
+}
+export async function downloadMahnungZusatzanhang(mahnungId: number, index: number, dateiname: string): Promise<void> {
+  const res = await apiFetch(await getMahnungZusatzanhangUrl(mahnungId, index))
+  if (!res.ok) throw new Error(`Anhang-Download fehlgeschlagen: ${res.status}`)
+  await _triggerBlobDownload(await res.blob(), dateiname)
+}
+
 export async function downloadMahnungPdfForMail(mahnungId: number): Promise<void> {
   const base = await getBaseUrl()
   const res = await apiFetch(`${base}/mahnwesen/${mahnungId}/pdf?download=true`)

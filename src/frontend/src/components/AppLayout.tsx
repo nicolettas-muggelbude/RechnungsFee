@@ -350,6 +350,19 @@ export function AppLayout() {
       .catch((e) => console.warn('[RechnungsFee] Postfach-Abruf beim Start fehlgeschlagen:', e))
   }, [unt?.postfach_aktiv, unt?.imap_beim_start]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Issue #592: regelmäßig abrufen, solange die App läuft. Fehler (z. B. kein Netz) bleiben still -
+  // sichtbar werden sie beim Abruf von Hand im Postfach-Fenster. Neue Rechnungen zeigt das Dashboard.
+  const postfachIntervall = unt?.postfach_aktiv ? (unt.imap_intervall_minuten ?? 0) : 0
+  useEffect(() => {
+    if (postfachIntervall <= 0) return
+    const id = window.setInterval(() => {
+      postfachAbrufen()
+        .then(() => qcPostfach.invalidateQueries({ queryKey: ['postfach-eingang'] }))
+        .catch((e) => console.warn('[RechnungsFee] Postfach-Abruf im Hintergrund fehlgeschlagen:', e))
+    }, postfachIntervall * 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [postfachIntervall]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Nur relevant/sichtbar sobald mehr als ein Profil existiert - bei genau einem Profil
   // (der Normalfall) wäre die Anzeige nur Rauschen, siehe Profile.md.
   const { data: profilListe } = useQuery({
@@ -630,7 +643,7 @@ export function AppLayout() {
             <span className="text-blue-600 dark:text-blue-400 text-base leading-none">🔁</span>
             <p className="text-sm text-blue-800 dark:text-blue-300 flex-1">
               {wiederErgebnisse.length === 1
-                ? <>Entwurf <span className="font-semibold">{wiederErgebnisse[0].rechnungsnummer}</span> aus Vorlage „{wiederErgebnisse[0].vorlage_bezeichnung}" erstellt.</>
+                ? <>Rechnungsentwurf{wiederErgebnisse[0].rechnungsnummer && <> <span className="font-semibold">{wiederErgebnisse[0].rechnungsnummer}</span></>} aus Vorlage „{wiederErgebnisse[0].vorlage_bezeichnung}" erstellt.</>
                 : <>{wiederErgebnisse.length} Rechnungs-Entwürfe aus wiederkehrenden Vorlagen erstellt.</>
               }
               {wiederErgebnisse.some(e => e.preisaenderungen.length > 0) && (

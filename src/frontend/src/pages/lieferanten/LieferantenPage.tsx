@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
+import { PartnerVerlauf } from '../../components/DokumentVerlauf'
 import { useSearchParams } from 'react-router-dom'
 import { ImportDialog } from '../../components/ImportDialog'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { UstIdnrPruefung } from '../../components/UstIdnrPruefung'
 import { LandCombobox } from '../../components/LandCombobox'
 import { DsgvoMailButton } from '../../components/DsgvoMailButton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { kontokorrentMailOhneSmtp } from '../../utils/mailOhneSmtp'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,7 +18,7 @@ import {
   getLieferanten, createLieferant, updateLieferant, deleteLieferant,
   anonymisiereLieferant, dsgvoExportLieferant, dsgvoExportLieferantPdf,
   getKontokorrentLieferant, downloadKontokorrentPdfLieferant, sendeKontokorrentMailLieferant,
-  getNaechsteKreditorNr, getLieferantenguthaben, forderungVerrechnen, getRechnungen,
+  getNaechsteKreditorNr, getLieferantenguthaben, forderungVerrechnen, getRechnungen, getJournal, getUnternehmen,
   type Lieferant, type AnonymisierungResult, type KontokorrentBewegung,
 } from '../../api/client'
 
@@ -62,7 +66,7 @@ function formatDatum(iso: string): string {
 
 function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; initialTab?: 'kontokorrent' }) {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'details' | 'kontokorrent'>(initialTab ?? 'details')
+  const [tab, setTab] = useState<'details' | 'kontokorrent' | 'ausgaben' | 'verlauf'>(initialTab ?? 'details')
   const [kreditorEdit, setKreditorEdit] = useState(false)
   const [kreditorNr, setKreditorNr] = useState(lieferant.kreditor_nr ?? '')
 
@@ -90,12 +94,26 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
   })
 
   const mailMut = useMutation({
-    mutationFn: () => sendeKontokorrentMailLieferant(lieferant.id!, {
-      an: mailAn, cc: mailCc || undefined,
-      betreff: mailBetreff, text: mailText,
-      von, bis,
-    }),
+    mutationFn: async () => {
+      const daten = { an: mailAn, cc: mailCc || undefined, betreff: mailBetreff, text: mailText, von, bis }
+      // Issue #582: wie bei Rechnungen - Thunderbird hat Vorrang, ohne SMTP das Mailprogramm
+      const unt = await qc.fetchQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen, staleTime: 1000 * 60 * 10 })
+      if (unt?.thunderbird_aktiv || !unt?.smtp_aktiv) {
+        await kontokorrentMailOhneSmtp('lieferanten', lieferant.id!, daten, !!unt?.thunderbird_aktiv)
+        return { ok: true }
+      }
+      return sendeKontokorrentMailLieferant(lieferant.id!, daten)
+    },
     onSuccess: () => { setMailSent(true); setTimeout(() => { setShowMail(false); setMailSent(false) }, 1500) },
+  })
+
+  // Issue #566: direkt gebuchte Ausgaben (Journal, Split, Buchungsvorlage) - bewusst nicht im
+  // Kontokorrent, da sofort bezahlt und nie eine offene Verbindlichkeit
+  const { data: direkteAusgaben, isLoading: laedtAusgaben } = useQuery({
+    queryKey: ['journal', 'lieferant', lieferant.id],
+    queryFn: () => getJournal({ lieferant_id: lieferant.id! }),
+    enabled: tab === 'ausgaben' && !!lieferant.id,
+    staleTime: 1000 * 60,
   })
 
   const { data: bewegungen, isLoading: laegtBewegungen } = useQuery({
@@ -169,12 +187,61 @@ function LieferantDetail({ lieferant, initialTab }: { lieferant: Lieferant; init
             className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'kontokorrent' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
             Kontokorrent
           </button>
+          <button onClick={() => setTab('ausgaben')}
+            className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'ausgaben' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            Ausgaben
+          </button>
+          <button onClick={() => setTab('verlauf')}
+            className={`flex-1 text-xs py-1 rounded border transition-colors ${tab === 'verlauf' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            Verlauf
+          </button>
         </div>
       </div>
 
       {/* Scrollbarer Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {tab === 'kontokorrent' ? (
+        {tab === 'verlauf' ? (
+          <PartnerVerlauf art="lieferant" id={lieferant.id!} />
+        ) : tab === 'ausgaben' ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Direkt gebuchte Ausgaben mit diesem Lieferanten (Journal, Split-Buchung, Buchungsvorlage).
+              Zahlungen auf Eingangsrechnungen findest du im Kontokorrent.
+            </p>
+            {laedtAusgaben ? (
+              <p className="text-sm text-slate-400 dark:text-slate-500">Lade…</p>
+            ) : !direkteAusgaben?.length ? (
+              <p className="text-sm text-slate-400 dark:text-slate-500">Noch keine direkt gebuchten Ausgaben.</p>
+            ) : (
+              <>
+                <ul className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+                  {direkteAusgaben.map((e) => (
+                    <li key={e.id} className="flex items-baseline justify-between gap-3 py-1.5">
+                      <div className="min-w-0">
+                        <p className={`truncate text-slate-700 dark:text-slate-200 ${e.storniert ? 'line-through opacity-60' : ''}`}>{e.beschreibung}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          {new Date(e.datum).toLocaleDateString('de-DE')} · {e.belegnr}
+                          {e.storniert && <> · storniert{e.storno_belegnr ? ` (${e.storno_belegnr})` : ''}</>}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 font-medium tabular-nums ${e.storniert ? 'text-slate-400 line-through' : 'text-red-600 dark:text-red-400'}`}>
+                        {parseFloat(e.brutto_betrag).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <span>Summe (ohne stornierte)</span>
+                  <span className="tabular-nums">
+                    {direkteAusgaben.filter((e) => !e.storniert)
+                      .reduce((s, e) => s + parseFloat(e.brutto_betrag), 0)
+                      .toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                  </span>
+                </p>
+              </>
+            )}
+          </div>
+        ) : tab === 'kontokorrent' ? (
           <div className="space-y-4">
             <div>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Kreditorennummer</p>
@@ -451,6 +518,7 @@ export function LieferantenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('lieferanten', 33)
+  const detailBreite = useDetailBreite('lieferanten')
   const [selected, setSelected] = useState<Lieferant | null>(null)
   const [initialDetailTab, setInitialDetailTab] = useState<'kontokorrent' | undefined>(undefined)
   const [suche, setSuche] = useState('')
@@ -692,8 +760,9 @@ export function LieferantenPage() {
       )}
 
       {/* ── Rechte Spalte (Detail oder Formular) ─────────────────────── */}
+      {!showForm && <DetailTrennlinie detail={detailBreite} />}
       {!showForm && (
-        <div className="w-[28rem] shrink-0">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0`}>
           {selected ? (
             <LieferantDetail key={selected.id} lieferant={selected} initialTab={initialDetailTab} />
           ) : (

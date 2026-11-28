@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -11,7 +13,7 @@ import {
   uploadJournalAnhangVorab,
   analysiereRechnung,
   dateiInSpeicher,
-  getKategorien, getLieferanten, getKonten, getUnternehmen,
+  getKategorien, getLieferanten, getKonten, getUnternehmen, getKunden,
   type Buchungsvorlage, type BuchungsvorlageCreate, type AnalyseErgebnis,
 } from '../../api/client'
 import { LieferantErstellenModal } from '../../components/LieferantErstellenModal'
@@ -55,6 +57,8 @@ type FormData = {
   lieferant_id: number | null
   kategorie_id: number | null
   konto_id: number | null
+  zahlungsart: 'Bank' | 'Bar' | 'Karte' | 'PayPal'
+  kunde_id: number | null
   betrag: string
   ist_brutto: boolean
   ust_satz: string
@@ -72,6 +76,8 @@ function leereForm(): FormData {
     lieferant_id: null,
     kategorie_id: null,
     konto_id: null,
+    zahlungsart: 'Bank',
+    kunde_id: null,
     betrag: '',
     ist_brutto: true,
     ust_satz: '0',
@@ -90,6 +96,8 @@ function fromVorlage(v: Buchungsvorlage): FormData {
     lieferant_id: v.lieferant_id,
     kategorie_id: v.kategorie_id,
     konto_id: v.konto_id,
+    zahlungsart: v.zahlungsart ?? 'Bank',
+    kunde_id: v.kunde_id ?? null,
     betrag: v.betrag,
     ist_brutto: v.ist_brutto,
     ust_satz: v.ust_satz,
@@ -112,6 +120,7 @@ function VorlageFormular({
   kategorien,
   lieferanten,
   konten,
+  kunden,
 }: {
   initial?: Buchungsvorlage
   onSave: (d: BuchungsvorlageCreate) => void
@@ -119,6 +128,7 @@ function VorlageFormular({
   kategorien: { id: number; name: string; kontenart: string }[]
   lieferanten: { id: number; name: string }[]
   konten: { id: number; bezeichnung: string; kontoart: string }[]
+  kunden: { id: number; name: string }[]
 }) {
   const qc = useQueryClient()
   const [form, setForm] = useState<FormData>(initial ? fromVorlage(initial) : leereForm())
@@ -135,6 +145,11 @@ function VorlageFormular({
   const relevanteKategorien = form.art === 'Einnahme'
     ? kategorien.filter(k => k.kontenart === 'Erlös')
     : kategorien.filter(k => k.kontenart === 'Aufwand')
+  // Issue #566: Konto passend zur Zahlungsart (PayPal = Zahlungsdienstleister, bar = keins)
+  const passendeKonten = konten.filter(k =>
+    form.zahlungsart === 'PayPal' ? k.kontoart === 'zahlungsdienstleister' : k.kontoart === 'bank')
+  const kontoWaehlbar = form.zahlungsart !== 'Bar'
+  const direkt = form.modus === 'direkt'
 
   function setArt(neu: 'Einnahme' | 'Ausgabe') {
     setForm(f => ({
@@ -153,7 +168,9 @@ function VorlageFormular({
       bezeichnung: form.bezeichnung.trim(),
       lieferant_id: form.art === 'Einnahme' ? null : form.lieferant_id,
       kategorie_id: form.kategorie_id,
-      konto_id: form.konto_id,
+      konto_id: kontoWaehlbar && passendeKonten.some(k => k.id === form.konto_id) ? form.konto_id : null,
+      zahlungsart: form.zahlungsart,
+      kunde_id: form.art === 'Einnahme' ? form.kunde_id : null,
       betrag: form.betrag,
       ist_brutto: form.ist_brutto,
       ust_satz: sperreUstAufNull ? '0' : form.ust_satz,
@@ -215,11 +232,22 @@ function VorlageFormular({
         </div>
       </div>
 
-      <div className={form.art === 'Ausgabe' ? 'grid grid-cols-2 gap-4' : ''}>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Nächste Fälligkeit *</label>
           <DateInput value={form.naechstes_datum} onChange={(v) => set('naechstes_datum', v)} required className={inputCls} />
         </div>
+        {/* Issue #566: Kunde bei Einnahme-Vorlagen (z. B. Honorar aus Honorarvertrag) */}
+        {form.art === 'Einnahme' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-kunde">Kunde</label>
+            <select id="bv-kunde" value={form.kunde_id ?? ''}
+              onChange={e => set('kunde_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
+              <option value="">– kein Kunde –</option>
+              {kunden.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </div>
+        )}
         {form.art === 'Ausgabe' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Lieferant</label>
@@ -291,14 +319,34 @@ function VorlageFormular({
             {relevanteKategorien.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Konto</label>
-          <select value={form.konto_id ?? ''} onChange={e => set('konto_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
-            <option value="">– kein Konto –</option>
-            {konten.map(k => <option key={k.id} value={k.id}>{k.bezeichnung ?? ''}</option>)}
-          </select>
-        </div>
+        {direkt && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-zahlungsart">Zahlungsart</label>
+            <select id="bv-zahlungsart" value={form.zahlungsart}
+              onChange={e => set('zahlungsart', e.target.value as FormData['zahlungsart'])} className={selectCls}>
+              <option value="Bank">Bank</option>
+              <option value="Bar">Bar</option>
+              <option value="Karte">Karte</option>
+              <option value="PayPal">PayPal</option>
+            </select>
+          </div>
+        )}
+        {(!direkt || kontoWaehlbar) && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" htmlFor="bv-konto">Konto</label>
+            <select id="bv-konto" value={form.konto_id ?? ''} onChange={e => set('konto_id', e.target.value ? Number(e.target.value) : null)} className={selectCls}>
+              <option value="">– kein Konto –</option>
+              {(direkt ? passendeKonten : konten.filter(k => k.kontoart === 'bank')).map(k =>
+                <option key={k.id} value={k.id}>{k.bezeichnung ?? ''}</option>)}
+            </select>
+          </div>
+        )}
       </div>
+      {direkt && form.zahlungsart === 'Bar' && form.art === 'Ausgabe' && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">
+          Bar-Ausgaben werden aus der Kasse gebucht. Reicht der Kassenbestand nicht, wird die Buchung abgelehnt.
+        </p>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Notizen</label>
@@ -431,29 +479,38 @@ function VorlageKarte({ vorlage, onBuchen, onEingangsrechnung }: {
 /** Beleg-Auswahl für den Buchen-Bestätigungsdialog (Issue #355) - gleiches Aussehen wie der
  * Beleg-Anhang bei Eingangsrechnungen. Die Datei wird erst beim Bestätigen hochgeladen
  * (siehe handleBuchenBestaetigen), da der Journal-Eintrag noch nicht existiert. */
-function BelegDropzone({ datei, onChange }: { datei: File | null; onChange: (f: File | null) => void }) {
+function BelegDropzone({ dateien, onChange, vertrag }: {
+  dateien: File[]; onChange: (f: File[]) => void; vertrag?: string | null
+}) {
   return (
-    <div className="mt-3">
-      {datei ? (
-        <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-slate-700">
-          <span className="text-sm text-slate-600 dark:text-slate-300 truncate">📎 {datei.name}</span>
-          <button type="button" onClick={() => onChange(null)}
-            className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300" title="Entfernen">
+    <div className="mt-3 space-y-1.5">
+      {/* Issue #568 Stufe 2: der Vertrag der Vorlage wird immer zusätzlich angehängt */}
+      {vertrag && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+          📎 Der Vertrag „{vertrag}“ wird {dateien.length ? 'zusätzlich ' : ''}an die Buchung angehängt.
+        </p>
+      )}
+      {dateien.map((d, i) => (
+        <div key={`${d.name}-${i}`} className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-slate-700">
+          <span className="text-sm text-slate-600 dark:text-slate-300 truncate">📎 {d.name}</span>
+          <button type="button" onClick={() => onChange(dateien.filter((_, j) => j !== i))}
+            className="shrink-0 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+            title="Entfernen" aria-label={`${d.name} entfernen`}>
             🗑
           </button>
         </div>
-      ) : (
-        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-          <span>📎</span>
-          <span>Beleg anhängen (optional)</span>
-          <input
-            type="file"
-            accept="application/pdf,image/jpeg,image/png,image/tiff"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f); e.target.value = '' }}
-          />
-        </label>
-      )}
+      ))}
+      <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+        <span>📎</span>
+        <span>{dateien.length ? 'Weiteren Beleg anhängen' : 'Beleg anhängen (optional, auch mehrere)'}</span>
+        <input
+          type="file"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/tiff"
+          className="hidden"
+          onChange={(e) => { const neu = Array.from(e.target.files ?? []); if (neu.length) onChange([...dateien, ...neu]); e.target.value = '' }}
+        />
+      </label>
     </div>
   )
 }
@@ -535,7 +592,9 @@ function VorlageDetail({
           ['Buchungen erstellt', `${vorlage.erstellte_buchungen}×`],
           ...(vorlage.letzte_buchung ? [['Letzte Buchung', fmt(vorlage.letzte_buchung)]] : []),
           ...(vorlage.lieferant_name ? [['Lieferant', vorlage.lieferant_name]] : []),
+          ...(vorlage.kunde_name ? [['Kunde', vorlage.kunde_name]] : []),
           ...(vorlage.kategorie_name ? [['Kategorie', vorlage.kategorie_name]] : []),
+          ...(vorlage.modus === 'direkt' ? [['Zahlungsart', vorlage.zahlungsart ?? 'Bank']] : []),
           ...(vorlage.konto_name ? [['Konto', vorlage.konto_name]] : []),
         ].map(([label, value]) => (
           <div key={label}>
@@ -634,13 +693,14 @@ export default function BuchungsvorlagenPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('buchungsvorlagen', 33)
+  const detailBreite = useDetailBreite('buchungsvorlagen')
   const [selId, setSelId] = useState<number | null>(null)
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [suche, setSuche] = useState('')
   const [aktivFilter, setAktivFilter] = useState<'alle' | 'aktiv' | 'inaktiv'>('aktiv')
   const [modusFilter, setModusFilter] = useState<'' | 'direkt' | 'beleg'>('')
-  const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string } | null>(null)
-  const [buchenBelegDatei, setBuchenBelegDatei] = useState<File | null>(null)
+  const [buchungsBestaetigung, setBuchungsBestaetigung] = useState<{ id: number; warnung: boolean; datum: string; bezeichnung: string; vertrag: string | null } | null>(null)
+  const [buchenBelegDateien, setBuchenBelegDateien] = useState<File[]>([])
   const [buchenBelegHochladen, setBuchenBelegHochladen] = useState(false)
   const [buchungsHinweis, setBuchungsHinweis] = useState<string | null>(null)  // Issue #497
 
@@ -648,7 +708,11 @@ export default function BuchungsvorlagenPage() {
   const { data: kategorien = [] } = useQuery({ queryKey: ['kategorien'], queryFn: () => getKategorien() })
   const { data: lieferanten = [] } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
   const { data: konten = [] } = useQuery({ queryKey: ['konten'], queryFn: getKonten })
-  const bankKonten = konten.filter(k => k.kontoart === 'bank')
+  const { data: kundenListe = [] } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+  const kontenAuswahl = konten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))
+  const kundenAuswahl = kundenListe.map(k => ({
+    id: k.id!, name: k.firmenname || [k.vorname, k.nachname].filter(Boolean).join(' ') || `Kunde ${k.id}`,
+  }))
 
   const selVorlage = vorlagen.find(v => v.id === selId)
 
@@ -682,7 +746,7 @@ export default function BuchungsvorlagenPage() {
     onSuccess: () => { invalidieren(); setSelId(null) },
   })
   const buchenMut = useMutation({
-    mutationFn: ({ id, belegId }: { id: number; belegId?: number }) => buchungAusfuehren(id, belegId),
+    mutationFn: ({ id, belegIds }: { id: number; belegIds: number[] }) => buchungAusfuehren(id, belegIds),
     onSuccess: (eintrag) => {
       invalidieren()
       if (eintrag.hinweis) setBuchungsHinweis(eintrag.hinweis)  // Issue #497: freie ig. Lieferung ab Stichtag
@@ -690,20 +754,22 @@ export default function BuchungsvorlagenPage() {
   })
 
   async function handleBuchenBestaetigen(id: number) {
-    let belegId: number | undefined
-    if (buchenBelegDatei) {
+    const belegIds: number[] = []
+    if (buchenBelegDateien.length) {
       setBuchenBelegHochladen(true)
-      try {
-        const beleg = await uploadJournalAnhangVorab(buchenBelegDatei)
-        belegId = beleg.id
-      } catch (e) {
-        console.error('Beleg-Upload fehlgeschlagen', e)
+      for (const datei of buchenBelegDateien) {
+        try {
+          const beleg = await uploadJournalAnhangVorab(datei)
+          belegIds.push(beleg.id)
+        } catch (e) {
+          console.error('Beleg-Upload fehlgeschlagen', e)
+        }
       }
       setBuchenBelegHochladen(false)
     }
-    buchenMut.mutate({ id, belegId })
+    buchenMut.mutate({ id, belegIds })
     setBuchungsBestaetigung(null)
-    setBuchenBelegDatei(null)
+    setBuchenBelegDateien([])
   }
   const belegUploadMut = useMutation({
     mutationFn: ({ id, datei }: { id: number; datei: File }) => uploadBuchungsvorlageBeleg(id, datei),
@@ -722,8 +788,11 @@ export default function BuchungsvorlagenPage() {
   function handleBuchen(id: number) {
     const v = vorlagen.find(v => v.id === id)
     if (!v) return
-    setBuchenBelegDatei(null)
-    setBuchungsBestaetigung({ id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung })
+    setBuchenBelegDateien([])
+    setBuchungsBestaetigung({
+      id, warnung: v.naechstes_datum > heuteIso(), datum: v.naechstes_datum, bezeichnung: v.bezeichnung,
+      vertrag: v.beleg_name,
+    })
   }
 
   return (
@@ -808,7 +877,8 @@ export default function BuchungsvorlagenPage() {
               <VorlageFormular
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
+                konten={kontenAuswahl}
+                kunden={kundenAuswahl}
                 onSave={d => createMut.mutate(d)}
                 onAbbrechen={() => setFormModus(null)}
               />
@@ -821,7 +891,8 @@ export default function BuchungsvorlagenPage() {
                 initial={selVorlage}
                 kategorien={kategorien as { id: number; name: string; kontenart: string }[]}
                 lieferanten={lieferanten.map(l => ({ id: l.id!, name: l.firmenname }))}
-                konten={bankKonten.map(k => ({ id: k.id!, bezeichnung: k.name, kontoart: k.kontoart }))}
+                konten={kontenAuswahl}
+                kunden={kundenAuswahl}
                 onSave={d => updateMut.mutate({ id: selVorlage.id, data: d })}
                 onAbbrechen={() => setFormModus(null)}
               />
@@ -831,8 +902,9 @@ export default function BuchungsvorlagenPage() {
       )}
 
       {/* Rechte Spalte – Detail (schmal) */}
+      {formModus === null && selVorlage && <DetailTrennlinie detail={detailBreite} />}
       {formModus === null && selVorlage && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-6">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-6`}>
           <VorlageDetail
             vorlage={selVorlage}
             onBearbeiten={() => setFormModus('bearbeiten')}
@@ -865,9 +937,9 @@ export default function BuchungsvorlagenPage() {
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Trotzdem jetzt buchen?</p>
                   </div>
                 </div>
-                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <BelegDropzone dateien={buchenBelegDateien} onChange={setBuchenBelegDateien} vertrag={buchungsBestaetigung.vertrag} />
                 <div className="flex gap-3 justify-end mt-4">
-                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
+                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDateien([]) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                     Abbrechen
                   </button>
@@ -883,9 +955,9 @@ export default function BuchungsvorlagenPage() {
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
                   Erstellt einen Journal-Eintrag für <span className="font-medium">„{buchungsBestaetigung.bezeichnung}"</span> und rückt das Datum um ein Intervall vor.
                 </p>
-                <BelegDropzone datei={buchenBelegDatei} onChange={setBuchenBelegDatei} />
+                <BelegDropzone dateien={buchenBelegDateien} onChange={setBuchenBelegDateien} vertrag={buchungsBestaetigung.vertrag} />
                 <div className="flex gap-3 justify-end mt-4">
-                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDatei(null) }}
+                  <button onClick={() => { setBuchungsBestaetigung(null); setBuchenBelegDateien([]) }}
                     className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                     Abbrechen
                   </button>

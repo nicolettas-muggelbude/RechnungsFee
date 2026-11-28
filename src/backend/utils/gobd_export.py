@@ -522,20 +522,26 @@ def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
     seen_rechnungen: set[int] = set()
 
     for e in eintraege:
-        # Weg 1: Beleg direkt am Journaleintrag
-        beleg_id = e.beleg_id
+        # Weg 1: Belege direkt am Journaleintrag (Issue #568 Stufe 2: alle Anhänge)
+        beleg_ids = [a.beleg_id for a in (e.anhaenge or [])] or ([e.beleg_id] if e.beleg_id else [])
 
         # Weg 2: Beleg an der verknüpften Rechnung
         rechnung_obj = None
         if e.rechnung_id:
             rechnung_obj = db.query(Rechnung).filter(Rechnung.id == e.rechnung_id).first()
-            if not beleg_id and rechnung_obj and rechnung_obj.beleg_id:
-                beleg_id = rechnung_obj.beleg_id
+            if not beleg_ids and rechnung_obj and rechnung_obj.beleg_id:
+                beleg_ids = [rechnung_obj.beleg_id]
 
-        if beleg_id and beleg_id not in seen:
-            seen.add(beleg_id)
-            beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
-            if beleg:
+        neu_gesehen = False
+        if beleg_ids:
+            for beleg_id in beleg_ids:
+                if beleg_id in seen:
+                    continue
+                seen.add(beleg_id)
+                neu_gesehen = True
+                beleg = db.query(Beleg).filter(Beleg.id == beleg_id).first()
+                if not beleg:
+                    continue
                 rechnung = db.query(Rechnung).filter(Rechnung.beleg_id == beleg.id).first()
                 rechnung_id = str(rechnung.id) if rechnung else ""
 
@@ -551,6 +557,7 @@ def export_belege_csv(db: Session, jahr: int) -> tuple[bytes, list[dict]]:
                     _fmt_bool(bool(beleg.beleg_pdfa_pfad)),
                 ])
                 beleg_infos.append({"art": "beleg", "beleg": beleg, "journal_belegnr": e.belegnr})
+        if neu_gesehen:
             continue
 
         # Weg 3: Ausgangsrechnung – eigenes archiviertes Original-PDF, kein Beleg-Datensatz

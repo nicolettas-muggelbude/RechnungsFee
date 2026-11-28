@@ -25,6 +25,7 @@ from fpdf import FPDF
 from utils.dokument_adressen import adressfeld_adresse, adresszeilen_weitere_adresse, lieferzeile_adresse
 from utils.logo import logo_datei
 from utils.pdf_shared import build_hr_zeile, embed_unterschrift
+from utils.kontoinhaber import abweichender_kontoinhaber
 
 _STANDARDTEXT_TYP_SUFFIX = {
     "Angebot": "_angebot", "Auftrag": "_auftrag",
@@ -60,6 +61,61 @@ def dokument_text(r, unt: dict, feld: str) -> str:
         return eigener
     dokument_typ = getattr(r, "dokument_typ", "Rechnung") or "Rechnung"
     return _standardtext(unt, feld, dokument_typ)
+
+
+def ohne_ust_spalte(unt: dict, r) -> bool:
+    """Issue #586: Ausgangsdokument eines Kleinunternehmers (§ 19 UStG) - keine Spalte „USt %“.
+    Maßgeblich ist der Status im Absender-Snapshot (bzw. in den aktuellen Stammdaten)."""
+    return bool(unt.get("ist_kleinunternehmer")) and getattr(r, "typ", "ausgang") == "ausgang"
+
+
+def art_nr_spalte(unt: dict, positionen) -> bool:
+    """Issue #562: Spalte „Art.-Nr.“ anzeigen? Über den Schalter in Einstellungen →
+    Rechnungsvorlagen, sobald mindestens eine Position einen Artikel hat. Snapshots finalisierter
+    Dokumente ohne den Schlüssel (vor #562) behalten das alte Verhalten: Spalte nur, wenn ein
+    Artikel einen eigenen Eintrag im Feld Artikelcode hat (Issue #169)."""
+    if "pdf_artikelnummer" in unt:
+        return bool(unt.get("pdf_artikelnummer")) and any(getattr(p, "artikel", None) for p in positionen)
+    return any(getattr(p, "artikel", None) and p.artikel.artikelcode for p in positionen)
+
+
+def pos_datum_spalten(unt: dict, vorlage1: bool) -> tuple[bool, bool]:
+    """Issue #594: Spalten „Pos.“ und „Datum“ (in dieser Reihenfolge) - in beiden Vorlagen über die
+    Schalter in Einstellungen → Rechnungsvorlagen. Snapshots finalisierter Dokumente ohne den
+    Schlüssel pdf_positionsdatum (vor #594) behalten das alte Verhalten: „Sandra grün“ zeigt beide
+    Spalten immer, die Standardvorlage „Pos.“ nach Schalter und kein Datum."""
+    if "pdf_positionsdatum" in unt:
+        return bool(unt.get("pdf_positionsnummern")), bool(unt.get("pdf_positionsdatum"))
+    if vorlage1:
+        return True, True
+    return bool(unt.get("pdf_positionsnummern")), False
+
+
+def positionsdatum(pos, r) -> str:
+    """Issue #594: Datum in der Spalte „Datum“ - eigenes Leistungsdatum der Position, sonst
+    Leistungsbeginn des Dokuments, sonst Rechnungsdatum."""
+    d = getattr(pos, "leistungsdatum", None) or getattr(r, "leistung_von", None) or r.datum
+    return _iso_zu_de(str(d))
+
+
+def art_nr_anzeige(pos, unt: dict) -> str:
+    """Issue #562: Inhalt der Spalte „Art.-Nr.“ - der eigene Eintrag im Feld Artikelcode, sonst
+    (nur mit dem neuen Schalter) der automatisch vergebene Code ART-#### (DB-Feld artikelnummer)."""
+    artikel = getattr(pos, "artikel", None)
+    if artikel is None:
+        return ""
+    eigener = (artikel.artikelcode or "").strip()
+    if eigener or "pdf_artikelnummer" not in unt:
+        return eigener
+    return artikel.artikelnummer or ""
+
+
+def absender_name(unt: dict) -> str:
+    """Issue #558: Name des Ausstellers - Firmenname, sonst Vor- und Nachname (Freiberufler
+    ohne Firmenbezeichnung). Bisher nahm die Absenderzeile nur den Firmennamen."""
+    return (unt.get("firmenname") or "").strip() or " ".join(
+        filter(None, [(unt.get("vorname") or "").strip(), (unt.get("nachname") or "").strip()])
+    )
 
 
 ANREDE_STANDARD = "Hallo {vorname} {nachname},"
@@ -251,6 +307,54 @@ def _ust_aufschluesselung(positionen) -> list[tuple[Decimal, Decimal, Decimal]]:
         netto_by[satz] = netto_by.get(satz, Decimal("0")) + netto_eff
         ust_by[satz]   = ust_by.get(satz, Decimal("0"))   + Decimal(str(pos.ust_betrag))
     return sorted([(s, netto_by[s], ust_by[s]) for s in netto_by], key=lambda x: x[0])
+
+
+def ist_abschlag_abzug(pos) -> bool:
+    """Issue #600: automatisch erzeugte Abzugszeile einer verrechneten Abschlagsrechnung - steht
+    im PDF nicht in der Positionstabelle, sondern im Summenblock der Schlussrechnung."""
+    return bool(getattr(pos, "abschlag_rechnung_id", None))
+
+
+def abschlag_abzuege(positionen) -> list[dict]:
+    """Issue #600: Abzüge je verrechneter Abschlagsrechnung als positive Beträge
+    {bezeichnung, netto, ust, brutto, ust_je_satz: [(satz, ust)]}. Nach § 14 Abs. 5 Satz 2 UStG
+    (UStAE 14.8 Abs. 7) sind in der Endrechnung die gezahlten Entgelte UND die darauf
+    entfallenden Steuerbeträge abzusetzen - bisher stand nur der Steuersatz in der Zeile.
+    Noch nicht bezahlte Abschläge (Markierungszeile mit 0 €) erscheinen nicht."""
+    gruppen: dict[int, dict] = {}
+    for pos in positionen:
+        if not ist_abschlag_abzug(pos):
+            continue
+        ust = -Decimal(str(pos.ust_betrag or 0))
+        brutto = -Decimal(str(pos.brutto or 0))
+        ab = getattr(pos, "abschlag_rechnung", None)
+        g = gruppen.setdefault(pos.abschlag_rechnung_id, {
+            "bezeichnung": _abschlag_bezeichnung(pos),
+            "nummer": getattr(ab, "rechnungsnummer", None), "datum": getattr(ab, "datum", None),
+            "netto": Decimal("0"), "ust": Decimal("0"),
+            "brutto": Decimal("0"), "ust_satz": {},
+        })
+        g["netto"] += brutto - ust
+        g["ust"] += ust
+        g["brutto"] += brutto
+        satz = Decimal(str(pos.ust_satz or 0)).quantize(Decimal("0.01")).normalize()
+        g["ust_satz"][satz] = g["ust_satz"].get(satz, Decimal("0")) + ust
+    ergebnis = []
+    for g in gruppen.values():
+        if g["brutto"] == 0:
+            continue
+        g["ust_je_satz"] = sorted((s, u) for s, u in g.pop("ust_satz").items() if s > 0)
+        ergebnis.append(g)
+    return ergebnis
+
+
+def _abschlag_bezeichnung(pos) -> str:
+    ab = getattr(pos, "abschlag_rechnung", None)
+    nr = getattr(ab, "rechnungsnummer", None) if ab is not None else None
+    if not nr:
+        return pos.beschreibung or "Abschlagsrechnung"
+    datum = getattr(ab, "datum", None)
+    return f"Abschlagsrechnung {nr}" + (f" vom {_iso_zu_de(datum)}" if datum else "")
 
 
 def _person_bezeichnung(rechtsform: str) -> str:
@@ -502,6 +606,7 @@ class RechnungPDFBase(FPDF):
 
         _col(L_MARGIN + 2 * col_w, list(filter(None, [
             bank,
+            f"Kontoinhaber: {abweichender_kontoinhaber(unt)}" if abweichender_kontoinhaber(unt) else "",  # Issue #604
             f"IBAN: {iban}" if iban else "",
             f"BIC: {bic}" if bic else "",
             f"Seite {self.page_no()}  ·  {self._druckdatum}",
@@ -519,7 +624,7 @@ class RechnungPDFBase(FPDF):
         unt = self._unt
 
         absender_kurz = "  ·  ".join(filter(None, [
-            unt.get("firmenname"),
+            absender_name(unt),  # Issue #558
             f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip(),
             f"{unt.get('plz', '')} {unt.get('ort', '')}".strip(),
         ]))
@@ -775,6 +880,11 @@ class RechnungPDFBase(FPDF):
         ist_storno_sum = getattr(r, "storniert", False) and (getattr(r, "dokument_typ", "Rechnung") or "Rechnung") == "Rechnung"
         _s = Decimal("-1") if ist_storno_sum else Decimal("1")
 
+        abzuege = abschlag_abzuege(r.positionen)
+        if abzuege:
+            self._render_summenblock_schluss(abzuege, _s)
+            return
+
         aufschluesselung = _ust_aufschluesselung(r.positionen)
         re_rabatt_proz   = getattr(r, "rabatt_prozent", Decimal("0")) or Decimal("0")
         re_rabatt_betrag = getattr(r, "rabatt_betrag", None)
@@ -833,6 +943,72 @@ class RechnungPDFBase(FPDF):
                     _sum_row("Nettobetrag", _fmt_euro(r.netto_gesamt * _s), grau=True)
                 _sum_row("enthaltene USt", _fmt_euro(r.ust_gesamt * _s), grau=True)
             _sum_row("Gesamtbetrag", _fmt_euro(r.brutto_gesamt * _s), bold=True, trenn=True)
+
+    def _render_summenblock_schluss(self, abzuege: list[dict], _s: Decimal):
+        """Issue #600: Summenblock einer Schlussrechnung mit verrechneten Abschlagsrechnungen
+        (§ 14 Abs. 5 Satz 2 UStG, UStAE 14.8 Abs. 7/8): erst die gesamte Leistung mit Entgelt und
+        Steuer, dann je Abschlag der gezahlte Bruttobetrag mit dem darin enthaltenen Entgelt und
+        Steuerbetrag, zuletzt der Restbetrag. Die gespeicherten Summen der Rechnung (= Restbetrag)
+        bleiben unverändert - UStVA/EÜR rechnen wie bisher, nur die Darstellung ist neu.
+        Netto- und Bruttorechnung gleich aufgebaut; Kleinunternehmer ohne Steuerzeilen."""
+        r = self._r
+        val_w = self._sum_val_w
+        # Abschlag-Bezeichnungen brauchen mehr Platz als die normalen Summenzeilen
+        lbl_w = max(self._sum_lbl_w, 100.0)
+        x0 = PAGE_W - R_MARGIN - val_w - lbl_w
+
+        def zeile(lbl: str, wert: Decimal | None, bold: bool = False, trenn: bool = False, grau: bool = False):
+            if trenn:
+                self.set_draw_color(*GRAU_RAND)
+                self.line(x0, self.get_y(), PAGE_W - R_MARGIN, self.get_y())
+            self.set_x(x0)
+            self.set_font("DejaVu", "B" if bold else "", 8.5 if bold else (7.5 if grau else 8))
+            self.set_text_color(*TEXT_GRAU)
+            self.cell(lbl_w, 5 if grau else 5.5, lbl, align="R")
+            self.set_text_color(*TEXT_DUNKEL)
+            self.cell(val_w, 5 if grau else 5.5, "" if wert is None else _fmt_euro(wert * _s),
+                      align="R", new_x="LMARGIN", new_y="NEXT")
+
+        def satz_txt(satz: Decimal) -> str:
+            return f"{str(satz).replace('.', ',')} %"
+
+        abz_netto = sum((a["netto"] for a in abzuege), Decimal("0"))
+        abz_ust = sum((a["ust"] for a in abzuege), Decimal("0"))
+        rest_netto = Decimal(str(r.netto_gesamt or 0))
+        rest_ust = Decimal(str(r.ust_gesamt or 0))
+        rest_brutto = Decimal(str(r.brutto_gesamt or 0))
+        leist_netto = rest_netto + abz_netto
+        leist_ust = rest_ust + abz_ust
+
+        if ohne_ust_spalte(self._unt, r):
+            zeile("Gesamtbetrag der Leistung", rest_brutto + abz_netto + abz_ust)
+            for a in abzuege:
+                zeile(f"abzgl. {a['bezeichnung']}", -a["brutto"])
+            zeile("Zu zahlen", rest_brutto, bold=True, trenn=True)
+            return
+
+        hat_rabatt = bool(getattr(r, "rabatt_prozent", None) or getattr(r, "rabatt_betrag", None))
+        leistung = _ust_aufschluesselung([p for p in r.positionen if not ist_abschlag_abzug(p)])
+        saetze = [(s, u) for s, _, u in leistung if s > 0]
+
+        zeile("Leistung gesamt netto" + (" (nach Rabatt)" if hat_rabatt else ""), leist_netto)
+        if len(saetze) > 1 and not hat_rabatt:
+            for satz, ust in saetze:
+                zeile(f"zzgl. USt {satz_txt(satz)}", ust)
+        else:
+            zeile(f"zzgl. USt {satz_txt(saetze[0][0])}" if len(saetze) == 1 else "zzgl. Umsatzsteuer", leist_ust)
+        zeile("Gesamtbetrag der Leistung", leist_netto + leist_ust, trenn=True)
+
+        for a in abzuege:
+            zeile(f"abzgl. {a['bezeichnung']}", -a["brutto"])
+            teile = [f"netto {_fmt_euro(a['netto'] * _s)}"] + [
+                f"USt {satz_txt(s)} {_fmt_euro(u * _s)}" for s, u in a["ust_je_satz"]
+            ]
+            zeile("darin " + " · ".join(teile), None, grau=True)
+
+        zeile("Restbetrag netto", rest_netto, trenn=True)
+        zeile("Umsatzsteuer", rest_ust)
+        zeile("Zu zahlen", rest_brutto, bold=True, trenn=True)
 
     def _render_19_hinweis(self):
         unt = self._unt

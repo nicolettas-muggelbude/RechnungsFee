@@ -37,5 +37,8 @@ def schluesselbund(tmp_path_factory, monkeypatch):
     keyring.set_keyring(kr)
     monkeypatch.setattr(geheimnisse, "DATEN_DIR", tmp_path_factory.mktemp("profil"))
     monkeypatch.delenv("RECHNUNGSFEE_KEIN_SCHLUESSELBUND", raising=False)
+    # Issue #593: ein Passwort auf dem lokalen Entwicklerprofil darf die Tests nicht sperren
+    from utils import profil_zugang
+    monkeypatch.setattr(profil_zugang, "_entsperrt", True)
     yield kr
     keyring.set_keyring(vorher)

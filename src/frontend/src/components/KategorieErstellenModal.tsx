@@ -90,6 +90,7 @@ export function KategorieErstellenModal({ onSave, onClose, kontenPflicht = false
             <option>Erlös</option>
             <option>Anlage</option>
             <option>Privat</option>
+            <option value="Neutral">Neutral (durchlaufend)</option>
           </select>
         </div>
 

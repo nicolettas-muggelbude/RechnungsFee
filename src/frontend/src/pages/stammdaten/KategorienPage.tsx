@@ -4,7 +4,7 @@ import {
   getKategorien, toggleKategorieAktiv,
   updateKategorieKonten, resetKategorieKonten, createKategorie, updateKategorie, deleteKategorie,
   updateKategorieBeschreibung, downloadKategorienPdf, getUnternehmen,
-  type Kategorie, type KategorieCreate,
+  type Kategorie, type KategorieCreate, type SteuerfreiParagraf,
 } from '../../api/client'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { EuerZeileSelect } from '../../components/EuerZeileSelect'
@@ -15,9 +15,11 @@ const KONTENART_META: Record<string, { label: string; cls: string; beschreibung:
   Aufwand: { label: 'Aufwand',  cls: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',                 beschreibung: 'Betriebsausgaben' },
   Anlage:  { label: 'Anlage',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',             beschreibung: 'Anlagevermögen' },
   Privat:  { label: 'Privat',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',         beschreibung: 'Private Entnahmen/Einlagen' },
+  // Issue #564: bei Einnahme und Ausgabe wählbar, weder EÜR noch UStVA
+  Neutral: { label: 'Neutral',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',         beschreibung: 'Durchlaufende Posten (nicht in EÜR/UStVA)' },
 }
 
-const REIHENFOLGE = ['Erlös', 'Aufwand', 'Anlage', 'Privat']
+const REIHENFOLGE = ['Erlös', 'Aufwand', 'Anlage', 'Privat', 'Neutral']
 
 function UstBadge({ satz }: { satz: number }) {
   if (satz === 0)  return <span className="text-xs text-slate-400 dark:text-slate-500">§19 / 0 %</span>
@@ -116,6 +118,7 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
     vorsteuer_prozent: Number(bearbeiten.vorsteuer_prozent),
     ust_satz_standard: bearbeiten.ust_satz_standard,
     beschreibung: bearbeiten.beschreibung ?? '',
+    steuerfrei_paragraf: bearbeiten.steuerfrei_paragraf ?? null,
   } : LEER)
   const [err, setErr] = useState('')
   const qc = useQueryClient()
@@ -160,6 +163,7 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
               <option>Erlös</option>
               <option>Anlage</option>
               <option>Privat</option>
+              <option value="Neutral">Neutral (durchlaufend)</option>
             </select>
           </div>
 
@@ -211,6 +215,28 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
             </p>
           </div>
 
+          {form.kontenart === 'Erlös' && (
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400" htmlFor="kat-steuerfrei">
+                Steuerfrei nach § 3 EStG
+              </label>
+              <select
+                id="kat-steuerfrei"
+                className="mt-1 w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-lg px-3 py-2 text-sm"
+                value={form.steuerfrei_paragraf ?? ''}
+                onChange={e => setForm(f => ({ ...f, steuerfrei_paragraf: (e.target.value || null) as SteuerfreiParagraf | null }))}
+              >
+                <option value="">nein</option>
+                <option value="3_26">§ 3 Nr. 26 – Übungsleiter, Ausbilder, Betreuer (Übungsleiterfreibetrag)</option>
+                <option value="3_26a">§ 3 Nr. 26a – andere ehrenamtliche Tätigkeit (Ehrenamtspauschale)</option>
+              </select>
+              {/* Issue #567: Einnahmen bleiben Betriebseinnahmen, der steuerfreie Teil mindert den Gewinn */}
+              <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                Die Einnahmen zählen weiter zu den Betriebseinnahmen. Bis zum Freibetrag (2025: 3.000 € bzw. 840 €, ab 2026: 3.300 € bzw. 960 €) zieht die EÜR sie in der Gewinnermittlung wieder ab, und die Anlage S zeigt sie in Zeile 57.
+              </p>
+            </div>
+          )}
+
           {hatEks && (
             <div>
               <label className="text-xs font-medium text-slate-500 dark:text-slate-400">EKS-Feld</label>
@@ -259,7 +285,11 @@ function NeuDialog({ onClose, bearbeiten, hatEks }: { onClose: () => void; bearb
           <button
             type="button"
             disabled={!form.name || mut.isPending}
-            onClick={() => mut.mutate(form)}
+            onClick={() => mut.mutate({
+              ...form,
+              // Issue #567: Steuerbefreiung nur bei Erlös-Kategorien
+              steuerfrei_paragraf: form.kontenart === 'Erlös' ? (form.steuerfrei_paragraf ?? null) : null,
+            })}
             className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {bearbeiten ? 'Speichern' : 'Anlegen'}

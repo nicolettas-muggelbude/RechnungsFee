@@ -6,6 +6,7 @@ import {
 } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { ExportButtons } from '../../components/ExportButtons'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 const KZ_META: [string, string, string, boolean][] = [
   ['A. Steuerpflichtige Ausgangsumsätze', '81', 'Umsätze 19 % – Bemessungsgrundlage', false],
@@ -75,8 +76,8 @@ function Abschnitt({ titel, children }: { titel: string; children: React.ReactNo
 export function JahresUStPage() {
   const mxAuto = useMxAuto()
   const now = new Date()
-  const jahre = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i)
   const [jahr, setJahr] = useState(now.getFullYear() - 1)
+  const jahre = useBuchungsjahre(jahr)  // Issue #589: Jahre mit Buchungen + aktuelles + gewähltes
   const [pdfFehler, setPdfFehler] = useState<string | null>(null)
   const [pdfOk, setPdfOk] = useState(false)
 

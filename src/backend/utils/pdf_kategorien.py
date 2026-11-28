@@ -15,9 +15,10 @@ KONTENART_LABELS = {
     "Aufwand": "Betriebsausgaben",
     "Anlage":  "Anlagevermögen",
     "Privat":  "Privat / Nicht betrieblich",
+    "Neutral": "Durchlaufende Posten (nicht in EÜR/UStVA)",
 }
 
-KONTENART_ORDER = ["Erlös", "Aufwand", "Anlage", "Privat"]
+KONTENART_ORDER = ["Erlös", "Aufwand", "Anlage", "Privat", "Neutral"]
 
 # Farben je Kontenart (R, G, B)
 KONTENART_FARBEN = {
@@ -25,6 +26,7 @@ KONTENART_FARBEN = {
     "Aufwand": (239, 68,  68),   # rot
     "Anlage":  (99,  102, 241),  # indigo
     "Privat":  (168, 85,  247),  # lila
+    "Neutral": (245, 158, 11),   # bernstein
 }
 
 

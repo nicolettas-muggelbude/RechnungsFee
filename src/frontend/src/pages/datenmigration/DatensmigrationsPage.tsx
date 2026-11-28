@@ -538,7 +538,7 @@ function RechnungenBelegeImportFlow() {
   return (
     <div className="min-w-0 max-w-full space-y-5">
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-        Importierte Rechnungen und Belege bleiben in offenen Posten und im Kontokorrent sichtbar. Importierte Ausgangsrechnungen können nicht neu als PDF erzeugt, versendet oder gemahnt werden. Das Original bleibt im Altsystem; vorhandene Originalbelege können weiterhin angehängt werden.
+        Importierte Rechnungen und Belege bleiben in offenen Posten und im Kontokorrent sichtbar. Importierte Ausgangsrechnungen können nicht neu als PDF erzeugt oder versendet werden, gemahnt werden können sie. Das Original bleibt im Altsystem; vorhandene Originalbelege können weiterhin angehängt werden – eine Mahnung schickt sie dann als Rechnungsanhang mit.
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">CSV-Typ</label>

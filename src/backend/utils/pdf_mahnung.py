@@ -23,6 +23,7 @@ from utils.pdf_rechnung_base import (
 )
 from utils.logo import logo_datei
 from utils.pdf_shared import epc_qr_bytes, build_hr_zeile, embed_unterschrift
+from utils.kontoinhaber import abweichender_kontoinhaber, zahlungsempfaenger
 
 
 def _fmt_euro(val) -> str:
@@ -192,6 +193,7 @@ class MahnungPDF(FPDF):
 
         _col(L_MARGIN + 2 * col_w, list(filter(None, [
             bank,
+            f"Kontoinhaber: {abweichender_kontoinhaber(unt)}" if abweichender_kontoinhaber(unt) else "",  # Issue #604
             f"IBAN: {iban}" if iban else "",
             f"BIC: {bic}" if bic else "",
             f"Seite {self.page_no()}  ·  {self._druckdatum}",
@@ -209,8 +211,9 @@ class MahnungPDF(FPDF):
         self, empfaenger_zeilen: list[str], mahnnummer: str, datum_str: str, rechnungsnummern: str,
     ) -> float:
         unt = self.unt
+        from utils.pdf_rechnung_base import absender_name
         absender_kurz = "  ·  ".join(filter(None, [
-            unt.get("firmenname"),
+            absender_name(unt),  # Issue #558
             f"{unt.get('strasse', '')} {unt.get('hausnummer', '')}".strip(),
             f"{unt.get('plz', '')} {unt.get('ort', '')}".strip(),
         ]))
@@ -343,9 +346,7 @@ def erstelle_mahnung_pdf(
     iban = unternehmen.get("iban") or ""
     if iban:
         bic = unternehmen.get("bic") or ""
-        empf = unternehmen.get("firmenname") or " ".join(
-            p for p in [unternehmen.get("vorname"), unternehmen.get("nachname")] if p
-        )
+        empf = zahlungsempfaenger(unternehmen)  # Issue #604
         # Referenz: bei genau einer Rechnung deren Nummer (das findet der Kunde in seiner
         # eigenen Buchhaltung wieder). Bei mehreren Rechnungen (konsolidierte Mahnung) wäre
         # eine Aufzählung mehrerer Nummern im Verwendungszweck weder praktikabel noch beim

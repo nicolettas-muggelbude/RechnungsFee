@@ -513,21 +513,10 @@ def test_importierte_rechnung_zeigt_vorhandenes_original_pdf_an(db, tmp_path, mo
     assert len(PdfReader(BytesIO(response.body)).pages) == 1
 
 
-def test_importierte_rechnung_ist_vor_neuer_mahnung_geschuetzt(db):
-    from types import SimpleNamespace
-    from fastapi import HTTPException
-    from api.mahnwesen import _berechne_mahnung
-
-    asyncio.run(import_durchfuehren(_FakeUpload(RECHNUNGEN_CSV), TYP_RECHNUNGEN, "", db=db))
-    rechnung = db.query(Rechnung).filter(Rechnung.rechnungsnummer == "R-00002").first()
-    with pytest.raises(HTTPException) as exc:
-        _berechne_mahnung(db, [rechnung.id], None, SimpleNamespace())
-    assert exc.value.status_code == 409
-
-
-def test_importierte_rechnung_kann_nicht_in_eine_mahnung_als_pdf_ausgegeben_werden(db):
+def test_importierte_rechnung_kann_in_eine_mahnung_als_pdf_ausgegeben_werden(db):
+    """Seit Migration 196 sind importierte Rechnungen mahnbar - das Mahnschreiben nennt nur
+    Nummer, Datum und offenen Betrag, ein neues Rechnungs-PDF entsteht dabei nicht."""
     from datetime import datetime
-    from fastapi import HTTPException
     from api.mahnwesen import mahnung_pdf_bytes
     from database.models import Mahnung, MahnungRechnung
 
@@ -539,6 +528,5 @@ def test_importierte_rechnung_kann_nicht_in_eine_mahnung_als_pdf_ausgegeben_werd
     db.add(MahnungRechnung(mahnung_id=mahnung.id, rechnung_id=rechnung.id, offener_betrag=rechnung.brutto_gesamt))
     db.commit()
 
-    with pytest.raises(HTTPException) as exc:
-        mahnung_pdf_bytes(db, mahnung, nur_ansehen=True)
-    assert exc.value.status_code == 409
+    pdf, _ = mahnung_pdf_bytes(db, mahnung, nur_ansehen=True)
+    assert pdf.startswith(b"%PDF")

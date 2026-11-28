@@ -11,7 +11,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 from typing import Optional
 
 import markdown as md
@@ -25,7 +25,7 @@ from utils.pdf_rechnung import generate_rechnung_pdf
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 from utils.zugferd import generate_zugferd_pdf, ist_oeffentlicher_auftraggeber
 from utils import geheimnisse
-from utils.mailfelder import bereinige_mailfeld, ist_ascii
+from utils.mailfelder import ascii_rechnername, bereinige_mailfeld, ist_ascii
 from utils.pdf_kopie import speichere_original_pdf, lade_original_mit_kopie_stempel
 from utils.mail_tls import (
     MailTLSConfigurationError,
@@ -83,6 +83,9 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
         raise HTTPException(404, "Dokument nicht gefunden")
     if r.import_quelle:
         raise HTTPException(409, "Extern erstellte bzw. importierte Rechnung: Versand ist gesperrt – maßgeblich ist das Original.")
+    if r.typ == "eingang":
+        # Issue #591: Eingangsrechnungen stammen vom Lieferanten - kein eigener Versand
+        raise HTTPException(409, "Eingangsrechnungen werden nicht aus RechnungsFee versendet.")
 
     u = db.query(Unternehmen).first()
     unt_dict = {c.name: getattr(u, c.name) for c in u.__table__.columns} if u else {}
@@ -125,11 +128,14 @@ def _pdf_bytes_fuer(rechnung_id: int, db: Session) -> tuple[bytes, str, Optional
             nr = (r.rechnungsnummer or str(r.id)).replace("/", "-").replace(" ", "_")
             return kopie_bytes, f"{_dok}_{nr}_Kopie.pdf", None
 
+    pdf_bytes = None
     if kunde_zugferd:
         try:
-            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)
+            pdf_bytes = generate_zugferd_pdf(r, unt_dict, ist_netto=ist_netto)  # Vorlage aus unt_dict (#556)
         except Exception:
-            pdf_bytes = generate_rechnung_pdf(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
+            pdf_bytes = None
+    if pdf_bytes is not None:
+        pass
     elif u and u.pdf_vorlage == 1:
         pdf_bytes = generate_rechnung_pdf_vorlage1(r, unt_dict, ist_entwurf=r.ist_entwurf, ist_netto=ist_netto)
     else:
@@ -173,6 +179,11 @@ def _build_message(
     if cc:
         msg["Cc"] = cc
     msg["Subject"] = betreff
+    # Issue #596: setzte bisher erst der SMTP-Server - die Kopie im Ordner „Gesendet“ (IMAP)
+    # braucht beides selbst, sonst zeigt das Mailprogramm dort kein Datum
+    msg["Date"] = formatdate(localtime=True)
+    # ohne Domain nähme make_msgid den Rechnernamen – der kann Umlaute haben (Issue #537)
+    msg["Message-ID"] = make_msgid(domain=von_adresse.rpartition("@")[2] or ascii_rechnername())
 
     signatur_md = (u.mail_signatur or "").strip()
 
@@ -269,7 +280,10 @@ def _smtp_passwort(u: Unternehmen) -> str:
     return passwort
 
 
-def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> None:
+def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Session) -> Optional[str]:
+    """Versand per SMTP; wirft bei Fehlern HTTPException. Rückgabe: Hinweis, falls die Kopie im
+    Ordner „Gesendet“ (IMAP, Issue #596) nicht abgelegt werden konnte – der Versand selbst hat
+    dann trotzdem geklappt."""
     port = u.smtp_port or 587
     host = bereinige_mailfeld(u.smtp_host) or ""
     user = bereinige_mailfeld(u.smtp_user) or ""
@@ -291,15 +305,18 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
         # _pruefe_gepinntes_zertifikat() unten die eigentliche Sicherheitsprüfung (TOFU-Pinning).
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+    # EHLO-Name selbst setzen: smtplib nähme sonst den Rechnernamen, und ein Umlaut darin
+    # (z. B. „Noël-PC“) ließ jeden Versand mit UnicodeEncodeError scheitern (Issue #537)
+    rechnername = ascii_rechnername()
     try:
         if u.smtp_ssl:
-            with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as srv:
+            with smtplib.SMTP_SSL(host, port, local_hostname=rechnername, context=ctx, timeout=15) as srv:
                 if u.smtp_zertifikat_ignorieren:
                     _pruefe_gepinntes_zertifikat(u, srv, db)
                 _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
         else:
-            with smtplib.SMTP(host, port, timeout=15) as srv:
+            with smtplib.SMTP(host, port, local_hostname=rechnername, timeout=15) as srv:
                 srv.ehlo()
                 srv.starttls(context=ctx)
                 srv.ehlo()
@@ -308,11 +325,14 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
                 _smtp_login(srv, user, passwort)
                 srv.sendmail(msg["From"], empfaenger, msg.as_string())
     except UnicodeEncodeError:
-        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen
+        # z. B. Empfängeradresse mit Umlaut – alles andere ist oben abgefangen. Mit Traceback
+        # ins Log: bisher blieb backend.log hier leer, die Stelle war nicht zu ermitteln (#537)
+        logger.warning("SMTP-Versand: Zeichen nicht als ASCII übertragbar", exc_info=True)
         raise HTTPException(
             400,
             "Die Mail enthält Zeichen, die der SMTP-Server nicht annimmt (z. B. einen Umlaut in der "
-            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen.",
+            "Empfänger- oder Absenderadresse). Bitte die Adressen prüfen und ggf. neu eintippen. "
+            "Die genaue Stelle steht in der Protokolldatei backend.log.",
         )
     except smtplib.SMTPAuthenticationError:
         raise HTTPException(400, "SMTP-Authentifizierung fehlgeschlagen – Benutzer oder Passwort prüfen")
@@ -350,6 +370,13 @@ def _sende(u: Unternehmen, msg: MIMEMultipart, empfaenger: list[str], db: Sessio
     except OSError as e:
         raise HTTPException(400, f"Netzwerkfehler: {e}")
 
+    # Issue #596: Kopie im Ordner „Gesendet“ ablegen (Opt-in, IMAP mit den Zugangsdaten des
+    # Mailversands) - Fehler dabei brechen den bereits erfolgten Versand nie ab
+    if getattr(u, "gesendet_imap_aktiv", False):
+        from utils.gesendet_ablage import lege_gesendet_ab
+        return lege_gesendet_ab(u, msg.as_bytes(), user, passwort)
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Endpunkte
@@ -364,7 +391,10 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
 
     from api.rechnungen import XRECHNUNG_DOKUMENTTYPEN, vermerke_xrechnung_original, xrechnung_xml_fuer
     frisches_xml: Optional[str] = None
+    war_ausgegeben = False   # Issue #596: Kopie oder Original im Verlauf
     if req.rechnung_id:
+        _vorher = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        war_ausgegeben = bool(_vorher and (_vorher.ausgegeben or _vorher.original_pdf_pfad))
         pdf_bytes, dateiname, frisches_original = _pdf_bytes_fuer(req.rechnung_id, db)
         # Issue #530: an öffentliche Auftraggeber geht die XRechnung-XML (das Original) zuerst mit
         r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
@@ -407,7 +437,7 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         empfaenger.append(req.cc)
 
     msg = _build_message(u, req.an, req.cc, req.betreff, req.text, attachments)
-    _sende(u, msg, empfaenger, db)
+    hinweis = _sende(u, msg, empfaenger, db)
 
     # Erst nach erfolgreichem Versand als ausgegeben markieren (Issue #410) - _sende() wirft bei
     # jedem Fehler eine HTTPException, der Code hier wird dann nicht erreicht.
@@ -423,7 +453,20 @@ def mail_senden(req: MailSendenRequest, db: Session = Depends(get_db)):
         vermerke_xrechnung_original(r, frisches_xml)
         db.commit()
 
-    return {"ok": True}
+    # Issue #596: Versand im Dokumentverlauf festhalten (nur hier steht fest, dass er klappte)
+    from utils.dokument_verlauf import protokolliere, protokolliere_mahnung
+    an = ", ".join(e for e in empfaenger if e)
+    if req.rechnung_id:
+        r = db.query(Rechnung).filter(Rechnung.id == req.rechnung_id).first()
+        if r:
+            protokolliere(db, art="mail_gesendet", kanal="smtp", rechnung=r,
+                          kopie=war_ausgegeben, empfaenger=an, betreff=req.betreff)
+    if req.mahnung_id:
+        protokolliere_mahnung(db, mahnung, art="mahnung_gesendet", kanal="smtp",
+                              empfaenger=an, betreff=req.betreff)
+    db.commit()
+
+    return {"ok": True, "hinweis": hinweis}
 
 
 @router.post("/test")
@@ -435,5 +478,5 @@ def test_mail(req: TestMailRequest, db: Session = Depends(get_db)):
         "Diese Nachricht bestätigt, dass dein SMTP-Versand funktioniert.",
         [],
     )
-    _sende(u, msg, [req.an], db)
-    return {"ok": True}
+    hinweis = _sende(u, msg, [req.an], db)
+    return {"ok": True, "hinweis": hinweis}

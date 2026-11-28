@@ -57,6 +57,7 @@ class RechnungspositionCreate(BaseModel):
     # Issue #419 Phase 2: markiert eine automatisch generierte Abzugszeile (negierte Menge),
     # die eine Abschlagsrechnung in einer Schlussrechnung verrechnet.
     abschlag_rechnung_id: Optional[int] = None
+    leistungsdatum: Optional[date] = None  # Issue #594
 
     @field_validator("ust_satz")
     @classmethod
@@ -83,6 +84,7 @@ class RechnungspositionResponse(BaseModel):
     differenzbesteuerung: bool = False
     artikelcode: Optional[str] = None
     abschlag_rechnung_id: Optional[int] = None
+    leistungsdatum: Optional[date] = None  # Issue #594
 
     model_config = {"from_attributes": True}
 
@@ -330,6 +332,38 @@ class ZahlungKompakt(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class VerlaufEintrag(BaseModel):
+    """Issue #596: ein Ereignis im Dokumentverlauf (utils/dokument_verlauf.py)."""
+    id: int
+    zeitpunkt: datetime
+    art: str
+    kanal: str
+    kopie: bool = False
+    empfaenger: Optional[str] = None
+    betreff: Optional[str] = None
+    rechnung_id: Optional[int] = None
+    mahnung_id: Optional[int] = None
+    # nur im Partner-Verlauf (Kunden-/Lieferantenstamm) gefüllt
+    rechnungsnummer: Optional[str] = None
+    dokument_typ: Optional[str] = None
+    mahnnummer: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AbschlagKompakt(BaseModel):
+    """Issue #597: Abschlagsrechnung zu einem Angebot/Auftrag (Detailansicht)."""
+    id: int
+    rechnungsnummer: Optional[str] = None
+    datum: date
+    brutto_gesamt: Decimal
+    bezahlt_betrag: Decimal = Decimal("0")
+    zahlungsstatus: Optional[str] = None
+    ist_entwurf: bool = False
+    storniert: bool = False
+    verrechnet_in_rechnung_id: Optional[int] = None
+
+
 class RechnungResponse(BaseModel):
     id: int
     typ: str
@@ -359,6 +393,8 @@ class RechnungResponse(BaseModel):
     zahlungsstatus: str
     zahlungsdatum: Optional[date]
     mahnstufe_aktuell: int = 0
+    altsystem_mahnstufe: int = 0                 # Migration 196
+    altsystem_gemahnt_am: Optional[date] = None
     notizen: Optional[str]
     einleitungstext: Optional[str] = None
     schlusstext: Optional[str] = None
@@ -381,6 +417,9 @@ class RechnungResponse(BaseModel):
     steuerfrei_4: bool = False  # Issue #492
     ausgegeben: bool
     ausgegeben_am: Optional[datetime] = None
+    # Issue #596: Druck-/Versandverlauf und letzter Versand (Spalte „Versand“ in der Liste)
+    verlauf: List[VerlaufEintrag] = []
+    letzter_versand: Optional[VerlaufEintrag] = None
     positionen: List[RechnungspositionResponse] = []
     zahlungen: List[ZahlungKompakt] = []
     # Wie zahlungen, aber dokumentuebergreifend: bezieht bei einer Ersatzrechnungs-Kette
@@ -451,6 +490,11 @@ class RechnungResponse(BaseModel):
     herkunft_auftrag_nr: Optional[str] = None
     herkunft_proforma_id: Optional[int] = None
     herkunft_proforma_nr: Optional[str] = None
+    # Issue #597: Abschlagsrechnung aus Angebot/Auftrag
+    abschlag_zu_dokument_id: Optional[int] = None   # auf Abschlagsrechnung: Herkunft
+    abschlag_zu_dokument_nr: Optional[str] = None   # wird in from_orm_extended befüllt
+    abschlag_zu_dokument_typ: Optional[str] = None  # wird in from_orm_extended befüllt
+    abschlaege: List[AbschlagKompakt] = []           # auf Angebot/Auftrag, wird in from_orm_extended befüllt
     erstellt_am: datetime
     aktualisiert_am: datetime
 
@@ -520,14 +564,14 @@ class RechnungResponse(BaseModel):
         # Storno-Status je Zahlung (Issue #321-Fortsetzung): "STORNO "-Praefix + gesetztes
         # gruppe_id (laesst sich clientseitig nicht setzen, siehe journal.py._storno_infos)
         # statt reiner Beschreibungs-Textpruefung im Frontend.
-        _storno_wurzeln: set[int] = set()
+        # Storniert nur das Glied, dessen Belegnr. eine Gegenbuchung nennt (Issue #601).
+        from utils.storno_kette import ist_storno as _ist_storno, stornos_je_glied
         for _z in data.zahlungen_kette:
-            _z.ist_storno = _z.gruppe_id is not None and _z.beschreibung.startswith("STORNO ")
-            if _z.ist_storno:
-                _storno_wurzeln.add(_z.gruppe_id)
+            _z.ist_storno = _ist_storno(_z)
+        _storno_je_glied = stornos_je_glied(data.zahlungen_kette)
         for _z in data.zahlungen_kette:
             if not _z.ist_storno:
-                _z.storniert = (_z.gruppe_id or _z.id) in _storno_wurzeln
+                _z.storniert = (_z.gruppe_id or _z.id, _z.belegnr) in _storno_je_glied
         # Rechnungs-Kette (Original -> Storno -> Ersatzrechnung -> ...): unabhaengig von
         # Zahlungen/Journalbuchungen sichtbar, da die Verknuepfung ueber ersatzrechnung_id/
         # ersatz_fuer_rechnung_id direkt auf Dokumentebene liegt (Issue #304).
@@ -778,6 +822,27 @@ class RechnungResponse(BaseModel):
                             data.herkunft_proforma_nr = eltern_prf.rechnungsnummer
             except Exception:
                 pass
+        # Issue #597: Abschlagsrechnungen zu Angebot/Auftrag und Herkunft einer Abschlagsrechnung
+        try:
+            from sqlalchemy import inspect as _sa_inspect
+            session = _sa_inspect(obj).session
+            if session is not None:
+                _dt = getattr(obj, "dokument_typ", None)
+                if _dt in ("Angebot", "Auftrag"):
+                    from api.rechnungen import abschlaege_zu_dokument
+                    data.abschlaege = [AbschlagKompakt.model_validate(a, from_attributes=True)
+                                       for a in abschlaege_zu_dokument(session, obj)]
+                elif _dt == "Abschlagsrechnung" and obj.abschlag_zu_dokument_id:
+                    _quelle = session.get(obj.__class__, obj.abschlag_zu_dokument_id)
+                    if _quelle:
+                        data.abschlag_zu_dokument_nr = _quelle.rechnungsnummer
+                        data.abschlag_zu_dokument_typ = _quelle.dokument_typ
+        except Exception:
+            pass
+        # Issue #596
+        from utils.dokument_verlauf import VERSAND_ARTEN
+        versand = [v for v in data.verlauf if v.art in VERSAND_ARTEN]
+        data.letzter_versand = versand[-1] if versand else None
         return data
 
 
@@ -859,7 +924,7 @@ class BarZahlungCreate(BaseModel):
     @field_validator("zahlungsart")
     @classmethod
     def check_zahlungsart(cls, v: str) -> str:
-        if v not in ("Bar", "Karte", "PayPal", "Bank"):
+        if v not in ("Bar", "Karte", "PayPal", "Bank", "Privat"):  # Privat: Issue #470
             raise ValueError("zahlungsart muss Bar, Karte, PayPal oder Bank sein")
         return v
 

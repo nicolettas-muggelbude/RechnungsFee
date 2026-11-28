@@ -40,7 +40,7 @@ def test_eigenes_format_wird_nicht_mit_re_verfaelscht(db):
     db.add(Nummernkreis(bezeichnung="Ausgangsrechnungen", typ="rechnung_ausgang", format="R###-YYYY", naechste_nr=1, reset_jaehrlich=True))
     db.commit()
 
-    data = RechnungCreate(typ="ausgang", datum=date(2026, 1, 15), ist_entwurf=True, partner_freitext="Testkunde", positionen=[_position()])
+    data = RechnungCreate(typ="ausgang", datum=date(2026, 1, 15), ist_entwurf=False, partner_freitext="Testkunde", positionen=[_position()])
     ergebnis = create_rechnung(data, db)
 
     assert ergebnis.rechnungsnummer == "R001-2026"
@@ -50,7 +50,7 @@ def test_eigenes_format_eingang_wird_nicht_mit_er_verfaelscht(db):
     db.add(Nummernkreis(bezeichnung="Eingangsrechnungen", typ="rechnung_eingang", format="ER###-YYYY", naechste_nr=1, reset_jaehrlich=True))
     db.commit()
 
-    data = RechnungCreate(typ="eingang", datum=date(2026, 1, 15), ist_entwurf=True, partner_freitext="Testlieferant", positionen=[_position()])
+    data = RechnungCreate(typ="eingang", datum=date(2026, 1, 15), ist_entwurf=False, partner_freitext="Testlieferant", positionen=[_position()])
     ergebnis = create_rechnung(data, db)
 
     # Wer selbst "ER" im Format will, bekommt es einmal - nicht zusätzlich vom Code verdoppelt.
@@ -62,7 +62,7 @@ def test_wer_re_praefix_will_traegt_ihn_selbst_im_format_ein(db):
     db.add(Nummernkreis(bezeichnung="Ausgangsrechnungen", typ="rechnung_ausgang", format="RE-YY####", naechste_nr=1, reset_jaehrlich=True))
     db.commit()
 
-    data = RechnungCreate(typ="ausgang", datum=date(2026, 1, 15), ist_entwurf=True, partner_freitext="Testkunde", positionen=[_position()])
+    data = RechnungCreate(typ="ausgang", datum=date(2026, 1, 15), ist_entwurf=False, partner_freitext="Testkunde", positionen=[_position()])
     ergebnis = create_rechnung(data, db)
 
     assert ergebnis.rechnungsnummer == "RE-260001"

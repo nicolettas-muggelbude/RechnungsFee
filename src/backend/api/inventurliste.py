@@ -55,7 +55,8 @@ def _inventur_zeilen(db: Session) -> list[InventurZeile]:
         wert = (a.bestand_aktuell * a.ek_netto).quantize(Q, ROUND_HALF_UP) if a.ek_netto is not None else None
         zeilen.append(InventurZeile(
             artikel_id=a.id,
-            artikelnummer=a.artikelnummer,
+            # Issue #562: eigene Artikelnummer (Feld Artikelcode), sonst die automatische
+            artikelnummer=(a.artikelcode or "").strip() or a.artikelnummer,
             bezeichnung=a.bezeichnung,
             einheit=a.einheit,
             bestand=str(a.bestand_aktuell),

@@ -7,7 +7,7 @@ import { bankImportFilter, type BankImportFilterModus } from '../../store/filter
 import {
   getKonten,
   getBankTemplates,
-  getBankTransaktionen,
+  getBankTransaktionen, getBankTransaktionsJahre,
   vorschauBankImport,
   leseGedroppteDatei,
   importiereBankTransaktionen,
@@ -28,6 +28,7 @@ import {
   type BankAbgleichVorschlag,
 } from '../../api/client'
 import { BuchungForm } from '../journal/BuchungForm'
+import { betragPasst, jahresAuswahl } from '../../utils/betragssuche'
 import { BuchungsHinweisDialog } from '../../components/BuchungsHinweisDialog'
 import { useMxAuto } from '../../hooks/useAnsicht'
 
@@ -53,6 +54,32 @@ function ibanFmt(iban: string): string {
   return iban.replace(/(.{4})/g, '$1 ').trim()
 }
 
+/** Dropdown zur Kontowahl im Import-Dialog (E-Mail-Treffer, Übersteuerung, ohne IBAN). */
+function KontoSelect({ konten, value, mitLeerOption = false, onWahl }: {
+  konten: Konto[]
+  value: number
+  mitLeerOption?: boolean
+  onWahl: (id: number) => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
+      <select
+        value={value || ''}
+        onChange={e => onWahl(Number(e.target.value))}
+        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+      >
+        {mitLeerOption && <option value="">– Konto wählen –</option>}
+        {konten.map(k => (
+          <option key={k.id} value={k.id}>
+            {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 
 // ---------------------------------------------------------------------------
 // Import-Dialog (3 Schritte)
@@ -65,6 +92,8 @@ type AnalyseStatus =
   | { art: 'laden' }
   | { art: 'iban_match'; iban: string; kontoId: number; kontoName: string }
   | { art: 'iban_kein_konto'; iban: string }
+  | { art: 'email_match'; email: string; kontoId: number; kontoName: string }
+  | { art: 'email_auswahl'; email: string; kontoIds: number[] }
   | { art: 'kein_iban' }
 
 interface ImportDialogProps {
@@ -79,6 +108,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
   const [datei, setDatei] = useState<File | null>(null)
   const [templateId, setTemplateId] = useState<string>('')
   const [manuellKontoId, setManuellKontoId] = useState<number>(konten[0]?.id ?? 0)
+  const [freieKontoauswahl, setFreieKontoauswahl] = useState(false)
   const [analyseStatus, setAnalyseStatus] = useState<AnalyseStatus>({ art: 'idle' })
   const [vorschau, setVorschau] = useState<BankVorschauResponse | null>(null)
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set())
@@ -87,35 +117,56 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
 
   const geschaeftskonten = useMemo(() => konten.filter(k => k.kontotyp !== 'privat'), [konten])
 
-  // Welches kontoId wird letztendlich für den Import verwendet
+  // Welches kontoId wird letztendlich für den Import verwendet.
+  // Bei mehreren E-Mail-Treffern zählt nur die bewusste Auswahl, nicht das erste Konto der Liste.
   const aktuellesKontoId: number | null =
     analyseStatus.art === 'iban_match' ? analyseStatus.kontoId :
-    analyseStatus.art === 'kein_iban' ? manuellKontoId :
+    analyseStatus.art === 'email_match'
+      ? (freieKontoauswahl ? (manuellKontoId || null) : analyseStatus.kontoId) :
+    analyseStatus.art === 'email_auswahl' ? (manuellKontoId || null) :
+    analyseStatus.art === 'kein_iban' ? (manuellKontoId || null) :
     null
+
+  const uebernehmeVorschau = useCallback((result: BankVorschauResponse) => {
+    if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
+    setVorschau(result)
+    setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
+
+    const emailIds = result.email_konto_ids
+    if (result.konto_iban && result.erkanntes_konto_id) {
+      const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
+      setAnalyseStatus({
+        art: 'iban_match',
+        iban: result.konto_iban,
+        kontoId: result.erkanntes_konto_id,
+        kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
+      })
+    } else if (result.konto_iban && !result.erkanntes_konto_id) {
+      setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
+    } else if (result.erkannte_email && emailIds.length > 1 && !result.erkanntes_konto_id) {
+      setManuellKontoId(0)
+      setAnalyseStatus({ art: 'email_auswahl', email: result.erkannte_email, kontoIds: emailIds })
+    } else if (result.erkanntes_konto_id && result.erkannte_email) {
+      const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
+      setAnalyseStatus({
+        art: 'email_match',
+        email: result.erkannte_email,
+        kontoId: result.erkanntes_konto_id,
+        kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
+      })
+    } else {
+      setManuellKontoId(prev => prev || geschaeftskonten[0]?.id || 0)
+      setAnalyseStatus({ art: 'kein_iban' })
+    }
+  }, [geschaeftskonten])
 
   async function analysiere() {
     if (!datei) return
     setFehler(null)
+    setFreieKontoauswahl(false)
     setAnalyseStatus({ art: 'laden' })
     try {
-      const result = await vorschauBankImport(datei, undefined, templateId || undefined)
-      if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
-      setVorschau(result)
-      setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-
-      if (result.konto_iban && result.erkanntes_konto_id) {
-        const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
-        setAnalyseStatus({
-          art: 'iban_match',
-          iban: result.konto_iban,
-          kontoId: result.erkanntes_konto_id,
-          kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
-        })
-      } else if (result.konto_iban && !result.erkanntes_konto_id) {
-        setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
-      } else {
-        setAnalyseStatus({ art: 'kein_iban' })
-      }
+      uebernehmeVorschau(await vorschauBankImport(datei, undefined, templateId || undefined))
     } catch (e: unknown) {
       setFehler((e as Error).message)
       setAnalyseStatus({ art: 'idle' })
@@ -134,48 +185,26 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       const erlaubte = (Array.isArray(paths) ? paths : [])
         .filter((p: string) => /\.(csv|txt|xml|zip)$/i.test(p))
       if (erlaubte.length === 0) return
-      setFehler(null)
-      setAnalyseStatus({ art: 'idle' })
-      setVorschau(null)
-      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+      neueDateiZuruecksetzen()
       try {
         const f = await leseGedroppteDatei(erlaubte[0])
         setDatei(f)
         // bewusst undefined statt templateId: Neue Datei immer automatisch erkennen
         // (liest templateId nicht → kein Stale-Closure-Problem, kein Eintrag im Dep-Array nötig)
-        const result = await vorschauBankImport(f, undefined, undefined)
-        if (result.erkanntes_template) setTemplateId(result.erkanntes_template)
-        setVorschau(result)
-        setAuswahl(new Set(result.transaktionen.filter(t => !t.ist_duplikat).map(t => t.dedupe_hash)))
-        if (result.konto_iban && result.erkanntes_konto_id) {
-          const konto = geschaeftskonten.find(k => k.id === result.erkanntes_konto_id)
-          setAnalyseStatus({
-            art: 'iban_match',
-            iban: result.konto_iban,
-            kontoId: result.erkanntes_konto_id,
-            kontoName: konto?.name ?? `Konto #${result.erkanntes_konto_id}`,
-          })
-        } else if (result.konto_iban && !result.erkanntes_konto_id) {
-          setAnalyseStatus({ art: 'iban_kein_konto', iban: result.konto_iban })
-        } else {
-          setAnalyseStatus({ art: 'kein_iban' })
-        }
+        uebernehmeVorschau(await vorschauBankImport(f, undefined, undefined))
       } catch (e: unknown) {
         setFehler((e as Error).message)
       }
     }).then((fn) => { unlisten = fn })
     return () => { unlisten?.() }
-  }, [schritt, geschaeftskonten])
+  }, [schritt, uebernehmeVorschau])
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     const f = e.dataTransfer.files[0]
     if (f) {
       setDatei(f)
-      setAnalyseStatus({ art: 'idle' })
-      setVorschau(null)
-      setFehler(null)
-      setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+      neueDateiZuruecksetzen()
     }
   }
 
@@ -191,6 +220,27 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
       setFehler((e as Error).message)
     }
   }
+
+  // Zustand zurücksetzen, wenn eine neue Datei ins Spiel kommt (Template wieder auf Automatik)
+  function neueDateiZuruecksetzen() {
+    setFehler(null)
+    setFreieKontoauswahl(false)
+    setAnalyseStatus({ art: 'idle' })
+    setVorschau(null)
+    setTemplateId('')
+  }
+
+  // Manuell gewähltes Konto übernehmen und Vorschau neu laden (0 = noch nichts gewählt)
+  function waehleKonto(id: number) {
+    setManuellKontoId(id)
+    if (id) ladeVorschauMitKonto(id)
+  }
+
+  // Bei mehreren E-Mail-Treffern ohne Übersteuerung: nur die Kandidaten zur Auswahl
+  const sichtbareKonten =
+    analyseStatus.art === 'email_auswahl' && !freieKontoauswahl
+      ? geschaeftskonten.filter(k => k.id != null && analyseStatus.kontoIds.includes(k.id))
+      : geschaeftskonten
 
   const txAuswahl = vorschau?.transaktionen.filter(t => auswahl.has(t.dedupe_hash)) ?? []
   const txDuplikate = vorschau?.transaktionen.filter(t => t.ist_duplikat).length ?? 0
@@ -283,10 +333,7 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   type="file" accept=".csv,.txt,.xml,.zip" className="hidden"
                   onChange={e => {
                     setDatei(e.target.files?.[0] ?? null)
-                    setAnalyseStatus({ art: 'idle' })
-                    setVorschau(null)
-                    setFehler(null)
-                    setTemplateId('') // Neue Datei: Template zurück auf automatische Erkennung
+                    neueDateiZuruecksetzen()
                   }}
                 />
               </div>
@@ -353,32 +400,68 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                 </div>
               )}
 
-              {analyseStatus.art === 'kein_iban' && (
+              {analyseStatus.art === 'email_match' && (
                 <div className="space-y-2">
-                  <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                    <span className="text-blue-500 text-base leading-none mt-0.5">ℹ</span>
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      Kein Konto in der CSV erkannt. Bitte manuell auswählen.
+                  <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                    <span className="text-green-500 text-base leading-none mt-0.5">✓</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        Konto „{analyseStatus.kontoName}“ über {analyseStatus.email} erkannt.
+                      </p>
+                      {!freieKontoauswahl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManuellKontoId(analyseStatus.kontoId)
+                            setFreieKontoauswahl(true)
+                          }}
+                          className="mt-1 text-xs font-medium text-green-700 dark:text-green-300 underline hover:no-underline"
+                        >
+                          Anderes Konto wählen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {freieKontoauswahl && (
+                    <KontoSelect konten={geschaeftskonten} value={manuellKontoId} onWahl={waehleKonto} />
+                  )}
+                </div>
+              )}
+
+              {(analyseStatus.art === 'email_auswahl' || analyseStatus.art === 'kein_iban') && (
+                <div className="space-y-2">
+                  <div className={`flex items-start gap-2 p-3 rounded-xl border ${
+                    analyseStatus.art === 'kein_iban'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                      : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                  }`}>
+                    <span className={`text-base leading-none mt-0.5 ${analyseStatus.art === 'kein_iban' ? 'text-blue-500' : 'text-green-500'}`}>
+                      {analyseStatus.art === 'kein_iban' ? 'ℹ' : '✓'}
+                    </span>
+                    <p className={`text-xs ${
+                      analyseStatus.art === 'kein_iban'
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                    }`}>
+                      {analyseStatus.art === 'kein_iban' && 'Kein Konto in der CSV erkannt. Bitte manuell auswählen.'}
+                      {analyseStatus.art === 'email_auswahl' && `${analyseStatus.email} passt zu mehreren Konten. Bitte wähle das passende.`}
                     </p>
                   </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Konto</label>
-                    <select
-                      value={manuellKontoId}
-                      onChange={e => {
-                        const id = Number(e.target.value)
-                        setManuellKontoId(id)
-                        ladeVorschauMitKonto(id)
-                      }}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  {analyseStatus.art === 'email_auswahl' && !freieKontoauswahl && (
+                    <button
+                      type="button"
+                      onClick={() => setFreieKontoauswahl(true)}
+                      className="text-xs font-medium text-green-700 dark:text-green-300 underline hover:no-underline"
                     >
-                      {geschaeftskonten.map(k => (
-                        <option key={k.id} value={k.id}>
-                          {k.name} ({k.anbieter}){k.kontotyp === 'mischkonto' ? ' – Mischkonto' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      Anderes Konto wählen
+                    </button>
+                  )}
+                  <KontoSelect
+                    konten={sichtbareKonten}
+                    value={manuellKontoId}
+                    mitLeerOption={analyseStatus.art === 'email_auswahl'}
+                    onWahl={waehleKonto}
+                  />
                   {vorschau && (
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {vorschau.transaktionen.length} Transaktionen
@@ -534,9 +617,9 @@ function ImportDialog({ konten, templates, onClose, onErfolg }: ImportDialogProp
                   >
                     {analyseStatus.art === 'laden' ? 'Analysiere…' : 'Analysieren'}
                   </button>
-                ) : analyseStatus.art === 'iban_match' || analyseStatus.art === 'kein_iban' ? (
+                ) : analyseStatus.art === 'iban_match' || analyseStatus.art === 'kein_iban' || analyseStatus.art === 'email_match' || analyseStatus.art === 'email_auswahl' ? (
                   <button
-                    disabled={analyseStatus.art === 'kein_iban' && !manuellKontoId}
+                    disabled={!aktuellesKontoId}
                     onClick={() => setSchritt(2)}
                     className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
                   >
@@ -979,7 +1062,10 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const [datumBis, _setDatumBis] = useState<string>(() => bankImportFilter.datumBis)
   const setDatumBis = (d: string) => { bankImportFilter.datumBis = d; _setDatumBis(d); setLimit(200) }
 
-  const aktivesJahr = new Date().getFullYear()
+  // Issue #565: Jahr wählbar statt fest das aktuelle Jahr
+  const [jahr, _setJahr] = useState<number>(() => bankImportFilter.jahr)
+  const setJahr = (j: number) => { bankImportFilter.jahr = j; _setJahr(j); setLimit(200) }
+  const aktivesJahr = jahr
   function monatsEnde(monatStr: string): string {
     const [y, m] = monatStr.split('-').map(Number)
     const letzterTag = new Date(y, m, 0).getDate()
@@ -1004,12 +1090,19 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
   const autoCleanupRan = useRef(false)
 
   const { data: txListe, isLoading } = useQuery({
-    queryKey: ['bank-transaktionen', konto.id, limit, filterModus, monat, datum, datumVon, datumBis],
+    // jahr gehört in den Schlüssel (Issue #603-Folgemeldung, gleicher Fehler wie im Journal)
+    queryKey: ['bank-transaktionen', konto.id, limit, filterModus, monat, datum, datumVon, datumBis, jahr],
     queryFn: () => getBankTransaktionen(konto.id!, { limit, von: effektivVon, bis: effektivBis }),
     enabled: !!konto.id,
   })
   const txs = txListe?.transaktionen ?? []
   const txsGesamt = txListe?.total ?? 0
+  // Issue #565: Jahresauswahl nur mit Jahren, in denen es Transaktionen gibt
+  const { data: bebuchteJahre } = useQuery({
+    queryKey: ['bank-transaktionen', konto.id, 'jahre'],
+    queryFn: () => getBankTransaktionsJahre(konto.id!),
+    enabled: !!konto.id,
+  })
 
   const anerkenneMut = useMutation({
     mutationFn: (rechnungId: number) => ueberzahlungAnerkennen(rechnungId),
@@ -1148,9 +1241,11 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
     if (statusFilter === 'ignoriert' && !tx.ignoriert) return false
     if (suche) {
       const s = suche.toLowerCase()
+      // Issue #565: auch nach Betrag suchen (119 / 119,00 / -119,00)
       if (!((tx.partner_name ?? '').toLowerCase().includes(s) ||
             (tx.verwendungszweck ?? '').toLowerCase().includes(s) ||
-            (tx.buchungstext ?? '').toLowerCase().includes(s))) return false
+            (tx.buchungstext ?? '').toLowerCase().includes(s) ||
+            betragPasst(s, tx.betrag))) return false
     }
     return true
   })
@@ -1161,7 +1256,7 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
         <div className="flex items-center gap-3 flex-wrap">
           <input
             type="search"
-            placeholder="Partner, Verwendungszweck…"
+            placeholder="Partner, Verwendungszweck, Betrag…"
             value={suche}
             onChange={e => setSuche(e.target.value)}
             className="flex-1 min-w-[180px] text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
@@ -1182,6 +1277,16 @@ function Transaktionsliste({ konto }: { konto: Konto }) {
               </button>
             ))}
           </div>
+          {filterModus === 'jahr' && (
+            <select
+              value={jahr}
+              onChange={e => setJahr(Number(e.target.value))}
+              aria-label="Jahr"
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            >
+              {jahresAuswahl(bebuchteJahre, jahr).map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
+          )}
           {filterModus === 'monat' && (
             <input
               type="month"

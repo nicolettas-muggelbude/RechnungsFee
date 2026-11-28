@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { ExportButtons } from '../../components/ExportButtons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -9,6 +11,7 @@ import {
   getAfaPlan, getAveurPdfUrl, getAveurZusammenfassung, openUrl,
   type Anlagegut, type AnlagegutCreate, type AnlagegutTyp,
 } from '../../api/client'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 const AKTUELLES_JAHR = new Date().getFullYear()
 
@@ -67,6 +70,7 @@ function AnlagegutFormular({
           kaufpreis_netto: initial.kaufpreis_netto,
           nutzungsdauer_jahre: initial.nutzungsdauer_jahre,
           afa_methode: initial.afa_methode,
+          afa_sofort: initial.afa_sofort ?? false,
           kennzeichen: initial.kennzeichen,
           privat_anteil_prozent: initial.privat_anteil_prozent,
           verkauft_am: initial.verkauft_am,
@@ -86,6 +90,11 @@ function AnlagegutFormular({
       if (key === 'kaufdatum' && next.afa_methode === 'degressiv' && !istDegressivMoeglich(val as string)) {
         next.afa_methode = 'linear'
       }
+      // Issue #578: voller Abzug im Anschaffungsjahr nur für EDV mit ND 1 (linear). Bei neuen
+      // Einträgen vorausgewählt, sobald die Bedingung erfüllt ist; bestehende bleiben, wie sie sind.
+      const sofortMoeglich = next.typ === 'edv' && next.nutzungsdauer_jahre === 1 && next.afa_methode === 'linear'
+      if (!sofortMoeglich) next.afa_sofort = false
+      else if (!initial && (key === 'typ' || key === 'nutzungsdauer_jahre' || key === 'afa_methode')) next.afa_sofort = true
       return next
     })
   }
@@ -126,9 +135,25 @@ function AnlagegutFormular({
             const n = parseInt(e.target.value)
             set('nutzungsdauer_jahre', Number.isNaN(n) ? '' : n)
           }} />
-          <p className="text-xs text-slate-400 mt-1">AfA-Tabelle BMF: KFZ=6, PC/Laptop=3, Büromöbel=13</p>
+          <p className="text-xs text-slate-400 mt-1">AfA-Tabelle BMF: KFZ=6, Büromöbel=13. Computerhardware und Software: 1 Jahr zulässig (BMF-Schreiben).</p>
         </div>
       </div>
+
+      {/* Issue #578: Sofortabzug für Computerhardware/Software mit Nutzungsdauer 1 Jahr */}
+      {form.typ === 'edv' && form.nutzungsdauer_jahre === 1 && form.afa_methode === 'linear' && (
+        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 rounded border-slate-300 text-blue-600"
+            checked={!!form.afa_sofort} onChange={e => set('afa_sofort', e.target.checked)} />
+          <span>
+            Voller Abzug im Anschaffungsjahr
+            <span className="block text-xs text-slate-400 dark:text-slate-500">
+              Nach dem BMF-Schreiben zu Computerhardware und Software wird der gesamte Betrag im Jahr der
+              Anschaffung abgeschrieben, ohne Verteilung nach Monaten. Ohne Häkchen wird ab dem Kaufmonat
+              anteilig auf zwölf Monate verteilt.
+            </span>
+          </span>
+        </label>
+      )}
 
       <div>
         <label className={labelCls}>AfA-Methode</label>
@@ -284,7 +309,9 @@ export function AnlageverzeichnisPage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('anlageverzeichnis', 50)
+  const detailBreite = useDetailBreite('anlageverzeichnis')
   const [jahr, setJahr] = useState(AKTUELLES_JAHR)
+  const buchungsjahre = useBuchungsjahre()  // Issue #589
   const [formModus, setFormModus] = useState<'neu' | 'bearbeiten' | null>(null)
   const [selId, setSelId] = useState<number | null>(null)
   const [planGut, setPlanGut] = useState<Anlagegut | null>(null)
@@ -345,7 +372,7 @@ export function AnlageverzeichnisPage() {
             <div className="flex gap-2 items-center">
               <select value={jahr} onChange={e => setJahr(parseInt(e.target.value))}
                 className="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-sm dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {Array.from({ length: 6 }, (_, i) => AKTUELLES_JAHR - i).map(y => (
+                {buchungsjahre.map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
@@ -445,8 +472,9 @@ export function AnlageverzeichnisPage() {
       )}
 
       {/* Rechte Spalte – Detail */}
+      {formModus === null && selGut && <DetailTrennlinie detail={detailBreite} />}
       {formModus === null && selGut && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-5">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto p-5`}>
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{selGut.bezeichnung}</h2>

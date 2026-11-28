@@ -4,7 +4,8 @@ Rechnungs-PDF Vorlage 1 – Grün / Kleinunternehmer mit Zahlungsziel.
 Community-Vorlage (Issue #33, Einreicher: trinity2701).
 
 Layout:
-  Spalten: Pos. | Datum | Beschreibung | Einzelpreis | USt % | Netto/Saldo
+  Spalten: [Pos.] | [Datum] | Beschreibung | Einzelpreis | USt % | Netto/Saldo
+  (Pos./Datum über die Schalter pdf_positionsnummern/pdf_positionsdatum, Issue #594)
   Anrede + Einleitung vor der Tabelle.
   Bezahldaten-Block im Tabellenstil unterhalb der Summen.
 """
@@ -14,10 +15,13 @@ from io import BytesIO
 from utils.pdf_rechnung_base import (
     RechnungPDFBase,
     _fmt_euro, _fmt_ust_satz, _fmt_zahl, _iso_zu_de, _adresszeilen, _md, anrede_zeile, dokument_text,
+    art_nr_spalte, art_nr_anzeige, ohne_ust_spalte, ist_abschlag_abzug,
+    pos_datum_spalten, positionsdatum,
     TEXT_GRAU, TEXT_DUNKEL,
     L_MARGIN, R_MARGIN, PAGE_W, NUTZ_W, FOOTER_H,
 )
 from utils.pdf_shared import epc_qr_bytes
+from utils.kontoinhaber import zahlungsempfaenger
 
 # Vorlage-Farben: Grüntöne passend zu #eff4ef
 GRUEN_HELL = (239, 244, 239)
@@ -81,13 +85,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
     def _render_positionen(self):
         from decimal import Decimal
         r = self._r
-        pos_datum_str = _iso_zu_de(str(r.leistung_von or r.datum))
         ist_lieferschein = getattr(r, "dokument_typ", "Rechnung") == "Lieferschein"
 
-        hat_artikelcode = any(
-            getattr(pos, "artikel", None) and pos.artikel.artikelcode
-            for pos in r.positionen
-        )
+        hat_artikelcode = art_nr_spalte(self._unt, r.positionen)  # Issue #562
         CODE_W = 20
 
         if ist_lieferschein:
@@ -120,6 +120,27 @@ class RechnungPDFVorlage1(RechnungPDFBase):
 
         # desc_col: Index der Beschreibungs-Spalte (nach Pos., Datum, ggf. Art.-Nr.)
         desc_col = 3 if hat_artikelcode else 2
+
+        # Issue #586: Kleinunternehmer (§ 19 UStG) - keine Spalte „USt %“, Breite an die Beschreibung
+        ohne_ust = ohne_ust_spalte(self._unt, r) and "USt %" in headers
+        if ohne_ust:
+            i_ust = headers.index("USt %")
+            col_w[desc_col] += col_w[i_ust]
+            for liste in (col_w, headers, aligns):
+                del liste[i_ust]
+            headers[-1] = "Betrag"
+
+        # Issue #594: „Pos.“ und „Datum“ über die Schalter wie in der Standardvorlage - eine
+        # ausgeblendete Spalte gibt ihre Breite an die Beschreibung
+        mit_pos, mit_datum = pos_datum_spalten(self._unt, vorlage1=True)
+        for name, an in (("Datum", mit_datum), ("Pos.", mit_pos)):
+            if not an:
+                i = headers.index(name)
+                col_w[desc_col] += col_w[i]
+                for liste in (col_w, headers, aligns):
+                    del liste[i]
+                desc_col -= 1
+        code_idx = desc_col - 1  # Art.-Nr. steht direkt vor der Beschreibung
         other_x  = L_MARGIN + sum(col_w[:desc_col + 1])  # X-Start der Spalten nach der Beschreibung
 
         tbl_x   = L_MARGIN
@@ -155,10 +176,12 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         _sign = Decimal("-1") if ist_storno else Decimal("1")
 
         for pos in r.positionen:
+            if ist_abschlag_abzug(pos):
+                continue  # Issue #600: Abzug steht im Summenblock
             # Issue #462: Position vollständig auf die nächste Seite, wenn sie nicht mehr passt
             _beschr = [(col_w[desc_col], pos.beschreibung)]
             if hat_artikelcode and getattr(pos, "artikel", None):
-                _beschr.append((col_w[2], pos.artikel.artikelcode))
+                _beschr.append((col_w[code_idx], art_nr_anzeige(pos, self._unt)))
             _rabatt = (getattr(pos, "rabatt_prozent", Decimal("0")) or Decimal("0")) > 0 and not ist_lieferschein
             _hoehe = self._positionshoehe(_beschr, 3.5, 5, 0.75, 1.5 + (5 if _rabatt else 0))
             if self._umbruch_vor_position(_hoehe, KOPF_H, vor_umbruch=lambda: _rahmen(tbl_top, self.get_y())):
@@ -186,8 +209,9 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 netto_ges_vor = pos.netto * pos.menge * _sign
                 netto_ges_eff = (pos.brutto - pos.ust_betrag) * _sign
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(pos.netto), align="R")
-                self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
-                self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(netto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(netto_ges_vor), align="R")
             else:
                 # pos.netto ist bei eingabemodus="brutto" bereits der eingegebene Brutto-
                 # Einzelpreis (Issue #332) - keine Umrechnung mit dem USt-Satz mehr nötig.
@@ -195,17 +219,20 @@ class RechnungPDFVorlage1(RechnungPDFBase):
                 brutto_ges_vor = ep_brutto * pos.menge * _sign
                 brutto_ges_eff = pos.brutto * _sign
                 self.cell(col_w[desc_col + 1], ROW_H, _fmt_euro(ep_brutto), align="R")
-                self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
-                self.cell(col_w[desc_col + 3], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
+                if not ohne_ust:
+                    self.cell(col_w[desc_col + 2], ROW_H, ust_label, align="R")
+                self.cell(col_w[-1], ROW_H, _fmt_euro(brutto_ges_vor), align="R")
 
             # Zurück zum Zeilenanfang: Pos., Datum, Art.-Nr., dann Beschreibung mit multi_cell
             self.set_xy(L_MARGIN, row_y)
-            self.cell(col_w[0], ROW_H, str(pos.position_nr), align="R")
-            self.cell(col_w[1], ROW_H, pos_datum_str, align="L")
+            if mit_pos:
+                self.cell(col_w[0], ROW_H, str(pos.position_nr), align="R")
+            if mit_datum:
+                self.cell(col_w[int(mit_pos)], ROW_H, positionsdatum(pos, r), align="L")
             self.set_xy(self.get_x(), row_y + DESC_OFFSET)
             if hat_artikelcode:
-                ac = pos.artikel.artikelcode if getattr(pos, "artikel", None) else None
-                self.multi_cell(col_w[2], DESC_H, ac or "", new_x="RIGHT", new_y="TOP", align="L")
+                self.multi_cell(col_w[code_idx], DESC_H, art_nr_anzeige(pos, self._unt),
+                                new_x="RIGHT", new_y="TOP", align="L")
             self.multi_cell(col_w[desc_col], DESC_H, pos.beschreibung or "",
                             new_x="LMARGIN", new_y="NEXT", align="L")
 
@@ -261,9 +288,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         bank    = unt.get("bank_name") or ""
         faellig = _iso_zu_de(str(r.faellig_am)) if r.faellig_am else "nach Erhalt"
 
-        empfaenger = unt.get("firmenname") or " ".join(filter(None, [
-            unt.get("vorname"), unt.get("nachname")
-        ]))
+        empfaenger = zahlungsempfaenger(unt)  # Issue #604: Kontoinhaber aus Einstellungen → Konten
 
         zahlungsstatus = str(getattr(r, "zahlungsstatus", "offen") or "offen")
         zahlungen = [
@@ -383,9 +408,7 @@ class RechnungPDFVorlage1(RechnungPDFBase):
         block_bottom = self.get_y()
 
         if qr_aktiv:
-            empf = unt.get("firmenname") or " ".join(
-                p for p in [unt.get("vorname"), unt.get("nachname")] if p
-            )
+            empf = empfaenger
             qr_voll = epc_qr_bytes(iban, bic, empf, float(r.brutto_gesamt), r.rechnungsnummer or "")
             qr_sk   = (
                 epc_qr_bytes(iban, bic, empf, float(sk_netto), r.rechnungsnummer or "")
@@ -469,7 +492,11 @@ def generate_rechnung_pdf_vorlage1(
     ist_kopie: bool = False,
     ist_entwurf: bool = False,
     ist_netto: bool = False,
+    mit_output_intent: bool = False,
 ) -> bytes:
     pdf = RechnungPDFVorlage1(unternehmen, rechnung,
                                ist_kopie=ist_kopie, ist_entwurf=ist_entwurf, ist_netto=ist_netto)
+    if mit_output_intent:  # Issue #556: ZUGFeRD auch mit dieser Vorlage
+        from utils.pdf_rechnung import setze_srgb_output_intent
+        setze_srgb_output_intent(pdf)
     return pdf.render()

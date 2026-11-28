@@ -24,6 +24,21 @@ def _pruefe_euer_zeile(zeile: int | None) -> None:
         )
 
 
+STEUERFREI_PARAGRAFEN = ("3_26", "3_26a")
+
+
+def _steuerfrei_paragraf(data: KategorieCreate) -> str | None:
+    """Issue #567: steuerfreie Einnahmen nach § 3 Nr. 26/26a EStG - nur bei Erlös-Kategorien."""
+    wert = data.steuerfrei_paragraf or None
+    if wert is None:
+        return None
+    if wert not in STEUERFREI_PARAGRAFEN:
+        raise HTTPException(status_code=422, detail="Unbekannte Steuerbefreiung.")
+    if data.kontenart != "Erlös":
+        raise HTTPException(status_code=422, detail="Steuerfreie Einnahmen nach § 3 EStG gibt es nur bei Erlös-Kategorien.")
+    return wert
+
+
 @router.get("", response_model=list[KategorieResponse])
 def list_kategorien(
     kontenart: str | None = None,
@@ -64,6 +79,7 @@ def create_kategorie(data: KategorieCreate, db: Session = Depends(get_db)):
         konto_skr03_default=data.konto_skr03,
         konto_skr04_default=data.konto_skr04,
         euer_zeile=data.euer_zeile,
+        steuerfrei_paragraf=_steuerfrei_paragraf(data),
         eks_kategorie=data.eks_kategorie,
         vorsteuer_prozent=data.vorsteuer_prozent,
         ust_satz_standard=data.ust_satz_standard,
@@ -96,6 +112,7 @@ def update_kategorie(kategorie_id: int, data: KategorieCreate, db: Session = Dep
     kat.konto_skr03_default = data.konto_skr03 or None
     kat.konto_skr04_default = data.konto_skr04 or None
     kat.euer_zeile = data.euer_zeile
+    kat.steuerfrei_paragraf = _steuerfrei_paragraf(data)
     kat.eks_kategorie = data.eks_kategorie or None
     kat.vorsteuer_prozent = data.vorsteuer_prozent
     kat.ust_satz_standard = data.ust_satz_standard

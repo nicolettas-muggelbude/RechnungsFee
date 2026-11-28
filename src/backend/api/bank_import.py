@@ -25,6 +25,7 @@ from utils.bank_csv_parser import (
     decode_csv_text,
     detect_delimiter,
     detect_encoding,
+    extract_eigene_email,
     extract_konto_iban,
     extract_konto_iban_camt,
     extract_xml_from_zip,
@@ -74,6 +75,8 @@ class VorschauResponse(BaseModel):
     encoding: str
     konto_iban: Optional[str] = None          # aus CSV-Header extrahierte eigene IBAN
     erkanntes_konto_id: Optional[int] = None  # passendes Konto im System (None = nicht gefunden)
+    erkannte_email: Optional[str] = None      # eigene Adresse, wenn der Export keine IBAN trägt
+    email_konto_ids: list[int] = []           # Zahlungsdienstleister mit dieser Kennung
     transaktionen: list[TransaktionVorschau]
 
 
@@ -388,7 +391,7 @@ def _match_kundenguthaben(
             if rechnung and rechnung.kunde_id:
                 kunde = db.query(Kunde).filter(Kunde.id == rechnung.kunde_id).first()
                 if kunde:
-                    kunde_name = (kunde.firma or f"{kunde.vorname or ''} {kunde.nachname or ''}").strip()
+                    kunde_name = (kunde.firmenname or f"{kunde.vorname or ''} {kunde.nachname or ''}").strip()
                     if _name_match(kunde_name, tx.partner_name):
                         return f
 
@@ -432,7 +435,7 @@ def _match_lieferantenguthaben(
             if rechnung and rechnung.lieferant_id:
                 lieferant = db.query(Lieferant).filter(Lieferant.id == rechnung.lieferant_id).first()
                 if lieferant:
-                    lieferant_name = (lieferant.firma or f"{lieferant.vorname or ''} {lieferant.nachname or ''}").strip()
+                    lieferant_name = (lieferant.firmenname or f"{lieferant.vorname or ''} {lieferant.nachname or ''}").strip()
                     if _name_match(lieferant_name, tx.partner_name):
                         return f
 
@@ -503,7 +506,7 @@ def _buche_pfad_a(
         (
             satz_ratios, ust_satz_dom, hat_gemischte_25a, gruppen_keys,
             gruppen_kategorie, gruppen_marge, gruppen_brutto_mixed,
-        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku)
+        ) = _ausgangs_buchungsgruppen(db, rechnung, ist_ku, nach_offenem=True)
         if not hat_gemischte_25a:
             kat_id, kat = _erloes_kategorie(db, rechnung)
     elif rechnung.positionen:
@@ -564,6 +567,9 @@ def _buche_pfad_a(
 
     eintrag = None
     for i, (g_satz, g_betrag, g_ust_skr03, g_ust_skr04) in enumerate(ust_gruppen):
+        # Issue #567-Folgefund: keine 0-€-Buchung für eine bereits voll bezahlte Kategorie
+        if g_betrag == 0 and len(ust_gruppen) > 1:
+            continue
         if hat_gemischte_25a and i < len(gruppen_keys):
             key = gruppen_keys[i]
             g_kat_id, g_kat_obj = gruppen_kategorie.get(key, (kat_id, kat))
@@ -649,7 +655,7 @@ def _buche_pfad_a(
         )
         e.signatur = signatur_journaleintrag(e)
         db.add(e)
-        if i == 0:
+        if eintrag is None:
             eintrag = e
     db.flush()
 
@@ -799,6 +805,26 @@ def _enriche_tx(tx: BankTransaktion, rechnungen_map: dict, journale_map: dict) -
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _konten_mit_kennung(db: Session, email: str) -> list[int]:
+    """Aktive Zahlungsdienstleister, deren Kennung exakt der Adresse entspricht.
+
+    Bankkonten bleiben außen vor – die haben eine IBAN. Vergleich ohne Großschreibung
+    und ohne Leerzeichen am Rand. Privatkonten sind für den Import nicht wählbar.
+    """
+    ziel = email.strip().lower()
+    konten = (
+        db.query(Konto)
+        .filter(
+            Konto.aktiv == True,
+            Konto.kontoart == "zahlungsdienstleister",
+            Konto.kontotyp != "privat",
+        )
+        .order_by(Konto.id)
+        .all()
+    )
+    return [k.id for k in konten if (k.kennung or "").strip().lower() == ziel]
+
+
 def _vorschau_fuer_bytes(
     raw: bytes,
     konto_id: Optional[int],
@@ -924,9 +950,12 @@ def _vorschau_fuer_bytes(
             detail="Kein passendes Template gefunden. Bitte Template manuell auswählen.",
         )
 
-    # IBAN aus CSV-Header extrahieren und Konto im System suchen
+    # IBAN aus CSV-Header extrahieren und Konto im System suchen.
+    # Fehlt die IBAN (PayPal), gilt die eigene E-Mail gegen die Kennung der Zahlungsdienstleister.
     konto_iban = extract_konto_iban(raw, template)
     erkanntes_konto_id = konto_id  # übernehmen falls manuell übergeben
+    erkannte_email: Optional[str] = None
+    email_konto_ids: list[int] = []
 
     if konto_iban and konto_id is None:
         konto = db.query(Konto).filter(
@@ -935,6 +964,14 @@ def _vorschau_fuer_bytes(
         ).first()
         if konto:
             erkanntes_konto_id = konto.id
+    elif konto_id is None:
+        erkannte_email = extract_eigene_email(raw)
+        if erkannte_email:
+            email_konto_ids = _konten_mit_kennung(db, erkannte_email)
+            if len(email_konto_ids) == 1:
+                erkanntes_konto_id = email_konto_ids[0]
+            elif not email_konto_ids:
+                erkannte_email = None
 
     transaktionen, enc = parse_csv_mit_template(raw, template)
     hashes = _vorhandene_hashes(db, erkanntes_konto_id) if erkanntes_konto_id else set()
@@ -963,6 +1000,8 @@ def _vorschau_fuer_bytes(
         encoding=enc,
         konto_iban=konto_iban,
         erkanntes_konto_id=erkanntes_konto_id,
+        erkannte_email=erkannte_email,
+        email_konto_ids=email_konto_ids,
         transaktionen=result,
     )
 
@@ -1146,6 +1185,19 @@ def auto_buchen(konto_id: int, import_id: Optional[int] = None, db: Session = De
     db.commit()
     return AutoBuchenResult(gebucht=gebucht, offen=offen, forderungen=forderungen, fehler=fehler, import_id=import_id,
                             hinweis=hinweis)
+
+
+@router.get("/{konto_id}/jahre")
+def transaktionsjahre(konto_id: int, db: Session = Depends(get_db)) -> list[int]:
+    """Issue #565: Jahre mit Transaktionen dieses Kontos (absteigend) für die Jahresauswahl."""
+    from sqlalchemy import extract
+    jahre = (
+        db.query(extract("year", BankTransaktion.datum))
+        .filter(BankTransaktion.konto_id == konto_id)
+        .distinct()
+        .all()
+    )
+    return sorted({int(j[0]) for j in jahre if j[0] is not None}, reverse=True)
 
 
 @router.get("/{konto_id}", response_model=BankTransaktionenListResponse)
@@ -1336,10 +1388,8 @@ def journal_verknuepfen(
         # update_eintrag() automatisch hier, das deckt aber nicht storno_eintrag()/
         # storno_rechnung(), wo es keine automatische Nachfolgebuchung gibt).
         alt = db.query(Journaleintrag).filter(Journaleintrag.id == tx.journal_id).first()
-        alt_ist_storniert = alt and db.query(Journaleintrag).filter(
-            Journaleintrag.gruppe_id == (alt.gruppe_id or alt.id),
-            Journaleintrag.beschreibung.like("STORNO %"),
-        ).first() is not None
+        from utils.storno_kette import storno_zu
+        alt_ist_storniert = alt is not None and storno_zu(db, alt) is not None  # Issue #601
         if not alt_ist_storniert:
             raise HTTPException(status_code=409, detail="bereits_verknuepft")
 

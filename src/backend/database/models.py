@@ -118,6 +118,11 @@ class Unternehmen(Base):
     anrede_fallback: Mapped[str | None] = mapped_column(Text)
     pdf_vorlage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pdf_positionsnummern: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)  # Issue #475
+    # Issue #562: Spalte „Art.-Nr.“ auf Dokumenten - eigener Eintrag (artikel.artikelcode), sonst
+    # automatischer Code (artikel.artikelnummer); im absender_snapshot eingefroren
+    pdf_artikelnummer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #594: Spalte „Datum“ je Position in beiden Vorlagen und Datumsfeld im Positionsformular
+    pdf_positionsdatum: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     einleitungstext: Mapped[str | None] = mapped_column(Text)
     schlusstext: Mapped[str | None] = mapped_column(Text)
     # Issue #368: eigene Standardtexte je optionalem Dokumenttyp (Rechnung nutzt weiterhin
@@ -141,6 +146,9 @@ class Unternehmen(Base):
     mail_text_proforma: Mapped[str | None] = mapped_column(Text)
     mail_betreff_auftrag: Mapped[str | None] = mapped_column(String(500))
     mail_text_auftrag: Mapped[str | None] = mapped_column(Text)
+    # Issue #561: eigene Mailvorlage für Mahnungen (bisher fest eingebauter Text)
+    mail_betreff_mahnung: Mapped[str | None] = mapped_column(String(500))
+    mail_text_mahnung: Mapped[str | None] = mapped_column(Text)
     mail_signatur: Mapped[str | None] = mapped_column(Text)
     # SMTP
     smtp_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
@@ -157,6 +165,11 @@ class Unternehmen(Base):
     # Trust-on-First-Use: SHA-256-Fingerabdruck des beim ersten Verbindungsaufbau akzeptierten
     # Zertifikats (nur relevant/gesetzt wenn smtp_zertifikat_ignorieren aktiv ist, Issue #336)
     smtp_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    # Issue #596: Kopie gesendeter Mails per IMAP im Ordner „Gesendet“ ablegen (Opt-in; Benutzer
+    # und Passwort vom Mailversand, nur Server/Port eigen) - utils/gesendet_ablage.py
+    gesendet_imap_aktiv: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    gesendet_imap_host: Mapped[str | None] = mapped_column(String(200))
+    gesendet_imap_port: Mapped[int] = mapped_column(Integer, default=993, server_default="993", nullable=False)
     # Thunderbird als Mailversand-Option (Issue #147): hat Vorrang vor smtp_aktiv, wenn gesetzt -
     # RechnungsFee übergibt Empfänger/Betreff/Text/Anhang an ein Thunderbird-Compose-Fenster,
     # Versand (inkl. Signatur/Regeln/ggf. eingerichteter Verschlüsselung) übernimmt Thunderbird
@@ -172,6 +185,8 @@ class Unternehmen(Base):
     imap_passwort: Mapped[str | None] = mapped_column(Text)
     imap_ordner: Mapped[str] = mapped_column(String(200), default="INBOX", server_default="INBOX", nullable=False)
     imap_beim_start: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    # Issue #592: Abruf im Hintergrund alle N Minuten, solange die App läuft (0 = aus)
+    imap_intervall_minuten: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     # Trust-on-First-Use analog SMTP (Issue #336) - eigener Fingerabdruck, IMAP-Server kann ein anderer sein
     imap_zertifikat_ignorieren: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     imap_zertifikat_fingerprint: Mapped[str | None] = mapped_column(String(64))
@@ -255,6 +270,9 @@ class Konto(Base):
     kontotyp: Mapped[str] = mapped_column(String(20), default="geschaeftlich", nullable=False)  # geschaeftlich|mischkonto
     ist_standard: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     datev_kontonummer: Mapped[str | None] = mapped_column(String(8))  # individuelles DATEV-Gegenkonto (z.B. 1200, 1210)
+    # Issue #604: Name wie bei der Bank hinterlegt (Empfängerüberprüfung) – Empfänger im
+    # QR-Code/E-Rechnung, wenn dieses Konto die Rechnungs-IBAN ist; leer = Firmenname bzw. Vor-/Nachname
+    kontoinhaber: Mapped[str | None] = mapped_column(String(70))
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -272,7 +290,7 @@ class Kategorie(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    kontenart: Mapped[str] = mapped_column(String(20), nullable=False)  # Aufwand|Erlös|Privat|Anlage
+    kontenart: Mapped[str] = mapped_column(String(20), nullable=False)  # Aufwand|Erlös|Privat|Anlage|Neutral (#564: erfolgsneutral, beide Seiten)
     konto_skr03: Mapped[str | None] = mapped_column(String(10))
     konto_skr04: Mapped[str | None] = mapped_column(String(10))
     konto_skr49: Mapped[str | None] = mapped_column(String(10))
@@ -286,6 +304,10 @@ class Kategorie(Base):
     ust_sonderfall: Mapped[str | None] = mapped_column(String(20))
     eks_kategorie: Mapped[str | None] = mapped_column(String(10))  # B9, A1 etc.
     euer_zeile: Mapped[int | None] = mapped_column(Integer)
+    # Issue #567: Einnahmen dieser Erlös-Kategorie sind (bis zum Freibetrag) steuerfrei -
+    # "3_26" Übungsleiter (§ 3 Nr. 26 EStG), "3_26a" Ehrenamtspauschale (§ 3 Nr. 26a EStG), NULL = nein.
+    # Wirkt auf EÜR Zeile 78 (Abzug vom Gewinn) und Anlage S Zeile 57.
+    steuerfrei_paragraf: Mapped[str | None] = mapped_column(String(10))
     vorsteuer_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100, nullable=False)
     ust_satz_standard: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0|7|19
     ist_system: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -374,6 +396,10 @@ class Journaleintrag(Base):
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id"))
     kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id"))
+    # Issue #566: Lieferant bei direkt gebuchten Ausgaben. Bewusst OHNE Datenbank-Fremdschlüssel:
+    # versiegelte Zeilen sind unveränderlich, ein FK würde das Anonymisieren (Löschen) eines
+    # Lieferanten blockieren bzw. ein ON DELETE SET NULL am GoBD-Trigger scheitern lassen.
+    lieferant_id: Mapped[int | None] = mapped_column(Integer)
     zahlungsart: Mapped[str] = mapped_column(String(20), nullable=False)  # Bar|Karte|Bank|PayPal
     art: Mapped[str] = mapped_column(String(10), nullable=False)  # Einnahme|Ausgabe
     netto_betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -413,8 +439,31 @@ class Journaleintrag(Base):
 
     kategorie: Mapped["Kategorie | None"] = relationship(back_populates="journaleintraege")
     kunde: Mapped["Kunde | None"] = relationship()
+    # Issue #566: nur lesend, ohne DB-Fremdschlüssel (siehe lieferant_id)
+    lieferant: Mapped["Lieferant | None"] = relationship(
+        primaryjoin="foreign(Journaleintrag.lieferant_id) == Lieferant.id", viewonly=True,
+    )
     rechnung: Mapped["Rechnung | None"] = relationship(back_populates="journaleintraege")
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
+    # Issue #568 Stufe 2: alle Belege der Buchung (beleg_id bleibt der erste/Hauptbeleg)
+    anhaenge: Mapped[list["JournalAnhang"]] = relationship(
+        back_populates="journaleintrag", order_by="JournalAnhang.id",
+    )
+
+
+class JournalAnhang(Base):
+    """Issue #568 Stufe 2: mehrere Belege je Journalbuchung (z. B. Vertrag + Monatsabrechnung).
+    Nur im Korrekturfenster änderbar; bei festgeschriebener Buchung verhindert der Trigger
+    protect_journal_anhaenge_delete das Entfernen (GoBD)."""
+    __tablename__ = "journal_anhaenge"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    journal_id: Mapped[int] = mapped_column(ForeignKey("journal.id"), nullable=False, index=True)
+    beleg_id: Mapped[int] = mapped_column(ForeignKey("belege.id"), nullable=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    journaleintrag: Mapped["Journaleintrag"] = relationship(back_populates="anhaenge")
+    beleg: Mapped["Beleg"] = relationship()
 
 
 class Tagesabschluss(Base):
@@ -462,6 +511,31 @@ class AenderungsProtokoll(Base):
     migration_version: Mapped[int] = mapped_column(Integer, nullable=False)
     grund: Mapped[str] = mapped_column(String(500), nullable=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class DokumentVerlauf(Base):
+    """Issue #596: was wann mit einem Dokument passiert ist (gedruckt/PDF erzeugt, per SMTP
+    gesendet, an Thunderbird/Mailprogramm übergeben, Mahnung versendet). Nur Anhängen, nie
+    ändern. kunde_id/lieferant_id als Stand zum Zeitpunkt des Ereignisses, damit der Verlauf
+    im Kunden-/Lieferantenstamm auch Mahnungen (mehrere Rechnungen) zeigt. Bewusst ohne FK auf
+    kunden/lieferanten (Anonymisieren leert nur empfaenger/betreff, siehe utils/dokument_verlauf)."""
+    __tablename__ = "dokument_verlauf"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    zeitpunkt: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id", ondelete="CASCADE"), index=True)
+    mahnung_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    kunde_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    lieferant_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    # gedruckt | pdf | mail_gesendet | mail_uebergeben | mahnung_gesendet | mahnung_uebergeben | ausgegeben
+    art: Mapped[str] = mapped_column(String(30), nullable=False)
+    # druck | smtp | thunderbird | mailprogramm | unbekannt
+    kanal: Mapped[str] = mapped_column(String(20), nullable=False, default="unbekannt")
+    kopie: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    empfaenger: Mapped[str | None] = mapped_column(String(500))
+    betreff: Mapped[str | None] = mapped_column(String(500))
+
+    rechnung: Mapped["Rechnung | None"] = relationship(back_populates="verlauf")
 
 
 # ---------------------------------------------------------------------------
@@ -817,7 +891,7 @@ class Rechnung(Base):
     beleg_id: Mapped[int | None] = mapped_column(ForeignKey("belege.id"))
     notizen: Mapped[str | None] = mapped_column(Text)
     externe_belegnr: Mapped[str | None] = mapped_column(String(100))  # Lieferanten-Rechnungsnr. (nur Eingang)
-    import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, nicht neu ausgeben/mahnen
+    import_quelle: Mapped[str | None] = mapped_column(String(30))  # z. B. papierkram; historisch, kein neues PDF/kein Versand (mahnbar seit Migration 196)
     kunden_bestellnummer: Mapped[str | None] = mapped_column(String(100))  # Bestellnummer des Kunden (nur Ausgang) -> ZUGFeRD BT-13
     bemerkung_erechnung: Mapped[str | None] = mapped_column(Text)  # eigene Bemerkung -> ZUGFeRD BT-22, Vorrang vor notizen (Issue #474)
     # Issue #492: steuerfreie Leistung nach § 4 UStG (Grund aus unternehmen.steuerbefreiung_4,
@@ -847,6 +921,10 @@ class Rechnung(Base):
     storniert: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ueberzahlung_anerkannt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     mahnstufe_aktuell: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Migration 196: im Altsystem bereits verschickte Mahnstufe einer importierten/extern erstellten
+    # Rechnung (0 = keine) und deren Datum - Untergrenze für mahnstufe_aktuell, Basis der Fälligkeit
+    altsystem_mahnstufe: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    altsystem_gemahnt_am: Mapped[date | None] = mapped_column(Date, nullable=True)
     storno_grund: Mapped[str | None] = mapped_column(String(500))
     storno_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
     # Tag des Forderungsausfalls (zahlungsstatus "uneinbringlich", §17 Abs. 2 Nr. 1 UStG) - Monat
@@ -899,6 +977,9 @@ class Rechnung(Base):
     # verrechnet wurde - bewusst umgekehrte Richtung zum sonst ueblichen Muster oben, weil hier
     # die Quelle zeitlich zuerst entsteht statt aus dem Ziel abgeleitet zu werden.
     verrechnet_in_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
+    # Issue #597: auf der Abschlagsrechnung, aus welchem Angebot/Auftrag sie erstellt wurde
+    # (mehrere Abschläge je Dokument möglich, daher auf der Abschlagsrechnung statt am Dokument)
+    abschlag_zu_dokument_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"), nullable=True)
 
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -916,6 +997,11 @@ class Rechnung(Base):
     journaleintraege: Mapped[list["Journaleintrag"]] = relationship(back_populates="rechnung")
     vorsteuer_ansprueche: Mapped[list["VorsteuerAnspruch"]] = relationship(back_populates="rechnung")
     zugferd_anhaenge: Mapped[list["RechnungZugferdAnhang"]] = relationship(back_populates="rechnung", cascade="all, delete-orphan", order_by="RechnungZugferdAnhang.id")
+    # Issue #596: Druck/Versand-Verlauf; selectin = ein Query für die ganze Rechnungsliste
+    verlauf: Mapped[list["DokumentVerlauf"]] = relationship(
+        back_populates="rechnung", cascade="all, delete-orphan", lazy="selectin",
+        order_by="DokumentVerlauf.zeitpunkt",
+    )
 
 
 class Rechnungsposition(Base):
@@ -944,6 +1030,9 @@ class Rechnungsposition(Base):
     # Positions-Kopie). Verhindert, dass der generische Positions-Editor eine solche Zeile
     # unbemerkt loescht/aendert, ohne dass die Abschlagsrechnung davon erfaehrt.
     abschlag_rechnung_id: Mapped[int | None] = mapped_column(ForeignKey("rechnungen.id"))
+    # Issue #594: Leistungsdatum der einzelnen Position (Sammelrechnung); leer = Leistungsdatum
+    # bzw. -zeitraum der Rechnung
+    leistungsdatum: Mapped[date | None] = mapped_column(Date)
 
     rechnung: Mapped["Rechnung"] = relationship(back_populates="positionen", foreign_keys=[rechnung_id])
     abschlag_rechnung: Mapped["Rechnung | None"] = relationship(foreign_keys=[abschlag_rechnung_id])
@@ -1041,6 +1130,9 @@ class Anlagegut(Base):
     kaufpreis_netto: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     nutzungsdauer_jahre: Mapped[int] = mapped_column(Integer, nullable=False)
     afa_methode: Mapped[str] = mapped_column(String(20), default="linear", nullable=False)
+    # Issue #578: voller Abzug im Anschaffungsjahr (BMF-Schreiben Computerhardware/Software,
+    # Nutzungsdauer 1 Jahr) statt monatsgenauer Verteilung - nur EDV mit ND 1, bewusst Opt-in
+    afa_sofort: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     kennzeichen: Mapped[str | None] = mapped_column(String(20))          # KFZ
     privat_anteil_prozent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     verkauft_am: Mapped[date | None] = mapped_column(Date)
@@ -1059,6 +1151,9 @@ class Buchungsvorlage(Base):
     lieferant_id: Mapped[int | None] = mapped_column(ForeignKey("lieferanten.id", ondelete="SET NULL"))
     kategorie_id: Mapped[int | None] = mapped_column(ForeignKey("kategorien.id", ondelete="SET NULL"))
     konto_id: Mapped[int | None] = mapped_column(ForeignKey("konten.id", ondelete="SET NULL"))
+    # Issue #566: Zahlungsart der Buchung (bisher fest Bank) und Kunde bei Einnahme-Vorlagen
+    zahlungsart: Mapped[str] = mapped_column(String(20), default="Bank", server_default="Bank", nullable=False)
+    kunde_id: Mapped[int | None] = mapped_column(ForeignKey("kunden.id", ondelete="SET NULL"))
     betrag: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     ist_brutto: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     ust_satz: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
@@ -1076,6 +1171,7 @@ class Buchungsvorlage(Base):
     lieferant: Mapped["Lieferant | None"] = relationship(foreign_keys=[lieferant_id])
     kategorie: Mapped["Kategorie | None"] = relationship(foreign_keys=[kategorie_id])
     konto: Mapped["Konto | None"] = relationship(foreign_keys=[konto_id])
+    kunde: Mapped["Kunde | None"] = relationship(foreign_keys=[kunde_id])
     beleg: Mapped["Beleg | None"] = relationship(foreign_keys=[beleg_id])
 
 

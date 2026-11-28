@@ -561,6 +561,17 @@ def postfach_datei(eintrag_id: int, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/eingang/{eintrag_id}/ansicht")
+def postfach_ansicht(eintrag_id: int, db: Session = Depends(get_db)):
+    """Issue #598: Anhang (XRechnung oder ZUGFeRD-PDF) als lesbare Ansicht."""
+    from api.rechnungen import einvoice_ansicht_antwort
+    e = _eintrag(eintrag_id, db)
+    if not e.datei_pfad or not (UPLOADS / e.datei_pfad).exists():
+        raise HTTPException(404, "Datei nicht mehr vorhanden.")
+    quelle = " · ".join(x for x in (e.original_name, e.absender) if x)
+    return einvoice_ansicht_antwort((UPLOADS / e.datei_pfad).read_bytes(), Path(e.original_name).stem, quelle)
+
+
 @router.post("/eingang/{eintrag_id}/uebernommen", response_model=EintragMitHinweis)
 def postfach_uebernommen(eintrag_id: int, body: UebernommenRequest, db: Session = Depends(get_db)):
     """Nach erfolgreichem Einzelimport: Eintrag erledigt (die Datei hängt dann als Beleg an der

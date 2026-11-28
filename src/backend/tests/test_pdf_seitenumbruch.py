@@ -37,6 +37,7 @@ def _seiten(vorlage: int, zeilen: int, anzahl: int) -> list[str]:
                      for i in range(1, zeilen + 1))
     r = create_rechnung(RechnungCreate(
         typ="ausgang", datum=date(2026, 10, 20), kunde_id=db.query(Kunde).one().id,
+        rechnungsnummer="RE-260001",  # Entwürfe sind seit #465 ohne Nummer
         positionen=[RechnungspositionCreate(beschreibung=text, netto=Decimal("100"), ust_satz=Decimal("19"))
                     for _ in range(anzahl)],
     ), db)

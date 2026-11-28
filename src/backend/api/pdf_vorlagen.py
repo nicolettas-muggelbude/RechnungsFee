@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import Unternehmen
 from utils.pdf_rechnung import generate_rechnung_pdf
+from utils.kontoinhaber import kontoinhaber_von
 from utils.pdf_rechnung_vorlage1 import generate_rechnung_pdf_vorlage1
 
 router = APIRouter(prefix="/api/pdf-vorlagen", tags=["PDF-Vorlagen"])
@@ -26,30 +27,35 @@ VORLAGEN = [
     },
     {
         "id": 1,
-        "name": "Sandra grün – Nur für Kleinunternehmer",
-        "beschreibung": "Nur für Kleinunternehmer (§ 19 UStG) · Grünes Design · Spalten: Datum, Beschreibung, Saldo · Überweisungsblock mit IBAN",
+        "name": "Sandra grün",
+        "beschreibung": "Grünes Design · Spalten: Beschreibung, USt % (nicht bei Kleinunternehmern), Betrag, Pos. und Datum über die Schalter unten · Überweisungsblock mit IBAN · für alle Unternehmensformen",
     },
 ]
 
 
 def _demo_rechnung(unt: dict) -> Any:
-    """Erzeugt eine Muster-Rechnung mit Dummy-Daten für die Vorschau."""
+    """Erzeugt eine Muster-Rechnung mit Dummy-Daten für die Vorschau. Zwei Positionen haben einen
+    Artikel (einmal mit eigenem Artikelcode, einmal nur mit automatischer Nummer), alle ein eigenes
+    Leistungsdatum - sonst blieben die Spalten „Art.-Nr.“ (#562) und „Datum“ (#594) in der
+    Vorschau leer bzw. zeigten überall dasselbe Datum."""
     pos1 = SimpleNamespace(
-        position_nr=1,
+        position_nr=1, leistungsdatum=date(2024, 3, 4),
+        artikel=SimpleNamespace(artikelcode="WEB-START", artikelnummer="ART-0001"),
         beschreibung="Webdesign – Startseite", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("800.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "152.00"),
         brutto=Decimal("800.00" if unt.get("ist_kleinunternehmer") else "952.00"),
     )
     pos2 = SimpleNamespace(
-        position_nr=2,
+        position_nr=2, leistungsdatum=date(2024, 3, 12), artikel=None,
         beschreibung="Logo-Erstellung und CI-Konzept", menge=Decimal("1"), einheit="Pauschal",
         netto=Decimal("300.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "57.00"),
         brutto=Decimal("300.00" if unt.get("ist_kleinunternehmer") else "357.00"),
     )
     pos3 = SimpleNamespace(
-        position_nr=3,
+        position_nr=3, leistungsdatum=date(2024, 3, 28),
+        artikel=SimpleNamespace(artikelcode=None, artikelnummer="ART-0007"),
         beschreibung="Technischer Support (3 Stunden)", menge=Decimal("3"), einheit="Std",
         netto=Decimal("180.00"), ust_satz=Decimal("0" if unt.get("ist_kleinunternehmer") else "19"),
         ust_betrag=Decimal("0" if unt.get("ist_kleinunternehmer") else "34.20"),
@@ -118,6 +124,7 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "email":                   unternehmen.email or "",
         "webseite":                unternehmen.webseite or "",
         "iban":                    unternehmen.iban or "",
+        "kontoinhaber":            kontoinhaber_von(unternehmen),  # Issue #604
         "bic":                     unternehmen.bic or "",
         "bank_name":               unternehmen.bank_name or "",
         "logo_pfad":               unternehmen.logo_pfad or "",
@@ -133,6 +140,8 @@ def _unt_dict(unternehmen: Unternehmen | None) -> dict:
         "unterschrift_bild":       unternehmen.unterschrift_bild or "",
         "unterschrift_auf_rechnung": unternehmen.unterschrift_auf_rechnung or False,
         "pdf_positionsnummern":    bool(unternehmen.pdf_positionsnummern),
+        "pdf_artikelnummer":    bool(unternehmen.pdf_artikelnummer),
+        "pdf_positionsdatum":   bool(unternehmen.pdf_positionsdatum),
     }
 
 

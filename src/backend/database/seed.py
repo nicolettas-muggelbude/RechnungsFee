@@ -8,6 +8,12 @@ import json
 from sqlalchemy.orm import Session
 from .models import Kategorie, EuLand, Nummernkreis, BankTemplate, Mahnstufe
 
+DURCHLAUFENDE_POSTEN_BESCHREIBUNG = (
+    "Beträge, die nur durch deine Kasse laufen und weder Einnahme noch Ausgabe sind, z. B. eine "
+    "versehentlich doppelt erhaltene Zahlung: Eingang und Rückzahlung beide hierauf buchen. "
+    "Zählt weder in der EÜR noch in der Umsatzsteuer-Voranmeldung."
+)
+
 
 STANDARD_KATEGORIEN = [
     # ── Tabelle A: Betriebseinnahmen ──────────────────────────────────────
@@ -113,6 +119,8 @@ STANDARD_KATEGORIEN = [
     {"name": "Zinsen & Darlehenskosten",      "kontenart": "Aufwand", "konto_skr03": "2120", "konto_skr04": "7320", "eks_kategorie": "B15",   "euer_zeile": 56,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Kredittilgung",                 "kontenart": "Aufwand", "konto_skr03": "0630", "konto_skr04": "3150", "eks_kategorie": "B16",   "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     {"name": "Instandhaltungsrücklage (WEG)",          "kontenart": "Aufwand", "konto_skr03": "1500", "konto_skr04": "1300", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": "Rücklagen-Anteil des Hausgelds einer Wohnungseigentümergemeinschaft – Vermögen bei der WEG, beim Bezahlen keine Betriebsausgabe. Den laut Jahresabrechnung verwendeten Betrag als Ausgabe ohne Geldbewegung buchen (Issue #507)."},
+    # Issue #564: erfolgsneutral, bei Einnahme und Ausgabe wählbar, weder EÜR noch UStVA
+    {"name": "Durchlaufende Posten",          "kontenart": "Neutral", "konto_skr03": "1590", "konto_skr04": "1370", "eks_kategorie": None,    "euer_zeile": None, "vorsteuer_prozent": 0,   "ust_satz_standard": 0, "beschreibung": DURCHLAUFENDE_POSTEN_BESCHREIBUNG},
     {"name": "Umsatzsteuer-Zahlung FA",       "kontenart": "Aufwand", "konto_skr03": "1780", "konto_skr04": "3820", "eks_kategorie": "B18",   "euer_zeile": 58,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},
     # ── Tabelle B Ergänzungen ─────────────────────────────────────────────
     {"name": "Forderungsausfall",                "kontenart": "Aufwand", "konto_skr03": "2400", "konto_skr04": "6930", "eks_kategorie": None,    "euer_zeile": 60,   "vorsteuer_prozent": 0,   "ust_satz_standard": 0},

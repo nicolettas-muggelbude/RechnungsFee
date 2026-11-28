@@ -1150,6 +1150,8 @@ def _berechne_ku_kz48(von: date, bis: date, db: Session) -> Decimal:
                 Kategorie.euer_zeile.is_(None),
                 Kategorie.euer_zeile != 107,
             ),
+            # Issue #564: Durchlaufende Posten (Kontenart Neutral) sind kein Umsatz
+            or_(Journaleintrag.kategorie_id.is_(None), Kategorie.kontenart != "Neutral"),
         )
         .all()
     )

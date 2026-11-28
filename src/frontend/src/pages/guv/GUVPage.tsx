@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { berechneGUV, getUnternehmen, type GUVErgebnis } from '../../api/client'
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { formatWirtschaftsjahrLabel } from '../../utils/wirtschaftsjahr'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 function euroFmt(v: string | number): string {
   const n = typeof v === 'string' ? parseFloat(v) : v
@@ -13,7 +14,7 @@ export function GUVPage() {
   const mxAuto = useMxAuto()
   const now = new Date()
   const [jahr, setJahr] = useState(now.getFullYear() - (now.getMonth() < 3 ? 1 : 0))
-  const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const [detailansicht, setDetailansicht] = useState(false)
 

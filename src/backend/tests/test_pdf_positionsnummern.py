@@ -26,8 +26,9 @@ def db():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
+    # pdf_artikelnummer: wie nach Migration 195 bei vorhandenen Artikelcodes (Issue #562)
     session.add(Unternehmen(firmenname="Test GmbH", strasse="Teststr.", hausnummer="1", plz="12345",
-                            ort="Testort", ist_kleinunternehmer=False))
+                            ort="Testort", ist_kleinunternehmer=False, pdf_artikelnummer=True))
     session.add(Kunde(firmenname="Kunde AG", strasse="Weg", hausnummer="2", plz="54321", ort="Stadt"))
     session.add(Artikel(artikelnummer="ART-0001", typ="artikel", bezeichnung="Ölfilter", einheit="Stück",
                         artikelcode="AW5010KS", vk_brutto=119, vk_netto=100, steuersatz=19, aktiv=True))

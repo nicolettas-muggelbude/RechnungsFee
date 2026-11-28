@@ -4,6 +4,7 @@ import { berechneKontenuebersicht, getKontenuebersichtExportUrl, openUrl, type K
 import { useMxAuto } from '../../hooks/useAnsicht'
 import { DateInput } from '../../components/DateInput'
 import { ExportButtons } from '../../components/ExportButtons'
+import { useBuchungsjahre } from '../../hooks/useBuchungsjahre'
 
 function euroFmt(v: string): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(parseFloat(v))
@@ -26,7 +27,7 @@ export function KontenuebersichtPage() {
   const now = new Date()
   const [filterModus, setFilterModus] = useState<FilterModus>('jahr')
   const [jahr, setJahr] = useState(now.getFullYear())
-  const jahre = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+  const jahre = useBuchungsjahre()  // Issue #589: nur Jahre mit Buchungen + aktuelles
   const [monat, setMonat] = useState(aktuellerMonat())
   const [datumVon, setDatumVon] = useState(`${now.getFullYear()}-01-01`)
   const [datumBis, setDatumBis] = useState(now.toISOString().slice(0, 10))

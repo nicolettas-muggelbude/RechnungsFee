@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { letzteZahlungsart, merkeZahlungsart } from '../../utils/zahlungsartWahl'
 import { DateInput } from '../../components/DateInput'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { KategorieErstellenModal } from '../../components/KategorieErstellenModal'
@@ -13,12 +14,15 @@ import {
   createSplitBuchung,
   getKategorien,
   getKunden,
+  getLieferanten,
   getUnternehmen,
   getKassenstand,
   getUstSaetze,
   uploadJournalAnhang,
   uploadJournalAnhangVorab,
-  deleteJournalAnhang,
+  deleteJournalEinzelAnhang,
+  journalBelege,
+  type JournalAnhang,
   getJournalAnhangUrl,
   openUrl,
   type JournalEintrag,
@@ -36,9 +40,10 @@ const singleSchema = z.object({
     .string()
     .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, 'Betrag muss positiv sein'),
   ust_satz: z.string(),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine', 'Privat']),
   kategorie_id: z.string().optional(),
   kunde_id: z.string().optional(),
+  lieferant_id: z.string().optional(),
   vorsteuerabzug: z.boolean().optional(),
   ust_sonderfall: z.string().optional(),
   externe_belegnr: z.string().optional(),
@@ -57,9 +62,10 @@ const positionSchema = z.object({
 const splitSchema = z.object({
   datum: z.string().min(1, 'Datum erforderlich'),
   art: z.enum(['Einnahme', 'Ausgabe']),
-  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine']),
+  zahlungsart: z.enum(['Bar', 'Karte', 'Bank', 'PayPal', 'Keine', 'Privat']),
   externe_belegnr: z.string().optional(),
   kunde_id: z.string().optional(),
+  lieferant_id: z.string().optional(),
   positionen: z.array(positionSchema).min(2, 'Mindestens 2 Positionen erforderlich'),
 })
 
@@ -70,7 +76,7 @@ interface InitialWerte {
   datum?: string
   art?: 'Einnahme' | 'Ausgabe'
   brutto_betrag?: string
-  zahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine'
+  zahlungsart?: 'Bar' | 'Karte' | 'Bank' | 'PayPal' | 'Keine' | 'Privat'
   beschreibung?: string
   kategorie_id?: string
 }
@@ -103,8 +109,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const [keineGeldbewegung, setKeineGeldbewegung] = useState(false)
   const [kmAnzahl, setKmAnzahl] = useState<string>(bearbeiten?.km_anzahl ? String(bearbeiten.km_anzahl) : '')
   const [showNeuKategorie, setShowNeuKategorie] = useState(false)
-  const [belegDatei, setBelegDatei] = useState<File | null>(null)
-  const [belegVorhanden, setBelegVorhanden] = useState(bearbeiten?.beleg ?? null)
+  // Issue #568 Stufe 2: mehrere Belege je Buchung
+  const [belegDateien, setBelegDateien] = useState<File[]>([])
+  const [belegeVorhanden, setBelegeVorhanden] = useState<JournalAnhang[]>(bearbeiten ? journalBelege(bearbeiten) : [])
   // Refs: verhindern dass useEffects beim ersten Kategorien-Laden die bearbeiten-Werte überschreiben
   // Issue #273: Schnellbuchungen bringen ihre eigene Kategorie mit – die darf vom
   // Standardkategorie-Effekt nicht überschrieben/gelöscht werden, genau wie beim Bearbeiten.
@@ -135,6 +142,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   const { data: kategorien } = useQuery({ queryKey: ['kategorien', 'aktiv'], queryFn: () => getKategorien(true) })
   const { data: kunden } = useQuery({ queryKey: ['kunden'], queryFn: getKunden })
+  // Issue #566: Lieferant bei Ausgaben
+  const { data: lieferanten } = useQuery({ queryKey: ['lieferanten'], queryFn: getLieferanten })
+  const lieferantenOptionen = (lieferanten ?? [])
+    .filter((l) => l.aktiv !== false)
+    .map((l) => (
+      <option key={l.id} value={l.id}>
+        {l.firmenname || [l.vorname, l.nachname].filter(Boolean).join(' ')}
+        {l.lieferantennummer ? ` (${l.lieferantennummer})` : ''}
+      </option>
+    ))
   const { data: unternehmen } = useQuery({ queryKey: ['unternehmen'], queryFn: getUnternehmen })
   const { data: kassenstandData } = useQuery({ queryKey: ['kassenstand'], queryFn: getKassenstand })
   const { data: ustSaetze = [] } = useQuery({ queryKey: ['ust-saetze'], queryFn: getUstSaetze, staleTime: 1000 * 60 * 10 })
@@ -162,13 +179,14 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       zahlungsart: bearbeiten.zahlungsart,
       kategorie_id: bearbeiten.kategorie_id ? String(bearbeiten.kategorie_id) : '',
       kunde_id: bearbeiten.kunde_id ? String(bearbeiten.kunde_id) : '',
+      lieferant_id: bearbeiten.lieferant_id ? String(bearbeiten.lieferant_id) : '',
       vorsteuerabzug: bearbeiten.vorsteuerabzug,
       ust_sonderfall: bearbeiten.ust_sonderfall ?? '',
       externe_belegnr: bearbeiten.externe_belegnr ?? '',
     } : {
       datum: initialWerte?.datum ?? initialDatum ?? heute(),
       art: initialWerte?.art ?? 'Einnahme',
-      zahlungsart: initialWerte?.zahlungsart ?? 'Bar',
+      zahlungsart: initialWerte?.zahlungsart ?? letzteZahlungsart(),
       ust_satz: '0',
       vorsteuerabzug: true,
       beschreibung: initialWerte?.beschreibung ?? '',
@@ -190,7 +208,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     defaultValues: {
       datum: initialDatum ?? heute(),
       art: 'Ausgabe',
-      zahlungsart: 'Bar',
+      zahlungsart: letzteZahlungsart(),
       positionen: [
         { beschreibung: '', kategorie_id: '', brutto_betrag: '', ust_satz: '19', vorsteuerabzug: true },
         { beschreibung: '', kategorie_id: '', brutto_betrag: '', ust_satz: '19', vorsteuerabzug: true },
@@ -282,7 +300,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
     if (!kat) return
 
     // Privat-Buchung: immer USt=0, kein Vorsteuerabzug, kein Sonderfall
-    if (kat.kontenart === 'Privat') {
+    // Issue #564: Durchlaufende Posten (Neutral) ebenso ohne USt
+    if (kat.kontenart === 'Privat' || kat.kontenart === 'Neutral') {
       setValue('ust_satz', '0')
       setValue('vorsteuerabzug', false)
       setValue('ust_sonderfall', '')
@@ -302,6 +321,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
 
   const gewaehlteKat = (kategorien ?? []).find((k) => String(k.id) === kategorie_id)
   const istPrivatKategorie = gewaehlteKat?.kontenart === 'Privat'
+  const istNeutralKategorie = gewaehlteKat?.kontenart === 'Neutral'
   const ist25aAnkauf = gewaehlteKat?.name?.includes('§25a')
   const istFahrtkostenKat = gewaehlteKat?.eks_kategorie === 'B6_5'
   // SKR04 4125 seit Migration 179 (vorher fälschlich 3125, kann bei eigenen Anpassungen noch stehen)
@@ -389,6 +409,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   const aufwandKat = alle.filter((k) => k.kontenart === 'Aufwand')
   const anlageKat = alle.filter((k) => k.kontenart === 'Anlage')
   const entnahmeKat = privatKat.filter((k) => k.euer_zeile !== 107)
+  // Issue #564: erfolgsneutrale Kategorien (Durchlaufende Posten) auf beiden Seiten
+  const neutralKat = alle.filter((k) => k.kontenart === 'Neutral')
 
   function renderKategorieOptgroups(artWert: string) {
     return artWert === 'Einnahme' ? (
@@ -396,9 +418,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
         <optgroup label="Erlöse">
           {erloeseKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
         </optgroup>
-        {einlageKat.length > 0 && (
+        {einlageKat.length + neutralKat.length > 0 && (
           <optgroup label="Sonstiges">
-            {einlageKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
+            {[...einlageKat, ...neutralKat].map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
       </>
@@ -412,9 +434,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {anlageKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
-        {entnahmeKat.length > 0 && (
+        {entnahmeKat.length + neutralKat.length > 0 && (
           <optgroup label="Sonstiges">
-            {entnahmeKat.map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
+            {[...entnahmeKat, ...neutralKat].map((k) => <option key={k.id} value={k.id}>{katLabel(k, katModus)}</option>)}
           </optgroup>
         )}
       </>
@@ -439,9 +461,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       // Beleg-Upload (Issue #310): erst nachdem die Buchung ihre id hat - die Buchung ist
       // dabei noch nicht immutable (Erstellung bzw. innerhalb des 5-Minuten-Fensters),
       // der GoBD-Trigger blockiert das UPDATE des beleg_id-Feldes daher nicht.
-      if (belegDatei) {
+      for (const datei of belegDateien) {
         try {
-          await uploadJournalAnhang(data.id, belegDatei)
+          await uploadJournalAnhang(data.id, datei)
         } catch (e) {
           console.error('Beleg-Upload fehlgeschlagen', e)
         }
@@ -454,15 +476,15 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   })
 
   const belegLoeschenMutation = useMutation({
-    mutationFn: () => deleteJournalAnhang(bearbeiten!.id),
-    onSuccess: () => {
-      setBelegVorhanden(null)
+    mutationFn: (a: JournalAnhang) => deleteJournalEinzelAnhang(bearbeiten!.id, a.anhang_id),
+    onSuccess: (_r, a) => {
+      setBelegeVorhanden((liste) => liste.filter((x) => x.anhang_id !== a.anhang_id))
       qc.invalidateQueries({ queryKey: ['journal'] })
     },
   })
 
-  async function belegAnsehen() {
-    const url = await getJournalAnhangUrl(bearbeiten!.id)
+  async function belegAnsehen(a: JournalAnhang) {
+    const url = await getJournalAnhangUrl(bearbeiten!.id, a.anhang_id || undefined)
     await openUrl(url)
   }
 
@@ -490,6 +512,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       eingabeModus === 'netto'
         ? nettoToBrutto(values.brutto_betrag, values.ust_satz)
         : values.brutto_betrag
+    if (!bearbeiten) merkeZahlungsart(values.zahlungsart)
     singleMutation.mutate({
       datum: values.datum,
       beschreibung: values.beschreibung,
@@ -499,6 +522,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       zahlungsart: values.zahlungsart,
       kategorie_id: values.kategorie_id ? Number(values.kategorie_id) : undefined,
       kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
+      lieferant_id: values.art === 'Ausgabe' && values.lieferant_id ? Number(values.lieferant_id) : undefined,
       vorsteuerabzug: values.vorsteuerabzug,
       ust_sonderfall: values.ust_sonderfall || null,
       externe_belegnr: values.externe_belegnr || undefined,
@@ -509,21 +533,23 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
   async function onSubmitSplit(values: SplitValues) {
     // Beleg muss vor dem Anlegen hochgeladen werden - Split-Buchungen sind ab Erstellung
     // immutable, ein nachtraeglicher Upload wie bei der Einzelbuchung ist nicht moeglich.
-    let belegId: number | undefined
-    if (belegDatei) {
+    const belegIds: number[] = []
+    for (const datei of belegDateien) {
       try {
-        const beleg = await uploadJournalAnhangVorab(belegDatei)
-        belegId = beleg.id
+        const beleg = await uploadJournalAnhangVorab(datei)
+        belegIds.push(beleg.id)
       } catch (e) {
         console.error('Beleg-Upload fehlgeschlagen', e)
       }
     }
+    merkeZahlungsart(values.zahlungsart)
     splitMutation.mutate({
       datum: values.datum,
       art: values.art,
       zahlungsart: values.zahlungsart,
       externe_belegnr: values.externe_belegnr || undefined,
       kunde_id: values.kunde_id ? Number(values.kunde_id) : undefined,
+      lieferant_id: values.art === 'Ausgabe' && values.lieferant_id ? Number(values.lieferant_id) : undefined,
       positionen: values.positionen.map((p) => {
         const ustFinal = (istKleinunternehmer && values.art === 'Einnahme') ? '0' : p.ust_satz
         const bruttoFinal =
@@ -536,7 +562,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
           vorsteuerabzug: p.vorsteuerabzug,
         }
       }),
-      beleg_id: belegId,
+      beleg_ids: belegIds,
     })
   }
 
@@ -675,6 +701,8 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                   >
                     {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                    {/* Issue #470: aus privaten Mitteln bezahlte Betriebsausgabe = Einlage */}
+                    {art === 'Ausgabe' && <option value="Privat">Privat bezahlt</option>}
                   </select>
                 )}
               </div>
@@ -710,51 +738,16 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {/* Beleg (Issue #310) */}
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                Belege <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auch mehrere)</span>
               </label>
-              {belegVorhanden ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={belegAnsehen}
-                    className="flex-1 text-left text-blue-600 dark:text-blue-400 hover:underline truncate"
-                  >
-                    📎 {belegVorhanden.original_name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => belegLoeschenMutation.mutate()}
-                    disabled={belegLoeschenMutation.isPending}
-                    title="Beleg entfernen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : belegDatei ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setBelegDatei(null)}
-                    title="Auswahl verwerfen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-                  <span>📎</span>
-                  <span>PDF oder Bild anhängen</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png,image/tiff"
-                    className="hidden"
-                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
+              <BelegeAuswahl
+                vorhanden={belegeVorhanden}
+                onAnsehen={belegAnsehen}
+                onEntfernen={(a) => belegLoeschenMutation.mutate(a)}
+                entfernenLaeuft={belegLoeschenMutation.isPending}
+                dateien={belegDateien}
+                setDateien={setBelegDateien}
+              />
             </div>
 
             {/* Kategorie */}
@@ -801,6 +794,17 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
               </div>
             )}
 
+            {/* Durchlaufende Posten (Issue #564) */}
+            {istNeutralKategorie && (
+              <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                <span>
+                  <strong>Durchlaufender Posten</strong> – zählt weder in der EÜR noch in der
+                  Umsatzsteuer-Voranmeldung. Eingang und Rückzahlung beide auf diese Kategorie
+                  buchen, dann gleicht sich der Betrag aus. USt ist automatisch 0 %.
+                </span>
+              </div>
+            )}
+
             {/* §25a-Hinweis */}
             {ist25aAnkauf && (
               <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-2 text-xs text-orange-800 dark:text-orange-300">
@@ -836,6 +840,23 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                         </option>
                       )
                     })}
+                </select>
+              </div>
+            )}
+
+            {/* Lieferant (nur Ausgaben, Issue #566) */}
+            {art === 'Ausgabe' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1" htmlFor="buchung-lieferant">
+                  Lieferant <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <select
+                  id="buchung-lieferant"
+                  {...register('lieferant_id')}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="">— kein Lieferant —</option>
+                  {lieferantenOptionen}
                 </select>
               </div>
             )}
@@ -908,12 +929,12 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                 </label>
                 <select
                   {...register('ust_satz')}
-                  disabled={sperreUstAufNull || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst}
+                  disabled={sperreUstAufNull || istPrivatKategorie || istNeutralKategorie || ist25aAnkauf || istEinfuhrUst}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
-                  {sperreUstAufNull || istPrivatKategorie || ist25aAnkauf || istEinfuhrUst ? (
+                  {sperreUstAufNull || istPrivatKategorie || istNeutralKategorie || ist25aAnkauf || istEinfuhrUst ? (
                     <option value="0">
-                      {sperreUstAufNull ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : istEinfuhrUst ? 'entfällt (voller Betrag = Steuer)' : '0 % (§25a – kein VSt-Abzug)'}
+                      {sperreUstAufNull ? '0 % (§19 UStG)' : istPrivatKategorie ? '0 % (Privat)' : istNeutralKategorie ? '0 % (durchlaufend)' : istEinfuhrUst ? 'entfällt (voller Betrag = Steuer)' : '0 % (§25a – kein VSt-Abzug)'}
                     </option>
                   ) : (
                     aktiveSaetze.map((s) => {
@@ -952,7 +973,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             )}
 
             {/* Vorsteuerabzug */}
-            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !ist25aAnkauf && (
+            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !istNeutralKategorie && !ist25aAnkauf && (
               <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" {...register('vorsteuerabzug')} className="rounded" />
                 <span className="flex items-center gap-1">
@@ -963,7 +984,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             )}
 
             {/* Reverse Charge / Sonderfall */}
-            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !ist25aAnkauf && (
+            {art === 'Ausgabe' && !istKleinunternehmer && !istPrivatKategorie && !istNeutralKategorie && !ist25aAnkauf && (
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 flex items-center gap-1">
                   Steuerlicher Sonderfall (Reverse Charge)
@@ -1103,6 +1124,7 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                     className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                   >
                     {['Bar', 'Karte', 'Bank', 'PayPal'].map((z) => <option key={z}>{z}</option>)}
+                    {artSplit === 'Ausgabe' && <option value="Privat">Privat bezahlt</option>}
                   </select>
                 )}
               </div>
@@ -1124,32 +1146,9 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
             {/* Beleg (Issue #310) - ein Beleg gilt fuer die gesamte Split-Buchung */}
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                Beleg <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, für alle Positionen gemeinsam)</span>
+                Belege <span className="text-slate-400 dark:text-slate-500 font-normal">(optional, auch mehrere, für alle Positionen gemeinsam)</span>
               </label>
-              {belegDatei ? (
-                <div className="flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2">
-                  <span className="flex-1 truncate">📎 {belegDatei.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setBelegDatei(null)}
-                    title="Auswahl verwerfen"
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-                  <span>📎</span>
-                  <span>PDF oder Bild anhängen</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png,image/tiff"
-                    className="hidden"
-                    onChange={(e) => setBelegDatei(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
+              <BelegeAuswahl dateien={belegDateien} setDateien={setBelegDateien} />
             </div>
 
             {/* Kunde (nur Einnahmen) */}
@@ -1174,6 +1173,23 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
                         </option>
                       )
                     })}
+                </select>
+              </div>
+            )}
+
+            {/* Lieferant (nur Ausgaben, Issue #566) */}
+            {artSplit === 'Ausgabe' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1" htmlFor="split-lieferant">
+                  Lieferant <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <select
+                  id="split-lieferant"
+                  {...registerS('lieferant_id')}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="">— kein Lieferant —</option>
+                  {lieferantenOptionen}
                 </select>
               </div>
             )}
@@ -1410,5 +1426,74 @@ export function BuchungForm({ onClose, onSuccess, bearbeiten, initialDatum, init
       />
     )}
     </>
+  )
+}
+
+
+// Issue #568 Stufe 2: vorhandene Belege (ansehen/entfernen) + neu ausgewählte Dateien (mehrere)
+function BelegeAuswahl({ vorhanden = [], onAnsehen, onEntfernen, entfernenLaeuft, dateien, setDateien }: {
+  vorhanden?: JournalAnhang[]
+  onAnsehen?: (a: JournalAnhang) => void
+  onEntfernen?: (a: JournalAnhang) => void
+  entfernenLaeuft?: boolean
+  dateien: File[]
+  setDateien: (f: File[]) => void
+}) {
+  const zeile = 'flex items-center gap-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2'
+  return (
+    <div className="space-y-1.5">
+      {vorhanden.map((a) => (
+        <div key={a.anhang_id || a.id} className={zeile}>
+          <button
+            type="button"
+            onClick={() => onAnsehen?.(a)}
+            className="flex-1 text-left text-blue-600 dark:text-blue-400 hover:underline truncate"
+          >
+            📎 {a.original_name}
+          </button>
+          {onEntfernen && (
+            <button
+              type="button"
+              onClick={() => onEntfernen(a)}
+              disabled={entfernenLaeuft}
+              title="Beleg entfernen"
+              aria-label={`Beleg ${a.original_name} entfernen`}
+              className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      {dateien.map((d, i) => (
+        <div key={`${d.name}-${i}`} className={zeile}>
+          <span className="flex-1 truncate">📎 {d.name} <span className="text-slate-400 dark:text-slate-500">(wird beim Speichern hochgeladen)</span></span>
+          <button
+            type="button"
+            onClick={() => setDateien(dateien.filter((_, j) => j !== i))}
+            title="Auswahl verwerfen"
+            aria-label={`Auswahl ${d.name} verwerfen`}
+            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+        <span>📎</span>
+        <span>{vorhanden.length + dateien.length > 0 ? 'Weiteren Beleg anhängen' : 'PDF oder Bild anhängen'}</span>
+        <input
+          type="file"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/tiff"
+          className="hidden"
+          onChange={(e) => {
+            const neu = Array.from(e.target.files ?? [])
+            if (neu.length) setDateien([...dateien, ...neu])
+            e.target.value = ''
+          }}
+        />
+      </label>
+    </div>
   )
 }

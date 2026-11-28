@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnsicht } from '../../hooks/useAnsicht'
 import { useSplitterBreite } from '../../hooks/useSplitterBreite'
+import { useDetailBreite } from '../../hooks/useDetailBreite'
+import { DetailTrennlinie } from '../../components/DetailTrennlinie'
 import { DateInput } from '../../components/DateInput'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -8,7 +10,7 @@ import {
   getAuftraege, getRechnung, getKunden, getUstSaetze, getDokumentenPakete, getUnternehmen,
   auftragErstellen, updateRechnung, deleteRechnung,
   rechnungAusAuftrag, lieferscheinAusAuftrag, proformaAusAuftrag, auftragStatusSetzen,
-  getApiBase, openUrl, isTauri, openInPdfWindow, oeffnePaketVorschau,
+  getApiBase, openUrl, isTauri, openInPdfWindow, oeffnePaketVorschau, meldeVerlauf,
   type Rechnung, type ArtikelSuche,
   dokumentPdfUrl,
 } from '../../api/client'
@@ -22,6 +24,8 @@ import type { RechnungVorschauRequest } from '../../api/client'
 import { sendeUeberThunderbird, ThunderbirdNichtGefundenError, paketAnhaenge } from '../../utils/thunderbirdVersand'
 import { ThunderbirdInstallHinweis } from '../../components/ThunderbirdInstallHinweis'
 import { PaketMailtoWarnung } from '../../components/PaketMailtoWarnung'
+import { AbschlagErstellenKnopf, AbschlagListe } from '../../components/AbschlagAusDokument'
+import MarkdownTextfeld from '../../components/MarkdownTextfeld'
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -71,6 +75,7 @@ interface Pos {
   ust_satz: string
   rabatt_prozent?: string
   artikel_id?: number
+  leistungsdatum?: string  // Issue #594
   art_lager_aktiv?: boolean
   art_bestand?: string
   art_minusbestand_erlaubt?: boolean
@@ -114,7 +119,7 @@ function formatMenge(v: string | number): string {
 }
 
 function PositionenTabelle({
-  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer,
+  positionen, onChange, ustSaetze, onArtikelWahl, eingabeModus, summen, istKleinunternehmer, mitDatum,
 }: {
   positionen: Pos[]
   onChange: (p: Pos[]) => void
@@ -123,6 +128,7 @@ function PositionenTabelle({
   eingabeModus: EingabeModus
   summen: { netto: number; ust: number; brutto: number }
   istKleinunternehmer: boolean
+  mitDatum: boolean  // Issue #594: Leistungsdatum je Position
 }) {
   function update(i: number, field: keyof Pos, val: string) {
     onChange(positionen.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
@@ -139,6 +145,7 @@ function PositionenTabelle({
       <table className="w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-900">
           <tr>
+            {mitDatum && <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-32">Datum</th>}
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium">Beschreibung</th>
             <th className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 font-medium w-16">Menge</th>
             <th className="px-3 py-2 text-left text-slate-500 dark:text-slate-400 font-medium w-20">Einheit</th>
@@ -153,6 +160,12 @@ function PositionenTabelle({
         <tbody>
           {positionen.map((pos, i) => (
             <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+              {mitDatum && (
+                <td className="px-2 py-1.5">
+                  <input type="date" value={pos.leistungsdatum ?? ''} aria-label="Leistungsdatum"
+                    onChange={e => update(i, 'leistungsdatum', e.target.value)} className={cellInput} />
+                </td>
+              )}
               <td className="px-2 py-1.5">
                 <ArtikelAutocomplete
                   value={pos.beschreibung}
@@ -215,7 +228,7 @@ function PositionenTabelle({
           {!istKleinunternehmer && (
             <>
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400" title="ohne MwSt">
                   Netto{eingabeModus === 'brutto' && <span className="text-slate-400 dark:text-slate-500"> (berechnet)</span>}
                 </td>
                 <td colSpan={3} className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-200">
@@ -223,7 +236,7 @@ function PositionenTabelle({
                 </td>
               </tr>
               <tr className="border-t border-slate-100 dark:border-slate-700">
-                <td colSpan={4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
+                <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs">USt</td>
                 <td colSpan={3} className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
                   {summen.ust.toFixed(2).replace('.', ',')} €
                 </td>
@@ -231,7 +244,7 @@ function PositionenTabelle({
             </>
           )}
           <tr className="border-t border-slate-100 dark:border-slate-700">
-            <td colSpan={4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
+            <td colSpan={mitDatum ? 5 : 4} className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-200" title="mit MwSt">Brutto</td>
             <td colSpan={3} className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">
               {summen.brutto.toFixed(2).replace('.', ',')} €
             </td>
@@ -324,6 +337,7 @@ function AuftragFormular({
         einzelpreis: String(p.netto),
         ust_satz: String(p.ust_satz),
         rabatt_prozent: p.rabatt_prozent && parseFloat(p.rabatt_prozent) > 0 ? String(parseFloat(p.rabatt_prozent)) : '',
+        leistungsdatum: p.leistungsdatum ?? '',
       }))
     }
     return [leerePos()]
@@ -402,6 +416,7 @@ function AuftragFormular({
           ust_satz: unternehmen?.ist_kleinunternehmer ? '0' : String(parseFloat(p.ust_satz) || 0),
           artikel_id: p.artikel_id,
           rabatt_prozent: rabatt > 0 ? rabatt : undefined,
+          leistungsdatum: p.leistungsdatum || undefined,
         }
       })
 
@@ -581,6 +596,7 @@ function AuftragFormular({
           eingabeModus={eingabeModus}
           summen={summen}
           istKleinunternehmer={unternehmen?.ist_kleinunternehmer ?? false}
+          mitDatum={!!unternehmen?.pdf_positionsdatum}
         />
         {(() => {
           const warnungen = positionen.filter(p =>
@@ -630,14 +646,14 @@ function AuftragFormular({
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Einleitungstext</label>
-        <textarea value={einleitungstext} onChange={e => setEinleitungstext(e.target.value)}
+        <MarkdownTextfeld value={einleitungstext} onChange={setEinleitungstext} vorschau aria-label="Einleitungstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint vor der Positionstabelle. Leer = Standard aus den Einstellungen für Aufträge." />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Schlusstext</label>
-        <textarea value={schlusstext} onChange={e => setSchlusstext(e.target.value)}
+        <MarkdownTextfeld value={schlusstext} onChange={setSchlusstext} vorschau aria-label="Schlusstext"
           rows={3} className={`${inputCls} resize-y`}
           placeholder="Erscheint nach den Positionen/Summen. Leer = Standard aus den Einstellungen für Aufträge." />
       </div>
@@ -719,6 +735,8 @@ function AuftragDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, auftrag)
+      // Issue #596: Ausgabe im Dokumentverlauf festhalten
+      if (!auftrag.ist_entwurf) void meldeVerlauf(auftrag.id, { art: 'pdf', kanal: 'druck', kopie: auftrag.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, `Auftrag ${auftrag.rechnungsnummer ?? ''}`)
       } else {
@@ -732,6 +750,7 @@ function AuftragDetail({
     try {
       const base = await getApiBase()
       const url = dokumentPdfUrl(base, auftrag)
+      if (!auftrag.ist_entwurf) void meldeVerlauf(auftrag.id, { art: 'gedruckt', kanal: 'druck', kopie: auftrag.ausgegeben })
       if (isTauri()) {
         openInPdfWindow(url, 'Auftrag drucken')
       } else {
@@ -766,6 +785,9 @@ function AuftragDetail({
             ...(await paketAnhaenge(auftrag.dokumentenpaket_id)),
           ],
         })
+        await meldeVerlauf(auftrag.id, {
+          art: 'mail_uebergeben', kanal: 'thunderbird', kopie: auftrag.ausgegeben, empfaenger: auftrag.kunde_email ?? undefined, betreff,
+        })
       } catch (e) {
         if (e instanceof ThunderbirdNichtGefundenError) {
           setThunderbirdFehlerDetails(e.details)
@@ -794,6 +816,9 @@ function AuftragDetail({
     } else {
       window.location.href = mailtoUrl
     }
+    await meldeVerlauf(auftrag.id, {
+      art: 'mail_uebergeben', kanal: 'mailprogramm', kopie: auftrag.ausgegeben, empfaenger: undefined, betreff,
+    })
     setZeigSmtpHinweis(true)
     // Issue #477: fehlt ein Paket, bleibt der Hinweis stehen bis er weggeklickt wird
     if (!auftrag.dokumentenpaket_id) setTimeout(() => setZeigSmtpHinweis(false), 6000)
@@ -948,6 +973,16 @@ function AuftragDetail({
             </button>
           )}
 
+          {/* → Abschlagsrechnung (Issue #597) */}
+          {unternehmen?.abschlagsrechnungen_aktiv && !auftrag.rechnung_zu_auftrag_id && (
+            <AbschlagErstellenKnopf
+              dokument={auftrag}
+              className={btnGreen}
+              gesperrt={!!auftrag.ist_entwurf || auftrag.auftrag_status === 'storniert' || auftrag.auftrag_status === 'abgeschlossen'}
+              gesperrtTitel={auftrag.ist_entwurf ? 'Erst finalisieren' : 'Auftrag ist abgeschlossen oder storniert'}
+            />
+          )}
+
           {/* → Lieferschein */}
           {unternehmen?.lieferschein_aktiv && (
             !auftrag.lieferschein_zu_auftrag_id ? (
@@ -1002,8 +1037,8 @@ function AuftragDetail({
             </button>
           )}
 
-          <button onClick={onDelete} disabled={hatBezug}
-            title={hatBezug ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt' : undefined}
+          <button onClick={onDelete} disabled={hatBezug || (auftrag.abschlaege?.length ?? 0) > 0}
+            title={hatBezug || (auftrag.abschlaege?.length ?? 0) > 0 ? 'Kann nicht gelöscht werden – es wurden bereits Dokumente erstellt' : undefined}
             className={btnRed}>🗑️ Löschen</button>
         </div>
 
@@ -1017,6 +1052,8 @@ function AuftragDetail({
             </button>
           </div>
         )}
+
+        <AbschlagListe dokument={auftrag} />
 
         {/* Status */}
         <div>
@@ -1172,6 +1209,7 @@ export function AuftraegePage() {
   const { einstellungen } = useAnsicht()
   const manuell = einstellungen.splitter === 'manuell'
   const [splitterBreite, startSplitterDrag] = useSplitterBreite('auftraege', 33)
+  const detailBreite = useDetailBreite('auftraege')
   const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
 
@@ -1467,8 +1505,9 @@ export function AuftraegePage() {
         </div>
       )}
 
+      {selAuftrag && !zeigFormular && <DetailTrennlinie detail={detailBreite} />}
       {selAuftrag && !zeigFormular && (
-        <div className="w-[28rem] shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        <div style={detailBreite.style} className={`${detailBreite.breiteKlasse} shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col`}>
           <AuftragDetail
             auftrag={selAuftrag}
             onEdit={() => handleEdit(selAuftrag)}

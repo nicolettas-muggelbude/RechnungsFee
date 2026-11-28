@@ -269,6 +269,42 @@ def dsgvo_pdf_kunde(kunde_id: int, db: Session) -> tuple[bytes, str]:
     return pdf_bytes, f"dsgvo-{name.replace(' ', '-')}-{_date.today()}.pdf"
 
 
+_PERSONENFELDER_KUNDE = (
+    "anrede", "anrede_individuell", "vorname", "nachname", "strasse", "hausnummer", "plz", "ort",
+    "ust_idnr", "ust_idnr_validierung_datum", "steuernummer_ausland", "email", "telefon",
+    "bescheinigung_paragraph", "bescheinigung_nummer", "bescheinigung_behoerde",
+    "bescheinigung_gueltig_bis", "z_hd", "notizen", "leitweg_id", "mahnsperre_bis", "mahnsperre_grund",
+)
+
+
+def _leere_kundendaten(kunde: Kunde) -> None:
+    """Personenbezogene Felder entfernen, Datensatz deaktivieren (Anonymisierung ohne Löschen).
+    Lieferadressen werden geleert statt gelöscht - Rechnungen können per Fremdschlüssel auf sie
+    verweisen (Issue #495)."""
+    for feld in _PERSONENFELDER_KUNDE:
+        setattr(kunde, feld, None)
+    kunde.firmenname = f"Anonymisierter Kunde #{kunde.id}"
+    kunde.ust_idnr_validiert = False
+    kunde.aktiv = False
+    for a in kunde.lieferadressen:
+        for feld in ("bezeichnung", "name", "z_hd", "strasse", "hausnummer", "plz", "ort", "email"):
+            setattr(a, feld, None)
+
+
+def _loesche_kundendokumente(kunde: Kunde, db: Session) -> None:
+    """Dokumente des Kunden samt Beleg und Datei entfernen (kein Datenmüll) - wie delete_kunde_beleg."""
+    for kb in list(kunde.dokumente):
+        beleg = kb.beleg
+        if beleg is not None:
+            pfad = APP_DATA_DIR / "uploads" / beleg.dateiname
+            if pfad.exists():
+                pfad.unlink()
+        kunde.dokumente.remove(kb)
+        db.delete(kb)
+        if beleg is not None:
+            db.delete(beleg)
+
+
 @router.post("/{kunde_id}/anonymisieren")
 def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
     """DSGVO Art. 17 (Recht auf Vergessenwerden):
@@ -301,6 +337,10 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
         .count()
     )
 
+    # Issue #596: Mailadressen/Betreffe im Dokumentverlauf entfernen
+    from utils.dokument_verlauf import anonymisiere as _verlauf_anonymisieren
+    _verlauf_anonymisieren(db, kunde_id=kunde_id)
+
     # Rechnungen: kunde_id entfernen, Name als partner_freitext sichern
     rechnungen = db.query(Rechnung).filter(Rechnung.kunde_id == kunde_id).all()
     for r in rechnungen:
@@ -308,7 +348,20 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
             r.partner_freitext = kunde_name
         r.kunde_id = None
 
-    db.delete(kunde)
+    _loesche_kundendokumente(kunde, db)
+    if immutable_anzahl:
+        # Versiegelte Buchungen verweisen per Fremdschlüssel auf den Kunden und lassen sich nicht
+        # ändern - ein Löschen scheiterte mit IntegrityError (FOREIGN KEY). Stattdessen bleibt der
+        # Datensatz als leere Hülle stehen, alle personenbezogenen Daten werden entfernt
+        # (Art. 17 DSGVO erfüllt, GoBD-Verweis bleibt gültig).
+        _leere_kundendaten(kunde)
+    else:
+        # Lieferadressen werden mitgelöscht - Verweise der (bereits gelösten) Rechnungen vorher
+        # entfernen, sonst scheitert das Löschen am Fremdschlüssel (Issue #495)
+        for r in rechnungen:
+            r.empfaenger_adresse_id = None
+            r.lieferadresse_id = None
+        db.delete(kunde)
     db.commit()
 
     # Seit #25 (Lieferadressen) stand dieser Block versehentlich in delete_lieferadresse() –
@@ -319,8 +372,9 @@ def anonymisiere_kunde(kunde_id: int, db: Session = Depends(get_db)):
         "anonymisierte_rechnungen": len(rechnungen),
         "unveraenderlich_verblieben": immutable_anzahl,
         "hinweis": (
-            f"{immutable_anzahl} immutable Journaleinträge konnten nicht anonymisiert werden "
-            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO)."
+            f"{immutable_anzahl} unveränderliche Journalbuchungen verweisen weiter auf den Kunden-Datensatz "
+            f"(GoBD-Schutz, Aufbewahrungspflicht §147 AO). Seine personenbezogenen Daten wurden gelöscht, "
+            f"übrig bleibt „Anonymisierter Kunde #{kunde_id}“."
             if immutable_anzahl else ""
         ),
     }
@@ -932,8 +986,8 @@ def kontokorrent_mail(
         empfaenger.append(data.cc)
     msg = _build_message(unt, data.an, data.cc, data.betreff, data.text,
                          attachments=[(pdf_bytes, dateiname)])
-    _sende(unt, msg, empfaenger, db)  # db fehlte seit #336 (TypeError → „Failed to fetch“, #537)
-    return {"ok": True}
+    hinweis = _sende(unt, msg, empfaenger, db)  # db fehlte seit #336 (TypeError → „Failed to fetch“, #537)
+    return {"ok": True, "hinweis": hinweis}
 
 
 @router.get("/{kunde_id}", response_model=KundeResponse)

@@ -24,7 +24,8 @@ struct BackendToken(String);
 
 fn neues_sitzungstoken() -> String {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("Zufallsgenerator des Betriebssystems nicht verfügbar");
+    // getrandom 0.3+: getrandom() heißt jetzt fill() (Dependabot-PR #584, 0.2 → 0.4)
+    getrandom::fill(&mut bytes).expect("Zufallsgenerator des Betriebssystems nicht verfügbar");
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
