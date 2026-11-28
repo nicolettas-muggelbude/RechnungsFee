@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db, APP_DATA_DIR
 from database.models import Unternehmen
 from utils import geheimnisse
+from utils.datev_konten import finanzkonten_umstellen
 from utils.logo import logo_datei, logo_relativ
 from .schemas import (
     GEHEIMNIS_EINGABE_FELDER, GeheimnisEingabe,
@@ -75,12 +76,15 @@ def update_unternehmen(data: UnternehmenUpdate, db: Session = Depends(get_db)):
     unternehmen = db.query(Unternehmen).first()
     if not unternehmen:
         raise HTTPException(status_code=404, detail="Unternehmensdaten noch nicht angelegt.")
+    alter_kontenrahmen = unternehmen.kontenrahmen
     # logo_pfad wird ausschließlich über POST/DELETE /logo verwaltet – nie überschreiben
     for key, value in data.model_dump(
         exclude_unset=True, exclude={"logo_pfad"} | GEHEIMNIS_EINGABE_FELDER,
     ).items():
         setattr(unternehmen, key, value)
     _geheimnisse_uebernehmen(unternehmen, data)
+    # DATEV-Nummern der Konten (automatisch aus dem Bankbereich vergeben) mitziehen
+    finanzkonten_umstellen(db, alter_kontenrahmen, unternehmen.kontenrahmen)
     db.commit()
     db.refresh(unternehmen)
     return unternehmen

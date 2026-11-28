@@ -99,6 +99,35 @@ def test_globale_nummer_vom_steuerbuero_geht_an_das_konto(db):
     assert _paypal(db, "Stripe").datev_kontonummer == "1800"
 
 
+def test_kontenrahmen_wechsel_stellt_nummern_um(db):
+    from api.schemas import UnternehmenUpdate
+    from api.unternehmen import update_unternehmen
+    db.query(Unternehmen).one().kontenrahmen = "SKR03"
+    db.commit()
+    a = _bank(db, "Geschäftskonto", "DE02120300000000202051")
+    p = _paypal(db)
+    eigen = _bank(db, "Tagesgeld", "DE89370400440532013000", datev_kontonummer="1299")
+    assert (a.datev_kontonummer, p.datev_kontonummer) == ("1200", "1210")
+
+    update_unternehmen(UnternehmenUpdate(kontenrahmen="SKR04"), db)
+    db.expire_all()
+    assert [db.get(Konto, k.id).datev_kontonummer for k in (a, p, eigen)] == ["1800", "1810", "1299"]
+
+    update_unternehmen(UnternehmenUpdate(kontenrahmen="SKR03"), db)
+    db.expire_all()
+    assert [db.get(Konto, k.id).datev_kontonummer for k in (a, p, eigen)] == ["1200", "1210", "1299"]
+
+
+def test_kontenrahmen_wechsel_weicht_belegter_nummer_aus(db):
+    from utils.datev_konten import finanzkonten_umstellen
+    db.query(Unternehmen).one().kontenrahmen = "SKR03"
+    db.commit()
+    a = _bank(db, "Geschäftskonto", "DE02120300000000202051")              # 1200 → eigentlich 1800
+    fremd = _bank(db, "Altkonto", "DE02500105170137075030", datev_kontonummer="1800")  # schon belegt
+    finanzkonten_umstellen(db, "SKR03", "SKR04")
+    assert (a.datev_kontonummer, fremd.datev_kontonummer) == ("1810", "1800")
+
+
 # --- DATEV-Export --------------------------------------------------------------------------
 
 def _journal(db, zahlungsart, konto_id=None, belegnr="J-1"):

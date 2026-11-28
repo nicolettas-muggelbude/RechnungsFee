@@ -25,6 +25,33 @@ def kontenrahmen(db: Session) -> str:
     return "SKR03" if rahmen == "SKR03" else "SKR04"  # SKR49 nutzt wie im Export die SKR04-Nummern
 
 
+def _rahmen(rahmen: Optional[str]) -> str:
+    return "SKR03" if (rahmen or "SKR03") == "SKR03" else "SKR04"
+
+
+def finanzkonten_umstellen(db: Session, alt: Optional[str], neu: Optional[str]) -> int:
+    """Kontenrahmen gewechselt: Kontonummern aus dem Bankbereich des alten Rahmens auf dieselbe
+    Position im neuen Rahmen umstellen (SKR03 1200 → SKR04 1800, 1210 → 1810 …). Sonst bliebe z. B.
+    1200 stehen - in SKR04 „Forderungen aus Lieferungen und Leistungen“. Eigene Nummern außerhalb
+    des Bankbereichs bleiben unverändert. Ist die Zielnummer schon von einem anderen Konto belegt,
+    bekommt das Konto die nächste freie. Gibt die Zahl der umgestellten Konten zurück."""
+    von, nach = _rahmen(alt), _rahmen(neu)
+    if von == nach:
+        return 0
+    konten = db.query(Konto).all()
+    umzustellen = [k for k in konten if (k.datev_kontonummer or "").strip() in FINANZKONTEN[von]]
+    bleibt = {(k.datev_kontonummer or "").strip() for k in konten if k not in umzustellen} - {""}
+    vergeben: set[str] = set()
+    for k in sorted(umzustellen, key=lambda k: FINANZKONTEN[von].index(k.datev_kontonummer.strip())):
+        ziel = FINANZKONTEN[nach][FINANZKONTEN[von].index(k.datev_kontonummer.strip())]
+        if ziel in bleibt or ziel in vergeben:
+            ziel = next((n for n in FINANZKONTEN[nach] if n not in bleibt and n not in vergeben), None)
+        k.datev_kontonummer = ziel
+        if ziel:
+            vergeben.add(ziel)
+    return len(umzustellen)
+
+
 def geldtransit_konto(rahmen: str) -> str:
     return GELDTRANSIT_KONTEN["SKR03" if rahmen == "SKR03" else "SKR04"]
 
